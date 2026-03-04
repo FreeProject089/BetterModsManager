@@ -38,6 +38,7 @@ fn main() {
             commands::mods::scan_mods_folder,
             commands::mods::download_mod,
             commands::mods::install_from_modlist,
+            commands::mods::verify_integrity,
             // Mod list commands
             commands::modlist::export_modlist,
             commands::modlist::import_modlist,

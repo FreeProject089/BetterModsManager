@@ -27,7 +27,7 @@
                 </svg>
             </div>
             <span class="titlebar-title">BETTER MOD MANAGER</span>
-            <span class="titlebar-version">v0.1.0</span>
+            <span class="titlebar-version">V0.9.2</span>
         </div>
         <div class="titlebar-controls">
             <button class="tb-btn" id="tb-min" title="Minimize">
@@ -142,8 +142,15 @@
                 </button>
             </nav>
 
-            <!-- Active Profile chip -->
+            <!-- Sidebar footer: lang + version + profile -->
             <div class="sidebar-footer">
+                <!-- Language Dropdown -->
+                <div class="nav-lang-container" id="nav-lang-dropdown"></div>
+
+                <!-- Version Button -->
+                <button class="nav-version-badge" id="nav-version-btn">V0.9.2</button>
+
+                <!-- Active Profile chip -->
                 <div class="profile-chip" id="profile-chip">
                     <div class="profile-chip-dot"></div>
                     <div class="profile-chip-info">
@@ -180,6 +187,15 @@
                                 <path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
                             </svg>
                             <span data-i18n="lib.scan">Scanner</span>
+                        </button>
+                        <button class="btn btn-ghost" id="btn-verify-integrity" title="Vérifier l'intégrité"
+                            data-i18n-title="lib.verifyTitle">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2.2">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                <polyline points="22 4 12 14.01 9 11.01" />
+                            </svg>
+                            <span data-i18n="lib.verify">Vérifier</span>
                         </button>
                         <button class="btn btn-secondary" id="btn-add-mod">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -608,12 +624,12 @@
                         <div
                             style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--cyan),var(--accent))">
                         </div>
-                        <img src="../.Assets/BetterMM.png" alt="Better Mod Manager"
+                        <img src="assets/BMm.png" alt="Better Mod Manager"
                             style="width:80px;height:80px;border-radius:16px;margin:0 auto 16px;display:block;box-shadow:0 4px 20px rgba(59,130,246,0.3)" />
                         <h2 style="font-size:22px;font-weight:700;color:var(--text-primary);margin-bottom:4px">Better
                             Mod Manager</h2>
                         <span class="mono"
-                            style="display:inline-block;padding:3px 10px;border-radius:6px;background:var(--accent-dim);color:var(--accent);font-size:12px;margin-bottom:14px">v1.0.6</span>
+                            style="display:inline-block;padding:3px 10px;border-radius:6px;background:var(--accent-dim);color:var(--accent);font-size:12px;margin-bottom:14px">V0.9.2</span>
                         <p style="color:var(--text-secondary);font-size:13px;max-width:400px;margin:0 auto;line-height:1.6"
                             data-i18n="credits.heroDesc">
                             Gestionnaire de mods moderne et universel. Organisez, activez et partagez vos mods en toute
@@ -624,7 +640,7 @@
                     <!-- Developer -->
                     <div class="glass-card" style="padding:20px 24px">
                         <div style="display:flex;align-items:center;gap:16px">
-                            <img src="../.Assets/pfp.webp" alt="FreeProject089"
+                            <img src="assets/pfp.webp" alt="FreeProject089"
                                 style="width:52px;height:52px;border-radius:50%;border:2px solid var(--border);object-fit:cover" />
                             <div style="flex:1">
                                 <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:2px"
@@ -683,19 +699,17 @@
                             <!-- Discord -->
                             <a href="https://discord.com/invite/CTaaEF9R75" target="_blank"
                                 style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;text-decoration:none;transition:var(--transition);cursor:pointer"
-                                onmouseover="this.style.borderColor='rgba(6,182,212,0.4)';this.style.background='rgba(6,182,212,0.04)'"
+                                onmouseover="this.style.borderColor='rgba(88,101,242,0.5)';this.style.background='rgba(88,101,242,0.06)'"
                                 onmouseout="this.style.borderColor='var(--border)';this.style.background='rgba(255,255,255,0.02)'">
                                 <div
-                                    style="width:40px;height:40px;border-radius:10px;background:rgba(6,182,212,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
-                                        stroke-width="2">
+                                    style="width:40px;height:40px;border-radius:10px;background:rgba(88,101,242,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="#5865F2">
                                         <path
-                                            d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z">
-                                        </path>
+                                            d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" />
                                     </svg>
                                 </div>
                                 <div style="flex:1">
-                                    <div style="font-weight:600;font-size:14px;color:var(--cyan)">Discord Community
+                                    <div style="font-weight:600;font-size:14px;color:#5865F2">BetterDiscord
                                     </div>
                                     <div style="font-size:12px;color:var(--text-muted);margin-top:1px"
                                         data-i18n="credits.discordSub">Aide & mises à jour</div>
@@ -753,7 +767,7 @@
                             <img src="assets/BMm.png" alt="logo" class="about-logo" />
                             <div>
                                 <p class="about-name">Better Mod Manager</p>
-                                <p class="about-version mono">v0.1.0 — Vanguard Workstation</p>
+                                <p class="about-version mono">V0.9.2 — Vanguard Workstation</p>
                                 <p class="about-desc" data-i18n="settings.aboutDesc">Gestionnaire de mods universel
                                     moderne. Conçu pour tous les jeux.
                                 </p>
@@ -761,27 +775,7 @@
                         </div>
                     </div>
 
-                    <div class="glass-card">
-                        <h3 class="card-title" data-i18n="settings.shortcuts">Raccourcis clavier</h3>
-                        <table class="shortcuts-table">
-                            <tr>
-                                <td class="mono">Ctrl + N</td>
-                                <td data-i18n="settings.shortcutNewProfile">Nouveau profil</td>
-                            </tr>
-                            <tr>
-                                <td class="mono">Ctrl + M</td>
-                                <td data-i18n="settings.shortcutAddMod">Ajouter un mod</td>
-                            </tr>
-                            <tr>
-                                <td class="mono">Ctrl + E</td>
-                                <td data-i18n="settings.shortcutExport">Exporter la liste</td>
-                            </tr>
-                            <tr>
-                                <td class="mono">Ctrl + I</td>
-                                <td data-i18n="settings.shortcutImport">Importer une liste</td>
-                            </tr>
-                        </table>
-                    </div>
+
 
                     <div class="glass-card">
                         <h3 class="card-title" data-i18n="settings.notifications">Notifications</h3>
@@ -803,13 +797,7 @@
                         </label>
                     </div>
 
-                    <div class="glass-card">
-                        <h3 class="card-title" data-i18n="settings.language">Langue</h3>
-                        <div style="display:flex;gap:10px;margin-top:8px">
-                            <button class="btn btn-secondary btn-sm lang-btn" data-lang="fr">Français</button>
-                            <button class="btn btn-secondary btn-sm lang-btn" data-lang="en">English</button>
-                        </div>
-                    </div>
+
 
                     <div class="glass-card">
                         <h3 class="card-title" data-i18n="settings.tagsTitle">Gestion des tags personnalisés</h3>
@@ -889,10 +877,7 @@
                         </div>
                     </div>
 
-                    <div class="glass-card">
-                        <button class="btn btn-secondary btn-sm lang-btn" data-lang="fr">Français</button>
-                        <button class="btn btn-secondary btn-sm lang-btn" data-lang="en">English</button>
-                    </div>
+
                 </div>
 
                 <div class="glass-card">
@@ -962,59 +947,184 @@
                 </button>
             </div>
             <div class="modal-body"
-                style="max-height: 400px; overflow-y: auto; font-family: var(--font-mono); font-size: 11px; line-height: 1.5; color: var(--text-muted); background: rgba(0,0,0,0.2); border-radius: 8px; padding: 16px;">
-                Apache License
-                Version 2.0, January 2004
-                http://www.apache.org/licenses/
+                style="max-height: 400px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 16px;">
+                <pre
+                    style="white-space: pre-wrap; font-family: var(--font-mono); font-size: 11px; line-height: 1.5; color: var(--text-muted); margin: 0;">                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
 
-                TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 
-                1. Definitions.
-                "License" shall mean the terms and conditions for use, reproduction, and distribution as defined by
-                Sections 1 through 9 of this document.
-                "Licensor" shall mean the copyright owner or entity authorized by the copyright owner that is granting
-                the License.
-                "Legal Entity" shall mean the union of the acting entity and all other entities that control, are
-                controlled by, or are under common control with that entity. For the purposes of this definition,
-                "control" means (i) the power, direct or indirect, to cause the direction or management of such entity,
-                whether by contract or otherwise, or (ii) ownership of fifty percent (50%) or more of the outstanding
-                shares, or (iii) beneficial ownership of such entity.
-                "You" (or "Your") shall mean an individual or Legal Entity exercising permissions granted by this
-                License.
-                "Source" form shall mean the preferred form for making modifications, including but not limited to
-                software source code, documentation source, and configuration files.
-                "Object" form shall mean any form resulting from mechanical transformation or translation of a Source
-                form, including but not limited to compiled object code, generated documentation, and conversions to
-                other media types.
-                "Work" shall mean the work of authorship, whether in Source or Object form, made available under the
-                License, as indicated by a copyright notice that is included in or attached to the work (an example is
-                provided in the Appendix below).
-                "Derivative Works" shall mean any work, whether in Source or Object form, that is based on (or derived
-                from) the Work and for which the editorial revisions, annotations, elaborations, or other modifications
-                represent, as a whole, an original work of authorship. For the purposes of this License, Derivative
-                Works shall not include works that remain separable from, or merely link (or bind by name) to the
-                interfaces of, the Work and Derivative Works thereof.
-                "Contribution" shall mean any work of authorship, including the original version of the Work and any
-                modifications or additions to that Work or Derivative Works thereof, that is intentionally submitted to
-                Licensor for inclusion in the Work by the copyright owner or by an individual or Legal Entity authorized
-                to submit on behalf of the copyright owner. For the purposes of this definition, "submitted" means any
-                form of electronic, verbal, or written communication sent to the Licensor or its representatives,
-                including but not limited to communication on electronic mailing lists, source code control systems, and
-                issue tracking systems that are managed by, or on behalf of, the Licensor for the purpose of discussing
-                and improving the Work, but excluding communication that is conspicuously marked or otherwise designated
-                in writing by the copyright owner as "Not a Contribution."
-                "Contributor" shall mean Licensor and any individual or Legal Entity on behalf of whom a Contribution
-                has been received by Licensor and subsequently incorporated within the Work.
+   1. Definitions.
 
-                2. Grant of Copyright License. Subject to the terms and conditions of this License, each Contributor
-                hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-                copyright license to reproduce, prepare Derivative Works of, publicly display, publicly perform,
-                sublicense, and distribute the Work and such Derivative Works in Source or Object form.
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
 
-                3. Grant of Patent License. Subject to the terms and conditions of this License, each Contributor hereby
-                grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable (except as
-                stated in this section) patent license to make, have made, use, offer to sell, sell, import, and
-                otherwise transfer the Work...
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS</pre>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-primary" data-close="modal-license">Fermer</button>
@@ -1039,7 +1149,8 @@
                 <div class="form-group">
                     <label class="form-label"><span data-i18n="detail.name">Nom du mod</span> <span
                             class="required">*</span></label>
-                    <input type="text" class="form-input" id="mod-name" placeholder="Mon super mod..." />
+                    <input type="text" class="form-input" id="mod-name" placeholder="Mon super mod..."
+                        data-i18n-placeholder="mod.namePlaceholder" />
                 </div>
                 <div class="form-group">
                     <label class="form-label"><span data-i18n="detail.folder">Dossier du mod</span> <span
@@ -1061,9 +1172,19 @@
                         <input type="text" class="form-input" id="mod-author" placeholder="Auteur..." />
                     </div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label" data-i18n="detail.description">Description</label>
-                    <input type="text" class="form-input" id="mod-desc" placeholder="Description courte..." />
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" data-i18n="detail.description">Description</label>
+                        <input type="text" class="form-input" id="mod-desc" placeholder="Description courte..."
+                            data-i18n-placeholder="mod.descPlaceholder" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" data-i18n="detail.tags">Tags</label>
+                        <select class="form-input" id="mod-tag">
+                            <option value="" data-i18n="prof.none">Aucun</option>
+                            <!-- filled dynamically -->
+                        </select>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -1094,55 +1215,76 @@
                 </button>
             </div>
             <div class="modal-body">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Nom du profil <span class="required">*</span></label>
-                        <input type="text" class="form-input" id="prof-name" placeholder="Mon profil DCS..." />
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Nom du jeu</label>
-                        <input type="text" class="form-input" id="prof-game" placeholder="DCS World..." />
-                    </div>
+                <div class="form-group">
+                    <label class="form-label" data-i18n="prof.nameLabel">Nom du profil <span
+                            class="required">*</span></label>
+                    <input type="text" class="form-input" id="prof-name" placeholder="Mon profil DCS..."
+                        data-i18n-placeholder="prof.namePlaceholder" />
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
+                <div class="form-row" style="align-items:flex-end">
+                    <div class="form-group" style="flex:2">
+                        <label class="form-label" data-i18n="prof.gameLabel">Nom du jeu</label>
+                        <input type="text" class="form-input" id="prof-game" placeholder="DCS World..."
+                            data-i18n-placeholder="prof.gamePlaceholder" />
+                    </div>
+                    <div class="form-group" style="flex:0.8">
                         <label class="form-label" data-i18n="prof.color">Couleur</label>
                         <input type="color" class="form-input" id="prof-color" value="#3b82f6"
-                            style="padding:0;height:38px;cursor:pointer" />
+                            style="padding:0;height:38px;cursor:pointer;width:100%" />
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="flex:2">
                         <label class="form-label" data-i18n="prof.icon">Icône</label>
-                        <select class="form-input" id="prof-icon">
-                            <option value="">Aucune</option>
-                            <option value="gamepad">Manette</option>
-                            <option value="sword">Épée</option>
-                            <option value="plane">Avion</option>
-                            <option value="car">Voiture</option>
-                            <option value="star">Étoile</option>
-                        </select>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <div id="prof-icon-preview"
+                                style="width:38px;height:38px;flex-shrink:0;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-primary)">
+                            </div>
+                            <select class="form-input" id="prof-icon" style="flex:1">
+                                <option value="" data-i18n="prof.none">Aucune</option>
+                                <option value="gamepad">Manette</option>
+                                <option value="sword">Épée</option>
+                                <option value="plane">Avion</option>
+                                <option value="car">Voiture</option>
+                                <option value="star">Étoile</option>
+                                <option value="shield">Bouclier</option>
+                                <option value="crosshair">Cible</option>
+                                <option value="rocket">Fusée</option>
+                                <option value="anchor">Ancre</option>
+                                <option value="zap">Éclair</option>
+                                <option value="cpu">Processeur</option>
+                                <option value="globe">Globe</option>
+                                <option value="map">Carte</option>
+                                <option value="mountain">Montagne</option>
+                                <option value="music">Musique</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Répertoire du jeu <span class="required">*</span></label>
+                    <label class="form-label" data-i18n="prof.gameDir">Répertoire du jeu <span
+                            class="required">*</span></label>
                     <div class="path-picker">
-                        <input type="text" class="form-input" id="prof-game-path" placeholder="C:\Games\..." readonly />
+                        <input type="text" class="form-input" id="prof-game-path" placeholder="C:\Games\..."
+                            data-i18n-placeholder="prof.gameDirPlaceholder" readonly />
                         <button class="btn btn-secondary btn-sm" id="btn-pick-game-path"
                             data-i18n="prof.browse">Parcourir</button>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Dossier des mods <span class="required">*</span></label>
+                    <label class="form-label" data-i18n="prof.modsDir">Dossier des mods <span
+                            class="required">*</span></label>
                     <div class="path-picker">
-                        <input type="text" class="form-input" id="prof-mods-path" placeholder="C:\Mods\..." readonly />
+                        <input type="text" class="form-input" id="prof-mods-path" placeholder="C:\Mods\..."
+                            data-i18n-placeholder="prof.modsDirPlaceholder" readonly />
                         <button class="btn btn-secondary btn-sm" id="btn-pick-mods-path"
                             data-i18n="prof.browse">Parcourir</button>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Dossier de sauvegarde <span class="required">*</span></label>
+                    <label class="form-label" data-i18n="prof.backupDir">Dossier de sauvegarde <span
+                            class="required">*</span></label>
                     <div class="path-picker">
                         <input type="text" class="form-input" id="prof-backup-path" placeholder="C:\Backups\..."
-                            readonly />
+                            data-i18n-placeholder="prof.backupDirPlaceholder" readonly />
                         <button class="btn btn-secondary btn-sm" id="btn-pick-backup-path"
                             data-i18n="prof.browse">Parcourir</button>
                     </div>
@@ -1177,52 +1319,73 @@
             </div>
             <div class="modal-body">
                 <input type="hidden" id="edit-prof-id" />
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Nom du profil <span class="required">*</span></label>
-                        <input type="text" class="form-input" id="edit-prof-name" placeholder="Mon profil DCS..." />
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Nom du jeu</label>
-                        <input type="text" class="form-input" id="edit-prof-game" placeholder="DCS World..." />
-                    </div>
+                <div class="form-group">
+                    <label class="form-label" data-i18n="prof.nameLabel">Nom du profil <span
+                            class="required">*</span></label>
+                    <input type="text" class="form-input" id="edit-prof-name" placeholder="Mon profil DCS..."
+                        data-i18n-placeholder="prof.namePlaceholder" />
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
+                <div class="form-row" style="align-items:flex-end">
+                    <div class="form-group" style="flex:2">
+                        <label class="form-label" data-i18n="prof.gameLabel">Nom du jeu</label>
+                        <input type="text" class="form-input" id="edit-prof-game" placeholder="DCS World..."
+                            data-i18n-placeholder="prof.gamePlaceholder" />
+                    </div>
+                    <div class="form-group" style="flex:0.8">
                         <label class="form-label" data-i18n="prof.color">Couleur</label>
                         <input type="color" class="form-input" id="edit-prof-color" value="#3b82f6"
-                            style="padding:0;height:38px;cursor:pointer" />
+                            style="padding:0;height:38px;cursor:pointer;width:100%" />
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="flex:2">
                         <label class="form-label" data-i18n="prof.icon">Icône</label>
-                        <select class="form-input" id="edit-prof-icon">
-                            <option value="">Aucune</option>
-                            <option value="gamepad">Manette</option>
-                            <option value="sword">Épée</option>
-                            <option value="plane">Avion</option>
-                            <option value="car">Voiture</option>
-                            <option value="star">Étoile</option>
-                        </select>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <div id="edit-prof-icon-preview"
+                                style="width:38px;height:38px;flex-shrink:0;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-primary)">
+                            </div>
+                            <select class="form-input" id="edit-prof-icon" style="flex:1">
+                                <option value="" data-i18n="prof.none">Aucune</option>
+                                <option value="gamepad">Manette</option>
+                                <option value="sword">Épée</option>
+                                <option value="plane">Avion</option>
+                                <option value="car">Voiture</option>
+                                <option value="star">Étoile</option>
+                                <option value="shield">Bouclier</option>
+                                <option value="crosshair">Cible</option>
+                                <option value="rocket">Fusée</option>
+                                <option value="anchor">Ancre</option>
+                                <option value="zap">Éclair</option>
+                                <option value="cpu">Processeur</option>
+                                <option value="globe">Globe</option>
+                                <option value="map">Carte</option>
+                                <option value="mountain">Montagne</option>
+                                <option value="music">Musique</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Répertoire du jeu <span class="required">*</span></label>
+                    <label class="form-label" data-i18n="prof.gameDir">Répertoire du jeu <span
+                            class="required">*</span></label>
                     <div class="path-picker">
                         <input type="text" class="form-input" id="edit-prof-game-path" placeholder="C:\Games\..."
-                            readonly />
-                        <button class="btn btn-secondary btn-sm" id="btn-edit-pick-game-path">Parcourir</button>
+                            data-i18n-placeholder="prof.gameDirPlaceholder" readonly />
+                        <button class="btn btn-secondary btn-sm" id="btn-edit-pick-game-path"
+                            data-i18n="prof.browse">Parcourir</button>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Dossier des mods <span class="required">*</span></label>
+                    <label class="form-label" data-i18n="prof.modsDir">Dossier des mods <span
+                            class="required">*</span></label>
                     <div class="path-picker">
                         <input type="text" class="form-input" id="edit-prof-mods-path" placeholder="C:\Mods\..."
-                            readonly />
-                        <button class="btn btn-secondary btn-sm" id="btn-edit-pick-mods-path">Parcourir</button>
+                            data-i18n-placeholder="prof.modsDirPlaceholder" readonly />
+                        <button class="btn btn-secondary btn-sm" id="btn-edit-pick-mods-path"
+                            data-i18n="prof.browse">Parcourir</button>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Dossier de sauvegarde <span class="required">*</span></label>
+                    <label class="form-label" data-i18n="prof.backupDir">Dossier de sauvegarde <span
+                            class="required">*</span></label>
                     <div class="path-picker">
                         <input type="text" class="form-input" id="edit-prof-backup-path" placeholder="C:\Backups\..."
                             readonly />
@@ -1248,7 +1411,30 @@
     <!-- Toast notifications -->
     <div class="toast-container" id="toast-container"></div>
 
+    <!-- Integrity Modal -->
+    <div class="modal-overlay" id="modal-integrity">
+        <div class="modal glass" style="max-width:500px">
+            <div class="modal-header">
+                <h2 class="modal-title" data-i18n="integrity.title">Rapport d'Intégrité</h2>
+                <button class="modal-close" data-close="modal-integrity">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="integrity-report-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-close="modal-integrity">Fermer</button>
+            </div>
+        </div>
+    </div>
+
     <script src="js/app.js" type="module"></script>
 </body>
 
 </html>
+```

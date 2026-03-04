@@ -11,9 +11,38 @@ let searchQuery = '';
 let selectedModId = null;
 
 export async function initMods() {
+  window._refreshModsFn = refreshMods;
   document.getElementById('btn-add-mod').addEventListener('click', openAddModModal);
   document.getElementById('btn-confirm-add-mod').addEventListener('click', confirmAddMod);
   document.getElementById('btn-enable-all').addEventListener('click', enableAll);
+
+  // Verify Integrity
+  const verifyBtn = document.getElementById('btn-verify-integrity');
+  if (verifyBtn) {
+    verifyBtn.addEventListener('click', async () => {
+      try {
+        toast('Vérification en cours...', 'info');
+        const alteredFiles = await invoke('verify_integrity');
+        const modal = document.getElementById('modal-integrity');
+        const content = document.getElementById('integrity-report-content');
+
+        if (alteredFiles.length === 0) {
+          content.innerHTML = '<div style="color:var(--success);padding:20px;text-align:center;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:12px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg><br><h3>Intégrité OK</h3><p style="font-size:13px;color:var(--text-muted);margin-top:8px">Tous les fichiers moddés actifs correspondent parfaitement à leurs versions dans le dossier du jeu.</p></div>';
+        } else {
+          let html = '<div style="color:var(--warning);padding:10px 0;"><h3 style="margin-bottom:12px;display:flex;align-items:center;gap:8px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg> Problèmes détectés !</h3><p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Les fichiers suivants ont été modifiés (ou sont manquants) dans le répertoire du jeu par des mises à jour ou d\'autres outils :</p><ul style="background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;max-height:300px;overflow-y:auto;list-style:none;margin:0;border:1px solid var(--border)">';
+          alteredFiles.forEach(f => {
+            html += `<li style="font-size:12px;font-family:var(--font-mono);margin-bottom:6px;word-break:break-all;color:var(--text-primary)"><span style="color:var(--accent)">></span> ${String(f).replace(/</g, '&lt;')}</li>`;
+          });
+          html += '</ul><div style="margin-top:16px;font-size:12px;color:var(--text-secondary)">Conseil : Désactivez puis réactivez les mods concernés pour réparer l\'installation.</div></div>';
+          content.innerHTML = html;
+        }
+
+        modal.classList.add('open');
+      } catch (err) {
+        toast('Erreur de vérification : ' + err, 'error');
+      }
+    });
+  }
 
   // Scan mods folder button
   const scanBtn = document.getElementById('btn-scan-mods');
@@ -402,6 +431,9 @@ function renderModDetail(mod) {
   panel.id = 'mod-detail-panel';
   panel.className = 'mod-detail-panel inline-panel';
 
+  // Prevent click bubbling to avoid auto-closing when clicking input fields inside
+  panel.addEventListener('click', e => e.stopPropagation());
+
   const card = document.querySelector(`.mod-card[data-id="${mod.id}"]`);
   if (!card) return;
   card.appendChild(panel);
@@ -608,6 +640,18 @@ function openAddModModal() {
     document.getElementById(id).value = '';
   });
   document.getElementById('mod-version').value = '1.0.0';
+
+  const tagSelect = document.getElementById('mod-tag');
+  if (tagSelect) {
+    tagSelect.innerHTML = '<option value="" data-i18n="prof.none">Aucun</option>';
+    userTags.forEach(tDef => {
+      const opt = document.createElement('option');
+      opt.value = tDef.id;
+      opt.textContent = tDef.name;
+      tagSelect.appendChild(opt);
+    });
+  }
+
   document.getElementById('modal-add-mod').classList.add('open');
 }
 
@@ -617,6 +661,8 @@ async function confirmAddMod() {
   const version = document.getElementById('mod-version').value.trim() || '1.0.0';
   const author = document.getElementById('mod-author').value.trim();
   const description = document.getElementById('mod-desc').value.trim();
+  const tagSelect = document.getElementById('mod-tag');
+  const tagId = tagSelect ? tagSelect.value : '';
 
   if (!name || !folder) {
     toast('Le nom et le fichier/dossier sont obligatoires.', 'error');
@@ -635,6 +681,7 @@ async function confirmAddMod() {
       author,
       description,
       version,
+      tags: tagId ? [tagId] : [],
     });
     document.getElementById('modal-add-mod').classList.remove('open');
     toast(`"${name}" importé et ajouté à la bibliothèque.`, 'success');

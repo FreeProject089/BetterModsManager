@@ -5,7 +5,7 @@
 
 import { initProfiles, renderProfiles, updateProfileChip } from './profiles.js';
 import { initMods, refreshMods } from './mods.js';
-import { setLang, getLang, applyTranslations } from './i18n.js';
+import { initI18n, setLang, getLang, applyTranslations, getLanguages } from './i18n.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
 
 // ── Tauri bridge ──────────────────────────────────────────
@@ -442,21 +442,68 @@ function escHtml(str) {
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// ── Language switcher ─────────────────────────────────────
-function initLangSwitcher() {
-    function updateLangButtons() {
-        document.querySelectorAll('.lang-btn').forEach(btn => {
-            btn.classList.toggle('active-lang', btn.dataset.lang === getLang());
+// ── Navbar Language Dropdown ──────────────────────────────
+function initNavbarLangDropdown() {
+    const container = document.getElementById('nav-lang-dropdown');
+    if (!container) return;
+
+    function render() {
+        const langs = getLanguages();
+        const current = langs.find(l => l.active) || langs[0];
+        container.innerHTML = `
+            <button class="nav-lang-btn" id="nav-lang-toggle">
+                <span class="nav-lang-flag">${current.flag}</span>
+                <span class="nav-lang-name">${current.name}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="nav-lang-chevron"><polyline points="18 15 12 9 6 15"/></svg>
+            </button>
+            <div class="nav-lang-menu" id="nav-lang-menu">
+                ${langs.map(l => `
+                    <button class="nav-lang-option ${l.active ? 'active' : ''}" data-lang="${l.code}">
+                        <span class="nav-lang-flag">${l.flag}</span>
+                        <span>${l.name}</span>
+                        ${l.active ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+                    </button>
+                `).join('')}
+            </div>
+        `;
+
+        const toggle = document.getElementById('nav-lang-toggle');
+        const menu = document.getElementById('nav-lang-menu');
+
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menu.classList.toggle('open');
+            toggle.classList.toggle('open');
+        });
+
+        menu.querySelectorAll('.nav-lang-option').forEach(opt => {
+            opt.addEventListener('click', () => {
+                setLang(opt.dataset.lang);
+                menu.classList.remove('open');
+                toggle.classList.remove('open');
+                render();
+                // Re-render dynamic content
+                if (window._refreshModsFn) window._refreshModsFn();
+            });
+        });
+
+        document.addEventListener('click', () => {
+            menu.classList.remove('open');
+            toggle.classList.remove('open');
         });
     }
-    document.querySelectorAll('.lang-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            setLang(btn.dataset.lang);
-            updateLangButtons();
-            toast(btn.dataset.lang === 'fr' ? 'Langue : Français' : 'Language: English', 'info');
-        });
+    render();
+}
+
+// ── Navbar Version Button ────────────────────────────────
+function initNavbarVersion() {
+    const btn = document.getElementById('nav-version-btn');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+        // Reuse the update notes logic
+        const showUpdatesBtn = document.getElementById('btn-show-updates');
+        if (showUpdatesBtn) showUpdatesBtn.click();
     });
-    updateLangButtons();
 }
 
 // ── Update notes modal ───────────────────────────────────
@@ -519,12 +566,14 @@ function renderMarkdown(md) {
 // ── Boot ──────────────────────────────────────────────────
 async function main() {
     await loadTauri();
+    await initI18n();
     initNavigation();
     initModals();
     await initTitlebar();
     initModlist();
     initShortcuts();
-    initLangSwitcher();
+    initNavbarLangDropdown();
+    initNavbarVersion();
     initUpdateNotes();
     applyTranslations();
     await initProfiles();

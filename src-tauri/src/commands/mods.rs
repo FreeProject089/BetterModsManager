@@ -26,6 +26,7 @@ pub async fn add_mod(
     author: String,
     description: String,
     version: String,
+    tags: Option<Vec<String>>,
 ) -> Result<ModEntry, String> {
     let mods_path = {
         let data = state.data.lock().unwrap();
@@ -90,6 +91,9 @@ pub async fn add_mod(
     entry.author = author;
     entry.description = description;
     entry.version = version;
+    if let Some(t) = tags {
+        entry.tags = t;
+    }
     
     let result = entry.clone();
     {
@@ -432,4 +436,52 @@ pub async fn install_from_modlist(
 
     let _ = state.save();
     Ok(results)
+}
+
+#[tauri::command]
+pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let enabled_mods = {
+        let data = state.data.lock().unwrap();
+        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
+        let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
+        
+        let mut enabled = Vec::new();
+        for m in &data.mods {
+            if m.enabled && m.mod_folder_path.starts_with(&p.mods_path) {
+                enabled.push((m.name.clone(), m.mod_folder_path.clone(), p.game_path.clone()));
+            }
+        }
+        enabled
+    };
+
+    let altered = tauri::async_runtime::spawn_blocking(move || -> Result<Vec<String>, String> {
+        let mut altered = Vec::new();
+        for (mod_name, mod_folder, game_path) in enabled_mods {
+            let mod_dir = PathBuf::from(&mod_folder);
+            let game_dir = PathBuf::from(&game_path);
+            if let Ok(files) = crate::fs_utils::list_mod_files(&mod_dir) {
+                for rel in files {
+                    let src = mod_dir.join(&rel);
+                    let dst = game_dir.join(&rel);
+                    
+                    let src_meta = std::fs::metadata(&src).ok();
+                    let dst_meta = std::fs::metadata(&dst).ok();
+                    
+                    match (src_meta, dst_meta) {
+                        (Some(s), Some(d)) => {
+                            if s.len() != d.len() {
+                                altered.push(format!("[{}] {}", mod_name, rel.display()));
+                            }
+                        },
+                        _ => {
+                            altered.push(format!("[{}] {} (Manquant/Missing)", mod_name, rel.display()));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(altered)
+    }).await.map_err(|e| e.to_string())??;
+
+    Ok(altered)
 }

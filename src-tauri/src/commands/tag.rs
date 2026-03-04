@@ -23,6 +23,7 @@ pub fn create_tag(
         icon,
     };
     data.custom_tags.push(tag.clone());
+    drop(data); // Drop the lock before saving to avoid deadlock
     let _ = state.save();
     Ok(tag)
 }
@@ -35,6 +36,7 @@ pub fn delete_tag(state: State<AppState>, tag_id: String) -> Result<(), String> 
     for m in &mut data.mods {
         m.tags.retain(|tid| *tid != tag_id);
     }
+    drop(data); // Drop the lock before saving to avoid deadlock
     let _ = state.save();
     Ok(())
 }

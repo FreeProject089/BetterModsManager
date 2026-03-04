@@ -323,10 +323,133 @@ img {
     margin: 6px 4px;
 }
 
-/* Profile Chip */
+/* Profile Chip & Sidebar Footer */
 .sidebar-footer {
     padding: 12px 10px;
     border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* ── Navbar Language Dropdown ── */
+.nav-lang-container {
+    position: relative;
+}
+
+.nav-lang-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.nav-lang-btn:hover {
+    border-color: var(--border-accent);
+    background: var(--bg-hover);
+}
+
+.nav-lang-btn.open {
+    border-color: var(--accent);
+}
+
+.nav-lang-flag {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.nav-lang-name {
+    flex: 1;
+    text-align: left;
+}
+
+.nav-lang-chevron {
+    transition: transform 0.2s ease;
+    opacity: 0.5;
+}
+
+.nav-lang-btn.open .nav-lang-chevron {
+    transform: rotate(180deg);
+}
+
+.nav-lang-menu {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    margin-bottom: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-accent);
+    border-radius: 8px;
+    padding: 4px;
+    z-index: 100;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.nav-lang-menu.open {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.nav-lang-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.nav-lang-option:hover {
+    background: var(--bg-hover);
+}
+
+.nav-lang-option.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+/* ── Version Badge Button ── */
+.nav-version-badge {
+    display: block;
+    width: 100%;
+    padding: 6px 12px;
+    background: var(--accent-dim);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 8px;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    letter-spacing: 0.03em;
+}
+
+.nav-version-badge:hover {
+    background: rgba(59, 130, 246, 0.25);
+    border-color: var(--accent);
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
 }
 
 .profile-chip {
@@ -385,9 +508,7 @@ img {
     font-size: 12.5px;
     font-weight: 600;
     color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-word;
 }
 
 /* ═══════════════════════════════════
