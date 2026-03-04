@@ -23,3 +23,31 @@ pub fn import_app_data(state: State<AppState>, src_path: String) -> Result<(), S
     };
     Ok(())
 }
+#[tauri::command]
+pub fn get_license_text(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let mut path = app_handle
+        .path_resolver()
+        .resource_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    // If we're inside src-tauri (dev mode), go up to find LICENSE.md
+    if path.ends_with("src-tauri") {
+        path.pop();
+    }
+    
+    let license_path = path.join("LICENSE.md");
+    
+    if !license_path.exists() {
+        // Try manifest dir parent as last resort for dev
+        let dev_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("LICENSE.md");
+        if dev_path.exists() {
+            return std::fs::read_to_string(dev_path).map_err(|e| e.to_string());
+        }
+        return Err("LICENSE.md not found".to_string());
+    }
+
+    std::fs::read_to_string(license_path).map_err(|e| e.to_string())
+}

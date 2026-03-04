@@ -15,8 +15,15 @@
 </head>
 
 <body>
-
-    <!-- Custom Titlebar -->
+    <!-- App Loader -->
+    <div id="app-loader"
+        style="position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg-primary);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.5s ease, visibility 0.5s ease">
+        <img src="assets/Tasky.png" alt="Loading..."
+            style="width:120px;height:auto;animation:pulse-tasky 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;filter:drop-shadow(0 0 20px rgba(59,130,246,0.3))">
+        <div
+            style="margin-top:24px;font-family:var(--font-mono);font-size:12px;color:var(--text-muted);letter-spacing:0.1em;animation:pulse-text 2s infinite">
+            CHARGEMENT...</div>
+    </div> <!-- Custom Titlebar -->
     <div class="titlebar" data-tauri-drag-region>
         <div class="titlebar-left" data-tauri-drag-region>
             <div class="titlebar-icon">
@@ -27,7 +34,7 @@
                 </svg>
             </div>
             <span class="titlebar-title">BETTER MOD MANAGER</span>
-            <span class="titlebar-version">V0.9.2</span>
+            <span class="titlebar-version">V1.0.6</span>
         </div>
         <div class="titlebar-controls">
             <button class="tb-btn" id="tb-min" title="Minimize">
@@ -142,21 +149,29 @@
                 </button>
             </nav>
 
-            <!-- Sidebar footer: lang + version + profile -->
+            <!-- Sidebar footer -->
             <div class="sidebar-footer">
+                <button class="footer-nav-item" id="btn-restart-onboarding">
+                    <span class="nav-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <polygon points="10 8 16 12 10 16 10 8" />
+                        </svg>
+                    </span>
+                    <span class="nav-label" data-i18n="settings.restartTutorial">Relancer Tuto</span>
+                </button>
+
+                <div class="footer-separator"></div>
+
                 <!-- Language Dropdown -->
                 <div class="nav-lang-container" id="nav-lang-dropdown"></div>
 
-                <!-- Version Button -->
-                <button class="nav-version-badge" id="nav-version-btn">V0.9.2</button>
+                <div class="footer-separator"></div>
 
-                <!-- Active Profile chip -->
-                <div class="profile-chip" id="profile-chip">
-                    <div class="profile-chip-dot"></div>
-                    <div class="profile-chip-info">
-                        <span class="profile-chip-label" data-i18n="nav.activeProfile">PROFIL ACTIF</span>
-                        <span class="profile-chip-name" id="chip-profile-name">—</span>
-                    </div>
+                <div class="footer-bottom-row">
+                    <span class="footer-profile-name" id="chip-profile-name">—</span>
+                    <button class="footer-version-pill" id="nav-version-btn">v1.0.6</button>
                 </div>
             </div>
         </aside>
@@ -184,7 +199,8 @@
                         <button class="btn btn-ghost" id="btn-scan-mods" title="Scanner le dossier mods">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.2">
-                                <path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
+                                <path d="M23 4v6h-6M1 20v-6h6" />
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
                             </svg>
                             <span data-i18n="lib.scan">Scanner</span>
                         </button>
@@ -200,16 +216,17 @@
                         <button class="btn btn-secondary" id="btn-add-mod">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.2">
-                                <line x1="12" y1="5" x2="12" y2="19" />
-                                <line x1="5" y1="12" x2="19" y2="12" />
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                <line x1="12" y1="8" x2="12" y2="16" />
+                                <line x1="8" y1="12" x2="16" y2="12" />
                             </svg>
                             <span data-i18n="lib.addMod">Ajouter un mod</span>
                         </button>
                         <button class="btn btn-primary" id="btn-enable-all">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.2">
-                                <polyline points="9 11 12 14 22 4" />
-                                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                                <path d="m5 12 5 5L20 7" />
+                                <circle cx="12" cy="12" r="10" />
                             </svg>
                             <span data-i18n="lib.enableAll">Tout activer</span>
                         </button>
@@ -374,8 +391,9 @@
                             </svg>
                         </div>
                         <div>
-                            <p class="info-card-title">Format .MM</p>
-                            <p class="info-card-desc">Un fichier JSON contenant la liste complète de vos mods, liens de
+                            <p class="info-card-title" data-i18n="mm.formatTitle">Format .MM</p>
+                            <p class="info-card-desc" data-i18n="mm.formatDesc">Un fichier JSON contenant la liste
+                                complète de vos mods, liens de
                                 téléchargement, ordre d'installation et configuration.</p>
                         </div>
                     </div>
@@ -388,8 +406,9 @@
                             </svg>
                         </div>
                         <div>
-                            <p class="info-card-title">Partage facile</p>
-                            <p class="info-card-desc">Envoyez votre fichier .MM à d'autres utilisateurs pour reproduire
+                            <p class="info-card-title" data-i18n="mm.shareTitle">Partage facile</p>
+                            <p class="info-card-desc" data-i18n="mm.shareDesc">Envoyez votre fichier .MM à d'autres
+                                utilisateurs pour reproduire
                                 exactement votre configuration.</p>
                         </div>
                     </div>
@@ -400,21 +419,21 @@
                     <h3 class="card-title">Exporter la liste actuelle</h3>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label">Nom de la liste</label>
+                            <label class="form-label" data-i18n="mod.listName">Nom de la liste</label>
                             <input type="text" class="form-input" id="mm-list-name" placeholder="Ma config DCS..." />
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Auteur</label>
+                            <label class="form-label" data-i18n="detail.author">Auteur</label>
                             <input type="text" class="form-input" id="mm-author" placeholder="Votre pseudo..." />
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">Description</label>
+                            <label class="form-label" data-i18n="detail.description">Description</label>
                             <input type="text" class="form-input" id="mm-description"
                                 placeholder="Description de la liste..." />
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-ghost" id="btn-cancel-export">Annuler</button>
+                        <button class="btn btn-ghost" id="btn-cancel-export" data-i18n="prof.cancel">Annuler</button>
                         <button class="btn btn-primary" id="btn-confirm-export">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.2">
@@ -422,7 +441,7 @@
                                 <line x1="12" y1="3" x2="12" y2="15" />
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                             </svg>
-                            Sauvegarder .MM
+                            <span data-i18n="mm.export">Sauvegarder .MM</span>
                         </button>
                     </div>
                 </div>
@@ -438,7 +457,7 @@
                                 <polyline points="7 10 12 15 17 10" />
                                 <line x1="12" y1="15" x2="12" y2="3" />
                             </svg>
-                            Tout installer
+                            <span data-i18n="mm.installAll">Tout installer</span>
                         </button>
                     </div>
                     <div id="imported-content"></div>
@@ -492,6 +511,25 @@
                             défini.
                             Ainsi, lorsque vous désactivez le mod, le fichier original est restauré, laissant votre jeu
                             intact.
+                        </p>
+                    </div>
+
+                    <!-- Integrity Report -->
+                    <div class="glass-card">
+                        <h3 class="card-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warning)"
+                                stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                <polyline points="22 4 12 14.01 9 11.01" />
+                            </svg>
+                            <span data-i18n="docs.integrityReport">Rapport d'intégrité</span>
+                        </h3>
+                        <p class="about-desc" data-i18n="docs.integrityReportDesc" style="line-height:1.6">
+                            Le bouton <strong>"Vérifier l'intégrité"</strong> compare les fichiers réellement installés
+                            dans votre dossier de jeu avec les fichiers originaux du mod.
+                            <br><br>
+                            Il détecte si un fichier a été modifié, supprimé accidentellement ou si une mise à jour du
+                            jeu a écrasé vos mods. C'est l'outil idéal pour diagnostiquer un mod qui ne fonctionne plus.
                         </p>
                     </div>
 
@@ -611,143 +649,193 @@
             <section class="view" id="view-credits">
                 <div class="view-header">
                     <div>
-                        <h1 class="view-title" data-i18n="credits.title">Crédits</h1>
-                        <p class="view-subtitle" data-i18n="credits.subtitle">À propos de Better Mod Manager</p>
+                        <h1 class="view-title" data-i18n="nav.credits">Crédits</h1>
+                        <p class="view-subtitle">Better Mod Manager — Version 2.2.0-Alpha</p>
                     </div>
                 </div>
 
-                <div class="settings-sections" style="grid-template-columns:1fr; max-width:700px; margin: 0 auto">
-
-                    <!-- Hero Card -->
+                <div style="max-width: 850px; margin: 0 auto; padding: 20px 20px 60px;">
+                    <!-- HERO SECTION -->
                     <div class="glass-card"
-                        style="text-align:center;padding:40px 24px 32px;position:relative;overflow:hidden">
+                        style="padding: 48px 32px; border-radius: 24px; text-align: center; margin-bottom: 32px; position: relative; overflow: hidden; border: 1px solid rgba(59, 130, 246, 0.15); background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.2) 100%);">
                         <div
-                            style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--cyan),var(--accent))">
+                            style="position: absolute; top: -50px; left: 50%; transform: translateX(-50%); width: 300px; height: 300px; background: var(--accent); opacity: 0.03; filter: blur(80px); pointer-events: none;">
                         </div>
-                        <img src="assets/BMm.png" alt="Better Mod Manager"
-                            style="width:80px;height:80px;border-radius:16px;margin:0 auto 16px;display:block;box-shadow:0 4px 20px rgba(59,130,246,0.3)" />
-                        <h2 style="font-size:22px;font-weight:700;color:var(--text-primary);margin-bottom:4px">Better
-                            Mod Manager</h2>
-                        <span class="mono"
-                            style="display:inline-block;padding:3px 10px;border-radius:6px;background:var(--accent-dim);color:var(--accent);font-size:12px;margin-bottom:14px">V0.9.2</span>
-                        <p style="color:var(--text-secondary);font-size:13px;max-width:400px;margin:0 auto;line-height:1.6"
+
+                        <div
+                            style="display: inline-flex; width: 84px; height: 84px; background: rgba(0,0,0,0.5); border: 1px solid var(--border); border-radius: 20px; align-items: center; justify-content: center; margin-bottom: 24px; position: relative; z-index: 1; box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
+                            <img src="assets/BMm.png" alt="BM"
+                                style="width: 54px; height: 54px; object-fit: contain;" />
+                        </div>
+
+                        <h1
+                            style="font-size: 32px; font-weight: 800; color: var(--text-primary); margin-bottom: 12px; letter-spacing: -0.02em;">
+                            Better Mod.Manager</h1>
+
+                        <div
+                            style="display: inline-flex; align-items: center; background: rgba(59, 130, 246, 0.12); color: var(--accent); padding: 5px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; font-family: var(--font-mono); border: 1px solid rgba(59, 130, 246, 0.25); margin-bottom: 32px;">
+                            v1.0.6
+                        </div>
+
+                        <p style="font-size: 15px; color: var(--text-secondary); line-height: 1.7; max-width: 560px; margin: 0 auto; font-weight: 500;"
                             data-i18n="credits.heroDesc">
-                            Gestionnaire de mods moderne et universel. Organisez, activez et partagez vos mods en toute
-                            simplicité.
+                            Un outil complet pour gérer vos mods et optimiser votre expérience. Sélectionnez vos
+                            fichiers, automatisez vos installations et gérez vos profils avec une interface workstation
+                            moderne.
                         </p>
                     </div>
 
-                    <!-- Developer -->
-                    <div class="glass-card" style="padding:20px 24px">
-                        <div style="display:flex;align-items:center;gap:16px">
+                    <!-- INFO CARDS GRID -->
+                    <div class="credit-info-grid"
+                        style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px;">
+                        <div class="credit-info-card glass-card"
+                            style="padding: 24px; border-radius: 18px; display: flex; align-items: center; gap: 18px; border: 1px solid var(--border);">
                             <img src="assets/pfp.webp" alt="FreeProject089"
-                                style="width:52px;height:52px;border-radius:50%;border:2px solid var(--border);object-fit:cover" />
-                            <div style="flex:1">
-                                <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:2px"
-                                    data-i18n="credits.devLabel">Développeur</div>
-                                <div style="font-size:16px;font-weight:700;color:var(--text-primary)">FreeProject089
-                                </div>
-                                <div style="font-size:12px;color:var(--text-secondary)" data-i18n="credits.devRole">
-                                    Créateur & Développeur</div>
+                                style="width: 58px; height: 58px; border-radius: 16px; border: 2px solid rgba(255,255,255,0.1); object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" />
+                            <div>
+                                <div class="credit-info-label" data-i18n="credits.devLabel"
+                                    style="margin-bottom: 4px; opacity: 0.5; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;">
+                                    AUTEUR</div>
+                                <div class="credit-info-value"
+                                    style="font-size: 19px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em;">
+                                    FreeProject089</div>
+                                <div class="credit-info-sub" data-i18n="credits.devRole"
+                                    style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Créateur &
+                                    Développeur</div>
+                            </div>
+                        </div>
+
+                        <div class="credit-info-card glass-card"
+                            style="padding: 24px; border-radius: 18px; display: flex; align-items: center; gap: 18px; border: 1px solid var(--border);">
+                            <div class="credit-icon-box"
+                                style="width: 58px; height: 58px; border-radius: 16px; background:rgba(255,100,50,0.1); border: 1px solid rgba(255,100,50,0.2); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ff6432"
+                                    stroke-width="2.2">
+                                    <circle cx="12" cy="12" r="3" />
+                                    <path
+                                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                                </svg>
+                            </div>
+                            <div class="credit-info-text">
+                                <div class="credit-info-label" data-i18n="credits.rustLabel"
+                                    style="margin-bottom: 4px; opacity: 0.5; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;">
+                                    DÉVELOPPÉ EN RUST</div>
+                                <div class="credit-info-value" data-i18n="credits.rustSub"
+                                    style="font-size: 19px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em;">
+                                    Cœur système haute performance</div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Links -->
-                    <div class="glass-card" style="padding:20px 24px">
-                        <h3
-                            style="font-size:13px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:14px;display:flex;align-items:center;gap:6px">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
+                    <!-- COMMUNITY LINKS CARD (IMAGE 4) -->
+                    <div class="glass-card"
+                        style="padding: 24px; border-radius: 20px; border: 1px solid var(--border);">
+                        <div
+                            style="display:flex; align-items:center; gap:10px; margin-bottom:20px; color:var(--text-primary); font-weight:700; font-size:15px; letter-spacing: -0.01em;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                                stroke-width="2.5">
                                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                             </svg>
                             <span data-i18n="credits.linksTitle">Liens & Communauté</span>
-                        </h3>
-                        <div style="display:flex;flex-direction:column;gap:8px">
+                        </div>
 
-                            <!-- GitHub -->
+                        <div class="credit-links-list" style="display: flex; flex-direction: column; gap: 12px;">
                             <a href="https://github.com/FreeProject089/BetterModsManager" target="_blank"
-                                style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;text-decoration:none;transition:var(--transition);cursor:pointer"
-                                onmouseover="this.style.borderColor='var(--border-accent)';this.style.background='rgba(59,130,246,0.04)'"
-                                onmouseout="this.style.borderColor='var(--border)';this.style.background='rgba(255,255,255,0.02)'">
-                                <div
-                                    style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                                        stroke="var(--text-primary)" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
+                                class="credit-link-card" style="border-left: 3px solid #64748b;">
+                                <div class="credit-icon-box" style="background: rgba(255,255,255,0.08); color: #fff;">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.2">
                                         <path
-                                            d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22">
-                                        </path>
+                                            d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
                                     </svg>
                                 </div>
-                                <div style="flex:1">
-                                    <div style="font-weight:600;font-size:14px;color:var(--text-primary)">GitHub
-                                        Repository</div>
-                                    <div
-                                        style="font-size:12px;color:var(--text-muted);margin-top:1px;font-family:var(--font-mono)">
-                                        FreeProject089/BetterModsManager</div>
+                                <div class="credit-info">
+                                    <div class="credit-title" style="color: var(--text-primary); font-size: 15px;">Dépôt
+                                        GitHub</div>
+                                    <div class="credit-subtitle" data-i18n="credits.githubSub">Code source &
+                                        contributions</div>
                                 </div>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
-                                    stroke-width="2">
+                                <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" style="opacity: 0.4;">
                                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                                     <polyline points="15 3 21 3 21 9" />
                                     <line x1="10" y1="14" x2="21" y2="3" />
                                 </svg>
                             </a>
 
-                            <!-- Discord -->
-                            <a href="https://discord.com/invite/CTaaEF9R75" target="_blank"
-                                style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;text-decoration:none;transition:var(--transition);cursor:pointer"
-                                onmouseover="this.style.borderColor='rgba(88,101,242,0.5)';this.style.background='rgba(88,101,242,0.06)'"
-                                onmouseout="this.style.borderColor='var(--border)';this.style.background='rgba(255,255,255,0.02)'">
-                                <div
-                                    style="width:40px;height:40px;border-radius:10px;background:rgba(88,101,242,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="#5865F2">
+                            <a href="https://discord.com/invite/CTaaEF9R75" target="_blank" class="credit-link-card"
+                                style="border-left: 3px solid #5865F2;">
+                                <div class="credit-icon-box" style="background: rgba(88,101,242,0.1); color: #5865F2;">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                         <path
-                                            d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" />
+                                            d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 11.756 11.756 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.078.078 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.332c-1.183 0-2.157-1.085-2.157-2.42s.955-2.42 2.157-2.42c1.21 0 2.176 1.085 2.156 2.42 0 1.335-.956 2.42-2.156 2.42zm7.974 0c-1.183 0-2.157-1.085-2.157-2.42s.955-2.42 2.157-2.42c1.21 0 2.176 1.085 2.156 2.42 0 1.335-.946 2.42-2.156 2.42z" />
                                     </svg>
                                 </div>
-                                <div style="flex:1">
-                                    <div style="font-weight:600;font-size:14px;color:#5865F2">BetterDiscord
-                                    </div>
-                                    <div style="font-size:12px;color:var(--text-muted);margin-top:1px"
-                                        data-i18n="credits.discordSub">Aide & mises à jour</div>
+                                <div class="credit-info">
+                                    <div class="credit-title" style="color: #8b9dfa; font-size: 15px;"
+                                        data-i18n="credits.discord">Communauté Discord</div>
+                                    <div class="credit-subtitle" style="font-size: 12px; opacity: 0.7;"
+                                        data-i18n="credits.discordSub">Aide & Mises à jour</div>
                                 </div>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
-                                    stroke-width="2">
+                                <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" style="opacity: 0.4;">
                                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                                     <polyline points="15 3 21 3 21 9" />
                                     <line x1="10" y1="14" x2="21" y2="3" />
                                 </svg>
                             </a>
 
-                            <!-- License -->
-                            <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:var(--transition)"
-                                onclick="document.getElementById('modal-license').classList.add('open')"
-                                onmouseover="this.style.borderColor='var(--border-accent)';this.style.background='rgba(255,255,255,0.04)'"
-                                onmouseout="this.style.borderColor='var(--border)';this.style.background='rgba(255,255,255,0.02)'">
-                                <div
-                                    style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                                        stroke="var(--text-muted)" stroke-width="2">
+                            <a href="https://forum.dcs.world" target="_blank" class="credit-link-card"
+                                style="border-left: 3px solid #ff9800;">
+                                <div class="credit-icon-box"
+                                    style="background: rgba(0,0,0,0.4); border-radius: 10px; overflow: hidden; padding: 0;">
+                                    <img src="assets/ED.webp" alt="ED"
+                                        style="width: 40px; height: 40px; object-fit: cover; filter: brightness(1.2);" />
+                                </div>
+                                <div class="credit-info">
+                                    <div class="credit-title" style="color: #ffb74d; font-size: 15px;">Forums Eagle
+                                        Dynamics</div>
+                                    <div class="credit-subtitle" style="font-size: 12px; opacity: 0.7;"
+                                        data-i18n="credits.edSub">Ressources de modding DCS World</div>
+                                </div>
+                                <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" style="opacity: 0.4;">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                    <polyline points="15 3 21 3 21 9" />
+                                    <line x1="10" y1="14" x2="21" y2="3" />
+                                </svg>
+                            </a>
+
+                            <a href="#" onclick="openLicenseModal()" class="credit-link-card"
+                                style="border-left: 3px solid #2563eb;">
+                                <div class="credit-icon-box" style="background: rgba(37,99,235,0.1); color: #3b82f6;">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
                                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                                         <polyline points="14 2 14 8 20 8" />
-                                        <line x1="16" y1="13" x2="8" y2="13" />
-                                        <line x1="16" y1="17" x2="8" y2="17" />
                                     </svg>
                                 </div>
-                                <div style="flex:1">
-                                    <div style="font-weight:600;font-size:14px;color:var(--text-primary)"
-                                        data-i18n="credits.license">Licence</div>
-                                    <div style="font-size:12px;color:var(--text-muted);margin-top:1px"
-                                        data-i18n="credits.licenseSub">Apache 2.0 — Cliquez pour lire</div>
+                                <div class="credit-info">
+                                    <div class="credit-title" style="color: #60a5fa; font-size: 15px;"
+                                        data-i18n="credits.license">License</div>
+                                    <div class="credit-subtitle" style="font-size: 12px; opacity: 0.7;"
+                                        data-i18n="credits.licenseSub">View Apache-2.0 License</div>
                                 </div>
-                            </div>
-
+                                <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" style="opacity: 0.4;">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                    <polyline points="15 3 21 3 21 9" />
+                                    <line x1="10" y1="14" x2="21" y2="3" />
+                                </svg>
+                            </a>
                         </div>
                     </div>
 
+                    <div
+                        style="margin-top: 40px; text-align: center; color: var(--text-muted); font-size: 11px; font-family: var(--font-mono); letter-spacing: 0.05em;">
+                        &copy; 2025 BETTER PROJECT. ALL RIGHTS RESERVED.
+                    </div>
                 </div>
             </section>
 
@@ -767,7 +855,7 @@
                             <img src="assets/BMm.png" alt="logo" class="about-logo" />
                             <div>
                                 <p class="about-name">Better Mod Manager</p>
-                                <p class="about-version mono">V0.9.2 — Vanguard Workstation</p>
+                                <p class="about-version mono">v1.0.6 — Vanguard Workstation</p>
                                 <p class="about-desc" data-i18n="settings.aboutDesc">Gestionnaire de mods universel
                                     moderne. Conçu pour tous les jeux.
                                 </p>
@@ -896,13 +984,9 @@
 
                 <div class="glass-card">
                     <h3 class="card-title" data-i18n="settings.tutorialTitle">Tutoriel (Tasky)</h3>
-                    <button class="btn btn-secondary btn-sm" id="btn-restart-onboarding" style="margin-top:8px">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.26l3.08 2.69"></path>
-                        </svg>
-                        <span data-i18n="settings.restartTutorial">Redémarrer le tutoriel</span>
-                    </button>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+                        Retrouvez le bouton de tutoriel directement dans le menu de gauche pour un accès rapide.
+                    </p>
                 </div>
     </div>
     </section>
@@ -947,189 +1031,15 @@
                 </button>
             </div>
             <div class="modal-body"
-                style="max-height: 400px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 16px;">
-                <pre
-                    style="white-space: pre-wrap; font-family: var(--font-mono); font-size: 11px; line-height: 1.5; color: var(--text-muted); margin: 0;">                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
-
-   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
-
-   1. Definitions.
-
-      "License" shall mean the terms and conditions for use, reproduction,
-      and distribution as defined by Sections 1 through 9 of this document.
-
-      "Licensor" shall mean the copyright owner or entity authorized by
-      the copyright owner that is granting the License.
-
-      "Legal Entity" shall mean the union of the acting entity and all
-      other entities that control, are controlled by, or are under common
-      control with that entity. For the purposes of this definition,
-      "control" means (i) the power, direct or indirect, to cause the
-      direction or management of such entity, whether by contract or
-      otherwise, or (ii) ownership of fifty percent (50%) or more of the
-      outstanding shares, or (iii) beneficial ownership of such entity.
-
-      "You" (or "Your") shall mean an individual or Legal Entity
-      exercising permissions granted by this License.
-
-      "Source" form shall mean the preferred form for making modifications,
-      including but not limited to software source code, documentation
-      source, and configuration files.
-
-      "Object" form shall mean any form resulting from mechanical
-      transformation or translation of a Source form, including but
-      not limited to compiled object code, generated documentation,
-      and conversions to other media types.
-
-      "Work" shall mean the work of authorship, whether in Source or
-      Object form, made available under the License, as indicated by a
-      copyright notice that is included in or attached to the work
-      (an example is provided in the Appendix below).
-
-      "Derivative Works" shall mean any work, whether in Source or Object
-      form, that is based on (or derived from) the Work and for which the
-      editorial revisions, annotations, elaborations, or other modifications
-      represent, as a whole, an original work of authorship. For the purposes
-      of this License, Derivative Works shall not include works that remain
-      separable from, or merely link (or bind by name) to the interfaces of,
-      the Work and Derivative Works thereof.
-
-      "Contribution" shall mean any work of authorship, including
-      the original version of the Work and any modifications or additions
-      to that Work or Derivative Works thereof, that is intentionally
-      submitted to Licensor for inclusion in the Work by the copyright owner
-      or by an individual or Legal Entity authorized to submit on behalf of
-      the copyright owner. For the purposes of this definition, "submitted"
-      means any form of electronic, verbal, or written communication sent
-      to the Licensor or its representatives, including but not limited to
-      communication on electronic mailing lists, source code control systems,
-      and issue tracking systems that are managed by, or on behalf of, the
-      Licensor for the purpose of discussing and improving the Work, but
-      excluding communication that is conspicuously marked or otherwise
-      designated in writing by the copyright owner as "Not a Contribution."
-
-      "Contributor" shall mean Licensor and any individual or Legal Entity
-      on behalf of whom a Contribution has been received by Licensor and
-      subsequently incorporated within the Work.
-
-   2. Grant of Copyright License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      copyright license to reproduce, prepare Derivative Works of,
-      publicly display, publicly perform, sublicense, and distribute the
-      Work and such Derivative Works in Source or Object form.
-
-   3. Grant of Patent License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      (except as stated in this section) patent license to make, have made,
-      use, offer to sell, sell, import, and otherwise transfer the Work,
-      where such license applies only to those patent claims licensable
-      by such Contributor that are necessarily infringed by their
-      Contribution(s) alone or by combination of their Contribution(s)
-      with the Work to which such Contribution(s) was submitted. If You
-      institute patent litigation against any entity (including a
-      cross-claim or counterclaim in a lawsuit) alleging that the Work
-      or a Contribution incorporated within the Work constitutes direct
-      or contributory patent infringement, then any patent licenses
-      granted to You under this License for that Work shall terminate
-      as of the date such litigation is filed.
-
-   4. Redistribution. You may reproduce and distribute copies of the
-      Work or Derivative Works thereof in any medium, with or without
-      modifications, and in Source or Object form, provided that You
-      meet the following conditions:
-
-      (a) You must give any other recipients of the Work or
-          Derivative Works a copy of this License; and
-
-      (b) You must cause any modified files to carry prominent notices
-          stating that You changed the files; and
-
-      (c) You must retain, in the Source form of any Derivative Works
-          that You distribute, all copyright, patent, trademark, and
-          attribution notices from the Source form of the Work,
-          excluding those notices that do not pertain to any part of
-          the Derivative Works; and
-
-      (d) If the Work includes a "NOTICE" text file as part of its
-          distribution, then any Derivative Works that You distribute must
-          include a readable copy of the attribution notices contained
-          within such NOTICE file, excluding those notices that do not
-          pertain to any part of the Derivative Works, in at least one
-          of the following places: within a NOTICE text file distributed
-          as part of the Derivative Works; within the Source form or
-          documentation, if provided along with the Derivative Works; or,
-          within a display generated by the Derivative Works, if and
-          wherever such third-party notices normally appear. The contents
-          of the NOTICE file are for informational purposes only and
-          do not modify the License. You may add Your own attribution
-          notices within Derivative Works that You distribute, alongside
-          or as an addendum to the NOTICE text from the Work, provided
-          that such additional attribution notices cannot be construed
-          as modifying the License.
-
-      You may add Your own copyright statement to Your modifications and
-      may provide additional or different license terms and conditions
-      for use, reproduction, or distribution of Your modifications, or
-      for any such Derivative Works as a whole, provided Your use,
-      reproduction, and distribution of the Work otherwise complies with
-      the conditions stated in this License.
-
-   5. Submission of Contributions. Unless You explicitly state otherwise,
-      any Contribution intentionally submitted for inclusion in the Work
-      by You to the Licensor shall be under the terms and conditions of
-      this License, without any additional terms or conditions.
-      Notwithstanding the above, nothing herein shall supersede or modify
-      the terms of any separate license agreement you may have executed
-      with Licensor regarding such Contributions.
-
-   6. Trademarks. This License does not grant permission to use the trade
-      names, trademarks, service marks, or product names of the Licensor,
-      except as required for reasonable and customary use in describing the
-      origin of the Work and reproducing the content of the NOTICE file.
-
-   7. Disclaimer of Warranty. Unless required by applicable law or
-      agreed to in writing, Licensor provides the Work (and each
-      Contributor provides its Contributions) on an "AS IS" BASIS,
-      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-      implied, including, without limitation, any warranties or conditions
-      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-      PARTICULAR PURPOSE. You are solely responsible for determining the
-      appropriateness of using or redistributing the Work and assume any
-      risks associated with Your exercise of permissions under this License.
-
-   8. Limitation of Liability. In no event and under no legal theory,
-      whether in tort (including negligence), contract, or otherwise,
-      unless required by applicable law (such as deliberate and grossly
-      negligent acts) or agreed to in writing, shall any Contributor be
-      liable to You for damages, including any direct, indirect, special,
-      incidental, or consequential damages of any character arising as a
-      result of this License or out of the use or inability to use the
-      Work (including but not limited to damages for loss of goodwill,
-      work stoppage, computer failure or malfunction, or any and all
-      other commercial damages or losses), even if such Contributor
-      has been advised of the possibility of such damages.
-
-   9. Accepting Warranty or Additional Liability. While redistributing
-      the Work or Derivative Works thereof, You may choose to offer,
-      and charge a fee for, acceptance of support, warranty, indemnity,
-      or other liability obligations and/or rights consistent with this
-      License. However, in accepting such obligations, You may act only
-      on Your own behalf and on Your sole responsibility, not on behalf
-      of any other Contributor, and only if You agree to indemnify,
-      defend, and hold each Contributor harmless for any liability
-      incurred by, or claims asserted against, such Contributor by reason
-      of your accepting any such warranty or additional liability.
-
-   END OF TERMS AND CONDITIONS</pre>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary" data-close="modal-license">Fermer</button>
+                style="max-height: 500px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 20px; margin-top:10px; border: 1px solid var(--border);">
+                <pre id="license-content"
+                    style="white-space: pre-wrap; word-wrap: break-word; font-family: var(--font-mono); font-size: 11px; line-height: 1.6; color: rgba(255,255,255,0.7); margin: 0; text-align: left;">Chargement de la licence...</pre>
             </div>
         </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" data-close="modal-license">Fermer</button>
+        </div>
+    </div>
     </div>
 
     <!-- Add Mod Modal -->
@@ -1232,31 +1142,10 @@
                         <input type="color" class="form-input" id="prof-color" value="#3b82f6"
                             style="padding:0;height:38px;cursor:pointer;width:100%" />
                     </div>
-                    <div class="form-group" style="flex:2">
-                        <label class="form-label" data-i18n="prof.icon">Icône</label>
-                        <div style="display:flex;gap:8px;align-items:center">
-                            <div id="prof-icon-preview"
-                                style="width:38px;height:38px;flex-shrink:0;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-primary)">
-                            </div>
-                            <select class="form-input" id="prof-icon" style="flex:1">
-                                <option value="" data-i18n="prof.none">Aucune</option>
-                                <option value="gamepad">Manette</option>
-                                <option value="sword">Épée</option>
-                                <option value="plane">Avion</option>
-                                <option value="car">Voiture</option>
-                                <option value="star">Étoile</option>
-                                <option value="shield">Bouclier</option>
-                                <option value="crosshair">Cible</option>
-                                <option value="rocket">Fusée</option>
-                                <option value="anchor">Ancre</option>
-                                <option value="zap">Éclair</option>
-                                <option value="cpu">Processeur</option>
-                                <option value="globe">Globe</option>
-                                <option value="map">Carte</option>
-                                <option value="mountain">Montagne</option>
-                                <option value="music">Musique</option>
-                            </select>
-                        </div>
+                    <div class="form-group full-width" style="margin-top:12px">
+                        <label class="form-label" data-i18n="prof.iconPickerTitle">ICÔNE VISUELLE</label>
+                        <div class="icon-picker-grid" id="prof-icon-grid"></div>
+                        <input type="hidden" id="prof-icon" value="" />
                     </div>
                 </div>
                 <div class="form-group">
@@ -1336,31 +1225,10 @@
                         <input type="color" class="form-input" id="edit-prof-color" value="#3b82f6"
                             style="padding:0;height:38px;cursor:pointer;width:100%" />
                     </div>
-                    <div class="form-group" style="flex:2">
-                        <label class="form-label" data-i18n="prof.icon">Icône</label>
-                        <div style="display:flex;gap:8px;align-items:center">
-                            <div id="edit-prof-icon-preview"
-                                style="width:38px;height:38px;flex-shrink:0;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-primary)">
-                            </div>
-                            <select class="form-input" id="edit-prof-icon" style="flex:1">
-                                <option value="" data-i18n="prof.none">Aucune</option>
-                                <option value="gamepad">Manette</option>
-                                <option value="sword">Épée</option>
-                                <option value="plane">Avion</option>
-                                <option value="car">Voiture</option>
-                                <option value="star">Étoile</option>
-                                <option value="shield">Bouclier</option>
-                                <option value="crosshair">Cible</option>
-                                <option value="rocket">Fusée</option>
-                                <option value="anchor">Ancre</option>
-                                <option value="zap">Éclair</option>
-                                <option value="cpu">Processeur</option>
-                                <option value="globe">Globe</option>
-                                <option value="map">Carte</option>
-                                <option value="mountain">Montagne</option>
-                                <option value="music">Musique</option>
-                            </select>
-                        </div>
+                    <div class="form-group full-width" style="margin-top:12px">
+                        <label class="form-label" data-i18n="prof.iconPickerTitle">ICÔNE VISUELLE</label>
+                        <div class="icon-picker-grid" id="edit-prof-icon-grid"></div>
+                        <input type="hidden" id="edit-prof-icon" value="" />
                     </div>
                 </div>
                 <div class="form-group">
@@ -1389,7 +1257,8 @@
                     <div class="path-picker">
                         <input type="text" class="form-input" id="edit-prof-backup-path" placeholder="C:\Backups\..."
                             readonly />
-                        <button class="btn btn-secondary btn-sm" id="btn-edit-pick-backup-path">Parcourir</button>
+                        <button class="btn btn-secondary btn-sm" id="btn-edit-pick-backup-path"
+                            data-i18n="prof.browse">Parcourir</button>
                     </div>
                 </div>
             </div>
@@ -1402,7 +1271,7 @@
                         <polyline points="17 21 17 13 7 13 7 21" />
                         <polyline points="7 3 7 8 15 8" />
                     </svg>
-                    Enregistrer
+                    <span data-i18n="prof.saveBtn">Enregistrer</span>
                 </button>
             </div>
         </div>

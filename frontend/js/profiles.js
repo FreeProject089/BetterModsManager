@@ -1,7 +1,7 @@
 /**
  * profiles.js — Profile management
  */
-import { invoke, pickFolder, toast } from './app.js';
+import { invoke, pickFolder, toast, updateLibraryProfileSelector } from './app.js';
 import { refreshMods } from './mods.js';
 import { t } from './i18n.js';
 
@@ -18,14 +18,15 @@ export async function initProfiles() {
         try {
             const count = await invoke('import_ovgme_profiles');
             if (count > 0) {
-                toast(`${count} profil(s) OvGME importé(s) avec succès.`, 'success');
+                toast(t('prof.importSuccess').replace('{count}', count), 'success');
                 await renderProfiles();
                 updateProfileChip();
+                updateLibraryProfileSelector();
             } else {
-                toast('Aucun nouveau profil OvGME trouvé.', 'info');
+                toast(t('prof.importNone'), 'info');
             }
         } catch (err) {
-            toast('Erreur import OvGME : ' + err, 'error');
+            toast(t('common.error') + ' OvGME : ' + err, 'error');
         } finally {
             btn.disabled = false;
             btn.innerHTML = originalText;
@@ -62,24 +63,47 @@ export async function initProfiles() {
     });
     document.getElementById('btn-confirm-edit-profile').addEventListener('click', confirmEditProfile);
 
-    // Icon Picker Previews
-    const profIcon = document.getElementById('prof-icon');
-    const profIconPreview = document.getElementById('prof-icon-preview');
-    if (profIcon && profIconPreview) {
-        profIcon.addEventListener('change', () => {
-            profIconPreview.innerHTML = getProfileIconSvg(profIcon.value, 'opacity:1;') || '';
-        });
-    }
-
-    const editProfIcon = document.getElementById('edit-prof-icon');
-    const editProfIconPreview = document.getElementById('edit-prof-icon-preview');
-    if (editProfIcon && editProfIconPreview) {
-        editProfIcon.addEventListener('change', () => {
-            editProfIconPreview.innerHTML = getProfileIconSvg(editProfIcon.value, 'opacity:1;') || '';
-        });
-    }
+    // Initialize Icon Pickers
+    renderIconPicker('prof-icon-grid', 'prof-icon');
+    renderIconPicker('edit-prof-icon-grid', 'edit-prof-icon');
 
     await renderProfiles();
+}
+
+const AVAILABLE_ICONS = [
+    'star', 'flame', 'key', 'headphones', 'toggle', 'megaphone', 'radio', 'target',
+    'gear', 'snowflake', 'sun', 'shield', 'wind', 'plane', 'wifi', 'bomb',
+    'hammer', 'user', 'globe', 'cursor', 'volume', 'music', 'bell', 'anchor',
+    'zap', 'cpu', 'map', 'mountain', 'rocket', 'gamepad', 'sword', 'car'
+];
+
+function renderIconPicker(gridId, hiddenInputId) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+    grid.innerHTML = '';
+    const input = document.getElementById(hiddenInputId);
+
+    AVAILABLE_ICONS.forEach(iconName => {
+        const item = document.createElement('div');
+        item.className = 'icon-option';
+        if (input && input.value === iconName) item.classList.add('selected');
+        item.dataset.icon = iconName;
+        item.innerHTML = getProfileIconSvg(iconName, 'width:18px;height:18px');
+        item.addEventListener('click', () => {
+            grid.querySelectorAll('.icon-option').forEach(el => el.classList.remove('selected'));
+            item.classList.add('selected');
+            if (input) input.value = iconName;
+        });
+        grid.appendChild(item);
+    });
+}
+
+function updateIconPickerSelection(gridId, iconName) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+    grid.querySelectorAll('.icon-option').forEach(el => {
+        el.classList.toggle('selected', el.dataset.icon === iconName);
+    });
 }
 
 function openNewProfileModal() {
@@ -88,8 +112,7 @@ function openNewProfileModal() {
         .forEach(id => document.getElementById(id).value = '');
     document.getElementById('prof-color').value = '#3b82f6';
     document.getElementById('prof-icon').value = '';
-    const preview = document.getElementById('prof-icon-preview');
-    if (preview) preview.innerHTML = '';
+    updateIconPickerSelection('prof-icon-grid', '');
     document.getElementById('modal-new-profile').classList.add('open');
 }
 
@@ -103,16 +126,17 @@ async function confirmCreateProfile() {
     const icon = document.getElementById('prof-icon').value || null;
 
     if (!name || !gamePath || !modsPath || !backupPath) {
-        toast('Veuillez remplir tous les champs obligatoires.', 'error');
+        toast(t('prof.missingFields'), 'error');
         return;
     }
 
     try {
         const profile = await invoke('create_profile', { name, gameName, gamePath, modsPath, backupPath, color, icon });
         document.getElementById('modal-new-profile').classList.remove('open');
-        toast(`Profil "${profile.name}" créé avec succès.`, 'success');
+        toast(t('prof.created').replace('{name}', profile.name), 'success');
         await renderProfiles();
         updateProfileChip();
+        updateLibraryProfileSelector();
     } catch (err) {
         toast('Erreur : ' + err, 'error');
     }
@@ -139,6 +163,7 @@ async function confirmEditProfile() {
         toast(`Profil "${name}" mis à jour.`, 'success');
         await renderProfiles();
         updateProfileChip();
+        updateLibraryProfileSelector();
     } catch (err) {
         toast('Erreur : ' + err, 'error');
     }
@@ -182,39 +207,58 @@ export async function renderProfiles() {
 
         // Count mods for this profile
         let modCountLabel = t('prof.noMods');
+        let activeModsHtml = '';
         try {
             const profileMods = allModsCache.filter(m => m.mod_folder_path && m.mod_folder_path.startsWith(p.mods_path));
-            const enabledCount = profileMods.filter(m => m.enabled).length;
+            const enabledMods = profileMods.filter(m => m.enabled);
+            const enabledCount = enabledMods.length;
+
             if (profileMods.length > 0) {
                 modCountLabel = t('prof.modsActive', { count: enabledCount }) + ' / ' + profileMods.length;
+            }
+
+            if (enabledCount > 0) {
+                activeModsHtml = `<div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; max-height:60px; overflow-y:auto; padding-right:4px;" class="active-mods-list">
+                    ${enabledMods.map(m => `<span style="font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px;" title="${escHtml(m.name)}">${escHtml(m.name)}</span>`).join('')}
+                </div>`;
             }
         } catch { }
 
         card.innerHTML = `
-      <div class="profile-card-header" style="display:flex;align-items:center;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:16px;padding:0;min-height:36px">
-        <div style="width:3px;height:28px;border-radius:2px;background:${brandColor};margin-right:12px;flex-shrink:0"></div>
-        ${p.icon ? `<div style="color:${brandColor};display:flex;align-items:center;margin-right:12px;opacity:0.9">${getProfileIconSvg(p.icon, 'margin:0;')}</div>` : ''}
-        <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center">
-          <div style="font-weight:700;font-size:16px;color:var(--text-primary);line-height:1.2;word-break:break-word">${escHtml(p.name)}</div>
+      <div class="profile-card-header" style="display:flex;align-items:center;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:16px;min-height:36px;gap:12px">
+        <div style="width:3px;height:24px;border-radius:2px;background:${brandColor};flex-shrink:0"></div>
+        <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+          <div style="font-weight:700;font-size:16px;color:var(--text-primary);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(p.name)}">${escHtml(p.name)}</div>
+          ${p.icon ? `<div style="color:${brandColor};display:flex;align-items:center;opacity:0.9">${getProfileIconSvg(p.icon, 'margin:0;width:16px;height:16px')}</div>` : ''}
         </div>
-        ${p.game_name ? `<div style="font-family:var(--font-mono);font-size:11px;padding:4px 10px;border-radius:6px;background:${brandColor}20;color:${brandColor};border:1px solid ${brandColor}30;margin-left:12px;flex-shrink:0;text-align:center;word-break:keep-all">${escHtml(p.game_name)}</div>` : ''}
+        ${p.game_name ? `<div style="font-family:var(--font-mono);font-weight:600;font-size:11px;padding:4px 10px;border-radius:6px;background:${brandColor}15;color:${brandColor};border:1px solid ${brandColor}30;flex-shrink:0;text-align:center;word-break:keep-all">${escHtml(p.game_name)}</div>` : ''}
       </div>
-      <div class="profile-card-paths" style="margin-bottom:12px">
-        <div class="profile-path" style="margin-bottom:8px">
-          <span class="profile-path-label">${t('prof.gamePath')}</span>
-          <span class="profile-path-value mono">${escHtml(p.game_path)}</span>
+      <div class="profile-card-paths" style="margin-bottom:16px;background:rgba(255,255,255,0.015);padding:10px 12px;border-radius:8px;border:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+          <span class="clickable-label btn-open-path" data-path="${escAttr(p.game_path)}" style="font-size:11px;color:var(--text-secondary);width:110px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em">${t('prof.gameDirLabel')}</span>
+          <span class="btn-open-path" data-path="${escAttr(p.game_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" title="${escHtml(p.game_path)}">${escHtml(p.game_path)}</span>
+          <button class="btn-open-path" data-path="${escAttr(p.game_path)}" title="${t('prof.openDir')}" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </button>
         </div>
-        <div class="profile-path">
-          <span class="profile-path-label">${t('prof.modsPath')}</span>
-          <span class="profile-path-value mono">${escHtml(p.mods_path)}</span>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+          <span class="clickable-label btn-open-path" data-path="${escAttr(p.mods_path)}" style="font-size:11px;color:var(--text-secondary);width:110px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em">${t('prof.modsDirLabel')}</span>
+          <span class="btn-open-path" data-path="${escAttr(p.mods_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" title="${escHtml(p.mods_path)}">${escHtml(p.mods_path)}</span>
+          <button class="btn-open-path" data-path="${escAttr(p.mods_path)}" title="${t('prof.openDir')}" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </button>
         </div>
-        <div class="profile-path">
-          <span class="profile-path-label">${t('prof.backupPath')}</span>
-          <span class="profile-path-value mono">${escHtml(p.backup_path)}</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="clickable-label btn-open-path" data-path="${escAttr(p.backup_path)}" style="font-size:11px;color:var(--text-secondary);width:110px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em">${t('prof.backupDirLabel')}</span>
+          <span class="btn-open-path" data-path="${escAttr(p.backup_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" title="${escHtml(p.backup_path)}">${escHtml(p.backup_path)}</span>
+          <button class="btn-open-path" data-path="${escAttr(p.backup_path)}" title="${t('prof.openDir')}" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </button>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px">
         <span style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${modCountLabel}</span>
+        ${activeModsHtml}
       </div>
       <div class="profile-card-actions">
         <button class="btn btn-secondary btn-sm flex-1 btn-activate" style="flex:1" data-id="${p.id}">
@@ -243,6 +287,7 @@ export async function renderProfiles() {
             await invoke('set_active_profile', { profileId: id });
             await renderProfiles();
             updateProfileChip();
+            updateLibraryProfileSelector();
             await refreshMods();
         });
     });
@@ -261,8 +306,7 @@ export async function renderProfiles() {
                 document.getElementById('edit-prof-backup-path').value = profile.backup_path;
                 document.getElementById('edit-prof-color').value = profile.color || '#3b82f6';
                 document.getElementById('edit-prof-icon').value = profile.icon || '';
-                const preview = document.getElementById('edit-prof-icon-preview');
-                if (preview) preview.innerHTML = getProfileIconSvg(profile.icon, 'opacity:1;') || '';
+                updateIconPickerSelection('edit-prof-icon-grid', profile.icon || '');
                 document.getElementById('modal-edit-profile').classList.add('open');
             }
         });
@@ -276,7 +320,22 @@ export async function renderProfiles() {
             await invoke('delete_profile', { profileId: id });
             await renderProfiles();
             updateProfileChip();
+            updateLibraryProfileSelector();
             toast('Profil supprimé.', 'info');
+        });
+    });
+
+    grid.querySelectorAll('.btn-open-path').forEach(btn => {
+        btn.addEventListener('click', async e => {
+            e.stopPropagation();
+            const path = e.currentTarget.dataset.path;
+            if (path) {
+                try {
+                    await invoke('open_folder', { path });
+                } catch (err) {
+                    toast('Erreur dossier : ' + err, 'error');
+                }
+            }
         });
     });
 }
@@ -300,16 +359,34 @@ export function getProfileIconSvg(iconName, extraStyle = '') {
         case 'plane': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.2-1.1.7l-1.2 3.3c-.2.5.1 1 .6 1.1l7.3 2-2.8 2.8-3.2-.8c-.5-.1-.9.2-1.1.7l-1 2.6c-.2.5.2 1 .7 1.1l5.5 1.4 1.4 5.5c.1.5.6.9 1.1.7l2.6-1c.5-.2.8-.6.7-1.1l-.8-3.2 2.8-2.8 2 7.3c.1.5.6.8 1.1.6l3.3-1.2c.5-.2.8-.6.7-1.1z"></path></svg>`;
         case 'car': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a2 2 0 0 0-1.6-.8H9.3a2 2 0 0 0-1.6.8L5 11l-5.16.86a1 1 0 0 0-.84.99V16h3m10 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0m-6 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0"></path></svg>`;
         case 'star': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+        case 'flame': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>`;
+        case 'key': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3L15.5 7.5z"></path></svg>`;
+        case 'headphones': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>`;
+        case 'toggle': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><rect x="1" y="5" width="22" height="14" rx="7" ry="7"></rect><circle cx="16" cy="12" r="3"></circle></svg>`;
+        case 'megaphone': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="m3 11 18-5v12L3 13v-2z"></path><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"></path></svg>`;
+        case 'radio': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M16.2 7.8A6 6 0 1 0 7.8 16.2"></path><circle cx="12" cy="12" r="2"></circle><path d="M19.1 4.9a10 10 0 1 0-14.2 14.2"></path></svg>`;
+        case 'target': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>`;
+        case 'gear': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
+        case 'snowflake': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><line x1="2" y1="12" x2="22" y2="12"></line><line x1="12" y1="2" x2="12" y2="22"></line><path d="m20 16-4-4 4-4"></path><path d="m4 8 4 4-4 4"></path><path d="m16 4-4 4-4-4"></path><path d="m8 20 4-4 4 4"></path></svg>`;
+        case 'sun': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><circle cx="12" cy="12" r="4"></circle><line x1="12" y1="2" x2="12" y2="4"></line><line x1="12" y1="20" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"></line><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="4" y2="12"></line><line x1="20" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"></line><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"></line></svg>`;
         case 'shield': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>`;
-        case 'crosshair': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>`;
-        case 'rocket': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"></path><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path></svg>`;
+        case 'wind': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"></path><path d="M9.6 4.6A2 2 0 1 1 11 8H2"></path><path d="M12.6 19.4A2 2 0 1 0 14 16H2"></path></svg>`;
+        case 'wifi': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M5 13a10 10 0 0 1 14 0"></path><path d="M8.5 16.5a5 5 0 0 1 7 0"></path><path d="M2 8a15 15 0 0 1 20 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>`;
+        case 'bomb': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><circle cx="11" cy="13" r="9"></circle><path d="M18.35 5.65 21.5 2.5"></path><path d="M17 10c.5-2 2.5-2.5 3-1"></path></svg>`;
+        case 'hammer': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="m15 12-8.5 8.5c-.83.83-2.17.83-3 0 0 0 0 0 0 0a2.12 2.12 0 0 1 0-3L12 9"></path><path d="M17.64 15 22 10.64"></path><path d="m20.91 11.7-1.25-1.25c-.6-.6-.93-1.4-.93-2.25v-.31a2 2 0 0 0-2-2h-.28c-.84 0-1.64-.34-2.24-.93L12.96 3.7a2 2 0 0 0-2.82 0L6.5 7.34a2 2 0 0 0 0 2.82l1.25 1.25c.6.6.93 1.41.93 2.25v.28a2 2 0 0 0 2 2h.28c.84 0 1.64.34 2.24.93l1.25 1.25a2 2 0 0 0 2.82 0l3.64-3.64a2 2 0 0 0 0-2.82z"></path></svg>`;
+        case 'user': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
+        case 'globe': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`;
+        case 'cursor': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path><path d="m13 13 6 6"></path></svg>`;
+        case 'volume': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`;
+        case 'music': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`;
+        case 'bell': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>`;
         case 'anchor': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><circle cx="12" cy="5" r="3"></circle><line x1="12" y1="22" x2="12" y2="8"></line><path d="M5 12H2a10 10 0 0 0 20 0h-3"></path></svg>`;
         case 'zap': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`;
         case 'cpu': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>`;
-        case 'globe': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`;
         case 'map': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><polygon points="1 6 8 2 16 6 23 2 23 18 16 22 8 18 1 22 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>`;
         case 'mountain': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="m8 3 4 8 5-5 5 15H2L8 3z"></path></svg>`;
-        case 'music': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`;
+        case 'rocket': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"></path><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path></svg>`;
+        case 'crosshair': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>`;
         default: return '';
     }
 }
@@ -321,4 +398,13 @@ function escHtml(str) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+function escAttr(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }

@@ -5,7 +5,7 @@
 
 import { initProfiles, renderProfiles, updateProfileChip } from './profiles.js';
 import { initMods, refreshMods } from './mods.js';
-import { initI18n, setLang, getLang, applyTranslations, getLanguages } from './i18n.js';
+import { initI18n, setLang, getLang, applyTranslations, getLanguages, t } from './i18n.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
 
 // ── Tauri bridge ──────────────────────────────────────────
@@ -182,10 +182,10 @@ function initModlist() {
 
         try {
             await invoke('export_modlist', { listName, description, author, outputPath: path });
-            toast('Liste .MM exportée avec succès.', 'success');
+            toast(t('mm.exportSuccess'), 'success');
             exportCard.style.display = 'none';
         } catch (err) {
-            toast('Erreur export : ' + err, 'error');
+            toast(t('mm.exportError').replace('{err}', err), 'error');
         }
     });
 
@@ -198,37 +198,43 @@ function initModlist() {
             exportCard.style.display = 'none';
             previewCard.style.display = '';
             renderImportedModlist(modList);
-            toast('Liste importée.', 'success');
+            toast(t('mm.importSuccess'), 'success');
         } catch (err) {
-            toast('Erreur import : ' + err, 'error');
+            toast(t('mm.importError').replace('{err}', err), 'error');
         }
     });
 
     // Install all mods from imported .MM list
     installBtn.addEventListener('click', async () => {
         if (!lastImportedModlistJson) {
-            toast('Aucune liste importée.', 'warning');
+            toast(t('mm.installNone'), 'warning');
             return;
         }
         installBtn.disabled = true;
-        installBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Installation en cours...';
+        installBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('common.installing')}`;
         try {
             const results = await invoke('install_from_modlist', { modlistJson: lastImportedModlistJson });
-            // Show results
-            const resultHtml = results.map(r => `<div style="padding:3px 0;font-size:12px;font-family:var(--font-mono)">${r}</div>`).join('');
+            const resultHtml = results.map(r => {
+                const isOk = r.startsWith('[OK]');
+                const txt = r.replace(/^\[OK\] |^\[ERR\] /g, '');
+                return `<div style="padding:2px 0;font-size:11.5px;font-family:var(--font-mono);color:var(--text-primary);display:flex;align-items:center;gap:6px">
+                    ${isOk ? '<div style="background:var(--success);color:#000;border-radius:2px;padding:0 2px;display:flex;align-items:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'} 
+                    ${escHtml(txt)}
+                </div>`;
+            }).join('');
             const resultsDiv = document.createElement('div');
             resultsDiv.style.cssText = 'margin-top:12px;padding:12px;background:rgba(0,0,0,0.3);border-radius:8px;border:1px solid var(--border)';
-            resultsDiv.innerHTML = `<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.06em">Résultats d'installation</div>${resultHtml}`;
+            resultsDiv.innerHTML = `<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.06em">${t('mm.installResults')}</div>${resultHtml}`;
             previewCard.appendChild(resultsDiv);
 
             const successCount = results.filter(r => r.startsWith('[OK]')).length;
-            toast(`${successCount}/${results.length} mod(s) installé(s).`, 'success');
+            toast(t('mm.installSuccess').replace('{success}', successCount).replace('{total}', results.length), 'success');
             await refreshMods();
         } catch (err) {
-            toast('Erreur installation : ' + err, 'error');
+            toast(t('mm.installError').replace('{err}', err), 'error');
         }
         installBtn.disabled = false;
-        installBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Tout installer`;
+        installBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installAll')}`;
     });
 }
 
@@ -243,35 +249,23 @@ function renderImportedModlist(modlist) {
       ${modlist.game_path_hint ? `<p style="margin-top:4px;font-size:11px;color:var(--text-muted)"><span style="color:var(--cyan)">ROOT:</span> ${escHtml(modlist.game_path_hint)}</p>` : ''}
       ${modlist.description ? `<p style="margin-top:8px;font-size:13px;color:var(--text-secondary)">${escHtml(modlist.description)}</p>` : ''}
     </div>
-    <div style="display:flex;flex-direction:column;gap:8px">
       ${modlist.mods.map(m => `
-        <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
-            <span style="font-weight:600">${escHtml(m.name)}</span>
-            <span style="font-family:var(--font-mono);font-size:11px;color:var(--cyan)">v${escHtml(m.version)}</span>
-            <span style="font-size:11px;color:var(--text-muted)">priorité: ${m.sort_priority}</span>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 12px;display:flex;flex-direction:column;gap:4px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-weight:600;font-size:13px">${escHtml(m.name)}</span>
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--cyan)">v${escHtml(m.version)}</span>
+            <span style="font-size:10px;color:var(--text-muted)">priorité: ${m.sort_priority}</span>
           </div>
-          ${m.description ? `<p style="font-size:12px;color:var(--text-muted);margin-bottom:6px">${escHtml(m.description)}</p>` : ''}
-          ${(m.download_links && m.download_links.length > 0) ? `
-            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
-              ${m.download_links.map(dl => `
-                <a style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--accent);font-family:var(--font-mono);background:var(--accent-dim);padding:3px 8px;border-radius:6px;text-decoration:none" href="${escHtml(dl.url)}" target="_blank">
-                  ${getLinkIcon(dl.link_type)} ${escHtml(dl.label || dl.url)}
-                </a>
-              `).join('')}
-            </div>
-          ` : ''}
           ${(m.file_tree && m.file_tree.length > 0) ? `
-            <details style="margin-top:6px">
-              <summary style="font-size:11px;color:var(--cyan);cursor:pointer;font-family:var(--font-mono)">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Arborescence (${m.file_tree.length} fichier${m.file_tree.length > 1 ? 's' : ''})
+            <details>
+              <summary style="font-size:11px;color:var(--cyan);cursor:pointer;font-family:var(--font-mono);display:flex;align-items:center;gap:4px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Arborescence (${m.file_tree.length} fichier${m.file_tree.length > 1 ? 's' : ''})
               </summary>
-              <div style="max-height:150px;overflow-y:auto;margin-top:6px;padding:6px 8px;background:rgba(0,0,0,0.3);border-radius:6px;font-size:10.5px;font-family:var(--font-mono);color:var(--text-muted)">
-                ${m.file_tree.map(f => `<div style="padding:1px 0;display:flex;align-items:center;gap:4px">${f.is_directory ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'} ${escHtml(f.relative_path)} ${!f.is_directory ? `<span style="color:var(--text-muted);opacity:0.5">(${formatBytes(f.size)})</span>` : ''}</div>`).join('')}
+              <div style="max-height:120px;overflow-y:auto;margin-top:4px;padding:4px 0 0 12px;font-size:10px;font-family:var(--font-mono);color:var(--text-muted)">
+                ${m.file_tree.map(f => `<div style="padding:1px 0;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(f.relative_path)}">${f.is_directory ? '📁' : '📄'} ${escHtml(f.relative_path)} <span style="color:var(--text-muted);opacity:0.5">${f.is_directory ? '' : `(${formatBytes(f.size)})`}</span></div>`).join('')}
               </div>
             </details>
           ` : ''}
-          ${m.install_notes ? `<p style="font-size:11px;color:var(--warning);margin-top:4px;display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ${escHtml(m.install_notes)}</p>` : ''}
         </div>
       `).join('')}
     </div>
@@ -279,12 +273,18 @@ function renderImportedModlist(modlist) {
 }
 
 function getLinkIcon(type) {
+    const style = 'width:14px;height:14px;vertical-align:middle;margin-right:6px;opacity:0.8';
     switch (type) {
-        case 'github': return 'GitHub';
-        case 'google_drive': return 'GDrive';
-        case 'mega': return 'MEGA';
-        case 'direct': return 'Direct';
-        default: return 'Link';
+        case 'github':
+            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>`;
+        case 'google_drive':
+            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M22 10L14 10L14 2L22 10Z"/><path d="M6 22L14 22L22 10L14 10L6 22Z"/><path d="M2 10L10 10L6 22L2 10Z"/></svg>`;
+        case 'mega':
+            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M12 3l9 4v10l-9 4-9-4V7l9-4z"/><path d="M12 8v8M8 12h8"/></svg>`;
+        case 'direct':
+            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+        default:
+            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
     }
 }
 
@@ -450,16 +450,21 @@ function initNavbarLangDropdown() {
     function render() {
         const langs = getLanguages();
         const current = langs.find(l => l.active) || langs[0];
+        const flagFr = `<svg width="14" height="10" viewBox="0 0 3 2" style="margin-right:8px;vertical-align:middle"><rect width="1" height="2" fill="#002395"/><rect width="1" height="2" x="1" fill="#fff"/><rect width="1" height="2" x="2" fill="#ED2939"/></svg>`;
+        const flagEn = `<svg width="14" height="10" viewBox="0 0 60 30" style="margin-right:8px;vertical-align:middle"><clipPath id="s2"><path d="M0,0 v30 h60 v-30 z"/></clipPath><clipPath id="t2"><path d="M30,15 h30 v15 z v0 h-30 z v-15 h-30 z v0 h30 z"/></clipPath><g clip-path="url(#s2)"><path d="M0,0 v30 h60 v-30 z" fill="#012169"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#C8102E" stroke-width="4" clip-path="url(#t2)"/><path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"/><path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"/></g></svg>`;
+
+        const getFlag = (code) => code === 'fr' ? flagFr : flagEn;
+
         container.innerHTML = `
             <button class="nav-lang-btn" id="nav-lang-toggle">
-                <span class="nav-lang-flag">${current.flag}</span>
+                <span class="nav-lang-flag">${getFlag(current.code)}</span>
                 <span class="nav-lang-name">${current.name}</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="nav-lang-chevron"><polyline points="18 15 12 9 6 15"/></svg>
             </button>
             <div class="nav-lang-menu" id="nav-lang-menu">
                 ${langs.map(l => `
                     <button class="nav-lang-option ${l.active ? 'active' : ''}" data-lang="${l.code}">
-                        <span class="nav-lang-flag">${l.flag}</span>
+                        <span class="nav-lang-flag">${getFlag(l.code).replace('margin-right:8px', 'margin-right:10px')}</span>
                         <span>${l.name}</span>
                         ${l.active ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
                     </button>
@@ -483,6 +488,7 @@ function initNavbarLangDropdown() {
                 toggle.classList.remove('open');
                 render();
                 // Re-render dynamic content
+                updateLibraryProfileSelector();
                 if (window._refreshModsFn) window._refreshModsFn();
             });
         });
@@ -511,19 +517,15 @@ function initUpdateNotes() {
     const btn = document.getElementById('btn-show-updates');
     if (!btn) return;
     btn.addEventListener('click', async () => {
-        // Try to read update files from the Update directory
-        let content = '<p style="color:var(--text-muted)">Aucune note de mise à jour disponible.</p>';
+        let notes = [];
+        let oldNotes = [];
         try {
-            const notes = await invoke('get_update_notes');
-            if (notes && notes.length > 0) {
-                content = notes.map(n => renderMarkdown(n.content)).join('<hr style="border-color:var(--border);margin:16px 0">');
-            }
-        } catch {
-            // Fallback: no backend command available yet
-            content = '<p style="color:var(--text-muted)">Les notes de mise à jour seront disponibles prochainement.</p>';
-        }
+            notes = await invoke('get_update_notes', { subDir: null });
+            oldNotes = await invoke('get_update_notes', { subDir: 'Old_Update' });
+        } catch (e) { console.error(e); }
 
-        // Create modal dynamically
+        const allNotes = [...notes, ...oldNotes];
+
         let modal = document.getElementById('modal-update-notes');
         if (!modal) {
             modal = document.createElement('div');
@@ -531,20 +533,71 @@ function initUpdateNotes() {
             modal.className = 'modal-overlay';
             document.body.appendChild(modal);
         }
+
         modal.innerHTML = `
-            <div class="modal glass" style="max-width:600px;width:90%">
-                <div class="modal-header">
-                    <h2 class="modal-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;vertical-align:middle"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Notes de mise à jour</h2>
+            <div class="modal glass" style="max-width:900px; width:95%; height:80vh; display:flex; flex-direction:column;">
+                <div class="modal-header" style="flex-shrink:0">
+                    <h2 class="modal-title" style="display:flex; align-items:center; gap:10px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        ${t('update.title')}
+                    </h2>
                     <button class="modal-close" id="close-update-notes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
                 </div>
-                <div class="modal-body">
-                    <div class="update-notes-content">${content}</div>
+                <div class="modal-body" style="padding:0; flex:1; overflow:hidden;">
+                    <div class="archive-modal-container" style="display:flex; height:100%;">
+                        <div class="archive-sidebar" id="archive-sidebar" style="width:260px; background:rgba(0,0,0,0.2); border-right:1px solid var(--border); overflow-y:auto; padding:12px 0;">
+                            
+                            <div class="tree-group" style="margin-bottom:16px;">
+                                <div class="tree-label" style="padding:0 16px 8px; font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center; gap:6px;">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                                    Release Notes
+                                </div>
+                                ${notes.map((n, i) => `
+                                    <div class="archive-sidebar-item ${i === 0 ? 'active' : ''}" data-index="${i}" style="padding:8px 16px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); border-left:2px solid transparent;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(n.filename)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+
+                            <div class="tree-group">
+                                <div class="tree-label" style="padding:0 16px 8px; font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center; gap:6px;">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                                    Archives
+                                </div>
+                                ${oldNotes.map((n, i) => `
+                                    <div class="archive-sidebar-item" data-index="${notes.length + i}" style="padding:8px 16px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); border-left:2px solid transparent;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(n.filename)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+
+                        </div>
+                        <div class="archive-content" id="archive-content" style="flex:1; overflow-y:auto; padding:32px; background:var(--bg-primary);">
+                            ${allNotes.length > 0 ? renderMarkdown(allNotes[0].content) : `<p style="color:var(--text-muted)">${t('update.none')}</p>`}
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
         modal.classList.add('open');
         modal.querySelector('#close-update-notes').addEventListener('click', () => modal.classList.remove('open'));
         modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
+
+        // Sidebar selection logic
+        const sidebarItems = modal.querySelectorAll('.archive-sidebar-item');
+        const contentArea = modal.querySelector('#archive-content');
+
+        sidebarItems.forEach(item => {
+            item.addEventListener('click', () => {
+                sidebarItems.forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+                const note = allNotes[item.dataset.index];
+                contentArea.innerHTML = renderMarkdown(note.content);
+                contentArea.scrollTop = 0;
+            });
+        });
     });
 }
 
@@ -579,7 +632,15 @@ async function main() {
     await initProfiles();
     await initMods();
     await updateProfileChip();
-    await initProfileSelector();
+    await updateLibraryProfileSelector();
+
+    // Hide loader smoothly
+    const loader = document.getElementById('app-loader');
+    if (loader) {
+        loader.style.opacity = '0';
+        loader.style.visibility = 'hidden';
+        setTimeout(() => loader.remove(), 600);
+    }
 
     // Init Settings
     const notifToggle = document.getElementById('setting-sys-notif');
@@ -665,19 +726,17 @@ async function main() {
 }
 
 // ── Profile selector in Library ───────────────────────────
-async function initProfileSelector() {
+export async function updateLibraryProfileSelector() {
     const select = document.getElementById('lib-profile-select');
     if (!select) return;
 
     try {
         const profiles = await invoke('get_profiles');
-        // Keep the first placeholder option
-        select.innerHTML = `<option value="">${select.querySelector('option').textContent}</option>`;
-        let activeId = null;
-        try {
-            const active = await invoke('get_active_profile');
-            activeId = active?.id;
-        } catch { }
+        const activeId = await invoke('get_active_profile_id');
+
+        // Always include/reset to the placeholder as the first option
+        select.innerHTML = `<option value="" data-i18n="lib.selectProfile">${t('lib.selectProfile') || '— Select a profile —'}</option>`;
+
         profiles.forEach(p => {
             const opt = document.createElement('option');
             opt.value = p.id;
@@ -685,22 +744,27 @@ async function initProfileSelector() {
             if (p.id === activeId) opt.selected = true;
             select.appendChild(opt);
         });
-    } catch {
-        // Mock mode — leave empty
-    }
 
-    select.addEventListener('change', async () => {
-        const id = select.value;
-        if (!id) return;
-        try {
-            await invoke('set_active_profile', { profileId: id });
-            await updateProfileChip();
-            if (window._refreshModsFn) await window._refreshModsFn();
-            applyTranslations();
-        } catch (e) {
-            toast('Erreur chargement profil : ' + e, 'error');
+        // Add change listener only once
+        if (!select._hasListener) {
+            select.addEventListener('change', async () => {
+                const id = select.value;
+                if (!id) return;
+                try {
+                    await invoke('set_active_profile', { profileId: id });
+                    await updateProfileChip();
+                    if (window._refreshModsFn) await window._refreshModsFn();
+                    await updateLibraryProfileSelector(); // Keep labels in sync
+                    applyTranslations();
+                } catch (e) {
+                    toast('Erreur chargement profil : ' + e, 'error');
+                }
+            });
+            select._hasListener = true;
         }
-    });
+    } catch (err) {
+        console.warn("Profile selector update failed:", err);
+    }
 }
 
 async function renderSettingsTags() {
@@ -738,5 +802,25 @@ async function renderSettingsTags() {
         console.error("Tags error", err);
     }
 }
+
+// ── Licenses ──────────────────────────────────────────────
+async function openLicenseModal() {
+    const modal = document.getElementById('modal-license');
+    const contentEl = document.getElementById('license-content');
+    if (!modal || !contentEl) return;
+
+    modal.classList.add('open');
+    contentEl.textContent = t('common.loading');
+
+    try {
+        const text = await invoke('get_license_text');
+        contentEl.textContent = text;
+    } catch (err) {
+        contentEl.textContent = "Error loading license: " + err;
+    }
+}
+
+// Global expose for onclick
+window.openLicenseModal = openLicenseModal;
 
 main().catch(console.error);

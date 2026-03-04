@@ -2,6 +2,8 @@
  * mods.js — Mod library management with detail panel + scan + edit
  */
 import { invoke, pickFolder, listenFileDrop, toast, sendOsNotification } from './app.js';
+import { renderProfiles } from './profiles.js';
+import { t } from './i18n.js';
 
 let allMods = [];
 let userTags = [];
@@ -21,25 +23,25 @@ export async function initMods() {
   if (verifyBtn) {
     verifyBtn.addEventListener('click', async () => {
       try {
-        toast('Vérification en cours...', 'info');
+        toast(t('integrity.checking'), 'info');
         const alteredFiles = await invoke('verify_integrity');
         const modal = document.getElementById('modal-integrity');
         const content = document.getElementById('integrity-report-content');
 
         if (alteredFiles.length === 0) {
-          content.innerHTML = '<div style="color:var(--success);padding:20px;text-align:center;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:12px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg><br><h3>Intégrité OK</h3><p style="font-size:13px;color:var(--text-muted);margin-top:8px">Tous les fichiers moddés actifs correspondent parfaitement à leurs versions dans le dossier du jeu.</p></div>';
+          content.innerHTML = `<div style="color:var(--success);padding:20px;text-align:center;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:12px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg><br><h3>${t('integrity.ok')}</h3><p style="font-size:13px;color:var(--text-muted);margin-top:8px">${t('integrity.okDesc')}</p></div>`;
         } else {
-          let html = '<div style="color:var(--warning);padding:10px 0;"><h3 style="margin-bottom:12px;display:flex;align-items:center;gap:8px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg> Problèmes détectés !</h3><p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Les fichiers suivants ont été modifiés (ou sont manquants) dans le répertoire du jeu par des mises à jour ou d\'autres outils :</p><ul style="background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;max-height:300px;overflow-y:auto;list-style:none;margin:0;border:1px solid var(--border)">';
+          let html = `<div style="color:var(--warning);padding:10px 0;"><h3 style="margin-bottom:12px;display:flex;align-items:center;gap:8px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg> ${t('integrity.issues')}</h3><p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">${t('integrity.issuesDesc')}</p><ul style="background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;max-height:300px;overflow-y:auto;list-style:none;margin:0;border:1px solid var(--border)">`;
           alteredFiles.forEach(f => {
             html += `<li style="font-size:12px;font-family:var(--font-mono);margin-bottom:6px;word-break:break-all;color:var(--text-primary)"><span style="color:var(--accent)">></span> ${String(f).replace(/</g, '&lt;')}</li>`;
           });
-          html += '</ul><div style="margin-top:16px;font-size:12px;color:var(--text-secondary)">Conseil : Désactivez puis réactivez les mods concernés pour réparer l\'installation.</div></div>';
+          html += `</ul><div style="margin-top:16px;font-size:12px;color:var(--text-secondary)">${t('integrity.tip')}</div></div>`;
           content.innerHTML = html;
         }
 
         modal.classList.add('open');
       } catch (err) {
-        toast('Erreur de vérification : ' + err, 'error');
+        toast(t('common.error') + ' : ' + err, 'error');
       }
     });
   }
@@ -51,13 +53,13 @@ export async function initMods() {
       try {
         const added = await invoke('scan_mods_folder');
         if (added.length === 0) {
-          toast('Aucun nouveau mod détecté.', 'info');
+          toast(t('mod.scanNone'), 'info');
         } else {
-          toast(`${added.length} mod(s) découvert(s) !`, 'success');
+          toast(t('mod.scanFound').replace('{count}', added.length), 'success');
           await refreshMods();
         }
       } catch (err) {
-        toast('Erreur scan : ' + err, 'error');
+        toast(t('common.error') + ' : ' + err, 'error');
       }
     });
   }
@@ -167,6 +169,12 @@ export async function refreshMods() {
   updateBadge();
   renderModList();
   updateSubtitle();
+
+  // Dynamic refresh for profiles to update counts/status
+  try {
+    renderProfiles();
+  } catch (e) { }
+
   if (selectedModId) {
     const m = allMods.find(mod => mod.id === selectedModId);
     if (m) renderModDetail(m);
@@ -312,6 +320,11 @@ function createModCard(mod) {
     </div>
 
     <div class="mod-actions">
+      <button class="btn btn-sm btn-icon btn-open-folder" title="Ouvrir le dossier" data-id="${mod.id}" style="background:rgba(255,255,255,0.05);color:var(--text-secondary);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+      </button>
       <button class="btn btn-sm btn-icon btn-edit-mod" title="Détails / Éditer" data-id="${mod.id}" style="background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
           <path d="M12 20h9"/>
@@ -351,15 +364,15 @@ function createModCard(mod) {
     try {
       if (toggle.checked) {
         await invoke('enable_mod', { modId: mod.id });
-        toast(`"${mod.name}" activé.`, 'success');
+        toast(t('mod.activated', { name: mod.name }), 'success');
         if (localStorage.getItem('bmm_sysNotif') === 'true') {
-          sendOsNotification('Better Mod Manager', `"${mod.name}" activé — fichiers transférés.`);
+          sendOsNotification('Better Mod Manager', t('mod.activated', { name: mod.name }));
         }
       } else {
         await invoke('disable_mod', { modId: mod.id });
-        toast(`"${mod.name}" désactivé.`, 'info');
+        toast(t('mod.deactivated', { name: mod.name }), 'info');
         if (localStorage.getItem('bmm_sysNotif') === 'true') {
-          sendOsNotification('Better Mod Manager', `"${mod.name}" désactivé — fichiers restaurés.`);
+          sendOsNotification('Better Mod Manager', t('mod.deactivated', { name: mod.name }));
         }
       }
       await refreshMods();
@@ -372,9 +385,24 @@ function createModCard(mod) {
     }
   });
 
+  // Open folder handler
+  const openFolderBtn = card.querySelector('.btn-open-folder');
+  if (openFolderBtn) {
+    openFolderBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (mod.mod_folder_path) {
+        try {
+          await invoke('open_folder', { path: mod.mod_folder_path });
+        } catch (err) {
+          toast('Erreur dossier : ' + err, 'error');
+        }
+      }
+    });
+  }
+
   // Click card to show detail
   card.addEventListener('click', (e) => {
-    if (e.target.closest('.mod-toggle') || e.target.closest('.btn-remove-mod') || e.target.closest('.btn-edit-mod')) return;
+    if (e.target.closest('.mod-toggle') || e.target.closest('.btn-remove-mod') || e.target.closest('.btn-edit-mod') || e.target.closest('.btn-open-folder')) return;
     selectMod(mod);
   });
 
@@ -456,21 +484,21 @@ function renderModDetail(mod) {
     <div class="detail-body" style="display:flex;flex-direction:column;gap:12px;margin-top:12px">
       <!-- Editable Fields -->
       <div class="detail-section">
-        <label class="detail-label">Nom</label>
+        <label class="detail-label">${t('detail.name')}</label>
         <input type="text" id="detail-name" class="input-field" value="${escAttr(mod.name)}" />
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="detail-section">
-          <label class="detail-label">Version</label>
+          <label class="detail-label">${t('detail.version')}</label>
           <input type="text" id="detail-version" class="input-field" value="${escAttr(mod.version)}" />
         </div>
         <div class="detail-section">
-          <label class="detail-label">Auteur</label>
+          <label class="detail-label">${t('detail.author')}</label>
           <input type="text" id="detail-author" class="input-field" value="${escAttr(mod.author || '')}" />
         </div>
       </div>
       <div class="detail-section">
-        <label class="detail-label">Description</label>
+        <label class="detail-label">${t('detail.description')}</label>
         <textarea id="detail-desc" class="input-field" rows="2" style="resize:vertical">${escHtml(mod.description || '')}</textarea>
       </div>
 
@@ -479,13 +507,13 @@ function renderModDetail(mod) {
         <label class="detail-label" data-i18n="detail.tags" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Tags</label>
         <div id="detail-tags-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
         <select id="detail-tag-select" class="input-field" style="width:100%;padding:6px;font-size:11px">
-            <option value="">— Ajouter un tag —</option>
+            <option value="">— ${t('detail.selectTag')} —</option>
         </select>
       </div>
 
       <!-- Mod Folder Path -->
       <div class="detail-section">
-        <label class="detail-label" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Dossier du mod</label>
+        <label class="detail-label" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ${t('prof.modsDir')}</label>
         <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);background:rgba(0,0,0,0.3);padding:8px 10px;border-radius:8px;word-break:break-all">
           ${escHtml(mod.mod_folder_path || 'Non défini')}
         </div>
@@ -494,7 +522,7 @@ function renderModDetail(mod) {
       <!-- Installed Files -->
       ${mod.installed_files && mod.installed_files.length > 0 ? `
       <div class="detail-section">
-        <label class="detail-label" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Fichiers installés (${mod.installed_files.length})</label>
+        <label class="detail-label" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ${t('detail.files')} (${mod.installed_files.length})</label>
         <div style="max-height:120px;overflow-y:auto;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:8px">
           ${mod.installed_files.map(f => `<div style="padding:1px 0;display:flex;align-items:center;gap:4px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${escHtml(f)}</div>`).join('')}
         </div>
@@ -503,7 +531,7 @@ function renderModDetail(mod) {
 
       <!-- Download Links -->
       <div class="detail-section">
-        <label class="detail-label" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Liens de téléchargement</label>
+        <label class="detail-label" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> ${t('detail.links')}</label>
         <div id="detail-links-list" style="display:flex;flex-direction:column;gap:6px">
           ${links.map((dl, i) => `
             <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.2);padding:6px 8px;border-radius:8px">
@@ -520,12 +548,12 @@ function renderModDetail(mod) {
             </div>
           `).join('')}
         </div>
-        <button id="btn-add-link" class="btn btn-sm" style="margin-top:6px;background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px">+ Ajouter un lien</button>
+        <button id="btn-add-link" class="btn btn-sm" style="margin-top:6px;background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px">+ ${t('detail.addLink')}</button>
       </div>
 
       <!-- Save Button -->
       <button id="btn-save-detail" class="btn btn-primary" style="align-self:flex-start;margin-top:6px">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Sauvegarder
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> ${t('detail.save')}
       </button>
     </div>
   `;
@@ -665,7 +693,7 @@ async function confirmAddMod() {
   const tagId = tagSelect ? tagSelect.value : '';
 
   if (!name || !folder) {
-    toast('Le nom et le fichier/dossier sont obligatoires.', 'error');
+    toast(t('mod.folderRequired'), 'error');
     return;
   }
 
@@ -684,10 +712,10 @@ async function confirmAddMod() {
       tags: tagId ? [tagId] : [],
     });
     document.getElementById('modal-add-mod').classList.remove('open');
-    toast(`"${name}" importé et ajouté à la bibliothèque.`, 'success');
+    toast(t('mod.added').replace('{name}', name), 'success');
     await refreshMods();
   } catch (err) {
-    toast('Erreur : ' + err, 'error');
+    toast(t('common.error') + ' : ' + err, 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = originalText;
@@ -697,18 +725,29 @@ async function confirmAddMod() {
 async function enableAll() {
   const disabled = allMods.filter(m => !m.enabled);
   if (disabled.length === 0) {
-    toast('Tous les mods sont déjà actifs.', 'info');
+    toast(t('mod.allEnabled'), 'info');
     return;
   }
-  for (const mod of disabled) {
-    try {
-      await invoke('enable_mod', { modId: mod.id });
-    } catch (err) {
-      toast(`Erreur sur "${mod.name}" : ${err}`, 'error');
+
+  const btn = document.getElementById('btn-enable-all');
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Activation...';
+
+  try {
+    for (const mod of disabled) {
+      try {
+        await invoke('enable_mod', { modId: mod.id });
+      } catch (err) {
+        toast(`${t('common.error')} "${mod.name}" : ${err}`, 'error');
+      }
     }
+    await refreshMods();
+    toast(t('mod.enabledCount').replace('{count}', disabled.length), 'success');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
   }
-  await refreshMods();
-  toast(`${disabled.length} mod(s) activé(s).`, 'success');
 }
 
 function escHtml(str) {

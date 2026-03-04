@@ -1,6 +1,19 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+use std::fs;
+
+fn ensure_removed(path: &Path) -> Result<()> {
+    if !path.exists() { return Ok(()); }
+    if let Ok(meta) = fs::metadata(path) {
+        let mut perms = meta.permissions();
+        if perms.readonly() {
+            perms.set_readonly(false);
+            let _ = fs::set_permissions(path, perms);
+        }
+    }
+    fs::remove_file(path).with_context(|| format!("Failed to remove file: {:?}", path))
+}
 
 /// Copy a single file from `src` to `dst`, creating parent dirs as needed.
 pub fn copy_file(src: &Path, dst: &Path) -> Result<()> {
@@ -29,13 +42,15 @@ pub fn restore_file(game_path: &Path, rel: &Path, backup_root: &Path) -> Result<
     let src = backup_root.join(rel);
     let dst = game_path.join(rel);
     if src.exists() {
+        println!("[BMM] Restoring backup: {:?} -> {:?}", src, dst);
         copy_file(&src, &dst)?;
-        std::fs::remove_file(&src)?;
+        ensure_removed(&src)?;
         Ok(true)
     } else {
         // No backup existed, the mod created this file entirely — remove it
         if dst.exists() {
-            std::fs::remove_file(&dst)?;
+            println!("[BMM] Removing mod-only file: {:?}", dst);
+            ensure_removed(&dst)?;
         }
         Ok(false)
     }
@@ -84,20 +99,37 @@ pub fn apply_mod(
     Ok(applied)
 }
 
-/// Unapply a mod: restore all backups.
+/// Unapply a mod: restore all backups based on the list of files that were actually installed.
 pub fn unapply_mod(
-    mod_folder: &Path,
     game_path: &Path,
     backup_root: &Path,
     mod_id: &str,
+    installed_files: Vec<String>,
 ) -> Result<()> {
     let mod_backup_root = backup_root.join(mod_id);
-    let files = list_mod_files(mod_folder)?;
-    for rel in &files {
-        restore_file(game_path, rel, &mod_backup_root)
+    println!("[BMM] Unapplying mod: {}, files: {}", mod_id, installed_files.len());
+    
+    for rel_str in &installed_files {
+        let rel = PathBuf::from(rel_str);
+        restore_file(game_path, &rel, &mod_backup_root)
             .with_context(|| format!("Restore failed for {:?}", rel))?;
+            
+        // Attempt to clean up empty parent directories in the game folder
+        let mut parent = game_path.join(&rel).parent().map(|p| p.to_path_buf());
+        while let Some(p) = parent {
+            if p == game_path || !p.starts_with(game_path) { break; }
+            if p.exists() && std::fs::read_dir(&p).map(|mut d| d.next().is_none()).unwrap_or(false) {
+                let _ = std::fs::remove_dir(&p);
+                parent = p.parent().map(|p| p.to_path_buf());
+            } else {
+                break;
+            }
+        }
     }
-    // Clean up empty backup dir
-    let _ = std::fs::remove_dir_all(&mod_backup_root);
+    
+    // Clean up group backup dir if it's empty or exists
+    if mod_backup_root.exists() {
+        let _ = std::fs::remove_dir_all(&mod_backup_root);
+    }
     Ok(())
 }

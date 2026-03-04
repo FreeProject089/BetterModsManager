@@ -8,20 +8,27 @@ pub struct UpdateNote {
 }
 
 #[tauri::command]
-pub fn get_update_notes(app_handle: tauri::AppHandle) -> Result<Vec<UpdateNote>, String> {
+pub fn get_update_notes(app_handle: tauri::AppHandle, sub_dir: Option<String>) -> Result<Vec<UpdateNote>, String> {
     // Try to read from the Update directory relative to the executable
     let exe_dir = app_handle
         .path_resolver()
         .resource_dir()
         .unwrap_or_else(|| PathBuf::from("."));
     
-    let update_dir = exe_dir.join("Update");
+    let mut update_dir = exe_dir.join("Update");
     
     // Also try the project root Update directory (dev mode)
-    let dev_update_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let dev_base = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .map(|p| p.join("Update"))
-        .unwrap_or_else(|| PathBuf::from("Update"));
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."));
+    
+    let mut dev_update_dir = dev_base.join("Update");
+
+    if let Some(s) = sub_dir {
+        update_dir = update_dir.join(&s);
+        dev_update_dir = dev_update_dir.join(&s);
+    }
     
     let dir = if update_dir.exists() {
         update_dir
@@ -50,4 +57,28 @@ pub fn get_update_notes(app_handle: tauri::AppHandle) -> Result<Vec<UpdateNote>,
     notes.sort_by(|a, b| b.filename.cmp(&a.filename));
 
     Ok(notes)
+}
+
+#[tauri::command]
+pub fn get_old_updates_count(_app_handle: tauri::AppHandle) -> Result<usize, String> {
+    let dev_base = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."));
+    
+    let old_dir = dev_base.join("Update").join("Old_Update");
+    
+    if !old_dir.exists() {
+        return Ok(0);
+    }
+
+    let mut count = 0;
+    if let Ok(entries) = std::fs::read_dir(old_dir) {
+        for entry in entries.flatten() {
+            if entry.path().is_file() && entry.path().extension().and_then(|s| s.to_str()) == Some("md") {
+                count += 1;
+            }
+        }
+    }
+    Ok(count)
 }
