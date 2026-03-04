@@ -35,6 +35,9 @@ pub struct ModEntry {
     /// Download links for this mod (for .MM export/sharing)
     #[serde(default)]
     pub download_links: Vec<DownloadLink>,
+    /// Custom tags associated with this mod
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// A download link for a mod
@@ -59,6 +62,7 @@ impl ModEntry {
             added_at: chrono::Local::now().to_rfc3339(),
             installed_files: Vec::new(),
             download_links: Vec::new(),
+            tags: Vec::new(),
         }
     }
 }

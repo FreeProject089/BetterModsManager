@@ -117,13 +117,13 @@ pub fn remove_mod(state: State<AppState>, mod_id: String) -> Result<(), String> 
 
 #[tauri::command]
 pub async fn enable_mod(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
-    let (mod_folder, game_path, backup_path) = {
+    let (mod_folder, game_path, backup_path, active_id, mod_name) = {
         let data = state.data.lock().unwrap();
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?.clone();
         if m.enabled { return Ok(()); }
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
-        (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone())
+        (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), active_id, m.name)
     };
 
     let mod_id_clone = mod_id.clone();
@@ -140,18 +140,21 @@ pub async fn enable_mod(state: State<'_, AppState>, mod_id: String) -> Result<()
         }
     }
     let _ = state.save();
+    
+    // Log history
+    crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Enabled");
     Ok(())
 }
 
 #[tauri::command]
 pub async fn disable_mod(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
-    let (mod_folder, game_path, backup_path) = {
+    let (mod_folder, game_path, backup_path, active_id, mod_name) = {
         let data = state.data.lock().unwrap();
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?.clone();
         if !m.enabled { return Ok(()); }
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
-        (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone())
+        (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), active_id, m.name)
     };
 
     let mod_id_clone = mod_id.clone();
@@ -168,6 +171,9 @@ pub async fn disable_mod(state: State<'_, AppState>, mod_id: String) -> Result<(
         }
     }
     let _ = state.save();
+    
+    // Log history
+    crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Disabled");
     Ok(())
 }
 
@@ -179,6 +185,7 @@ pub fn update_mod_meta(
     author: String,
     description: String,
     version: String,
+    tags: Vec<String>,
 ) -> Result<(), String> {
     {
         let mut data = state.data.lock().unwrap();
@@ -187,6 +194,7 @@ pub fn update_mod_meta(
             m.author = author;
             m.description = description;
             m.version = version;
+            m.tags = tags;
         }
     }
     let _ = state.save();

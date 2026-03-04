@@ -1,10 +1,12 @@
 /**
  * mods.js — Mod library management with detail panel + scan + edit
  */
-import { invoke, pickFolder, toast } from './app.js';
+import { invoke, pickFolder, listenFileDrop, toast, sendOsNotification } from './app.js';
 
 let allMods = [];
+let userTags = [];
 let currentFilter = 'all';
+let currentSort = 'name_asc';
 let searchQuery = '';
 let selectedModId = null;
 
@@ -59,11 +61,71 @@ export async function initMods() {
     renderModList();
   });
 
+  // History Modal
+  const historyBtn = document.getElementById('btn-show-history');
+  if (historyBtn) {
+    historyBtn.addEventListener('click', async () => {
+      const activeId = await invoke('get_active_profile_id').catch(() => null);
+      if (!activeId) {
+        toast('Aucun profil actif.', 'error');
+        return;
+      }
+      try {
+        const history = await invoke('get_activity_history', { profileId: activeId });
+        renderHistoryModal(history);
+      } catch (err) {
+        toast('Erreur historique : ' + err, 'error');
+      }
+    });
+  }
+
+  // Sort
+  const sortSelect = document.getElementById('mod-sort');
+  if (sortSelect) {
+    sortSelect.addEventListener('change', e => {
+      currentSort = e.target.value;
+      renderModList();
+    });
+  }
+
+  // File Drop
+  listenFileDrop(paths => {
+    // Check if Library view is active
+    const libView = document.getElementById('view-library');
+    if (!libView || !libView.classList.contains('active')) return;
+
+    // Check if an existing modal is already open
+    if (document.querySelector('.modal-overlay.open')) return;
+
+    if (paths && paths.length > 0) {
+      const path = paths[0]; // Take first dropped file/folder
+      openAddModModal();
+      document.getElementById('mod-folder').value = path;
+      const nameInput = document.getElementById('mod-name');
+      const parts = path.replace(/\\/g, '/').split('/');
+      nameInput.value = parts[parts.length - 1] || '';
+    }
+  });
+
   // Close detail panel
   const closeDetail = document.getElementById('btn-close-detail');
   if (closeDetail) closeDetail.addEventListener('click', closeModDetail);
 
-  await refreshMods();
+  try {
+    userTags = await invoke('get_tags').catch(() => []);
+    allMods = await invoke('get_mods');
+    renderModList();
+  } catch (err) {
+    console.warn("Could not get mods:", err);
+    allMods = [];
+  }
+  updateBadge();
+  updateSubtitle();
+  if (selectedModId) {
+    const m = allMods.find(mod => mod.id === selectedModId);
+    if (m) renderModDetail(m);
+    else closeModDetail();
+  }
 }
 
 export async function refreshMods() {
@@ -99,14 +161,67 @@ function updateSubtitle() {
 }
 
 function getFilteredMods() {
-  return allMods.filter(m => {
+  let filtered = allMods.filter(m => {
     const matchFilter =
       currentFilter === 'all' ||
       (currentFilter === 'enabled' && m.enabled) ||
       (currentFilter === 'disabled' && !m.enabled);
-    const matchSearch = !searchQuery || m.name.toLowerCase().includes(searchQuery);
+    // Search also matches tag names
+    let matchSearch = !searchQuery || m.name.toLowerCase().includes(searchQuery);
+    if (!matchSearch && searchQuery && m.tags && m.tags.length > 0) {
+      matchSearch = m.tags.some(tid => {
+        const tDef = userTags.find(t => t.id === tid);
+        return tDef && tDef.name.toLowerCase().includes(searchQuery);
+      });
+    }
     return matchFilter && matchSearch;
   });
+
+  filtered.sort((a, b) => {
+    if (currentSort === 'name_asc') return a.name.localeCompare(b.name);
+    if (currentSort === 'name_desc') return b.name.localeCompare(a.name);
+    if (currentSort === 'status') {
+      if (a.enabled === b.enabled) return a.name.localeCompare(b.name);
+      return a.enabled ? -1 : 1;
+    }
+    return 0;
+  });
+
+  return filtered;
+}
+
+function renderHistoryModal(history) {
+  const list = document.getElementById('history-list');
+  list.innerHTML = '';
+  if (!history || history.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px" data-i18n="history.empty">Aucun historique disponible.</div>';
+    import('./i18n.js').then(m => m.applyTranslations());
+  } else {
+    // sort newest first
+    history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    history.forEach(item => {
+      const isEnabled = item.action === 'Enabled';
+      const color = isEnabled ? 'var(--success)' : 'var(--text-muted)';
+      const actionText = isEnabled ? 'ACTIF' : 'INACTIF';
+      const dateStr = new Date(item.timestamp).toLocaleString();
+
+      const safeName = escHtml(item.mod_name);
+
+      list.innerHTML += `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border)">
+          <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
+          <div style="flex:1">
+            <div style="font-weight:600;color:var(--text-primary);word-break:break-all">${safeName}</div>
+            <div style="font-size:12px;color:var(--text-muted)">${dateStr}</div>
+          </div>
+          <div style="font-size:11px;font-family:var(--font-mono);padding:3px 8px;border-radius:6px;background:${isEnabled ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)'};color:${color}">
+            ${actionText}
+          </div>
+        </div>
+      `;
+    });
+  }
+  document.getElementById('modal-history').classList.add('open');
 }
 
 function renderModList() {
@@ -153,6 +268,13 @@ function createModCard(mod) {
         <span class="mono" style="color: var(--cyan)">v${escHtml(mod.version)}</span>
         ${mod.author ? `<span>· ${escHtml(mod.author)}</span>` : ''}
         ${mod.description ? `<span style="color: var(--text-muted)">· ${escHtml(mod.description)}</span>` : ''}
+        ${mod.tags?.length > 0 ? `<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+          ${mod.tags.map(tid => {
+    const tDef = userTags.find(t => t.id === tid);
+    if (!tDef) return '';
+    return `<span style="background:${tDef.color}15;color:${tDef.color};border:1px solid ${tDef.color}30;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600">${escHtml(tDef.name)}</span>`;
+  }).join('')}
+        </div>` : ''}
       </div>
       <div class="mod-path-hint" style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);opacity:0.6;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;display:flex;align-items:center;gap:4px">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -201,9 +323,15 @@ function createModCard(mod) {
       if (toggle.checked) {
         await invoke('enable_mod', { modId: mod.id });
         toast(`"${mod.name}" activé.`, 'success');
+        if (localStorage.getItem('bmm_sysNotif') === 'true') {
+          sendOsNotification('Better Mod Manager', `"${mod.name}" activé — fichiers transférés.`);
+        }
       } else {
         await invoke('disable_mod', { modId: mod.id });
         toast(`"${mod.name}" désactivé.`, 'info');
+        if (localStorage.getItem('bmm_sysNotif') === 'true') {
+          sendOsNotification('Better Mod Manager', `"${mod.name}" désactivé — fichiers restaurés.`);
+        }
       }
       await refreshMods();
     } catch (err) {
@@ -314,6 +442,15 @@ function renderModDetail(mod) {
         <textarea id="detail-desc" class="input-field" rows="2" style="resize:vertical">${escHtml(mod.description || '')}</textarea>
       </div>
 
+      <!-- Tags Selection -->
+      <div class="detail-section" id="detail-tags-container">
+        <label class="detail-label" data-i18n="detail.tags" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Tags</label>
+        <div id="detail-tags-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <select id="detail-tag-select" class="input-field" style="width:100%;padding:6px;font-size:11px">
+            <option value="">— Ajouter un tag —</option>
+        </select>
+      </div>
+
       <!-- Mod Folder Path -->
       <div class="detail-section">
         <label class="detail-label" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Dossier du mod</label>
@@ -364,15 +501,56 @@ function renderModDetail(mod) {
   // Close button
   panel.querySelector('#btn-close-detail-inner').addEventListener('click', closeModDetail);
 
+  // Load Tags logic
+  const tagSelect = panel.querySelector('#detail-tag-select');
+  const tagList = panel.querySelector('#detail-tags-list');
+  let modTags = [...(mod.tags || [])];
+
+  const renderTagsUI = () => {
+    tagList.innerHTML = '';
+    modTags.forEach(tid => {
+      const tDef = userTags.find(t => t.id === tid);
+      if (!tDef) return;
+      const chip = document.createElement('div');
+      chip.style.cssText = `display:flex;align-items:center;gap:4px;background:${tDef.color}20;color:${tDef.color};border:1px solid ${tDef.color}40;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600`;
+      chip.innerHTML = `<span>${escHtml(tDef.name)}</span><button data-id="${tid}" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:4px">&times;</button>`;
+      chip.querySelector('button').addEventListener('click', () => {
+        modTags = modTags.filter(id => id !== tid);
+        renderTagsUI();
+      });
+      tagList.appendChild(chip);
+    });
+    mod._currentTags = modTags;
+  };
+
+  userTags.forEach(tDef => {
+    const opt = document.createElement('option');
+    opt.value = tDef.id;
+    opt.textContent = tDef.name;
+    tagSelect.appendChild(opt);
+  });
+
+  tagSelect.addEventListener('change', e => {
+    const tid = e.target.value;
+    if (tid && !modTags.includes(tid)) {
+      modTags.push(tid);
+      renderTagsUI();
+    }
+    e.target.value = '';
+  });
+
+  renderTagsUI();
+
   // Save button
   panel.querySelector('#btn-save-detail').addEventListener('click', async () => {
     const name = panel.querySelector('#detail-name').value.trim();
     const version = panel.querySelector('#detail-version').value.trim();
     const author = panel.querySelector('#detail-author').value.trim();
     const description = panel.querySelector('#detail-desc').value.trim();
+    const tags = mod._currentTags || mod.tags || [];
 
     try {
-      await invoke('update_mod_meta', { modId: mod.id, name, author, description, version });
+      await invoke('update_mod_meta', { modId: mod.id, name, author, description, version, tags });
 
       // Save download links: remove all, then add new
       const linkRows = panel.querySelectorAll('#detail-links-list > div');

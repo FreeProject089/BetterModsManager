@@ -47,6 +47,15 @@ fn main() {
             commands::ovgme::import_ovgme_profiles,
             // Update notes
             commands::update::get_update_notes,
+            // Tags
+            commands::tag::get_tags,
+            commands::tag::create_tag,
+            commands::tag::delete_tag,
+            // History
+            commands::history::get_activity_history,
+            // Settings
+            commands::settings::export_app_data,
+            commands::settings::import_app_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

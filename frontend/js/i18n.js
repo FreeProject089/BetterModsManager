@@ -27,6 +27,13 @@ const translations = {
         'lib.emptyDesc': 'Créez un profil et ajoutez vos premiers mods.',
         'lib.selectProfile': '— Sélectionnez un profil —',
         'lib.search': 'Rechercher un mod...',
+        'lib.sortNameAsc': 'Nom (A-Z)',
+        'lib.sortNameDesc': 'Nom (Z-A)',
+        'lib.sortStatus': 'Statut (Actifs en 1er)',
+        'lib.historyTitle': 'Historique d\'activation',
+        'lib.history': 'Historique',
+        'history.title': 'Historique d\'activation',
+        'history.empty': 'Aucun historique disponible pour ce profil. Activez un mod pour commencer !',
 
         // Mods
         'mod.active': 'ACTIF',
@@ -99,6 +106,13 @@ const translations = {
         'settings.shortcutAddMod': 'Ajouter un mod',
         'settings.shortcutExport': 'Exporter la liste',
         'settings.shortcutImport': 'Importer une liste',
+        'settings.notifications': 'Notifications',
+        'settings.sysNotif': 'Notifications Windows',
+        'settings.sysNotifDesc': 'Afficher une alerte système quand un transfert de mod est terminé.',
+        'settings.dataTitle': 'Gestion des données',
+        'settings.dataDesc': 'Sauvegardez ou restaurez toute votre configuration (profils, mods, tags et réglages).',
+        'settings.dataExport': 'Exporter',
+        'settings.dataImport': 'Importer',
         'settings.language': 'Langue',
         'settings.updateNotes': 'Notes de mise à jour',
         'settings.viewNotes': 'Voir les notes',
@@ -112,6 +126,28 @@ const translations = {
         'credits.discord': 'Rejoindre le Discord',
         'credits.license': 'Licence',
         'credits.licenseDesc': 'Ce logiciel est distribué sous licence Apache 2.0.',
+        'credits.linksTitle': 'Liens & Communauté',
+        'credits.discordSub': 'Aide & mises à jour',
+        'credits.edSub': 'Communauté DCS World & ressources de modding',
+        'credits.licenseSub': 'Apache 2.0 — Cliquez pour lire',
+        'credits.subtitle': 'À propos de Better Mod Manager',
+        'credits.heroDesc': 'Gestionnaire de mods moderne et universel. Organisez, activez et partagez vos mods en toute simplicité.',
+        'credits.devLabel': 'Développeur',
+        'credits.devRole': 'Créateur & Développeur',
+
+        // Tags settings
+        'settings.tagsTitle': 'Gestion des tags personnalisés',
+        'settings.tagsDesc': 'Créez des étiquettes (ex: Cockpit, Son) à assigner à vos mods.',
+        'settings.tagNamePlaceholder': 'Nom du tag',
+        'settings.tagCreate': 'Créer',
+
+        // Shortcuts settings
+        'settings.shortcutsTitle': 'Raccourcis Clavier',
+        'settings.shortcutsDesc': 'Modifiez les raccourcis utilisés dans l\'application (Touche Ctrl + X).',
+
+        // Detail tags
+        'detail.tags': 'Tags',
+        'detail.selectTag': '— Ajouter un tag —',
 
         // FAQ
         'faq.title': 'Questions fréquentes (FAQ)',
@@ -133,8 +169,8 @@ const translations = {
         'docs.backupsDesc': 'La sécurité avant tout ! Si l\'activation d\'un mod nécessite de remplacer un fichier original du jeu, BMM va d\'abord sauvegarder l\'original dans le dossier Backup que vous avez défini. Ainsi, lorsque vous désactivez le mod, le fichier original est restauré, laissant votre jeu intact.',
         'docs.mmFormat': 'Comprendre le format .MM',
         'docs.mmFormatDesc': 'L\'extension .MM a été créée pour partager facilement vos listes de mods. Sous le capot, il s\'agit simplement d\'un format .JSON standard. L\'extension personnalisée permet à vos amis de se repérer plus facilement et de l\'importer en un clic.',
-        'docs.enableDisable': 'Activer & Désactiver',
-        'docs.enableDisableDesc': 'Utilisez le switch sur chaque carte de mod pour gérér son état. Les fichiers sont transférés en arrière-plan. Veillez toujours à désactiver un mod avant de le supprimer pour éviter que ses fichiers ne restent orphelins dans le jeu.',
+        'docs.enableDisable': 'Comment ça marche ?',
+        'docs.enableDisableDesc': 'Contrairement aux gestionnaires de mods classiques qui créent des liens virtuels (symlinks) risqués ou instables, Better Mod Manager effectue une copie physique intelligente de vos fichiers. \n\n1. Activation : Lorsque vous activez un mod, BMM analyse les fichiers. S\'ils remplacent des fichiers originaux du jeu, il les copie discrètement dans votre dossier Backup. Ensuite, il injecte les fichiers du mod dans le jeu.\n\n2. Désactivation : Lorsque vous désactivez le mod, BMM supprime les fichiers du mod du jeu, puis restaure instantanément les fichiers originaux depuis le dossier Backup. Votre jeu retrouve son état pur.\n\n⚠️ Attention : Veillez toujours à désactiver un mod depuis l\'application avant de supprimer physiquement son dossier, sinon le jeu conservera ses fichiers de modification et le backup ne sera pas restauré.',
 
         // Onboarding
         'onboard.s1.title': 'Bienvenue !',
@@ -187,7 +223,14 @@ const translations = {
         'lib.emptyTitle': 'No mods found',
         'lib.emptyDesc': 'Create a profile and add your first mods.',
         'lib.selectProfile': '— Select a profile —',
+        'lib.sortNameAsc': 'Name (A-Z)',
+        'lib.sortNameDesc': 'Name (Z-A)',
+        'lib.sortStatus': 'Status (Enabled first)',
         'lib.search': 'Search mods...',
+        'lib.historyTitle': 'Activation history',
+        'lib.history': 'History',
+        'history.title': 'Activation History',
+        'history.empty': 'No history available for this profile. Enable a mod to start recording!',
 
         // Mods
         'mod.active': 'ACTIVE',
@@ -260,6 +303,13 @@ const translations = {
         'settings.shortcutAddMod': 'Add a mod',
         'settings.shortcutExport': 'Export list',
         'settings.shortcutImport': 'Import a list',
+        'settings.notifications': 'Notifications',
+        'settings.sysNotif': 'OS Notifications',
+        'settings.sysNotifDesc': 'Show a system alert when a mod transfer is complete.',
+        'settings.dataTitle': 'Data Management',
+        'settings.dataDesc': 'Backup or restore your entire configuration (profiles, mods, tags, and settings).',
+        'settings.dataExport': 'Export',
+        'settings.dataImport': 'Import',
         'settings.language': 'Language',
         'settings.updateNotes': 'Update notes',
         'settings.viewNotes': 'View notes',
@@ -273,6 +323,28 @@ const translations = {
         'credits.discord': 'Join our Discord',
         'credits.license': 'License',
         'credits.licenseDesc': 'This software is distributed under the Apache 2.0 license.',
+        'credits.linksTitle': 'Links & Community',
+        'credits.discordSub': 'Get help & updates',
+        'credits.edSub': 'DCS World community & modding resources',
+        'credits.licenseSub': 'Apache 2.0 — Click to read',
+        'credits.subtitle': 'About Better Mod Manager',
+        'credits.heroDesc': 'A modern, universal mod manager. Organise, enable, and share your mods effortlessly.',
+        'credits.devLabel': 'Developer',
+        'credits.devRole': 'Creator & Developer',
+
+        // Tags settings
+        'settings.tagsTitle': 'Custom Tags Management',
+        'settings.tagsDesc': 'Create labels (e.g. Cockpit, Sound) to assign to your mods.',
+        'settings.tagNamePlaceholder': 'Tag name',
+        'settings.tagCreate': 'Create',
+
+        // Shortcuts settings
+        'settings.shortcutsTitle': 'Keyboard Shortcuts',
+        'settings.shortcutsDesc': 'Customise the shortcuts used in the application (Ctrl + key).',
+
+        // Detail tags
+        'detail.tags': 'Tags',
+        'detail.selectTag': '— Add a tag —',
 
         // FAQ
         'faq.title': 'Frequently Asked Questions (FAQ)',
@@ -294,8 +366,8 @@ const translations = {
         'docs.backupsDesc': 'Safety first! If enabling a mod requires replacing an original game file, BMM will first backup the original into your defined Backup folder. This way, when you disable the mod, the original file is restored, leaving your game intact.',
         'docs.mmFormat': 'Understanding the .MM format',
         'docs.mmFormatDesc': 'The .MM extension was created to easily share your mod lists. Under the hood, it\'s simply a standard .JSON format. The custom extension makes it easier for your friends to find and import it in one click.',
-        'docs.enableDisable': 'Enable & Disable',
-        'docs.enableDisableDesc': 'Use the switch on each mod card to manage its state. Files are transferred in the background. Always make sure to disable a mod before deleting it to avoid leaving its files orphaned in the game.',
+        'docs.enableDisable': 'How does it work?',
+        'docs.enableDisableDesc': 'Unlike classic mod managers that create risky or unstable virtual links (symlinks), Better Mod Manager performs a smart physical copy of your files.\n\n1. Activation: When you enable a mod, BMM analyzes the files. If they replace original game files, it discreetly copies them to your Backup folder. Then, it injects the mod files into the game.\n\n2. Deactivation: When you disable the mod, BMM removes the mod files from the game, then instantly restores the original files from the Backup folder. Your game returns to its pure state.\n\n⚠️ Warning: Always make sure to disable a mod from the application before physically deleting its folder, otherwise the game will keep its modification files and the backup will not be restored.',
 
         // Onboarding
         'onboard.s1.title': 'Welcome!',

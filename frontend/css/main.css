@@ -258,6 +258,11 @@ img {
     position: relative;
 }
 
+.profile-select option {
+    background-color: var(--bg);
+    color: var(--text-primary);
+}
+
 .nav-item:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
@@ -1699,4 +1704,87 @@ select.input-field option {
     .titlebar-center {
         display: none;
     }
+}
+
+/* ── Select option dark theme fix ── */
+select,
+select option {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+}
+
+select:focus {
+    outline: 1px solid var(--accent);
+    border-color: var(--border-accent) !important;
+}
+
+.profile-select option {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    padding: 8px;
+}
+
+/* ── Modern FAQ Accordion ── */
+.faq-accordion {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: var(--transition);
+    margin-bottom: 8px;
+}
+
+.faq-accordion:hover {
+    border-color: var(--border-accent);
+    background: rgba(59, 130, 246, 0.03);
+}
+
+.faq-accordion[open] {
+    border-color: var(--accent);
+    background: rgba(59, 130, 246, 0.04);
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.08);
+}
+
+.faq-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    cursor: pointer;
+    list-style: none;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    user-select: none;
+    gap: 12px;
+}
+
+.faq-summary::-webkit-details-marker {
+    display: none;
+}
+
+.faq-summary::marker {
+    display: none;
+    content: '';
+}
+
+.faq-summary svg {
+    flex-shrink: 0;
+    transition: transform 0.25s ease;
+    color: var(--text-muted);
+}
+
+.faq-accordion[open] .faq-summary svg {
+    transform: rotate(180deg);
+    color: var(--accent);
+}
+
+.faq-content {
+    padding: 0 20px 16px 20px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    margin-top: -2px;
 }

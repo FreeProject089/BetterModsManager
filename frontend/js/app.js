@@ -11,11 +11,13 @@ import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
 // ── Tauri bridge ──────────────────────────────────────────
 let _invoke;
 let _dialog;
+let _notifModule;
 
 async function loadTauri() {
     try {
         const tauriModule = await import('https://unpkg.com/@tauri-apps/api@1/tauri.js');
         const dialogModule = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
+        _notifModule = await import('https://unpkg.com/@tauri-apps/api@1/notification.js');
         _invoke = tauriModule.invoke;
         _dialog = dialogModule;
     } catch {
@@ -23,6 +25,7 @@ async function loadTauri() {
         console.warn('[BMM] Running in browser mock mode');
         _invoke = mockInvoke;
         _dialog = { open: async () => 'C:\\mock\\folder' };
+        _notifModule = null;
     }
 }
 
@@ -52,6 +55,42 @@ export async function saveFile(filters = []) {
         return await saveDialog.save({ filters });
     } catch {
         return null;
+    }
+}
+
+export async function listenFileDrop(callback) {
+    try {
+        const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
+        return await listen('tauri://file-drop', e => {
+            if (e.payload && e.payload.length > 0) {
+                callback(e.payload);
+            }
+        });
+    } catch {
+        console.warn('[BMM] File drop not supported in browser mockup');
+        return () => { };
+    }
+}
+
+export async function sendOsNotification(title, body) {
+    if (localStorage.getItem('bmm_sysNotif') !== 'true') return;
+    try {
+        let notif = _notifModule;
+        // Fallback: try window.__TAURI__
+        if (!notif && window.__TAURI__?.notification) {
+            notif = window.__TAURI__.notification;
+        }
+        if (!notif) return;
+
+        let permission = await notif.isPermissionGranted();
+        if (!permission) {
+            permission = (await notif.requestPermission()) === 'granted';
+        }
+        if (permission) {
+            notif.sendNotification({ title, body });
+        }
+    } catch (e) {
+        console.warn('Notification failed:', e);
     }
 }
 
@@ -257,33 +296,64 @@ function formatBytes(bytes) {
 }
 
 // ── Settings keyboard shortcuts ────────────────────────────
+export function getShortcuts() {
+    return JSON.parse(localStorage.getItem('bmm_shortcuts')) || {
+        "newProfile": "n",
+        "addMod": "m",
+        "exportModlist": "e",
+        "importModlist": "i"
+    };
+}
+
 function initShortcuts() {
     document.addEventListener('keydown', e => {
         if (e.ctrlKey) {
-            switch (e.key.toLowerCase()) {
-                case 'n':
-                    e.preventDefault();
-                    document.getElementById('nav-profiles').click();
-                    setTimeout(() => document.getElementById('btn-new-profile').click(), 50);
-                    break;
-                case 'm':
-                    e.preventDefault();
-                    document.getElementById('nav-library').click();
-                    setTimeout(() => document.getElementById('btn-add-mod').click(), 50);
-                    break;
-                case 'e':
-                    e.preventDefault();
-                    document.getElementById('nav-modlist').click();
-                    setTimeout(() => document.getElementById('btn-export-mm').click(), 100);
-                    break;
-                case 'i':
-                    e.preventDefault();
-                    document.getElementById('nav-modlist').click();
-                    setTimeout(() => document.getElementById('btn-import-mm').click(), 100);
-                    break;
+            const sc = getShortcuts();
+            const key = e.key.toLowerCase();
+
+            if (key === sc.newProfile) {
+                e.preventDefault();
+                document.getElementById('nav-profiles').click();
+                setTimeout(() => document.getElementById('btn-new-profile')?.click(), 50);
+            } else if (key === sc.addMod) {
+                e.preventDefault();
+                document.getElementById('nav-library').click();
+                setTimeout(() => document.getElementById('btn-add-mod')?.click(), 50);
+            } else if (key === sc.exportModlist) {
+                e.preventDefault();
+                document.getElementById('nav-modlist').click();
+                setTimeout(() => document.getElementById('btn-export-mm')?.click(), 100);
+            } else if (key === sc.importModlist) {
+                e.preventDefault();
+                document.getElementById('nav-modlist').click();
+                setTimeout(() => document.getElementById('btn-import-mm')?.click(), 100);
             }
         }
     });
+}
+
+function renderSettingsShortcuts() {
+    const sc = getShortcuts();
+    const updateShortcut = (id, keyName) => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.value = sc[keyName];
+            input.addEventListener('keydown', e => {
+                e.preventDefault();
+                const newKey = e.key.toLowerCase();
+                if (newKey !== 'control' && newKey !== 'shift' && newKey !== 'alt') {
+                    sc[keyName] = newKey;
+                    localStorage.setItem('bmm_shortcuts', JSON.stringify(sc));
+                    input.value = newKey;
+                    toast('Raccourci mis à jour (' + newKey + ')', 'success');
+                }
+            });
+        }
+    };
+    updateShortcut('sc-new-profile', 'newProfile');
+    updateShortcut('sc-add-mod', 'addMod');
+    updateShortcut('sc-export-mm', 'exportModlist');
+    updateShortcut('sc-import-mm', 'importModlist');
 }
 
 // ── Mock backend (browser dev mode) ───────────────────────
@@ -462,6 +532,73 @@ async function main() {
     await updateProfileChip();
     await initProfileSelector();
 
+    // Init Settings
+    const notifToggle = document.getElementById('setting-sys-notif');
+    if (notifToggle) {
+        notifToggle.checked = localStorage.getItem('bmm_sysNotif') === 'true';
+        notifToggle.addEventListener('change', e => {
+            localStorage.setItem('bmm_sysNotif', e.target.checked);
+        });
+    }
+
+    // Tags Settings
+    const btnCreateTag = document.getElementById('btn-create-tag');
+    if (btnCreateTag) {
+        btnCreateTag.addEventListener('click', async () => {
+            const nameInput = document.getElementById('setting-tag-name');
+            const colorInput = document.getElementById('setting-tag-color');
+            const name = nameInput.value.trim();
+            const color = colorInput.value;
+            if (!name) return toast('Le nom du tag est requis.', 'error');
+            try {
+                await invoke('create_tag', { name, color, icon: '' });
+                nameInput.value = '';
+                toast('Tag créé.', 'success');
+                renderSettingsTags();
+                // trigger mods refresh to update library UI
+                if (window._refreshModsFn) window._refreshModsFn();
+            } catch (err) {
+                toast('Erreur création tag : ' + err, 'error');
+            }
+        });
+        renderSettingsTags();
+    }
+
+    renderSettingsShortcuts();
+
+    const exportBtn = document.getElementById('btn-export-data');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', async () => {
+            const destPath = await saveFile([{ name: 'App Data Backup', extensions: ['json'] }]);
+            if (destPath) {
+                try {
+                    await invoke('export_app_data', { destPath });
+                    toast('Configuration exportée.', 'success');
+                } catch (e) {
+                    toast('Erreur export : ' + e, 'error');
+                }
+            }
+        });
+    }
+
+    const importBtn = document.getElementById('btn-import-data');
+    if (importBtn) {
+        importBtn.addEventListener('click', async () => {
+            const srcPath = await pickFile([{ name: 'App Data Backup', extensions: ['json'] }]);
+            if (srcPath) {
+                if (confirm('Voulez-vous vraiment écraser votre configuration actuelle ?')) {
+                    try {
+                        await invoke('import_app_data', { srcPath });
+                        toast('Configuration importée avec succès. Redémarrage...', 'success');
+                        setTimeout(() => window.location.reload(), 2000);
+                    } catch (e) {
+                        toast('Erreur import : ' + e, 'error');
+                    }
+                }
+            }
+        });
+    }
+
     // Show onboarding on first launch (language is step 0 inside onboarding)
     if (shouldShowOnboarding()) {
         setTimeout(() => startOnboarding(), 500);
@@ -507,14 +644,50 @@ async function initProfileSelector() {
         const id = select.value;
         if (!id) return;
         try {
-            await invoke('set_active_profile', { id });
+            await invoke('set_active_profile', { profileId: id });
             await updateProfileChip();
-            await refreshMods();
+            if (window._refreshModsFn) await window._refreshModsFn();
             applyTranslations();
         } catch (e) {
-            toast('Error switching profile: ' + e, 'error');
+            toast('Erreur chargement profil : ' + e, 'error');
         }
     });
+}
+
+async function renderSettingsTags() {
+    const list = document.getElementById('settings-tags-list');
+    if (!list) return;
+    try {
+        const tags = await invoke('get_tags');
+        list.innerHTML = '';
+        if (tags.length === 0) {
+            list.innerHTML = '<span style="color:var(--text-muted);font-size:12px;font-style:italic">Aucun tag personnalisé pour le moment.</span>';
+            return;
+        }
+        tags.forEach(t => {
+            const chip = document.createElement('div');
+            chip.style.cssText = `display:flex;align-items:center;gap:4px;background:${t.color}20;color:${t.color};border:1px solid ${t.color}40;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600`;
+            chip.innerHTML = `<span>${String(t.name).replace(/</g, '&lt;')}</span><button data-id="${t.id}" class="btn-del-tag" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:6px;font-size:14px" title="Supprimer">&times;</button>`;
+            list.appendChild(chip);
+        });
+
+        list.querySelectorAll('.btn-del-tag').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (confirm('Voulez-vous vraiment supprimer ce tag ? Il sera retiré de tous les mods.')) {
+                    try {
+                        await invoke('delete_tag', { tagId: btn.dataset.id });
+                        toast('Tag supprimé.', 'success');
+                        renderSettingsTags();
+                        if (window._refreshModsFn) window._refreshModsFn();
+                    } catch (err) {
+                        toast('Erreur suppression tag : ' + err, 'error');
+                    }
+                }
+            });
+        });
+    } catch (err) {
+        console.error("Tags error", err);
+    }
 }
 
 main().catch(console.error);

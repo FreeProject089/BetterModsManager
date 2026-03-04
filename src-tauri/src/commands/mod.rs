@@ -3,3 +3,6 @@ pub mod mods;
 pub mod modlist;
 pub mod ovgme;
 pub mod update;
+pub mod tag;
+pub mod history;
+pub mod settings;

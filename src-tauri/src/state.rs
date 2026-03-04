@@ -9,6 +9,8 @@ pub struct AppData {
     pub profiles: Vec<Profile>,
     pub mods: Vec<ModEntry>,
     pub active_profile_id: Option<String>,
+    #[serde(default)]
+    pub custom_tags: Vec<crate::models::tag::TagDef>,
 }
 
 pub struct AppState {

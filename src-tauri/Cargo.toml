@@ -11,7 +11,7 @@ path = "src/main.rs"
 tauri-build = { version = "1", features = [] }
 
 [dependencies]
-tauri = { version = "1", features = ["dialog-open", "dialog-save", "fs-all", "path-all", "window-all", "shell-open"] }
+tauri = { version = "1", features = [ "notification-all", "dialog-open", "dialog-save", "fs-all", "path-all", "window-all", "shell-open"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }

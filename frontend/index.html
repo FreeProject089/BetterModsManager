@@ -165,6 +165,15 @@
                         <p class="view-subtitle" id="lib-subtitle">Sélectionnez un profil pour commencer</p>
                     </div>
                     <div class="view-actions">
+                        <button class="btn btn-ghost" id="btn-show-history" title="Historique d'activation"
+                            data-i18n-title="lib.historyTitle">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2.2">
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                            <span data-i18n="lib.history">Historique</span>
+                        </button>
                         <button class="btn btn-ghost" id="btn-scan-mods" title="Scanner le dossier mods">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.2">
@@ -191,35 +200,46 @@
                     </div>
                 </div>
 
-                <!-- Profile selector -->
-                <div class="profile-selector-bar" style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
-                        stroke-width="2" style="flex-shrink:0">
-                        <circle cx="12" cy="8" r="4" />
-                        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-                    </svg>
-                    <select id="lib-profile-select" class="profile-select"
-                        style="flex:1;max-width:320px;padding:8px 12px;border-radius:8px;background:var(--card-bg);color:var(--text-primary);border:1px solid var(--border);font-size:13px;cursor:pointer">
-                        <option value="" data-i18n="lib.selectProfile">— Sélectionnez un profil —</option>
-                    </select>
-                </div>
+                <!-- Filter and Profile bar -->
+                <div class="filter-bar"
+                    style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px;margin-bottom:20px;">
+                    <div style="display:flex;align-items:center;gap:15px;flex:1">
+                        <div class="search-box">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="11" cy="11" r="8" />
+                                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                            </svg>
+                            <input type="text" id="mod-search" placeholder="Rechercher un mod..."
+                                data-i18n-placeholder="lib.search" />
+                        </div>
+                        <div class="filter-buttons">
+                            <button class="filter-btn active" data-filter="all" data-i18n="lib.filterAll">Tous</button>
+                            <button class="filter-btn" data-filter="enabled"
+                                data-i18n="lib.filterEnabled">Actifs</button>
+                            <button class="filter-btn" data-filter="disabled"
+                                data-i18n="lib.filterDisabled">Inactifs</button>
 
-                <!-- Filter bar -->
-                <div class="filter-bar">
-                    <div class="search-box">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <circle cx="11" cy="11" r="8" />
-                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                        </svg>
-                        <input type="text" id="mod-search" placeholder="Rechercher un mod..."
-                            data-i18n-placeholder="lib.search" />
+                            <select id="mod-sort" class="profile-select"
+                                style="margin-left: 8px; padding: 4.5px 12px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-primary); border: 1px solid var(--border); font-size: 12px; cursor: pointer; transition: var(--transition);">
+                                <option value="name_asc" data-i18n="lib.sortNameAsc">Nom (A-Z)</option>
+                                <option value="name_desc" data-i18n="lib.sortNameDesc">Nom (Z-A)</option>
+                                <option value="status" data-i18n="lib.sortStatus">Statut (Actifs en 1er)</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="filter-buttons">
-                        <button class="filter-btn active" data-filter="all" data-i18n="lib.filterAll">Tous</button>
-                        <button class="filter-btn" data-filter="enabled" data-i18n="lib.filterEnabled">Actifs</button>
-                        <button class="filter-btn" data-filter="disabled"
-                            data-i18n="lib.filterDisabled">Inactifs</button>
+
+                    <!-- Profile selector -->
+                    <div class="profile-selector-bar" style="display:flex;align-items:center;gap:10px;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
+                            stroke-width="2" style="flex-shrink:0">
+                            <circle cx="12" cy="8" r="4" />
+                            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                        </svg>
+                        <select id="lib-profile-select" class="profile-select"
+                            style="width:250px;max-width:320px;padding:8px 12px;border-radius:8px;background:var(--card-bg);color:var(--text-primary);border:1px solid var(--border);font-size:13px;cursor:pointer">
+                            <option value="" data-i18n="lib.selectProfile">— Sélectionnez un profil —</option>
+                        </select>
                     </div>
                 </div>
 
@@ -477,6 +497,7 @@
                         </p>
                     </div>
 
+                    <!-- Comment ça marche (Tutorial) -->
                     <div class="glass-card">
                         <h3 class="card-title">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)"
@@ -486,13 +507,24 @@
                                 <polyline points="7 23 3 19 7 15" />
                                 <path d="M21 13v2a4 4 0 0 1-4 4H3" />
                             </svg>
-                            <span data-i18n="docs.enableDisable">Activer & Désactiver</span>
+                            <span data-i18n="docs.enableDisable">Comment ça marche ?</span>
                         </h3>
                         <p class="about-desc" data-i18n="docs.enableDisableDesc" style="line-height:1.6">
-                            Utilisez le switch sur chaque carte de mod pour gérér son état. Les fichiers sont transférés
-                            en arrière-plan.
-                            Veillez toujours à désactiver un mod avant de le supprimer pour éviter que ses fichiers ne
-                            restent orphelins dans le jeu.
+                            Contrairement aux gestionnaires de mods classiques qui créent des liens virtuels (symlinks)
+                            risqués ou instables, <strong>Better Mod Manager</strong> effectue une <strong>copie
+                                physique intelligente</strong> de vos fichiers.
+                            <br><br>
+                            <strong>1. Activation :</strong> Lorsque vous activez un mod, BMM analyse les fichiers.
+                            S'ils remplacent des fichiers originaux du jeu, il les copie discrètement dans votre dossier
+                            <strong>Backup</strong>. Ensuite, il injecte les fichiers du mod dans le jeu.
+                            <br><br>
+                            <strong>2. Désactivation :</strong> Lorsque vous désactivez le mod, BMM supprime les
+                            fichiers du mod du jeu, puis restaure instantanément les fichiers originaux depuis le
+                            dossier Backup. Votre jeu retrouve son état pur.
+                            <br><br>
+                            <strong>⚠️ Attention :</strong> Veillez toujours à <u>désactiver</u> un mod depuis
+                            l'application avant de supprimer physiquement son dossier, sinon le jeu conservera ses
+                            fichiers de modification et le backup ne sera pas restauré.
                         </p>
                     </div>
 
@@ -500,32 +532,62 @@
                     <h2 style="margin-top:28px;font-size:18px;color:var(--text-primary)" data-i18n="faq.title">Questions
                         fréquentes (FAQ)</h2>
 
-                    <div class="glass-card">
-                        <h3 class="card-title" style="color:var(--accent)" data-i18n="faq.q1">Est-ce que mes mods sont
-                            conservés si je change de profil ?</h3>
-                        <p class="about-desc" data-i18n="faq.a1" style="line-height:1.6">Oui ! Chaque profil garde son
-                            propre état de mods. Quand vous revenez sur un profil, vos mods activés sont toujours là,
-                            même après redémarrage.</p>
-                    </div>
-                    <div class="glass-card">
-                        <h3 class="card-title" style="color:var(--accent)" data-i18n="faq.q2">Quelle est la différence
-                            entre .MM et .JSON ?</h3>
-                        <p class="about-desc" data-i18n="faq.a2" style="line-height:1.6">Aucune techniquement ! .MM est
-                            simplement un fichier .JSON renommé pour faciliter le partage entre joueurs.</p>
-                    </div>
-                    <div class="glass-card">
-                        <h3 class="card-title" style="color:var(--accent)" data-i18n="faq.q3">Que se passe-t-il si je
-                            supprime un mod activé ?</h3>
-                        <p class="about-desc" data-i18n="faq.a3" style="line-height:1.6">Vous devez d'abord désactiver
-                            le mod pour que ses fichiers soient retirés du jeu, puis vous pouvez le supprimer.</p>
-                    </div>
-                    <div class="glass-card">
-                        <h3 class="card-title" style="color:var(--accent)" data-i18n="faq.q4">Comment mettre à jour un
-                            mod ?</h3>
-                        <p class="about-desc" data-i18n="faq.a4" style="line-height:1.6">Désactivez le mod, remplacez
-                            ses fichiers dans le dossier des mods, puis réactivez-le. Le backup sera recréé
-                            automatiquement.</p>
-                    </div>
+                    <details class="faq-accordion">
+                        <summary class="faq-summary">
+                            <span data-i18n="faq.q1">Est-ce que mes mods sont conservés si je change de profil ?</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </summary>
+                        <div class="faq-content" data-i18n="faq.a1">
+                            Oui ! Chaque profil garde son propre état de mods. Quand vous revenez sur un profil, vos
+                            mods activés sont toujours là, même après redémarrage.
+                        </div>
+                    </details>
+
+                    <details class="faq-accordion">
+                        <summary class="faq-summary">
+                            <span data-i18n="faq.q2">Quelle est la différence entre .MM et .JSON ?</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </summary>
+                        <div class="faq-content" data-i18n="faq.a2">
+                            Aucune techniquement ! .MM est simplement un fichier .JSON renommé pour faciliter le partage
+                            entre joueurs.
+                        </div>
+                    </details>
+
+                    <details class="faq-accordion">
+                        <summary class="faq-summary">
+                            <span data-i18n="faq.q3">Que se passe-t-il si je supprime un mod activé ?</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </summary>
+                        <div class="faq-content" data-i18n="faq.a3">
+                            Vous devez d'abord désactiver le mod pour que ses fichiers soient retirés du jeu et les
+                            backups restaurés, puis vous pouvez le supprimer en toute sécurité.
+                        </div>
+                    </details>
+
+                    <details class="faq-accordion">
+                        <summary class="faq-summary">
+                            <span data-i18n="faq.q4">Comment mettre à jour un mod ?</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </summary>
+                        <div class="faq-content" data-i18n="faq.a4">
+                            Désactivez le mod, remplacez ses fichiers dans le dossier des mods dans l'explorateur
+                            Windows, puis réactivez-le dans l'application. Le backup sera recréé automatiquement.
+                        </div>
+                    </details>
+
                 </div>
             </section>
 
@@ -534,64 +596,144 @@
                 <div class="view-header">
                     <div>
                         <h1 class="view-title" data-i18n="credits.title">Crédits</h1>
-                        <p class="view-subtitle" data-i18n="credits.subtitle">L'équipe derrière Better Mod Manager</p>
+                        <p class="view-subtitle" data-i18n="credits.subtitle">À propos de Better Mod Manager</p>
                     </div>
                 </div>
 
-                <div class="settings-sections" style="grid-template-columns:1fr">
-                    <div class="glass-card" style="text-align:center;padding:32px">
-                        <img src="assets/BMm.png" alt="logo"
-                            style="width:80px;height:80px;border-radius:16px;margin-bottom:16px" />
-                        <p class="about-name" style="font-size:20px;font-weight:700">Better Mod Manager</p>
-                        <p class="about-version mono">v0.1.0</p>
+                <div class="settings-sections" style="grid-template-columns:1fr; max-width:700px; margin: 0 auto">
+
+                    <!-- Hero Card -->
+                    <div class="glass-card"
+                        style="text-align:center;padding:40px 24px 32px;position:relative;overflow:hidden">
+                        <div
+                            style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--cyan),var(--accent))">
+                        </div>
+                        <img src="../.Assets/BetterMM.png" alt="Better Mod Manager"
+                            style="width:80px;height:80px;border-radius:16px;margin:0 auto 16px;display:block;box-shadow:0 4px 20px rgba(59,130,246,0.3)" />
+                        <h2 style="font-size:22px;font-weight:700;color:var(--text-primary);margin-bottom:4px">Better
+                            Mod Manager</h2>
+                        <span class="mono"
+                            style="display:inline-block;padding:3px 10px;border-radius:6px;background:var(--accent-dim);color:var(--accent);font-size:12px;margin-bottom:14px">v1.0.6</span>
+                        <p style="color:var(--text-secondary);font-size:13px;max-width:400px;margin:0 auto;line-height:1.6"
+                            data-i18n="credits.heroDesc">
+                            Gestionnaire de mods moderne et universel. Organisez, activez et partagez vos mods en toute
+                            simplicité.
+                        </p>
                     </div>
 
-                    <div class="glass-card">
-                        <h3 class="card-title">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
-                                stroke-width="2" style="margin-right:8px;vertical-align:middle">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                <circle cx="12" cy="7" r="4" />
-                            </svg>
-                            <span data-i18n="credits.developer">Développeur</span>
-                        </h3>
-                        <p class="about-desc" style="font-size:16px;font-weight:600;margin-top:8px">FreeProject089</p>
+                    <!-- Developer -->
+                    <div class="glass-card" style="padding:20px 24px">
+                        <div style="display:flex;align-items:center;gap:16px">
+                            <img src="../.Assets/pfp.webp" alt="FreeProject089"
+                                style="width:52px;height:52px;border-radius:50%;border:2px solid var(--border);object-fit:cover" />
+                            <div style="flex:1">
+                                <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:2px"
+                                    data-i18n="credits.devLabel">Développeur</div>
+                                <div style="font-size:16px;font-weight:700;color:var(--text-primary)">FreeProject089
+                                </div>
+                                <div style="font-size:12px;color:var(--text-secondary)" data-i18n="credits.devRole">
+                                    Créateur & Développeur</div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="glass-card">
-                        <h3 class="card-title">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
-                                stroke-width="2" style="margin-right:8px;vertical-align:middle">
-                                <path
-                                    d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                            </svg>
-                            Discord
-                        </h3>
-                        <a href="https://discord.com/invite/CTaaEF9R75" target="_blank" class="btn btn-secondary btn-sm"
-                            style="margin-top:10px;display:inline-flex;gap:6px;text-decoration:none">
+                    <!-- Links -->
+                    <div class="glass-card" style="padding:20px 24px">
+                        <h3
+                            style="font-size:13px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:14px;display:flex;align-items:center;gap:6px">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
-                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                                <polyline points="15 3 21 3 21 9" />
-                                <line x1="10" y1="14" x2="21" y2="3" />
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                             </svg>
-                            <span data-i18n="credits.discord">Rejoindre le Discord</span>
-                        </a>
+                            <span data-i18n="credits.linksTitle">Liens & Communauté</span>
+                        </h3>
+                        <div style="display:flex;flex-direction:column;gap:8px">
+
+                            <!-- GitHub -->
+                            <a href="https://github.com/FreeProject089/BetterModsManager" target="_blank"
+                                style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;text-decoration:none;transition:var(--transition);cursor:pointer"
+                                onmouseover="this.style.borderColor='var(--border-accent)';this.style.background='rgba(59,130,246,0.04)'"
+                                onmouseout="this.style.borderColor='var(--border)';this.style.background='rgba(255,255,255,0.02)'">
+                                <div
+                                    style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                        stroke="var(--text-primary)" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round">
+                                        <path
+                                            d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22">
+                                        </path>
+                                    </svg>
+                                </div>
+                                <div style="flex:1">
+                                    <div style="font-weight:600;font-size:14px;color:var(--text-primary)">GitHub
+                                        Repository</div>
+                                    <div
+                                        style="font-size:12px;color:var(--text-muted);margin-top:1px;font-family:var(--font-mono)">
+                                        FreeProject089/BetterModsManager</div>
+                                </div>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
+                                    stroke-width="2">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                    <polyline points="15 3 21 3 21 9" />
+                                    <line x1="10" y1="14" x2="21" y2="3" />
+                                </svg>
+                            </a>
+
+                            <!-- Discord -->
+                            <a href="https://discord.com/invite/CTaaEF9R75" target="_blank"
+                                style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;text-decoration:none;transition:var(--transition);cursor:pointer"
+                                onmouseover="this.style.borderColor='rgba(6,182,212,0.4)';this.style.background='rgba(6,182,212,0.04)'"
+                                onmouseout="this.style.borderColor='var(--border)';this.style.background='rgba(255,255,255,0.02)'">
+                                <div
+                                    style="width:40px;height:40px;border-radius:10px;background:rgba(6,182,212,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
+                                        stroke-width="2">
+                                        <path
+                                            d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z">
+                                        </path>
+                                    </svg>
+                                </div>
+                                <div style="flex:1">
+                                    <div style="font-weight:600;font-size:14px;color:var(--cyan)">Discord Community
+                                    </div>
+                                    <div style="font-size:12px;color:var(--text-muted);margin-top:1px"
+                                        data-i18n="credits.discordSub">Aide & mises à jour</div>
+                                </div>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
+                                    stroke-width="2">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                    <polyline points="15 3 21 3 21 9" />
+                                    <line x1="10" y1="14" x2="21" y2="3" />
+                                </svg>
+                            </a>
+
+                            <!-- License -->
+                            <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:var(--transition)"
+                                onclick="document.getElementById('modal-license').classList.add('open')"
+                                onmouseover="this.style.borderColor='var(--border-accent)';this.style.background='rgba(255,255,255,0.04)'"
+                                onmouseout="this.style.borderColor='var(--border)';this.style.background='rgba(255,255,255,0.02)'">
+                                <div
+                                    style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                        stroke="var(--text-muted)" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                        <polyline points="14 2 14 8 20 8" />
+                                        <line x1="16" y1="13" x2="8" y2="13" />
+                                        <line x1="16" y1="17" x2="8" y2="17" />
+                                    </svg>
+                                </div>
+                                <div style="flex:1">
+                                    <div style="font-weight:600;font-size:14px;color:var(--text-primary)"
+                                        data-i18n="credits.license">Licence</div>
+                                    <div style="font-size:12px;color:var(--text-muted);margin-top:1px"
+                                        data-i18n="credits.licenseSub">Apache 2.0 — Cliquez pour lire</div>
+                                </div>
+                            </div>
+
+                        </div>
                     </div>
 
-                    <div class="glass-card">
-                        <h3 class="card-title">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)"
-                                stroke-width="2" style="margin-right:8px;vertical-align:middle">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                            </svg>
-                            <span data-i18n="credits.license">Licence</span>
-                        </h3>
-                        <p class="about-desc" style="margin-top:8px"><strong>Apache License 2.0</strong></p>
-                        <p class="about-desc" data-i18n="credits.licenseDesc" style="line-height:1.6;margin-top:4px">Ce
-                            logiciel est distribué sous licence Apache 2.0.</p>
-                    </div>
                 </div>
             </section>
 
@@ -642,6 +784,26 @@
                     </div>
 
                     <div class="glass-card">
+                        <h3 class="card-title" data-i18n="settings.notifications">Notifications</h3>
+                        <label class="mod-toggle"
+                            style="display:flex;align-items:center;gap:12px;width:auto;cursor:pointer;margin-top:8px">
+                            <div style="position:relative;width:44px;height:24px">
+                                <input type="checkbox" id="setting-sys-notif" class="mod-toggle-input">
+                                <div class="mod-toggle-track">
+                                    <div class="mod-toggle-thumb"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div style="font-weight:600;color:var(--text-primary)" data-i18n="settings.sysNotif">
+                                    Notifications système</div>
+                                <div style="font-size:12px;color:var(--text-muted);margin-top:2px"
+                                    data-i18n="settings.sysNotifDesc">Afficher une notification Windows quand un
+                                    transfert est terminé.</div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="glass-card">
                         <h3 class="card-title" data-i18n="settings.language">Langue</h3>
                         <div style="display:flex;gap:10px;margin-top:8px">
                             <button class="btn btn-secondary btn-sm lang-btn" data-lang="fr">Français</button>
@@ -650,36 +812,215 @@
                     </div>
 
                     <div class="glass-card">
-                        <h3 class="card-title" data-i18n="settings.updateNotes">Notes de mise à jour</h3>
-                        <button class="btn btn-secondary btn-sm" id="btn-show-updates" style="margin-top:8px">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                                <line x1="16" y1="13" x2="8" y2="13" />
-                                <line x1="16" y1="17" x2="8" y2="17" />
-                            </svg>
-                            <span data-i18n="settings.viewNotes">Voir les notes</span>
-                        </button>
+                        <h3 class="card-title" data-i18n="settings.tagsTitle">Gestion des tags personnalisés</h3>
+                        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px"
+                            data-i18n="settings.tagsDesc">
+                            Créez des étiquettes (ex: Cockpit, Son) à assigner à vos mods.
+                        </div>
+                        <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+                            <input type="text" id="setting-tag-name" placeholder="Nom du tag"
+                                data-i18n-placeholder="settings.tagNamePlaceholder"
+                                style="flex:1;padding:8px;border-radius:6px;background:rgba(0,0,0,0.2);color:white;border:1px solid var(--border)">
+                            <input type="color" id="setting-tag-color" value="#3b82f6"
+                                style="width:36px;height:36px;padding:0;border:none;border-radius:6px;cursor:pointer;background:transparent">
+                            <button class="btn btn-primary btn-sm" id="btn-create-tag"><span
+                                    data-i18n="settings.tagCreate">Créer</span></button>
+                        </div>
+                        <div id="settings-tags-list" style="display:flex;flex-wrap:wrap;gap:8px">
+                            <!-- Tags will be rendered here -->
+                        </div>
                     </div>
 
                     <div class="glass-card">
-                        <h3 class="card-title" data-i18n="settings.tutorialTitle">Tutoriel (Tasky)</h3>
-                        <button class="btn btn-secondary btn-sm" id="btn-restart-onboarding" style="margin-top:8px">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.26l3.08 2.69"></path>
-                            </svg>
-                            <span data-i18n="settings.restartTutorial">Redémarrer le tutoriel</span>
-                        </button>
+                        <h3 class="card-title" data-i18n="settings.shortcutsTitle">Raccourcis Clavier</h3>
+                        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px"
+                            data-i18n="settings.shortcutsDesc">
+                            Modifiez les raccourcis utilisés dans l'application (Touche Ctrl + X).
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                            <div class="form-group">
+                                <label style="font-size:11px;color:var(--text-muted)">Nouveau Profil (Ctrl +)</label>
+                                <input type="text" id="sc-new-profile" class="input-field"
+                                    style="width:100%;text-align:center;text-transform:uppercase" readonly />
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size:11px;color:var(--text-muted)">Ajouter un Mod (Ctrl +)</label>
+                                <input type="text" id="sc-add-mod" class="input-field"
+                                    style="width:100%;text-align:center;text-transform:uppercase" readonly />
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size:11px;color:var(--text-muted)">Exporter Liste (Ctrl +)</label>
+                                <input type="text" id="sc-export-mm" class="input-field"
+                                    style="width:100%;text-align:center;text-transform:uppercase" readonly />
+                            </div>
+                            <div class="form-group">
+                                <label style="font-size:11px;color:var(--text-muted)">Importer Liste (Ctrl +)</label>
+                                <input type="text" id="sc-import-mm" class="input-field"
+                                    style="width:100%;text-align:center;text-transform:uppercase" readonly />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card">
+                        <h3 class="card-title" data-i18n="settings.dataTitle">Gestion des données</h3>
+                        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px"
+                            data-i18n="settings.dataDesc">
+                            Sauvegardez ou restaurez toute votre configuration (profils, mods, tags et réglages).
+                        </div>
+                        <div style="display:flex;gap:10px">
+                            <button class="btn btn-secondary btn-sm" id="btn-export-data">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                <span data-i18n="settings.dataExport">Exporter</span>
+                            </button>
+                            <button class="btn btn-secondary btn-sm" id="btn-import-data">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <span data-i18n="settings.dataImport">Importer</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="glass-card">
+                        <button class="btn btn-secondary btn-sm lang-btn" data-lang="fr">Français</button>
+                        <button class="btn btn-secondary btn-sm lang-btn" data-lang="en">English</button>
                     </div>
                 </div>
-            </section>
 
-        </main>
+                <div class="glass-card">
+                    <h3 class="card-title" data-i18n="settings.updateNotes">Notes de mise à jour</h3>
+                    <button class="btn btn-secondary btn-sm" id="btn-show-updates" style="margin-top:8px">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                        </svg>
+                        <span data-i18n="settings.viewNotes">Voir les notes</span>
+                    </button>
+                </div>
+
+                <div class="glass-card">
+                    <h3 class="card-title" data-i18n="settings.tutorialTitle">Tutoriel (Tasky)</h3>
+                    <button class="btn btn-secondary btn-sm" id="btn-restart-onboarding" style="margin-top:8px">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.26l3.08 2.69"></path>
+                        </svg>
+                        <span data-i18n="settings.restartTutorial">Redémarrer le tutoriel</span>
+                    </button>
+                </div>
+    </div>
+    </section>
+
+    </main>
     </div>
 
     <!-- ══ MODALS ══ -->
+
+    <!-- History Modal -->
+    <div class="modal-overlay" id="modal-history">
+        <div class="modal glass" style="max-width: 500px; width: 90%;">
+            <div class="modal-header">
+                <h2 class="modal-title" data-i18n="history.title">Historique d'activation</h2>
+                <button class="modal-close" data-close="modal-history">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+                <div id="history-list" style="display: flex; flex-direction: column; gap: 8px;">
+                    <!-- Activity items inserted here via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- License Modal -->
+    <div class="modal-overlay" id="modal-license">
+        <div class="modal glass" style="max-width: 600px; width: 90%;">
+            <div class="modal-header">
+                <h2 class="modal-title">Apache License 2.0</h2>
+                <button class="modal-close" data-close="modal-license">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body"
+                style="max-height: 400px; overflow-y: auto; font-family: var(--font-mono); font-size: 11px; line-height: 1.5; color: var(--text-muted); background: rgba(0,0,0,0.2); border-radius: 8px; padding: 16px;">
+                Apache License
+                Version 2.0, January 2004
+                http://www.apache.org/licenses/
+
+                TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+                1. Definitions.
+                "License" shall mean the terms and conditions for use, reproduction, and distribution as defined by
+                Sections 1 through 9 of this document.
+                "Licensor" shall mean the copyright owner or entity authorized by the copyright owner that is granting
+                the License.
+                "Legal Entity" shall mean the union of the acting entity and all other entities that control, are
+                controlled by, or are under common control with that entity. For the purposes of this definition,
+                "control" means (i) the power, direct or indirect, to cause the direction or management of such entity,
+                whether by contract or otherwise, or (ii) ownership of fifty percent (50%) or more of the outstanding
+                shares, or (iii) beneficial ownership of such entity.
+                "You" (or "Your") shall mean an individual or Legal Entity exercising permissions granted by this
+                License.
+                "Source" form shall mean the preferred form for making modifications, including but not limited to
+                software source code, documentation source, and configuration files.
+                "Object" form shall mean any form resulting from mechanical transformation or translation of a Source
+                form, including but not limited to compiled object code, generated documentation, and conversions to
+                other media types.
+                "Work" shall mean the work of authorship, whether in Source or Object form, made available under the
+                License, as indicated by a copyright notice that is included in or attached to the work (an example is
+                provided in the Appendix below).
+                "Derivative Works" shall mean any work, whether in Source or Object form, that is based on (or derived
+                from) the Work and for which the editorial revisions, annotations, elaborations, or other modifications
+                represent, as a whole, an original work of authorship. For the purposes of this License, Derivative
+                Works shall not include works that remain separable from, or merely link (or bind by name) to the
+                interfaces of, the Work and Derivative Works thereof.
+                "Contribution" shall mean any work of authorship, including the original version of the Work and any
+                modifications or additions to that Work or Derivative Works thereof, that is intentionally submitted to
+                Licensor for inclusion in the Work by the copyright owner or by an individual or Legal Entity authorized
+                to submit on behalf of the copyright owner. For the purposes of this definition, "submitted" means any
+                form of electronic, verbal, or written communication sent to the Licensor or its representatives,
+                including but not limited to communication on electronic mailing lists, source code control systems, and
+                issue tracking systems that are managed by, or on behalf of, the Licensor for the purpose of discussing
+                and improving the Work, but excluding communication that is conspicuously marked or otherwise designated
+                in writing by the copyright owner as "Not a Contribution."
+                "Contributor" shall mean Licensor and any individual or Legal Entity on behalf of whom a Contribution
+                has been received by Licensor and subsequently incorporated within the Work.
+
+                2. Grant of Copyright License. Subject to the terms and conditions of this License, each Contributor
+                hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+                copyright license to reproduce, prepare Derivative Works of, publicly display, publicly perform,
+                sublicense, and distribute the Work and such Derivative Works in Source or Object form.
+
+                3. Grant of Patent License. Subject to the terms and conditions of this License, each Contributor hereby
+                grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable (except as
+                stated in this section) patent license to make, have made, use, offer to sell, sell, import, and
+                otherwise transfer the Work...
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-close="modal-license">Fermer</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Add Mod Modal -->
     <div class="modal-overlay" id="modal-add-mod">
