@@ -1,0 +1,66 @@
+{
+    "build": {
+        "beforeDevCommand": "",
+        "beforeBuildCommand": "",
+        "devPath": "../frontend",
+        "distDir": "../frontend"
+    },
+    "package": {
+        "productName": "Better Mod Manager",
+        "version": "0.1.0"
+    },
+    "tauri": {
+        "allowlist": {
+            "all": false,
+            "dialog": {
+                "open": true,
+                "save": true
+            },
+            "fs": {
+                "all": true,
+                "scope": [
+                    "$APP/**",
+                    "$APPDATA/**",
+                    "$HOME/**",
+                    "$RESOURCE/**",
+                    "**"
+                ]
+            },
+            "path": {
+                "all": true
+            },
+            "shell": {
+                "open": true
+            },
+            "window": {
+                "all": true
+            }
+        },
+        "bundle": {
+            "active": true,
+            "targets": "all",
+            "identifier": "com.bettermm.app",
+            "icon": [
+                "../.Assets/BMm.png"
+            ]
+        },
+        "security": {
+            "csp": null
+        },
+        "windows": [
+            {
+                "label": "main",
+                "title": "Better Mod Manager",
+                "width": 1280,
+                "height": 800,
+                "minWidth": 1024,
+                "minHeight": 680,
+                "resizable": true,
+                "fullscreen": false,
+                "decorations": false,
+                "transparent": false,
+                "center": true
+            }
+        ]
+    }
+}

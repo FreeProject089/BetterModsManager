@@ -1,0 +1,16 @@
+{
+    "name": "better-mods-manager",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "tauri": "tauri",
+        "dev": "npx tauri dev",
+        "build": "npx tauri build"
+    },
+    "devDependencies": {
+        "@tauri-apps/cli": "^1"
+    },
+    "dependencies": {
+        "@tauri-apps/api": "^1"
+    }
+}
