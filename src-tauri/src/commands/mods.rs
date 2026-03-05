@@ -540,24 +540,62 @@ pub async fn download_mod(
     Ok(result)
 }
 
+#[derive(serde::Serialize, Clone)]
+struct DownloadProgress {
+    mod_index: usize,
+    total_mods: usize,
+    mod_name: String,
+    progress: f32, // 0.0 to 100.0
+    status: String,
+}
+
 #[tauri::command]
 pub async fn install_from_modlist(
+    window: tauri::Window,
     state: State<'_, AppState>,
     modlist_json: String,
+    create_profile: bool,
 ) -> Result<Vec<String>, String> {
     let modlist: crate::models::modlist::ModList =
         serde_json::from_str(&modlist_json).map_err(|e| format!("Invalid modlist: {}", e))?;
 
-    let mods_path = {
+    let mut mods_path = {
         let data = state.data.lock().unwrap();
-        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
-        let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
-        p.mods_path.clone()
+        if create_profile {
+            // Profile will be created later if it doesn't exist, but we need a path now
+            // For now, let's use the hint or a default
+            PathBuf::from(&modlist.game_path_hint).join("BetterMods")
+        } else {
+            let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
+            let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
+            p.mods_path.clone()
+        }
     };
 
-    let mut results = Vec::new();
+    // If create_profile, we actually create the profile first
+    if create_profile {
+        let mut data = state.data.lock().unwrap();
+        let new_id = uuid::Uuid::new_v4().to_string();
+        let game_path = PathBuf::from(&modlist.game_path_hint);
+        let backup_path = game_path.join("BetterModsBackup");
+        let mut new_p = crate::models::profile::Profile::new(
+            modlist.name.clone(),
+            modlist.game_name.clone(),
+            game_path,
+            mods_path.clone(),
+            backup_path
+        );
+        new_p.id = new_id.clone();
+        data.profiles.push(new_p);
+        data.active_profile_id = Some(new_id);
+        drop(data);
+        let _ = state.save();
+    }
 
-    for entry in modlist.mods {
+    let mut results = Vec::new();
+    let total_mods = modlist.mods.len();
+
+    for (idx, entry) in modlist.mods.iter().enumerate() {
         let link = entry.download_links.iter().find(|dl| !dl.url.is_empty());
         let safe_name = entry.name
             .chars()
@@ -565,20 +603,21 @@ pub async fn install_from_modlist(
             .collect::<String>();
         let target_dir = mods_path.join(&safe_name);
         
+        // Progress: Starting
+        let _ = window.emit("bmm://mod-download-progress", DownloadProgress {
+            mod_index: idx,
+            total_mods,
+            mod_name: entry.name.clone(),
+            progress: 0.0,
+            status: "Démarrage...".to_string(),
+        });
+
         // Skip if already downloaded
         if target_dir.exists() {
             let mut data = state.data.lock().unwrap();
             let mut exists_in_db = false;
             for m in &data.mods {
-                let m_p = &m.mod_folder_path;
-                let t_p = &target_dir;
-                let is_match = if m_p == t_p { true } else {
-                    match (m_p.canonicalize(), t_p.canonicalize()) {
-                        (Ok(a), Ok(b)) => a == b,
-                        _ => false
-                    }
-                };
-                if is_match {
+                if m.mod_folder_path == target_dir {
                     exists_in_db = true;
                     break;
                 }
@@ -588,35 +627,127 @@ pub async fn install_from_modlist(
                 new_mod.name = entry.name.clone();
                 new_mod.version = entry.version.clone();
                 new_mod.author = entry.author.clone();
+                new_mod.tags = entry.tags.clone();
                 data.mods.push(new_mod);
             }
-            results.push(format!("✅ {} — Déjà téléchargé", entry.name));
+            results.push(format!("✅ {} — Déjà présent", entry.name));
+            
+            let _ = window.emit("bmm://mod-download-progress", DownloadProgress {
+                mod_index: idx,
+                total_mods,
+                mod_name: entry.name.clone(),
+                progress: 100.0,
+                status: "Déjà présent".to_string(),
+            });
             continue;
+        }
+
+        // --- OPTIMIZATION: Look for matching mod in other profiles (Local Cache) ---
+        let existing_source = {
+            let data = state.data.lock().unwrap();
+            data.mods.iter()
+                .find(|m| m.name == entry.name && m.mod_folder_path.exists())
+                .map(|m| m.mod_folder_path.clone())
+        };
+
+        if let Some(src_path) = existing_source {
+            let target_dir_clone = target_dir.clone();
+            let window_clone = window.clone();
+            let m_name = entry.name.clone();
+
+            let res = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+                let _ = window_clone.emit("bmm://mod-download-progress", DownloadProgress {
+                    mod_index: idx,
+                    total_mods,
+                    mod_name: m_name.clone(),
+                    progress: 50.0,
+                    status: "Copie locale...".to_string(),
+                });
+
+                std::fs::create_dir_all(&target_dir_clone).map_err(|e| e.to_string())?;
+                let mut options = fs_extra::dir::CopyOptions::new();
+                options.content_only = true;
+                options.overwrite = true;
+                fs_extra::dir::copy(&src_path, &target_dir_clone, &options).map_err(|e| e.to_string())?;
+                Ok(())
+            }).await.map_err(|e| e.to_string())?;
+
+            if res.is_ok() {
+                let mut data = state.data.lock().unwrap();
+                let mut new_mod = ModEntry::new(safe_name.clone(), target_dir.clone());
+                new_mod.name = entry.name.clone();
+                new_mod.version = entry.version.clone();
+                new_mod.author = entry.author.clone();
+                new_mod.tags = entry.tags.clone();
+                data.mods.push(new_mod);
+                results.push(format!("✅ {} — Copié localement", entry.name));
+                
+                let _ = window.emit("bmm://mod-download-progress", DownloadProgress {
+                    mod_index: idx,
+                    total_mods,
+                    mod_name: entry.name.clone(),
+                    progress: 100.0,
+                    status: "Copié localement".to_string(),
+                });
+                continue;
+            }
         }
 
         if let Some(dl) = link {
             let url = dl.url.clone();
-            
-            // Perform download in blocking thread
-            let res = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-                std::fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
+            let target_dir_clone = target_dir.clone();
+            let window_clone = window.clone();
+            let m_name = entry.name.clone();
 
-                let response = reqwest::blocking::get(&url)
+            // Perform download
+            let res = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+                let mut response = reqwest::blocking::get(&url)
                     .map_err(|e| format!("Download failed: {}", e))?;
 
                 if !response.status().is_success() {
                     return Err(format!("HTTP {}", response.status()));
                 }
 
-                let bytes = response.bytes().map_err(|e| format!("Read failed: {}", e))?;
-                let is_zip = bytes.len() >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B;
+                let total_size = response.content_length().unwrap_or(0);
+                let mut bytes = Vec::new();
+                let mut buffer = [0; 8192];
+                let mut downloaded: u64 = 0;
 
+                std::fs::create_dir_all(&target_dir_clone).map_err(|e| e.to_string())?;
+
+                use std::io::Read;
+                while let Ok(count) = response.read(&mut buffer) {
+                    if count == 0 { break; }
+                    bytes.extend_from_slice(&buffer[..count]);
+                    downloaded += count as u64;
+
+                    if total_size > 0 {
+                        let prog = (downloaded as f32 / total_size as f32) * 100.0;
+                        let _ = window_clone.emit("bmm://mod-download-progress", DownloadProgress {
+                            mod_index: idx,
+                            total_mods,
+                            mod_name: m_name.clone(),
+                            progress: prog * 0.8, // 80% for download, 20% for extraction
+                            status: format!("Téléchargement... {:.1}%", prog),
+                        });
+                    }
+                }
+
+                let _ = window_clone.emit("bmm://mod-download-progress", DownloadProgress {
+                    mod_index: idx,
+                    total_mods,
+                    mod_name: m_name.clone(),
+                    progress: 85.0,
+                    status: "Extraction...".to_string(),
+                });
+
+                let is_zip = bytes.len() >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B;
                 if is_zip {
                     let cursor = std::io::Cursor::new(&bytes);
                     let mut archive = zip::ZipArchive::new(cursor).map_err(|e| format!("Zip: {}", e))?;
                     for i in 0..archive.len() {
                         let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
-                        let outpath = target_dir.join(file.name());
+                        let outpath = target_dir_clone.join(file.name());
                         if file.name().ends_with('/') {
                             std::fs::create_dir_all(&outpath).ok();
                         } else {
@@ -629,7 +760,7 @@ pub async fn install_from_modlist(
                     }
                 } else {
                     let filename = url.split('/').last().unwrap_or("mod_file");
-                    let filepath = target_dir.join(filename);
+                    let filepath = target_dir_clone.join(filename);
                     std::fs::write(&filepath, &bytes).map_err(|e| e.to_string())?;
                 }
                 Ok(())
@@ -642,11 +773,27 @@ pub async fn install_from_modlist(
                     new_mod.name = entry.name.clone();
                     new_mod.version = entry.version.clone();
                     new_mod.author = entry.author.clone();
+                    new_mod.tags = entry.tags.clone();
                     data.mods.push(new_mod);
                     results.push(format!("✅ {} — Téléchargé et extrait", entry.name));
+                    
+                    let _ = window.emit("bmm://mod-download-progress", DownloadProgress {
+                        mod_index: idx,
+                        total_mods,
+                        mod_name: entry.name.clone(),
+                        progress: 100.0,
+                        status: "Terminé".to_string(),
+                    });
                 },
                 Err(e) => {
                     results.push(format!("❌ {} — {}", entry.name, e));
+                    let _ = window.emit("bmm://mod-download-progress", DownloadProgress {
+                        mod_index: idx,
+                        total_mods,
+                        mod_name: entry.name.clone(),
+                        progress: 0.0,
+                        status: format!("Erreur: {}", e),
+                    });
                 }
             }
         } else {

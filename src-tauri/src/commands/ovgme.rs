@@ -71,7 +71,7 @@ async fn parse_ovgme_path(ovgme_path: &PathBuf, state: State<'_, AppState>) -> R
         let mut data = state.data.lock().unwrap();
         
         // Find if profile already exists (match by same game path or name)
-        let profile_id = if let Some(p) = data.profiles.iter().find(|p| p.name == title || p.game_path == game_path) {
+        let _profile_id = if let Some(p) = data.profiles.iter().find(|p| p.name == title || p.game_path == game_path) {
             p.id.clone()
         } else {
             let new_profile = Profile::new(

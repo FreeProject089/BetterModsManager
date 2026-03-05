@@ -714,6 +714,53 @@ img {
     border-left: 3px solid var(--border);
 }
 
+.mod-list.compact {
+    gap: 4px;
+}
+
+.mod-list.compact .mod-card {
+    padding: 8px 12px;
+    border-radius: 8px;
+    gap: 12px;
+    min-height: 48px;
+}
+
+.mod-list.compact .mod-card .mod-info p.mod-desc {
+    display: none;
+}
+
+.mod-list.compact .mod-card .mod-name {
+    font-size: 13px;
+}
+
+.mod-list.compact .mod-card .mod-meta {
+    margin-top: 1px;
+    font-size: 11px;
+}
+
+.mod-list.compact .mod-card .mod-meta span.mod-version {
+    font-family: var(--font-mono);
+    color: var(--cyan);
+}
+
+.mod-list.compact .mod-card .mod-actions {
+    gap: 2px;
+}
+
+.mod-list.compact .mod-card .mod-toggle {
+    width: 38px;
+    height: 20px;
+}
+
+.mod-list.compact .mod-card .mod-toggle-thumb {
+    width: 14px;
+    height: 14px;
+}
+
+.mod-list.compact .mod-card .mod-toggle input:checked~.mod-toggle-track .mod-toggle-thumb {
+    transform: translateX(18px);
+}
+
 /* Mod toggle */
 .mod-toggle {
     position: relative;

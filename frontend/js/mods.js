@@ -14,12 +14,38 @@ let selectedModId = null;
 let processingMods = new Set();
 let conflictCache = {}; // modId -> Array of conflicting mod names
 let refreshTimeout = null;
+let isCompact = localStorage.getItem('bmm-view-compact') === 'true';
+let ghostFilteredMods = []; // Cache for virtualization
 
 export async function initMods() {
   window._refreshModsFn = refreshMods;
   document.getElementById('btn-add-mod').addEventListener('click', openAddModModal);
   document.getElementById('btn-confirm-add-mod').addEventListener('click', confirmAddMod);
   document.getElementById('btn-enable-all').addEventListener('click', () => toggleAllMods());
+
+  const viewBtn = document.getElementById('btn-view-mode');
+  const modlist = document.getElementById('mod-list');
+  const scrollContainer = document.querySelector('.content-area');
+
+  if (isCompact) modlist.classList.add('compact');
+
+  viewBtn.addEventListener('click', () => {
+    isCompact = !isCompact;
+    localStorage.setItem('bmm-view-compact', isCompact);
+    modlist.classList.toggle('compact', isCompact);
+    renderModList(); // Re-render with new heights
+    toast(isCompact ? 'Mode compact activé' : 'Mode standard activé', 'info', 1500);
+  });
+
+  if (scrollContainer) {
+    scrollContainer.addEventListener('scroll', () => {
+      // Only trigger virtual re-render if we are in Library view
+      if (document.getElementById('view-library').classList.contains('active')) {
+        renderModList(true); // true = scroll-only update
+      }
+    });
+  }
+
   const altDisable = document.getElementById('btn-disable-all-alt');
   if (altDisable) altDisable.addEventListener('click', () => toggleAllMods(false));
 
@@ -292,7 +318,6 @@ function renderHistoryModal(history) {
       const color = isEnabled ? 'var(--success)' : 'var(--text-muted)';
       const actionText = isEnabled ? 'ACTIF' : 'INACTIF';
       const dateStr = new Date(item.timestamp).toLocaleString();
-
       const safeName = escHtml(item.mod_name);
 
       list.innerHTML += `
@@ -312,69 +337,102 @@ function renderHistoryModal(history) {
   document.getElementById('modal-history').classList.add('open');
 }
 
-function renderModList() {
+async function renderModList(isScrollOnly = false) {
   const list = document.getElementById('mod-list');
+  const viewport = document.getElementById('mod-list-viewport');
+  const spacer = document.getElementById('mod-list-spacer');
   const scrollContainer = document.querySelector('.content-area');
-  const oldScroll = scrollContainer ? scrollContainer.scrollTop : 0;
   const empty = document.getElementById('empty-mods');
 
-  invoke('get_active_profile_id').then(activeId => {
-    Array.from(list.children).forEach(c => { if (!c.id.startsWith('empty')) list.removeChild(c); });
+  if (!list || !viewport || !spacer || !scrollContainer || !empty) return;
 
-    if (!activeId) {
-      empty.style.display = 'none';
-      let noProf = document.getElementById('empty-no-profile');
-      if (!noProf) {
-        noProf = document.createElement('div');
-        noProf.id = 'empty-no-profile';
-        noProf.className = 'empty-state';
-        noProf.style.padding = '60px 20px';
-        noProf.innerHTML = `
-          <div class="empty-icon" style="margin-bottom:24px; opacity:0.6">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-              <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-            </svg>
-          </div>
-          <h3 data-i18n="lib.noProfileTitle" style="font-size:22px; margin-bottom:12px; font-weight:700">Aucun profil actif</h3>
-          <p data-i18n="lib.noProfileDesc" style="color:var(--text-secondary); max-width:420px; margin:0 auto 32px; line-height:1.6">Veuillez sélectionner ou créer un profil pour gérer vos mods.</p>
-          <div style="display:flex; justify-content:center; gap:16px;">
-            <button class="btn btn-primary" onclick="document.getElementById('nav-profiles').click(); document.getElementById('btn-new-profile').click();" style="padding:12px 24px; font-size:14px">
-              <span data-i18n="prof.create">Créer un profil</span>
-            </button>
-            <button class="btn btn-secondary" onclick="document.getElementById('nav-profiles').click(); document.getElementById('btn-import-ovgme').click();" style="padding:12px 24px; font-size:14px">
-              <span data-i18n="prof.importOvgme">Importer OvGME</span>
-            </button>
-          </div>
-        `;
-        list.appendChild(noProf);
-        applyTranslations(noProf);
-      } else {
-        noProf.style.display = '';
+  // Use cached mods if just scrolling
+  let mods = isScrollOnly ? ghostFilteredMods : [];
+  let activeId = null;
+
+  if (!isScrollOnly) {
+    try {
+      activeId = await invoke('get_active_profile_id');
+      if (!activeId) {
+        viewport.innerHTML = '';
+        spacer.style.height = '0px';
+        empty.style.display = 'none';
+
+        let noProf = document.getElementById('empty-no-profile');
+        if (!noProf) {
+          noProf = document.createElement('div');
+          noProf.id = 'empty-no-profile';
+          noProf.className = 'empty-state';
+          noProf.style.padding = '60px 20px';
+          noProf.innerHTML = `
+            <div class="empty-icon" style="margin-bottom:24px; opacity:0.6">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+              </svg>
+            </div>
+            <h3 data-i18n="lib.noProfileTitle" style="font-size:22px; margin-bottom:12px; font-weight:700">Aucun profil actif</h3>
+            <p data-i18n="lib.noProfileDesc" style="color:var(--text-secondary); max-width:420px; margin:0 auto 32px; line-height:1.6">Veuillez sélectionner ou créer un profil pour gérer vos mods.</p>
+            <div style="display:flex; justify-content:center; gap:16px;">
+              <button class="btn btn-primary" onclick="document.getElementById('nav-profiles').click(); document.getElementById('btn-new-profile').click();" style="padding:12px 24px; font-size:14px">
+                <span data-i18n="prof.create">Créer un profil</span>
+              </button>
+              <button class="btn btn-secondary" onclick="document.getElementById('nav-profiles').click(); document.getElementById('btn-import-ovgme').click();" style="padding:12px 24px; font-size:14px">
+                <span data-i18n="prof.importOvgme">Importer OvGME</span>
+              </button>
+            </div>
+          `;
+          list.appendChild(noProf);
+          applyTranslations(noProf);
+        } else {
+          noProf.style.display = '';
+        }
+        return;
       }
-      return;
-    }
 
-    if (document.getElementById('empty-no-profile')) {
-      document.getElementById('empty-no-profile').style.display = 'none';
-    }
+      if (document.getElementById('empty-no-profile')) {
+        document.getElementById('empty-no-profile').style.display = 'none';
+      }
 
-    const mods = getFilteredMods();
-    if (mods.length === 0) {
-      empty.style.display = '';
-      return;
-    }
+      mods = getFilteredMods();
+      ghostFilteredMods = mods; // Cache it
+    } catch (e) { return; }
+  }
 
-    empty.style.display = 'none';
-    mods.forEach(mod => {
-      const card = createModCard(mod);
-      list.appendChild(card);
-    });
+  if (mods.length === 0) {
+    viewport.innerHTML = '';
+    spacer.style.height = '0px';
+    empty.style.display = '';
+    return;
+  }
 
-    if (scrollContainer) {
-      scrollContainer.scrollTop = oldScroll;
-      requestAnimationFrame(() => { scrollContainer.scrollTop = oldScroll; });
-    }
-  }).catch(() => { });
+  empty.style.display = 'none';
+
+  // --- VIRTUALIZATION LOGIC ---
+  const rowHeight = isCompact ? 52 : 94; // approx heights in px
+  const gap = isCompact ? 4 : 8;
+  const itemFullHeight = rowHeight + gap;
+  const totalHeight = mods.length * itemFullHeight;
+  spacer.style.height = totalHeight + 'px';
+
+  // Viewport metrics
+  const viewportHeight = scrollContainer.clientHeight;
+  const scrollTop = scrollContainer.scrollTop;
+
+  // We need to account for the list's offset from the top of the content-area
+  const listOffset = list.offsetTop;
+  const relativeScroll = Math.max(0, scrollTop - listOffset);
+
+  const startIndex = Math.max(0, Math.floor(relativeScroll / itemFullHeight) - 2);
+  const endIndex = Math.min(mods.length, Math.ceil((relativeScroll + viewportHeight) / itemFullHeight) + 2);
+
+  // Clear viewport but keep selected/processing states if possible
+  viewport.innerHTML = '';
+  viewport.style.transform = `translateY(${startIndex * itemFullHeight}px)`;
+
+  for (let i = startIndex; i < endIndex; i++) {
+    const card = createModCard(mods[i]);
+    viewport.appendChild(card);
+  }
 }
 
 function createModCard(mod) {
@@ -594,7 +652,7 @@ function selectMod(mod) {
     closeModDetail();
     return;
   }
-  
+
   // Remove .selected from previously selected card
   if (selectedModId) {
     const oldCard = document.querySelector(`.mod-card[data-id="${selectedModId}"]`);

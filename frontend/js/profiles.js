@@ -308,35 +308,63 @@ export async function renderProfiles() {
         grid.appendChild(card);
     });
 
-    // Events
+    // Functions for card actions
+    async function activateProfile(id) {
+        await invoke('set_active_profile', { profileId: id });
+        await renderProfiles();
+        updateProfileChip();
+        updateLibraryProfileSelector();
+        const { refreshMods } = await import('./mods.js');
+        await refreshMods(true);
+    }
+
+    function openEditProfile(id) {
+        const profile = profiles.find(p => p.id === id);
+        if (profile) {
+            document.getElementById('edit-prof-id').value = profile.id;
+            document.getElementById('edit-prof-name').value = profile.name;
+            document.getElementById('edit-prof-game').value = profile.game_name || '';
+            document.getElementById('edit-prof-game-path').value = profile.game_path;
+            document.getElementById('edit-prof-mods-path').value = profile.mods_path;
+            document.getElementById('edit-prof-backup-path').value = profile.backup_path;
+            document.getElementById('edit-prof-color').value = profile.color || '#3b82f6';
+            document.getElementById('edit-prof-icon').value = profile.icon || '';
+            updateIconPickerSelection('edit-prof-icon-grid', profile.icon || '');
+            document.getElementById('modal-edit-profile').classList.add('open');
+        }
+    }
+
+    // Individual Card Events
+    grid.querySelectorAll('.profile-card').forEach(card => {
+        const id = card.dataset.id;
+
+        // Single click -> Activate
+        card.addEventListener('click', (e) => {
+            // Don't trigger if clicking a button or a path
+            if (e.target.closest('button') || e.target.closest('.btn-open-path')) return;
+            activateProfile(id);
+        });
+
+        // Double click -> Edit
+        card.addEventListener('dblclick', (e) => {
+            // Don't trigger if clicking a button or a path
+            if (e.target.closest('button') || e.target.closest('.btn-open-path')) return;
+            openEditProfile(id);
+        });
+    });
+
+    // Button Events
     grid.querySelectorAll('.btn-activate').forEach(btn => {
         btn.addEventListener('click', async e => {
-            const id = e.currentTarget.dataset.id;
-            await invoke('set_active_profile', { profileId: id });
-            await renderProfiles();
-            updateProfileChip();
-            updateLibraryProfileSelector();
-            await refreshMods(true);
+            e.stopPropagation();
+            activateProfile(e.currentTarget.dataset.id);
         });
     });
 
     grid.querySelectorAll('.btn-edit-profile').forEach(btn => {
         btn.addEventListener('click', async e => {
             e.stopPropagation();
-            const id = e.currentTarget.dataset.id;
-            const profile = profiles.find(p => p.id === id);
-            if (profile) {
-                document.getElementById('edit-prof-id').value = profile.id;
-                document.getElementById('edit-prof-name').value = profile.name;
-                document.getElementById('edit-prof-game').value = profile.game_name || '';
-                document.getElementById('edit-prof-game-path').value = profile.game_path;
-                document.getElementById('edit-prof-mods-path').value = profile.mods_path;
-                document.getElementById('edit-prof-backup-path').value = profile.backup_path;
-                document.getElementById('edit-prof-color').value = profile.color || '#3b82f6';
-                document.getElementById('edit-prof-icon').value = profile.icon || '';
-                updateIconPickerSelection('edit-prof-icon-grid', profile.icon || '');
-                document.getElementById('modal-edit-profile').classList.add('open');
-            }
+            openEditProfile(e.currentTarget.dataset.id);
         });
     });
 

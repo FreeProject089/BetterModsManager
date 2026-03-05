@@ -14,14 +14,15 @@ pub fn export_modlist(
 ) -> Result<(), String> {
     let data = state.data.lock().unwrap();
 
-    let (game_name, game_path_hint) = if let Some(ref id) = data.active_profile_id {
-        data.profiles
-            .iter()
-            .find(|p| &p.id == id)
-            .map(|p| (p.game_name.clone(), p.game_path.to_string_lossy().to_string()))
-            .unwrap_or_default()
+    let active_profile = if let Some(ref id) = data.active_profile_id {
+        data.profiles.iter().find(|p| &p.id == id)
     } else {
-        (String::new(), String::new())
+        None
+    };
+
+    let (game_name, game_path_hint, mods_path) = match active_profile {
+        Some(p) => (p.game_name.clone(), p.game_path.to_string_lossy().to_string(), Some(p.mods_path.clone())),
+        None => (String::new(), String::new(), None)
     };
 
     let mut modlist = ModList::new(list_name, game_name, game_path_hint);
@@ -29,6 +30,13 @@ pub fn export_modlist(
     modlist.author = author;
 
     for (i, m) in data.mods.iter().enumerate() {
+        // Filter: Only mods from the active profile's path
+        if let Some(ref mp) = mods_path {
+            if !m.mod_folder_path.starts_with(mp) {
+                continue;
+            }
+        }
+
         // Build the file tree for this mod
         let file_tree = build_file_tree(m);
 
@@ -47,9 +55,10 @@ pub fn export_modlist(
             author: m.author.clone(),
             description: m.description.clone(),
             download_links,
-            sort_priority: (i as u32) * 10,
+            sort_priority: if m.enabled { (i as u32) * 10 } else { 9999 },
             file_tree,
             install_notes: String::new(),
+            tags: m.tags.clone(),
         });
     }
 

@@ -3,7 +3,8 @@
         "beforeDevCommand": "",
         "beforeBuildCommand": "",
         "devPath": "../frontend",
-        "distDir": "../frontend"
+        "distDir": "../frontend",
+        "withGlobalTauri": true
     },
     "package": {
         "productName": "Better Mod Manager",
@@ -58,8 +59,8 @@
             {
                 "label": "main",
                 "title": "Better Mod Manager",
-                "width": 1280,
-                "height": 800,
+                "width": 1440,
+                "height": 920,
                 "minWidth": 1024,
                 "minHeight": 680,
                 "resizable": true,

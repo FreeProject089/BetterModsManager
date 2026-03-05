@@ -14,6 +14,16 @@ let _dialog;
 let _notifModule;
 
 async function loadTauri() {
+    // 1. Prioritize window.__TAURI__ (injected locally by Tauri when withGlobalTauri is true)
+    if (window.__TAURI__) {
+        _invoke = window.__TAURI__.invoke;
+        _dialog = window.__TAURI__.dialog;
+        _notifModule = window.__TAURI__.notification;
+        console.log('[BMM] Using local Tauri bridge');
+        return;
+    }
+
+    // 2. Fallback to unpkg (requires internet)
     try {
         const tauriModule = await import('https://unpkg.com/@tauri-apps/api@1/tauri.js');
         const dialogModule = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
@@ -21,10 +31,10 @@ async function loadTauri() {
         _invoke = tauriModule.invoke;
         _dialog = dialogModule;
     } catch {
-        // Dev / browser mode fallback — mock Tauri
+        // 3. Last fallback: mock for browser testing
         console.warn('[BMM] Running in browser mock mode');
         _invoke = mockInvoke;
-        _dialog = { open: async () => 'C:\\mock\\folder' };
+        _dialog = { open: async () => 'C:\\mock\\folder', save: async () => null };
         _notifModule = null;
     }
 }
@@ -73,24 +83,25 @@ export async function listenFileDrop(callback) {
 }
 
 export async function sendOsNotification(title, body) {
+    // Permission check against app settings
     if (localStorage.getItem('bmm_sysNotif') !== 'true') return;
+
     try {
-        let notif = _notifModule;
-        // Fallback: try window.__TAURI__
-        if (!notif && window.__TAURI__?.notification) {
-            notif = window.__TAURI__.notification;
-        }
+        let notif = _notifModule || window.__TAURI__?.notification;
         if (!notif) return;
 
+        // Ensure permission is granted
         let permission = await notif.isPermissionGranted();
         if (!permission) {
-            permission = (await notif.requestPermission()) === 'granted';
+            const result = await notif.requestPermission();
+            permission = (result === 'granted');
         }
+
         if (permission) {
-            notif.sendNotification({ title, body });
+            await notif.sendNotification({ title, body });
         }
     } catch (e) {
-        console.warn('Notification failed:', e);
+        console.error('[BMM] Notification error:', e);
     }
 }
 
@@ -223,66 +234,263 @@ function initModlist() {
             toast(t('mm.installNone'), 'warning');
             return;
         }
+
+        // Sync the current path hint back into the JSON before sending to backend
+        const pathHintEl = document.getElementById('imported-path-hint');
+        if (pathHintEl) {
+            const currentList = JSON.parse(lastImportedModlistJson);
+            currentList.game_path_hint = pathHintEl.textContent;
+            lastImportedModlistJson = JSON.stringify(currentList);
+        }
+
+        const createProfile = document.getElementById('chk-import-as-profile')?.checked || false;
+
         installBtn.disabled = true;
+        installBtn.classList.add('loading');
         installBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('common.installing')}`;
+
+        // Show progress UI
+        const progressOverlay = document.getElementById('imported-progress-overlay');
+        const progressList = document.getElementById('imported-progress-list');
+        if (progressOverlay) progressOverlay.style.display = 'flex';
+        if (progressList) progressList.innerHTML = '';
+
         try {
-            const results = await invoke('install_from_modlist', { modlistJson: lastImportedModlistJson });
+            const results = await invoke('install_from_modlist', {
+                modlistJson: lastImportedModlistJson,
+                createProfile: createProfile
+            });
+
+            // Final results summary
             const resultHtml = results.map(r => {
-                const isOk = r.startsWith('[OK]');
-                const txt = r.replace(/^\[OK\] |^\[ERR\] /g, '');
-                return `<div style="padding:2px 0;font-size:11.5px;font-family:var(--font-mono);color:var(--text-primary);display:flex;align-items:center;gap:6px">
-                    ${isOk ? '<div style="background:var(--success);color:#000;border-radius:2px;padding:0 2px;display:flex;align-items:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>' : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'} 
+                const isOk = r.startsWith('[OK]') || r.includes('✅');
+                const txt = r.replace(/^\[OK\] |^\[ERR\] |^✅ |^❌ /g, '');
+                return `<div style="padding:4px 0;font-size:11.5px;font-family:var(--font-mono);color:var(--text-primary);display:flex;align-items:center;gap:8px">
+                    ${isOk ? '<div style="background:var(--success);color:#000;border-radius:2px;padding:0 4px;font-size:9px;font-weight:800">OK</div>' : '<div style="background:var(--danger);color:white;border-radius:2px;padding:0 4px;font-size:9px;font-weight:800">ERR</div>'} 
                     ${escHtml(txt)}
                 </div>`;
             }).join('');
+
             const resultsDiv = document.createElement('div');
-            resultsDiv.style.cssText = 'margin-top:12px;padding:12px;background:rgba(0,0,0,0.3);border-radius:8px;border:1px solid var(--border)';
-            resultsDiv.innerHTML = `<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.06em">${t('mm.installResults')}</div>${resultHtml}`;
+            resultsDiv.style.cssText = 'margin-top:12px;padding:16px;background:rgba(0,0,0,0.4);border-radius:10px;border:1px solid var(--border);box-shadow:0 4px 12px rgba(0,0,0,0.2)';
+            resultsDiv.innerHTML = `<div style="font-size:10px;color:var(--accent);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em;font-weight:800">${t('mm.installResults')}</div>${resultHtml}`;
             previewCard.appendChild(resultsDiv);
 
-            const successCount = results.filter(r => r.startsWith('[OK]')).length;
+            const successCount = results.filter(r => r.includes('✅') || r.startsWith('[OK]')).length;
             toast(t('mm.installSuccess').replace('{success}', successCount).replace('{total}', results.length), 'success');
-            await refreshMods();
+
+            if (createProfile) {
+                await renderProfiles();
+                // Profile selector in library might need update
+                const libraryTab = document.querySelector('.nav-item[data-view="library"]');
+                if (libraryTab) libraryTab.click();
+            } else {
+                await refreshMods();
+            }
         } catch (err) {
             toast(t('mm.installError').replace('{err}', err), 'error');
+        } finally {
+            installBtn.disabled = false;
+            installBtn.classList.remove('loading');
+            installBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installAll')}`;
+            if (progressOverlay) {
+                setTimeout(() => { progressOverlay.style.display = 'none'; }, 2000);
+            }
         }
-        installBtn.disabled = false;
-        installBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installAll')}`;
+    });
+
+    // Listen for progress events
+    import('https://unpkg.com/@tauri-apps/api@1/event.js').then(({ listen }) => {
+        listen('bmm://mod-download-progress', (e) => {
+            const data = e.payload; // { mod_index, total_mods, mod_name, progress, status }
+            const container = document.getElementById('imported-progress-list');
+            if (!container) return;
+
+            let row = document.getElementById(`dl-progress-${data.mod_index}`);
+            if (!row) {
+                row = document.createElement('div');
+                row.id = `dl-progress-${data.mod_index}`;
+                row.style.cssText = 'margin-bottom:10px; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05)';
+                container.appendChild(row);
+            }
+
+            row.innerHTML = `
+                <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px">
+                    <span style="font-weight:600; color:var(--text-primary)">${escHtml(data.mod_name)}</span>
+                    <span style="color:var(--accent); font-family:var(--font-mono)">${Math.round(data.progress)}%</span>
+                </div>
+                <div style="height:4px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden">
+                    <div style="height:100%; background:var(--accent); width:${data.progress}%; transition:width 0.2s ease; box-shadow:0 0 8px var(--accent)"></div>
+                </div>
+                <div style="font-size:9px; color:var(--text-muted); margin-top:4px; text-transform:uppercase">${escHtml(data.status)}</div>
+            `;
+
+            // Auto scroll progress list
+            container.scrollTop = container.scrollHeight;
+        });
+    });
+
+    // Handle path override button
+    previewCard.addEventListener('click', async (e) => {
+        const btn = e.target.closest('#btn-override-import-path');
+        if (btn) {
+            const newPath = await pickFolder();
+            if (newPath) {
+                const hintEl = document.getElementById('imported-path-hint');
+                if (hintEl) hintEl.textContent = newPath;
+                toast('Destination mise à jour.', 'info');
+            }
+        }
     });
 }
 
 function renderImportedModlist(modlist) {
     const container = document.getElementById('imported-content');
-    container.innerHTML = `
-    <div style="margin-bottom:14px">
-      <p style="font-size:16px;font-weight:700;color:var(--text-primary)">${escHtml(modlist.name)}</p>
-      <p style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono)">
-        ${modlist.game_name || '—'} • par ${modlist.author || '—'} • v${modlist.format_version}
-      </p>
-      ${modlist.game_path_hint ? `<p style="margin-top:4px;font-size:11px;color:var(--text-muted)"><span style="color:var(--cyan)">ROOT:</span> ${escHtml(modlist.game_path_hint)}</p>` : ''}
-      ${modlist.description ? `<p style="margin-top:8px;font-size:13px;color:var(--text-secondary)">${escHtml(modlist.description)}</p>` : ''}
-    </div>
-      ${modlist.mods.map(m => `
-        <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 12px;display:flex;flex-direction:column;gap:4px">
-          <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-weight:600;font-size:13px">${escHtml(m.name)}</span>
-            <span style="font-family:var(--font-mono);font-size:10px;color:var(--cyan)">v${escHtml(m.version)}</span>
-            <span style="font-size:10px;color:var(--text-muted)">priorité: ${m.sort_priority}</span>
+
+    // Calculate totals
+    let totalFiles = 0;
+    let totalBytes = 0;
+    modlist.mods.forEach(m => {
+        if (m.file_tree) {
+            totalFiles += m.file_tree.length;
+            m.file_tree.forEach(f => { totalBytes += (f.size || 0); });
+        }
+    });
+
+    // Header section
+    const headerHtml = `
+      <div style="margin-bottom:20px; padding:20px; background:rgba(0,0,0,0.2); border-radius:12px; border:1px solid var(--border)">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px">
+            <div>
+                <h3 style="font-size:20px; font-weight:800; color:var(--text-primary); margin:0">${escHtml(modlist.name)}</h3>
+                <div style="display:flex; align-items:center; gap:8px; margin-top:6px; flex-wrap:wrap">
+                    <span style="font-size:10px; font-weight:700; text-transform:uppercase; padding:2px 8px; background:var(--accent-dim); color:var(--accent); border-radius:4px">${escHtml(modlist.game_name || 'Generic')}</span>
+                    <span style="font-size:11px; color:var(--text-muted)">par <span style="color:var(--text-secondary); font-weight:600">${escHtml(modlist.author || 'Inconnu')}</span></span>
+                    <span style="font-size:11px; color:var(--text-muted)">• v${modlist.format_version}</span>
+                </div>
+            </div>
+            <div style="display:flex; gap:20px; text-align:right">
+                <div>
+                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em">Mods</div>
+                    <div style="font-size:20px; font-weight:800; color:var(--accent)">${modlist.mods.length}</div>
+                </div>
+                <div>
+                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em">Total Poids</div>
+                    <div style="font-size:20px; font-weight:800; color:var(--cyan)">${formatBytes(totalBytes)}</div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display:flex; align-items:center; gap:10px; padding:12px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid rgba(255,255,255,0.05); margin-top:10px">
+            <div style="flex:1">
+                 <div style="font-size:12px; font-weight:700; color:var(--text-primary)">Créer un profil automatique</div>
+                 <div style="font-size:10px; color:var(--text-muted)">Génère un nouveau profil dédié pour cette liste</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="chk-import-as-profile" checked>
+                <span class="slider round"></span>
+            </label>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:rgba(0,255,255,0.03); border-radius:8px; border:1px solid rgba(6,182,212,0.1); margin-top:10px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <div style="flex:1; min-width:0">
+                <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; font-weight:700">Dossier d'installation (ROOT)</div>
+                <div style="font-family:var(--font-mono); font-size:11px; color:var(--cyan); white-space:nowrap; overflow:hidden; text-overflow:ellipsis" id="imported-path-hint">${escHtml(modlist.game_path_hint || '—')}</div>
+            </div>
+            <button class="btn btn-sm btn-ghost" id="btn-override-import-path" title="Modifier le dossier de destination" style="height:28px; width:28px; border-radius:6px; padding:0; display:flex; align-items:center; justify-content:center">
+                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            </button>
+        </div>
+        
+        ${modlist.description ? `
+            <p style="margin-top:12px; font-size:13px; color:var(--text-secondary); line-height:1.5; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px">
+                ${escHtml(modlist.description)}
+            </p>
+        ` : ''}
+      </div>
+    `;
+
+    // Cards for each mod
+    const modsHtml = modlist.mods.map(m => {
+        const fileCount = m.file_tree ? m.file_tree.length : 0;
+        const modSize = m.file_tree ? m.file_tree.reduce((acc, f) => acc + (f.size || 0), 0) : 0;
+
+        return `
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; flex-direction:column; gap:8px; position:relative; overflow:hidden">
+          <div style="position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--accent)"></div>
+          
+          <div style="display:flex; align-items:center; justify-content:space-between">
+            <div style="display:flex; align-items:center; gap:12px">
+                <span style="font-weight:700; font-size:14px; color:var(--text-primary)">${escHtml(m.name)}</span>
+                <span style="font-family:var(--font-mono); font-size:10px; color:var(--cyan); background:rgba(6,182,212,0.1); padding:1px 6px; border-radius:4px; border:1px solid rgba(6,182,212,0.2)">v${escHtml(m.version)}</span>
+                <span style="font-size:10px; color:var(--text-muted); font-family:var(--font-mono)">${formatBytes(modSize)}</span>
+            </div>
+            <div style="font-size:10px; color:var(--text-muted); font-family:var(--font-mono); background:rgba(255,255,255,0.03); padding:2px 6px; border-radius:4px" title="Priorité d'installation (plus élevé = écrase les autres)">PRIO: ${m.sort_priority}</div>
           </div>
-          ${(m.file_tree && m.file_tree.length > 0) ? `
-            <details>
-              <summary style="font-size:11px;color:var(--cyan);cursor:pointer;font-family:var(--font-mono);display:flex;align-items:center;gap:4px">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Arborescence (${m.file_tree.length} fichier${m.file_tree.length > 1 ? 's' : ''})
+          
+          ${m.description ? `<p style="font-size:12px; color:var(--text-secondary); margin:0; opacity:0.8">${escHtml(m.description)}</p>` : ''}
+          
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+            ${m.tags && m.tags.length > 0 ? m.tags.map(t => `<span style="font-size:9px; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; color:var(--text-secondary); border:1px solid var(--border)">${escHtml(t)}</span>`).join('') : ''}
+            
+            ${m.download_links && m.download_links.length > 0 ? m.download_links.map(l => `
+                <a href="${l.url}" target="_blank" class="btn btn-sm btn-ghost" style="padding:2px 8px; font-size:10px; height:22px; gap:4px; text-decoration:none; color:var(--accent)">
+                    ${getLinkIcon(l.link_type)} ${escHtml(l.label || 'Lien')}
+                </a>
+            `).join('') : ''}
+          </div>
+
+          ${fileCount > 0 ? `
+            <details style="margin-top:4px">
+              <summary style="font-size:11px; color:var(--text-muted); cursor:pointer; font-family:var(--font-mono); display:flex; align-items:center; gap:6px; user-select:none">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                Arborescence (${fileCount} fichiers)
               </summary>
-              <div style="max-height:120px;overflow-y:auto;margin-top:4px;padding:4px 0 0 12px;font-size:10px;font-family:var(--font-mono);color:var(--text-muted)">
-                ${m.file_tree.map(f => `<div style="padding:1px 0;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(f.relative_path)}">${f.is_directory ? '📁' : '📄'} ${escHtml(f.relative_path)} <span style="color:var(--text-muted);opacity:0.5">${f.is_directory ? '' : `(${formatBytes(f.size)})`}</span></div>`).join('')}
+              <div style="max-height:150px; overflow-y:auto; margin-top:8px; padding:8px; background:rgba(0,0,0,0.2); border-radius:6px; font-size:10.5px; font-family:var(--font-mono); color:var(--text-muted); border:1px solid rgba(255,255,255,0.03)">
+                ${m.file_tree.map(f => `
+                    <div style="padding:2px 0; display:flex; align-items:center; gap:6px; border-bottom:1px solid rgba(255,255,255,0.02)">
+                        <span style="opacity:0.6">${f.is_directory ? '📁' : '📄'}</span> 
+                        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${escAttr(f.relative_path)}">${escHtml(f.relative_path)}</span>
+                        ${!f.is_directory ? `<span style="opacity:0.4; font-size:9px">${formatBytes(f.size)}</span>` : ''}
+                    </div>
+                `).join('')}
               </div>
             </details>
           ` : ''}
         </div>
-      `).join('')}
-    </div>
-  `;
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:4px; position:relative">
+            ${headerHtml}
+            
+            <!-- Progress Overlay -->
+            <div id="imported-progress-overlay" style="display:none; position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(10,14,23,0.9); z-index:100; border-radius:12px; flex-direction:column; padding:24px; backdrop-filter:blur(8px)">
+                <div style="display:flex; align-items:center; gap:16px; margin-bottom:24px">
+                    <div style="width:40px; height:40px; background:var(--accent-dim); border-radius:10px; display:flex; align-items:center; justify-content:center">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 2s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                    </div>
+                    <div>
+                        <h4 style="margin:0; font-size:16px; font-weight:800; color:var(--text-primary)">Installation en cours...</h4>
+                        <p style="margin:0; font-size:12px; color:var(--text-muted)">Récupération des archives et extraction</p>
+                    </div>
+                </div>
+                <div id="imported-progress-list" style="flex:1; overflow-y:auto; padding-right:8px">
+                    <!-- Progress bars injected here -->
+                </div>
+            </div>
+
+            <div style="padding:0 4px">
+                <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px; display:flex; align-items:center; gap:8px">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    Installation Preview
+                </div>
+                ${modsHtml}
+            </div>
+        </div>
+    `;
 }
 
 function getLinkIcon(type) {
@@ -448,11 +656,20 @@ async function mockInvoke(cmd, args = {}) {
     }
 }
 
-function escHtml(str) {
+export function escHtml(str) {
     if (!str) return '';
     return String(str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+export function escAttr(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }
 
 // ── Navbar Language Dropdown ──────────────────────────────

@@ -48,6 +48,9 @@ pub struct ModListEntry {
     pub file_tree: Vec<ModFileEntry>,
     /// Instructions on placement and special setup
     pub install_notes: String,
+    /// Custom tags
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 impl ModList {
