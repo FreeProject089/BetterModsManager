@@ -83,26 +83,8 @@ export async function listenFileDrop(callback) {
 }
 
 export async function sendOsNotification(title, body) {
-    // Permission check against app settings
-    if (localStorage.getItem('bmm_sysNotif') !== 'true') return;
-
-    try {
-        let notif = _notifModule || window.__TAURI__?.notification;
-        if (!notif) return;
-
-        // Ensure permission is granted
-        let permission = await notif.isPermissionGranted();
-        if (!permission) {
-            const result = await notif.requestPermission();
-            permission = (result === 'granted');
-        }
-
-        if (permission) {
-            await notif.sendNotification({ title, body });
-        }
-    } catch (e) {
-        console.error('[BMM] Notification error:', e);
-    }
+    // Deprecated per user request. OS notifications and settings removed.
+    return;
 }
 
 // ── Toast ─────────────────────────────────────────────────
@@ -834,16 +816,10 @@ function initUpdateNotes() {
 // Simple Markdown renderer
 function renderMarkdown(md) {
     if (!md) return '';
-    return md
-        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
-        .replace(/^- (.*$)/gim, '<li>$1</li>')
-        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-        .replace(/\n/g, '<br>');
+    if (typeof marked !== 'undefined') {
+        return marked.parse(md);
+    }
+    return md.replace(/\n/g, '<br>');
 }
 
 // ── Boot ──────────────────────────────────────────────────
@@ -857,7 +833,7 @@ async function main() {
         const v = await invoke('get_app_version');
         document.querySelectorAll('.titlebar-version').forEach(el => el.textContent = 'V' + v);
         document.querySelectorAll('.footer-version-pill').forEach(el => el.textContent = 'v' + v);
-        document.querySelectorAll('.about-version').forEach(el => el.textContent = 'v' + v + ' — Vanguard Workstation');
+        document.querySelectorAll('.about-version').forEach(el => el.textContent = 'v' + v);
 
         const heroVer = document.getElementById('credits-hero-version');
         if (heroVer) heroVer.textContent = 'v' + v;
@@ -897,14 +873,6 @@ async function main() {
         }, 800);
     }
 
-    // Init Settings
-    const notifToggle = document.getElementById('setting-sys-notif');
-    if (notifToggle) {
-        notifToggle.checked = localStorage.getItem('bmm_sysNotif') === 'true';
-        notifToggle.addEventListener('change', e => {
-            localStorage.setItem('bmm_sysNotif', e.target.checked);
-        });
-    }
 
     // Tags Settings
     const btnCreateTag = document.getElementById('btn-create-tag');

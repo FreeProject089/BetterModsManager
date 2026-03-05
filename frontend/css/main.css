@@ -2329,3 +2329,190 @@ select:focus {
 #archive-context-menu .menu-item:hover {
     background: var(--bg-active);
 }
+
+/* ══════════════════════════════════════════
+   MARKDOWN RENDERED CONTENT (Update Notes)
+══════════════════════════════════════════ */
+.archive-content {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.8;
+    color: var(--text-secondary);
+}
+
+/* Headings */
+.archive-content h1 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: 0 0 20px 0;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--accent);
+    letter-spacing: -0.02em;
+}
+
+.archive-content h2 {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 28px 0 12px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: -0.01em;
+}
+
+.archive-content h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 20px 0 8px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+/* Paragraph */
+.archive-content p {
+    margin: 0 0 14px 0;
+    color: var(--text-secondary);
+}
+
+/* Strong & Em */
+.archive-content strong {
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+.archive-content em {
+    color: var(--text-secondary);
+    font-style: italic;
+    opacity: 0.85;
+}
+
+/* Horizontal Rule */
+.archive-content hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 24px 0;
+}
+
+/* Blockquote */
+.archive-content blockquote {
+    border-left: 3px solid var(--accent);
+    background: rgba(59, 130, 246, 0.06);
+    padding: 10px 16px;
+    margin: 16px 0;
+    border-radius: 0 8px 8px 0;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.archive-content blockquote p {
+    margin: 0;
+}
+
+/* Inline Code */
+.archive-content code {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 2px 7px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--cyan);
+}
+
+/* Code Block */
+.archive-content pre {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    margin: 16px 0;
+}
+
+.archive-content pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Lists */
+.archive-content ul,
+.archive-content ol {
+    margin: 0 0 14px 0;
+    padding-left: 24px;
+}
+
+.archive-content li {
+    margin-bottom: 6px;
+    color: var(--text-secondary);
+}
+
+.archive-content li::marker {
+    color: var(--accent);
+}
+
+/* Tables */
+.archive-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    font-size: 13px;
+}
+
+.archive-content thead {
+    background: rgba(59, 130, 246, 0.10);
+}
+
+.archive-content thead th {
+    padding: 11px 16px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border-accent);
+}
+
+.archive-content tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s ease;
+}
+
+.archive-content tbody tr:last-child {
+    border-bottom: none;
+}
+
+.archive-content tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.archive-content tbody tr:hover {
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.archive-content tbody td {
+    padding: 10px 16px;
+    color: var(--text-secondary);
+    vertical-align: top;
+}
+
+/* Links */
+.archive-content a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(59, 130, 246, 0.3);
+    transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.archive-content a:hover {
+    color: #93c5fd;
+    border-color: #93c5fd;
+}

@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Better Mod Manager</title>
-    <meta name="description" content="Modern universal mod manager — Vanguard Workstation" />
+    <meta name="description" content="Modern universal mod manager" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -891,42 +891,6 @@
                 </div>
 
                 <div class="settings-sections">
-                    <div class="glass-card">
-                        <h3 class="card-title" data-i18n="settings.about">À propos</h3>
-                        <div class="about-block">
-                            <img src="assets/BMm.png" alt="logo" class="about-logo" />
-                            <div>
-                                <p class="about-name">Better Mod Manager</p>
-                                <p class="about-version mono">v1.0.6 — Vanguard Workstation</p>
-                                <p class="about-desc" data-i18n="settings.aboutDesc">Gestionnaire de mods universel
-                                    moderne. Conçu pour tous les jeux.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-
-
-                    <div class="glass-card">
-                        <h3 class="card-title" data-i18n="settings.notifications">Notifications</h3>
-                        <label class="mod-toggle"
-                            style="display:flex;align-items:center;gap:12px;width:auto;cursor:pointer;margin-top:8px">
-                            <div style="position:relative;width:44px;height:24px">
-                                <input type="checkbox" id="setting-sys-notif" class="mod-toggle-input">
-                                <div class="mod-toggle-track">
-                                    <div class="mod-toggle-thumb"></div>
-                                </div>
-                            </div>
-                            <div>
-                                <div style="font-weight:600;color:var(--text-primary)" data-i18n="settings.sysNotif">
-                                    Notifications système</div>
-                                <div style="font-size:12px;color:var(--text-muted);margin-top:2px"
-                                    data-i18n="settings.sysNotifDesc">Afficher une notification Windows quand un
-                                    transfert est terminé.</div>
-                            </div>
-                        </label>
-                    </div>
-
 
 
                     <div class="glass-card">
@@ -1337,6 +1301,7 @@
         </div>
     </div>
 
+    <script src="js/marked.min.js"></script>
     <script src="js/app.js" type="module"></script>
     <!-- Conflict Warning Modal -->
     <div class="modal-overlay" id="modal-conflict-warning">
