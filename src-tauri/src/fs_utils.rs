@@ -16,40 +16,59 @@ fn ensure_removed(path: &Path) -> Result<()> {
 }
 
 /// Copy a single file from `src` to `dst`, creating parent dirs as needed.
-pub fn copy_file(src: &Path, dst: &Path) -> Result<()> {
+/// If `dst` exists, we try to clear its readonly flag and overwrite it.
+pub fn copy_file_force(src: &Path, dst: &Path) -> Result<()> {
     if let Some(parent) = dst.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create dir: {:?}", parent))?;
+        std::fs::create_dir_all(parent).ok();
+    }
+    if dst.exists() {
+        let _ = ensure_removed(dst); // Clear permissions and delete if possible before overwrite
     }
     std::fs::copy(src, dst)
         .with_context(|| format!("Failed to copy {:?} -> {:?}", src, dst))?;
     Ok(())
 }
 
-/// Backup a file from `game_path/rel` to `backup_root/rel`. Only backs up once.
-pub fn backup_file(game_path: &Path, rel: &Path, backup_root: &Path) -> Result<()> {
+/// Backup a file from `game_path/rel` to `backup_root/_original/rel`. 
+/// Only if it's NOT provided by another active mod.
+pub fn backup_original_file(
+    game_path: &Path, 
+    rel: &Path, 
+    profile_backup_root: &Path,
+    other_active_mods: &[(String, PathBuf)]
+) -> Result<()> {
     let src = game_path.join(rel);
-    let dst = backup_root.join(rel);
-    if src.exists() && !dst.exists() {
-        copy_file(&src, &dst)
-            .with_context(|| format!("Failed to backup file: {:?}", rel))?;
+    let dst = profile_backup_root.join("_original").join(rel);
+    
+    // If it's already backed up, we're good
+    if dst.exists() { return Ok(()); }
+    if !src.exists() { return Ok(()); }
+
+    // CRITICAL: Check if the current file in game dir is actually from another mod
+    for (_, mod_folder) in other_active_mods {
+        let mod_file = mod_folder.join(rel);
+        if mod_file.exists() && mod_file.is_file() {
+            // This is a mod file, NOT a game original. Don't backup.
+            return Ok(());
+        }
     }
+
+    // It's a real game file! Secure it.
+    copy_file_force(&src, &dst)
+        .with_context(|| format!("Failed to backup original file: {:?}", rel))?;
+    
     Ok(())
 }
 
-/// Restore a backed-up file from `backup_root/rel` to `game_path/rel`.
-pub fn restore_file(game_path: &Path, rel: &Path, backup_root: &Path) -> Result<bool> {
-    let src = backup_root.join(rel);
+/// Restore a backed-up file from `profile_backup_root/_original/rel` to `game_path/rel`.
+pub fn restore_original_file(game_path: &Path, rel: &Path, profile_backup_root: &Path) -> Result<bool> {
+    let src = profile_backup_root.join("_original").join(rel);
     let dst = game_path.join(rel);
     if src.exists() {
-        println!("[BMM] Restoring backup: {:?} -> {:?}", src, dst);
-        copy_file(&src, &dst)?;
-        ensure_removed(&src)?;
+        copy_file_force(&src, &dst)?;
         Ok(true)
     } else {
-        // No backup existed, the mod created this file entirely — remove it
         if dst.exists() {
-            println!("[BMM] Removing mod-only file: {:?}", dst);
             ensure_removed(&dst)?;
         }
         Ok(false)
@@ -74,62 +93,77 @@ pub fn list_mod_files(mod_folder: &Path) -> Result<Vec<PathBuf>> {
     Ok(files)
 }
 
-/// Apply a mod: for each file in mod folder, backup original then copy mod file.
-pub fn apply_mod(
+/// Apply a mod: for each file, backup ORIGINAL if needed, then copy mod file.
+pub fn apply_mod_stacked(
     mod_folder: &Path,
     game_path: &Path,
-    backup_root: &Path,
-    mod_id: &str,
+    profile_backup_root: &Path,
+    other_active_mods: &[(String, PathBuf)],
 ) -> Result<Vec<PathBuf>> {
     let files = list_mod_files(mod_folder)?;
     let mut applied = Vec::new();
 
     for rel in &files {
-        let mod_backup_root = backup_root.join(mod_id);
-        // Backup original if it exists
-        backup_file(game_path, rel, &mod_backup_root)
-            .with_context(|| format!("Backup failed for {:?}", rel))?;
-        // Copy mod file
+        // Backup original if it's the first time BMM touches this file in this profile
+        let _ = backup_original_file(game_path, rel, profile_backup_root, other_active_mods);
+        
+        // Copy mod file to game dir (force overwrite)
         let src = mod_folder.join(rel);
         let dst = game_path.join(rel);
-        copy_file(&src, &dst)
-            .with_context(|| format!("Apply failed for {:?}", rel))?;
+        copy_file_force(&src, &dst)?;
         applied.push(rel.clone());
     }
     Ok(applied)
 }
 
-/// Unapply a mod: restore all backups based on the list of files that were actually installed.
-pub fn unapply_mod(
+/// Unapply a mod: for each file, find if another active mod provides it.
+/// If not, restore from _original.
+pub fn unapply_mod_stacked(
     game_path: &Path,
-    backup_root: &Path,
-    mod_id: &str,
-    installed_files: Vec<String>,
+    profile_backup_root: &Path,
+    files_to_remove: Vec<String>,
+    other_active_mods: &[(String, PathBuf)],
 ) -> Result<()> {
-    let mod_backup_root = backup_root.join(mod_id);
-    println!("[BMM] Unapplying mod: {}, files: {}", mod_id, installed_files.len());
+    let game_path_can = game_path.canonicalize().unwrap_or(game_path.to_path_buf());
     
-    for rel_str in &installed_files {
-        let rel = PathBuf::from(rel_str);
-        restore_file(game_path, &rel, &mod_backup_root)
-            .with_context(|| format!("Restore failed for {:?}", rel))?;
-            
-        // Attempt to clean up empty parent directories in the game folder
-        let mut parent = game_path.join(&rel).parent().map(|p| p.to_path_buf());
+    for rel_str in files_to_remove {
+        let rel = PathBuf::from(&rel_str);
+        let dst_path = game_path.join(&rel);
+        
+        let mut restored = false;
+        // 1. Try to find another mod that provides this file
+        for (_, mod_folder) in other_active_mods {
+            let mod_src = mod_folder.join(&rel);
+            if mod_src.exists() && mod_src.is_file() {
+                let _ = copy_file_force(&mod_src, &dst_path);
+                restored = true;
+                break;
+            }
+        }
+
+        // 2. If no other mod has it, restore original or DELETE
+        if !restored {
+            let original_src = profile_backup_root.join("_original").join(&rel);
+            if original_src.exists() {
+                let _ = copy_file_force(&original_src, &dst_path);
+            } else {
+                // File was added by mod and no original exists — DELETE IT
+                let _ = ensure_removed(&dst_path);
+            }
+        }
+
+        // 3. Clean up empty parent directories
+        let mut parent = dst_path.parent().map(|p| p.to_path_buf());
         while let Some(p) = parent {
-            if p == game_path || !p.starts_with(game_path) { break; }
-            if p.exists() && std::fs::read_dir(&p).map(|mut d| d.next().is_none()).unwrap_or(false) {
-                let _ = std::fs::remove_dir(&p);
-                parent = p.parent().map(|p| p.to_path_buf());
+            let p_can = p.canonicalize().unwrap_or(p.clone());
+            if p_can == game_path_can || !p_can.starts_with(&game_path_can) { break; }
+            if p_can.exists() && std::fs::read_dir(&p_can).map(|mut d| d.next().is_none()).unwrap_or(false) {
+                let _ = std::fs::remove_dir(&p_can);
+                parent = p_can.parent().map(|p| p.to_path_buf());
             } else {
                 break;
             }
         }
-    }
-    
-    // Clean up group backup dir if it's empty or exists
-    if mod_backup_root.exists() {
-        let _ = std::fs::remove_dir_all(&mod_backup_root);
     }
     Ok(())
 }

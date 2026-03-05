@@ -1,6 +1,6 @@
 [package]
 name = "better-mods-manager"
-version = "0.1.0"
+version = "0.9.5"
 edition = "2021"
 
 [[bin]]
@@ -21,3 +21,4 @@ fs_extra = "1"
 anyhow = "1"
 reqwest = { version = "0.11", features = ["blocking"] }
 zip = "0.6"
+lazy_static = "1.4"

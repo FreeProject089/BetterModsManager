@@ -59,7 +59,14 @@ fn main() {
             commands::settings::export_app_data,
             commands::settings::import_app_data,
             commands::settings::get_license_text,
+            commands::settings::get_app_version,
             commands::mods::open_folder,
+            commands::mods::open_file,
+            commands::mods::open_mod_folder_at,
+            commands::mods::open_mod_file_at,
+            commands::mods::toggle_all_mods,
+            commands::mods::check_conflicts,
+            commands::mods::list_mod_files_recursive,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

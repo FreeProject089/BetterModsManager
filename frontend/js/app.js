@@ -120,7 +120,20 @@ function initNavigation() {
             item.classList.add('active');
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById('view-' + viewId)?.classList.add('active');
+
+            // Auto-sync when entering library
+            if (viewId === 'library') {
+                window._refreshModsFn?.(true);
+            }
         });
+    });
+
+    // Auto-detect when app regained focus
+    window.addEventListener('focus', () => {
+        const libView = document.getElementById('view-library');
+        if (libView && libView.classList.contains('active')) {
+            window._refreshModsFn?.(true);
+        }
     });
 }
 
@@ -619,7 +632,23 @@ function renderMarkdown(md) {
 // ── Boot ──────────────────────────────────────────────────
 async function main() {
     await loadTauri();
+
     await initI18n();
+
+    // ── Sync App Version ──
+    try {
+        const v = await invoke('get_app_version');
+        document.querySelectorAll('.titlebar-version').forEach(el => el.textContent = 'V' + v);
+        document.querySelectorAll('.footer-version-pill').forEach(el => el.textContent = 'v' + v);
+        document.querySelectorAll('.about-version').forEach(el => el.textContent = 'v' + v + ' — Vanguard Workstation');
+
+        const heroVer = document.getElementById('credits-hero-version');
+        if (heroVer) heroVer.textContent = 'v' + v;
+
+        const creditsSub = document.getElementById('credits-version-subtitle');
+        if (creditsSub) creditsSub.textContent = t('credits.subtitle', { version: v });
+    } catch (e) { console.warn("Failed to sync version:", e); }
+
     initNavigation();
     initModals();
     await initTitlebar();
@@ -633,6 +662,7 @@ async function main() {
     await initMods();
     await updateProfileChip();
     await updateLibraryProfileSelector();
+
 
     // Hide loader smoothly
     const loader = document.getElementById('app-loader');

@@ -51,3 +51,7 @@ pub fn get_license_text(app_handle: tauri::AppHandle) -> Result<String, String> 
 
     std::fs::read_to_string(license_path).map_err(|e| e.to_string())
 }
+#[tauri::command]
+pub fn get_app_version(app_handle: tauri::AppHandle) -> String {
+    app_handle.package_info().version.to_string()
+}

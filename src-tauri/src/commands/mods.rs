@@ -3,6 +3,11 @@ use crate::models::mod_entry::{ModEntry, ModStatus};
 use crate::state::AppState;
 use std::path::PathBuf;
 use tauri::State;
+use std::sync::Mutex;
+
+lazy_static::lazy_static! {
+    static ref MOD_OP_LOCK: Mutex<()> = Mutex::new(());
+}
 
 #[tauri::command]
 pub fn get_mods(state: State<AppState>) -> Result<Vec<ModEntry>, String> {
@@ -117,34 +122,52 @@ pub async fn add_mod(
 }
 
 #[tauri::command]
-pub fn remove_mod(state: State<AppState>, mod_id: String) -> Result<(), String> {
-    {
+pub async fn remove_mod(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
+    let mod_path = {
         let mut data = state.data.lock().unwrap();
-        if let Some(m) = data.mods.iter().find(|m| m.id == mod_id) {
-            if m.enabled {
-                return Err("Désactivez le mod avant de le supprimer.".to_string());
-            }
+        let idx = data.mods.iter().position(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        let m = &data.mods[idx];
+        if m.enabled {
+            return Err("Désactivez le mod avant de le supprimer.".to_string());
         }
-        data.mods.retain(|m| m.id != mod_id);
-    }
+        let p = m.mod_folder_path.clone();
+        data.mods.remove(idx);
+        p
+    };
+
+    tauri::async_runtime::spawn_blocking(move || {
+        if mod_path.exists() && mod_path.is_dir() {
+            std::fs::remove_dir_all(mod_path).map_err(|e| e.to_string())?;
+        }
+        Ok::<(), String>(())
+    }).await.map_err(|e| e.to_string())??;
+
     let _ = state.save();
     Ok(())
 }
 
 #[tauri::command]
 pub async fn enable_mod(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
-    let (mod_folder, game_path, backup_path, active_id, mod_name) = {
+    let (mod_folder, game_path, backup_path, active_id, mod_name, other_active_mods) = {
         let data = state.data.lock().unwrap();
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?.clone();
         if m.enabled { return Ok(()); }
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
-        (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), active_id, m.name)
+        
+        let mut others = Vec::new();
+        for mid in &p.active_mods {
+            if let Some(other_m) = data.mods.iter().find(|om| &om.id == mid) {
+                others.push((other_m.id.clone(), other_m.mod_folder_path.clone()));
+            }
+        }
+        
+        (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), active_id, m.name, others)
     };
 
-    let mod_id_clone = mod_id.clone();
     let applied = tauri::async_runtime::spawn_blocking(move || {
-        fs_utils::apply_mod(&mod_folder, &game_path, &backup_path, &mod_id_clone)
+        let _lock = MOD_OP_LOCK.lock().unwrap();
+        fs_utils::apply_mod_stacked(&mod_folder, &game_path, &backup_path, &other_active_mods)
     }).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
 
     {
@@ -172,29 +195,34 @@ pub async fn enable_mod(state: State<'_, AppState>, mod_id: String) -> Result<()
 
 #[tauri::command]
 pub async fn disable_mod(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
-    let (game_path, backup_path, active_id, mod_name, installed_files) = {
+    let (game_path, backup_path, active_id, mod_name, files_to_remove, other_active_mods) = {
         let data = state.data.lock().unwrap();
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?.clone();
         if !m.enabled { return Ok(()); }
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
         
-        let mut files = m.installed_files.clone();
-        // Fallback or safety check: also scan the mod folder itself to ensure we catch everything
-        if let Ok(scanned) = fs_utils::list_mod_files(&m.mod_folder_path) {
-             for s in scanned {
-                 let s_str = s.to_string_lossy().to_string();
-                 if !files.contains(&s_str) {
-                     files.push(s_str);
-                 }
-             }
+        let mut others = Vec::new();
+        for mid in p.active_mods.iter().rev() {
+            if mid == &mod_id { continue; }
+            if let Some(other_m) = data.mods.iter().find(|om| &om.id == mid) {
+                others.push((other_m.id.clone(), other_m.mod_folder_path.clone()));
+            }
         }
-        (p.game_path.clone(), p.backup_path.clone(), active_id, m.name, files)
+        
+        // Hybrid cleanup: Tracked files + Current physical files
+        let mut unique_files = std::collections::HashSet::new();
+        for f in m.installed_files { unique_files.insert(f); }
+        if let Ok(scanned) = fs_utils::list_mod_files(&m.mod_folder_path) {
+            for s in scanned { unique_files.insert(s.to_string_lossy().to_string()); }
+        }
+        
+        (p.game_path.clone(), p.backup_path.clone(), active_id, m.name, unique_files.into_iter().collect::<Vec<String>>(), others)
     };
 
-    let mod_id_clone = mod_id.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        fs_utils::unapply_mod(&game_path, &backup_path, &mod_id_clone, installed_files)
+        let _lock = MOD_OP_LOCK.lock().unwrap();
+        fs_utils::unapply_mod_stacked(&game_path, &backup_path, files_to_remove, &other_active_mods)
     }).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
 
     {
@@ -248,6 +276,78 @@ pub fn open_folder(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_file(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        Command::new("cmd")
+            .args(["/c", "start", "", &path])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        Command::new("open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+        Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+
+#[tauri::command]
+pub async fn open_mod_folder_at(state: State<'_, AppState>, mod_id: String, relative_path: String) -> Result<(), String> {
+    let mod_dir = {
+        let data = state.data.lock().unwrap();
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        m.mod_folder_path.clone()
+    };
+    
+    let target = mod_dir.join(relative_path);
+    if !target.exists() {
+        return Err("Le chemin n'existe pas ou plus.".to_string());
+    }
+    
+    if target.is_dir() {
+        open_folder(target.to_string_lossy().to_string())
+    } else {
+        // If it's a file, "open location" should open the PARENT folder
+        if let Some(parent) = target.parent() {
+            open_folder(parent.to_string_lossy().to_string())
+        } else {
+            open_folder(mod_dir.to_string_lossy().to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn open_mod_file_at(state: State<'_, AppState>, mod_id: String, relative_path: String) -> Result<(), String> {
+    let mod_dir = {
+        let data = state.data.lock().unwrap();
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        m.mod_folder_path.clone()
+    };
+    
+    let target = mod_dir.join(relative_path);
+    if !target.exists() || target.is_dir() {
+        return Err("Le fichier n'existe pas ou est un dossier.".to_string());
+    }
+    
+    open_file(target.to_string_lossy().to_string())
+}
+
+
+#[tauri::command]
 pub fn update_mod_meta(
     state: State<AppState>,
     mod_id: String,
@@ -273,12 +373,44 @@ pub fn update_mod_meta(
 
 #[tauri::command]
 pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<Vec<ModEntry>, String> {
-    let mods_path = {
+    let (mods_path, profile_id) = {
         let data = state.data.lock().unwrap();
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
-        p.mods_path.clone()
+        (p.mods_path.clone(), active_id)
     };
+
+    // 1. Prune missing mods from the state for this profile
+    {
+        let mut data = state.data.lock().unwrap();
+        let mut to_remove_ids = Vec::new();
+        
+        data.mods.retain(|m| {
+            let mod_p = &m.mod_folder_path;
+            
+            // Check if this mod belongs to the current profile's mods folder
+            let belongs_to_profile = if mod_p.starts_with(&mods_path) { true } else {
+                match (mod_p.canonicalize(), mods_path.canonicalize()) {
+                    (Ok(a), Ok(b)) => a.starts_with(b),
+                    _ => false
+                }
+            };
+            
+            if belongs_to_profile && !mod_p.exists() {
+                to_remove_ids.push(m.id.clone());
+                false // Remove from global mods list
+            } else {
+                true
+            }
+        });
+
+        // Also remove from the profile's active_mods list
+        if !to_remove_ids.is_empty() {
+            if let Some(p) = data.profiles.iter_mut().find(|p| p.id == profile_id) {
+                p.active_mods.retain(|id| !to_remove_ids.contains(id));
+            }
+        }
+    }
 
     let existing_paths: Vec<PathBuf> = {
         let data = state.data.lock().unwrap();
@@ -582,4 +714,80 @@ pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>,
     }).await.map_err(|e| e.to_string())??;
 
     Ok(altered)
+}
+#[tauri::command]
+pub async fn toggle_all_mods(state: State<'_, AppState>, enable: bool) -> Result<(), String> {
+    let mod_ids = {
+        let data = state.data.lock().unwrap();
+        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;
+        let active_profile = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?;
+        
+        data.mods.iter()
+            .filter(|m| {
+                let mod_p = &m.mod_folder_path;
+                let prof_p = &active_profile.mods_path;
+                if mod_p.starts_with(prof_p) { return true; }
+                match (mod_p.canonicalize(), prof_p.canonicalize()) {
+                    (Ok(m_can), Ok(p_can)) => m_can.starts_with(p_can),
+                    _ => false
+                }
+            })
+            .map(|m| m.id.clone())
+            .collect::<Vec<String>>()
+    };
+
+    for id in mod_ids {
+        if enable {
+            let _ = enable_mod(state.clone(), id).await;
+        } else {
+            let _ = disable_mod(state.clone(), id).await;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn check_conflicts(state: State<'_, AppState>, mod_id: String) -> Result<Vec<String>, String> {
+    let (mod_folder, active_mods_data) = {
+        let data = state.data.lock().unwrap();
+        let target_mod = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        
+        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;
+        let p = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?;
+        
+        let mut others = Vec::new();
+        for mid in &p.active_mods {
+            if mid == &mod_id { continue; }
+            if let Some(m) = data.mods.iter().find(|m| &m.id == mid) {
+                others.push(m.clone());
+            }
+        }
+        (target_mod.mod_folder_path.clone(), others)
+    };
+
+    let target_files = fs_utils::list_mod_files(&mod_folder).map_err(|e| e.to_string())?;
+    let mut conflicts = std::collections::HashSet::new();
+
+    for other in active_mods_data {
+        let other_files = fs_utils::list_mod_files(&other.mod_folder_path).map_err(|e| e.to_string())?;
+        for f in &target_files {
+            if other_files.contains(f) {
+                conflicts.insert(other.name.clone());
+            }
+        }
+    }
+
+    Ok(conflicts.into_iter().collect())
+}
+
+#[tauri::command]
+pub async fn list_mod_files_recursive(state: State<'_, AppState>, mod_id: String) -> Result<Vec<String>, String> {
+    let mod_folder = {
+        let data = state.data.lock().unwrap();
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        m.mod_folder_path.clone()
+    };
+    
+    let files = fs_utils::list_mod_files(&mod_folder).map_err(|e| e.to_string())?;
+    Ok(files.into_iter().map(|p| p.to_string_lossy().to_string()).collect())
 }

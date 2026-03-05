@@ -225,13 +225,15 @@ export async function renderProfiles() {
         } catch { }
 
         card.innerHTML = `
-      <div class="profile-card-header" style="display:flex;align-items:center;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:16px;min-height:36px;gap:12px">
-        <div style="width:3px;height:24px;border-radius:2px;background:${brandColor};flex-shrink:0"></div>
-        <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
-          <div style="font-weight:700;font-size:16px;color:var(--text-primary);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(p.name)}">${escHtml(p.name)}</div>
-          ${p.icon ? `<div style="color:${brandColor};display:flex;align-items:center;opacity:0.9">${getProfileIconSvg(p.icon, 'margin:0;width:16px;height:16px')}</div>` : ''}
+      <div class="profile-card-header" style="display:flex;align-items:flex-start;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:16px;min-height:54px;gap:12px">
+        <div style="width:3px;height:32px;border-radius:2px;background:${brandColor};flex-shrink:0;margin-top:2px"></div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="font-weight:700;font-size:16px;color:var(--text-primary);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(p.name)}">${escHtml(p.name)}</div>
+            ${p.icon ? `<div style="color:${brandColor};display:flex;align-items:center;opacity:0.9">${getProfileIconSvg(p.icon, 'margin:0;width:16px;height:16px')}</div>` : ''}
+          </div>
+          ${p.game_name ? `<div style="font-family:var(--font-mono);font-weight:600;font-size:10px;padding:2px 8px;border-radius:4px;background:${brandColor}15;color:${brandColor};border:1px solid ${brandColor}30;align-self:flex-start;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${escHtml(p.game_name)}</div>` : ''}
         </div>
-        ${p.game_name ? `<div style="font-family:var(--font-mono);font-weight:600;font-size:11px;padding:4px 10px;border-radius:6px;background:${brandColor}15;color:${brandColor};border:1px solid ${brandColor}30;flex-shrink:0;text-align:center;word-break:keep-all">${escHtml(p.game_name)}</div>` : ''}
       </div>
       <div class="profile-card-paths" style="margin-bottom:16px;background:rgba(255,255,255,0.015);padding:10px 12px;border-radius:8px;border:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
@@ -288,7 +290,7 @@ export async function renderProfiles() {
             await renderProfiles();
             updateProfileChip();
             updateLibraryProfileSelector();
-            await refreshMods();
+            await refreshMods(true);
         });
     });
 

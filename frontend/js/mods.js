@@ -11,12 +11,14 @@ let currentFilter = 'all';
 let currentSort = 'name_asc';
 let searchQuery = '';
 let selectedModId = null;
+let isModOperationRunning = false;
+let conflictCache = {}; // modId -> Array of conflicting mod names
 
 export async function initMods() {
   window._refreshModsFn = refreshMods;
   document.getElementById('btn-add-mod').addEventListener('click', openAddModModal);
   document.getElementById('btn-confirm-add-mod').addEventListener('click', confirmAddMod);
-  document.getElementById('btn-enable-all').addEventListener('click', enableAll);
+  document.getElementById('btn-enable-all').addEventListener('click', toggleAllMods);
 
   // Verify Integrity
   const verifyBtn = document.getElementById('btn-verify-integrity');
@@ -157,9 +159,41 @@ export async function initMods() {
     if (m) renderModDetail(m);
     else closeModDetail();
   }
+
+  // Background check for conflicts
+  checkAllConflicts();
 }
 
-export async function refreshMods() {
+async function checkAllConflicts() {
+  const activeId = await invoke('get_active_profile_id').catch(() => null);
+  if (!activeId) return;
+
+  for (const mod of allMods) {
+    try {
+      const conflicts = await invoke('check_conflicts', { modId: mod.id });
+      if (conflicts && conflicts.length > 0) {
+        conflictCache[mod.id] = conflicts;
+      } else {
+        delete conflictCache[mod.id];
+      }
+    } catch (e) { }
+  }
+  renderModList();
+}
+
+export async function refreshMods(autoScan = false) {
+  if (autoScan) {
+    try {
+      await invoke('scan_mods_folder');
+    } catch (e) {
+      console.warn("Auto-scan error:", e);
+    }
+  }
+
+  try {
+    userTags = await invoke('get_tags');
+  } catch (err) { }
+
   try {
     allMods = await invoke('get_mods');
   } catch (err) {
@@ -169,6 +203,8 @@ export async function refreshMods() {
   updateBadge();
   renderModList();
   updateSubtitle();
+  updateToggleAllBtn();
+  checkAllConflicts();
 
   // Dynamic refresh for profiles to update counts/status
   try {
@@ -289,6 +325,8 @@ function createModCard(mod) {
   card.className = `mod-card ${mod.enabled ? 'enabled' : 'disabled'} ${selectedModId === mod.id ? 'selected' : ''}`;
   card.dataset.id = mod.id;
 
+  const hasConflict = conflictCache[mod.id] && conflictCache[mod.id].length > 0;
+
   card.innerHTML = `
     <label class="mod-toggle" title="${mod.enabled ? 'Désactiver' : 'Activer'}">
       <input type="checkbox" class="mod-toggle-input" ${mod.enabled ? 'checked' : ''} />
@@ -300,17 +338,23 @@ function createModCard(mod) {
     <div class="mod-status-dot ${mod.enabled ? 'enabled' : 'disabled'}"></div>
 
     <div class="mod-info">
-      <div class="mod-name">${escHtml(mod.name)}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="mod-name">${escHtml(mod.name)}</div>
+        ${hasConflict ? `
+          <div style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.4);font-size:9px;font-weight:900;padding:1px 5px;border-radius:4px;letter-spacing:0.4px;text-transform:uppercase">Conflict</div>
+        ` : ''}
+      </div>
       <div class="mod-meta">
         <span class="mono" style="color: var(--cyan)">v${escHtml(mod.version)}</span>
         ${mod.author ? `<span>· ${escHtml(mod.author)}</span>` : ''}
         ${mod.description ? `<span style="color: var(--text-muted)">· ${escHtml(mod.description)}</span>` : ''}
         ${mod.tags?.length > 0 ? `<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
-          ${mod.tags.map(tid => {
+          ${mod.tags.slice(0, 3).map(tid => {
     const tDef = userTags.find(t => t.id === tid);
     if (!tDef) return '';
     return `<span style="background:${tDef.color}15;color:${tDef.color};border:1px solid ${tDef.color}30;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600">${escHtml(tDef.name)}</span>`;
   }).join('')}
+          ${mod.tags.length > 3 ? `<span style="color:var(--text-muted);font-size:9px;align-self:center">+${mod.tags.length - 3}</span>` : ''}
         </div>` : ''}
       </div>
       <div class="mod-path-hint" style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);opacity:0.6;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;display:flex;align-items:center;gap:4px">
@@ -355,11 +399,54 @@ function createModCard(mod) {
   // Toggle handler
   const toggle = card.querySelector('.mod-toggle-input');
   toggle.addEventListener('change', async () => {
+    if (isModOperationRunning) {
+      toggle.checked = !toggle.checked;
+      toast("Une opération est déjà en cours...", "warning");
+      return;
+    }
+
+    // Conflict Check
+    const conflicts = conflictCache[mod.id];
+    const ignoreConflicts = localStorage.getItem('bmm_ignore_conflicts') === 'true';
+
+    if (toggle.checked && conflicts && conflicts.length > 0 && !ignoreConflicts) {
+      // Show conflict warning modal
+      toggle.checked = false; // Reset visually until confirmed
+      const modal = document.getElementById('modal-conflict-warning');
+      const listContainer = document.getElementById('conflict-warning-list');
+      const msgEl = modal.querySelector('[data-i18n="conflict.warningMsg"]');
+
+      if (msgEl) {
+        msgEl.innerHTML = t('conflict.warningMsg', { mods: '' }).replace(': ', ''); // Clear placeholder if used in title
+      }
+
+      listContainer.innerHTML = conflicts.map(c => `<div style="margin-bottom:4px;color:var(--warning);font-size:13px"><span style="color:var(--text-muted)">></span> ${escHtml(c)}</div>`).join('');
+
+      modal.classList.add('open');
+
+      const confirmBtn = document.getElementById('btn-confirm-conflict-toggle');
+      const onConfirm = async () => {
+        modal.classList.remove('open');
+        confirmBtn.removeEventListener('click', onConfirm);
+
+        if (document.getElementById('conflict-ignore-forever').checked) {
+          localStorage.setItem('bmm_ignore_conflicts', 'true');
+        }
+
+        // Re-trigger toggle
+        toggle.checked = true;
+        toggle.dispatchEvent(new Event('change'));
+      };
+      confirmBtn.onclick = onConfirm; // Use onclick to replace previous listeners
+      return;
+    }
+
     const originalState = !toggle.checked;
     const pill = card.querySelector('.mod-status-pill');
     const oldPillContent = pill.innerHTML;
     pill.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>';
     toggle.disabled = true;
+    isModOperationRunning = true;
 
     try {
       if (toggle.checked) {
@@ -381,6 +468,7 @@ function createModCard(mod) {
       toast('Erreur : ' + err, 'error');
       pill.innerHTML = oldPillContent;
     } finally {
+      isModOperationRunning = false;
       toggle.disabled = false;
     }
   });
@@ -416,18 +504,50 @@ function createModCard(mod) {
   card.querySelector('.btn-remove-mod').addEventListener('click', async e => {
     e.stopPropagation();
     if (mod.enabled) {
-      toast('Désactivez le mod avant de le supprimer.', 'warning');
+      toast(t('mod.disableFirst'), 'warning');
       return;
     }
-    if (!confirm(`Supprimer "${mod.name}" de la bibliothèque ?`)) return;
-    try {
-      await invoke('remove_mod', { modId: mod.id });
-      toast(`"${mod.name}" supprimé.`, 'info');
-      if (selectedModId === mod.id) closeModDetail();
-      await refreshMods();
-    } catch (err) {
-      toast('Erreur : ' + err, 'error');
+
+    const modal = document.getElementById('modal-delete-mod');
+    const warningText = document.getElementById('delete-mod-warning-text');
+    const confirmCheck = document.getElementById('check-delete-confirm');
+    const finalBtn = document.getElementById('btn-final-delete-mod');
+
+    if (warningText) {
+      warningText.innerHTML = t('mod.deleteWarning', { name: `<strong style="color:var(--text-primary)">${mod.name}</strong>` });
     }
+    confirmCheck.checked = false;
+    finalBtn.disabled = true;
+    finalBtn.style.opacity = '0.5';
+
+    modal.classList.add('open');
+
+    // Setup listeners for this specific mod deletion
+    const onCheckChange = () => {
+      finalBtn.disabled = !confirmCheck.checked;
+      finalBtn.style.opacity = confirmCheck.checked ? '1' : '0.5';
+    };
+
+    const onFinalDelete = async () => {
+      try {
+        finalBtn.disabled = true;
+        finalBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>';
+
+        await invoke('remove_mod', { modId: mod.id });
+        toast(t('mod.removed', { name: mod.name }), 'info');
+
+        modal.classList.remove('open');
+        if (selectedModId === mod.id) closeModDetail();
+        await refreshMods();
+      } catch (err) {
+        toast('Erreur : ' + err, 'error');
+        finalBtn.disabled = false;
+        finalBtn.innerHTML = `<span>${t('lib.delete')}</span>`;
+      }
+    };
+
+    confirmCheck.onchange = onCheckChange;
+    finalBtn.onclick = onFinalDelete;
   });
 
   return card;
@@ -451,7 +571,7 @@ function closeModDetail() {
   renderModList();
 }
 
-function renderModDetail(mod) {
+async function renderModDetail(mod) {
   let panel = document.getElementById('mod-detail-panel');
   if (panel) panel.remove();
 
@@ -469,6 +589,12 @@ function renderModDetail(mod) {
   // Scroll into view if it's off screen
   setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
 
+  // Fetch conflicts
+  let conflicts = [];
+  try {
+    conflicts = await invoke('check_conflicts', { modId: mod.id });
+  } catch (e) { }
+
   const links = mod.download_links || [];
 
   panel.innerHTML = `
@@ -482,6 +608,17 @@ function renderModDetail(mod) {
     </div>
 
     <div class="detail-body" style="display:flex;flex-direction:column;gap:12px;margin-top:12px">
+      ${conflicts.length > 0 ? `
+      <div id="conflict-alert" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;margin-bottom:8px">
+        <h4 style="color:var(--danger);font-size:12px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          ${t('mod.conflictsTitle')}
+        </h4>
+        <p style="font-size:11px;color:rgba(255,255,255,0.7);line-height:1.4">
+          ${t('mod.conflictsDesc').replace('{mods}', `<strong style="color:var(--text-primary)">${conflicts.join(', ')}</strong>`)}
+        </p>
+      </div>` : ''}
+
       <!-- Editable Fields -->
       <div class="detail-section">
         <label class="detail-label">${t('detail.name')}</label>
@@ -514,8 +651,13 @@ function renderModDetail(mod) {
       <!-- Mod Folder Path -->
       <div class="detail-section">
         <label class="detail-label" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ${t('prof.modsDir')}</label>
-        <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);background:rgba(0,0,0,0.3);padding:8px 10px;border-radius:8px;word-break:break-all">
-          ${escHtml(mod.mod_folder_path || 'Non défini')}
+        <div style="display:flex;gap:8px">
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);background:rgba(0,0,0,0.3);padding:8px 10px;border-radius:8px;word-break:break-all;flex:1">
+            ${escHtml(mod.mod_folder_path || 'Non défini')}
+          </div>
+          <button id="btn-browse-archive" class="btn btn-secondary btn-sm" title="${t('mod.explorerBtn')}" style="padding:6px 12px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><rect x="8" y="8" width="6" height="6"/></svg>
+          </button>
         </div>
       </div>
 
@@ -561,6 +703,9 @@ function renderModDetail(mod) {
   // Close button
   panel.querySelector('#btn-close-detail-inner').addEventListener('click', closeModDetail);
 
+  // Archive Explorer button
+  panel.querySelector('#btn-browse-archive').addEventListener('click', () => openArchiveExplorer(mod));
+
   // Load Tags logic
   const tagSelect = panel.querySelector('#detail-tag-select');
   const tagList = panel.querySelector('#detail-tags-list');
@@ -593,8 +738,12 @@ function renderModDetail(mod) {
   tagSelect.addEventListener('change', e => {
     const tid = e.target.value;
     if (tid && !modTags.includes(tid)) {
-      modTags.push(tid);
-      renderTagsUI();
+      if (modTags.length >= 3) {
+        toast(t('mod.tagLimit'), 'warning');
+      } else {
+        modTags.push(tid);
+        renderTagsUI();
+      }
     }
     e.target.value = '';
   });
@@ -722,33 +871,280 @@ async function confirmAddMod() {
   }
 }
 
-async function enableAll() {
-  const disabled = allMods.filter(m => !m.enabled);
-  if (disabled.length === 0) {
-    toast(t('mod.allEnabled'), 'info');
+async function toggleAllMods() {
+  if (isModOperationRunning) {
+    toast("Une opération est déjà en cours...", "warning");
     return;
   }
+
+  const currentStatus = getToggleAllStatus();
+  const enable = currentStatus === 'enable';
+  const targetMods = enable ? allMods.filter(m => !m.enabled) : allMods.filter(m => m.enabled);
+
+  if (targetMods.length === 0) return;
+
+  isModOperationRunning = true;
 
   const btn = document.getElementById('btn-enable-all');
   const originalHtml = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Activation...';
+  btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${enable ? 'Activation...' : 'Désactivation...'}`;
 
   try {
-    for (const mod of disabled) {
-      try {
-        await invoke('enable_mod', { modId: mod.id });
-      } catch (err) {
-        toast(`${t('common.error')} "${mod.name}" : ${err}`, 'error');
-      }
-    }
+    await invoke('toggle_all_mods', { enable });
     await refreshMods();
-    toast(t('mod.enabledCount').replace('{count}', disabled.length), 'success');
+    const key = enable ? 'mod.enabledCount' : 'mod.deactivatedCount'; // Should add i18n key for multi-deact if needed
+    toast(t(enable ? 'mod.enabledCount' : 'mod.enabledCount').replace('{count}', targetMods.length), 'success');
+  } catch (err) {
+    toast(t('common.error') + ' : ' + err, 'error');
   } finally {
+    isModOperationRunning = false;
     btn.disabled = false;
     btn.innerHTML = originalHtml;
   }
 }
+
+function getToggleAllStatus() {
+  const enabledCount = allMods.filter(m => m.enabled).length;
+  // If some are disabled, main action is to ENABLE all
+  return (enabledCount < allMods.length && allMods.length > 0) ? 'enable' : 'disable';
+}
+
+function updateToggleAllBtn() {
+  const btn = document.getElementById('btn-enable-all');
+  if (!btn) return;
+  const status = getToggleAllStatus();
+  const label = btn.querySelector('span');
+  const svg = btn.querySelector('svg');
+
+  if (status === 'disable') {
+    label.innerHTML = t('lib.disableAll');
+    svg.innerHTML = '<path d="M18 6L6 18M6 6l12 12" /><circle cx="12" cy="12" r="10" />';
+    btn.classList.replace('btn-primary', 'btn-ghost');
+    btn.style.color = 'var(--danger)';
+  } else {
+    label.innerHTML = t('lib.enableAll');
+    svg.innerHTML = '<path d="m5 12 5 5L20 7" /><circle cx="12" cy="12" r="10" />';
+    btn.classList.replace('btn-ghost', 'btn-primary');
+    btn.style.color = '';
+  }
+}
+
+async function openArchiveExplorer(mod) {
+  window._currentExplorerModId = mod.id;
+  const modal = document.getElementById('modal-archive-explorer');
+  const searchInput = document.getElementById('archive-explorer-search');
+  if (searchInput) {
+    searchInput.value = '';
+    searchInput.placeholder = t('ctx.searchPlaceholder');
+  }
+  const container = document.getElementById('archive-explorer-content');
+  container.innerHTML = `
+    <div style="text-align:center;padding:40px;color:var(--text-muted)">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-bottom:12px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+      <br>Scan en cours...
+    </div>`;
+
+  modal.classList.add('open');
+
+  try {
+    const files = await invoke('list_mod_files_recursive', { modId: mod.id });
+    if (files.length === 0) {
+      container.innerHTML = `<div style="text-align:center;padding:40px;">${t('lib.emptyTitle')}</div>`;
+      return;
+    }
+
+    // Build the tree
+    const tree = buildFileTree(files);
+    const treeHtml = renderTree(tree);
+
+    container.innerHTML = `<div class="tree-container">${treeHtml}</div>`;
+
+    // Setup interactions
+    setupTreeInteractions(mod);
+
+  } catch (err) {
+    container.innerHTML = `<div style="color:var(--danger);padding:20px;">${err}</div>`;
+  }
+}
+
+function buildFileTree(files) {
+  const root = {};
+  files.sort().forEach(f => {
+    const parts = f.split(/[/\\]/);
+    let current = root;
+    parts.forEach((part, i) => {
+      if (!current[part]) {
+        current[part] = {
+          _isFolder: i < parts.length - 1,
+          _fullPath: f,
+          _relPath: parts.slice(0, i + 1).join('\\'),
+          children: {}
+        };
+      }
+      current = current[part].children;
+    });
+  });
+  return root;
+}
+
+function renderTree(nodes) {
+  let html = '';
+  // Sort folders first, then alphabetically
+  const keys = Object.keys(nodes).sort((a, b) => {
+    if (nodes[a]._isFolder && !nodes[b]._isFolder) return -1;
+    if (!nodes[a]._isFolder && nodes[b]._isFolder) return 1;
+    return a.localeCompare(b);
+  });
+
+  keys.forEach(key => {
+    const node = nodes[key];
+    const isFolder = node._isFolder;
+    const arrow = isFolder ? `
+      <span class="tree-node-arrow">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </span>` : '<span style="width:16px"></span>';
+
+    const icon = isFolder ? `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    ` : `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    `;
+
+    html += `
+      <div class="tree-node ${isFolder ? 'collapsed' : ''}" data-path="${escAttr(node._relPath)}" data-full="${escAttr(node._fullPath)}" data-type="${isFolder ? 'folder' : 'file'}">
+        ${arrow}
+        <span class="tree-node-icon">${icon}</span>
+        <span class="tree-node-label">${escHtml(key)}</span>
+      </div>
+    `;
+
+    if (isFolder) {
+      html += `<div class="tree-children">${renderTree(node.children)}</div>`;
+    }
+  });
+  return html;
+}
+
+function setupTreeInteractions(mod) {
+  const container = document.getElementById('archive-explorer-content');
+  const ctxMenu = document.getElementById('archive-context-menu');
+  let selectedNode = null;
+
+  // Toggle folders
+  container.querySelectorAll('.tree-node[data-type="folder"]').forEach(node => {
+    node.addEventListener('click', (e) => {
+      node.classList.toggle('collapsed');
+      // Highlight selection
+      container.querySelectorAll('.tree-node').forEach(n => n.classList.remove('selected'));
+      node.classList.add('selected');
+      selectedNode = node;
+    });
+  });
+
+  // Highlight files
+  container.querySelectorAll('.tree-node[data-type="file"]').forEach(node => {
+    node.addEventListener('click', () => {
+      container.querySelectorAll('.tree-node').forEach(n => n.classList.remove('selected'));
+      node.classList.add('selected');
+      selectedNode = node;
+    });
+  });
+
+  // Right click
+  container.querySelectorAll('.tree-node').forEach(node => {
+    node.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      selectedNode = node;
+
+      // Highlight
+      container.querySelectorAll('.tree-node').forEach(n => n.classList.remove('selected'));
+      node.classList.add('selected');
+
+      const x = e.clientX;
+      const y = e.clientY;
+
+      ctxMenu.style.top = y + 'px';
+      ctxMenu.style.left = x + 'px';
+      ctxMenu.style.display = 'block';
+
+      // Ensure it stays in viewport
+      const box = ctxMenu.getBoundingClientRect();
+      if (box.right > window.innerWidth) ctxMenu.style.left = (x - box.width) + 'px';
+      if (box.bottom > window.innerHeight) ctxMenu.style.top = (y - box.height) + 'px';
+
+      e.stopPropagation(); // Avoid immediate dismissal if using bubble
+    });
+  });
+}
+
+// Global Context Menu Handlers
+document.addEventListener('DOMContentLoaded', () => {
+  const ctxMenu = document.getElementById('archive-context-menu');
+  const searchInput = document.getElementById('archive-explorer-search');
+  if (!ctxMenu) return;
+
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const val = e.target.value.toLowerCase();
+      const nodes = document.querySelectorAll('.tree-node');
+      nodes.forEach(node => {
+        const label = node.querySelector('.tree-node-label').textContent.toLowerCase();
+        const path = node.dataset.path.toLowerCase();
+        const isMatch = label.includes(val) || path.includes(val);
+
+        node.style.display = isMatch ? 'flex' : 'none';
+
+        // If it's a file and match, show parents
+        if (isMatch && node.dataset.type === 'file') {
+          let parent = node.parentElement.previousElementSibling;
+          while (parent && parent.classList.contains('tree-node')) {
+            parent.style.display = 'flex';
+            parent.classList.remove('collapsed');
+            parent = parent.parentElement.previousElementSibling;
+          }
+        }
+      });
+    });
+  }
+
+  // GLOBAL DISMISS for right click menu
+  document.addEventListener('mousedown', (e) => {
+    if (!ctxMenu.contains(e.target)) {
+      ctxMenu.style.display = 'none';
+    }
+  });
+
+  document.getElementById('ctx-open-file').addEventListener('click', async () => {
+    const selected = document.querySelector('.tree-node.selected');
+    if (!selected || selected.dataset.type !== 'file') return;
+    const relPath = selected.dataset.path;
+    ctxMenu.style.display = 'none';
+    try {
+      await invoke('open_mod_file_at', { modId: window._currentExplorerModId, relativePath: relPath });
+    } catch (e) { toast(e, 'error'); }
+  });
+
+  document.getElementById('ctx-open-folder').addEventListener('click', async () => {
+    const selected = document.querySelector('.tree-node.selected');
+    if (!selected) return;
+    const relPath = selected.dataset.path;
+    ctxMenu.style.display = 'none';
+    try {
+      await invoke('open_mod_folder_at', { modId: window._currentExplorerModId, relativePath: relPath });
+    } catch (e) { toast(e, 'error'); }
+  });
+
+  document.getElementById('ctx-copy-path').addEventListener('click', () => {
+    const selected = document.querySelector('.tree-node.selected');
+    if (!selected) return;
+    const path = selected.dataset.path;
+    navigator.clipboard.writeText(path);
+    toast('Chemin copié', 'success');
+    ctxMenu.style.display = 'none';
+  });
+});
+
 
 function escHtml(str) {
   if (!str) return '';

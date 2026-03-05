@@ -32,6 +32,19 @@ function getSteps() {
             navTarget: 'library'
         },
         {
+            title: t('onboard.conflicts.title'), // Conflict Detection
+            text: t('onboard.conflicts.text'),
+            img: 'assets/Tasky.png',
+            navTarget: 'library'
+        },
+        {
+            title: t('onboard.explorer.title'), // Archive Explorer
+            text: t('onboard.explorer.text'),
+            img: 'assets/Tasky.png',
+            navTarget: 'library',
+            selector: 'btn-browse-archive'
+        },
+        {
             title: t('onboard.modding.title'), // How to mod
             text: t('onboard.modding.text'),
             img: 'assets/Tasky.png',
