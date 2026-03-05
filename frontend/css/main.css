@@ -2173,7 +2173,8 @@ select:focus {
 }
 
 .credit-external-icon {
-    opacity: 0.3;
+    opacity: 0.6;
+    color: var(--text-secondary);
     transition: var(--transition);
 }
 

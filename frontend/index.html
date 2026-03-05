@@ -469,7 +469,7 @@
                 <!-- Imported modlist preview -->
                 <div class="glass-card" id="imported-preview" style="display:none">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-                        <h3 class="card-title" style="margin:0">Liste importée</h3>
+                        <h3 class="card-title" style="margin:0" data-i18n="mm.importedTitle">Liste importée</h3>
                         <button class="btn btn-primary btn-sm" id="btn-install-from-mm">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.2">
@@ -497,11 +497,13 @@
                     <!-- Comment Modder / How modding works -->
                     <div class="glass-card">
                         <h3 class="card-title">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
-                                stroke-width="2" style="margin-right:8px;vertical-align:middle">
-                                <circle cx="12" cy="12" r="10" />
-                                <path d="M12 16v-4" />
-                                <path d="M12 8h.01" />
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" class="lucide lucide-badge-info-icon lucide-badge-info">
+                                <path
+                                    d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z" />
+                                <line x1="12" x2="12" y1="16" y2="12" />
+                                <line x1="12" x2="12.01" y1="8" y2="8" />
                             </svg>
                             <span data-i18n="docs.howModdingWorks">Comment fonctionne le modding ?</span>
                         </h3>
@@ -517,10 +519,12 @@
                     <!-- Sauvegardes / Backups -->
                     <div class="glass-card">
                         <h3 class="card-title">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warning)"
-                                stroke-width="2" style="margin-right:8px;vertical-align:middle">
-                                <path d="M12 22V8" />
-                                <path d="m5 15 7-7 7 7" />
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="#ce8a17" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" class="lucide lucide-archive-icon lucide-archive">
+                                <rect width="20" height="5" x="2" y="3" rx="1" />
+                                <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+                                <path d="M10 12h4" />
                             </svg>
                             <span data-i18n="docs.backups">À quoi sert le dossier Backup ?</span>
                         </h3>
@@ -537,10 +541,11 @@
                     <!-- Integrity Report -->
                     <div class="glass-card">
                         <h3 class="card-title">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warning)"
-                                stroke-width="2" style="margin-right:8px;vertical-align:middle">
-                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                                <polyline points="22 4 12 14.01 9 11.01" />
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="#174a1e" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" class="lucide lucide-circle-check-icon lucide-circle-check">
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="m9 12 2 2 4-4" />
                             </svg>
                             <span data-i18n="docs.integrityReport">Rapport d'intégrité</span>
                         </h3>
@@ -793,7 +798,7 @@
                                         contributions</div>
                                 </div>
                                 <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                    stroke="currentColor" stroke-width="2" style="opacity: 0.4;">
+                                    stroke="currentColor" stroke-width="2">
                                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                                     <polyline points="15 3 21 3 21 9" />
                                     <line x1="10" y1="14" x2="21" y2="3" />
@@ -815,7 +820,7 @@
                                         data-i18n="credits.discordSub">Aide & Mises à jour</div>
                                 </div>
                                 <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                    stroke="currentColor" stroke-width="2" style="opacity: 0.4;">
+                                    stroke="currentColor" stroke-width="2">
                                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                                     <polyline points="15 3 21 3 21 9" />
                                     <line x1="10" y1="14" x2="21" y2="3" />
@@ -837,7 +842,7 @@
                                         data-i18n="credits.edSub">Ressources de modding DCS World</div>
                                 </div>
                                 <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                    stroke="currentColor" stroke-width="2" style="opacity: 0.4;">
+                                    stroke="currentColor" stroke-width="2">
                                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                                     <polyline points="15 3 21 3 21 9" />
                                     <line x1="10" y1="14" x2="21" y2="3" />
@@ -860,7 +865,7 @@
                                         data-i18n="credits.licenseSub">View Apache-2.0 License</div>
                                 </div>
                                 <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                    stroke="currentColor" stroke-width="2" style="opacity: 0.4;">
+                                    stroke="currentColor" stroke-width="2">
                                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                                     <polyline points="15 3 21 3 21 9" />
                                     <line x1="10" y1="14" x2="21" y2="3" />
@@ -871,7 +876,7 @@
 
                     <div
                         style="margin-top: 40px; text-align: center; color: var(--text-muted); font-size: 11px; font-family: var(--font-mono); letter-spacing: 0.05em;">
-                        &copy; 2025 BETTER PROJECT. ALL RIGHTS RESERVED.
+                        &copy; 2026 BETTER MOD.MANAGER. ALL RIGHTS RESERVED.
                     </div>
                 </div>
             </section>

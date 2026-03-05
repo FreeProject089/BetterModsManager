@@ -364,27 +364,27 @@ function renderImportedModlist(modlist) {
             <div>
                 <h3 style="font-size:20px; font-weight:800; color:var(--text-primary); margin:0">${escHtml(modlist.name)}</h3>
                 <div style="display:flex; align-items:center; gap:8px; margin-top:6px; flex-wrap:wrap">
-                    <span style="font-size:10px; font-weight:700; text-transform:uppercase; padding:2px 8px; background:var(--accent-dim); color:var(--accent); border-radius:4px">${escHtml(modlist.game_name || 'Generic')}</span>
-                    <span style="font-size:11px; color:var(--text-muted)">par <span style="color:var(--text-secondary); font-weight:600">${escHtml(modlist.author || 'Inconnu')}</span></span>
+                    <span style="font-size:10px; font-weight:700; text-transform:uppercase; padding:2px 8px; background:var(--accent-dim); color:var(--accent); border-radius:4px">${t('mm.importedBadge')}</span>
+                    <span style="font-size:11px; color:var(--text-muted)">${t('mm.by')} <span style="color:var(--text-secondary); font-weight:600">${escHtml(modlist.author || 'Inconnu')}</span></span>
                     <span style="font-size:11px; color:var(--text-muted)">• v${modlist.format_version}</span>
                 </div>
             </div>
             <div style="display:flex; gap:20px; text-align:right">
                 <div>
-                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em">Mods</div>
+                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em">${t('mm.modsCount')}</div>
                     <div style="font-size:20px; font-weight:800; color:var(--accent)">${modlist.mods.length}</div>
                 </div>
                 <div>
-                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em">Total Poids</div>
+                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em">${t('mm.totalWeight')}</div>
                     <div style="font-size:20px; font-weight:800; color:var(--cyan)">${formatBytes(totalBytes)}</div>
                 </div>
             </div>
         </div>
         
-        <div style="display:flex; align-items:center; gap:10px; padding:12px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid rgba(255,255,255,0.05); margin-top:10px">
+        <div style="display:flex; align-items:center; gap:10px; padding:12px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid var(--border); margin-top:10px">
             <div style="flex:1">
-                 <div style="font-size:12px; font-weight:700; color:var(--text-primary)">Créer un profil automatique</div>
-                 <div style="font-size:10px; color:var(--text-muted)">Génère un nouveau profil dédié pour cette liste</div>
+                 <div style="font-size:12px; font-weight:700; color:var(--text-primary)">${t('mm.autoProfile')}</div>
+                 <div style="font-size:10px; color:var(--text-muted)">${t('mm.autoProfileDesc')}</div>
             </div>
             <label class="switch">
                 <input type="checkbox" id="chk-import-as-profile" checked>
@@ -395,7 +395,7 @@ function renderImportedModlist(modlist) {
         <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:rgba(0,255,255,0.03); border-radius:8px; border:1px solid rgba(6,182,212,0.1); margin-top:10px">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             <div style="flex:1; min-width:0">
-                <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; font-weight:700">Dossier d'installation (ROOT)</div>
+                <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; font-weight:700">${t('mm.installPath')}</div>
                 <div style="font-family:var(--font-mono); font-size:11px; color:var(--cyan); white-space:nowrap; overflow:hidden; text-overflow:ellipsis" id="imported-path-hint">${escHtml(modlist.game_path_hint || '—')}</div>
             </div>
             <button class="btn btn-sm btn-ghost" id="btn-override-import-path" title="Modifier le dossier de destination" style="height:28px; width:28px; border-radius:6px; padding:0; display:flex; align-items:center; justify-content:center">
@@ -426,7 +426,7 @@ function renderImportedModlist(modlist) {
                 <span style="font-family:var(--font-mono); font-size:10px; color:var(--cyan); background:rgba(6,182,212,0.1); padding:1px 6px; border-radius:4px; border:1px solid rgba(6,182,212,0.2)">v${escHtml(m.version)}</span>
                 <span style="font-size:10px; color:var(--text-muted); font-family:var(--font-mono)">${formatBytes(modSize)}</span>
             </div>
-            <div style="font-size:10px; color:var(--text-muted); font-family:var(--font-mono); background:rgba(255,255,255,0.03); padding:2px 6px; border-radius:4px" title="Priorité d'installation (plus élevé = écrase les autres)">PRIO: ${m.sort_priority}</div>
+            <div style="font-size:10px; color:var(--text-muted); font-family:var(--font-mono); background:rgba(255,255,255,0.03); padding:2px 6px; border-radius:4px" title="${t('mm.priorityTitle')}">PRIO: ${m.sort_priority}</div>
           </div>
           
           ${m.description ? `<p style="font-size:12px; color:var(--text-secondary); margin:0; opacity:0.8">${escHtml(m.description)}</p>` : ''}
@@ -436,7 +436,7 @@ function renderImportedModlist(modlist) {
             
             ${m.download_links && m.download_links.length > 0 ? m.download_links.map(l => `
                 <a href="${l.url}" target="_blank" class="btn btn-sm btn-ghost" style="padding:2px 8px; font-size:10px; height:22px; gap:4px; text-decoration:none; color:var(--accent)">
-                    ${getLinkIcon(l.link_type)} ${escHtml(l.label || 'Lien')}
+                    ${getLinkIcon(l.link_type)} ${escHtml(l.label || t('common.link'))}
                 </a>
             `).join('') : ''}
           </div>
@@ -445,7 +445,7 @@ function renderImportedModlist(modlist) {
             <details style="margin-top:4px">
               <summary style="font-size:11px; color:var(--text-muted); cursor:pointer; font-family:var(--font-mono); display:flex; align-items:center; gap:6px; user-select:none">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                Arborescence (${fileCount} fichiers)
+                ${t('mm.fileTree').replace('{count}', fileCount)}
               </summary>
               <div style="max-height:150px; overflow-y:auto; margin-top:8px; padding:8px; background:rgba(0,0,0,0.2); border-radius:6px; font-size:10.5px; font-family:var(--font-mono); color:var(--text-muted); border:1px solid rgba(255,255,255,0.03)">
                 ${m.file_tree.map(f => `
@@ -473,8 +473,8 @@ function renderImportedModlist(modlist) {
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 2s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                     </div>
                     <div>
-                        <h4 style="margin:0; font-size:16px; font-weight:800; color:var(--text-primary)">Installation en cours...</h4>
-                        <p style="margin:0; font-size:12px; color:var(--text-muted)">Récupération des archives et extraction</p>
+                        <h4 style="margin:0; font-size:16px; font-weight:800; color:var(--text-primary)">${t('mm.installingTitle')}</h4>
+                        <p style="margin:0; font-size:12px; color:var(--text-muted)">${t('mm.installingDesc')}</p>
                     </div>
                 </div>
                 <div id="imported-progress-list" style="flex:1; overflow-y:auto; padding-right:8px">
@@ -485,7 +485,7 @@ function renderImportedModlist(modlist) {
             <div style="padding:0 4px">
                 <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px; display:flex; align-items:center; gap:8px">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                    Installation Preview
+                    ${t('mm.installPreview')}
                 </div>
                 ${modsHtml}
             </div>
