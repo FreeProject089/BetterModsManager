@@ -60,17 +60,17 @@ export function getLanguages() {
     }));
 }
 
-export function applyTranslations() {
+export function applyTranslations(root = document) {
     if (!loaded) return;
-    document.querySelectorAll('[data-i18n]').forEach(el => {
+    root.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.dataset.i18n;
         el.textContent = t(key);
     });
-    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    root.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
         const key = el.dataset.i18nPlaceholder;
         el.placeholder = t(key);
     });
-    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    root.querySelectorAll('[data-i18n-title]').forEach(el => {
         const key = el.dataset.i18nTitle;
         el.title = t(key);
     });

@@ -3,7 +3,7 @@
  */
 import { invoke, pickFolder, toast, updateLibraryProfileSelector } from './app.js';
 import { refreshMods } from './mods.js';
-import { t } from './i18n.js';
+import { t, applyTranslations } from './i18n.js';
 
 export async function initProfiles() {
     document.getElementById('btn-new-profile').addEventListener('click', openNewProfileModal);
@@ -192,7 +192,33 @@ export async function renderProfiles() {
     Array.from(grid.children).forEach(c => { if (!c.id.startsWith('empty')) grid.removeChild(c); });
 
     if (count === 0) {
-        emptyEl.style.display = '';
+        emptyEl.style.display = 'flex';
+        emptyEl.style.width = '100%';
+        emptyEl.style.minHeight = '400px';
+        emptyEl.innerHTML = `
+            <div class="empty-icon" style="margin-bottom:24px; opacity:0.6; background:rgba(255,255,255,0.03); width:100px; height:100px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:1px solid var(--border)">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                    <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                </svg>
+            </div>
+            <h3 data-i18n="prof.emptyTitle" style="font-size:22px; margin-bottom:12px; font-weight:700">Aucun profil configuré</h3>
+            <p data-i18n="prof.emptyDesc" style="color:var(--text-secondary); max-width:440px; text-align:center; margin-bottom:32px; line-height:1.6">
+                Organisez vos mods par jeu ou par configuration. Créez votre premier profil pour commencer à modder en toute sécurité.
+            </p>
+            <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:16px; width:100%;">
+                <button class="btn btn-primary btn-lg" id="empty-create-profile" style="padding:12px 24px; font-size:14px; font-weight:600; min-width:180px">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span data-i18n="prof.create">Créer un profil</span>
+                </button>
+                <button class="btn btn-secondary btn-lg" id="empty-import-ovgme" style="padding:12px 24px; font-size:14px; font-weight:600; min-width:180px">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    <span data-i18n="prof.importOvgme">Importer OvGME</span>
+                </button>
+            </div>
+        `;
+        document.getElementById('empty-create-profile').onclick = () => document.getElementById('btn-new-profile').click();
+        document.getElementById('empty-import-ovgme').onclick = () => document.getElementById('btn-import-ovgme').click();
+        applyTranslations(emptyEl);
         return;
     }
 

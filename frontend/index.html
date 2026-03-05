@@ -18,9 +18,9 @@
     <!-- App Loader -->
     <div id="app-loader"
         style="position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg-primary);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.5s ease, visibility 0.5s ease">
-        <img src="assets/Tasky.png" alt="Loading..."
+        <img src="assets/Tasky.png" alt="Loading..." id="loader-img"
             style="width:120px;height:auto;animation:pulse-tasky 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;filter:drop-shadow(0 0 20px rgba(59,130,246,0.3))">
-        <div
+        <div id="loader-text"
             style="margin-top:24px;font-family:var(--font-mono);font-size:12px;color:var(--text-muted);letter-spacing:0.1em;animation:pulse-text 2s infinite">
             CHARGEMENT...</div>
     </div> <!-- Custom Titlebar -->
@@ -222,14 +222,26 @@
                             </svg>
                             <span data-i18n="lib.addMod">Ajouter un mod</span>
                         </button>
-                        <button class="btn btn-primary" id="btn-enable-all">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.2">
-                                <path d="m5 12 5 5L20 7" />
-                                <circle cx="12" cy="12" r="10" />
-                            </svg>
-                            <span data-i18n="lib.enableAll">Tout activer</span>
-                        </button>
+                        <div class="split-btn-group" id="enable-all-container">
+                            <button class="btn btn-primary btn-split-main" id="btn-enable-all">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.2">
+                                    <path d="m5 12 5 5L20 7" />
+                                    <circle cx="12" cy="12" r="10" />
+                                </svg>
+                                <span data-i18n="lib.enableAll">Tout activer</span>
+                            </button>
+                            <div class="split-btn-dropdown">
+                                <button class="btn btn-ghost btn-split-alt" id="btn-disable-all-alt">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.2">
+                                        <path d="M18 6L6 18M6 6l12 12" />
+                                        <circle cx="12" cy="12" r="10" />
+                                    </svg>
+                                    <span data-i18n="lib.disableAll">Tout désactiver</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -322,30 +334,20 @@
                         </button>
                     </div>
                 </div>
-                <div class="profile-grid" id="profile-grid">
-                    <div class="empty-state" id="empty-profiles">
-                        <div class="empty-icon">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="1.2">
-                                <circle cx="12" cy="8" r="4" />
-                                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-                            </svg>
-                        </div>
-                        <p class="empty-title" data-i18n="prof.emptyTitle">Aucun profil</p>
-                        <p class="empty-desc" data-i18n="prof.emptyDesc">Créez votre premier profil pour commencer ou
-                            importez vos configurations
-                            OvGME.</p>
-                        <div style="display:flex; gap:12px; margin-top:20px; justify-content:center">
-                            <button class="btn btn-primary"
-                                onclick="document.getElementById('btn-new-profile').click()">
-                                <span data-i18n="prof.create">Créer un profil</span>
-                            </button>
-                            <button class="btn btn-secondary"
-                                onclick="document.getElementById('btn-import-ovgme').click()">
-                                <span data-i18n="prof.importOvgme">Importer OvGME</span>
-                            </button>
-                        </div>
+                <div class="empty-state" id="empty-profiles" style="display: none;">
+                    <div class="empty-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="1.2">
+                            <circle cx="12" cy="8" r="4" />
+                            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                        </svg>
                     </div>
+                    <p class="empty-title" data-i18n="prof.emptyTitle">Aucun profil configuré</p>
+                    <p class="empty-desc" data-i18n="prof.emptyDesc">Organisez vos mods par jeu ou par configuration.
+                        Créez votre premier profil pour commencer à modder en toute sécurité.</p>
+                </div>
+
+                <div class="profile-grid" id="profile-grid">
                 </div>
             </section>
 

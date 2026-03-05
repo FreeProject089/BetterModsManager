@@ -1097,6 +1097,60 @@ img {
     height: 32px;
 }
 
+/* ── Split Button & Dropdown ── */
+.split-btn-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.btn-split-main {
+    border-radius: var(--radius-btn);
+    z-index: 2;
+}
+
+.split-btn-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 6px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-accent);
+    border-radius: var(--radius-btn);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 100;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+}
+
+.split-btn-group:hover .split-btn-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.split-btn-group.all-enabled .split-btn-dropdown {
+    display: none;
+}
+
+.btn-split-alt {
+    width: 100%;
+    justify-content: flex-start !important;
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+    color: var(--danger) !important;
+}
+
+.btn-split-alt:hover {
+    background: var(--danger-dim) !important;
+}
+
 /* ═══════════════════════════════════
    FORMS
 ═══════════════════════════════════ */
@@ -1189,6 +1243,7 @@ img {
     padding: 60px 20px;
     color: var(--text-muted);
     text-align: center;
+    width: 100%;
 }
 
 .empty-icon {

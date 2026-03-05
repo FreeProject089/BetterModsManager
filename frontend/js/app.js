@@ -664,12 +664,20 @@ async function main() {
     await updateLibraryProfileSelector();
 
 
-    // Hide loader smoothly
+    // Show happy tasky when everything is ready
+    const loaderImg = document.getElementById('loader-img');
+    const loaderText = document.getElementById('loader-text');
+    if (loaderImg) loaderImg.src = 'assets/Tasky_Happy.png';
+    if (loaderText) loaderText.textContent = 'CHARGÉ !';
+
+    // Hide loader smoothly after a small delay to see the happy face
     const loader = document.getElementById('app-loader');
     if (loader) {
-        loader.style.opacity = '0';
-        loader.style.visibility = 'hidden';
-        setTimeout(() => loader.remove(), 600);
+        setTimeout(() => {
+            loader.style.opacity = '0';
+            loader.style.visibility = 'hidden';
+            setTimeout(() => loader.remove(), 600);
+        }, 800);
     }
 
     // Init Settings

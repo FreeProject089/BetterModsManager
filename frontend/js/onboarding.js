@@ -6,65 +6,77 @@ import { t, setLang, applyTranslations } from './i18n.js';
 function getSteps() {
     return [
         {
-            title: t('onboard.s1.title'), // Welcome
+            title: t('onboard.s1.title'),
             text: t('onboard.s1.text'),
             img: 'assets/Tasky_Happy.png',
             navTarget: 'profiles'
         },
         {
-            title: t('onboard.s2.title'), // Profiles
+            title: t('onboard.s2.title'),
             text: t('onboard.s2.text'),
             img: 'assets/Tasky.png',
             navTarget: 'profiles',
             selector: 'profiles-list'
         },
         {
-            title: t('onboard.s4.title'), // Library
+            title: t('onboard.s4.title'),
             text: t('onboard.s4.text'),
             img: 'assets/Tasky.png',
             navTarget: 'library',
             selector: 'view-library'
         },
         {
-            title: t('onboard.s5.title'), // Activation logic
+            title: t('onboard.s5.title'),
             text: t('onboard.s5.text'),
             img: 'assets/Tasky_yeux1.png',
             navTarget: 'library'
         },
         {
-            title: t('onboard.conflicts.title'), // Conflict Detection
+            title: t('onboard.conflicts.title'),
             text: t('onboard.conflicts.text'),
             img: 'assets/Tasky.png',
-            navTarget: 'library'
+            navTarget: 'library',
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color:var(--danger)"><path d="M14.5 2 L2 14.5 M22 22 L19.5 19.5 M5 2 2 5 M19 22 22 19 M2 22 22 2 M8 6 l3 3 M18 16 l-3-3"/></svg>'
         },
         {
-            title: t('onboard.explorer.title'), // Archive Explorer
+            title: t('onboard.explorer.title'),
             text: t('onboard.explorer.text'),
             img: 'assets/Tasky.png',
             navTarget: 'library',
-            selector: 'btn-browse-archive'
+            selector: 'btn-browse-archive',
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color:var(--cyan)"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
         },
         {
-            title: t('onboard.modding.title'), // How to mod
+            title: t('onboard.modding.title'),
             text: t('onboard.modding.text'),
             img: 'assets/Tasky.png',
-            navTarget: 'library'
+            navTarget: 'library',
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color:var(--accent)"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>'
         },
         {
-            title: t('onboard.integrity.title'), // Integrity report
+            title: t('onboard.integrity.title'),
             text: t('onboard.integrity.text'),
             img: 'assets/Tasky_Happy.png',
             navTarget: 'library',
-            selector: 'btn-verify-integrity'
+            selector: 'btn-verify-integrity',
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color:var(--success)"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>'
         },
         {
-            title: t('onboard.s7.title'), // Modlists
+            title: t('onboard.s7.title'),
             text: t('onboard.s7.text'),
             img: 'assets/Tasky.png',
-            navTarget: 'modlists'
+            navTarget: 'modlists',
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color:var(--accent)"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>'
         },
         {
-            title: t('onboard.s8.title'), // Credits
+            title: t('onboard.performance.title'),
+            text: t('onboard.performance.text'),
+            img: 'assets/Tasky.png',
+            navTarget: 'library',
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color:var(--warning)"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>'
+        },
+        {
+            title: t('onboard.s8.title'),
             text: t('onboard.s8.text'),
             img: 'assets/Tasky_Happy.png',
             navTarget: 'credits'
@@ -150,7 +162,10 @@ function renderOnboarding() {
           </div>
         </div>
         <p class="onboarding-step-counter">STEP ${currentStep + 1} / ${totalSteps}</p>
-        <h3 class="onboarding-title">${step.title}</h3>
+        <h3 class="onboarding-title" style="display:flex;align-items:center;gap:10px">
+            ${step.icon ? step.icon : ''}
+            <span>${step.title}</span>
+        </h3>
         <p class="onboarding-text" id="onboarding-typewriter"></p>
         <div class="onboarding-actions">
           ${currentStep > 0 ? `<button class="btn btn-secondary onboarding-prev" id="btn-onboarding-prev" style="padding:6px 12px">←</button>` : ''}

@@ -3,7 +3,7 @@
  */
 import { invoke, pickFolder, listenFileDrop, toast, sendOsNotification } from './app.js';
 import { renderProfiles } from './profiles.js';
-import { t } from './i18n.js';
+import { t, applyTranslations } from './i18n.js';
 
 let allMods = [];
 let userTags = [];
@@ -11,14 +11,17 @@ let currentFilter = 'all';
 let currentSort = 'name_asc';
 let searchQuery = '';
 let selectedModId = null;
-let isModOperationRunning = false;
+let processingMods = new Set();
 let conflictCache = {}; // modId -> Array of conflicting mod names
+let refreshTimeout = null;
 
 export async function initMods() {
   window._refreshModsFn = refreshMods;
   document.getElementById('btn-add-mod').addEventListener('click', openAddModModal);
   document.getElementById('btn-confirm-add-mod').addEventListener('click', confirmAddMod);
-  document.getElementById('btn-enable-all').addEventListener('click', toggleAllMods);
+  document.getElementById('btn-enable-all').addEventListener('click', () => toggleAllMods());
+  const altDisable = document.getElementById('btn-disable-all-alt');
+  if (altDisable) altDisable.addEventListener('click', () => toggleAllMods(false));
 
   // Verify Integrity
   const verifyBtn = document.getElementById('btn-verify-integrity');
@@ -168,54 +171,66 @@ async function checkAllConflicts() {
   const activeId = await invoke('get_active_profile_id').catch(() => null);
   if (!activeId) return;
 
-  for (const mod of allMods) {
-    try {
-      const conflicts = await invoke('check_conflicts', { modId: mod.id });
-      if (conflicts && conflicts.length > 0) {
-        conflictCache[mod.id] = conflicts;
-      } else {
-        delete conflictCache[mod.id];
-      }
-    } catch (e) { }
-  }
+  // Check in parallel to be faster
+  const results = await Promise.allSettled(allMods.map(m => invoke('check_conflicts', { modId: m.id })));
+
+  results.forEach((res, idx) => {
+    const mid = allMods[idx].id;
+    if (res.status === 'fulfilled' && res.value && res.value.length > 0) {
+      conflictCache[mid] = res.value;
+    } else {
+      delete conflictCache[mid];
+    }
+  });
+
   renderModList();
 }
 
 export async function refreshMods(autoScan = false) {
-  if (autoScan) {
-    try {
-      await invoke('scan_mods_folder');
-    } catch (e) {
-      console.warn("Auto-scan error:", e);
+  if (refreshTimeout) clearTimeout(refreshTimeout);
+
+  refreshTimeout = setTimeout(async () => {
+    // Prevent autoScan if any mod is still processing to avoid "spam refresh"
+    if (autoScan && processingMods.size === 0) {
+      try { await invoke('scan_mods_folder'); } catch (e) { }
     }
-  }
 
-  try {
-    userTags = await invoke('get_tags');
-  } catch (err) { }
+    try {
+      userTags = await invoke('get_tags').catch(() => []);
+      allMods = await invoke('get_mods').catch(() => []);
 
-  try {
-    allMods = await invoke('get_mods');
-  } catch (err) {
-    console.warn("Could not get mods:", err);
-    allMods = [];
-  }
-  updateBadge();
-  renderModList();
-  updateSubtitle();
-  updateToggleAllBtn();
-  checkAllConflicts();
+      const activeId = await invoke('get_active_profile_id').catch(() => null);
+      if (activeId) {
+        const results = await Promise.allSettled(allMods.map(m => invoke('check_conflicts', { modId: m.id })));
+        results.forEach((res, idx) => {
+          if (allMods[idx]) {
+            const mid = allMods[idx].id;
+            if (res.status === 'fulfilled' && res.value && res.value.length > 0) {
+              conflictCache[mid] = res.value;
+            } else {
+              delete conflictCache[mid];
+            }
+          }
+        });
+      }
+    } catch (err) {
+      allMods = [];
+    }
 
-  // Dynamic refresh for profiles to update counts/status
-  try {
-    renderProfiles();
-  } catch (e) { }
+    updateBadge();
+    updateSubtitle();
+    updateToggleAllBtn();
+    try { renderProfiles(); } catch (e) { }
 
-  if (selectedModId) {
-    const m = allMods.find(mod => mod.id === selectedModId);
-    if (m) renderModDetail(m);
-    else closeModDetail();
-  }
+    renderModList(); // Single final render
+
+    if (selectedModId) {
+      const m = allMods.find(mod => mod.id === selectedModId);
+      if (m) renderModDetail(m);
+      else closeModDetail();
+    }
+    refreshTimeout = null;
+  }, 200);
 }
 
 function updateBadge() {
@@ -299,25 +314,67 @@ function renderHistoryModal(history) {
 
 function renderModList() {
   const list = document.getElementById('mod-list');
+  const scrollContainer = document.querySelector('.content-area');
+  const oldScroll = scrollContainer ? scrollContainer.scrollTop : 0;
   const empty = document.getElementById('empty-mods');
-  const mods = getFilteredMods();
 
-  // Remove old mod cards
-  Array.from(list.children).forEach(c => {
-    if (!c.id.startsWith('empty')) list.removeChild(c);
-  });
+  invoke('get_active_profile_id').then(activeId => {
+    Array.from(list.children).forEach(c => { if (!c.id.startsWith('empty')) list.removeChild(c); });
 
-  if (mods.length === 0) {
-    empty.style.display = '';
-    return;
-  }
+    if (!activeId) {
+      empty.style.display = 'none';
+      let noProf = document.getElementById('empty-no-profile');
+      if (!noProf) {
+        noProf = document.createElement('div');
+        noProf.id = 'empty-no-profile';
+        noProf.className = 'empty-state';
+        noProf.style.padding = '60px 20px';
+        noProf.innerHTML = `
+          <div class="empty-icon" style="margin-bottom:24px; opacity:0.6">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+              <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+            </svg>
+          </div>
+          <h3 data-i18n="lib.noProfileTitle" style="font-size:22px; margin-bottom:12px; font-weight:700">Aucun profil actif</h3>
+          <p data-i18n="lib.noProfileDesc" style="color:var(--text-secondary); max-width:420px; margin:0 auto 32px; line-height:1.6">Veuillez sélectionner ou créer un profil pour gérer vos mods.</p>
+          <div style="display:flex; justify-content:center; gap:16px;">
+            <button class="btn btn-primary" onclick="document.getElementById('nav-profiles').click(); document.getElementById('btn-new-profile').click();" style="padding:12px 24px; font-size:14px">
+              <span data-i18n="prof.create">Créer un profil</span>
+            </button>
+            <button class="btn btn-secondary" onclick="document.getElementById('nav-profiles').click(); document.getElementById('btn-import-ovgme').click();" style="padding:12px 24px; font-size:14px">
+              <span data-i18n="prof.importOvgme">Importer OvGME</span>
+            </button>
+          </div>
+        `;
+        list.appendChild(noProf);
+        applyTranslations(noProf);
+      } else {
+        noProf.style.display = '';
+      }
+      return;
+    }
 
-  empty.style.display = 'none';
+    if (document.getElementById('empty-no-profile')) {
+      document.getElementById('empty-no-profile').style.display = 'none';
+    }
 
-  mods.forEach(mod => {
-    const card = createModCard(mod);
-    list.appendChild(card);
-  });
+    const mods = getFilteredMods();
+    if (mods.length === 0) {
+      empty.style.display = '';
+      return;
+    }
+
+    empty.style.display = 'none';
+    mods.forEach(mod => {
+      const card = createModCard(mod);
+      list.appendChild(card);
+    });
+
+    if (scrollContainer) {
+      scrollContainer.scrollTop = oldScroll;
+      requestAnimationFrame(() => { scrollContainer.scrollTop = oldScroll; });
+    }
+  }).catch(() => { });
 }
 
 function createModCard(mod) {
@@ -394,82 +451,60 @@ function createModCard(mod) {
     ">
       ${mod.enabled ? 'ACTIF' : 'INACTIF'}
     </div>
+    ${processingMods.has(mod.id) ? `
+      <div class="mod-loading-overlay" style="position:absolute;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-card);z-index:10;animation:fadeIn 0.2s ease">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+        </div>
+      </div>
+    ` : ''}
   `;
 
   // Toggle handler
   const toggle = card.querySelector('.mod-toggle-input');
   toggle.addEventListener('change', async () => {
-    if (isModOperationRunning) {
-      toggle.checked = !toggle.checked;
-      toast("Une opération est déjà en cours...", "warning");
-      return;
-    }
-
-    // Conflict Check
+    // Conflict Check (Keep it blocking for safety)
     const conflicts = conflictCache[mod.id];
     const ignoreConflicts = localStorage.getItem('bmm_ignore_conflicts') === 'true';
 
     if (toggle.checked && conflicts && conflicts.length > 0 && !ignoreConflicts) {
-      // Show conflict warning modal
-      toggle.checked = false; // Reset visually until confirmed
+      toggle.checked = false;
       const modal = document.getElementById('modal-conflict-warning');
       const listContainer = document.getElementById('conflict-warning-list');
       const msgEl = modal.querySelector('[data-i18n="conflict.warningMsg"]');
-
-      if (msgEl) {
-        msgEl.innerHTML = t('conflict.warningMsg', { mods: '' }).replace(': ', ''); // Clear placeholder if used in title
-      }
-
+      if (msgEl) msgEl.innerHTML = t('conflict.warningMsg', { mods: '' }).replace(': ', '');
       listContainer.innerHTML = conflicts.map(c => `<div style="margin-bottom:4px;color:var(--warning);font-size:13px"><span style="color:var(--text-muted)">></span> ${escHtml(c)}</div>`).join('');
-
       modal.classList.add('open');
 
       const confirmBtn = document.getElementById('btn-confirm-conflict-toggle');
-      const onConfirm = async () => {
+      confirmBtn.onclick = () => {
         modal.classList.remove('open');
-        confirmBtn.removeEventListener('click', onConfirm);
-
-        if (document.getElementById('conflict-ignore-forever').checked) {
-          localStorage.setItem('bmm_ignore_conflicts', 'true');
-        }
-
-        // Re-trigger toggle
+        if (document.getElementById('conflict-ignore-forever').checked) localStorage.setItem('bmm_ignore_conflicts', 'true');
         toggle.checked = true;
         toggle.dispatchEvent(new Event('change'));
       };
-      confirmBtn.onclick = onConfirm; // Use onclick to replace previous listeners
       return;
     }
 
     const originalState = !toggle.checked;
-    const pill = card.querySelector('.mod-status-pill');
-    const oldPillContent = pill.innerHTML;
-    pill.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>';
-    toggle.disabled = true;
-    isModOperationRunning = true;
+    processingMods.add(mod.id);
+    renderModList(); // Show loading state immediately
 
     try {
       if (toggle.checked) {
         await invoke('enable_mod', { modId: mod.id });
         toast(t('mod.activated', { name: mod.name }), 'success');
-        if (localStorage.getItem('bmm_sysNotif') === 'true') {
-          sendOsNotification('Better Mod Manager', t('mod.activated', { name: mod.name }));
-        }
+        if (localStorage.getItem('bmm_sysNotif') === 'true') sendOsNotification('Better Mod Manager', t('mod.activated', { name: mod.name }));
       } else {
         await invoke('disable_mod', { modId: mod.id });
         toast(t('mod.deactivated', { name: mod.name }), 'info');
-        if (localStorage.getItem('bmm_sysNotif') === 'true') {
-          sendOsNotification('Better Mod Manager', t('mod.deactivated', { name: mod.name }));
-        }
+        if (localStorage.getItem('bmm_sysNotif') === 'true') sendOsNotification('Better Mod Manager', t('mod.deactivated', { name: mod.name }));
       }
-      await refreshMods();
     } catch (err) {
-      toggle.checked = originalState;
       toast('Erreur : ' + err, 'error');
-      pill.innerHTML = oldPillContent;
     } finally {
-      isModOperationRunning = false;
-      toggle.disabled = false;
+      processingMods.delete(mod.id);
+      await refreshMods();
     }
   });
 
@@ -871,35 +906,33 @@ async function confirmAddMod() {
   }
 }
 
-async function toggleAllMods() {
-  if (isModOperationRunning) {
-    toast("Une opération est déjà en cours...", "warning");
-    return;
-  }
-
+async function toggleAllMods(forcedEnable = null) {
   const currentStatus = getToggleAllStatus();
-  const enable = currentStatus === 'enable';
-  const targetMods = enable ? allMods.filter(m => !m.enabled) : allMods.filter(m => m.enabled);
+  // If forcedEnable is null, use currentStatus, else user clicked a specific sub-button
+  const enable = (forcedEnable === null) ? (currentStatus === 'enable') : forcedEnable;
 
+  const targetMods = enable ? allMods.filter(m => !m.enabled) : allMods.filter(m => m.enabled);
   if (targetMods.length === 0) return;
 
-  isModOperationRunning = true;
-
   const btn = document.getElementById('btn-enable-all');
+  const altBtn = document.getElementById('btn-disable-all-alt');
   const originalHtml = btn.innerHTML;
+
   btn.disabled = true;
+  if (altBtn) altBtn.disabled = true;
+
   btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${enable ? 'Activation...' : 'Désactivation...'}`;
 
   try {
     await invoke('toggle_all_mods', { enable });
     await refreshMods();
-    const key = enable ? 'mod.enabledCount' : 'mod.deactivatedCount'; // Should add i18n key for multi-deact if needed
-    toast(t(enable ? 'mod.enabledCount' : 'mod.enabledCount').replace('{count}', targetMods.length), 'success');
+    const key = enable ? 'mod.enabledCount' : 'mod.disabledCount';
+    toast(t(key).replace('{count}', targetMods.length), 'success');
   } catch (err) {
     toast(t('common.error') + ' : ' + err, 'error');
   } finally {
-    isModOperationRunning = false;
     btn.disabled = false;
+    if (altBtn) altBtn.disabled = false;
     btn.innerHTML = originalHtml;
   }
 }
@@ -912,21 +945,31 @@ function getToggleAllStatus() {
 
 function updateToggleAllBtn() {
   const btn = document.getElementById('btn-enable-all');
+  const container = document.getElementById('enable-all-container');
   if (!btn) return;
+
   const status = getToggleAllStatus();
   const label = btn.querySelector('span');
   const svg = btn.querySelector('svg');
 
-  if (status === 'disable') {
+  // Logic: 
+  // - If some mods are disabled: Main action is "Enable All", Dropdown shows "Disable All"
+  // - If ALL mods are enabled: Main action becomes "Disable All", no need for dropdown/split
+
+  const allEnabled = allMods.length > 0 && allMods.every(m => m.enabled);
+
+  if (allEnabled) {
     label.innerHTML = t('lib.disableAll');
     svg.innerHTML = '<path d="M18 6L6 18M6 6l12 12" /><circle cx="12" cy="12" r="10" />';
-    btn.classList.replace('btn-primary', 'btn-ghost');
+    btn.className = 'btn btn-ghost btn-split-main';
     btn.style.color = 'var(--danger)';
+    if (container) container.classList.add('all-enabled');
   } else {
     label.innerHTML = t('lib.enableAll');
     svg.innerHTML = '<path d="m5 12 5 5L20 7" /><circle cx="12" cy="12" r="10" />';
-    btn.classList.replace('btn-ghost', 'btn-primary');
+    btn.className = 'btn btn-primary btn-split-main';
     btn.style.color = '';
+    if (container) container.classList.remove('all-enabled');
   }
 }
 
