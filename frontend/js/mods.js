@@ -594,16 +594,30 @@ function selectMod(mod) {
     closeModDetail();
     return;
   }
+  
+  // Remove .selected from previously selected card
+  if (selectedModId) {
+    const oldCard = document.querySelector(`.mod-card[data-id="${selectedModId}"]`);
+    if (oldCard) oldCard.classList.remove('selected');
+  }
+
   selectedModId = mod.id;
-  renderModList(); // re-render to show selected state
+
+  // Add .selected to the newly selected card
+  const newCard = document.querySelector(`.mod-card[data-id="${mod.id}"]`);
+  if (newCard) newCard.classList.add('selected');
+
   renderModDetail(mod);
 }
 
 function closeModDetail() {
+  if (selectedModId) {
+    const oldCard = document.querySelector(`.mod-card[data-id="${selectedModId}"]`);
+    if (oldCard) oldCard.classList.remove('selected');
+  }
   selectedModId = null;
   const panel = document.getElementById('mod-detail-panel');
-  if (panel) panel.style.display = 'none';
-  renderModList();
+  if (panel) panel.remove();
 }
 
 async function renderModDetail(mod) {
