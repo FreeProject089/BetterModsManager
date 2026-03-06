@@ -558,6 +558,22 @@
                         </p>
                     </div>
 
+                    <!-- Link Types -->
+                    <div class="glass-card">
+                        <h3 class="card-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                                stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                            </svg>
+                            <span data-i18n="docs.linkTypes">Types de liens et automation</span>
+                        </h3>
+                        <p class="about-desc" data-i18n="docs.linkTypesDesc"
+                            style="line-height:1.6; white-space: pre-line">
+                            BMM catégorise vos liens pour optimiser l'expérience.
+                        </p>
+                    </div>
+
                     <!-- Format .MM -->
                     <div class="glass-card">
                         <h3 class="card-title">
@@ -1384,10 +1400,13 @@
                         data-i18n="mod.deleteCheck">Je confirme vouloir supprimer définitivement les fichiers.</label>
                 </div>
             </div>
-            <div class="modal-footer" style="padding: 12px 20px;">
+            <div class="modal-footer" style="padding: 12px 20px; display:flex; gap:10px; justify-content:flex-end">
                 <button class="btn btn-ghost" data-close="modal-delete-mod" data-i18n="prof.cancel">Annuler</button>
+                <button class="btn btn-secondary" id="btn-remove-only-mod" style="font-size:12px">
+                    <span data-i18n="mod.removeOnly">Retirer de la liste uniquement</span>
+                </button>
                 <button class="btn btn-danger" id="btn-final-delete-mod" disabled
-                    style="padding-left:24px; padding-right:24px;">
+                    style="padding-left:24px; padding-right:24px; font-size:12px">
                     <span data-i18n="lib.delete">Supprimer définitivement</span>
                 </button>
             </div>

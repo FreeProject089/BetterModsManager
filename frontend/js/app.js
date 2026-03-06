@@ -124,7 +124,8 @@ function initNavigation() {
     // Auto-detect when app regained focus
     window.addEventListener('focus', () => {
         const libView = document.getElementById('view-library');
-        if (libView && libView.classList.contains('active')) {
+        const detailOpen = !!document.getElementById('mod-detail-panel');
+        if (libView && libView.classList.contains('active') && !detailOpen) {
             window._refreshModsFn?.(true);
         }
     });
@@ -237,6 +238,17 @@ function initModlist() {
         if (progressOverlay) progressOverlay.style.display = 'flex';
         if (progressList) progressList.innerHTML = '';
 
+        // Reset Cancel button state
+        const cancelBtn = document.getElementById('btn-cancel-import-dl');
+        if (cancelBtn) {
+            cancelBtn.disabled = false;
+            cancelBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:6px"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> ${t('prof.cancel').toUpperCase()}`;
+        }
+
+        // Clear previous results
+        const existingResults = previewCard.querySelectorAll('.install-results-container');
+        existingResults.forEach(r => r.remove());
+
         try {
             const results = await invoke('install_from_modlist', {
                 modlistJson: lastImportedModlistJson,
@@ -254,6 +266,7 @@ function initModlist() {
             }).join('');
 
             const resultsDiv = document.createElement('div');
+            resultsDiv.className = 'install-results-container';
             resultsDiv.style.cssText = 'margin-top:12px;padding:16px;background:rgba(0,0,0,0.4);border-radius:10px;border:1px solid var(--border);box-shadow:0 4px 12px rgba(0,0,0,0.2)';
             resultsDiv.innerHTML = `<div style="font-size:10px;color:var(--accent);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em;font-weight:800">${t('mm.installResults')}</div>${resultHtml}`;
             previewCard.appendChild(resultsDiv);
@@ -270,13 +283,32 @@ function initModlist() {
                 await refreshMods();
             }
         } catch (err) {
-            toast(t('mm.installError').replace('{err}', err), 'error');
+            if (err.includes('annulée') || err.includes('cancelled')) {
+                toast(t('mm.installCancelled'), 'info');
+            } else {
+                toast(t('mm.installError').replace('{err}', err), 'error');
+            }
         } finally {
             installBtn.disabled = false;
             installBtn.classList.remove('loading');
             installBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installAll')}`;
             if (progressOverlay) {
                 setTimeout(() => { progressOverlay.style.display = 'none'; }, 2000);
+            }
+        }
+    });
+
+    // Cancel installation
+    previewCard.addEventListener('click', async (e) => {
+        const btn = e.target.closest('#btn-cancel-import-dl');
+        if (btn) {
+            try {
+                await invoke('cancel_install_from_modlist');
+                btn.disabled = true;
+                btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('prof.cancel')}...`;
+                toast(t('mm.cancelRequested'), 'info');
+            } catch (err) {
+                toast(t('mm.cancelError').replace('{err}', err), 'error');
             }
         }
     });
@@ -458,6 +490,10 @@ function renderImportedModlist(modlist) {
                         <h4 style="margin:0; font-size:16px; font-weight:800; color:var(--text-primary)">${t('mm.installingTitle')}</h4>
                         <p style="margin:0; font-size:12px; color:var(--text-muted)">${t('mm.installingDesc')}</p>
                     </div>
+                    <button class="btn btn-danger btn-sm" id="btn-cancel-import-dl" style="margin-left:auto; height:32px; padding:0 16px; font-size:11px; font-weight:800">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:6px"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        ${t('prof.cancel').toUpperCase()}
+                    </button>
                 </div>
                 <div id="imported-progress-list" style="flex:1; overflow-y:auto; padding-right:8px">
                     <!-- Progress bars injected here -->

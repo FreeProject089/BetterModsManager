@@ -104,9 +104,26 @@ The `.MM` format is BMM's proprietary JSON-based sharing standard.
 | **Archive Access** | Older changelogs from `Update/Old_Update/` are available in a sidebar for historical reference. |
 | **File Browser Sidebar** | Navigate between release note files using left-panel navigation. |
 
+| **File Browser Sidebar** | Navigate between release note files using left-panel navigation. |
+| **Cancellation Support** | Long operations like modlist installations can be cancelled mid-way through the progress UI. |
+
 ---
 
-## 9. Interface & Settings
+## 10. Mod Connection Types
+
+When adding or editing a mod, you can categorize its download links. This helps with organization and automation.
+
+| Type | Best Use Case | BMM Behavior |
+| :--- | :--- | :--- |
+| **GitHub** | Official mod repositories or release pages. | Standard community-recognized link. |
+| **Direct** | A direct URL to a `.zip`, `.rar`, or `.7z` file. | **High Priority.** Essential for fully automated `.MM` installations. |
+| **Google Drive** | Large files shared through Drive. | Requires manual interaction if a direct bypass isn't possible. |
+| **MEGA** | Encrypted cloud storage. | Standard link recognition. |
+| **Other** | Forums (DCS, Nexus), Discord links, etc. | Generic fallback link. |
+
+---
+
+## 11. Interface & Settings
 
 | Feature | Description |
 | :--- | :--- |

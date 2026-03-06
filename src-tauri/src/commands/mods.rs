@@ -122,7 +122,7 @@ pub async fn add_mod(
 }
 
 #[tauri::command]
-pub async fn remove_mod(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
+pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files: bool) -> Result<(), String> {
     let mod_path = {
         let mut data = state.data.lock().unwrap();
         let idx = data.mods.iter().position(|m| m.id == mod_id).ok_or("Mod introuvable")?;
@@ -135,12 +135,14 @@ pub async fn remove_mod(state: State<'_, AppState>, mod_id: String) -> Result<()
         p
     };
 
-    tauri::async_runtime::spawn_blocking(move || {
-        if mod_path.exists() && mod_path.is_dir() {
-            std::fs::remove_dir_all(mod_path).map_err(|e| e.to_string())?;
-        }
-        Ok::<(), String>(())
-    }).await.map_err(|e| e.to_string())??;
+    if delete_files {
+        tauri::async_runtime::spawn_blocking(move || {
+            if mod_path.exists() && mod_path.is_dir() {
+                std::fs::remove_dir_all(mod_path).map_err(|e| e.to_string())?;
+            }
+            Ok::<(), String>(())
+        }).await.map_err(|e| e.to_string())??;
+    }
 
     let _ = state.save();
     Ok(())
@@ -550,21 +552,45 @@ struct DownloadProgress {
 }
 
 #[tauri::command]
+pub fn cancel_install_from_modlist(state: State<AppState>) {
+    state.install_cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+#[tauri::command]
 pub async fn install_from_modlist(
     window: tauri::Window,
     state: State<'_, AppState>,
     modlist_json: String,
     create_profile: bool,
 ) -> Result<Vec<String>, String> {
+    state.install_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
     let modlist: crate::models::modlist::ModList =
         serde_json::from_str(&modlist_json).map_err(|e| format!("Invalid modlist: {}", e))?;
 
-    let mut mods_path = {
-        let data = state.data.lock().unwrap();
+    let mut newly_created_profile_id: Option<String> = None;
+    let mut newly_added_mod_ids: Vec<String> = Vec::new();
+    let mut newly_added_mod_folders: Vec<PathBuf> = Vec::new();
+
+    let mods_path = {
+        let mut data = state.data.lock().unwrap();
         if create_profile {
-            // Profile will be created later if it doesn't exist, but we need a path now
-            // For now, let's use the hint or a default
-            PathBuf::from(&modlist.game_path_hint).join("BetterMods")
+            let new_id = uuid::Uuid::new_v4().to_string();
+            let game_path = PathBuf::from(&modlist.game_path_hint);
+            let m_path = game_path.join("BetterMods");
+            let backup_path = game_path.join("BetterModsBackup");
+            
+            let mut new_p = crate::models::profile::Profile::new(
+                modlist.name.clone(),
+                modlist.game_name.clone(),
+                game_path,
+                m_path.clone(),
+                backup_path
+            );
+            new_p.id = new_id.clone();
+            data.profiles.push(new_p);
+            data.active_profile_id = Some(new_id.clone());
+            newly_created_profile_id = Some(new_id);
+            m_path
         } else {
             let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
             let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
@@ -572,39 +598,17 @@ pub async fn install_from_modlist(
         }
     };
 
-    // If create_profile, we actually create the profile first
-    if create_profile {
-        let mut data = state.data.lock().unwrap();
-        let new_id = uuid::Uuid::new_v4().to_string();
-        let game_path = PathBuf::from(&modlist.game_path_hint);
-        let backup_path = game_path.join("BetterModsBackup");
-        let mut new_p = crate::models::profile::Profile::new(
-            modlist.name.clone(),
-            modlist.game_name.clone(),
-            game_path,
-            mods_path.clone(),
-            backup_path
-        );
-        new_p.id = new_id.clone();
-        data.profiles.push(new_p);
-        data.active_profile_id = Some(new_id);
-        drop(data);
-        let _ = state.save();
-    }
-
     let mut results = Vec::new();
     let total_mods = modlist.mods.len();
 
     for (idx, entry) in modlist.mods.iter().enumerate() {
-        let link = entry.download_links.iter().find(|dl| !dl.url.is_empty());
-        let safe_name = entry.name
-            .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' { c } else { '_' })
-            .collect::<String>();
-        let target_dir = mods_path.join(&safe_name);
+        if state.install_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+            results.push("❌ Installation annulée par l'utilisateur".to_string());
+            break;
+        }
         
         // Progress: Starting
-        let _ = window.emit("bmm://mod-download-progress", DownloadProgress {
+        let _ = window.emit("bmm://mod-download-progress", crate::commands::mods::DownloadProgress {
             mod_index: idx,
             total_mods,
             mod_name: entry.name.clone(),
@@ -612,17 +616,17 @@ pub async fn install_from_modlist(
             status: "Démarrage...".to_string(),
         });
 
-        // Skip if already downloaded
+        let safe_name = entry.name
+            .chars()
+            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' { c } else { '_' })
+            .collect::<String>();
+        let target_dir = mods_path.join(&safe_name);
+
+        // Check if already present
         if target_dir.exists() {
             let mut data = state.data.lock().unwrap();
-            let mut exists_in_db = false;
-            for m in &data.mods {
-                if m.mod_folder_path == target_dir {
-                    exists_in_db = true;
-                    break;
-                }
-            }
-            if !exists_in_db {
+            let exists = data.mods.iter().any(|m| m.mod_folder_path == target_dir);
+            if !exists {
                 let mut new_mod = ModEntry::new(safe_name.clone(), target_dir.clone());
                 new_mod.name = entry.name.clone();
                 new_mod.version = entry.version.clone();
@@ -631,44 +635,37 @@ pub async fn install_from_modlist(
                 data.mods.push(new_mod);
             }
             results.push(format!("✅ {} — Déjà présent", entry.name));
-            
-            let _ = window.emit("bmm://mod-download-progress", DownloadProgress {
-                mod_index: idx,
-                total_mods,
-                mod_name: entry.name.clone(),
-                progress: 100.0,
-                status: "Déjà présent".to_string(),
-            });
             continue;
         }
 
-        // --- OPTIMIZATION: Look for matching mod in other profiles (Local Cache) ---
-        let existing_source = {
+        // --- NEW: Track this folder for cleanup immediately as we're about to create it ---
+        newly_added_mod_folders.push(target_dir.clone());
+
+        // Try local copy first
+        let source_path = {
             let data = state.data.lock().unwrap();
             data.mods.iter()
                 .find(|m| m.name == entry.name && m.mod_folder_path.exists())
                 .map(|m| m.mod_folder_path.clone())
         };
 
-        if let Some(src_path) = existing_source {
-            let target_dir_clone = target_dir.clone();
-            let window_clone = window.clone();
-            let m_name = entry.name.clone();
-
+        let mut success = false;
+        if let Some(src) = source_path {
+            let t_dir = target_dir.clone();
+            let w = window.clone();
+            let n = entry.name.clone();
             let res = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-                let _ = window_clone.emit("bmm://mod-download-progress", DownloadProgress {
+                let _ = w.emit("bmm://mod-download-progress", crate::commands::mods::DownloadProgress {
                     mod_index: idx,
                     total_mods,
-                    mod_name: m_name.clone(),
+                    mod_name: n,
                     progress: 50.0,
                     status: "Copie locale...".to_string(),
                 });
-
-                std::fs::create_dir_all(&target_dir_clone).map_err(|e| e.to_string())?;
+                std::fs::create_dir_all(&t_dir).map_err(|e| e.to_string())?;
                 let mut options = fs_extra::dir::CopyOptions::new();
                 options.content_only = true;
-                options.overwrite = true;
-                fs_extra::dir::copy(&src_path, &target_dir_clone, &options).map_err(|e| e.to_string())?;
+                fs_extra::dir::copy(&src, &t_dir, &options).map_err(|e| e.to_string())?;
                 Ok(())
             }).await.map_err(|e| e.to_string())?;
 
@@ -679,126 +676,146 @@ pub async fn install_from_modlist(
                 new_mod.version = entry.version.clone();
                 new_mod.author = entry.author.clone();
                 new_mod.tags = entry.tags.clone();
+                let mid = new_mod.id.clone();
                 data.mods.push(new_mod);
-                results.push(format!("✅ {} — Copié localement", entry.name));
                 
-                let _ = window.emit("bmm://mod-download-progress", DownloadProgress {
-                    mod_index: idx,
-                    total_mods,
-                    mod_name: entry.name.clone(),
-                    progress: 100.0,
-                    status: "Copié localement".to_string(),
-                });
-                continue;
+                newly_added_mod_ids.push(mid);
+                results.push(format!("✅ {} — Copié localement", entry.name));
+                success = true;
             }
         }
 
-        if let Some(dl) = link {
-            let url = dl.url.clone();
-            let target_dir_clone = target_dir.clone();
-            let window_clone = window.clone();
-            let m_name = entry.name.clone();
+        // If not copied, try download
+        if !success {
+            if let Some(dl) = entry.download_links.iter().find(|l| !l.url.is_empty()) {
+                let url = dl.url.clone();
+                let t_dir = target_dir.clone();
+                let w = window.clone();
+                let n = entry.name.clone();
+                let cancel_flag = state.install_cancelled.clone();
 
-            // Perform download
-            let res = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-                let mut response = reqwest::blocking::get(&url)
-                    .map_err(|e| format!("Download failed: {}", e))?;
+                let res = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+                    let mut response = reqwest::blocking::get(&url).map_err(|e| e.to_string())?;
+                    let total = response.content_length().unwrap_or(0);
+                    let mut bytes = Vec::new();
+                    let mut buffer = [0; 8192];
+                    let mut downloaded: u64 = 0;
+                    
+                    std::fs::create_dir_all(&t_dir).map_err(|e| e.to_string())?;
+                    
+                    use std::io::Read;
+                    while let Ok(c) = response.read(&mut buffer) {
+                        if c == 0 { break; }
+                        // Check for cancellation during download
+                        if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+                            return Err("Cancelled".to_string());
+                        }
 
-                if !response.status().is_success() {
-                    return Err(format!("HTTP {}", response.status()));
-                }
-
-                let total_size = response.content_length().unwrap_or(0);
-                let mut bytes = Vec::new();
-                let mut buffer = [0; 8192];
-                let mut downloaded: u64 = 0;
-
-                std::fs::create_dir_all(&target_dir_clone).map_err(|e| e.to_string())?;
-
-                use std::io::Read;
-                while let Ok(count) = response.read(&mut buffer) {
-                    if count == 0 { break; }
-                    bytes.extend_from_slice(&buffer[..count]);
-                    downloaded += count as u64;
-
-                    if total_size > 0 {
-                        let prog = (downloaded as f32 / total_size as f32) * 100.0;
-                        let _ = window_clone.emit("bmm://mod-download-progress", DownloadProgress {
-                            mod_index: idx,
-                            total_mods,
-                            mod_name: m_name.clone(),
-                            progress: prog * 0.8, // 80% for download, 20% for extraction
-                            status: format!("Téléchargement... {:.1}%", prog),
-                        });
-                    }
-                }
-
-                let _ = window_clone.emit("bmm://mod-download-progress", DownloadProgress {
-                    mod_index: idx,
-                    total_mods,
-                    mod_name: m_name.clone(),
-                    progress: 85.0,
-                    status: "Extraction...".to_string(),
-                });
-
-                let is_zip = bytes.len() >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B;
-                if is_zip {
-                    let cursor = std::io::Cursor::new(&bytes);
-                    let mut archive = zip::ZipArchive::new(cursor).map_err(|e| format!("Zip: {}", e))?;
-                    for i in 0..archive.len() {
-                        let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
-                        let outpath = target_dir_clone.join(file.name());
-                        if file.name().ends_with('/') {
-                            std::fs::create_dir_all(&outpath).ok();
-                        } else {
-                            if let Some(parent) = outpath.parent() {
-                                std::fs::create_dir_all(parent).ok();
-                            }
-                            let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
-                            std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+                        bytes.extend_from_slice(&buffer[..c]);
+                        downloaded += c as u64;
+                        if total > 0 {
+                            let p = (downloaded as f32 / total as f32) * 80.0;
+                            let _ = w.emit("bmm://mod-download-progress", crate::commands::mods::DownloadProgress {
+                                mod_index: idx,
+                                total_mods,
+                                mod_name: n.clone(),
+                                progress: p,
+                                status: format!("Téléchargement... {:.0}%", (downloaded as f32 / total as f32) * 100.0),
+                            });
                         }
                     }
-                } else {
-                    let filename = url.split('/').last().unwrap_or("mod_file");
-                    let filepath = target_dir_clone.join(filename);
-                    std::fs::write(&filepath, &bytes).map_err(|e| e.to_string())?;
-                }
-                Ok(())
-            }).await.map_err(|e| e.to_string())?;
 
-            match res {
-                Ok(_) => {
+                    if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+                        return Err("Cancelled".to_string());
+                    }
+
+                    let _ = w.emit("bmm://mod-download-progress", crate::commands::mods::DownloadProgress {
+                        mod_index: idx,
+                        total_mods,
+                        mod_name: n,
+                        progress: 90.0,
+                        status: "Extraction...".to_string(),
+                    });
+
+                    let is_zip = bytes.len() > 4 && &bytes[0..2] == b"PK";
+                    if is_zip {
+                        let cursor = std::io::Cursor::new(bytes);
+                        let mut archive = zip::ZipArchive::new(cursor).map_err(|e| e.to_string())?;
+                        for i in 0..archive.len() {
+                            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+                                return Err("Cancelled".to_string());
+                            }
+                            let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+                            let outpath = t_dir.join(file.name());
+                            if file.name().ends_with('/') {
+                                std::fs::create_dir_all(&outpath).ok();
+                            } else {
+                                if let Some(p) = outpath.parent() { std::fs::create_dir_all(p).ok(); }
+                                let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
+                                std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+                            }
+                        }
+                    } else {
+                        let fname = url.split('/').last().unwrap_or("mod.file");
+                        std::fs::write(t_dir.join(fname), bytes).map_err(|e| e.to_string())?;
+                    }
+                    Ok(())
+                }).await.map_err(|e| e.to_string())?;
+
+                if let Ok(_) = res {
                     let mut data = state.data.lock().unwrap();
-                    let mut new_mod = ModEntry::new(safe_name.clone(), mods_path.join(&safe_name));
+                    let mut new_mod = ModEntry::new(safe_name.clone(), target_dir.clone());
                     new_mod.name = entry.name.clone();
                     new_mod.version = entry.version.clone();
                     new_mod.author = entry.author.clone();
                     new_mod.tags = entry.tags.clone();
+                    let mid = new_mod.id.clone();
                     data.mods.push(new_mod);
-                    results.push(format!("✅ {} — Téléchargé et extrait", entry.name));
                     
-                    let _ = window.emit("bmm://mod-download-progress", DownloadProgress {
+                    newly_added_mod_ids.push(mid);
+                    results.push(format!("✅ {} — Téléchargé", entry.name));
+                    
+                    let _ = window.emit("bmm://mod-download-progress", crate::commands::mods::DownloadProgress {
                         mod_index: idx,
                         total_mods,
                         mod_name: entry.name.clone(),
                         progress: 100.0,
                         status: "Terminé".to_string(),
                     });
-                },
-                Err(e) => {
-                    results.push(format!("❌ {} — {}", entry.name, e));
-                    let _ = window.emit("bmm://mod-download-progress", DownloadProgress {
-                        mod_index: idx,
-                        total_mods,
-                        mod_name: entry.name.clone(),
-                        progress: 0.0,
-                        status: format!("Erreur: {}", e),
-                    });
+                } else if let Err(e) = res {
+                    if e == "Cancelled" {
+                        // Folder will be cleaned up by the main loop break
+                    } else {
+                        results.push(format!("❌ {} — {}", entry.name, e));
+                    }
+                }
+            } else {
+                results.push(format!("⚠ {} — Aucun lien de téléchargement", entry.name));
+            }
+        }
+    }
+
+    // --- CLEANUP IF CANCELLED ---
+    if state.install_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+        let mut data = state.data.lock().unwrap();
+        data.mods.retain(|m| !newly_added_mod_ids.contains(&m.id));
+        if let Some(pid) = newly_created_profile_id {
+            if let Some(idx) = data.profiles.iter().position(|p| p.id == pid) {
+                data.profiles.remove(idx);
+                if data.active_profile_id == Some(pid) {
+                    data.active_profile_id = None;
                 }
             }
-        } else {
-            results.push(format!("⚠ {} — Aucun lien de téléchargement", entry.name));
         }
+        drop(data);
+        let _ = state.save();
+        
+        for folder in newly_added_mod_folders {
+            if folder.exists() {
+                let _ = std::fs::remove_dir_all(folder);
+            }
+        }
+        return Err("Installation annulée.".to_string());
     }
 
     let _ = state.save();

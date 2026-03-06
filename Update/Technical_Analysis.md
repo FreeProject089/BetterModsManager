@@ -136,6 +136,14 @@ The core of BMM's mod management is the **Stacked Physical Copy** engine in `src
 | 5 | Zip Detection | Inspects the first 4 bytes (PK magic numbers) to detect zip archives, regardless of file extension |
 | 6 | Extraction | Iterates zip entries, creating directories and writing files via `zip::ZipArchive` |
 | 7 | Progress Events | After each mod, a `bmm://mod-download-progress` event is emitted via `window.emit()` with `mod_index`, `total_mods`, `mod_name`, and `progress` (0.0–100.0) |
+| 8 | Cancellation | An `AtomicBool` in the `AppState` is checked at each iteration of the installation loop to allow user-initiated termination. |
+
+### Cancellation Logic
+
+Cancellation is implemented using a shared `std::sync::atomic::AtomicBool` within the `AppState`. 
+1. The `cancel_install_from_modlist` command sets the flag to `true`.
+2. The installation loop in `install_from_modlist` checks this flag before processing each mod in the list.
+3. If `true`, the loop breaks and returns a partial result set to the frontend.
 
 ### ModList Data Schema
 
@@ -152,7 +160,7 @@ The core of BMM's mod management is the **Stacked Physical Copy** engine in `src
 | :--- | :--- | :--- |
 | `name` | `String` | Mod name |
 | `version` | `String` | Version string |
-| `download_links` | `Vec<DownloadLink>` | HTTP URLs + link type (nexus, github, direct) + label |
+| `download_links` | `Vec<DownloadLink>` | HTTP URLs + link type (**github**, **google_drive**, **mega**, **direct**, **other**) + label |
 | `sort_priority` | `u32` | Lower value = higher priority in install order |
 | `file_tree` | `Vec<ModFileEntry>` | Complete list of relative file paths (built at export time) |
 | `tags` | `Vec<String>` | Tag labels carried over from the source profile |

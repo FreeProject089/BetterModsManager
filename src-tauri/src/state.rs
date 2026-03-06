@@ -16,6 +16,7 @@ pub struct AppData {
 pub struct AppState {
     pub data: Mutex<AppData>,
     pub data_path: PathBuf,
+    pub install_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl AppState {
@@ -29,6 +30,7 @@ impl AppState {
         Self {
             data: Mutex::new(data),
             data_path,
+            install_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 

@@ -16,6 +16,8 @@ let conflictCache = {}; // modId -> Array of conflicting mod names
 let refreshTimeout = null;
 let isCompact = localStorage.getItem('bmm-view-compact') === 'true';
 let ghostFilteredMods = []; // Cache for virtualization
+let lastStartIndex = -1;
+let lastEndIndex = -1;
 
 export async function initMods() {
   window._refreshModsFn = refreshMods;
@@ -38,10 +40,17 @@ export async function initMods() {
   });
 
   if (scrollContainer) {
+    let ticking = false;
     scrollContainer.addEventListener('scroll', () => {
-      // Only trigger virtual re-render if we are in Library view
-      if (document.getElementById('view-library').classList.contains('active')) {
-        renderModList(true); // true = scroll-only update
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          // Only trigger virtual re-render if we are in Library view
+          if (document.getElementById('view-library').classList.contains('active')) {
+            renderModList(true); // true = scroll-only update
+          }
+          ticking = false;
+        });
+        ticking = true;
       }
     });
   }
@@ -411,27 +420,117 @@ async function renderModList(isScrollOnly = false) {
   const rowHeight = isCompact ? 52 : 94; // approx heights in px
   const gap = isCompact ? 4 : 8;
   const itemFullHeight = rowHeight + gap;
-  const totalHeight = mods.length * itemFullHeight;
-  spacer.style.height = totalHeight + 'px';
 
-  // Viewport metrics
-  const viewportHeight = scrollContainer.clientHeight;
-  const scrollTop = scrollContainer.scrollTop;
+  const VIRTUALIZATION_THRESHOLD = 50;
+  const useVirtualization = mods.length > VIRTUALIZATION_THRESHOLD;
 
-  // We need to account for the list's offset from the top of the content-area
-  const listOffset = list.offsetTop;
-  const relativeScroll = Math.max(0, scrollTop - listOffset);
+  let startIndex = 0;
+  let endIndex = mods.length;
 
-  const startIndex = Math.max(0, Math.floor(relativeScroll / itemFullHeight) - 2);
-  const endIndex = Math.min(mods.length, Math.ceil((relativeScroll + viewportHeight) / itemFullHeight) + 2);
+  if (useVirtualization) {
+    const totalHeight = mods.length * itemFullHeight;
+    spacer.style.height = totalHeight + 'px';
 
-  // Clear viewport but keep selected/processing states if possible
-  viewport.innerHTML = '';
+    // Viewport metrics
+    const viewportHeight = scrollContainer.clientHeight;
+    const scrollTop = scrollContainer.scrollTop;
+
+    // We need to account for the list's offset from the top of the content-area
+    const listOffset = list.offsetTop;
+    const relativeScroll = Math.max(0, scrollTop - listOffset);
+
+    startIndex = Math.max(0, Math.floor(relativeScroll / itemFullHeight) - 2);
+    endIndex = Math.min(mods.length, Math.ceil((relativeScroll + viewportHeight) / itemFullHeight) + 2);
+
+    if (isScrollOnly && startIndex === lastStartIndex && endIndex === lastEndIndex) {
+      return;
+    }
+  } else {
+    // If we're not using virtualization, simply ignore scroll-triggered renders entirely
+    if (isScrollOnly) return;
+    spacer.style.height = '0px';
+    viewport.style.transform = 'translateY(0px)'; // Explicitly reset transform
+  }
+
+  lastStartIndex = startIndex;
+  lastEndIndex = endIndex;
+
+  // Safely detach detail panel if it exists
+  const existingPanel = document.getElementById('mod-detail-panel');
+  let activeEl = null;
+  let selStart = null;
+  let selEnd = null;
+
+  if (existingPanel) {
+    // Only detach if the parent card is NOT in the new visible range
+    const parentCard = existingPanel.parentElement;
+    const parentId = parentCard ? parentCard.dataset.id : null;
+    const isStillVisible = mods.some((m, idx) => idx >= startIndex && idx < endIndex && m.id === parentId);
+
+    if (!isStillVisible) {
+      if (document.activeElement && existingPanel.contains(document.activeElement)) {
+        activeEl = document.activeElement;
+        if (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') {
+          try {
+            selStart = activeEl.selectionStart;
+            selEnd = activeEl.selectionEnd;
+          } catch (e) { }
+        }
+      }
+      existingPanel.remove();
+    }
+  }
+
+  // Preserve existing cards for virtualization performance
+  const existingMap = new Map();
+  if (isScrollOnly) {
+    Array.from(viewport.children).forEach(c => {
+      if (c.classList.contains('mod-card')) {
+        existingMap.set(c.dataset.id, c);
+      }
+    });
+  } else {
+    // If not scroll only, clear it out fully to ensure clean state
+    viewport.innerHTML = '';
+  }
+
   viewport.style.transform = `translateY(${startIndex * itemFullHeight}px)`;
 
   for (let i = startIndex; i < endIndex; i++) {
-    const card = createModCard(mods[i]);
-    viewport.appendChild(card);
+    const mod = mods[i];
+    let card;
+
+    if (isScrollOnly && existingMap.has(mod.id)) {
+      card = existingMap.get(mod.id);
+    } else {
+      card = createModCard(mod);
+    }
+
+    if (existingPanel && mod.id === selectedModId) {
+      if (existingPanel.parentElement !== card) {
+        card.appendChild(existingPanel);
+      }
+    }
+
+    const actualIndex = i - startIndex;
+    if (viewport.children[actualIndex] !== card) {
+      viewport.insertBefore(card, viewport.children[actualIndex] || null);
+    }
+  }
+
+  // Remove any trailing extra cards
+  const targetLength = endIndex - startIndex;
+  while (viewport.children.length > targetLength) {
+    viewport.lastElementChild.remove();
+  }
+
+  if (activeEl) {
+    setTimeout(() => {
+      activeEl.focus();
+      try {
+        if (selStart !== null && selEnd !== null) activeEl.setSelectionRange(selStart, selEnd);
+      } catch (e) { }
+    }, 0);
   }
 }
 
@@ -615,32 +714,54 @@ function createModCard(mod) {
 
     modal.classList.add('open');
 
+    const subButtons = modal.querySelectorAll('.modal-footer .btn');
+    const btnRemoveOnly = modal.querySelector('#btn-remove-only-mod');
+
+    // Reset button state
+    finalBtn.innerHTML = `<span>${t('lib.delete')}</span>`;
+    finalBtn.disabled = true;
+    finalBtn.style.opacity = '0.5';
+    btnRemoveOnly.disabled = false;
+    btnRemoveOnly.innerHTML = `<span>${t('mod.removeOnly')}</span>`;
+
     // Setup listeners for this specific mod deletion
     const onCheckChange = () => {
       finalBtn.disabled = !confirmCheck.checked;
       finalBtn.style.opacity = confirmCheck.checked ? '1' : '0.5';
     };
 
-    const onFinalDelete = async () => {
-      try {
-        finalBtn.disabled = true;
-        finalBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>';
+    const performDeletion = async (deleteFiles) => {
+      const activeBtn = deleteFiles ? finalBtn : btnRemoveOnly;
+      const otherBtn = deleteFiles ? btnRemoveOnly : finalBtn;
 
-        await invoke('remove_mod', { modId: mod.id });
-        toast(t('mod.removed', { name: mod.name }), 'info');
+      try {
+        activeBtn.disabled = true;
+        otherBtn.disabled = true;
+        const originalHtml = activeBtn.innerHTML;
+        activeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>';
+
+        await invoke('remove_mod', { modId: mod.id, deleteFiles });
+
+        const toastKey = deleteFiles ? 'mod.removed' : 'mod.removedOnly';
+        toast(t(toastKey, { name: mod.name }), 'info');
 
         modal.classList.remove('open');
         if (selectedModId === mod.id) closeModDetail();
         await refreshMods();
       } catch (err) {
         toast('Erreur : ' + err, 'error');
-        finalBtn.disabled = false;
+      } finally {
+        activeBtn.disabled = false;
+        otherBtn.disabled = false;
         finalBtn.innerHTML = `<span>${t('lib.delete')}</span>`;
+        btnRemoveOnly.innerHTML = `<span>${t('mod.removeOnly')}</span>`;
+        onCheckChange(); // Re-sync disabled state based on checkbox
       }
     };
 
     confirmCheck.onchange = onCheckChange;
-    finalBtn.onclick = onFinalDelete;
+    finalBtn.onclick = () => performDeletion(true);
+    btnRemoveOnly.onclick = () => performDeletion(false);
   });
 
   return card;

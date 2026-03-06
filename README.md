@@ -15,8 +15,17 @@ Better Mod Manager (BMM) simplifies the process of managing, installing, and sha
 - **Local Mod Pooling**: Automatically detects and copies mods already present in other profiles to save bandwidth.
 - **Integrity Reporting**: Diagnostic tool to verify if modded files have been corrupted or overwritten by game updates.
 - **Archive Explorer**: Built-in tree view for navigating .zip and .rar contents without extraction.
+- **Mod Link Support**: Categorize links (GitHub, MEGA, etc.) with custom icons and behavior.
 
-## Technical Stack
+## Mod Link Types
+
+In the **Mod Detail Panel** and **.MM Lists**, links can be set to different types to improve identification and automated processing:
+
+- **GitHub**: Link to a repository or release. Stable and community-standard.
+- **Google Drive**: Link to a shared folder or file. Often requires manual clicking.
+- **MEGA**: Secure cloud storage link.
+- **Direct**: A **direct download link** (ending in .zip, .rar, .7z). This allows BMM to download and extract the mod automatically during imports.
+- **Other**: For generic websites or specialized forums.
 
 - **Backend**: Rust 1.70+ (Tauri, Reqwest, Zip-rs)
 - **Frontend**: ES6+ JavaScript, CSS3 (Vanilla), HTML5
