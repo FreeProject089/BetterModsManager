@@ -10,6 +10,10 @@ use std::path::PathBuf;
 use tauri::Manager;
 
 fn main() {
+    // 1. Initialise le gestionnaire de crash dès le démarrage (Expert Mode)
+    commands::crash::setup_panic_hook();
+    commands::crash::init_session();
+
     tauri::Builder::default()
         .setup(|app| {
             let app_dir = app
@@ -18,7 +22,40 @@ fn main() {
                 .unwrap_or_else(|| PathBuf::from("."));
             let data_path = app_dir.join("data.json");
             app.manage(AppState::load(data_path));
+
+            // Log du démarrage
+            commands::crash::log_line(format!(
+                "[STARTUP] Better Mod Manager v{} initializing system...",
+                env!("CARGO_PKG_VERSION")
+            ));
+
             Ok(())
+        })
+        // 2. Capture de la fermeture (Alt+F4 / Croix)
+        // On intercepte pour générer un rapport de session avant que le processus ne soit tué.
+        .on_window_event(|event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event.event() {
+                api.prevent_close();
+
+                let window = event.window().clone();
+                let state = window.state::<AppState>();
+
+                // Capture de l'état actuel pour le diagnostic
+                let state_snapshot = state.data.lock().ok().and_then(|d| serde_json::to_string_pretty(&*d).ok());
+
+                commands::crash::log_line("[SHUTDOWN] Window close-requested. Generating session report...");
+
+                // Thread de sauvegarde rapide du rapport de session
+                std::thread::spawn(move || {
+                    commands::crash::generate_report(
+                        false, 
+                        "User requested close (Alt+F4 / Window X)", 
+                        state_snapshot,
+                        None
+                    );
+                    let _ = window.close();
+                });
+            }
         })
         .invoke_handler(tauri::generate_handler![
             // Profile commands
@@ -59,6 +96,8 @@ fn main() {
             // Settings
             commands::settings::export_app_data,
             commands::settings::import_app_data,
+            commands::settings::reset_app_data,
+            commands::settings::is_debug_mode,
             commands::settings::get_license_text,
             commands::settings::get_app_version,
             commands::mods::open_folder,
@@ -68,6 +107,11 @@ fn main() {
             commands::mods::toggle_all_mods,
             commands::mods::check_conflicts,
             commands::mods::list_mod_files_recursive,
+            // Crash Advanced
+            commands::crash::open_crash_folder,
+            commands::crash::open_crash_zip,
+            commands::crash::get_crash_reports,
+            commands::crash::trigger_manual_crash_report,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

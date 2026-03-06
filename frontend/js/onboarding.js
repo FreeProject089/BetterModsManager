@@ -104,6 +104,10 @@ function renderOnboarding() {
         document.body.appendChild(overlay);
     }
 
+    // Block all interaction behind the overlay
+    const appShell = document.querySelector('.app-shell');
+    if (appShell) appShell.style.pointerEvents = 'none';
+
     // Step -1: Language selection
     if (currentStep === -1) {
         overlay.innerHTML = `
@@ -245,6 +249,11 @@ function renderOnboarding() {
 
 function closeOnboarding() {
     localStorage.setItem('bmm-onboarding-done', '1');
+
+    // Restore interaction with the app
+    const appShell = document.querySelector('.app-shell');
+    if (appShell) appShell.style.pointerEvents = '';
+
     const overlay = document.getElementById('onboarding-overlay');
     if (overlay) {
         overlay.classList.add('closing');

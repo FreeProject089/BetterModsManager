@@ -23,6 +23,40 @@ pub fn import_app_data(state: State<AppState>, src_path: String) -> Result<(), S
     };
     Ok(())
 }
+
+#[tauri::command]
+pub fn reset_app_data(state: State<AppState>) -> Result<(), String> {
+    {
+        let mut data = state.data.lock().unwrap();
+        *data = crate::state::AppData::default();
+    }
+    let _ = state.save();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn is_debug_mode(app_handle: tauri::AppHandle) -> bool {
+    let cfg_path = app_handle
+        .path_resolver()
+        .resolve_resource("../app.cfg")
+        .or_else(|| {
+            // Fallback pour le mode dev direct si resolve_resource échoue
+            Some(std::path::PathBuf::from("app.cfg"))
+        });
+
+    if let Some(path) = cfg_path {
+        println!("[DEBUG_SYSTEM] Final path resolved: {:?}", path);
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let normalized = content.to_lowercase();
+            let is_debug = normalized.contains("prod=false");
+            println!("[DEBUG_SYSTEM] Content read: '{}', is_debug: {}", normalized.trim(), is_debug);
+            return is_debug;
+        }
+    }
+    
+    println!("[DEBUG_SYSTEM] app.cfg could not be resolved or read.");
+    false
+}
 #[tauri::command]
 pub fn get_license_text(app_handle: tauri::AppHandle) -> Result<String, String> {
     let mut path = app_handle

@@ -6,3 +6,4 @@ pub mod update;
 pub mod tag;
 pub mod history;
 pub mod settings;
+pub mod crash;

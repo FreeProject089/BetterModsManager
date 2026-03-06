@@ -45,6 +45,7 @@ pub async fn add_mod(
     version: String,
     tags: Option<Vec<String>>,
 ) -> Result<ModEntry, String> {
+    crate::commands::crash::log_line(format!("[MOD] Adding mod '{}' from '{}'", name, mod_folder_path));
     let mods_path = {
         let data = state.data.lock().unwrap();
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
@@ -562,6 +563,7 @@ pub async fn install_from_modlist(
     state: State<'_, AppState>,
     modlist_json: String,
     create_profile: bool,
+    github_token: Option<String>,
 ) -> Result<Vec<String>, String> {
     state.install_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
     let modlist: crate::models::modlist::ModList =
@@ -693,9 +695,23 @@ pub async fn install_from_modlist(
                 let w = window.clone();
                 let n = entry.name.clone();
                 let cancel_flag = state.install_cancelled.clone();
+                let pat_clone = github_token.clone();
 
                 let res = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-                    let mut response = reqwest::blocking::get(&url).map_err(|e| e.to_string())?;
+                    let github_token = pat_clone;
+                    // Build a client with optional GitHub auth header
+                    let client = reqwest::blocking::Client::new();
+                    let is_github = url.contains("github.com") || url.contains("raw.githubusercontent.com");
+                    let mut req = client.get(&url);
+                    if is_github {
+                        if let Some(ref tok) = github_token {
+                            if !tok.is_empty() {
+                                req = req.header("Authorization", format!("Bearer {}", tok));
+                            }
+                        }
+                        req = req.header("X-GitHub-Api-Version", "2022-11-28");
+                    }
+                    let mut response = req.send().map_err(|e| e.to_string())?;
                     let total = response.content_length().unwrap_or(0);
                     let mut bytes = Vec::new();
                     let mut buffer = [0; 8192];

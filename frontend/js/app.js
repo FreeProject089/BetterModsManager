@@ -40,7 +40,16 @@ async function loadTauri() {
 }
 
 export async function invoke(command, args = {}) {
-    return _invoke(command, args);
+    console.log(`[BMM] Invoke: ${command}`, args);
+    // Log every tauri invoke for real-time tracking
+    const start = Date.now();
+    try {
+        const res = await _invoke(command, args);
+        return res;
+    } catch (err) {
+        console.error(`[RPC ERROR] ${command}:`, err);
+        throw err;
+    }
 }
 
 export async function pickFolder() {
@@ -252,7 +261,8 @@ function initModlist() {
         try {
             const results = await invoke('install_from_modlist', {
                 modlistJson: lastImportedModlistJson,
-                createProfile: createProfile
+                createProfile: createProfile,
+                githubToken: getGithubPat()
             });
 
             // Final results summary
@@ -533,6 +543,152 @@ function formatBytes(bytes) {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
+
+// ── GitHub PAT helper ─────────────────────────────────────
+const GITHUB_PAT_KEY = 'bmm_github_pat';
+
+export function getGithubPat() {
+    return localStorage.getItem(GITHUB_PAT_KEY) || '';
+}
+
+function initGithubPatSettings() {
+    const input = document.getElementById('setting-github-pat');
+    const saveBtn = document.getElementById('btn-save-github-pat');
+    const clearBtn = document.getElementById('btn-clear-github-pat');
+    const toggleBtn = document.getElementById('btn-toggle-pat-visibility');
+    const statusMsg = document.getElementById('pat-status-msg');
+    if (!input) return;
+
+    // Pre-fill from localStorage
+    const stored = getGithubPat();
+    if (stored) {
+        input.value = stored;
+        if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--success)">&#10003; Token saved (${stored.length} chars)</span>`;
+    }
+
+    // Toggle show/hide
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+            const icon = document.getElementById('pat-eye-icon');
+            if (icon) {
+                if (isPassword) {
+                    icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>';
+                } else {
+                    icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+                }
+            }
+        });
+    }
+
+    // Save
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            const val = input.value.trim();
+            if (!val) {
+                if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--warning)">⚠ No token entered. Use Clear to remove the stored token.</span>`;
+                return;
+            }
+            localStorage.setItem(GITHUB_PAT_KEY, val);
+            if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--success)">&#10003; Token saved (${val.length} chars)</span>`;
+            toast(t('settings.githubPatSaved'), 'success');
+        });
+    }
+
+    // Clear
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            localStorage.removeItem(GITHUB_PAT_KEY);
+            input.value = '';
+            input.type = 'password';
+            const icon = document.getElementById('pat-eye-icon');
+            if (icon) icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+            if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--text-muted)">Token cleared.</span>`;
+            toast(t('settings.githubPatCleared'), 'info');
+        });
+    }
+
+    // "Need Help?" → open Documentation view and reveal the GitHub PAT FAQ entry
+    const helpBtn = document.getElementById('btn-pat-need-help');
+    if (helpBtn) {
+        helpBtn.addEventListener('click', () => {
+            // Navigate to Docs view
+            const docsNav = document.querySelector('.nav-item[data-view="docs"]');
+            if (docsNav) docsNav.click();
+            // Small delay to let the view render, then scroll & open the FAQ
+            setTimeout(() => {
+                const faqEl = document.getElementById('faq-github-pat');
+                if (faqEl) {
+                    faqEl.open = true;
+                    faqEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    faqEl.classList.add('faq-highlight');
+                    setTimeout(() => faqEl.classList.remove('faq-highlight'), 2000);
+                }
+            }, 200);
+        });
+    }
+}
+
+// ── Crash Report UI ───────────────────────────────────────
+
+function initCrashReportUI() {
+    // Open Crash Folder (settings card)
+    const openFolderBtn = document.getElementById('btn-open-crash-folder');
+    if (openFolderBtn) {
+        openFolderBtn.addEventListener('click', async () => {
+            try {
+                await invoke('open_crash_folder');
+            } catch (err) {
+                toast('Could not open crash folder: ' + err, 'error');
+            }
+        });
+    }
+
+    // Crash modal: "Open in Explorer" button
+    const openZipBtn = document.getElementById('btn-crash-open-zip');
+    if (openZipBtn) {
+        openZipBtn.addEventListener('click', async () => {
+            const pathEl = document.getElementById('crash-zip-path');
+            const path = pathEl?.textContent?.trim();
+            if (path && path !== '—') {
+                try {
+                    await invoke('open_crash_zip', { path });
+                } catch (err) {
+                    toast('Could not open zip: ' + err, 'error');
+                }
+            }
+        });
+    }
+}
+
+/** Call on startup – shows crash modal if a recent zip was generated. */
+async function checkPreviousCrash() {
+    try {
+        const reports = await invoke('get_crash_reports');
+        if (!reports || reports.length === 0) return;
+
+        const newest = reports[0]; // already sorted newest-first
+        const pathEl = document.getElementById('crash-zip-path');
+        if (pathEl) pathEl.textContent = newest;
+
+        const modal = document.getElementById('modal-crash-report');
+        if (modal) {
+            // Only show if the zip is fresh (< 2 min old based on filename timestamp)
+            const match = newest.match(/crash_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.zip/);
+            if (match) {
+                const crashTime = new Date(match[1].replace(/_(\d{2})-(\d{2})-(\d{2})$/, 'T$1:$2:$3'));
+                const ageSec = (Date.now() - crashTime.getTime()) / 1000;
+                if (ageSec < 120) {
+                    modal.classList.add('open');
+                }
+            }
+        }
+    } catch (_) {
+        // Tauri not available in browser mode — silently ignore
+    }
+}
+
 
 // ── Settings keyboard shortcuts ────────────────────────────
 export function getShortcuts() {
@@ -934,6 +1090,7 @@ async function main() {
     }
 
     renderSettingsShortcuts();
+    initGithubPatSettings();
 
     const exportBtn = document.getElementById('btn-export-data');
     if (exportBtn) {
@@ -972,6 +1129,14 @@ async function main() {
     if (shouldShowOnboarding()) {
         setTimeout(() => startOnboarding(), 500);
     }
+
+    // Debug Menu
+    initDebugMenu();
+
+    // Crash report UI wiring
+    initCrashReportUI();
+    // Check if the previous session crashed and show the modal
+    checkPreviousCrash();
 
     const restartBtn = document.getElementById('btn-restart-onboarding');
     if (restartBtn) {
@@ -1059,6 +1224,52 @@ async function renderSettingsTags() {
         });
     } catch (err) {
         console.error("Tags error", err);
+    }
+}
+
+
+// ── Debug Menu ──────────────────────────────────────────
+
+function initDebugMenu() {
+    // Show/Hide based on app.cfg (Prod=false)
+    invoke('is_debug_mode').then(isDebug => {
+        const card = document.getElementById('debug-menu-card');
+        if (card && isDebug) {
+            card.style.display = 'block';
+        }
+    });
+
+    const genCrashBtn = document.getElementById('btn-debug-gen-crash');
+    if (genCrashBtn) {
+        genCrashBtn.addEventListener('click', async () => {
+            try {
+                toast(t('common.loading'), 'info');
+                const path = await invoke('trigger_manual_crash_report');
+                toast(`Report generated: ${path}`, 'success', 5000);
+            } catch (err) {
+                toast('Failed: ' + err, 'error');
+            }
+        });
+    }
+
+    const resetAppBtn = document.getElementById('btn-debug-reset-app');
+    if (resetAppBtn) {
+        resetAppBtn.addEventListener('click', async () => {
+            const confirmed = confirm(t('settings.debugResetConfirm') || "DANGER: This will delete everything (Profiles, Mods, Settings). Are you sure?");
+            if (confirmed) {
+                try {
+                    // 1. Reset backend (data.json)
+                    await invoke('reset_app_data');
+                    // 2. Reset frontend (localStorage)
+                    localStorage.clear();
+                    // 3. Restart app
+                    toast("System Reset. Restarting...", "warning");
+                    setTimeout(() => window.location.reload(), 1500);
+                } catch (err) {
+                    toast('Reset failed: ' + err, 'error');
+                }
+            }
+        });
     }
 }
 

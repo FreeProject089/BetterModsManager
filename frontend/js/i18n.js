@@ -64,7 +64,12 @@ export function applyTranslations(root = document) {
     if (!loaded) return;
     root.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.dataset.i18n;
-        el.textContent = t(key);
+        const msg = t(key);
+        // Debug fallback
+        if (msg === key && key.startsWith('faq')) {
+            console.warn(`[I18N] Critical Key not found: ${key}`);
+        }
+        el.innerHTML = msg;
     });
     root.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
         const key = el.dataset.i18nPlaceholder;

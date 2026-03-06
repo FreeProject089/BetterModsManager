@@ -703,6 +703,60 @@
                         </div>
                     </details>
 
+                    <!-- PAT Guide FAQ -->
+                    <details class="faq-accordion" id="faq-github-pat">
+                        <summary class="faq-summary">
+                            <span style="display:flex;align-items:center;gap:8px">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                                    stroke-width="2.2">
+                                    <path
+                                        d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+                                </svg>
+                                <span data-i18n="faq.qPat">Comment obtenir un token GitHub PAT ?</span>
+                            </span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </summary>
+                        <div class="faq-content">
+                            <p data-i18n="faq.aPat_intro" style="margin-bottom:12px">Un <strong>Personal Access Token
+                                    (PAT)</strong> vous permet de télécharger plus de 60 mods/heure depuis GitHub. Voici
+                                comment en créer un :</p>
+                            <ol
+                                style="padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.6;color:var(--text-secondary)">
+                                <li data-i18n="faq.aPat_s1">Connectez-vous à <a href="https://github.com"
+                                        target="_blank" style="color:var(--accent)">github.com</a> avec votre compte.
+                                </li>
+                                <li data-i18n="faq.aPat_s2">Cliquez sur votre <strong>avatar</strong> en haut à droite →
+                                    <strong>Settings</strong>.
+                                </li>
+                                <li data-i18n="faq.aPat_s3">Dans le menu de gauche, descendez jusqu'à <strong>Developer
+                                        settings</strong> (tout en bas).</li>
+                                <li data-i18n="faq.aPat_s4">Cliquez sur <strong>Personal access tokens</strong> →
+                                    <strong>Tokens (classic)</strong>.
+                                </li>
+                                <li data-i18n="faq.aPat_s5">Cliquez sur <strong>Generate new token (classic)</strong>.
+                                </li>
+                                <li data-i18n="faq.aPat_s6">Donnez-lui un nom (ex: <em>BMM Downloads</em>), choisissez
+                                    une
+                                    durée d’expiration, et cochez uniquement <code>public_repo</code> dans la section
+                                    <strong>repo</strong>.
+                                </li>
+                                <li data-i18n="faq.aPat_s7">Cliquez <strong>Generate token</strong>, <strong>copiez le
+                                        token</strong> (il commence par <code>ghp_</code>) et collez-le dans le champ
+                                    <em>GitHub PAT</em> des paramètres de BMM.
+                                </li>
+                            </ol>
+                            <div
+                                style="margin-top:12px;padding:10px 14px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);border-radius:8px;font-size:12px;color:rgba(234,179,8,0.9)">
+                                ⚠️ <span data-i18n="faq.aPat_warn">Ne partagez jamais votre token ! Il donne accès à
+                                    votre
+                                    compte GitHub.</span>
+                            </div>
+                        </div>
+                    </details>
+
                 </div>
             </section>
 
@@ -959,6 +1013,96 @@
                         </div>
                     </div>
 
+                    <!-- ── GitHub PAT Token ── -->
+                    <div class="glass-card"
+                        style="border: 1px solid rgba(59,130,246,0.15); position: relative; overflow: hidden;">
+                        <!-- subtle glow accent -->
+                        <div
+                            style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(59,130,246,0.06);border-radius:50%;filter:blur(30px);pointer-events:none">
+                        </div>
+
+                        <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                                stroke-width="2.2">
+                                <path
+                                    d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+                            </svg>
+                            <span data-i18n="settings.githubPatTitle">GitHub Personal Access Token</span>
+                            <span
+                                style="font-size:10px;font-weight:700;padding:2px 8px;background:rgba(100,200,100,0.12);color:#6ee7b7;border:1px solid rgba(110,231,183,0.2);border-radius:999px;letter-spacing:0.04em"
+                                data-i18n="settings.optional">OPTIONAL</span>
+                        </h3>
+
+                        <!-- Explanation Banner -->
+                        <div
+                            style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;margin-bottom:16px">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                                stroke-width="2" style="flex-shrink:0;margin-top:1px">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="8" x2="12" y2="12" />
+                                <line x1="12" y1="16" x2="12.01" y2="16" />
+                            </svg>
+                            <p style="font-size:12px;line-height:1.6;color:var(--text-secondary);margin:0"
+                                data-i18n="settings.githubPatDesc">GitHub limits unauthenticated downloads to 60
+                                requests/hour. Adding your Personal Access Token (PAT) raises this limit to 5 000
+                                req/hour. This is completely optional — BMM works without it, but helps when downloading
+                                many GitHub-hosted mods at once. Your token is stored only locally in your browser
+                                storage and never sent anywhere except GitHub.</p>
+                        </div>
+
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <div style="position:relative;flex:1">
+                                <input type="password" id="setting-github-pat"
+                                    data-i18n-placeholder="settings.githubPatPlaceholder"
+                                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                                    style="width:100%;padding:9px 40px 9px 12px;border-radius:8px;background:rgba(0,0,0,0.25);color:white;border:1px solid var(--border);font-family:var(--font-mono);font-size:12px;box-sizing:border-box;transition:border 0.2s" />
+                                <button id="btn-toggle-pat-visibility" title="Show/Hide token"
+                                    style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;display:flex;align-items:center">
+                                    <svg id="pat-eye-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                        <circle cx="12" cy="12" r="3" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <button class="btn btn-primary btn-sm" id="btn-save-github-pat" style="white-space:nowrap">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.5">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                                    <polyline points="17 21 17 13 7 13 7 21" />
+                                    <polyline points="7 3 7 8 15 8" />
+                                </svg>
+                                <span data-i18n="settings.githubPatSave">Save</span>
+                            </button>
+                            <button class="btn btn-ghost btn-sm" id="btn-clear-github-pat"
+                                style="white-space:nowrap;color:var(--text-muted)">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.5">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6l-1 14H6L5 6" />
+                                    <path d="M10 11v6M14 11v6" />
+                                </svg>
+                                <span data-i18n="settings.githubPatClear">Clear</span>
+                            </button>
+                        </div>
+
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+                            <div id="pat-status-msg" style="font-size:11px;color:var(--text-muted);min-height:16px">
+                            </div>
+                            <button class="btn btn-ghost btn-sm" id="btn-pat-need-help"
+                                style="font-size:11px;color:var(--accent);gap:5px;padding:4px 8px">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.5">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                                </svg>
+                                <span data-i18n="settings.githubPatHelp">Need Help?</span>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- ── END GitHub PAT ── -->
+
                     <div class="glass-card">
                         <h3 class="card-title" data-i18n="settings.dataTitle">Gestion des données</h3>
                         <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px"
@@ -987,6 +1131,88 @@
                         </div>
                     </div>
 
+                    <!-- ── Crash Reports ── -->
+                    <div class="glass-card"
+                        style="border:1px solid rgba(239,68,68,0.15);position:relative;overflow:hidden">
+                        <div
+                            style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;background:rgba(239,68,68,0.05);border-radius:50%;filter:blur(25px);pointer-events:none">
+                        </div>
+                        <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171"
+                                stroke-width="2.2">
+                                <path
+                                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                <line x1="12" y1="9" x2="12" y2="13" />
+                                <line x1="12" y1="17" x2="12.01" y2="17" />
+                            </svg>
+                            <span data-i18n="settings.crashTitle">Crash Reports</span>
+                        </h3>
+                        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6"
+                            data-i18n="settings.crashDesc">Upon each crash or forced quit, BMM generates a .zip file
+                            containing dxdiag output, app logs, and state snapshot to help diagnose issues.</p>
+                        <button class="btn btn-secondary btn-sm" id="btn-open-crash-folder">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                            </svg>
+                            <span data-i18n="settings.crashOpenFolder">Open Crash Reports Folder</span>
+                        </button>
+                    </div>
+                    <!-- ── END Crash Reports ── -->
+
+                    <!-- ── Debug Menu ── -->
+                    <div id="debug-menu-card" class="glass-card"
+                        style="border:1px dashed rgba(239,68,68,0.4); background: rgba(10,5,5,0.4); display: none;">
+                        <div
+                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px">
+                            <h3 class="card-title"
+                                style="margin-bottom:0; color:#f87171; display:flex; align-items:center; gap:8px">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path
+                                        d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                                </svg>
+                                <span data-i18n="settings.debugTitle">Debug & Troubleshooting</span>
+                            </h3>
+                            <span
+                                style="font-size:10px; padding:2px 6px; background:rgba(239,68,68,0.2); color:#fca5a5; border-radius:4px; font-weight:700">ADVANCED</span>
+                        </div>
+
+                        <div style="display:flex; flex-wrap:wrap; gap:12px">
+                            <!-- Button: Generate Manual Crash -->
+                            <button class="btn btn-ghost btn-sm" id="btn-debug-gen-crash"
+                                style="border:1px solid rgba(239,68,68,0.2); color:#fca5a5">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                <span data-i18n="settings.debugGenCrash">Generate Manual Crash Log</span>
+                            </button>
+
+                            <!-- Button: Reset Storage -->
+                            <button class="btn btn-outline-danger btn-sm" id="btn-debug-reset-app"
+                                style="color:#ef4444; border-color:rgba(239,68,68,0.3)">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path
+                                        d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                </svg>
+                                <span data-i18n="settings.debugReset">Full Reset (Storage & Cache)</span>
+                            </button>
+                        </div>
+                        <p style="font-size:10px; color:var(--text-muted); margin-top:12px">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" style="vertical-align:middle; margin-right:4px">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="8" x2="12" y2="12" />
+                                <line x1="12" y1="16" x2="12.01" y2="16" />
+                            </svg>
+                            <span data-i18n="settings.debugWarn">Caution: Resetting the application will delete all your
+                                profiles and mod configurations.</span>
+                        </p>
+                    </div>
 
                 </div>
 
@@ -1010,6 +1236,68 @@
     </div>
 
     <!-- ══ MODALS ══ -->
+
+    <!-- Crash Report Modal -->
+    <div class="modal-overlay" id="modal-crash-report"
+        style="z-index:9998;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px)">
+        <div class="modal glass"
+            style="max-width:520px;width:92%;border:1px solid rgba(239,68,68,0.35);box-shadow:0 0 60px rgba(239,68,68,0.15)">
+            <div class="modal-header" style="border-color:rgba(239,68,68,0.2)">
+                <div style="display:flex;align-items:center;gap:12px">
+                    <div
+                        style="width:36px;height:36px;background:rgba(239,68,68,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.2">
+                            <path
+                                d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                            <line x1="12" y1="9" x2="12" y2="13" />
+                            <line x1="12" y1="17" x2="12.01" y2="17" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="modal-title" style="color:#f87171" data-i18n="crash.title">BMM Crashed</h2>
+                        <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0" data-i18n="crash.subtitle">A
+                            crash report has been generated</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13px;line-height:1.65;color:var(--text-secondary)" data-i18n="crash.desc">Something
+                    unexpected happened and BMM stopped working. A .zip file with diagnostic information (logs, DXDiag,
+                    app state) has been saved automatically.</p>
+                <div
+                    style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2"
+                        style="flex-shrink:0">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                    <code id="crash-zip-path"
+                        style="font-size:10.5px;font-family:var(--font-mono);color:var(--text-muted);word-break:break-all">—</code>
+                </div>
+                <p style="font-size:12px;color:var(--text-muted);margin-top:4px" data-i18n="crash.helpText">Please share
+                    this file on our Discord so we can investigate.</p>
+            </div>
+            <div class="modal-footer" style="border-color:rgba(239,68,68,0.15);gap:10px;flex-wrap:wrap">
+                <a href="https://discord.com/invite/CTaaEF9R75" target="_blank" class="btn btn-primary"
+                    style="background:rgba(88,101,242,0.85);border-color:rgba(88,101,242,0.4);text-decoration:none;display:flex;align-items:center;gap:8px">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 11.756 11.756 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.078.078 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.332c-1.183 0-2.157-1.085-2.157-2.42s.955-2.42 2.157-2.42c1.21 0 2.176 1.085 2.156 2.42 0 1.335-.956 2.42-2.156 2.42zm7.974 0c-1.183 0-2.157-1.085-2.157-2.42s.955-2.42 2.157-2.42c1.21 0 2.176 1.085 2.156 2.42 0 1.335-.946 2.42-2.156 2.42z" />
+                    </svg>
+                    <span data-i18n="crash.discord">Join Discord</span>
+                </a>
+                <button class="btn btn-secondary" id="btn-crash-open-zip">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span data-i18n="crash.openZip">Open in Explorer</span>
+                </button>
+                <button class="btn btn-ghost" data-close="modal-crash-report" style="margin-left:auto"
+                    data-i18n="prof.cancel">Fermer</button>
+            </div>
+        </div>
+    </div>
+    <!-- END Crash Report Modal -->
 
     <!-- History Modal -->
     <div class="modal-overlay" id="modal-history">

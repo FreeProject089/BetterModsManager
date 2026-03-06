@@ -1643,6 +1643,8 @@ select.input-field option {
     padding: 30px;
     pointer-events: none;
     animation: fadeIn 0.3s ease;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(2px);
 }
 
 .onboarding-overlay.closing {
@@ -1818,6 +1820,27 @@ select.input-field option {
     color: #fff !important;
     border-color: var(--accent) !important;
 }
+
+/* FAQ highlight pulse (triggered by "Need Help?" button) */
+.faq-accordion.faq-highlight {
+    animation: faqPulse 0.6s ease 2;
+    border-color: var(--accent) !important;
+}
+
+@keyframes faqPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
+    }
+
+    50% {
+        box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.2);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    }
+}
+
 
 @keyframes fadeIn {
     from {
