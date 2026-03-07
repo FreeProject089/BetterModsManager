@@ -1,5 +1,8 @@
 use serde::Serialize;
 use crate::commands::crash::log_line;
+use std::path::PathBuf;
+use std::fs::File;
+use std::io::Write;
 
 #[derive(Serialize, Clone)]
 pub struct UpdateInfo {
@@ -125,4 +128,54 @@ fn is_newer_version(latest: &str, current: &str) -> bool {
         }
     }
     false
+}
+
+#[tauri::command]
+pub async fn download_and_install_update(url: String, filename: String) -> Result<(), String> {
+    log_line(format!("[UPDATE] Downloading update installer from: {}", url));
+    
+    // Choose temp directory
+    let temp_dir = std::env::temp_dir();
+    let file_path = temp_dir.join(&filename);
+
+    let client = reqwest::Client::new();
+    let response = client.get(&url).send().await.map_err(|e| format!("Download error: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Download failed with status: {}", response.status()));
+    }
+
+    let bytes = response.bytes().await.map_err(|e| format!("Error reading response bytes: {}", e))?;
+    
+    log_line(format!("[UPDATE] Saving installer to: {:?}", file_path));
+    let mut file = File::create(&file_path).map_err(|e| format!("Failed to create file: {}", e))?;
+    file.write_all(&bytes).map_err(|e| format!("Failed to write to file: {}", e))?;
+
+    log_line("[UPDATE] Launching installer and exiting...");
+
+    // Execute installer depending on the OS
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", file_path.to_str().unwrap()])
+            .spawn()
+            .map_err(|e| format!("Failed to start installer: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(file_path.to_str().unwrap())
+            .spawn()
+            .map_err(|e| format!("Failed to start installer: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(file_path.to_str().unwrap())
+            .spawn()
+            .map_err(|e| format!("Failed to start installer: {}", e))?;
+    }
+
+    // Exit BMM
+    std::process::exit(0);
 }

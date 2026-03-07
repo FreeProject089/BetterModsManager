@@ -117,6 +117,7 @@ fn main() {
             commands::crash::log_frontend_line,
             // Auto Update
             commands::autoupdate::check_for_update,
+            commands::autoupdate::download_and_install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

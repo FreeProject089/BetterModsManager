@@ -1514,7 +1514,7 @@ function showUpdateAvailableModal(info) {
             </div>
 
             ${releaseNotes ? `
-                <div style="max-height:150px;overflow-y:auto;padding:12px;background:rgba(0,0,0,0.3);border-radius:10px;border:1px solid var(--border);margin-bottom:20px;font-size:12px;line-height:1.6;color:var(--text-secondary)">
+                <div style="max-height:280px;overflow-y:auto;padding:12px;background:rgba(0,0,0,0.3);border-radius:10px;border:1px solid var(--border);margin-bottom:20px;font-size:12px;line-height:1.6;color:var(--text-secondary)" class="custom-scrollbar">
                     <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:700;margin-bottom:8px">${t('settings.releaseNotes') || 'RELEASE NOTES'}</div>
                     ${releaseNotes}
                 </div>
@@ -1524,14 +1524,14 @@ function showUpdateAvailableModal(info) {
                 <button class="btn btn-ghost" id="btn-update-later" style="flex:1">
                     ${t('settings.later') || 'Later'}
                 </button>
-                <a href="${escAttr(info.download_url)}" target="_blank" class="btn btn-primary" style="flex:2;text-decoration:none;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px">
+                <button class="btn btn-primary" id="btn-download-install-update" style="flex:2;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                         <polyline points="7 10 12 15 17 10"/>
                         <line x1="12" y1="15" x2="12" y2="3"/>
                     </svg>
                     ${t('settings.downloadUpdate') || 'Download Update'}
-                </a>
+                </button>
             </div>
 
             <div style="text-align:center;margin-top:12px">
@@ -1542,6 +1542,25 @@ function showUpdateAvailableModal(info) {
         </div>
     `;
     document.body.appendChild(modal);
+
+    const downloadBtn = modal.querySelector('#btn-download-install-update');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', async () => {
+            const originalContent = downloadBtn.innerHTML;
+            downloadBtn.disabled = true;
+            downloadBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Downloading...';
+            try {
+                let filename = info.download_url.split('/').pop() || 'setup.exe';
+                if (!filename.includes('.')) filename += '.exe';
+                await invoke('download_and_install_update', { url: info.download_url, filename });
+                downloadBtn.innerHTML = 'Installing...';
+            } catch (err) {
+                toast(`Failed to download update: ${err}`, 'error');
+                downloadBtn.disabled = false;
+                downloadBtn.innerHTML = originalContent;
+            }
+        });
+    }
 
     // Close handlers
     modal.querySelector('#close-update-modal').addEventListener('click', () => modal.remove());
