@@ -72,6 +72,14 @@
                 "transparent": false,
                 "center": true
             }
-        ]
+        ],
+        "updater": {
+            "active": true,
+            "endpoints": [
+                "https://raw.githubusercontent.com/FreeProject089/BetterModsManager/main/update.json"
+            ],
+            "dialog": false,
+            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE1MURFRTAyODUxRTYxRUQKUldUdFlSNkZBdTRkRmJVSWl0cmFHT2xNN0RtQURvVDVtWjFkRXZFaG5ja1dLUExybysyTjFQaGUK"
+        }
     }
 }

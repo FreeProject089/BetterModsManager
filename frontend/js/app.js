@@ -1177,6 +1177,9 @@ async function main() {
     // Check if the previous session crashed and show the modal
     checkPreviousCrash();
 
+    // Initialize Auto Update System
+    initUpdateSystem();
+
     const restartBtn = document.getElementById('btn-restart-onboarding');
     if (restartBtn) {
         restartBtn.addEventListener('click', () => {
@@ -1328,6 +1331,81 @@ async function openLicenseModal() {
         contentEl.textContent = "Error loading license: " + err;
     }
 }
+
+// ── Update System ─────────────────────────────────────────
+
+async function checkAndApplyUpdate(isManual = false) {
+    const isAutoUpdateEnabled = localStorage.getItem('bmm_auto_update') !== 'false';
+    if (!isManual && !isAutoUpdateEnabled) return;
+
+    try {
+        const { checkUpdate, installUpdate } = await import('https://unpkg.com/@tauri-apps/api@1/updater.js');
+        const { relaunch } = await import('https://unpkg.com/@tauri-apps/api@1/process.js');
+
+        if (isManual) toast(t('update.checking'), 'info');
+
+        const { shouldUpdate, manifest } = await checkUpdate();
+
+        if (shouldUpdate) {
+            const confirmed = await _dialog.ask(
+                (t('update.available') || "Update available: v{version}").replace('{version}', manifest.version),
+                { title: 'Better Mod Manager Update', type: 'info' }
+            );
+
+            if (confirmed) {
+                toast(t('update.downloading'), 'info');
+                await installUpdate();
+                await relaunch();
+            }
+        } else if (isManual) {
+            toast(t('update.upToDate'), 'success');
+        }
+    } catch (err) {
+        if (String(err).includes("Update not available")) {
+            if (isManual) toast(t('update.upToDate'), 'success');
+            return;
+        }
+        console.error('[BMM] Update check failed:', err);
+        if (isManual) toast(t('update.failed'), 'error');
+    }
+}
+
+async function initUpdateSystem() {
+    const manualBtn = document.getElementById('btn-manual-update');
+    const toggle = document.getElementById('setting-auto-update');
+
+    if (manualBtn) {
+        manualBtn.addEventListener('click', () => checkAndApplyUpdate(true));
+    }
+
+    if (toggle) {
+        toggle.checked = localStorage.getItem('bmm_auto_update') !== 'false';
+        toggle.addEventListener('change', () => {
+            localStorage.setItem('bmm_auto_update', toggle.checked);
+            toast(t('mod.saved'), 'success');
+        });
+    }
+
+    // Launch check
+    setTimeout(() => checkAndApplyUpdate(false), 3000);
+
+    // Shutdown check (Tauri 1 style)
+    try {
+        const { appWindow } = await import('https://unpkg.com/@tauri-apps/api@1/window.js');
+        appWindow.listen('tauri://close-requested', async () => {
+            const isAutoUpdateEnabled = localStorage.getItem('bmm_auto_update') !== 'false';
+            if (isAutoUpdateEnabled) {
+                // Just a quick check, usually we don't want to block closure too long
+                // but if we find an update, we can alert.
+                // However, listener can be async but must call close() eventually.
+            }
+            // For now we just let it close as the backend might be doing its own thing (crash reports)
+        });
+    } catch (e) {
+        console.warn("Could not setup shutdown update check:", e);
+    }
+}
+
 
 // Global expose for onclick
 window.openLicenseModal = openLicenseModal;

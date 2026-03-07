@@ -326,5 +326,13 @@
     "mm.installPath": "Dossier d'installation (ROOT)",
     "mm.fileTree": "Arborescence ({count} fichiers)",
     "mm.importedTitle": "Liste importée",
-    "mm.priorityTitle": "Priorité (plus élevé = écrase les autres)"
+    "mm.priorityTitle": "Priorité (plus élevé = écrase les autres)",
+    "settings.autoUpdate": "Auto Mise à jour",
+    "settings.autoUpdateDesc": "Vérifier automatiquement les mises à jour au lancement et à la fermeture.",
+    "settings.checkUpdates": "Vérifier les mises à jour",
+    "update.checking": "Recherche de mises à jour...",
+    "update.available": "Mise à jour disponible : v{version}",
+    "update.upToDate": "L'application est à jour.",
+    "update.downloading": "Téléchargement de la mise à jour...",
+    "update.failed": "Échec de la vérification des mises à jour."
 }

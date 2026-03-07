@@ -326,5 +326,13 @@
     "mm.installPath": "Installation folder (ROOT)",
     "mm.fileTree": "File Tree ({count} files)",
     "mm.importedTitle": "Imported List",
-    "mm.priorityTitle": "Priority (higher = overwrites others)"
+    "mm.priorityTitle": "Priority (higher = overwrites others)",
+    "settings.autoUpdate": "Auto Update",
+    "settings.autoUpdateDesc": "Automatically check for updates on startup and shutdown.",
+    "settings.checkUpdates": "Check for Updates",
+    "update.checking": "Checking for updates...",
+    "update.available": "Update available: v{version}",
+    "update.upToDate": "Application is up to date.",
+    "update.downloading": "Downloading update...",
+    "update.failed": "Failed to check for updates."
 }

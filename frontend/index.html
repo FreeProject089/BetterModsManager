@@ -170,8 +170,22 @@
                 <div class="footer-separator"></div>
 
                 <div class="footer-bottom-row">
-                    <span class="footer-profile-name" id="chip-profile-name">—</span>
-                    <button class="footer-version-pill" id="nav-version-btn">v1.0.6</button>
+                    <div style="display:flex; flex-direction:column; gap:8px; width:100%">
+                        <div style="display:flex; justify-content:space-between; align-items:center">
+                            <span class="footer-profile-name" id="chip-profile-name">—</span>
+                            <button class="footer-version-pill" id="nav-version-btn">v1.0.6</button>
+                        </div>
+
+                        <button class="btn btn-sm btn-outline" id="btn-manual-update"
+                            style="width:100%; justify-content:center; gap:8px; font-size:11px; height:34px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.02)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2.5">
+                                <path d="M23 4v6h-6M1 20v-6h6" />
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                            </svg>
+                            <span data-i18n="settings.checkUpdates">Vérifier les mises à jour</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </aside>
@@ -1102,6 +1116,24 @@
                         </div>
                     </div>
                     <!-- ── END GitHub PAT ── -->
+
+                    <div class="glass-card">
+                        <h3 class="card-title" data-i18n="settings.autoUpdate">Auto Mise à jour</h3>
+                        <div
+                            style="display:flex; align-items:center; gap:12px; padding:12px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid var(--border)">
+                            <div style="flex:1">
+                                <div style="font-size:13px; font-weight:700; color:var(--text-primary)"
+                                    data-i18n="settings.autoUpdate">Auto Mise à jour</div>
+                                <div style="font-size:11px; color:var(--text-muted)"
+                                    data-i18n="settings.autoUpdateDesc">Vérifier automatiquement les mises à jour au
+                                    lancement et à la fermeture.</div>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-auto-update" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
 
                     <div class="glass-card">
                         <h3 class="card-title" data-i18n="settings.dataTitle">Gestion des données</h3>

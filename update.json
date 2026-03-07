@@ -1,0 +1,11 @@
+{
+    "version": "0.9.5",
+    "notes": "Transition vers le système d'auto-update v1.",
+    "pub_date": "2026-03-07T14:30:00Z",
+    "platforms": {
+        "windows-x86_64": {
+            "signature": "UlVUdFlSNkZBdTRkRllGVVhRb1o2bU5UaWhpWC9xRkpVOVFpYjN5dUdNbVBSei83VXU5bjY5MklIYlk2bk9HNUdqOGlQS0JFKzdxNmxoVDAvandTKzBaaktRcndjUFVqemdrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzcyOTA1NTMzCWZpbGU6QmV0dGVyIE1vZCBNYW5hZ2VyXzAuOS41X3g2NF9lbi1VUy5tc2kuemlwClM3U2xCd3lVNmFScnVZc1lEaWFMMTFLakVmcFFmNUN0Y2FtdHNiRUVvd09KYzArOC9nN1VRcFd3QmRaYWdKKyt6Y0txelJDb25LSWkxQStxRGgzQkJnPT0K",
+            "url": "https://github.com/FreeProject089/BetterModsManager/releases/latest/download/Better.Mod.Manager_0.9.5_x64_en-US.msi"
+        }
+    }
+}
