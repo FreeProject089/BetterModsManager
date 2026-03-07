@@ -1,11 +1,11 @@
 {
-    "version": "0.9.5",
+    "version": "0.9.6",
     "notes": "Transition vers le système d'auto-update v1.",
     "pub_date": "2026-03-07T14:30:00Z",
     "platforms": {
         "windows-x86_64": {
-            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUdFlSNkZBdTRkRmNtbVNDTW1obVVLVXpZeVVIeXFzWEFVTm1sZHNENFhVUU5qNnA0T05UT3NETXEwZkxtMWRyRjhnMjY1anNkOUNBTG9LNW1TckZodGlJVTZZRWt5N2dzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzcyOTA2MzA3CWZpbGU6QmV0dGVyIE1vZCBNYW5hZ2VyXzAuOS41X3g2NF9lbi1VUy5tc2kuemlwCjlnSmtUTkpGZ3lyWVZodVkvT000MEdmc1ZOWk40NTJRL1IxT1BCSTkvZGQ1VldnRlRiTFBBOGhJVVNIbkhkcHptT3pEQWMxSFpDRjViNnNxM3laNEFBPT0K",
-            "url": "https://github.com/better-dcs/BetterModsManager/releases/download/PTB/Better.Mod.Manager_0.9.5_x64_en-US.msi"
+            "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUdFlSNkZBdTRkRmM3MzYxVktGZ2ZwMVFFR3oxRmdOQmlCZVJBWTRpZ0VPenRZYXZ2bFlNVVZOaGsvSEU3OEd3b3NYdDM3b09BYy9sdHF5ZlB1clRXeUNoMXdDeUY0VHdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzcyOTA3NDk5CWZpbGU6QmV0dGVyIE1vZCBNYW5hZ2VyXzAuOS42X3g2NF9lbi1VUy5tc2kuemlwCi9wRGs3bzhFRy9tbFdGbDhxa0lXSTVBUVZieEhoUUJMTDV1alNDYlhYS1F2aTYvUjhLa3lMeExvenhpb2dWRGtCcWMzZHBnbzZqUElDNWZzT2REOEJRPT0K",
+            "url": "https://github.com/better-dcs/BetterModsManager/releases/download/PTB/Better.Mod.Manager_0.9.6_x64_en-US.msi"
         }
     }
 }

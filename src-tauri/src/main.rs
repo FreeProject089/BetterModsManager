@@ -98,6 +98,7 @@ fn main() {
             commands::settings::import_app_data,
             commands::settings::reset_app_data,
             commands::settings::is_debug_mode,
+            commands::settings::is_ptb_mode,
             commands::settings::get_license_text,
             commands::settings::get_app_version,
             commands::mods::open_folder,

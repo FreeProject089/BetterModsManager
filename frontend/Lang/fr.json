@@ -334,5 +334,7 @@
     "update.available": "Mise à jour disponible : v{version}",
     "update.upToDate": "L'application est à jour.",
     "update.downloading": "Téléchargement de la mise à jour...",
-    "update.failed": "Échec de la vérification des mises à jour."
+    "update.failed": "Échec de la vérification des mises à jour.",
+    "ptb.title": "PUBLIC TEST BUILD",
+    "ptb.ack": "J'ai compris"
 }

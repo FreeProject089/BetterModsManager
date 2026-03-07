@@ -45,16 +45,29 @@ pub fn is_debug_mode(app_handle: tauri::AppHandle) -> bool {
         });
 
     if let Some(path) = cfg_path {
-        println!("[DEBUG_SYSTEM] Final path resolved: {:?}", path);
         if let Ok(content) = std::fs::read_to_string(&path) {
             let normalized = content.to_lowercase();
-            let is_debug = normalized.contains("prod=false");
-            println!("[DEBUG_SYSTEM] Content read: '{}', is_debug: {}", normalized.trim(), is_debug);
-            return is_debug;
+            return normalized.contains("prod=false");
         }
     }
-    
-    println!("[DEBUG_SYSTEM] app.cfg could not be resolved or read.");
+    false
+}
+
+#[tauri::command]
+pub fn is_ptb_mode(app_handle: tauri::AppHandle) -> bool {
+    let cfg_path = app_handle
+        .path_resolver()
+        .resolve_resource("../app.cfg")
+        .or_else(|| {
+            Some(std::path::PathBuf::from("app.cfg"))
+        });
+
+    if let Some(path) = cfg_path {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let normalized = content.to_lowercase();
+            return normalized.contains("ptb=true");
+        }
+    }
     false
 }
 #[tauri::command]

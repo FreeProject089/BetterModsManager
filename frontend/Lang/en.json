@@ -334,5 +334,7 @@
     "update.available": "Update available: v{version}",
     "update.upToDate": "Application is up to date.",
     "update.downloading": "Downloading update...",
-    "update.failed": "Failed to check for updates."
+    "update.failed": "Failed to check for updates.",
+    "ptb.title": "PUBLIC TEST BUILD",
+    "ptb.ack": "Understood"
 }
