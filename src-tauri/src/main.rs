@@ -112,6 +112,7 @@ fn main() {
             commands::crash::open_crash_zip,
             commands::crash::get_crash_reports,
             commands::crash::trigger_manual_crash_report,
+            commands::crash::log_frontend_line,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

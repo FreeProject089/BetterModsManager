@@ -118,6 +118,9 @@ function initNavigation() {
     navItems.forEach(item => {
         item.addEventListener('click', () => {
             const viewId = item.dataset.view;
+
+            invoke('log_frontend_line', { line: `Navigated to view: ${viewId}` });
+
             navItems.forEach(n => n.classList.remove('active'));
             item.classList.add('active');
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -145,6 +148,7 @@ function initModals() {
     document.querySelectorAll('[data-close]').forEach(btn => {
         btn.addEventListener('click', () => {
             const id = btn.dataset.close;
+            invoke('log_frontend_line', { line: `Modal closed: ${id}` });
             document.getElementById(id)?.classList.remove('open');
         });
     });
@@ -669,24 +673,56 @@ async function checkPreviousCrash() {
         if (!reports || reports.length === 0) return;
 
         const newest = reports[0]; // already sorted newest-first
+        const lastSeen = localStorage.getItem('bmm_last_seen_crash');
+
+        // If we already showed this report, don't show it again
+        if (newest === lastSeen) return;
+
         const pathEl = document.getElementById('crash-zip-path');
         if (pathEl) pathEl.textContent = newest;
 
         const modal = document.getElementById('modal-crash-report');
         if (modal) {
-            // Only show if the zip is fresh (< 2 min old based on filename timestamp)
-            const match = newest.match(/crash_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.zip/);
-            if (match) {
-                const crashTime = new Date(match[1].replace(/_(\d{2})-(\d{2})-(\d{2})$/, 'T$1:$2:$3'));
-                const ageSec = (Date.now() - crashTime.getTime()) / 1000;
-                if (ageSec < 120) {
-                    modal.classList.add('open');
-                }
-            }
+            // Un crash_*.zip a été détecté et on ne l'a pas encore "vu"
+            // On l'affiche systématiquement si c'est nouveau, pour être sûr de ne pas le rater
+            modal.classList.add('open');
+            localStorage.setItem('bmm_last_seen_crash', newest);
+            invoke('log_frontend_line', { line: `Crash modal displayed for: ${newest}` });
         }
     } catch (_) {
         // Tauri not available in browser mode — silently ignore
     }
+}
+
+/** Global interaction logger */
+function initInteractionLogging() {
+    // Log clicks
+    document.addEventListener('click', (e) => {
+        const target = e.target;
+        const btn = target.closest('button');
+        const link = target.closest('a');
+
+        if (btn) {
+            const text = btn.innerText?.trim() || btn.title || btn.id || 'anonymous button';
+            invoke('log_frontend_line', { line: `Click: Button [${text}]` });
+        } else if (link) {
+            const text = link.innerText?.trim() || link.href;
+            invoke('log_frontend_line', { line: `Click: Link [${text}]` });
+        }
+    }, true);
+
+    // Log scrolls (debounced)
+    let scrollTimeout;
+    document.addEventListener('scroll', (e) => {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            const target = e.target === document ? document.documentElement : e.target;
+            if (target && target.scrollTop > 0) {
+                const view = document.querySelector('.view.active')?.id || 'unknown';
+                invoke('log_frontend_line', { line: `Scroll: View [${view}] at ${target.scrollTop}px` });
+            }
+        }, 1000);
+    }, true);
 }
 
 
@@ -1129,6 +1165,9 @@ async function main() {
     if (shouldShowOnboarding()) {
         setTimeout(() => startOnboarding(), 500);
     }
+
+    // Interaction log
+    initInteractionLogging();
 
     // Debug Menu
     initDebugMenu();

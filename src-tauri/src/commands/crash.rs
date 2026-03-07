@@ -72,8 +72,13 @@ pub fn init_session() {
         
         if !old_content.trim().is_empty() {
             eprintln!("[CRASH_LOGGER] Recovering logs from previous session...");
-            // Génère un rapport crash_ automatique
-            generate_report(true, "Detected uncontrolled shutdown (dirty session)", None, Some(old_content));
+            
+            // On vérifie si les logs contiennent une trace de panic
+            let was_panic = old_content.contains("[PANIC DETECTED]");
+            
+            // Génère un rapport automatique
+            // On utilise le préfixe 'crash' seulement si on est sûr que c'était un vrai crash
+            generate_report(was_panic, "Detected uncontrolled shutdown (dirty session)", None, Some(old_content));
         }
     }
 
@@ -164,9 +169,9 @@ pub fn generate_report(
         let _ = zip.write_all(state.as_bytes());
     }
 
-    // 6. dxdiag.txt (Windows Only)
+    // 6. dxdiag.txt (Windows Only, uniquement si crash pour booster la fermeture normale)
     #[cfg(target_os = "windows")]
-    {
+    if is_crash {
         let tmp_file = std::env::temp_dir().join("bmm_dxdiag_tmp.txt");
         let _ = std::process::Command::new("dxdiag")
             .args(["/t", &tmp_file.to_string_lossy().to_string()])
@@ -183,6 +188,23 @@ pub fn generate_report(
     }
 
     let _ = zip.finish();
+    
+    // Nettoyage : Garde seulement les 10 derniers rapports pour éviter de saturer le disque
+    if let Ok(entries) = fs::read_dir(&dir) {
+        let mut files: Vec<_> = entries.flatten()
+            .filter(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                name.starts_with("crash_") || name.starts_with("session_")
+            })
+            .collect();
+        
+        if files.len() > 10 {
+            files.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+            for i in 0..(files.len() - 10) {
+                let _ = fs::remove_file(files[i].path());
+            }
+        }
+    }
 
     // Après avoir généré le zip (qui contient les logs), on vide le log temps réel.
     let _ = fs::remove_file(get_realtime_log_path());
@@ -265,3 +287,9 @@ pub fn get_crash_reports(app_handle: tauri::AppHandle) -> Vec<String> {
     files.sort_by(|a, b| b.cmp(a));
     files
 }
+
+#[tauri::command]
+pub fn log_frontend_line(line: String) {
+    log_line(format!("[UI] {}", line));
+}
+

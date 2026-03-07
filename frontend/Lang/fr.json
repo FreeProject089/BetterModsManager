@@ -174,7 +174,7 @@
     "credits.devLabel": "Développeur",
     "credits.devRole": "Créateur & Développeur",
     "credits.rustLabel": "RUST ARCHITECTURE",
-    "credits.rustSub": "Moteur robuste : Sécurité mémoire & Performance brute",
+    "credits.rustSub": "Construit avec Rust & Tauri v1",
     "credits.linksTitle": "Liens & Communauté",
     "credits.discordSub": "Aide & mises à jour",
     "credits.edSub": "Communauté DCS World & ressources de modding",

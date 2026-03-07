@@ -174,7 +174,7 @@
     "credits.devLabel": "Developer",
     "credits.devRole": "Creator & Developer",
     "credits.rustLabel": "RUST ARCHITECTURE",
-    "credits.rustSub": "Robust engine: Memory safety & Raw performance",
+    "credits.rustSub": "Built with Rust & Tauri v1",
     "credits.linksTitle": "Links & Community",
     "credits.discordSub": "Get help & updates",
     "credits.edSub": "DCS World community & modding resources",

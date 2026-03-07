@@ -224,9 +224,44 @@ BMM can directly parse OvGME's proprietary binary `.dat` configuration files.
 | **File Operations** | std::fs + fs_extra 1.x |
 | **Concurrency Model** | Arc + Mutex + tauri::async_runtime |
 | **Idle RAM** | approx. 60 MB |
-| **Active RAM (I/O)** | Less than 120 MB |
+| **Active RAM (I/O)** | Less than 130 MB (increased by system diagnostics) |
 | **UI Framerate** | 60 FPS (decoupled from Rust workers) |
 | **Cold Boot Time** | Less than 1.5 seconds |
+| **System Info** | `sysinfo 0.30` |
+| **Crash Tracing** | `backtrace 0.3` |
+
+---
+
+## 11. Crash & Logging System (`crash.rs`)
+
+BMM implements a hybrid real-time logging system to prevent data loss in the event of an unhandled panic or process termination.
+
+### Logging Flow
+
+| Mechanism | Implementation | Role |
+| :--- | :--- | :--- |
+| **LOG_BUFFER** | `VecDeque<String>` (cap 500) | Thread-safe circular buffer for in-memory access and state snapshots. |
+| **Current Session Log** | `current_session.log` | Real-time disk write via `file.sync_all()`. Acts as a "heartbeat" file. |
+| **Panic Hook** | `std::panic::set_hook` | Intercepts terminal errors, generates a full `backtrace`, and triggers a ZIP generation before termination. |
+
+### Recovery Mechanism
+
+On application boot, `init_session()` scans the `com.bettermm.app/` directory:
+1. If `current_session.log` exists, BMM assumes the previous session crashed or was killed (Alt+F4).
+2. `generate_report()` is called to create a `crash_YYYYMMDD_HHMMSS.zip` within the `Crashes/` folder.
+3. The old log is renamed and then replaced by a fresh log for the current session.
+
+---
+
+## 12. Advanced Troubleshooting (Debug Menu)
+
+The `is_debug_mode` command controls the visibility of developer tools via `app.cfg`.
+
+| Diagnostic | Logic |
+| :--- | :--- |
+| **Config Check** | `app_handle.path_resolver().resolve_resource("../app.cfg")` |
+| **State Reset** | Overwrites in-memory `AppData` with `Default::default()`, clears disk `data.json`, and triggers a frontend `localStorage.clear()`. |
+| **Manual Trigger** | Exposes the `trigger_manual_crash_report` command for ZIP format validation. |
 
 ---
 

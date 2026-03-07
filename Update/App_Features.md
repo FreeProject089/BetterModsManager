@@ -103,9 +103,21 @@ The `.MM` format is BMM's proprietary JSON-based sharing standard.
 | **Built-in Changelog** | A modal displays all `.md` files found in the `Update/` directory, rendered with full Markdown support. |
 | **Archive Access** | Older changelogs from `Update/Old_Update/` are available in a sidebar for historical reference. |
 | **File Browser Sidebar** | Navigate between release note files using left-panel navigation. |
-
-| **File Browser Sidebar** | Navigate between release note files using left-panel navigation. |
 | **Cancellation Support** | Long operations like modlist installations can be cancelled mid-way through the progress UI. |
+
+---
+
+## 9. Crash Reporting & Troubleshooting
+
+BMM includes a high-reliability diagnostic system to ensure any issue can be identified and fixed quickly.
+
+| Feature | Description |
+| :--- | :--- |
+| **Real-Time Logging** | Every action (mod activation, profile change, API call) is written instantly to `current_session.log`. If the app closes unexpectedly, the cause is preserved. |
+| **Automatic Crash Detection** | At startup, BMM checks if the previous session ended cleanly. If not, it automatically packages logs, system info, and app state into a `.zip` report. |
+| **Detailed Diagnostics** | Crash reports include your OS version, CPU/RAM usage, `DXDiag` output (Windows), and a full error stack trace. |
+| **Crash Alert Modal** | If a crash occurred, a dedicated window appears on the next launch with a link to the Discord support and a button to open the report folder. |
+| **Manual Report Button** | Users can manually trigger a full system diagnostic report from the Settings menu for performance or bug investigations. |
 
 ---
 
