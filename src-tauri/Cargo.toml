@@ -1,6 +1,6 @@
 [package]
 name = "better-mods-manager"
-version = "0.9.6"
+version = "0.9.5"
 edition = "2021"
 
 [[bin]]
@@ -11,7 +11,7 @@ path = "src/main.rs"
 tauri-build = { version = "1", features = [] }
 
 [dependencies]
-tauri = { version = "1", features = [ "custom-protocol", "notification-all", "dialog-open", "dialog-save", "fs-all", "path-all", "window-all", "shell-open", "updater"] }
+tauri = { version = "1", features = [ "custom-protocol", "notification-all", "dialog-open", "dialog-save", "fs-all", "path-all", "window-all", "shell-open"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
@@ -19,7 +19,7 @@ chrono = { version = "0.4", features = ["serde"] }
 walkdir = "2"
 fs_extra = "1"
 anyhow = "1"
-reqwest = { version = "0.11", features = ["blocking"] }
+reqwest = { version = "0.11", features = ["blocking", "json", "rustls-tls"] }
 zip = { version = "0.6", features = ["deflate"] }
 lazy_static = "1.4"
 backtrace = "0.3"

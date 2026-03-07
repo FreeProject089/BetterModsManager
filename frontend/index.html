@@ -170,24 +170,19 @@
                 <div class="footer-separator"></div>
 
                 <div class="footer-bottom-row">
-                    <div style="display:flex; flex-direction:column; gap:8px; width:100%">
-                        <div style="display:flex; justify-content:space-between; align-items:center">
-                            <span class="footer-profile-name" id="chip-profile-name">—</span>
-                            <button class="footer-version-pill" id="nav-version-btn">v1.0.6</button>
-                        </div>
-
-                        <button class="btn btn-sm btn-outline" id="btn-manual-update"
-                            style="width:100%; justify-content:center; gap:8px; font-size:11px; height:38px; border:1px solid rgba(16, 185, 129, 0.25); background:rgba(16, 185, 129, 0.04); color:#10b981; border-radius:10px; transition:all 0.2s ease;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5" style="color:#10b981;">
-                                <path d="M23 4v6h-6M1 20v-6h6" />
-                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                            </svg>
-                            <span data-i18n="settings.checkUpdates" style="font-weight:600;">Vérifier les mises à
-                                jour</span>
-                        </button>
-                    </div>
+                    <span class="footer-profile-name" id="chip-profile-name">—</span>
+                    <button class="footer-version-pill" id="nav-version-btn">v1.0.6</button>
                 </div>
+
+                <!-- Check for Updates Button -->
+                <button class="btn-check-updates" id="btn-check-updates">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.2">
+                        <path d="M23 4v6h-6M1 20v-6h6" />
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                    </svg>
+                    <span data-i18n="settings.checkUpdates">Check for Updates</span>
+                </button>
             </div>
         </aside>
 
@@ -977,6 +972,64 @@
 
                 <div class="settings-sections">
 
+                    <!-- ── Auto Update Toggle ── -->
+                    <div class="glass-card"
+                        style="border: 1px solid rgba(16, 185, 129, 0.15); position: relative; overflow: hidden;">
+                        <div
+                            style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(16,185,129,0.06);border-radius:50%;filter:blur(30px);pointer-events:none">
+                        </div>
+                        <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)"
+                                stroke-width="2.2">
+                                <path d="M23 4v6h-6M1 20v-6h6" />
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                            </svg>
+                            <span data-i18n="settings.autoUpdateTitle">Auto Update</span>
+                        </h3>
+
+                        <div
+                            style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;margin-bottom:16px">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)"
+                                stroke-width="2" style="flex-shrink:0;margin-top:1px">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="8" x2="12" y2="12" />
+                                <line x1="12" y1="16" x2="12.01" y2="16" />
+                            </svg>
+                            <p style="font-size:12px;line-height:1.6;color:var(--text-secondary);margin:0"
+                                data-i18n="settings.autoUpdateDesc">
+                                When enabled, BMM will automatically check for new versions each time the app starts
+                                and when it's closed. You will be notified if a new version is available.
+                            </p>
+                        </div>
+
+                        <div
+                            style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                            <div style="flex:1">
+                                <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                    data-i18n="settings.autoUpdateToggle">Check for updates automatically</div>
+                                <div style="font-size:10px;color:var(--text-muted)"
+                                    data-i18n="settings.autoUpdateToggleDesc">On startup &amp; on close</div>
+                            </div>
+                            <label class="bmm-switch">
+                                <input type="checkbox" id="chk-auto-update" checked>
+                                <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                            </label>
+                        </div>
+
+                        <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+                            <button class="btn btn-secondary btn-sm" id="btn-settings-check-update">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.2">
+                                    <path d="M23 4v6h-6M1 20v-6h6" />
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                                </svg>
+                                <span data-i18n="settings.checkUpdates">Check for Updates</span>
+                            </button>
+                            <span id="update-status-msg"
+                                style="font-size:11px;color:var(--text-muted);min-height:16px"></span>
+                        </div>
+                    </div>
+                    <!-- ── END Auto Update ── -->
 
                     <div class="glass-card">
                         <h3 class="card-title" data-i18n="settings.tagsTitle">Gestion des tags personnalisés</h3>
@@ -1117,24 +1170,6 @@
                         </div>
                     </div>
                     <!-- ── END GitHub PAT ── -->
-
-                    <div class="glass-card">
-                        <h3 class="card-title" data-i18n="settings.autoUpdate">Auto Mise à jour</h3>
-                        <div
-                            style="display:flex; align-items:center; gap:12px; padding:12px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid var(--border)">
-                            <div style="flex:1">
-                                <div style="font-size:13px; font-weight:700; color:var(--text-primary)"
-                                    data-i18n="settings.autoUpdate">Auto Mise à jour</div>
-                                <div style="font-size:11px; color:var(--text-muted)"
-                                    data-i18n="settings.autoUpdateDesc">Vérifier automatiquement les mises à jour au
-                                    lancement et à la fermeture.</div>
-                            </div>
-                            <label class="switch">
-                                <input type="checkbox" id="setting-auto-update" checked>
-                                <span class="slider round"></span>
-                            </label>
-                        </div>
-                    </div>
 
                     <div class="glass-card">
                         <h3 class="card-title" data-i18n="settings.dataTitle">Gestion des données</h3>

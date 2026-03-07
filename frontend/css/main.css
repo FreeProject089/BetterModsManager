@@ -515,6 +515,151 @@ img {
     }
 }
 
+/* ── Check for Updates Button ── */
+.btn-check-updates {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    background: rgba(6, 182, 212, 0.08);
+    border: 1px solid rgba(6, 182, 212, 0.25);
+    border-radius: 10px;
+    color: var(--cyan);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: var(--transition);
+    margin-top: 4px;
+}
+
+.btn-check-updates:hover {
+    background: rgba(6, 182, 212, 0.15);
+    border-color: rgba(6, 182, 212, 0.4);
+    box-shadow: 0 0 16px rgba(6, 182, 212, 0.2);
+    transform: translateY(-1px);
+}
+
+.btn-check-updates:active {
+    transform: translateY(0);
+}
+
+.btn-check-updates.checking {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.btn-check-updates.checking svg {
+    animation: spin 1s linear infinite;
+}
+
+/* ── BMM Toggle Switch ── */
+.bmm-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.bmm-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.bmm-switch-track {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    transition: var(--transition);
+    cursor: pointer;
+}
+
+.bmm-switch input:checked+.bmm-switch-track {
+    background: var(--success);
+    border-color: transparent;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+.bmm-switch-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    background: white;
+    border-radius: 50%;
+    transition: var(--transition);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.bmm-switch input:checked+.bmm-switch-track .bmm-switch-thumb {
+    transform: translateX(20px);
+}
+
+/* ── Update Available Modal ── */
+.update-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+}
+
+.update-modal-card {
+    background: var(--bg-secondary);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 20px;
+    padding: 32px;
+    max-width: 480px;
+    width: 90%;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(16, 185, 129, 0.1);
+}
+
+.update-modal-card::before {
+    content: '';
+    position: absolute;
+    top: -60px;
+    right: -60px;
+    width: 200px;
+    height: 200px;
+    background: rgba(16, 185, 129, 0.06);
+    border-radius: 50%;
+    filter: blur(40px);
+    pointer-events: none;
+}
+
+.update-modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    transition: var(--transition-fast);
+}
+
+.update-modal-close:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+}
+
 /* End footer styles */
 
 /* ═══════════════════════════════════
@@ -2538,61 +2683,4 @@ select:focus {
 .archive-content a:hover {
     color: #93c5fd;
     border-color: #93c5fd;
-}
-
-/* ── Settings Switch ── */
-.switch {
-    position: relative;
-    display: inline-block;
-    width: 40px;
-    height: 22px;
-    flex-shrink: 0;
-}
-
-.switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(255, 255, 255, 0.08);
-    transition: .22s;
-    border: 1px solid var(--border);
-}
-
-.slider:before {
-    position: absolute;
-    content: "";
-    height: 14px;
-    width: 14px;
-    left: 3px;
-    bottom: 3px;
-    background-color: var(--text-secondary);
-    transition: .22s;
-}
-
-input:checked + .slider {
-    background-color: var(--accent);
-    border-color: transparent;
-    box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
-}
-
-input:checked + .slider:before {
-    transform: translateX(18px);
-    background-color: white;
-}
-
-.slider.round {
-    border-radius: 22px;
-}
-
-.slider.round:before {
-    border-radius: 50%;
 }

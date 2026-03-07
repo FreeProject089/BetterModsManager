@@ -18,7 +18,7 @@ All future updates will now be digitally signed to ensure that no one has modifi
 ### 💬 Your help is precious!
 If you encounter a bug or have a suggestion about the auto-updater, please let us know on the **official Discord**.
 
-👉 **[Join the Discord](https://discord.com/invite/CTaaEF9R75)**
+👉 **[Join the Discord](https://discord.gg/bettermodsmanager)**
 
 *Thank you for helping make Better Mod Manager more solid!*
 ---

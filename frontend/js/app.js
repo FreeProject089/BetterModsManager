@@ -1098,9 +1098,6 @@ async function main() {
             loader.style.opacity = '0';
             loader.style.visibility = 'hidden';
             setTimeout(() => loader.remove(), 600);
-
-            // Show PTB Modal if enabled
-            checkPtbMode();
         }, 800);
     }
 
@@ -1180,8 +1177,8 @@ async function main() {
     // Check if the previous session crashed and show the modal
     checkPreviousCrash();
 
-    // Initialize Auto Update System
-    initUpdateSystem();
+    // Auto Update System
+    initAutoUpdate();
 
     const restartBtn = document.getElementById('btn-restart-onboarding');
     if (restartBtn) {
@@ -1318,6 +1315,192 @@ function initDebugMenu() {
     }
 }
 
+// ── Auto Update System ──────────────────────────────────
+
+const AUTO_UPDATE_KEY = 'bmm_auto_update_enabled';
+
+function isAutoUpdateEnabled() {
+    const val = localStorage.getItem(AUTO_UPDATE_KEY);
+    return val !== 'false'; // Default to enabled
+}
+
+function setAutoUpdateEnabled(enabled) {
+    localStorage.setItem(AUTO_UPDATE_KEY, enabled ? 'true' : 'false');
+}
+
+function initAutoUpdate() {
+    // Toggle checkbox
+    const chk = document.getElementById('chk-auto-update');
+    if (chk) {
+        chk.checked = isAutoUpdateEnabled();
+        chk.addEventListener('change', () => {
+            setAutoUpdateEnabled(chk.checked);
+            toast(chk.checked
+                ? (t('settings.autoUpdateEnabled') || 'Auto-update enabled')
+                : (t('settings.autoUpdateDisabled') || 'Auto-update disabled'), 'info');
+        });
+    }
+
+    // Sidebar button
+    const sidebarBtn = document.getElementById('btn-check-updates');
+    if (sidebarBtn) {
+        sidebarBtn.addEventListener('click', () => performUpdateCheck(true));
+    }
+
+    // Settings button
+    const settingsBtn = document.getElementById('btn-settings-check-update');
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', () => performUpdateCheck(true));
+    }
+
+    // Auto-check on startup
+    if (isAutoUpdateEnabled()) {
+        setTimeout(() => performUpdateCheck(false), 3000); // Delay 3s to let app load
+    }
+}
+
+async function performUpdateCheck(showNoUpdateToast = false) {
+    const sidebarBtn = document.getElementById('btn-check-updates');
+    const statusMsg = document.getElementById('update-status-msg');
+
+    // Visual feedback
+    if (sidebarBtn) {
+        sidebarBtn.classList.add('checking');
+        sidebarBtn.querySelector('span').textContent = t('settings.checking') || 'Checking...';
+    }
+    if (statusMsg) {
+        statusMsg.innerHTML = `<span style="color:var(--accent)">${t('settings.checking') || 'Checking...'}</span>`;
+    }
+
+    try {
+        const info = await invoke('check_for_update');
+
+        if (info.has_update) {
+            showUpdateAvailableModal(info);
+            if (statusMsg) {
+                statusMsg.innerHTML = `<span style="color:var(--success)">✓ ${t('settings.updateAvailable') || 'Update available'}: v${escHtml(info.latest_version)}</span>`;
+            }
+        } else {
+            if (showNoUpdateToast) {
+                toast(t('settings.upToDate') || 'You are running the latest version!', 'success');
+            }
+            if (statusMsg) {
+                statusMsg.innerHTML = `<span style="color:var(--success)">✓ ${t('settings.upToDate') || 'Up to date'} (v${escHtml(info.current_version)})</span>`;
+            }
+        }
+    } catch (err) {
+        console.warn('[BMM] Update check failed:', err);
+        const errStr = String(err);
+        if (errStr.includes('NO_RELEASE')) {
+            // No releases published yet — not a real error
+            if (showNoUpdateToast) {
+                toast(t('settings.noRelease') || 'No releases published on GitHub yet.', 'info');
+            }
+            if (statusMsg) {
+                statusMsg.innerHTML = `<span style="color:var(--warning)">⚠ ${t('settings.noRelease') || 'No releases yet'}</span>`;
+            }
+        } else {
+            if (showNoUpdateToast) {
+                toast((t('settings.updateCheckFailed') || 'Update check failed') + ': ' + err, 'error');
+            }
+            if (statusMsg) {
+                statusMsg.innerHTML = `<span style="color:var(--danger)">✗ ${t('settings.updateCheckFailed') || 'Check failed'}</span>`;
+            }
+        }
+    } finally {
+        // Reset sidebar button
+        if (sidebarBtn) {
+            sidebarBtn.classList.remove('checking');
+            sidebarBtn.querySelector('span').textContent = t('settings.checkUpdates') || 'Check for Updates';
+        }
+    }
+}
+
+function showUpdateAvailableModal(info) {
+    // Remove existing modal if any
+    const existing = document.getElementById('update-available-modal');
+    if (existing) existing.remove();
+
+    const releaseNotes = info.release_notes
+        ? (typeof marked !== 'undefined' ? marked.parse(info.release_notes) : info.release_notes.replace(/\n/g, '<br>'))
+        : '';
+
+    const modal = document.createElement('div');
+    modal.id = 'update-available-modal';
+    modal.className = 'update-modal-backdrop';
+    modal.innerHTML = `
+        <div class="update-modal-card">
+            <button class="update-modal-close" id="close-update-modal">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+
+            <div style="text-align:center;margin-bottom:24px">
+                <div style="display:inline-flex;width:56px;height:56px;background:rgba(16,185,129,0.12);border-radius:16px;align-items:center;justify-content:center;margin-bottom:16px;border:1px solid rgba(16,185,129,0.25)">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2">
+                        <path d="M23 4v6h-6M1 20v-6h6" />
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                    </svg>
+                </div>
+                <h2 style="font-size:20px;font-weight:800;color:var(--text-primary);margin-bottom:8px">
+                    ${t('settings.updateAvailableTitle') || 'Update Available!'}
+                </h2>
+                <p style="font-size:13px;color:var(--text-muted)">
+                    ${t('settings.newVersionReady') || 'A new version of Better Mod Manager is ready.'}
+                </p>
+            </div>
+
+            <div style="display:flex;gap:12px;margin-bottom:20px">
+                <div style="flex:1;padding:12px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;text-align:center">
+                    <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:700;margin-bottom:4px">${t('settings.currentVersion') || 'CURRENT'}</div>
+                    <div style="font-size:18px;font-weight:800;font-family:var(--font-mono);color:var(--danger)">v${escHtml(info.current_version)}</div>
+                </div>
+                <div style="display:flex;align-items:center;color:var(--text-muted)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </div>
+                <div style="flex:1;padding:12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;text-align:center">
+                    <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:700;margin-bottom:4px">${t('settings.latestVersion') || 'LATEST'}</div>
+                    <div style="font-size:18px;font-weight:800;font-family:var(--font-mono);color:var(--success)">v${escHtml(info.latest_version)}</div>
+                </div>
+            </div>
+
+            ${releaseNotes ? `
+                <div style="max-height:150px;overflow-y:auto;padding:12px;background:rgba(0,0,0,0.3);border-radius:10px;border:1px solid var(--border);margin-bottom:20px;font-size:12px;line-height:1.6;color:var(--text-secondary)">
+                    <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:700;margin-bottom:8px">${t('settings.releaseNotes') || 'RELEASE NOTES'}</div>
+                    ${releaseNotes}
+                </div>
+            ` : ''}
+
+            <div style="display:flex;gap:10px">
+                <button class="btn btn-ghost" id="btn-update-later" style="flex:1">
+                    ${t('settings.later') || 'Later'}
+                </button>
+                <a href="${escAttr(info.download_url)}" target="_blank" class="btn btn-primary" style="flex:2;text-decoration:none;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    ${t('settings.downloadUpdate') || 'Download Update'}
+                </a>
+            </div>
+
+            <div style="text-align:center;margin-top:12px">
+                <a href="${escAttr(info.release_url)}" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">
+                    ${t('settings.viewOnGithub') || 'View on GitHub →'}
+                </a>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Close handlers
+    modal.querySelector('#close-update-modal').addEventListener('click', () => modal.remove());
+    modal.querySelector('#btn-update-later').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+}
+
 // ── Licenses ──────────────────────────────────────────────
 async function openLicenseModal() {
     const modal = document.getElementById('modal-license');
@@ -1334,143 +1517,6 @@ async function openLicenseModal() {
         contentEl.textContent = "Error loading license: " + err;
     }
 }
-
-// ── Update System ─────────────────────────────────────────
-
-async function checkAndApplyUpdate(isManual = false) {
-    const isAutoUpdateEnabled = localStorage.getItem('bmm_auto_update') !== 'false';
-    if (!isManual && !isAutoUpdateEnabled) return;
-
-    try {
-        const { checkUpdate, installUpdate } = await import('https://unpkg.com/@tauri-apps/api@1/updater.js');
-        const { relaunch } = await import('https://unpkg.com/@tauri-apps/api@1/process.js');
-
-        if (isManual) toast(t('update.checking'), 'info');
-
-        const { shouldUpdate, manifest } = await checkUpdate();
-
-        if (shouldUpdate) {
-            const confirmed = await _dialog.ask(
-                (t('update.available') || "Update available: v{version}").replace('{version}', manifest.version),
-                { title: 'Better Mod Manager Update', type: 'info' }
-            );
-
-            if (confirmed) {
-                toast(t('update.downloading'), 'info');
-                await installUpdate();
-                await relaunch();
-            }
-        } else if (isManual) {
-            toast(t('update.upToDate'), 'success');
-        }
-    } catch (err) {
-        if (String(err).includes("Update not available")) {
-            if (isManual) toast(t('update.upToDate'), 'success');
-            return;
-        }
-        console.error('[BMM] Update check failed:', err);
-        if (isManual) toast(t('update.failed'), 'error');
-    }
-}
-
-async function initUpdateSystem() {
-    const manualBtn = document.getElementById('btn-manual-update');
-    const toggle = document.getElementById('setting-auto-update');
-
-    if (manualBtn) {
-        manualBtn.addEventListener('click', () => checkAndApplyUpdate(true));
-    }
-
-    if (toggle) {
-        toggle.checked = localStorage.getItem('bmm_auto_update') !== 'false';
-        toggle.addEventListener('change', () => {
-            localStorage.setItem('bmm_auto_update', toggle.checked);
-            toast(t('mod.saved'), 'success');
-        });
-    }
-
-    // Launch check
-    setTimeout(() => checkAndApplyUpdate(false), 3000);
-
-    // Shutdown check (Tauri 1 style)
-    try {
-        const { appWindow } = await import('https://unpkg.com/@tauri-apps/api@1/window.js');
-        appWindow.listen('tauri://close-requested', async () => {
-            const isAutoUpdateEnabled = localStorage.getItem('bmm_auto_update') !== 'false';
-            if (isAutoUpdateEnabled) {
-                // Just a quick check, usually we don't want to block closure too long
-                // but if we find an update, we can alert.
-                // However, listener can be async but must call close() eventually.
-            }
-            // For now we just let it close as the backend might be doing its own thing (crash reports)
-        });
-    } catch (e) {
-        console.warn("Could not setup shutdown update check:", e);
-    }
-}
-
-
-// ── PTB System ─────────────────────────────────────────────
-
-async function checkPtbMode() {
-    try {
-        const isPtb = await invoke('is_ptb_mode');
-        if (isPtb) {
-            // Check if we've already shown it this session to avoid annoyance
-            if (sessionStorage.getItem('bmm_ptb_shown')) return;
-
-            const notes = await invoke('get_update_notes', { subDir: null });
-            const ptbNote = notes.find(n => n.filename.includes('PTB'));
-
-            if (ptbNote) {
-                showPtbModal(ptbNote.content);
-                sessionStorage.setItem('bmm_ptb_shown', 'true');
-            }
-        }
-    } catch (e) {
-        console.warn("[BMM] PTB check failed:", e);
-    }
-}
-
-function showPtbModal(content) {
-    let modal = document.getElementById('modal-ptb-welcome');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'modal-ptb-welcome';
-        modal.className = 'modal-overlay';
-        document.body.appendChild(modal);
-    }
-
-    modal.innerHTML = `
-        <div class="modal glass" style="max-width:700px; width:90%; animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
-            <div class="modal-header">
-                <h2 class="modal-title" style="display:flex; align-items:center; gap:12px; color:var(--warning);">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                        <line x1="12" y1="9" x2="12" y2="13"/>
-                        <line x1="12" y1="17" x2="12.01" y2="17"/>
-                    </svg>
-                    ${t('ptb.title') || 'PUBLIC TEST BUILD'}
-                </h2>
-                <button class="modal-close" id="close-ptb-welcome">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-            </div>
-            <div class="modal-body archive-content" style="max-height:60vh; overflow-y:auto; padding:32px;">
-                ${renderMarkdown(content)}
-            </div>
-            <div class="modal-footer" style="padding:16px 24px; border-top:1px solid var(--border); display:flex; justify-content:flex-end;">
-                <button class="btn btn-primary" id="btn-ptb-ack" style="padding:10px 24px;">${t('ptb.ack') || 'OK'}</button>
-            </div>
-        </div>
-    `;
-
-    modal.classList.add('open');
-    const close = () => modal.classList.remove('open');
-    modal.querySelector('#close-ptb-welcome').addEventListener('click', close);
-    modal.querySelector('#btn-ptb-ack').addEventListener('click', close);
-}
-
 
 // Global expose for onclick
 window.openLicenseModal = openLicenseModal;

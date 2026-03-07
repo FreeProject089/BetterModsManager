@@ -7,3 +7,4 @@ pub mod tag;
 pub mod history;
 pub mod settings;
 pub mod crash;
+pub mod autoupdate;

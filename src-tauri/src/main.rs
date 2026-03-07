@@ -98,7 +98,6 @@ fn main() {
             commands::settings::import_app_data,
             commands::settings::reset_app_data,
             commands::settings::is_debug_mode,
-            commands::settings::is_ptb_mode,
             commands::settings::get_license_text,
             commands::settings::get_app_version,
             commands::mods::open_folder,
@@ -114,6 +113,8 @@ fn main() {
             commands::crash::get_crash_reports,
             commands::crash::trigger_manual_crash_report,
             commands::crash::log_frontend_line,
+            // Auto Update
+            commands::autoupdate::check_for_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
