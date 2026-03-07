@@ -1,6 +1,6 @@
 [package]
 name = "better-mods-manager"
-version = "0.9.5"
+version = "0.9.6"
 edition = "2021"
 
 [[bin]]

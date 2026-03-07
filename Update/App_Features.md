@@ -147,4 +147,33 @@ When adding or editing a mod, you can categorize its download links. This helps 
 
 ---
 
+## 12. Auto-Update System
+
+BMM includes a built-in update checker that queries the GitHub Releases API to notify users when a new version is available.
+
+| Feature | Description |
+| :--- | :--- |
+| **Automatic Check on Startup** | When enabled, BMM queries the GitHub Releases API 3 seconds after launch to check for a newer version. This runs silently in the background. |
+| **Manual Check Button** | A "Check for Updates" button is available in the sidebar footer and in the Settings page for on-demand checking. |
+| **Enable / Disable Toggle** | The auto-check can be toggled on or off from the Settings → Auto Update card. The preference is persisted in `localStorage`. |
+| **Update Available Modal** | When a newer version is detected, a modal displays the current version vs. latest version, the release notes (rendered as Markdown), and a direct download button for the `.msi` installer. |
+| **SemVer Comparison** | Versions are compared using semantic versioning logic (`MAJOR.MINOR.PATCH`). Only strictly newer versions trigger the update notification. |
+| **Asset Auto-Detection** | The download button prioritizes `.msi` installers, then `.exe`, then `.zip` — linking directly to the asset rather than the GitHub page. |
+| **Graceful Error Handling** | If no releases exist (404), a friendly info toast is shown. Network errors are reported via toast without blocking the app. |
+
+---
+
+## 13. PTB Mode (Public Test Build)
+
+BMM supports a PTB (Public Test Build) mode for distributing pre-release versions with dedicated onboarding.
+
+| Feature | Description |
+| :--- | :--- |
+| **PTB Detection** | BMM reads `app.cfg` at startup. If `PTB=true` is present, PTB mode is activated. |
+| **Welcome Modal** | On first launch in PTB mode, a modal displays the contents of the `Update_v*_PTB.md` file found at the project root, rendered with full Markdown support. |
+| **Session-Based Dismiss** | The PTB modal is shown once per session. Dismissing it stores the state in `sessionStorage`, so it won't reappear until the next app restart. |
+| **Theme Integration** | The PTB modal matches the app's Vanguard Workstation design system with glassmorphism, accent-blue theming, and a visible primary action button. |
+
+---
+
 *Better Mod Manager is developed by FreeProject089.*

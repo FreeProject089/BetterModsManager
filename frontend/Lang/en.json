@@ -107,6 +107,7 @@
     "prof.saveBtn": "Save",
     "prof.deleted": "Profile deleted.",
     "prof.confirmDelete": "Delete this profile?",
+    "prof.hasActiveMods": "{count} mod(s) are still active in this profile. Disable them all before deleting?",
     "prof.updated": "Profile \"{name}\" updated.",
     "prof.created": "Profile \"{name}\" created successfully.",
     "prof.ovgmeImported": "{count} OvGME profile(s) imported successfully.",
@@ -347,5 +348,7 @@
     "settings.later": "Later",
     "settings.downloadUpdate": "Download Update",
     "settings.viewOnGithub": "View on GitHub →",
-    "settings.noRelease": "No releases published on GitHub yet."
+    "settings.noRelease": "No releases published on GitHub yet.",
+    "ptb.title": "Public Test Build",
+    "ptb.understood": "Understood!"
 }

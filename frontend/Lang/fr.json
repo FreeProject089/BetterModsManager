@@ -107,6 +107,7 @@
     "prof.saveBtn": "Enregistrer",
     "prof.deleted": "Profil supprimé.",
     "prof.confirmDelete": "Supprimer ce profil ?",
+    "prof.hasActiveMods": "{count} mod(s) sont encore actifs dans ce profil. Voulez-vous les désactiver avant de supprimer ?",
     "prof.updated": "Profil \"{name}\" mis à jour.",
     "prof.created": "Profil \"{name}\" créé avec succès.",
     "prof.ovgmeImported": "{count} profil(s) OvGME importé(s) avec succès.",
@@ -347,5 +348,7 @@
     "settings.later": "Plus tard",
     "settings.downloadUpdate": "Télécharger la mise à jour",
     "settings.viewOnGithub": "Voir sur GitHub →",
-    "settings.noRelease": "Aucune release publiée sur GitHub pour le moment."
+    "settings.noRelease": "Aucune release publiée sur GitHub pour le moment.",
+    "ptb.title": "Version de Test Publique",
+    "ptb.understood": "Compris !"
 }

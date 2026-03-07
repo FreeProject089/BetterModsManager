@@ -89,3 +89,55 @@ pub fn get_license_text(app_handle: tauri::AppHandle) -> Result<String, String> 
 pub fn get_app_version(app_handle: tauri::AppHandle) -> String {
     app_handle.package_info().version.to_string()
 }
+
+#[tauri::command]
+pub fn is_ptb_mode(app_handle: tauri::AppHandle) -> bool {
+    let cfg_path = app_handle
+        .path_resolver()
+        .resolve_resource("../app.cfg")
+        .or_else(|| {
+            Some(std::path::PathBuf::from("app.cfg"))
+        });
+
+    if let Some(path) = cfg_path {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let normalized = content.to_lowercase();
+            return normalized.contains("ptb=true");
+        }
+    }
+    false
+}
+
+#[tauri::command]
+pub fn get_ptb_notes(app_handle: tauri::AppHandle) -> Result<String, String> {
+    // Look for Update_v*_PTB.md in the project root
+    let exe_dir = app_handle
+        .path_resolver()
+        .resource_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    let dev_base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    // Search in both dirs for a PTB markdown file
+    for base in &[exe_dir, dev_base] {
+        if let Ok(entries) = std::fs::read_dir(base) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        if name.contains("PTB") && name.ends_with(".md") {
+                            if let Ok(content) = std::fs::read_to_string(&path) {
+                                return Ok(content);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Err("No PTB notes found".to_string())
+}

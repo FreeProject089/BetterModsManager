@@ -1,4 +1,5 @@
 use serde::Serialize;
+use crate::commands::crash::log_line;
 
 #[derive(Serialize, Clone)]
 pub struct UpdateInfo {
@@ -15,6 +16,7 @@ pub struct UpdateInfo {
 #[tauri::command]
 pub async fn check_for_update(app_handle: tauri::AppHandle) -> Result<UpdateInfo, String> {
     let current_version = app_handle.package_info().version.to_string();
+    log_line(format!("[UPDATE] Checking for updates (current: v{})", current_version));
 
     // GitHub API endpoint for latest release
     let url = "https://api.github.com/repos/better-dcs/BetterModsManager/releases/latest";

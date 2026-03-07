@@ -372,12 +372,44 @@ export async function renderProfiles() {
         btn.addEventListener('click', async e => {
             e.stopPropagation();
             const id = e.currentTarget.dataset.id;
-            if (!confirm('Supprimer ce profil ?')) return;
+            const profile = profiles.find(p => p.id === id);
+
+            // Check for enabled mods in this profile
+            const profileMods = allModsCache.filter(m => m.mod_folder_path && m.mod_folder_path.startsWith(profile.mods_path));
+            const enabledMods = profileMods.filter(m => m.enabled);
+
+            if (enabledMods.length > 0) {
+                // Offer to disable all mods first
+                const msg = (t('prof.hasActiveMods') || '{count} mod(s) are still active in this profile. Disable them all before deleting?')
+                    .replace('{count}', enabledMods.length);
+                if (!confirm(msg)) return;
+
+                // Disable all enabled mods
+                const btn = e.currentTarget;
+                const originalHtml = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>';
+
+                try {
+                    for (const mod of enabledMods) {
+                        await invoke('disable_mod', { modId: mod.id });
+                    }
+                    toast((t('mod.disabledCount') || '{count} mod(s) disabled.').replace('{count}', enabledMods.length), 'info');
+                } catch (err) {
+                    toast(t('common.error') + ': ' + err, 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                    return;
+                }
+            } else {
+                if (!confirm(t('prof.confirmDelete') || 'Delete this profile?')) return;
+            }
+
             await invoke('delete_profile', { profileId: id });
             await renderProfiles();
             updateProfileChip();
             updateLibraryProfileSelector();
-            toast('Profil supprimé.', 'info');
+            toast(t('prof.deleted') || 'Profile deleted.', 'info');
         });
     });
 

@@ -1,5 +1,6 @@
 use crate::fs_utils;
 use crate::models::mod_entry::{ModEntry, ModStatus};
+use crate::commands::crash::log_line;
 use crate::state::AppState;
 use std::path::PathBuf;
 use tauri::State;
@@ -45,7 +46,7 @@ pub async fn add_mod(
     version: String,
     tags: Option<Vec<String>>,
 ) -> Result<ModEntry, String> {
-    crate::commands::crash::log_line(format!("[MOD] Adding mod '{}' from '{}'", name, mod_folder_path));
+    log_line(format!("[MOD] Adding mod '{}' from '{}'", name, mod_folder_path));
     let mods_path = {
         let data = state.data.lock().unwrap();
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
@@ -124,6 +125,7 @@ pub async fn add_mod(
 
 #[tauri::command]
 pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files: bool) -> Result<(), String> {
+    log_line(format!("[MOD] Removing mod '{}' (delete_files: {})", mod_id, delete_files));
     let mod_path = {
         let mut data = state.data.lock().unwrap();
         let idx = data.mods.iter().position(|m| m.id == mod_id).ok_or("Mod introuvable")?;
@@ -151,6 +153,7 @@ pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files
 
 #[tauri::command]
 pub async fn enable_mod(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
+    log_line(format!("[MOD] Enabling mod '{}'", mod_id));
     let (mod_folder, game_path, backup_path, active_id, mod_name, other_active_mods) = {
         let data = state.data.lock().unwrap();
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?.clone();
@@ -192,12 +195,14 @@ pub async fn enable_mod(state: State<'_, AppState>, mod_id: String) -> Result<()
     let _ = state.save();
     
     // Log history
+    log_line(format!("[MOD] Mod '{}' enabled successfully ({} files installed)", mod_name, applied.len()));
     crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Enabled");
     Ok(())
 }
 
 #[tauri::command]
 pub async fn disable_mod(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
+    log_line(format!("[MOD] Disabling mod '{}'", mod_id));
     let (game_path, backup_path, active_id, mod_name, files_to_remove, other_active_mods) = {
         let data = state.data.lock().unwrap();
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?.clone();
@@ -245,6 +250,7 @@ pub async fn disable_mod(state: State<'_, AppState>, mod_id: String) -> Result<(
     let _ = state.save();
     
     // Log history
+    log_line(format!("[MOD] Mod '{}' disabled successfully", mod_name));
     crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Disabled");
     Ok(())
 }
@@ -360,6 +366,7 @@ pub fn update_mod_meta(
     version: String,
     tags: Vec<String>,
 ) -> Result<(), String> {
+    log_line(format!("[MOD] Updating metadata for '{}' ({})", name, mod_id));
     {
         let mut data = state.data.lock().unwrap();
         if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
@@ -376,6 +383,7 @@ pub fn update_mod_meta(
 
 #[tauri::command]
 pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<Vec<ModEntry>, String> {
+    log_line("[MOD] Scanning mods folder for new mods...");
     let (mods_path, profile_id) = {
         let data = state.data.lock().unwrap();
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
@@ -464,10 +472,13 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<Vec<ModEntry
     }).await.map_err(|e| e.to_string())??;
 
     if !added.is_empty() {
+        log_line(format!("[MOD] Scan discovered {} new mod(s)", added.len()));
         let mut data = state.data.lock().unwrap();
         data.mods.extend(added.clone());
         drop(data);
         let _ = state.save();
+    } else {
+        log_line("[MOD] Scan complete, no new mods found");
     }
     Ok(added)
 }
@@ -478,6 +489,7 @@ pub async fn download_mod(
     url: String,
     mod_name: String,
 ) -> Result<ModEntry, String> {
+    log_line(format!("[MOD] Downloading mod '{}' from '{}'", mod_name, url));
     let mods_path = {
         let data = state.data.lock().unwrap();
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
@@ -840,6 +852,7 @@ pub async fn install_from_modlist(
 
 #[tauri::command]
 pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    log_line("[INTEGRITY] Running integrity check on active mods...");
     let enabled_mods = {
         let data = state.data.lock().unwrap();
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
@@ -893,10 +906,12 @@ pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>,
         Ok(altered)
     }).await.map_err(|e| e.to_string())??;
 
+    log_line(format!("[INTEGRITY] Check complete: {} issue(s) found", altered.len()));
     Ok(altered)
 }
 #[tauri::command]
 pub async fn toggle_all_mods(state: State<'_, AppState>, enable: bool) -> Result<(), String> {
+    log_line(format!("[MOD] Toggle all mods: {}", if enable { "ENABLE" } else { "DISABLE" }));
     let mod_ids = {
         let data = state.data.lock().unwrap();
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;

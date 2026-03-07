@@ -723,6 +723,51 @@ function initInteractionLogging() {
             }
         }, 1000);
     }, true);
+
+    // Log keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            const key = e.key?.toUpperCase();
+            if (['N', 'E', 'S', 'F'].includes(key)) {
+                invoke('log_frontend_line', { line: `Shortcut: Ctrl+${key}` });
+            }
+        }
+    });
+
+    // Log drag-and-drop
+    document.addEventListener('drop', (e) => {
+        const files = e.dataTransfer?.files;
+        if (files && files.length > 0) {
+            const names = Array.from(files).map(f => f.name).join(', ');
+            invoke('log_frontend_line', { line: `Drop: ${files.length} file(s) [${names}]` });
+        }
+    });
+
+    // Log toggle/checkbox changes
+    document.addEventListener('change', (e) => {
+        const t = e.target;
+        if (t.type === 'checkbox' || t.classList?.contains('toggle-switch')) {
+            const id = t.id || t.name || 'unknown';
+            invoke('log_frontend_line', { line: `Toggle: [${id}] = ${t.checked}` });
+        }
+        if (t.tagName === 'SELECT') {
+            const id = t.id || t.name || 'unknown';
+            invoke('log_frontend_line', { line: `Select: [${id}] = ${t.value}` });
+        }
+    });
+
+    // Log window focus/blur
+    window.addEventListener('focus', () => invoke('log_frontend_line', { line: 'Window: Focus gained' }));
+    window.addEventListener('blur', () => invoke('log_frontend_line', { line: 'Window: Focus lost' }));
+
+    // Log unhandled JS errors
+    window.addEventListener('error', (e) => {
+        invoke('log_frontend_line', { line: `[JS-ERROR] ${e.message} at ${e.filename}:${e.lineno}` });
+    });
+
+    window.addEventListener('unhandledrejection', (e) => {
+        invoke('log_frontend_line', { line: `[JS-PROMISE-ERROR] ${e.reason}` });
+    });
 }
 
 
@@ -1180,6 +1225,9 @@ async function main() {
     // Auto Update System
     initAutoUpdate();
 
+    // PTB Mode check
+    checkPtbMode();
+
     const restartBtn = document.getElementById('btn-restart-onboarding');
     if (restartBtn) {
         restartBtn.addEventListener('click', () => {
@@ -1499,6 +1547,93 @@ function showUpdateAvailableModal(info) {
     modal.querySelector('#close-update-modal').addEventListener('click', () => modal.remove());
     modal.querySelector('#btn-update-later').addEventListener('click', () => modal.remove());
     modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+}
+
+// ── PTB (Public Test Build) Modal ───────────────────────
+
+const PTB_DISMISSED_KEY = 'bmm_ptb_dismissed';
+
+async function checkPtbMode() {
+    try {
+        const isPtb = await invoke('is_ptb_mode');
+        if (!isPtb) return;
+
+        // Check if user already dismissed this session
+        if (sessionStorage.getItem(PTB_DISMISSED_KEY) === 'true') return;
+
+        // Load PTB notes
+        let content = '';
+        try {
+            content = await invoke('get_ptb_notes');
+        } catch (e) {
+            console.warn('[BMM] No PTB notes found:', e);
+            return;
+        }
+
+        // Render markdown
+        const rendered = typeof marked !== 'undefined'
+            ? marked.parse(content)
+            : content.replace(/\n/g, '<br>');
+
+        showPtbModal(rendered);
+    } catch (e) {
+        console.warn('[BMM] PTB check failed:', e);
+    }
+}
+
+function showPtbModal(htmlContent) {
+    const existing = document.getElementById('ptb-welcome-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'ptb-welcome-modal';
+    modal.className = 'update-modal-backdrop';
+    modal.innerHTML = `
+        <div class="ptb-modal-card">
+            <button class="update-modal-close" id="close-ptb-modal">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+
+            <div class="ptb-modal-header">
+                <div style="display:inline-flex;width:52px;height:52px;background:var(--accent-dim);border-radius:14px;align-items:center;justify-content:center;margin-bottom:14px;border:1px solid var(--border-accent)">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                    </svg>
+                </div>
+                <h2 style="font-size:19px;font-weight:800;color:var(--text-primary);margin-bottom:6px">
+                    ${t('ptb.title') || 'Public Test Build'}
+                </h2>
+                <div style="display:inline-block;padding:3px 12px;background:var(--accent-dim);border:1px solid var(--border-accent);border-radius:var(--radius-chip);font-size:10px;font-weight:700;color:var(--accent);letter-spacing:0.06em;text-transform:uppercase;font-family:var(--font-mono)">
+                    PTB
+                </div>
+            </div>
+
+            <div class="ptb-modal-body">
+                ${htmlContent}
+            </div>
+
+            <div class="ptb-modal-footer">
+                <button class="btn-ptb-ok" id="btn-ptb-dismiss">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    ${t('ptb.understood') || 'Understood!'}
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Close handlers
+    const close = () => {
+        sessionStorage.setItem(PTB_DISMISSED_KEY, 'true');
+        modal.remove();
+    };
+    modal.querySelector('#close-ptb-modal').addEventListener('click', close);
+    modal.querySelector('#btn-ptb-dismiss').addEventListener('click', close);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
 }
 
 // ── Licenses ──────────────────────────────────────────────

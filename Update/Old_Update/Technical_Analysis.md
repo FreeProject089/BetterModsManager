@@ -218,7 +218,7 @@ BMM can directly parse OvGME's proprietary binary `.dat` configuration files.
 | :--- | :--- |
 | **Language (Backend)** | Rust 1.70+ (Tauri v1) |
 | **Language (Frontend)** | ES2022 JavaScript — Zero framework |
-| **Networking** | reqwest 0.11 (blocking, async via spawn_blocking) |
+| **Networking** | reqwest 0.11 (blocking + async with `json` and `rustls-tls` features) |
 | **Archiving** | zip-rs 0.6 |
 | **State Serialization** | serde / serde_json |
 | **File Operations** | std::fs + fs_extra 1.x |
@@ -262,6 +262,65 @@ The `is_debug_mode` command controls the visibility of developer tools via `app.
 | **Config Check** | `app_handle.path_resolver().resolve_resource("../app.cfg")` |
 | **State Reset** | Overwrites in-memory `AppData` with `Default::default()`, clears disk `data.json`, and triggers a frontend `localStorage.clear()`. |
 | **Manual Trigger** | Exposes the `trigger_manual_crash_report` command for ZIP format validation. |
+
+---
+
+## 13. Auto-Update Engine (`autoupdate.rs`)
+
+BMM includes a GitHub-based update checker implemented as an async Tauri command.
+
+### Update Check Flow
+
+| Step | Implementation | Detail |
+| :--- | :--- | :--- |
+| 1 | `check_for_update` | Async Tauri command triggered by frontend on startup or manual button click |
+| 2 | HTTP Request | `reqwest::Client` with `User-Agent: BetterModManager` queries `https://api.github.com/repos/better-dcs/BetterModsManager/releases/latest` |
+| 3 | Version Parse | Strips `v` / `V` prefix from `tag_name`, splits into `MAJOR.MINOR.PATCH` segments |
+| 4 | SemVer Compare | `is_newer_version()` compares each segment left-to-right; returns `true` only if latest is strictly greater |
+| 5 | Asset Detection | Scans `assets[]` array for `.msi` (priority), then `.exe` / `.zip`, extracts `browser_download_url` |
+| 6 | Response | Returns `UpdateInfo { has_update, current_version, latest_version, release_url, release_notes, download_url }` |
+
+### Error Handling
+
+| Status | Behavior |
+| :--- | :--- |
+| **404** | Returns `Err("NO_RELEASE")` — frontend shows info toast instead of error |
+| **Network failure** | Returns `Err("Network error: ...")` — frontend shows error toast on manual check, silent on auto-check |
+| **JSON parse error** | Returns `Err("JSON parse error: ...")` |
+
+### Frontend Integration
+
+| Mechanism | Implementation |
+| :--- | :--- |
+| **Auto-check toggle** | `localStorage('bmm_auto_update_enabled')`, default `true` |
+| **Startup check** | `setTimeout(() => performUpdateCheck(false), 3000)` — non-blocking, no toast if up-to-date |
+| **Manual check** | Sidebar button (`#btn-check-updates`) and Settings button (`#btn-settings-check-update`) |
+| **Update modal** | Dynamically created DOM element with version comparison, Markdown release notes, and asset download link |
+
+---
+
+## 14. PTB System (Public Test Build)
+
+BMM supports a PTB distribution mode controlled via `app.cfg`.
+
+### Detection
+
+| Command | Logic |
+| :--- | :--- |
+| `is_ptb_mode` | Reads `app.cfg` via `path_resolver().resolve_resource("../app.cfg")`, checks for `ptb=true` (case-insensitive) |
+| `get_ptb_notes` | Scans both the resource dir and dev project root for any file matching `*PTB*.md`, returns its content as a string |
+
+### Frontend Flow
+
+| Step | Detail |
+| :--- | :--- |
+| 1 | `checkPtbMode()` called during `main()` boot sequence |
+| 2 | Invokes `is_ptb_mode` — if `false`, exits silently |
+| 3 | Checks `sessionStorage('bmm_ptb_dismissed')` — if already dismissed this session, exits |
+| 4 | Invokes `get_ptb_notes` to load the PTB markdown content |
+| 5 | Renders content using `marked.parse()` (with `<br>` fallback) |
+| 6 | Displays a themed modal with header (icon + title + PTB badge), scrollable body, and blue primary dismiss button |
+| 7 | On dismiss, sets `sessionStorage` flag to prevent re-display until next app restart |
 
 ---
 

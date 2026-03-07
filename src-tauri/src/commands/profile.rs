@@ -1,5 +1,6 @@
 use crate::models::profile::Profile;
 use crate::state::AppState;
+use crate::commands::crash::log_line;
 use std::path::PathBuf;
 use tauri::State;
 
@@ -17,7 +18,8 @@ pub fn get_active_profile_id(state: State<AppState>) -> Option<String> {
 pub fn set_active_profile(state: State<AppState>, profile_id: String) -> Result<(), String> {
     {
         let mut data = state.data.lock().unwrap();
-        if data.profiles.iter().any(|p| p.id == profile_id) {
+        if let Some(p) = data.profiles.iter().find(|p| p.id == profile_id) {
+            log_line(format!("[PROFILE] Switched active profile to '{}' ({})", p.name, profile_id));
             data.active_profile_id = Some(profile_id);
         } else {
             return Err("Profile not found".to_string());
@@ -55,6 +57,7 @@ pub fn create_profile(
         data.profiles.push(profile);
     }
     state.save().map_err(|e| e.to_string())?;
+    log_line(format!("[PROFILE] Created profile '{}' (game: {}, id: {})", result.name, result.game_name, result.id));
     Ok(result)
 }
 
@@ -70,6 +73,7 @@ pub fn update_profile(
     color: Option<String>,
     icon: Option<String>,
 ) -> Result<(), String> {
+    log_line(format!("[PROFILE] Updated profile '{}' ({})", name, profile_id));
     {
         let mut data = state.data.lock().unwrap();
         if let Some(p) = data.profiles.iter_mut().find(|p| p.id == profile_id) {
@@ -89,6 +93,7 @@ pub fn update_profile(
 
 #[tauri::command]
 pub fn delete_profile(state: State<AppState>, profile_id: String) -> Result<(), String> {
+    log_line(format!("[PROFILE] Deleting profile ({})", profile_id));
     {
         let mut data = state.data.lock().unwrap();
         data.profiles.retain(|p| p.id != profile_id);
