@@ -1376,33 +1376,67 @@ function setAutoUpdateEnabled(enabled) {
     localStorage.setItem(AUTO_UPDATE_KEY, enabled ? 'true' : 'false');
 }
 
-function initAutoUpdate() {
+async function initAutoUpdate() {
+    let isDisabled = false;
+    try {
+        isDisabled = await invoke('is_update_disabled');
+    } catch (e) {
+        console.warn('[BMM] Failed to check update disabled status:', e);
+    }
+
     // Toggle checkbox
     const chk = document.getElementById('chk-auto-update');
     if (chk) {
-        chk.checked = isAutoUpdateEnabled();
-        chk.addEventListener('change', () => {
-            setAutoUpdateEnabled(chk.checked);
-            toast(chk.checked
-                ? (t('settings.autoUpdateEnabled') || 'Auto-update enabled')
-                : (t('settings.autoUpdateDisabled') || 'Auto-update disabled'), 'info');
-        });
+        if (isDisabled) {
+            chk.checked = false;
+            chk.disabled = true;
+            if (chk.parentElement) {
+                chk.parentElement.style.opacity = '0.5';
+                chk.parentElement.title = t('update.disabled') || 'Updates disabled via configuration.';
+            }
+        } else {
+            chk.checked = isAutoUpdateEnabled();
+            chk.addEventListener('change', () => {
+                setAutoUpdateEnabled(chk.checked);
+                toast(chk.checked
+                    ? (t('settings.autoUpdateEnabled') || 'Auto-update enabled')
+                    : (t('settings.autoUpdateDisabled') || 'Auto-update disabled'), 'info');
+            });
+        }
     }
 
     // Sidebar button
     const sidebarBtn = document.getElementById('btn-check-updates');
     if (sidebarBtn) {
-        sidebarBtn.addEventListener('click', () => performUpdateCheck(true));
+        if (isDisabled) {
+            sidebarBtn.style.opacity = '0.5';
+            sidebarBtn.style.cursor = 'not-allowed';
+            sidebarBtn.title = t('update.disabled');
+            sidebarBtn.addEventListener('click', () => {
+                toast(t('update.disabled') || 'Updates are disabled.', 'warning');
+            });
+        } else {
+            sidebarBtn.addEventListener('click', () => performUpdateCheck(true));
+        }
     }
 
     // Settings button
     const settingsBtn = document.getElementById('btn-settings-check-update');
     if (settingsBtn) {
-        settingsBtn.addEventListener('click', () => performUpdateCheck(true));
+        if (isDisabled) {
+            settingsBtn.style.opacity = '0.5';
+            settingsBtn.style.cursor = 'not-allowed';
+            settingsBtn.title = t('update.disabled');
+            settingsBtn.addEventListener('click', () => {
+                toast(t('update.disabled') || 'Updates are disabled.', 'warning');
+            });
+        } else {
+            settingsBtn.addEventListener('click', () => performUpdateCheck(true));
+        }
     }
 
     // Auto-check on startup
-    if (isAutoUpdateEnabled()) {
+    if (!isDisabled && isAutoUpdateEnabled()) {
         setTimeout(() => performUpdateCheck(false), 3000); // Delay 3s to let app load
     }
 }

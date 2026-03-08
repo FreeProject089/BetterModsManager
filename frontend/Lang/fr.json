@@ -292,6 +292,7 @@
     "update.title": "Notes de mise à jour",
     "update.none": "Aucune note de mise à jour disponible.",
     "update.fallback": "Les notes de mise à jour seront disponibles prochainement.",
+    "update.disabled": "Les mises à jour sont désactivées.",
     "update.showOld": "Voir les archives",
     "update.hideOld": "Cacher les archives",
     "prof.nameLabel": "Nom du profil",

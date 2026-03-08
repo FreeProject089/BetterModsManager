@@ -109,6 +109,24 @@ pub fn is_ptb_mode(app_handle: tauri::AppHandle) -> bool {
 }
 
 #[tauri::command]
+pub fn is_update_disabled(app_handle: tauri::AppHandle) -> bool {
+    let cfg_path = app_handle
+        .path_resolver()
+        .resolve_resource("../app.cfg")
+        .or_else(|| {
+            Some(std::path::PathBuf::from("app.cfg"))
+        });
+
+    if let Some(path) = cfg_path {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let normalized = content.to_lowercase();
+            return normalized.contains("disableupdate=true");
+        }
+    }
+    false
+}
+
+#[tauri::command]
 pub fn get_ptb_notes(app_handle: tauri::AppHandle) -> Result<String, String> {
     // Look for Update_v*_PTB.md in the project root
     let exe_dir = app_handle

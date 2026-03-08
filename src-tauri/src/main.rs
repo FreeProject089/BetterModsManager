@@ -99,6 +99,7 @@ fn main() {
             commands::settings::reset_app_data,
             commands::settings::is_debug_mode,
             commands::settings::is_ptb_mode,
+            commands::settings::is_update_disabled,
             commands::settings::get_ptb_notes,
             commands::settings::get_license_text,
             commands::settings::get_app_version,

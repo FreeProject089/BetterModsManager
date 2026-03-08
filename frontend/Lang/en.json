@@ -292,6 +292,7 @@
     "update.title": "Update notes",
     "update.none": "No update notes available.",
     "update.fallback": "Update notes will be available soon.",
+    "update.disabled": "Updates are currently disabled.",
     "update.showOld": "View archives",
     "update.hideOld": "Hide archives",
     "prof.nameLabel": "Profile name",
