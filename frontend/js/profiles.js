@@ -181,7 +181,7 @@ export async function renderProfiles() {
 
     // Fetch all mods for count display
     let allModsCache = [];
-    try { allModsCache = await invoke('get_mods'); } catch { }
+    try { allModsCache = await invoke('get_all_mods'); } catch { }
 
     // Badge
     const count = profiles.length;
@@ -236,7 +236,8 @@ export async function renderProfiles() {
         let activeModsHtml = '';
         try {
             const profileMods = allModsCache.filter(m => m.mod_folder_path && m.mod_folder_path.startsWith(p.mods_path));
-            const enabledMods = profileMods.filter(m => m.enabled);
+            const activeIds = Array.isArray(p.active_mods) ? p.active_mods : [];
+            const enabledMods = profileMods.filter(m => activeIds.includes(m.id));
             const enabledCount = enabledMods.length;
 
             if (profileMods.length > 0) {
@@ -376,9 +377,10 @@ export async function renderProfiles() {
 
             // Check for enabled mods in this profile
             const profileMods = allModsCache.filter(m => m.mod_folder_path && m.mod_folder_path.startsWith(profile.mods_path));
-            const enabledMods = profileMods.filter(m => m.enabled);
+            const activeIds = Array.isArray(profile.active_mods) ? profile.active_mods : [];
+            const enabledMods = profileMods.filter(m => activeIds.includes(m.id));
 
-            if (enabledMods.length > 0) {
+            if (enabledMods.length > 0 && id === activeId) {
                 // Offer to disable all mods first
                 const msg = (t('prof.hasActiveMods') || '{count} mod(s) are still active in this profile. Disable them all before deleting?')
                     .replace('{count}', enabledMods.length);

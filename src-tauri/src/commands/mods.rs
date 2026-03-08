@@ -37,6 +37,12 @@ pub fn get_mods(state: State<AppState>) -> Result<Vec<ModEntry>, String> {
 }
 
 #[tauri::command]
+pub fn get_all_mods(state: State<AppState>) -> Result<Vec<ModEntry>, String> {
+    let data = state.data.lock().unwrap();
+    Ok(data.mods.clone())
+}
+
+#[tauri::command]
 pub async fn add_mod(
     state: State<'_, AppState>,
     name: String,

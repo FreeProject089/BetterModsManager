@@ -67,6 +67,7 @@ fn main() {
             commands::profile::delete_profile,
             // Mod commands
             commands::mods::get_mods,
+            commands::mods::get_all_mods,
             commands::mods::add_mod,
             commands::mods::remove_mod,
             commands::mods::enable_mod,
