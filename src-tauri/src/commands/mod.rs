@@ -8,3 +8,5 @@ pub mod history;
 pub mod settings;
 pub mod crash;
 pub mod autoupdate;
+pub mod benchmark;
+pub mod disk;

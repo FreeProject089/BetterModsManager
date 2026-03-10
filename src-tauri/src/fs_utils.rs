@@ -15,15 +15,43 @@ fn ensure_removed(path: &Path) -> Result<()> {
     fs::remove_file(path).with_context(|| format!("Failed to remove file: {:?}", path))
 }
 
-/// Copy a single file from `src` to `dst`, creating parent dirs as needed.
-/// If `dst` exists, we try to clear its readonly flag and overwrite it.
-pub fn copy_file_force(src: &Path, dst: &Path) -> Result<()> {
+pub fn copy_file_force_limited(src: &Path, dst: &Path, limit_mb_s: Option<u64>) -> Result<()> {
     if let Some(parent) = dst.parent() {
         std::fs::create_dir_all(parent).ok();
     }
     if dst.exists() {
         let _ = ensure_removed(dst); // Clear permissions and delete if possible before overwrite
     }
+    
+    if let Some(limit) = limit_mb_s {
+        if limit > 0 {
+            use std::io::{Read, Write};
+            let mut src_file = std::fs::File::open(src).with_context(|| format!("Failed to open src: {:?}", src))?;
+            let mut dst_file = std::fs::File::create(dst).with_context(|| format!("Failed to create dst: {:?}", dst))?;
+            
+            let chunk_size: usize = 1024 * 1024; // 1 MB buffer
+            let mut buffer = vec![0u8; chunk_size];
+            
+            loop {
+                let start = std::time::Instant::now();
+                let bytes_read = src_file.read(&mut buffer)?;
+                if bytes_read == 0 {
+                    break;
+                }
+                dst_file.write_all(&buffer[..bytes_read])?;
+                
+                let elapsed = start.elapsed();
+                let fraction = bytes_read as f64 / 1_048_576.0;
+                let required_duration = std::time::Duration::from_secs_f64(fraction / limit as f64);
+                
+                if elapsed < required_duration {
+                    std::thread::sleep(required_duration - elapsed);
+                }
+            }
+            return Ok(());
+        }
+    }
+
     std::fs::copy(src, dst)
         .with_context(|| format!("Failed to copy {:?} -> {:?}", src, dst))?;
     Ok(())
@@ -35,7 +63,8 @@ pub fn backup_original_file(
     game_path: &Path, 
     rel: &Path, 
     profile_backup_root: &Path,
-    other_active_mods: &[(String, PathBuf)]
+    other_active_mods: &[(String, PathBuf)],
+    backup_path_limit: Option<u64>
 ) -> Result<()> {
     let src = game_path.join(rel);
     let dst = profile_backup_root.join("_original").join(rel);
@@ -54,26 +83,12 @@ pub fn backup_original_file(
     }
 
     // It's a real game file! Secure it.
-    copy_file_force(&src, &dst)
+    copy_file_force_limited(&src, &dst, backup_path_limit)
         .with_context(|| format!("Failed to backup original file: {:?}", rel))?;
     
     Ok(())
 }
 
-/// Restore a backed-up file from `profile_backup_root/_original/rel` to `game_path/rel`.
-pub fn restore_original_file(game_path: &Path, rel: &Path, profile_backup_root: &Path) -> Result<bool> {
-    let src = profile_backup_root.join("_original").join(rel);
-    let dst = game_path.join(rel);
-    if src.exists() {
-        copy_file_force(&src, &dst)?;
-        Ok(true)
-    } else {
-        if dst.exists() {
-            ensure_removed(&dst)?;
-        }
-        Ok(false)
-    }
-}
 
 /// Get all file paths (relative) inside a mod folder, recursively.
 pub fn list_mod_files(mod_folder: &Path) -> Result<Vec<PathBuf>> {
@@ -99,18 +114,20 @@ pub fn apply_mod_stacked(
     game_path: &Path,
     profile_backup_root: &Path,
     other_active_mods: &[(String, PathBuf)],
+    game_path_limit: Option<u64>,
+    backup_path_limit: Option<u64>,
 ) -> Result<Vec<PathBuf>> {
     let files = list_mod_files(mod_folder)?;
     let mut applied = Vec::new();
 
     for rel in &files {
         // Backup original if it's the first time BMM touches this file in this profile
-        let _ = backup_original_file(game_path, rel, profile_backup_root, other_active_mods);
+        let _ = backup_original_file(game_path, rel, profile_backup_root, other_active_mods, backup_path_limit);
         
         // Copy mod file to game dir (force overwrite)
         let src = mod_folder.join(rel);
         let dst = game_path.join(rel);
-        copy_file_force(&src, &dst)?;
+        copy_file_force_limited(&src, &dst, game_path_limit)?;
         applied.push(rel.clone());
     }
     Ok(applied)
@@ -123,6 +140,7 @@ pub fn unapply_mod_stacked(
     profile_backup_root: &Path,
     files_to_remove: Vec<String>,
     other_active_mods: &[(String, PathBuf)],
+    game_path_limit: Option<u64>,
 ) -> Result<()> {
     let game_path_can = game_path.canonicalize().unwrap_or(game_path.to_path_buf());
     
@@ -135,7 +153,7 @@ pub fn unapply_mod_stacked(
         for (_, mod_folder) in other_active_mods {
             let mod_src = mod_folder.join(&rel);
             if mod_src.exists() && mod_src.is_file() {
-                let _ = copy_file_force(&mod_src, &dst_path);
+                let _ = copy_file_force_limited(&mod_src, &dst_path, game_path_limit);
                 restored = true;
                 break;
             }
@@ -145,7 +163,7 @@ pub fn unapply_mod_stacked(
         if !restored {
             let original_src = profile_backup_root.join("_original").join(&rel);
             if original_src.exists() {
-                let _ = copy_file_force(&original_src, &dst_path);
+                let _ = copy_file_force_limited(&original_src, &dst_path, game_path_limit);
             } else {
                 // File was added by mod and no original exists — DELETE IT
                 let _ = ensure_removed(&dst_path);

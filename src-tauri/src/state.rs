@@ -11,12 +11,15 @@ pub struct AppData {
     pub active_profile_id: Option<String>,
     #[serde(default)]
     pub custom_tags: Vec<crate::models::tag::TagDef>,
+    #[serde(default)]
+    pub disk_limits: std::collections::HashMap<String, u64>,
 }
 
 pub struct AppState {
     pub data: Mutex<AppData>,
     pub data_path: PathBuf,
     pub install_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub benchmark_running: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl AppState {
@@ -31,6 +34,7 @@ impl AppState {
             data: Mutex::new(data),
             data_path,
             install_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            benchmark_running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 

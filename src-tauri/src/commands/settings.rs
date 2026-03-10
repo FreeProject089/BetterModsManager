@@ -20,6 +20,7 @@ pub fn import_app_data(state: State<AppState>, src_path: String) -> Result<(), S
         mods: new_data.mods.clone(),
         active_profile_id: new_data.active_profile_id.clone(),
         custom_tags: new_data.custom_tags.clone(),
+        disk_limits: new_data.disk_limits.clone(),
     };
     Ok(())
 }
@@ -91,6 +92,11 @@ pub fn get_app_version(app_handle: tauri::AppHandle) -> String {
 }
 
 #[tauri::command]
+pub fn get_build_date() -> String {
+    env!("BMM_BUILD_DATE").to_string()
+}
+
+#[tauri::command]
 pub fn is_ptb_mode(app_handle: tauri::AppHandle) -> bool {
     let cfg_path = app_handle
         .path_resolver()
@@ -158,4 +164,66 @@ pub fn get_ptb_notes(app_handle: tauri::AppHandle) -> Result<String, String> {
     }
 
     Err("No PTB notes found".to_string())
+}
+#[tauri::command]
+pub fn get_available_languages(app_handle: tauri::AppHandle) -> Vec<String> {
+    let mut path = app_handle
+        .path_resolver()
+        .resource_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    // In dev mode, we might be inside src-tauri or a subdirectory of target
+    // We try to find the project root by looking for "src-tauri" in the path components
+    let mut lang_dir = path.clone();
+    let mut found = false;
+
+    // Climb up until we find a directory containing "frontend/Lang" or until we hit root
+    for _ in 0..10 {
+        let check = lang_dir.join("frontend").join("Lang");
+        if check.exists() && check.is_dir() {
+            lang_dir = check;
+            found = true;
+            break;
+        }
+        let check_prod = lang_dir.join("Lang");
+        if check_prod.exists() && check_prod.is_dir() {
+            lang_dir = check_prod;
+            found = true;
+            break;
+        }
+        if !lang_dir.pop() { break; }
+    }
+
+    if !found {
+        // Fallback to original logic if climbing failed
+        lang_dir = if path.ends_with("src-tauri") {
+            path.pop();
+            path.join("frontend").join("Lang")
+        } else {
+            path.join("Lang")
+        };
+    }
+
+    let mut languages = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(lang_dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_file() && p.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Some(name) = p.file_stem().and_then(|n| n.to_str()) {
+                    // Skip template if exists
+                    if name != "template" {
+                        languages.push(name.to_string());
+                    }
+                }
+            }
+        }
+    }
+    
+    // Default fallback if empty
+    if languages.is_empty() {
+        languages.push("fr".to_string());
+        languages.push("en".to_string());
+    }
+    
+    languages
 }

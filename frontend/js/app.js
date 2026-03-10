@@ -6,95 +6,14 @@
 import { initProfiles, renderProfiles, updateProfileChip } from './profiles.js';
 import { initMods, refreshMods } from './mods.js';
 import { initI18n, setLang, getLang, applyTranslations, getLanguages, t } from './i18n.js';
+import { initBenchmark } from './benchmark.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
 
 // ── Tauri bridge ──────────────────────────────────────────
-let _invoke;
-let _dialog;
-let _notifModule;
+import { loadTauri, invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification } from './api.js';
 
-async function loadTauri() {
-    // 1. Prioritize window.__TAURI__ (injected locally by Tauri when withGlobalTauri is true)
-    if (window.__TAURI__) {
-        _invoke = window.__TAURI__.invoke;
-        _dialog = window.__TAURI__.dialog;
-        _notifModule = window.__TAURI__.notification;
-        console.log('[BMM] Using local Tauri bridge');
-        return;
-    }
+export { invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification };
 
-    // 2. Fallback to unpkg (requires internet)
-    try {
-        const tauriModule = await import('https://unpkg.com/@tauri-apps/api@1/tauri.js');
-        const dialogModule = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
-        _notifModule = await import('https://unpkg.com/@tauri-apps/api@1/notification.js');
-        _invoke = tauriModule.invoke;
-        _dialog = dialogModule;
-    } catch {
-        // 3. Last fallback: mock for browser testing
-        console.warn('[BMM] Running in browser mock mode');
-        _invoke = mockInvoke;
-        _dialog = { open: async () => 'C:\\mock\\folder', save: async () => null };
-        _notifModule = null;
-    }
-}
-
-export async function invoke(command, args = {}) {
-    console.log(`[BMM] Invoke: ${command}`, args);
-    // Log every tauri invoke for real-time tracking
-    const start = Date.now();
-    try {
-        const res = await _invoke(command, args);
-        return res;
-    } catch (err) {
-        console.error(`[RPC ERROR] ${command}:`, err);
-        throw err;
-    }
-}
-
-export async function pickFolder() {
-    try {
-        return await _dialog.open({ directory: true, multiple: false });
-    } catch {
-        return null;
-    }
-}
-
-export async function pickFile(filters = []) {
-    try {
-        return await _dialog.open({ multiple: false, filters });
-    } catch {
-        return null;
-    }
-}
-
-export async function saveFile(filters = []) {
-    try {
-        const saveDialog = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
-        return await saveDialog.save({ filters });
-    } catch {
-        return null;
-    }
-}
-
-export async function listenFileDrop(callback) {
-    try {
-        const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
-        return await listen('tauri://file-drop', e => {
-            if (e.payload && e.payload.length > 0) {
-                callback(e.payload);
-            }
-        });
-    } catch {
-        console.warn('[BMM] File drop not supported in browser mockup');
-        return () => { };
-    }
-}
-
-export async function sendOsNotification(title, body) {
-    // Deprecated per user request. OS notifications and settings removed.
-    return;
-}
 
 // ── Toast ─────────────────────────────────────────────────
 export function toast(message, type = 'info', duration = 3000) {
@@ -454,7 +373,21 @@ function renderImportedModlist(modlist) {
                 <span style="font-family:var(--font-mono); font-size:10px; color:var(--cyan); background:rgba(6,182,212,0.1); padding:1px 6px; border-radius:4px; border:1px solid rgba(6,182,212,0.2)">v${escHtml(m.version)}</span>
                 <span style="font-size:10px; color:var(--text-muted); font-family:var(--font-mono)">${formatBytes(modSize)}</span>
             </div>
-            <div style="font-size:10px; color:var(--text-muted); font-family:var(--font-mono); background:rgba(255,255,255,0.03); padding:2px 6px; border-radius:4px" title="${t('mm.priorityTitle')}">PRIO: ${m.sort_priority}</div>
+            <div style="font-size:10px; font-weight:700; font-family:var(--font-mono); padding:2px 6px; border-radius:4px; ${(() => {
+                const p = m.sort_priority || 0;
+                if (p >= 1000) {
+                    const alpha = Math.min(0.8, 0.15 + (p - 1000) / 10000);
+                    return `background:rgba(239,68,68,${alpha}); color:${alpha > 0.4 ? 'white' : '#ef4444'}; border:1px solid rgba(239,68,68,${alpha + 0.1})`;
+                } else if (p >= 100) {
+                    const alpha = Math.min(0.6, 0.15 + (p - 100) / 1000);
+                    return `background:rgba(245,158,11,${alpha}); color:${alpha > 0.4 ? 'white' : '#f59e0b'}; border:1px solid rgba(245,158,11,${alpha + 0.1})`;
+                } else {
+                    const alpha = Math.min(0.4, 0.05 + p / 100);
+                    return `background:rgba(255,255,255,${alpha}); color:var(--text-muted); border:1px solid rgba(255,255,255,${alpha + 0.05})`;
+                }
+            })()}" title="PRIO: ${m.sort_priority}">
+                ${m.sort_priority >= 1000 ? 'MAX' : m.sort_priority >= 100 ? 'MED' : 'LOW'}
+            </div>
           </div>
           
           ${m.description ? `<p style="font-size:12px; color:var(--text-secondary); margin:0; opacity:0.8">${escHtml(m.description)}</p>` : ''}
@@ -935,21 +868,38 @@ function initNavbarLangDropdown() {
     function render() {
         const langs = getLanguages();
         const current = langs.find(l => l.active) || langs[0];
-        const flagFr = `<svg width="14" height="10" viewBox="0 0 3 2" style="margin-right:8px;vertical-align:middle"><rect width="1" height="2" fill="#002395"/><rect width="1" height="2" x="1" fill="#fff"/><rect width="1" height="2" x="2" fill="#ED2939"/></svg>`;
-        const flagEn = `<svg width="14" height="10" viewBox="0 0 60 30" style="margin-right:8px;vertical-align:middle"><clipPath id="s2"><path d="M0,0 v30 h60 v-30 z"/></clipPath><clipPath id="t2"><path d="M30,15 h30 v15 z v0 h-30 z v-15 h-30 z v0 h30 z"/></clipPath><g clip-path="url(#s2)"><path d="M0,0 v30 h60 v-30 z" fill="#012169"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#C8102E" stroke-width="4" clip-path="url(#t2)"/><path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"/><path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"/></g></svg>`;
+        const getFlag = (l) => {
+            if (!l || !l.flag) return '⚪';
 
-        const getFlag = (code) => code === 'fr' ? flagFr : flagEn;
+            const f = l.flag.trim();
+            // If it's already an emoji (complex character) or a long string, return it as is
+            if (f.length > 2) return f;
+
+            // If it's a 2-letter ISO code (e.g., "us", "FR", "de")
+            if (f.length === 2) {
+                const code = f.toLowerCase();
+                // Use flagcdn.com for high quality flags with an offline text fallback
+                return `<img src="https://flagcdn.com/w20/${code}.png" 
+                             width="20" 
+                             height="14" 
+                             alt="${f.toUpperCase()}"
+                             style="vertical-align: middle; border-radius: 2px; object-fit: cover;"
+                             onerror="this.outerHTML='<span style=\\'font-size:10px; font-weight:700\\'>${f.toUpperCase()}</span>'">`;
+            }
+
+            return f;
+        };
 
         container.innerHTML = `
             <button class="nav-lang-btn" id="nav-lang-toggle">
-                <span class="nav-lang-flag">${getFlag(current.code)}</span>
+                <span class="nav-lang-flag" style="margin-right:8px">${getFlag(current)}</span>
                 <span class="nav-lang-name">${current.name}</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="nav-lang-chevron"><polyline points="18 15 12 9 6 15"/></svg>
             </button>
             <div class="nav-lang-menu" id="nav-lang-menu">
                 ${langs.map(l => `
                     <button class="nav-lang-option ${l.active ? 'active' : ''}" data-lang="${l.code}">
-                        <span class="nav-lang-flag">${getFlag(l.code).replace('margin-right:8px', 'margin-right:10px')}</span>
+                        <span class="nav-lang-flag" style="margin-right:10px">${getFlag(l)}</span>
                         <span>${l.name}</span>
                         ${l.active ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
                     </button>
@@ -1097,26 +1047,81 @@ function renderMarkdown(md) {
 
 // ── Boot ──────────────────────────────────────────────────
 async function main() {
+    // ── Version & Build Display ──
+    const initVersionDisplay = async () => {
+        // Safety delay
+        await new Promise(r => setTimeout(r, 300));
+
+        console.log("[BMM] Starting version display initialization...");
+        try {
+            // Safe extraction of Tauri APIs
+            const tauri = window.__TAURI__;
+            if (!tauri) {
+                console.warn("[BMM] window.__TAURI__ is not available. Skipping version injection.");
+                return;
+            }
+
+            const getVersion = tauri.app.getVersion;
+            const version = await getVersion();
+            console.log("[BMM] Found version:", version);
+
+            // Fetch PTB mode
+            let isPtb = false;
+            try {
+                isPtb = await invoke('is_ptb_mode');
+            } catch (err) {
+                console.warn("[BMM] Failed to fetch PTB mode:", err);
+            }
+
+            const suffix = isPtb ? "-PTB" : "";
+            const versionStr = `v${version}${suffix}`;
+
+            let buildDate = "Unknown";
+            try {
+                buildDate = await invoke('get_build_date');
+                console.log("[BMM] Found build date:", buildDate);
+            } catch (invErr) {
+                console.warn("[BMM] get_build_date invoke failed, using current date as fallback:", invErr);
+                buildDate = new Date().toISOString().split('T')[0];
+            }
+
+            const buildStr = `Build: ${buildDate} — ${versionStr}`;
+
+            const buildDisplay = document.getElementById('app-build-display');
+            if (buildDisplay) {
+                buildDisplay.textContent = buildStr;
+                console.log("[BMM] Updated build display.");
+            } else {
+                console.warn("[BMM] app-build-display element not found.");
+            }
+
+            const versionBadge = document.getElementById('credits-hero-version');
+            if (versionBadge) {
+                versionBadge.textContent = versionStr;
+                console.log("[BMM] Updated version badge.");
+            }
+
+            const creditsVerSub = document.getElementById('credits-version-subtitle');
+            if (creditsVerSub) {
+                creditsVerSub.textContent = `Better Mod Manager — ${versionStr} —`;
+                console.log("[BMM] Updated credits subtitle.");
+            }
+
+            // Exhaustive sync for all version labels
+            document.querySelectorAll('.titlebar-version').forEach(el => el.textContent = 'V' + version);
+            document.querySelectorAll('.footer-version-pill').forEach(el => el.textContent = 'v' + version);
+            document.querySelectorAll('.about-version').forEach(el => el.textContent = 'v' + version);
+
+        } catch (e) {
+            console.error("[BMM] CRITICAL: Failed to init version display:", e);
+        }
+    };
     await loadTauri();
-
     await initI18n();
-
-    // ── Sync App Version ──
-    try {
-        const v = await invoke('get_app_version');
-        document.querySelectorAll('.titlebar-version').forEach(el => el.textContent = 'V' + v);
-        document.querySelectorAll('.footer-version-pill').forEach(el => el.textContent = 'v' + v);
-        document.querySelectorAll('.about-version').forEach(el => el.textContent = 'v' + v);
-
-        const heroVer = document.getElementById('credits-hero-version');
-        if (heroVer) heroVer.textContent = 'v' + v;
-
-        const creditsSub = document.getElementById('credits-version-subtitle');
-        if (creditsSub) creditsSub.textContent = t('credits.subtitle', { version: v });
-    } catch (e) { console.warn("Failed to sync version:", e); }
 
     initNavigation();
     initModals();
+    initBenchmark();
     await initTitlebar();
     initModlist();
     initShortcuts();
@@ -1124,6 +1129,10 @@ async function main() {
     initNavbarVersion();
     initUpdateNotes();
     applyTranslations();
+
+    // Call this after translations to ensure it's not overwritten and elements are ready
+    await initVersionDisplay();
+
     await initProfiles();
     await initMods();
     await updateProfileChip();
@@ -1210,6 +1219,197 @@ async function main() {
     if (shouldShowOnboarding()) {
         setTimeout(() => startOnboarding(), 500);
     }
+
+    // ── Storage Performance Settings ──
+    const initStorageSettings = async () => {
+        const container = document.getElementById('storage-disks-container');
+        if (!container) return;
+
+        try {
+            const disks = await invoke('get_system_disks');
+            if (!disks || disks.length === 0) {
+                container.innerHTML = `<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:10px;">Aucun disque détecté.</div>`;
+                return;
+            }
+
+            container.innerHTML = disks.map(disk => {
+                const limitVal = disk.current_limit_mb_s ? disk.current_limit_mb_s : 0;
+                const kindBadge = disk.kind === 'SSD' ? '<span style="background:rgba(59,130,246,0.15);color:#60a5fa;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">SSD</span>' :
+                    disk.kind === 'HDD' ? '<span style="background:rgba(245,158,11,0.15);color:#fbbf24;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">HDD</span>' :
+                        '<span style="background:rgba(156,163,175,0.15);color:#9ca3af;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">' + disk.kind + '</span>';
+
+                return `
+                    <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.2);padding:10px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.05);">
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2">
+                                <rect x="2" y="4" width="20" height="16" rx="2" ry="2"/>
+                                <line x1="6" y1="12" x2="6.01" y2="12"/>
+                            </svg>
+                            <div style="display:flex;flex-direction:column;">
+                                <div style="display:flex;align-items:center;gap:8px;">
+                                    <span style="font-size:13px;font-weight:600;color:var(--text-bright);">${disk.name}</span>
+                                    ${kindBadge}
+                                </div>
+                                <span style="font-size:11px;color:var(--text-muted);">${disk.mount_point.replace(/\\\\/g, '\\')}</span>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <input type="number" min="0" step="10" class="form-input disk-limit-input" data-mount="${disk.mount_point.replace(/\\/g, '\\\\')}" value="${limitVal}" style="width:100px;font-size:12px;padding:6px;text-align:right;" placeholder="0 (illimité)">
+                            <span style="font-size:12px;color:var(--text-muted);">MB/s</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Add listeners
+            container.querySelectorAll('.disk-limit-input').forEach(input => {
+                let debounceTimer;
+                input.addEventListener('input', (e) => {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(async () => {
+                        let val = parseInt(e.target.value, 10);
+                        if (isNaN(val) || val < 0) val = 0;
+                        const limitMbS = val === 0 ? null : val;
+                        const mountPoint = e.target.getAttribute('data-mount');
+
+                        try {
+                            await invoke('set_disk_limit', { mountPoint, limitMbS });
+                            toast('Storage limit updated.', 'success');
+                        } catch (err) {
+                            toast('Error: ' + err, 'error');
+                        }
+                    }, 800);
+                });
+            });
+
+        } catch (err) {
+            console.error(err);
+            container.innerHTML = `<div style="font-size:12px;color:var(--error);text-align:center;padding:10px;">Erreur lors du chargement des disques.</div>`;
+        }
+    };
+    initStorageSettings();
+
+    // ── Language Settings ──
+    const initLanguageSettings = async () => {
+        const langContainer = document.getElementById('settings-lang-container');
+        if (!langContainer) return;
+
+        const { getLanguages, setLang } = await import('./i18n.js');
+
+        const getFlag = (l) => {
+            if (!l || !l.flag) return '⚪';
+            const f = l.flag.trim();
+            if (f.length > 2) return f;
+            if (f.length === 2) {
+                const code = f.toLowerCase();
+                return `<img src="https://flagcdn.com/w20/${code}.png" 
+                             width="20" height="14" alt="${f.toUpperCase()}"
+                             style="vertical-align: middle; border-radius: 2px; object-fit: cover;"
+                             onerror="this.outerHTML='<span style=\\'font-size:10px; font-weight:700\\'>${f.toUpperCase()}</span>'">`;
+            }
+            return f;
+        };
+
+        const renderLangs = () => {
+            const languages = getLanguages();
+            const current = languages.find(l => l.active) || languages[0];
+
+            langContainer.innerHTML = `
+                <button class="nav-lang-btn" id="settings-lang-toggle" style="width: 240px; background: rgba(0,0,0,0.3);">
+                    <span class="nav-lang-flag" style="margin-right:8px">${getFlag(current)}</span>
+                    <span class="nav-lang-name">${current.name}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="nav-lang-chevron"><polyline points="18 15 12 9 6 15"/></svg>
+                </button>
+                <div class="settings-lang-menu" id="settings-lang-menu">
+                    ${languages.map(l => `
+                        <button class="nav-lang-option ${l.active ? 'active' : ''}" data-lang="${l.code}">
+                            <span class="nav-lang-flag" style="margin-right:10px">${getFlag(l)}</span>
+                            <span>${l.name}</span>
+                            ${l.active ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+                        </button>
+                    `).join('')}
+                </div>
+            `;
+
+            const toggle = document.getElementById('settings-lang-toggle');
+            const menu = document.getElementById('settings-lang-menu');
+
+            if (toggle && menu) {
+                toggle.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isOpen = menu.classList.contains('open');
+
+                    // Close all menus first
+                    document.querySelectorAll('.settings-lang-menu, .nav-lang-menu').forEach(m => m.classList.remove('open'));
+                    document.querySelectorAll('.nav-lang-btn').forEach(b => b.classList.remove('open'));
+
+                    if (!isOpen) {
+                        menu.classList.add('open');
+                        toggle.classList.add('open');
+                    }
+                });
+
+                menu.querySelectorAll('.nav-lang-option').forEach(opt => {
+                    opt.addEventListener('click', () => {
+                        setLang(opt.dataset.lang);
+                        menu.classList.remove('open');
+                        toggle.classList.remove('open');
+                        renderLangs();
+                        // Also update navbar if needed (it will re-render on next view change or we can force it)
+                        if (typeof initNavbarLangDropdown === 'function') initNavbarLangDropdown();
+                    });
+                });
+            }
+        };
+
+        // Close on outside click
+        document.addEventListener('click', () => {
+            const menu = document.getElementById('settings-lang-menu');
+            const toggle = document.getElementById('settings-lang-toggle');
+            if (menu && toggle) {
+                menu.classList.remove('open');
+                toggle.classList.remove('open');
+            }
+        });
+
+        renderLangs();
+
+        // Guide button
+        const btnGuide = document.getElementById('btn-show-lang-guide');
+        if (btnGuide) {
+            btnGuide.addEventListener('click', () => {
+                const updateBtn = document.getElementById('btn-show-updates');
+                if (updateBtn) {
+                    updateBtn.click();
+                    // Wait for modal and select guide
+                    setTimeout(() => {
+                        const items = document.querySelectorAll('.archive-sidebar-item');
+                        items.forEach(item => {
+                            if (item.textContent.includes('TranslationGuide')) {
+                                item.click();
+                            }
+                        });
+                    }, 500);
+                }
+            });
+        }
+
+        // Copy Template button
+        const btnCopyTemplate = document.getElementById('btn-copy-lang-template');
+        if (btnCopyTemplate) {
+            btnCopyTemplate.addEventListener('click', async () => {
+                try {
+                    const resp = await fetch('Lang/template.json');
+                    const text = await resp.text();
+                    await navigator.clipboard.writeText(text);
+                    toast('Modèle de traduction copié !', 'success');
+                } catch (e) {
+                    toast('Erreur copie : ' + e, 'error');
+                }
+            });
+        }
+    };
+    initLanguageSettings();
 
     // Interaction log
     initInteractionLogging();
@@ -1390,9 +1590,12 @@ async function initAutoUpdate() {
         if (isDisabled) {
             chk.checked = false;
             chk.disabled = true;
-            if (chk.parentElement) {
-                chk.parentElement.style.opacity = '0.5';
-                chk.parentElement.title = t('update.disabled') || 'Updates disabled via configuration.';
+            const card = document.getElementById('settings-auto-update-card');
+            if (card) {
+                card.classList.add('config-disabled');
+                card.dataset.i18nContent = 'settings.disabledOverlay';
+                card.setAttribute('data-content', t('settings.disabledOverlay'));
+                card.title = t('update.disabled') || 'Updates disabled via configuration.';
             }
         } else {
             chk.checked = isAutoUpdateEnabled();

@@ -13,6 +13,8 @@ Better Mod Manager (BMM) simplifies the process of managing, installing, and sha
 - **Conflict Detection**: Real-time monitoring of file collisions between active mods.
 - **Mod Sharing (.MM)**: Export and import complete mod configurations, including download links and installation priorities.
 - **Local Mod Pooling**: Automatically detects and copies mods already present in other profiles to save bandwidth.
+- **Dynamic Internationalization**: Fully extensible translation system with auto-discovery and FlagCDN integration.
+- **Automated Versioning**: Build-time date capture and dynamic UI injection for synchronized versioning information.
 - **Integrity Reporting**: Diagnostic tool to verify if modded files have been corrupted or overwritten by game updates.
 - **Archive Explorer**: Built-in tree view for navigating .zip and .rar contents without extraction.
 - **Mod Link Support**: Categorize links (GitHub, MEGA, etc.) with custom icons and behavior.
@@ -27,8 +29,10 @@ In the **Mod Detail Panel** and **.MM Lists**, links can be set to different typ
 - **Direct**: A **direct download link** (ending in .zip, .rar, .7z). This allows BMM to download and extract the mod automatically during imports.
 - **Other**: For generic websites or specialized forums.
 
+## Technical Stack
+
 - **Backend**: Rust 1.70+ (Tauri, Reqwest, Zip-rs)
-- **Frontend**: ES6+ JavaScript, CSS3 (Vanilla), HTML5
+- **Frontend**: ES2022 JavaScript (Modular Architecture), CSS3 (Vanilla), HTML5
 - **Performance**: Low memory footprint (<80MB RAM), 60FPS responsive UI.
 - **Safety**: Thread-safe I/O operations with global Mutex locking.
 
@@ -59,8 +63,8 @@ In the **Mod Detail Panel** and **.MM Lists**, links can be set to different typ
 ## Documentation
 
 Detailed documentation is available in the `Update/` directory:
-- [User Guide & Features](Update/App_Features.md)
-- [Technical Architecture Analysis](Update/Technical_Analysis.md)
+- [User Guide & Features](Update/Old_Update/App_Features.md)
+- [Technical Architecture Analysis](Update/Old_Update/Technical_Analysis.md)
 
 ## License
 

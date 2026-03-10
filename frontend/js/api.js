@@ -1,0 +1,102 @@
+/**
+ * api.js — Tauri Bridge
+ * Handles communication between frontend and Rust backend
+ */
+
+let _invoke;
+let _dialog;
+let _notifModule;
+
+export async function loadTauri() {
+    // 1. Prioritize window.__TAURI__ (injected locally by Tauri when withGlobalTauri is true)
+    if (window.__TAURI__) {
+        _invoke = window.__TAURI__.invoke;
+        _dialog = window.__TAURI__.dialog;
+        _notifModule = window.__TAURI__.notification;
+        console.log('[BMM] Using local Tauri bridge');
+        return;
+    }
+
+    // 2. Fallback to unpkg (requires internet)
+    try {
+        const tauriModule = await import('https://unpkg.com/@tauri-apps/api@1/tauri.js');
+        const dialogModule = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
+        _notifModule = await import('https://unpkg.com/@tauri-apps/api@1/notification.js');
+        _invoke = tauriModule.invoke;
+        _dialog = dialogModule;
+    } catch {
+        // 3. Last fallback: mock for browser testing
+        console.warn('[BMM] Running in browser mock mode');
+        _invoke = mockInvoke;
+        _dialog = { open: async () => 'C:\\mock\\folder', save: async () => null };
+        _notifModule = null;
+    }
+}
+
+export async function invoke(command, args = {}) {
+    console.log(`[BMM] Invoke: ${command}`, args);
+    // Log every tauri invoke for real-time tracking
+    // const start = Date.now();
+    try {
+        const res = await _invoke(command, args);
+        return res;
+    } catch (err) {
+        console.error(`[RPC ERROR] ${command}:`, err);
+        throw err;
+    }
+}
+
+export async function pickFolder() {
+    try {
+        return await _dialog.open({ directory: true, multiple: false });
+    } catch {
+        return null;
+    }
+}
+
+export async function pickFile(filters = []) {
+    try {
+        return await _dialog.open({ multiple: false, filters });
+    } catch {
+        return null;
+    }
+}
+
+export async function saveFile(filters = []) {
+    try {
+        const saveDialog = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
+        return await saveDialog.save({ filters });
+    } catch {
+        return null;
+    }
+}
+
+export async function listenFileDrop(callback) {
+    try {
+        const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
+        return await listen('tauri://file-drop', e => {
+            if (e.payload && e.payload.length > 0) {
+                callback(e.payload);
+            }
+        });
+    } catch {
+        console.warn('[BMM] File drop not supported in browser mockup');
+        return () => { };
+    }
+}
+
+export async function sendOsNotification(title, body) {
+    // Deprecated per user request. OS notifications and settings removed.
+    return;
+}
+
+// Mock invoke for browser testing
+async function mockInvoke(command, args) {
+    console.log(`[Mock] ${command}`, args);
+    switch (command) {
+        case 'get_profiles': return [];
+        case 'get_active_profile_id': return null;
+        case 'get_all_mods': return [];
+        default: return null;
+    }
+}

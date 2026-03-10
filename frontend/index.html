@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8" />
@@ -20,9 +20,9 @@
         style="position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg-primary);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.5s ease, visibility 0.5s ease">
         <img src="assets/Tasky.png" alt="Loading..." id="loader-img"
             style="width:120px;height:auto;animation:pulse-tasky 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;filter:drop-shadow(0 0 20px rgba(59,130,246,0.3))">
-        <div id="loader-text"
+        <div id="loader-text" data-i18n="common.loading"
             style="margin-top:24px;font-family:var(--font-mono);font-size:12px;color:var(--text-muted);letter-spacing:0.1em;animation:pulse-text 2s infinite">
-            CHARGEMENT...</div>
+            LOADING...</div>
     </div> <!-- Custom Titlebar -->
     <div class="titlebar" data-tauri-drag-region>
         <div class="titlebar-left" data-tauri-drag-region>
@@ -34,7 +34,7 @@
                 </svg>
             </div>
             <span class="titlebar-title">BETTER MOD MANAGER</span>
-            <span class="titlebar-version">V1.0.6</span>
+            <span class="titlebar-version">V0.9.7</span>
         </div>
         <div class="titlebar-controls">
             <button class="tb-btn" id="tb-min" title="Minimize">
@@ -171,7 +171,7 @@
 
                 <div class="footer-bottom-row">
                     <span class="footer-profile-name" id="chip-profile-name">—</span>
-                    <button class="footer-version-pill" id="nav-version-btn">v1.0.6</button>
+                    <button class="footer-version-pill" id="nav-version-btn">v0.9.7</button>
                 </div>
 
                 <!-- Check for Updates Button -->
@@ -795,6 +795,9 @@
                         <h1
                             style="font-size: 32px; font-weight: 800; color: var(--text-primary); margin-bottom: 12px; letter-spacing: -0.02em;">
                             Better Mod.Manager</h1>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 24px;"
+                            id="app-build-display">Build: 2026-03-10 —
+                            v0.9.7-PTB</p>
 
                         <div id="credits-hero-version"
                             style="display: inline-flex; align-items: center; background: rgba(59, 130, 246, 0.12); color: var(--accent); padding: 5px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; font-family: var(--font-mono); border: 1px solid rgba(59, 130, 246, 0.25); margin-bottom: 32px;">
@@ -944,12 +947,6 @@
                                     <div class="credit-subtitle" style="font-size: 12px; opacity: 0.7;"
                                         data-i18n="credits.licenseSub">View Apache-2.0 License</div>
                                 </div>
-                                <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                    stroke="currentColor" stroke-width="2">
-                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                                    <polyline points="15 3 21 3 21 9" />
-                                    <line x1="10" y1="14" x2="21" y2="3" />
-                                </svg>
                             </a>
                         </div>
                     </div>
@@ -966,14 +963,15 @@
                 <div class="view-header">
                     <div>
                         <h1 class="view-title" data-i18n="settings.title">Paramètres</h1>
-                        <p class="view-subtitle" data-i18n="settings.subtitle">Configuration de l'application</p>
+                        <p class="view-subtitle" id="settings-subtitle" data-i18n="settings.subtitle">
+                            Configuration de l'application</p>
                     </div>
                 </div>
 
                 <div class="settings-sections">
 
                     <!-- ── Auto Update Toggle ── -->
-                    <div class="glass-card"
+                    <div class="glass-card" id="settings-auto-update-card"
                         style="border: 1px solid rgba(16, 185, 129, 0.15); position: relative; overflow: hidden;">
                         <div
                             style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(16,185,129,0.06);border-radius:50%;filter:blur(30px);pointer-events:none">
@@ -1171,6 +1169,63 @@
                     </div>
                     <!-- ── END GitHub PAT ── -->
 
+                    <!-- ── Language ── -->
+                    <div class="glass-card">
+                        <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
+                                stroke-width="2.2">
+                                <path d="M5 8l6 6"></path>
+                                <path d="M4 14l6-6 2-3"></path>
+                                <path d="M2 5h12"></path>
+                                <path d="M7 2h1"></path>
+                                <path d="M22 22l-5-10-5 10"></path>
+                                <path d="M14 18h6"></path>
+                            </svg>
+                            <span data-i18n="settings.language">Langue</span>
+                        </h3>
+                        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px"
+                            data-i18n="settings.langSubtitle">
+                            Sélectionnez la langue de l'application. La détection des nouveaux fichiers est automatique.
+                        </p>
+
+                        <div id="settings-lang-container" style="margin-bottom:16px; width: fit-content;">
+                            <!-- Injected from JS -->
+                        </div>
+
+                        <div
+                            style="display:flex;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                            <div style="flex:1">
+                                <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                    data-i18n="settings.langContribute">Contribuer à la
+                                    traduction</div>
+                                <div style="font-size:10px;color:var(--text-muted)"
+                                    data-i18n="settings.langContributeDesc">Aidez-nous à traduire BMM dans
+                                    d'autres langues.</div>
+                            </div>
+                            <div style="display:flex;gap:8px">
+                                <button class="btn btn-ghost btn-sm" id="btn-show-lang-guide"
+                                    style="font-size:11px;gap:6px">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                                    </svg>
+                                    <span data-i18n="settings.langGuide">Guide</span>
+                                </button>
+                                <button class="btn btn-secondary btn-sm" id="btn-copy-lang-template"
+                                    style="font-size:11px;gap:6px">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                    </svg>
+                                    <span data-i18n="settings.langCopyTemplate">Copier Modèle</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="glass-card">
                         <h3 class="card-title" data-i18n="settings.dataTitle">Gestion des données</h3>
                         <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px"
@@ -1199,104 +1254,146 @@
                         </div>
                     </div>
 
-                    <!-- ── Crash Reports ── -->
-                    <div class="glass-card"
-                        style="border:1px solid rgba(239,68,68,0.15);position:relative;overflow:hidden">
-                        <div
-                            style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;background:rgba(239,68,68,0.05);border-radius:50%;filter:blur(25px);pointer-events:none">
-                        </div>
+                    <!-- ── NEW: Performance & Benchmark ── -->
+                    <div class="glass-card" id="settings-benchmark-section">
                         <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171"
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
                                 stroke-width="2.2">
-                                <path
-                                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                <line x1="12" y1="9" x2="12" y2="13" />
-                                <line x1="12" y1="17" x2="12.01" y2="17" />
+                                <path d="M12 20V10M18 20V4M6 20v-4" />
                             </svg>
-                            <span data-i18n="settings.crashTitle">Crash Reports</span>
+                            <span data-i18n="settings.benchmarkTitle">Performance & Benchmark</span>
                         </h3>
                         <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6"
-                            data-i18n="settings.crashDesc">Upon each crash or forced quit, BMM generates a .zip file
-                            containing dxdiag output, app logs, and state snapshot to help diagnose issues.</p>
-                        <button class="btn btn-secondary btn-sm" id="btn-open-crash-folder">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                            </svg>
-                            <span data-i18n="settings.crashOpenFolder">Open Crash Reports Folder</span>
-                        </button>
-                    </div>
-                    <!-- ── END Crash Reports ── -->
-
-                    <!-- ── Debug Menu ── -->
-                    <div id="debug-menu-card" class="glass-card"
-                        style="border:1px dashed rgba(239,68,68,0.4); background: rgba(10,5,5,0.4); display: none;">
-                        <div
-                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px">
-                            <h3 class="card-title"
-                                style="margin-bottom:0; color:#f87171; display:flex; align-items:center; gap:8px">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path
-                                        d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                                </svg>
-                                <span data-i18n="settings.debugTitle">Debug & Troubleshooting</span>
-                            </h3>
-                            <span
-                                style="font-size:10px; padding:2px 6px; background:rgba(239,68,68,0.2); color:#fca5a5; border-radius:4px; font-weight:700">ADVANCED</span>
-                        </div>
-
-                        <div style="display:flex; flex-wrap:wrap; gap:12px">
-                            <!-- Button: Generate Manual Crash -->
-                            <button class="btn btn-ghost btn-sm" id="btn-debug-gen-crash"
-                                style="border:1px solid rgba(239,68,68,0.2); color:#fca5a5">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="7 10 12 15 17 10" />
-                                    <line x1="12" y1="15" x2="12" y2="3" />
-                                </svg>
-                                <span data-i18n="settings.debugGenCrash">Generate Manual Crash Log</span>
-                            </button>
-
-                            <!-- Button: Reset Storage -->
-                            <button class="btn btn-outline-danger btn-sm" id="btn-debug-reset-app"
-                                style="color:#ef4444; border-color:rgba(239,68,68,0.3)">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path
-                                        d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                </svg>
-                                <span data-i18n="settings.debugReset">Full Reset (Storage & Cache)</span>
-                            </button>
-                        </div>
-                        <p style="font-size:10px; color:var(--text-muted); margin-top:12px">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" style="vertical-align:middle; margin-right:4px">
-                                <circle cx="12" cy="12" r="10" />
-                                <line x1="12" y1="8" x2="12" y2="12" />
-                                <line x1="12" y1="16" x2="12.01" y2="16" />
-                            </svg>
-                            <span data-i18n="settings.debugWarn">Caution: Resetting the application will delete all your
-                                profiles and mod configurations.</span>
+                            data-i18n="settings.benchmarkDesc">
+                            Monitor application performance (CPU, RAM, Disk I/O) in real-time. Useful for assessing the
+                            impact of large mod activations.
                         </p>
+                        <div style="display:flex;gap:10px">
+                            <button class="btn btn-primary btn-sm" id="btn-open-benchmark" style="gap:8px">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.2">
+                                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                                </svg>
+                                <span data-i18n="settings.benchmarkOpen">Ouvrir le Benchmark</span>
+                            </button>
+                        </div>
                     </div>
 
                 </div>
 
-                <div class="glass-card">
-                    <h3 class="card-title" data-i18n="settings.updateNotes">Notes de mise à jour</h3>
-                    <button class="btn btn-secondary btn-sm" id="btn-show-updates" style="margin-top:8px">
+                <!-- ── NEW: Storage Performance ── -->
+                <div class="glass-card" id="settings-storage-section">
+                    <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                            stroke-width="2.2">
+                            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                        </svg>
+                        <span data-i18n="settings.storageTitle">Storage Performance (I/O Limiter)</span>
+                    </h3>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6"
+                        data-i18n="settings.storageDesc">
+                        Limiter la vitesse d'écriture et de lecture sur vos disques pendant l'activation des mods pour
+                        éviter les lags du système. (0 = illimité)
+                    </p>
+                    <div id="storage-disks-container" style="display:flex;flex-direction:column;gap:10px;">
+                        <!-- Disks will be injected here -->
+                    </div>
+                </div>
+
+                <!-- ── Crash Reports ── -->
+                <div class="glass-card" style="border:1px solid rgba(239,68,68,0.15);position:relative;overflow:hidden">
+                    <div
+                        style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;background:rgba(239,68,68,0.05);border-radius:50%;filter:blur(25px);pointer-events:none">
+                    </div>
+                    <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.2">
+                            <path
+                                d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                            <line x1="12" y1="9" x2="12" y2="13" />
+                            <line x1="12" y1="17" x2="12.01" y2="17" />
+                        </svg>
+                        <span data-i18n="settings.crashTitle">Crash Reports</span>
+                    </h3>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6"
+                        data-i18n="settings.crashDesc">Upon each crash or forced quit, BMM generates a .zip file
+                        containing dxdiag output, app logs, and state snapshot to help diagnose issues.</p>
+                    <button class="btn btn-secondary btn-sm" id="btn-open-crash-folder">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                            <line x1="16" y1="13" x2="8" y2="13" />
-                            <line x1="16" y1="17" x2="8" y2="17" />
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                         </svg>
-                        <span data-i18n="settings.viewNotes">Voir les notes</span>
+                        <span data-i18n="settings.crashOpenFolder">Open Crash Reports Folder</span>
                     </button>
                 </div>
+                <!-- ── END Crash Reports ── -->
+
+                <!-- ── Debug Menu ── -->
+                <div id="debug-menu-card" class="glass-card"
+                    style="border:1px dashed rgba(239,68,68,0.4); background: rgba(10,5,5,0.4); display: none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px">
+                        <h3 class="card-title"
+                            style="margin-bottom:0; color:#f87171; display:flex; align-items:center; gap:8px">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path
+                                    d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                            </svg>
+                            <span data-i18n="settings.debugTitle">Debug & Troubleshooting</span>
+                        </h3>
+                        <span
+                            style="font-size:10px; padding:2px 6px; background:rgba(239,68,68,0.2); color:#fca5a5; border-radius:4px; font-weight:700">ADVANCED</span>
+                    </div>
+
+                    <div style="display:flex; flex-wrap:wrap; gap:12px">
+                        <!-- Button: Generate Manual Crash -->
+                        <button class="btn btn-ghost btn-sm" id="btn-debug-gen-crash"
+                            style="border:1px solid rgba(239,68,68,0.2); color:#fca5a5">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            <span data-i18n="settings.debugGenCrash">Generate Manual Crash Log</span>
+                        </button>
+
+                        <!-- Button: Reset Storage -->
+                        <button class="btn btn-outline-danger btn-sm" id="btn-debug-reset-app"
+                            style="color:#ef4444; border-color:rgba(239,68,68,0.3)">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path
+                                    d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
+                            <span data-i18n="settings.debugReset">Full Reset (Storage & Cache)</span>
+                        </button>
+                    </div>
+                    <p style="font-size:10px; color:var(--text-muted); margin-top:12px">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" style="vertical-align:middle; margin-right:4px">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        <span data-i18n="settings.debugWarn">Caution: Resetting the application will delete all your
+                            profiles and mod configurations.</span>
+                    </p>
+                </div>
+
+    </div>
+
+    <div class="glass-card">
+        <h3 class="card-title" data-i18n="settings.updateNotes">Notes de mise à jour</h3>
+        <button class="btn btn-secondary btn-sm" id="btn-show-updates" style="margin-top:8px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+            </svg>
+            <span data-i18n="settings.viewNotes">Voir les notes</span>
+        </button>
+    </div>
     </div>
     </section>
 
@@ -1407,10 +1504,6 @@
                     style="white-space: pre-wrap; word-wrap: break-word; font-family: var(--font-mono); font-size: 11px; line-height: 1.6; color: rgba(255,255,255,0.7); margin: 0; text-align: left;">Chargement de la licence...</pre>
             </div>
         </div>
-        <div class="modal-footer">
-            <button class="btn btn-primary" data-close="modal-license">Fermer</button>
-        </div>
-    </div>
     </div>
 
     <!-- Add Mod Modal -->
@@ -1817,6 +1910,175 @@
             <span data-i18n="ctx.copyPath">Copier le chemin</span>
         </div>
     </div>
+    <!-- Benchmark Modal -->
+    <div class="modal-overlay" id="modal-benchmark">
+        <div class="modal glass"
+            style="max-width: 850px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <div style="display:flex;align-items:center;gap:12px">
+                    <div
+                        style="width:36px;height:36px;background:rgba(59,130,246,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                            stroke-width="2.2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="modal-title" data-i18n="benchmark.title">Performance & Monitoring</h2>
+                        <div id="benchmark-live-stats"
+                            style="font-size:11px;color:var(--text-muted);display:flex;gap:12px;margin-top:2px">
+                            <!-- Stats from JS -->
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px">
+                    <button class="btn btn-ghost btn-sm" id="btn-toggle-pip" title="Picture in Picture Mode">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M15 3h6v6" />
+                            <path d="M9 21H3v-6" />
+                            <path d="M21 3l-7 7" />
+                            <path d="M3 21l7-7" />
+                        </svg>
+                    </button>
+                    <button class="modal-close" data-close="modal-benchmark">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body benchmark-dashboard" style="overflow-y:auto; flex:1; padding-bottom: 20px;">
+                <div id="playback-controls"
+                    style="display:none; align-items:center; gap:15px; background:rgba(255,255,255,0.05); padding:10px 15px; border-radius:12px; margin-bottom:10px">
+                    <span style="font-size:10px; font-weight:800; color:var(--accent)">NAVIGATE:</span>
+                    <input type="range" id="benchmark-playback-slider" style="flex:1" min="0" value="0">
+                    <span id="playback-time-display" style="font-size:10px; font-family:var(--font-mono)">0/0</span>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div class="chart-title-group">
+                            <span class="chart-title">CPU USAGE</span>
+                        </div>
+                        <div style="display:flex; gap:8px">
+                            <div class="chart-badge avg" id="cpu-avg-badge">AVG: 0%</div>
+                            <div class="chart-badge" id="cpu-badge">0%</div>
+                        </div>
+                    </div>
+                    <div id="cpu-chart" class="chart-view"></div>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div class="chart-title-group">
+                            <span class="chart-title">RAM USAGE</span>
+                        </div>
+                        <div style="display:flex; gap:8px">
+                            <div class="chart-badge avg" id="ram-avg-badge">AVG: 0 MB</div>
+                            <div class="chart-badge" id="ram-badge">0 MB</div>
+                        </div>
+                    </div>
+                    <div id="ram-chart" class="chart-view"></div>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div class="chart-title-group">
+                            <span class="chart-title">DISK I/O</span>
+                        </div>
+                        <div style="display:flex; gap:8px">
+                            <div class="chart-badge avg" id="disk-avg-badge">AVG: 0 KB/s</div>
+                            <div class="chart-badge" id="disk-badge">0 KB/s</div>
+                        </div>
+                    </div>
+                    <div id="disk-chart" class="chart-view"></div>
+                </div>
+
+                <div id="benchmark-live-stats"></div>
+
+                <div class="benchmark-timeline-container" id="benchmark-timeline-root">
+                    <div class="timeline-header">
+                        <span class="timeline-title">SESSION TIMELINE</span>
+                        <div class="timeline-meta" style="display:flex; align-items:center; gap:8px">
+                            <button class="btn btn-icon" id="btn-replay-playpause"
+                                style="display:none; padding:4px; height:24px; width:24px; border-radius:6px; background:rgba(255,255,255,0.05)"
+                                title="Play/Pause Replay">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                </svg>
+                            </button>
+                            <span id="timeline-current-time">00:00</span> / <span id="timeline-total-time">00:00</span>
+                        </div>
+                    </div>
+                    <div class="professional-timeline" id="main-timeline">
+                        <div class="timeline-track session-bar" id="tl-track-total"></div>
+                        <div class="timeline-track red" id="tl-track-window"></div>
+                        <div class="timeline-playhead" id="tl-playhead"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-export-bench" style="margin-right:8px">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    <span>Export CSV</span>
+                </button>
+                <button class="btn btn-secondary" id="btn-import-bench" style="margin-right:auto">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    <span>Import CSV</span>
+                </button>
+                <div style="display:flex; align-items:center; gap:4px; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); padding:2px; margin-right:6px;"
+                    title="Auto-Stop Timer">
+                    <input type="number" id="benchmark-autostop-val" placeholder="Auto-stop"
+                        data-i18n-placeholder="benchmark.autostop" min="1"
+                        style="width:75px; padding:4px 8px; background:transparent; border:none; color:white; font-size:12px; outline:none;">
+                    <select id="benchmark-autostop-unit"
+                        style="background:transparent; border:none; color:var(--text-primary); font-size:12px; outline:none; cursor:pointer; padding-right:4px;">
+                        <option value="m" data-i18n="benchmark.min">Min</option>
+                        <option value="h" data-i18n="benchmark.hour">Heure</option>
+                        <option value="d" data-i18n="benchmark.day">Jour</option>
+                    </select>
+                </div>
+                <button class="btn btn-secondary" id="btn-reset-bench"
+                    style="margin-right:2px; display:flex; align-items:center; gap:6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                    </svg>
+                    <span data-i18n="benchmark.reset">Reset</span>
+                </button>
+                <button class="btn btn-danger" id="btn-stop-bench"
+                    style="margin-right:2px; display:flex; align-items:center; gap:6px;" disabled>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="6" y="6" width="12" height="12" rx="2" ry="2" />
+                    </svg>
+                    <span data-i18n="benchmark.stop">Stop</span>
+                </button>
+                <button class="btn btn-primary" id="btn-start-bench" style="display:flex; align-items:center; gap:6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                    <span data-i18n="benchmark.startTracking">Start Tracking</span>
+                </button>
+            </div>
+        </div>
+    </div> <!-- Close modal-benchmark -->
+
+    <!-- Floating Monitor (PiP) -->
+    <div id="benchmark-pip" class="benchmark-pip glass">
+        <!-- Content from JS -->
+    </div>
+
 </body>
 
 </html>

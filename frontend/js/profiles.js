@@ -251,6 +251,8 @@ export async function renderProfiles() {
             }
         } catch { }
 
+        card.style.display = 'flex';
+        card.style.flexDirection = 'column';
         card.innerHTML = `
       <div class="profile-card-header" style="display:flex;align-items:flex-start;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:16px;min-height:54px;gap:12px">
         <div style="width:3px;height:32px;border-radius:2px;background:${brandColor};flex-shrink:0;margin-top:2px"></div>
@@ -285,7 +287,7 @@ export async function renderProfiles() {
           </button>
         </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px">
+      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px;margin-top:auto;">
         <span style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${modCountLabel}</span>
         ${activeModsHtml}
       </div>

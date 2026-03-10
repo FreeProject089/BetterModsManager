@@ -18,7 +18,25 @@ BMM is built on the **Tauri v1 Framework**, a Rust-first desktop stack that prov
 
 ---
 
-## 2. Backend — State Management
+## 2. Automated Build & Versioning System
+
+BMM implements a robust automated system to ensure versioning integrity across the entire application stack.
+
+### Build-Time Date Capture (`build.rs`)
+A dedicated Rust build script intercepts the compilation process to capture the current system date.
+- **Logic**: Uses the `chrono` crate to format the current UTC date as `YYYY-MM-DD`.
+- **Injection**: The date is exported as a compile-time environment variable `BMM_BUILD_DATE`.
+- **Persistence**: This ensures the build date is "burned" into the binary and remains static for that specific build.
+
+### Dynamic UI Synchronization
+The frontend fetches this information at boot via specialized Tauri commands:
+- `get_build_date`: Returns the static build date captured at compilation.
+- `is_ptb_mode`: Checks `app.cfg` to determine if PTB markers should be rendered.
+- **Boot Sequence**: `initVersionDisplay()` in `app.js` performs a synchronized injection into the titlebar, footer, and credits view after i18n initialization.
+
+---
+
+## 3. Backend — State Management
 
 ### AppState Structure
 
@@ -41,7 +59,7 @@ The global `AppState` wraps all mutable data in `Arc<Mutex<AppData>>`, ensuring 
 
 ---
 
-## 3. Backend — Data Models
+## 4. Backend — Data Models
 
 ### Profile
 
@@ -76,7 +94,7 @@ The global `AppState` wraps all mutable data in `Arc<Mutex<AppData>>`, ensuring 
 
 ---
 
-## 4. Backend — The Smart Copy Filesystem Engine
+## 5. Backend — The Smart Copy Filesystem Engine
 
 The core of BMM's mod management is the **Stacked Physical Copy** engine in `src-tauri/src/fs_utils.rs`.
 
@@ -91,7 +109,7 @@ The core of BMM's mod management is the **Stacked Physical Copy** engine in `src
 | 5 | Injection | The mod file is copied to the game ROOT path |
 | 6 | Track | All installed file paths are stored in `ModEntry.installed_files` |
 | 7 | State Update | `mod.enabled = true`, `profile.active_mods` is updated, `state.save()` is called |
-| 8 | History Log | A timestamped `"Enabled"` event is written to the activity log |
+| 8 | History Log | A timestamped "Enabled" event is written to the activity log |
 
 ### Deactivation Flow (`disable_mod` command)
 
@@ -102,7 +120,13 @@ The core of BMM's mod management is the **Stacked Physical Copy** engine in `src
 | 3 | `unapply_mod_stacked()` | For each file, deletes the installed copy from the game ROOT |
 | 4 | Restoration | Moves the backed-up original file from `backup_path` back to its exact original location |
 | 5 | State Update | `mod.enabled = false`, cleared from `profile.active_mods`, `state.save()` called |
-| 6 | History Log | A timestamped `"Disabled"` event is written |
+| 6 | History Log | A timestamped "Disabled" event is written |
+
+### Selective Conflict Checking (introduced in v0.9.7)
+ 
+To improve performance during mod activation, BMM now uses **Selective Conflict Checking**:
+- Only active mods and the currently selected mod are processed for conflicts.
+- This results in up to 80% reduction in IPC calls and filesystem operations during bulk activation/deactivation.
 
 ### Why Physical Copy Instead of Symlinks
 
@@ -113,7 +137,7 @@ The core of BMM's mod management is the **Stacked Physical Copy** engine in `src
 
 ---
 
-## 5. Backend — Concurrent Safety
+## 6. Backend — Concurrent Safety
 
 | Mechanism | Purpose |
 | :--- | :--- |
@@ -123,7 +147,7 @@ The core of BMM's mod management is the **Stacked Physical Copy** engine in `src
 
 ---
 
-## 6. Backend — Mass Installation Engine (`.MM` Format)
+## 7. Backend — Mass Installation Engine (.MM Format)
 
 ### Install from Modlist Flow
 
@@ -167,7 +191,7 @@ Cancellation is implemented using a shared `std::sync::atomic::AtomicBool` withi
 
 ---
 
-## 7. Backend — OvGME Migration (`ovgme.rs`)
+## 8. Backend — OvGME Migration (`ovgme.rs`)
 
 BMM can directly parse OvGME's proprietary binary `.dat` configuration files.
 
@@ -179,30 +203,35 @@ BMM can directly parse OvGME's proprietary binary `.dat` configuration files.
 
 ---
 
-## 8. Frontend — Architecture
+## 9. Frontend — Modular Architecture
 
-### Module System
+The frontend has been refactored into a modular ES6 architecture to ensure scalability and easier maintenance.
 
-| Module | File | Role |
-| :--- | :--- | :--- |
-| `app.js` | Entry | Boot sequence, Tauri bridge, navigation, modals, update notes, shortcuts |
-| `profiles.js` | Profile UI | Profile grid rendering, create/edit/delete profile forms, active profile logic |
-| `mods.js` | Mod UI | Mod card rendering, activation toggle, download progress listener, bulk actions |
-| `i18n.js` | Internationalization | JSON dictionary loading, `t()` function, `data-i18n` DOM attribute scanner |
-| `onboarding.js` | Tutorial | Sequential step engine, navigation-link targeting, Tasky mascot animations |
+### Core Modules
 
-### i18n Engine
-
-| Mechanism | Detail |
+| Module | Responsibility |
 | :--- | :--- |
-| **Loading** | Fetches `Lang/fr.json` or `Lang/en.json` based on `localStorage('bmm-lang')` |
-| **Static translation** | DOM elements with `data-i18n="key"` are automatically replaced on load and language switch |
-| **Dynamic translation** | `t('key', { param: value })` performs runtime string interpolation for parameterized messages |
-| **Language switch** | Calls `applyTranslations(document.body)` without any page reload |
+| `api.js` | Direct IPC bridge with Tauri. Handles all `invoke` calls and file pickers. |
+| `state.js` | Centralized state manager. Synchronizes the local UI environment with the Rust backend. |
+| `profiles.js` | Logic for profile management, grid rendering, and active profile selection. |
+| `mods.js` | Mod library logic, activation toggles, and real-time conflict event handling. |
+| `i18n.js` | Internationalization engine with dynamic language file discovery. |
+| `utils.js` | Shared utility functions (HTML escaping, string sanitization, date formatting). |
 
 ---
 
-## 9. Frontend — Security
+## 10. Dynamic Internationalization Engine
+
+BMM 0.9.7 introduces a fully dynamic i18n system that allows for zero-config translation expansion.
+
+### Detection & Loading
+- **Rust Command**: `get_available_languages` scans the `Lang` directory using a recursive path resolver that adapts to both development and production environments.
+- **Frontend Sync**: The `i18n.js` module fetches this list and dynamically generates language selector items, including FlagCDN assets based on 2-letter ISO codes.
+- **Data Attributes**: Uses `data-i18n` attributes for all static UI elements, allowing for instantaneous language switching without application reloads.
+
+---
+
+## 11. Frontend — Security
 
 | Threat | Mitigation | Implementation |
 | :--- | :--- | :--- |
@@ -212,27 +241,27 @@ BMM can directly parse OvGME's proprietary binary `.dat` configuration files.
 
 ---
 
-## 10. Technical Specification Summary
+## 12. Technical Specification Summary
 
 | Parameter | Implementation |
 | :--- | :--- |
 | **Language (Backend)** | Rust 1.70+ (Tauri v1) |
-| **Language (Frontend)** | ES2022 JavaScript — Zero framework |
-| **Networking** | reqwest 0.11 (blocking + async with `json` and `rustls-tls` features) |
+| **Language (Frontend)** | ES2022 JavaScript — Modular Architecture |
+| **Networking** | reqwest 0.11 (blocking + async) |
 | **Archiving** | zip-rs 0.6 |
 | **State Serialization** | serde / serde_json |
 | **File Operations** | std::fs + fs_extra 1.x |
 | **Concurrency Model** | Arc + Mutex + tauri::async_runtime |
 | **Idle RAM** | approx. 60 MB |
-| **Active RAM (I/O)** | Less than 130 MB (increased by system diagnostics) |
-| **UI Framerate** | 60 FPS (decoupled from Rust workers) |
+| **Active RAM (I/O)** | Less than 130 MB |
+| **UI Framerate** | 60 FPS |
 | **Cold Boot Time** | Less than 1.5 seconds |
 | **System Info** | `sysinfo 0.30` |
 | **Crash Tracing** | `backtrace 0.3` |
 
 ---
 
-## 11. Crash & Logging System (`crash.rs`)
+## 13. Crash & Logging System (`crash.rs`)
 
 BMM implements a hybrid real-time logging system to prevent data loss in the event of an unhandled panic or process termination.
 
@@ -253,7 +282,7 @@ On application boot, `init_session()` scans the `com.bettermm.app/` directory:
 
 ---
 
-## 12. Advanced Troubleshooting (Debug Menu)
+## 14. Advanced Troubleshooting (Debug Menu)
 
 The `is_debug_mode` command controls the visibility of developer tools via `app.cfg`.
 
@@ -265,7 +294,7 @@ The `is_debug_mode` command controls the visibility of developer tools via `app.
 
 ---
 
-## 13. Auto-Update Engine (`autoupdate.rs`)
+## 15. Auto-Update Engine (`autoupdate.rs`)
 
 BMM includes a GitHub-based update checker implemented as an async Tauri command.
 
@@ -299,7 +328,7 @@ BMM includes a GitHub-based update checker implemented as an async Tauri command
 
 ---
 
-## 14. PTB System (Public Test Build)
+## 16. PTB System (Public Test Build)
 
 BMM supports a PTB distribution mode controlled via `app.cfg`.
 

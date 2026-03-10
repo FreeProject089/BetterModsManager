@@ -4,17 +4,25 @@
 import { invoke, pickFolder, listenFileDrop, toast, sendOsNotification } from './app.js';
 import { renderProfiles } from './profiles.js';
 import { t, applyTranslations } from './i18n.js';
+import { escHtml, escAttr } from './utils.js';
+import { getModCardHTML, getModDetailHTML } from './components.js';
+import { appState } from './state.js';
 
-let allMods = [];
-let userTags = [];
-let currentFilter = 'all';
-let currentSort = 'name_asc';
-let searchQuery = '';
-let selectedModId = null;
-let processingMods = new Set();
-let conflictCache = {}; // modId -> Array of conflicting mod names
+const S = new Proxy(appState.state, {
+  get(target, prop) { return target[prop]; },
+  set(target, prop, value) { appState.set(prop, value); return true; }
+});
+
+
+
+
+
+
+
+
+
 let refreshTimeout = null;
-let isCompact = localStorage.getItem('bmm-view-compact') === 'true';
+
 let ghostFilteredMods = []; // Cache for virtualization
 let lastStartIndex = -1;
 let lastEndIndex = -1;
@@ -29,31 +37,15 @@ export async function initMods() {
   const modlist = document.getElementById('mod-list');
   const scrollContainer = document.querySelector('.content-area');
 
-  if (isCompact) modlist.classList.add('compact');
+  if (S.isCompact) modlist.classList.add('compact');
 
   viewBtn.addEventListener('click', () => {
-    isCompact = !isCompact;
-    localStorage.setItem('bmm-view-compact', isCompact);
-    modlist.classList.toggle('compact', isCompact);
+    S.isCompact = !S.isCompact;
+    localStorage.setItem('bmm-view-compact', S.isCompact);
+    modlist.classList.toggle('compact', S.isCompact);
     renderModList(); // Re-render with new heights
-    toast(isCompact ? 'Mode compact activé' : 'Mode standard activé', 'info', 1500);
+    toast(S.isCompact ? 'Mode compact activé' : 'Mode standard activé', 'info', 1500);
   });
-
-  if (scrollContainer) {
-    let ticking = false;
-    scrollContainer.addEventListener('scroll', () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          // Only trigger virtual re-render if we are in Library view
-          if (document.getElementById('view-library').classList.contains('active')) {
-            renderModList(true); // true = scroll-only update
-          }
-          ticking = false;
-        });
-        ticking = true;
-      }
-    });
-  }
 
   const altDisable = document.getElementById('btn-disable-all-alt');
   if (altDisable) altDisable.addEventListener('click', () => toggleAllMods(false));
@@ -121,14 +113,14 @@ export async function initMods() {
     btn.addEventListener('click', e => {
       document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
       e.currentTarget.classList.add('active');
-      currentFilter = e.currentTarget.dataset.filter;
+      S.currentFilter = e.currentTarget.dataset.filter;
       renderModList();
     });
   });
 
   // Search
   document.getElementById('mod-search').addEventListener('input', e => {
-    searchQuery = e.target.value.toLowerCase();
+    S.searchQuery = e.target.value.toLowerCase();
     renderModList();
   });
 
@@ -154,7 +146,7 @@ export async function initMods() {
   const sortSelect = document.getElementById('mod-sort');
   if (sortSelect) {
     sortSelect.addEventListener('change', e => {
-      currentSort = e.target.value;
+      S.currentSort = e.target.value;
       renderModList();
     });
   }
@@ -183,17 +175,17 @@ export async function initMods() {
   if (closeDetail) closeDetail.addEventListener('click', closeModDetail);
 
   try {
-    userTags = await invoke('get_tags').catch(() => []);
-    allMods = await invoke('get_mods');
+    S.userTags = await invoke('get_tags').catch(() => []);
+    S.allMods = await invoke('get_mods');
     renderModList();
   } catch (err) {
     console.warn("Could not get mods:", err);
-    allMods = [];
+    S.allMods = [];
   }
   updateBadge();
   updateSubtitle();
-  if (selectedModId) {
-    const m = allMods.find(mod => mod.id === selectedModId);
+  if (S.selectedModId) {
+    const m = S.allMods.find(mod => mod.id === S.selectedModId);
     if (m) renderModDetail(m);
     else closeModDetail();
   }
@@ -207,14 +199,14 @@ async function checkAllConflicts() {
   if (!activeId) return;
 
   // Check in parallel to be faster
-  const results = await Promise.allSettled(allMods.map(m => invoke('check_conflicts', { modId: m.id })));
+  const results = await Promise.allSettled(S.allMods.map(m => invoke('check_conflicts', { modId: m.id })));
 
   results.forEach((res, idx) => {
-    const mid = allMods[idx].id;
+    const mid = S.allMods[idx].id;
     if (res.status === 'fulfilled' && res.value && res.value.length > 0) {
-      conflictCache[mid] = res.value;
+      S.conflictCache[mid] = res.value;
     } else {
-      delete conflictCache[mid];
+      delete S.conflictCache[mid];
     }
   });
 
@@ -226,30 +218,32 @@ export async function refreshMods(autoScan = false) {
 
   refreshTimeout = setTimeout(async () => {
     // Prevent autoScan if any mod is still processing to avoid "spam refresh"
-    if (autoScan && processingMods.size === 0) {
+    if (autoScan && S.processingMods.size === 0) {
       try { await invoke('scan_mods_folder'); } catch (e) { }
     }
 
     try {
-      userTags = await invoke('get_tags').catch(() => []);
-      allMods = await invoke('get_mods').catch(() => []);
+      S.userTags = await invoke('get_tags').catch(() => []);
+      S.allMods = await invoke('get_mods').catch(() => []);
 
       const activeId = await invoke('get_active_profile_id').catch(() => null);
       if (activeId) {
-        const results = await Promise.allSettled(allMods.map(m => invoke('check_conflicts', { modId: m.id })));
+        // Optimization: only check conflicts for enabled mods or the currently selected one
+        const modsToCheck = S.allMods.filter(m => m.enabled || m.id === S.selectedModId);
+        const results = await Promise.allSettled(modsToCheck.map(m => invoke('check_conflicts', { modId: m.id })));
+
+        // Clear conflict cache and then fill with new results
+        S.conflictCache = {};
+
         results.forEach((res, idx) => {
-          if (allMods[idx]) {
-            const mid = allMods[idx].id;
-            if (res.status === 'fulfilled' && res.value && res.value.length > 0) {
-              conflictCache[mid] = res.value;
-            } else {
-              delete conflictCache[mid];
-            }
+          const mod = modsToCheck[idx];
+          if (mod && res.status === 'fulfilled' && res.value && res.value.length > 0) {
+            S.conflictCache[mod.id] = res.value;
           }
         });
       }
     } catch (err) {
-      allMods = [];
+      S.allMods = [];
     }
 
     updateBadge();
@@ -259,8 +253,8 @@ export async function refreshMods(autoScan = false) {
 
     renderModList(); // Single final render
 
-    if (selectedModId) {
-      const m = allMods.find(mod => mod.id === selectedModId);
+    if (S.selectedModId) {
+      const m = S.allMods.find(mod => mod.id === S.selectedModId);
       if (m) renderModDetail(m);
       else closeModDetail();
     }
@@ -270,13 +264,13 @@ export async function refreshMods(autoScan = false) {
 
 function updateBadge() {
   const badge = document.getElementById('badge-library');
-  badge.textContent = allMods.length;
-  badge.classList.toggle('show', allMods.length > 0);
+  badge.textContent = S.allMods.length;
+  badge.classList.toggle('show', S.allMods.length > 0);
 }
 
 function updateSubtitle() {
-  const enabled = allMods.filter(m => m.enabled).length;
-  const total = allMods.length;
+  const enabled = S.allMods.filter(m => m.enabled).length;
+  const total = S.allMods.length;
   const el = document.getElementById('lib-subtitle');
   el.textContent = total === 0
     ? 'Ajoutez votre premier mod.'
@@ -284,26 +278,26 @@ function updateSubtitle() {
 }
 
 function getFilteredMods() {
-  let filtered = allMods.filter(m => {
+  let filtered = S.allMods.filter(m => {
     const matchFilter =
-      currentFilter === 'all' ||
-      (currentFilter === 'enabled' && m.enabled) ||
-      (currentFilter === 'disabled' && !m.enabled);
+      S.currentFilter === 'all' ||
+      (S.currentFilter === 'enabled' && m.enabled) ||
+      (S.currentFilter === 'disabled' && !m.enabled);
     // Search also matches tag names
-    let matchSearch = !searchQuery || m.name.toLowerCase().includes(searchQuery);
-    if (!matchSearch && searchQuery && m.tags && m.tags.length > 0) {
+    let matchSearch = !S.searchQuery || m.name.toLowerCase().includes(S.searchQuery);
+    if (!matchSearch && S.searchQuery && m.tags && m.tags.length > 0) {
       matchSearch = m.tags.some(tid => {
-        const tDef = userTags.find(t => t.id === tid);
-        return tDef && tDef.name.toLowerCase().includes(searchQuery);
+        const tDef = S.userTags.find(t => t.id === tid);
+        return tDef && tDef.name.toLowerCase().includes(S.searchQuery);
       });
     }
     return matchFilter && matchSearch;
   });
 
   filtered.sort((a, b) => {
-    if (currentSort === 'name_asc') return a.name.localeCompare(b.name);
-    if (currentSort === 'name_desc') return b.name.localeCompare(a.name);
-    if (currentSort === 'status') {
+    if (S.currentSort === 'name_asc') return a.name.localeCompare(b.name);
+    if (S.currentSort === 'name_desc') return b.name.localeCompare(a.name);
+    if (S.currentSort === 'status') {
       if (a.enabled === b.enabled) return a.name.localeCompare(b.name);
       return a.enabled ? -1 : 1;
     }
@@ -346,184 +340,146 @@ function renderHistoryModal(history) {
   document.getElementById('modal-history').classList.add('open');
 }
 
-async function renderModList(isScrollOnly = false) {
+async function renderModList() {
   const list = document.getElementById('mod-list');
   const viewport = document.getElementById('mod-list-viewport');
   const spacer = document.getElementById('mod-list-spacer');
-  const scrollContainer = document.querySelector('.content-area');
   const empty = document.getElementById('empty-mods');
 
-  if (!list || !viewport || !spacer || !scrollContainer || !empty) return;
+  if (!list || !viewport || !empty) return;
 
-  // Use cached mods if just scrolling
-  let mods = isScrollOnly ? ghostFilteredMods : [];
   let activeId = null;
+  try {
+    activeId = await invoke('get_active_profile_id');
+    if (!activeId) {
+      viewport.innerHTML = '';
+      if (spacer) spacer.style.height = '0px';
+      empty.style.display = 'none';
 
-  if (!isScrollOnly) {
-    try {
-      activeId = await invoke('get_active_profile_id');
-      if (!activeId) {
-        viewport.innerHTML = '';
-        spacer.style.height = '0px';
-        empty.style.display = 'none';
-
-        let noProf = document.getElementById('empty-no-profile');
-        if (!noProf) {
-          noProf = document.createElement('div');
-          noProf.id = 'empty-no-profile';
-          noProf.className = 'empty-state';
-          noProf.style.padding = '60px 20px';
-          noProf.innerHTML = `
-            <div class="empty-icon" style="margin-bottom:24px; opacity:0.6">
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-                <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-              </svg>
-            </div>
-            <h3 data-i18n="lib.noProfileTitle" style="font-size:22px; margin-bottom:12px; font-weight:700">Aucun profil actif</h3>
-            <p data-i18n="lib.noProfileDesc" style="color:var(--text-secondary); max-width:420px; margin:0 auto 32px; line-height:1.6">Veuillez sélectionner ou créer un profil pour gérer vos mods.</p>
-            <div style="display:flex; justify-content:center; gap:16px;">
-              <button class="btn btn-primary" onclick="document.getElementById('nav-profiles').click(); document.getElementById('btn-new-profile').click();" style="padding:12px 24px; font-size:14px">
-                <span data-i18n="prof.create">Créer un profil</span>
-              </button>
-              <button class="btn btn-secondary" onclick="document.getElementById('nav-profiles').click(); document.getElementById('btn-import-ovgme').click();" style="padding:12px 24px; font-size:14px">
-                <span data-i18n="prof.importOvgme">Importer OvGME</span>
-              </button>
-            </div>
-          `;
-          list.appendChild(noProf);
-          applyTranslations(noProf);
-        } else {
-          noProf.style.display = '';
-        }
-        return;
+      let noProf = document.getElementById('empty-no-profile');
+      if (!noProf) {
+        noProf = document.createElement('div');
+        noProf.id = 'empty-no-profile';
+        noProf.className = 'empty-state';
+        noProf.style.padding = '60px 20px';
+        noProf.innerHTML = `
+          <div class="empty-icon" style="margin-bottom:24px; opacity:0.6">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+              <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+            </svg>
+          </div>
+          <h3 data-i18n="lib.noProfileTitle" style="font-size:22px; margin-bottom:12px; font-weight:700">Aucun profil actif</h3>
+          <p data-i18n="lib.noProfileDesc" style="color:var(--text-secondary); max-width:420px; margin:0 auto 32px; line-height:1.6">Veuillez sélectionner ou créer un profil pour gérer vos mods.</p>
+          <div style="display:flex; justify-content:center; gap:16px;">
+            <button class="btn btn-primary" onclick="document.getElementById('nav-profiles').click(); document.getElementById('btn-new-profile').click();" style="padding:12px 24px; font-size:14px">
+              <span data-i18n="prof.create">Créer un profil</span>
+            </button>
+            <button class="btn btn-secondary" onclick="document.getElementById('nav-profiles').click(); document.getElementById('btn-import-ovgme').click();" style="padding:12px 24px; font-size:14px">
+              <span data-i18n="prof.importOvgme">Importer OvGME</span>
+            </button>
+          </div>
+        `;
+        list.appendChild(noProf);
+        applyTranslations(noProf);
+      } else {
+        noProf.style.display = '';
       }
+      return;
+    }
 
-      if (document.getElementById('empty-no-profile')) {
-        document.getElementById('empty-no-profile').style.display = 'none';
-      }
+    if (document.getElementById('empty-no-profile')) {
+      document.getElementById('empty-no-profile').style.display = 'none';
+    }
+  } catch (e) { return; }
 
-      mods = getFilteredMods();
-      ghostFilteredMods = mods; // Cache it
-    } catch (e) { return; }
-  }
+  const mods = getFilteredMods();
 
   if (mods.length === 0) {
     viewport.innerHTML = '';
-    spacer.style.height = '0px';
+    if (spacer) spacer.style.height = '0px';
     empty.style.display = '';
     return;
   }
 
   empty.style.display = 'none';
+  if (spacer) spacer.style.height = '0px';
+  viewport.style.transform = 'translateY(0px)';
 
-  // --- VIRTUALIZATION LOGIC ---
-  const rowHeight = isCompact ? 52 : 94; // approx heights in px
-  const gap = isCompact ? 4 : 8;
-  const itemFullHeight = rowHeight + gap;
-
-  const VIRTUALIZATION_THRESHOLD = 50;
-  const useVirtualization = mods.length > VIRTUALIZATION_THRESHOLD;
-
-  let startIndex = 0;
-  let endIndex = mods.length;
-
-  if (useVirtualization) {
-    const totalHeight = mods.length * itemFullHeight;
-    spacer.style.height = totalHeight + 'px';
-
-    // Viewport metrics
-    const viewportHeight = scrollContainer.clientHeight;
-    const scrollTop = scrollContainer.scrollTop;
-
-    // We need to account for the list's offset from the top of the content-area
-    const listOffset = list.offsetTop;
-    const relativeScroll = Math.max(0, scrollTop - listOffset);
-
-    startIndex = Math.max(0, Math.floor(relativeScroll / itemFullHeight) - 2);
-    endIndex = Math.min(mods.length, Math.ceil((relativeScroll + viewportHeight) / itemFullHeight) + 2);
-
-    if (isScrollOnly && startIndex === lastStartIndex && endIndex === lastEndIndex) {
-      return;
-    }
-  } else {
-    // If we're not using virtualization, simply ignore scroll-triggered renders entirely
-    if (isScrollOnly) return;
-    spacer.style.height = '0px';
-    viewport.style.transform = 'translateY(0px)'; // Explicitly reset transform
-  }
-
-  lastStartIndex = startIndex;
-  lastEndIndex = endIndex;
-
-  // Safely detach detail panel if it exists
+  // Safely detach detail panel if it exists so we don't lose its state
   const existingPanel = document.getElementById('mod-detail-panel');
   let activeEl = null;
   let selStart = null;
   let selEnd = null;
 
   if (existingPanel) {
-    // Only detach if the parent card is NOT in the new visible range
-    const parentCard = existingPanel.parentElement;
-    const parentId = parentCard ? parentCard.dataset.id : null;
-    const isStillVisible = mods.some((m, idx) => idx >= startIndex && idx < endIndex && m.id === parentId);
-
-    if (!isStillVisible) {
-      if (document.activeElement && existingPanel.contains(document.activeElement)) {
-        activeEl = document.activeElement;
-        if (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') {
-          try {
-            selStart = activeEl.selectionStart;
-            selEnd = activeEl.selectionEnd;
-          } catch (e) { }
-        }
+    if (document.activeElement && existingPanel.contains(document.activeElement)) {
+      activeEl = document.activeElement;
+      if (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') {
+        try {
+          selStart = activeEl.selectionStart;
+          selEnd = activeEl.selectionEnd;
+        } catch (e) { }
       }
-      existingPanel.remove();
     }
+    existingPanel.remove();
   }
 
-  // Preserve existing cards for virtualization performance
+  // Preserve DOM nodes instead of destroying them to prevent layout flashing
   const existingMap = new Map();
-  if (isScrollOnly) {
-    Array.from(viewport.children).forEach(c => {
-      if (c.classList.contains('mod-card')) {
-        existingMap.set(c.dataset.id, c);
-      }
-    });
-  } else {
-    // If not scroll only, clear it out fully to ensure clean state
-    viewport.innerHTML = '';
-  }
+  Array.from(viewport.children).forEach(c => {
+    if (c.dataset && c.dataset.id) existingMap.set(c.dataset.id, c);
+  });
 
-  viewport.style.transform = `translateY(${startIndex * itemFullHeight}px)`;
+  let i = 0;
+  for (const mod of mods) {
+    let card = existingMap.get(mod.id);
 
-  for (let i = startIndex; i < endIndex; i++) {
-    const mod = mods[i];
-    let card;
-
-    if (isScrollOnly && existingMap.has(mod.id)) {
-      card = existingMap.get(mod.id);
-    } else {
+    if (!card) {
       card = createModCard(mod);
-    }
+    } else {
+      // Gently update existing card without modifying innerHTML to preserve event listeners
+      card.className = `mod-card ${mod.enabled ? 'enabled' : 'disabled'} ${S.selectedModId === mod.id ? 'selected' : ''}`;
 
-    if (existingPanel && mod.id === selectedModId) {
-      if (existingPanel.parentElement !== card) {
-        card.appendChild(existingPanel);
+      const toggle = card.querySelector('.mod-toggle-input');
+      if (toggle && toggle.checked !== !!mod.enabled) toggle.checked = !!mod.enabled;
+
+      // Update conflict badge safely
+      const hasConflict = !!(S.conflictCache[mod.id] && S.conflictCache[mod.id].length > 0);
+      const nameContainer = card.querySelector('.mod-name').parentNode;
+      const conflictBadge = nameContainer.querySelector('.conflict-badge');
+      if (hasConflict && !conflictBadge) {
+        nameContainer.insertAdjacentHTML('beforeend', `<div class="conflict-badge" style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.4);font-size:9px;font-weight:900;padding:1px 5px;border-radius:4px;letter-spacing:0.4px;text-transform:uppercase">Conflict</div>`);
+      } else if (!hasConflict && conflictBadge) {
+        conflictBadge.remove();
+      }
+
+      // Update processing overlay safely
+      const isProcessing = S.processingMods.has(mod.id);
+      const overlay = card.querySelector('.mod-loading-overlay');
+      if (isProcessing && !overlay) {
+        card.insertAdjacentHTML('beforeend', `<div class="mod-loading-overlay" style="position:absolute;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-card);z-index:10;animation:fadeIn 0.2s ease"><div style="display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div></div>`);
+      } else if (!isProcessing && overlay) {
+        overlay.remove();
       }
     }
 
-    const actualIndex = i - startIndex;
-    if (viewport.children[actualIndex] !== card) {
-      viewport.insertBefore(card, viewport.children[actualIndex] || null);
+    if (existingPanel && mod.id === S.selectedModId) {
+      card.appendChild(existingPanel);
     }
+
+    // Ensure card is in the correct DOM position safely
+    if (viewport.children[i] !== card) {
+      viewport.insertBefore(card, viewport.children[i] || null);
+    }
+    i++;
   }
 
-  // Remove any trailing extra cards
-  const targetLength = endIndex - startIndex;
-  while (viewport.children.length > targetLength) {
+  // Remove trailing unused cards
+  while (viewport.children.length > mods.length) {
     viewport.lastElementChild.remove();
   }
 
+  // Restore focus if needed
   if (activeEl) {
     setTimeout(() => {
       activeEl.focus();
@@ -536,92 +492,18 @@ async function renderModList(isScrollOnly = false) {
 
 function createModCard(mod) {
   const card = document.createElement('div');
-  card.className = `mod-card ${mod.enabled ? 'enabled' : 'disabled'} ${selectedModId === mod.id ? 'selected' : ''}`;
+  card.className = `mod-card ${mod.enabled ? 'enabled' : 'disabled'} ${S.selectedModId === mod.id ? 'selected' : ''}`;
   card.dataset.id = mod.id;
 
-  const hasConflict = conflictCache[mod.id] && conflictCache[mod.id].length > 0;
+  const hasConflict = S.conflictCache[mod.id] && S.conflictCache[mod.id].length > 0;
 
-  card.innerHTML = `
-    <label class="mod-toggle" title="${mod.enabled ? 'Désactiver' : 'Activer'}">
-      <input type="checkbox" class="mod-toggle-input" ${mod.enabled ? 'checked' : ''} />
-      <div class="mod-toggle-track">
-        <div class="mod-toggle-thumb"></div>
-      </div>
-    </label>
-
-    <div class="mod-status-dot ${mod.enabled ? 'enabled' : 'disabled'}"></div>
-
-    <div class="mod-info">
-      <div style="display:flex;align-items:center;gap:8px">
-        <div class="mod-name">${escHtml(mod.name)}</div>
-        ${hasConflict ? `
-          <div style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.4);font-size:9px;font-weight:900;padding:1px 5px;border-radius:4px;letter-spacing:0.4px;text-transform:uppercase">Conflict</div>
-        ` : ''}
-      </div>
-      <div class="mod-meta">
-        <span class="mono" style="color: var(--cyan)">v${escHtml(mod.version)}</span>
-        ${mod.author ? `<span>· ${escHtml(mod.author)}</span>` : ''}
-        ${mod.description ? `<span style="color: var(--text-muted)">· ${escHtml(mod.description)}</span>` : ''}
-        ${mod.tags?.length > 0 ? `<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
-          ${mod.tags.slice(0, 3).map(tid => {
-    const tDef = userTags.find(t => t.id === tid);
-    if (!tDef) return '';
-    return `<span style="background:${tDef.color}15;color:${tDef.color};border:1px solid ${tDef.color}30;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600">${escHtml(tDef.name)}</span>`;
-  }).join('')}
-          ${mod.tags.length > 3 ? `<span style="color:var(--text-muted);font-size:9px;align-self:center">+${mod.tags.length - 3}</span>` : ''}
-        </div>` : ''}
-      </div>
-      <div class="mod-path-hint" style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);opacity:0.6;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;display:flex;align-items:center;gap:4px">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        ${escHtml(mod.mod_folder_path || '')}
-      </div>
-    </div>
-
-    <div class="mod-actions">
-      <button class="btn btn-sm btn-icon btn-open-folder" title="Ouvrir le dossier" data-id="${mod.id}" style="background:rgba(255,255,255,0.05);color:var(--text-secondary);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-        </svg>
-      </button>
-      <button class="btn btn-sm btn-icon btn-edit-mod" title="Détails / Éditer" data-id="${mod.id}" style="background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M12 20h9"/>
-          <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3l-12 12L3 20l1.5-4.5z"/>
-        </svg>
-      </button>
-      <button class="btn btn-danger btn-sm btn-icon btn-remove-mod" title="Supprimer" data-id="${mod.id}">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <polyline points="3 6 5 6 21 6"/>
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-        </svg>
-      </button>
-    </div>
-
-    <div class="mod-status-pill ${mod.enabled ? 'enabled' : 'disabled'}" style="
-      font-size: 10px;
-      font-family: var(--font-mono);
-      padding: 3px 8px;
-      border-radius: 6px;
-      background: ${mod.enabled ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)'};
-      color: ${mod.enabled ? 'var(--success)' : 'var(--text-muted)'};
-      flex-shrink: 0;
-    ">
-      ${mod.enabled ? 'ACTIF' : 'INACTIF'}
-    </div>
-    ${processingMods.has(mod.id) ? `
-      <div class="mod-loading-overlay" style="position:absolute;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-card);z-index:10;animation:fadeIn 0.2s ease">
-        <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-        </div>
-      </div>
-    ` : ''}
-  `;
+  card.innerHTML = getModCardHTML(mod, { selectedModId: S.selectedModId, conflictCache: S.conflictCache, processingMods: S.processingMods, userTags: S.userTags });
 
   // Toggle handler
   const toggle = card.querySelector('.mod-toggle-input');
   toggle.addEventListener('change', async () => {
     // Conflict Check (Keep it blocking for safety)
-    const conflicts = conflictCache[mod.id];
+    const conflicts = S.conflictCache[mod.id];
     const ignoreConflicts = localStorage.getItem('bmm_ignore_conflicts') === 'true';
 
     if (toggle.checked && conflicts && conflicts.length > 0 && !ignoreConflicts) {
@@ -644,7 +526,7 @@ function createModCard(mod) {
     }
 
     const originalState = !toggle.checked;
-    processingMods.add(mod.id);
+    S.processingMods.add(mod.id);
     renderModList(); // Show loading state immediately
 
     try {
@@ -660,9 +542,16 @@ function createModCard(mod) {
     } catch (err) {
       toast('Erreur : ' + err, 'error');
     } finally {
-      processingMods.delete(mod.id);
+      S.processingMods.delete(mod.id);
       await refreshMods();
     }
+  });
+
+  // Double-click to toggle
+  card.addEventListener('dblclick', (e) => {
+    // Don't trigger if clicking on an interactive element like a button or switch
+    if (e.target.closest('button') || e.target.closest('.mod-toggle') || e.target.closest('input')) return;
+    toggle.click();
   });
 
   // Open folder handler
@@ -746,7 +635,7 @@ function createModCard(mod) {
         toast(t(toastKey, { name: mod.name }), 'info');
 
         modal.classList.remove('open');
-        if (selectedModId === mod.id) closeModDetail();
+        if (S.selectedModId === mod.id) closeModDetail();
         await refreshMods();
       } catch (err) {
         toast('Erreur : ' + err, 'error');
@@ -769,18 +658,18 @@ function createModCard(mod) {
 
 // ── Detail / Edit Panel ──────────────────────────────────────
 function selectMod(mod) {
-  if (selectedModId === mod.id) {
+  if (S.selectedModId === mod.id) {
     closeModDetail();
     return;
   }
 
   // Remove .selected from previously selected card
-  if (selectedModId) {
-    const oldCard = document.querySelector(`.mod-card[data-id="${selectedModId}"]`);
+  if (S.selectedModId) {
+    const oldCard = document.querySelector(`.mod-card[data-id="${S.selectedModId}"]`);
     if (oldCard) oldCard.classList.remove('selected');
   }
 
-  selectedModId = mod.id;
+  S.selectedModId = mod.id;
 
   // Add .selected to the newly selected card
   const newCard = document.querySelector(`.mod-card[data-id="${mod.id}"]`);
@@ -790,11 +679,11 @@ function selectMod(mod) {
 }
 
 function closeModDetail() {
-  if (selectedModId) {
-    const oldCard = document.querySelector(`.mod-card[data-id="${selectedModId}"]`);
+  if (S.selectedModId) {
+    const oldCard = document.querySelector(`.mod-card[data-id="${S.selectedModId}"]`);
     if (oldCard) oldCard.classList.remove('selected');
   }
-  selectedModId = null;
+  S.selectedModId = null;
   const panel = document.getElementById('mod-detail-panel');
   if (panel) panel.remove();
 }
@@ -817,116 +706,29 @@ async function renderModDetail(mod) {
   // Scroll into view if it's off screen
   setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
 
-  // Fetch conflicts
-  let conflicts = [];
-  try {
-    conflicts = await invoke('check_conflicts', { modId: mod.id });
-  } catch (e) { }
-
   const links = mod.download_links || [];
+  panel.innerHTML = getModDetailHTML(mod, { conflicts: [], links });
 
-  panel.innerHTML = `
-    <div class="detail-header">
-      <div>
-        <h3 style="margin:0;font-size:16px;color:var(--text-primary)">${escHtml(mod.name)}</h3>
-        <span style="font-family:var(--font-mono);font-size:11px;color:var(--cyan)">v${escHtml(mod.version)}</span>
-        <span style="font-size:11px;color:var(--text-muted);margin-left:8px;display:inline-flex;align-items:center;gap:4px">${mod.enabled ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="var(--success)" stroke="none"><circle cx="12" cy="12" r="6"/></svg> ACTIF' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="var(--text-muted)" stroke="none"><circle cx="12" cy="12" r="6"/></svg> INACTIF'}</span>
-      </div>
-      <button id="btn-close-detail-inner" class="btn btn-sm btn-icon" style="background:rgba(255,255,255,0.05);border:none;color:var(--text-muted);cursor:pointer;padding:4px 8px;border-radius:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    </div>
-
-    <div class="detail-body" style="display:flex;flex-direction:column;gap:12px;margin-top:12px">
-      ${conflicts.length > 0 ? `
-      <div id="conflict-alert" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;margin-bottom:8px">
-        <h4 style="color:var(--danger);font-size:12px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          ${t('mod.conflictsTitle')}
-        </h4>
-        <p style="font-size:11px;color:rgba(255,255,255,0.7);line-height:1.4">
-          ${t('mod.conflictsDesc').replace('{mods}', `<strong style="color:var(--text-primary)">${conflicts.join(', ')}</strong>`)}
-        </p>
-      </div>` : ''}
-
-      <!-- Editable Fields -->
-      <div class="detail-section">
-        <label class="detail-label">${t('detail.name')}</label>
-        <input type="text" id="detail-name" class="input-field" value="${escAttr(mod.name)}" />
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="detail-section">
-          <label class="detail-label">${t('detail.version')}</label>
-          <input type="text" id="detail-version" class="input-field" value="${escAttr(mod.version)}" />
-        </div>
-        <div class="detail-section">
-          <label class="detail-label">${t('detail.author')}</label>
-          <input type="text" id="detail-author" class="input-field" value="${escAttr(mod.author || '')}" />
-        </div>
-      </div>
-      <div class="detail-section">
-        <label class="detail-label">${t('detail.description')}</label>
-        <textarea id="detail-desc" class="input-field" rows="2" style="resize:vertical">${escHtml(mod.description || '')}</textarea>
-      </div>
-
-      <!-- Tags Selection -->
-      <div class="detail-section" id="detail-tags-container">
-        <label class="detail-label" data-i18n="detail.tags" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Tags</label>
-        <div id="detail-tags-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-        <select id="detail-tag-select" class="input-field" style="width:100%;padding:6px;font-size:11px">
-            <option value="">— ${t('detail.selectTag')} —</option>
-        </select>
-      </div>
-
-      <!-- Mod Folder Path -->
-      <div class="detail-section">
-        <label class="detail-label" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ${t('prof.modsDir')}</label>
-        <div style="display:flex;gap:8px">
-          <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);background:rgba(0,0,0,0.3);padding:8px 10px;border-radius:8px;word-break:break-all;flex:1">
-            ${escHtml(mod.mod_folder_path || 'Non défini')}
-          </div>
-          <button id="btn-browse-archive" class="btn btn-secondary btn-sm" title="${t('mod.explorerBtn')}" style="padding:6px 12px">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><rect x="8" y="8" width="6" height="6"/></svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Installed Files -->
-      ${mod.installed_files && mod.installed_files.length > 0 ? `
-      <div class="detail-section">
-        <label class="detail-label" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ${t('detail.files')} (${mod.installed_files.length})</label>
-        <div style="max-height:120px;overflow-y:auto;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:8px">
-          ${mod.installed_files.map(f => `<div style="padding:1px 0;display:flex;align-items:center;gap:4px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${escHtml(f)}</div>`).join('')}
-        </div>
-      </div>
-      ` : ''}
-
-      <!-- Download Links -->
-      <div class="detail-section">
-        <label class="detail-label" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> ${t('detail.links')}</label>
-        <div id="detail-links-list" style="display:flex;flex-direction:column;gap:6px">
-          ${links.map((dl, i) => `
-            <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.2);padding:6px 8px;border-radius:8px">
-              <select class="detail-link-type input-field" style="width:100px;padding:3px;font-size:10px" data-index="${i}">
-                <option value="github" ${dl.link_type === 'github' ? 'selected' : ''}>GitHub</option>
-                <option value="google_drive" ${dl.link_type === 'google_drive' ? 'selected' : ''}>Google Drive</option>
-                <option value="mega" ${dl.link_type === 'mega' ? 'selected' : ''}>MEGA</option>
-                <option value="direct" ${dl.link_type === 'direct' ? 'selected' : ''}>Direct</option>
-                <option value="other" ${dl.link_type === 'other' ? 'selected' : ''}>Autre</option>
-              </select>
-              <input type="text" class="detail-link-url input-field" style="flex:1;padding:3px 6px;font-size:10px" value="${escAttr(dl.url)}" placeholder="URL" data-index="${i}" />
-              <input type="text" class="detail-link-label input-field" style="width:80px;padding:3px 6px;font-size:10px" value="${escAttr(dl.label)}" placeholder="Label" data-index="${i}" />
-              <button class="btn-remove-link" data-index="${i}" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;display:flex;align-items:center" title="Supprimer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-            </div>
-          `).join('')}
-        </div>
-        <button id="btn-add-link" class="btn btn-sm" style="margin-top:6px;background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px">+ ${t('detail.addLink')}</button>
-      </div>
-
-      <!-- Save Button -->
-      <button id="btn-save-detail" class="btn btn-primary" style="align-self:flex-start;margin-top:6px">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> ${t('detail.save')}
-      </button>
-    </div>
-  `;
+  // 1. ASYNC UPDATE: Fetch conflicts in background
+  (async () => {
+    try {
+      const conflicts = await invoke('check_conflicts', { modId: mod.id });
+      if (conflicts && conflicts.length > 0) {
+        // Update the conflict badge in the already rendered panel
+        const badgeContainer = panel.querySelector('.conflict-badge-container');
+        if (badgeContainer) {
+          badgeContainer.innerHTML = `<span class="badge badge-warning" style="font-size:10px">${t('mod.conflictsFound').replace('{n}', conflicts.length)}</span>`;
+        }
+        // Update the conflict list if present
+        const listContainer = panel.querySelector('#detail-conflicts-list');
+        if (listContainer) {
+          listContainer.innerHTML = conflicts.map(c => `<div style="color:var(--warning);font-size:11px;margin-bottom:2px">• ${escHtml(c)}</div>`).join('');
+        }
+      }
+    } catch (e) {
+      console.warn('[BMM] Failed to update conflicts in detail panel:', e);
+    }
+  })();
 
   // Close button
   panel.querySelector('#btn-close-detail-inner').addEventListener('click', closeModDetail);
@@ -942,7 +744,7 @@ async function renderModDetail(mod) {
   const renderTagsUI = () => {
     tagList.innerHTML = '';
     modTags.forEach(tid => {
-      const tDef = userTags.find(t => t.id === tid);
+      const tDef = S.userTags.find(t => t.id === tid);
       if (!tDef) return;
       const chip = document.createElement('div');
       chip.style.cssText = `display:flex;align-items:center;gap:4px;background:${tDef.color}20;color:${tDef.color};border:1px solid ${tDef.color}40;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600`;
@@ -956,7 +758,7 @@ async function renderModDetail(mod) {
     mod._currentTags = modTags;
   };
 
-  userTags.forEach(tDef => {
+  S.userTags.forEach(tDef => {
     const opt = document.createElement('option');
     opt.value = tDef.id;
     opt.textContent = tDef.name;
@@ -1049,7 +851,7 @@ function openAddModModal() {
   const tagSelect = document.getElementById('mod-tag');
   if (tagSelect) {
     tagSelect.innerHTML = '<option value="" data-i18n="prof.none">Aucun</option>';
-    userTags.forEach(tDef => {
+    S.userTags.forEach(tDef => {
       const opt = document.createElement('option');
       opt.value = tDef.id;
       opt.textContent = tDef.name;
@@ -1104,7 +906,7 @@ async function toggleAllMods(forcedEnable = null) {
   // If forcedEnable is null, use currentStatus, else user clicked a specific sub-button
   const enable = (forcedEnable === null) ? (currentStatus === 'enable') : forcedEnable;
 
-  const targetMods = enable ? allMods.filter(m => !m.enabled) : allMods.filter(m => m.enabled);
+  const targetMods = enable ? S.allMods.filter(m => !m.enabled) : S.allMods.filter(m => m.enabled);
   if (targetMods.length === 0) return;
 
   const btn = document.getElementById('btn-enable-all');
@@ -1131,9 +933,9 @@ async function toggleAllMods(forcedEnable = null) {
 }
 
 function getToggleAllStatus() {
-  const enabledCount = allMods.filter(m => m.enabled).length;
+  const enabledCount = S.allMods.filter(m => m.enabled).length;
   // If some are disabled, main action is to ENABLE all
-  return (enabledCount < allMods.length && allMods.length > 0) ? 'enable' : 'disable';
+  return (enabledCount < S.allMods.length && S.allMods.length > 0) ? 'enable' : 'disable';
 }
 
 function updateToggleAllBtn() {
@@ -1149,7 +951,7 @@ function updateToggleAllBtn() {
   // - If some mods are disabled: Main action is "Enable All", Dropdown shows "Disable All"
   // - If ALL mods are enabled: Main action becomes "Disable All", no need for dropdown/split
 
-  const allEnabled = allMods.length > 0 && allMods.every(m => m.enabled);
+  const allEnabled = S.allMods.length > 0 && S.allMods.every(m => m.enabled);
 
   if (allEnabled) {
     label.innerHTML = t('lib.disableAll');
@@ -1380,18 +1182,3 @@ document.addEventListener('DOMContentLoaded', () => {
     ctxMenu.style.display = 'none';
   });
 });
-
-
-function escHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function escAttr(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}

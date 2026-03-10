@@ -3,7 +3,7 @@ use crate::models::mod_entry::{ModEntry, ModStatus};
 use crate::commands::crash::log_line;
 use crate::state::AppState;
 use std::path::PathBuf;
-use tauri::State;
+use tauri::{State, Window};
 use std::sync::Mutex;
 
 lazy_static::lazy_static! {
@@ -158,7 +158,7 @@ pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files
 }
 
 #[tauri::command]
-pub async fn enable_mod(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
+pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
     log_line(format!("[MOD] Enabling mod '{}'", mod_id));
     let (mod_folder, game_path, backup_path, active_id, mod_name, other_active_mods) = {
         let data = state.data.lock().unwrap();
@@ -177,9 +177,14 @@ pub async fn enable_mod(state: State<'_, AppState>, mod_id: String) -> Result<()
         (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), active_id, m.name, others)
     };
 
+    let _ = window.emit("benchmark-event", format!("Activating mod: {}", mod_name));
+    
+    let game_path_limit = crate::commands::disk::get_limit_for_path(&state, &game_path);
+    let backup_path_limit = crate::commands::disk::get_limit_for_path(&state, &backup_path);
+    
     let applied = tauri::async_runtime::spawn_blocking(move || {
         let _lock = MOD_OP_LOCK.lock().unwrap();
-        fs_utils::apply_mod_stacked(&mod_folder, &game_path, &backup_path, &other_active_mods)
+        fs_utils::apply_mod_stacked(&mod_folder, &game_path, &backup_path, &other_active_mods, game_path_limit, backup_path_limit)
     }).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
 
     {
@@ -207,7 +212,7 @@ pub async fn enable_mod(state: State<'_, AppState>, mod_id: String) -> Result<()
 }
 
 #[tauri::command]
-pub async fn disable_mod(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
+pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
     log_line(format!("[MOD] Disabling mod '{}'", mod_id));
     let (game_path, backup_path, active_id, mod_name, files_to_remove, other_active_mods) = {
         let data = state.data.lock().unwrap();
@@ -234,9 +239,13 @@ pub async fn disable_mod(state: State<'_, AppState>, mod_id: String) -> Result<(
         (p.game_path.clone(), p.backup_path.clone(), active_id, m.name, unique_files.into_iter().collect::<Vec<String>>(), others)
     };
 
+    let _ = window.emit("benchmark-event", format!("Disabling mod: {}", mod_name));
+    
+    let game_path_limit = crate::commands::disk::get_limit_for_path(&state, &game_path);
+    
     tauri::async_runtime::spawn_blocking(move || {
         let _lock = MOD_OP_LOCK.lock().unwrap();
-        fs_utils::unapply_mod_stacked(&game_path, &backup_path, files_to_remove, &other_active_mods)
+        fs_utils::unapply_mod_stacked(&game_path, &backup_path, files_to_remove, &other_active_mods, game_path_limit)
     }).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
 
     {
@@ -916,7 +925,7 @@ pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>,
     Ok(altered)
 }
 #[tauri::command]
-pub async fn toggle_all_mods(state: State<'_, AppState>, enable: bool) -> Result<(), String> {
+pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable: bool) -> Result<(), String> {
     log_line(format!("[MOD] Toggle all mods: {}", if enable { "ENABLE" } else { "DISABLE" }));
     let mod_ids = {
         let data = state.data.lock().unwrap();
@@ -939,9 +948,9 @@ pub async fn toggle_all_mods(state: State<'_, AppState>, enable: bool) -> Result
 
     for id in mod_ids {
         if enable {
-            let _ = enable_mod(state.clone(), id).await;
+            let _ = enable_mod(window.clone(), state.clone(), id).await;
         } else {
-            let _ = disable_mod(state.clone(), id).await;
+            let _ = disable_mod(window.clone(), state.clone(), id).await;
         }
     }
     Ok(())

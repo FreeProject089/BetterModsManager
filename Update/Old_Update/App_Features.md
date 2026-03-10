@@ -35,6 +35,7 @@ The library view is your collections center. All mods for the active profile app
 | **Search & Filter** | Search mods by name, filter by active/inactive state, or filter by tag. |
 | **Open Mod Root** | Open a mod's physical folder directly in Windows Explorer from the right-click context menu. |
 | **Activity History** | Every enable/disable action is timestamped and logged per profile for audit tracking. |
+| **Double-Click Toggle** | Quickly enable or disable a mod by double-clicking anywhere on its card. |
 
 ---
 
@@ -58,6 +59,7 @@ BMM never uses symlinks. All file operations are physical, guaranteed, and rever
 | **Pre-Activation Warning** | Before enabling a mod, BMM compares its file tree against all currently active mods. If a collision is detected, a warning dialog appears identifying the conflicting mods. |
 | **Priority by Order** | The order in which mods are activated determines which one takes priority. The last activated mod's files take precedence. |
 | **Suppress Warning** | Users can choose to permanently suppress the conflict dialog for a specific combination. |
+| **Fast Selective Checking** | To ensure maximum performance, BMM only verifies conflicts between active mods and the mod being toggled, avoiding unnecessary scans of the entire library. |
 
 ---
 
@@ -77,7 +79,33 @@ The `.MM` format is BMM's proprietary JSON-based sharing standard.
 
 ---
 
-## 6. Integrity Report
+## 6. Dynamic Internationalization
+
+BMM features a robust, user-extensible translation engine.
+
+| Feature | Description |
+| :--- | :--- |
+| **Language Auto-Discovery** | Drop any `.json` translation file into the `frontend/Lang` folder. BMM detects it instantly on startup. |
+| **Unified Selector** | A streamlined, premium dropdown in Settings allows for instant language switching. |
+| **FlagCDN Integration** | High-quality flags are rendered based on 2-letter ISO codes provided in the translation files. |
+| **Offline Fallback** | If internet access is unavailable, flags are rendered as stylized text to maintain UI consistency. |
+| **Translator Tools** | Integrated "Copy Template" and "Translation Guide" buttons in Settings for community contributors. |
+
+---
+
+## 7. Automated Versioning & Build System
+
+BMM ensures that version information is always accurate and synchronized.
+
+| Feature | Description |
+| :--- | :--- |
+| **Static Build Capture** | The exact date and time of compilation are captured by the backend during the build process. |
+| **Dynamic UI Injection** | Version and build date are dynamically injected into the Credits subtitle, the hero section, the titlebar, and the footer. |
+| **Configuration-Based Suffix** | The "-PTB" label and version badge adapt in real-time based on the app's internal configuration. |
+
+---
+
+## 8. Integrity Report
 
 | Feature | Description |
 | :--- | :--- |
@@ -86,7 +114,7 @@ The `.MM` format is BMM's proprietary JSON-based sharing standard.
 
 ---
 
-## 7. Archive Explorer
+## 9. Archive Explorer
 
 | Feature | Description |
 | :--- | :--- |
@@ -96,83 +124,45 @@ The `.MM` format is BMM's proprietary JSON-based sharing standard.
 
 ---
 
-## 8. Update Notes
+## 10. Update Notes
 
 | Feature | Description |
 | :--- | :--- |
 | **Built-in Changelog** | A modal displays all `.md` files found in the `Update/` directory, rendered with full Markdown support. |
 | **Archive Access** | Older changelogs from `Update/Old_Update/` are available in a sidebar for historical reference. |
 | **File Browser Sidebar** | Navigate between release note files using left-panel navigation. |
-| **Cancellation Support** | Long operations like modlist installations can be cancelled mid-way through the progress UI. |
 
 ---
 
-## 9. Crash Reporting & Troubleshooting
+## 11. Crash Reporting & Troubleshooting
 
 BMM includes a high-reliability diagnostic system to ensure any issue can be identified and fixed quickly.
 
 | Feature | Description |
 | :--- | :--- |
-| **Real-Time Logging** | Every action (mod activation, profile change, API call) is written instantly to `current_session.log`. If the app closes unexpectedly, the cause is preserved. |
-| **Automatic Crash Detection** | At startup, BMM checks if the previous session ended cleanly. If not, it automatically packages logs, system info, and app state into a `.zip` report. |
-| **Detailed Diagnostics** | Crash reports include your OS version, CPU/RAM usage, `DXDiag` output (Windows), and a full error stack trace. |
-| **Crash Alert Modal** | If a crash occurred, a dedicated window appears on the next launch with a link to the Discord support and a button to open the report folder. |
-| **Manual Report Button** | Users can manually trigger a full system diagnostic report from the Settings menu for performance or bug investigations. |
-
----
-
-## 10. Mod Connection Types
-
-When adding or editing a mod, you can categorize its download links. This helps with organization and automation.
-
-| Type | Best Use Case | BMM Behavior |
-| :--- | :--- | :--- |
-| **GitHub** | Official mod repositories or release pages. | Standard community-recognized link. |
-| **Direct** | A direct URL to a `.zip`, `.rar`, or `.7z` file. | **High Priority.** Essential for fully automated `.MM` installations. |
-| **Google Drive** | Large files shared through Drive. | Requires manual interaction if a direct bypass isn't possible. |
-| **MEGA** | Encrypted cloud storage. | Standard link recognition. |
-| **Other** | Forums (DCS, Nexus), Discord links, etc. | Generic fallback link. |
-
----
-
-## 11. Interface & Settings
-
-| Feature | Description |
-| :--- | :--- |
-| **Multilingual** | Full support for English and French via a JSON-based i18n engine. Language switching is instant — no reload required. |
-| **Onboarding (Tasky)** | An interactive tutorial guides new users step-by-step through every core feature, with navigation to the relevant view. |
-| **Keyboard Shortcuts** | Ctrl+N (New Profile), Ctrl+E (Export .MM), and other shortcuts for power users. |
-| **Dark Mode Design** | Fixed dark mode workstation aesthetic with CSS custom properties for accent colors, borders, and transitions. |
-| **Sidebar Navigation** | Instant view switching: Library, Profiles, Mod Lists, Documentation, Credits, and Settings. |
+| **Real-Time Logging** | Every action is written instantly to `current_session.log`. |
+| **Automatic Crash Detection** | At startup, BMM checks for unclean exits and automatically packages diagnostic reports into `.zip` files. |
+| **Manual Report Button** | Users can manually trigger a full system diagnostic report from the Settings menu. |
 
 ---
 
 ## 12. Auto-Update System
 
-BMM includes a built-in update checker that queries the GitHub Releases API to notify users when a new version is available.
-
 | Feature | Description |
 | :--- | :--- |
-| **Automatic Check on Startup** | When enabled, BMM queries the GitHub Releases API 3 seconds after launch to check for a newer version. This runs silently in the background. |
-| **Manual Check Button** | A "Check for Updates" button is available in the sidebar footer and in the Settings page for on-demand checking. |
-| **Enable / Disable Toggle** | The auto-check can be toggled on or off from the Settings → Auto Update card. The preference is persisted in `localStorage`. |
-| **Update Available Modal** | When a newer version is detected, a modal displays the current version vs. latest version, the release notes (rendered as Markdown), and a direct download button for the `.msi` installer. |
-| **SemVer Comparison** | Versions are compared using semantic versioning logic (`MAJOR.MINOR.PATCH`). Only strictly newer versions trigger the update notification. |
-| **Asset Auto-Detection** | The download button prioritizes `.msi` installers, then `.exe`, then `.zip` — linking directly to the asset rather than the GitHub page. |
-| **Graceful Error Handling** | If no releases exist (404), a friendly info toast is shown. Network errors are reported via toast without blocking the app. |
+| **Automatic Check on Startup** | BMM queries the GitHub Releases API shortly after launch to check for newer versions. |
+| **Manual Check Button** | Available in the sidebar and Settings for on-demand checks. |
+| **Update Modal** | Displays version comparisons, markdown release notes, and direct installer download buttons. |
 
 ---
 
 ## 13. PTB Mode (Public Test Build)
 
-BMM supports a PTB (Public Test Build) mode for distributing pre-release versions with dedicated onboarding.
-
 | Feature | Description |
 | :--- | :--- |
-| **PTB Detection** | BMM reads `app.cfg` at startup. If `PTB=true` is present, PTB mode is activated. |
-| **Welcome Modal** | On first launch in PTB mode, a modal displays the contents of the `Update_v*_PTB.md` file found at the project root, rendered with full Markdown support. |
-| **Session-Based Dismiss** | The PTB modal is shown once per session. Dismissing it stores the state in `sessionStorage`, so it won't reappear until the next app restart. |
-| **Theme Integration** | The PTB modal matches the app's Vanguard Workstation design system with glassmorphism, accent-blue theming, and a visible primary action button. |
+| **Detection** | BMM reads `app.cfg` at startup. If `PTB=true` is present, PTB mode is activated. |
+| **Welcome Modal** | On first launch, a themed welcome modal displays the PTB release notes. |
+| **Dynamic Markers** | Special badges and version suffixes appear based on this mode. |
 
 ---
 

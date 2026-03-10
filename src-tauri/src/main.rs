@@ -8,6 +8,7 @@ mod state;
 use state::AppState;
 use std::path::PathBuf;
 use tauri::Manager;
+use commands::settings::*;
 
 fn main() {
     // 1. Initialise le gestionnaire de crash dès le démarrage (Expert Mode)
@@ -95,15 +96,17 @@ fn main() {
             // History
             commands::history::get_activity_history,
             // Settings
-            commands::settings::export_app_data,
-            commands::settings::import_app_data,
-            commands::settings::reset_app_data,
-            commands::settings::is_debug_mode,
-            commands::settings::is_ptb_mode,
-            commands::settings::is_update_disabled,
-            commands::settings::get_ptb_notes,
-            commands::settings::get_license_text,
-            commands::settings::get_app_version,
+            export_app_data,
+            import_app_data,
+            reset_app_data,
+            is_debug_mode,
+            is_ptb_mode,
+            is_update_disabled,
+            get_ptb_notes,
+            get_license_text,
+            get_app_version,
+            get_build_date,
+            get_available_languages,
             commands::mods::open_folder,
             commands::mods::open_file,
             commands::mods::open_mod_folder_at,
@@ -120,6 +123,14 @@ fn main() {
             // Auto Update
             commands::autoupdate::check_for_update,
             commands::autoupdate::download_and_install_update,
+            // Benchmark
+            commands::benchmark::is_benchmark_enabled,
+            commands::benchmark::start_benchmark,
+            commands::benchmark::stop_benchmark,
+            commands::benchmark::export_benchmark_csv,
+            // Disk Limiter
+            commands::disk::get_system_disks,
+            commands::disk::set_disk_limit,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

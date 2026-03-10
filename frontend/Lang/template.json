@@ -1,7 +1,7 @@
 {
     "_info": {
-        "name": "English",
-        "flag": "us"
+        "name": "Your Language Name",
+        "flag": "🏳️"
     },
     "nav.library": "Library",
     "nav.profiles": "Profiles",
@@ -174,11 +174,6 @@
     "settings.debugReset": "Full Reset (Storage & Cache)",
     "settings.debugWarn": "Caution: Resetting the application will delete all your profiles and mod configurations.",
     "settings.debugResetConfirm": "DANGER: Are you sure you want to delete EVERYTHING? (Profiles, Mods, Settings). This cannot be undone.",
-    "settings.benchmarkTitle": "Performance & Monitoring",
-    "settings.benchmarkDesc": "Monitor CPU, RAM and Disk I/O usage in real-time during mod operations.",
-    "settings.benchmarkOpen": "Open Benchmark Dashboard",
-    "settings.storageTitle": "Storage Performance (I/O Limiter)",
-    "settings.storageDesc": "Limit the read/write speed on your disks during mod activation to prevent system lag. (0 = unlimited)",
     "credits.title": "Credits",
     "credits.subtitle": "Better Mod Manager — Version {version}",
     "credits.heroDesc": "A modern, universal mod manager. Organise, enable, and share your mods effortlessly.",
@@ -328,6 +323,8 @@
     "ctx.copyPath": "Copy Relative Path",
     "ctx.searchPlaceholder": "Search files...",
     "mod.tagLimit": "Maximum 3 tags per mod.",
+    "mm.autoProfileDesc": "Generates a new dedicated profile for this list",
+    "mm.copyLocal": "Local copy...",
     "mm.alreadyPresent": "Already present",
     "mm.modsCount": "Mods",
     "mm.totalWeight": "Total Weight",

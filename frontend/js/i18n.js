@@ -24,8 +24,14 @@ async function loadLang(lang) {
 }
 
 export async function initI18n() {
-    // Load both languages
-    await Promise.all([loadLang('fr'), loadLang('en')]);
+    try {
+        const { invoke } = await import('./api.js');
+        const langs = await invoke('get_available_languages').catch(() => ['fr', 'en']);
+        await Promise.all(langs.map(l => loadLang(l)));
+    } catch (e) {
+        console.warn('[i18n] Failed to fetch language list, falling back:', e);
+        await Promise.all([loadLang('fr'), loadLang('en')]);
+    }
     loaded = true;
     applyTranslations();
 }
@@ -78,5 +84,9 @@ export function applyTranslations(root = document) {
     root.querySelectorAll('[data-i18n-title]').forEach(el => {
         const key = el.dataset.i18nTitle;
         el.title = t(key);
+    });
+    root.querySelectorAll('[data-i18n-content]').forEach(el => {
+        const key = el.dataset.i18nContent;
+        el.setAttribute('data-content', t(key));
     });
 }
