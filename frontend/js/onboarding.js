@@ -76,6 +76,20 @@ function getSteps() {
             icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color:var(--warning)"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>'
         },
         {
+            title: t('onboard.benchmark.title'),
+            text: t('onboard.benchmark.text'),
+            img: 'assets/Tasky.png',
+            navTarget: 'settings',
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color:#3b82f6"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>'
+        },
+        {
+            title: t('onboard.storage.title'),
+            text: t('onboard.storage.text'),
+            img: 'assets/Tasky.png',
+            navTarget: 'settings',
+            icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="M10 16h.01"/><path d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M21.946 12.013H2.054"/><path d="M6 16h.01"/></svg>'
+        },
+        {
             title: t('onboard.s8.title'),
             text: t('onboard.s8.text'),
             img: 'assets/Tasky_Happy.png',

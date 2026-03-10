@@ -12,6 +12,7 @@ let benchmarkStartTime = null;
 let playbackIndex = -1;
 let replayInterval = null;
 let autoStopTimeout = null;
+let activeDiskName = "";
 
 const MAX_DISPLAY_POINTS = 60;
 
@@ -45,32 +46,82 @@ export async function initBenchmark() {
     });
 
     await listen('benchmark-event', (event) => {
-        currentEvent = event.payload;
+        let payloadText = "";
+        let etaStr = "";
+
+        if (typeof event.payload === 'object' && event.payload !== null) {
+            payloadText = event.payload.text || "";
+            activeDiskName = event.payload.disk_name || "";
+            const tMb = event.payload.total_mb || 0;
+            const lMb = event.payload.limit_mb_s;
+
+            let diskStr = activeDiskName ? ` [${activeDiskName}]` : "";
+
+            if (lMb && lMb > 0 && tMb > 0) {
+                // Approximate 5% overhead in calculation 
+                const sec = Math.ceil((tMb / lMb) * 1.05);
+                const m = Math.floor(sec / 60);
+                const s = Math.floor(sec % 60);
+                etaStr = ` ⏱️ ETA: ${m > 0 ? m + 'm ' : ''}${s}s`;
+            } else if (tMb > 0) {
+                etaStr = ` ⏱️ ${t('benchmark.maxSpeed')}`;
+            }
+
+            currentEvent = payloadText + diskStr + etaStr;
+        } else {
+            currentEvent = event.payload;
+            activeDiskName = "";
+        }
+
         if (currentEvent) {
+            const isFinished = (typeof event.payload === 'object' && event.payload !== null) ? event.payload.finished : true;
+            const eventId = Date.now() + Math.random().toString(36).substr(2, 9);
+
+            // If it's a "finished" event, try to find and remove the "progress" entry for the same mod to avoid duplicates
+            if (isFinished && typeof event.payload === 'object' && event.payload !== null) {
+                const modName = payloadText.split(': ').pop();
+                recentEvents = recentEvents.filter(e => {
+                    const isOldProgress = e.text.includes('Activating mod:') || e.text.includes('Disabling mod:');
+                    const sameMod = e.text.includes(modName);
+                    return !(isOldProgress && sameMod);
+                });
+            }
+
             recentEvents.unshift({
+                id: eventId,
                 text: currentEvent,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
             });
-            if (recentEvents.length > 20) recentEvents.pop(); // Keep last 20 events
+
+            if (recentEvents.length > 20) recentEvents.pop();
+
+            // Granular clearing: only remove this specific event after 5s if it's finished
+            if (isFinished) {
+                setTimeout(() => {
+                    recentEvents = recentEvents.filter(e => e.id !== eventId);
+
+                    // Also clear main label if it matches
+                    if (currentEvent === payloadText + (activeDiskName ? ` [${activeDiskName}]` : "")) {
+                        currentEvent = "";
+                        activeDiskName = "";
+                    }
+
+                    updateBenchmarkUI();
+                    const lastPoint = benchmarkPoints[benchmarkPoints.length - 1];
+                    if (lastPoint) updateFloatingMonitor(lastPoint);
+                }, 5000);
+            }
         }
-
-        if (eventTimeout) clearTimeout(eventTimeout);
-
-        // Auto-clear active event label after 5 seconds, but keep in history
-        eventTimeout = setTimeout(() => {
-            currentEvent = "";
-            updateBenchmarkUI();
-            const lastPoint = benchmarkPoints[benchmarkPoints.length - 1];
-            if (lastPoint) updateFloatingMonitor(lastPoint);
-        }, 5000);
 
         updateBenchmarkUI();
         const lastPoint = benchmarkPoints[benchmarkPoints.length - 1];
         if (lastPoint) updateFloatingMonitor(lastPoint);
     });
 
-    document.getElementById('btn-start-bench').addEventListener('click', startBenchmark);
-    document.getElementById('btn-stop-bench').addEventListener('click', stopBenchmark);
+    document.getElementById('btn-toggle-bench').addEventListener('click', () => {
+        if (isBenchmarkActive) stopBenchmark();
+        else startBenchmark();
+    });
     document.getElementById('btn-export-bench').addEventListener('click', exportBenchmark);
     document.getElementById('btn-import-bench').addEventListener('click', importBenchmark);
     document.getElementById('btn-toggle-pip').addEventListener('click', togglePiP);
@@ -194,10 +245,17 @@ async function startBenchmark() {
 
         updateBenchmarkUI();
         updateFloatingMonitorState(true);
+        renderEmptyMonitor();
 
-        document.getElementById('btn-start-bench').disabled = true;
-        document.getElementById('btn-stop-bench').disabled = false;
-        document.getElementById('btn-start-bench').classList.add('pulse');
+        const btn = document.getElementById('btn-toggle-bench');
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-danger', 'pulse');
+        btn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <rect x="6" y="6" width="12" height="12" rx="2" ry="2" />
+            </svg>
+            <span id="label-toggle-bench" data-i18n="benchmark.stop">${t('benchmark.stop') || 'Stop Tracking'}</span>
+        `;
         toast("Benchmark started", "info");
     } catch (e) {
         toast("Failed to start benchmark: " + e, "error");
@@ -214,12 +272,24 @@ async function stopBenchmark() {
         autoStopTimeout = null;
     }
 
-    document.getElementById('btn-start-bench').disabled = false;
-    document.getElementById('btn-stop-bench').disabled = true;
-    document.getElementById('btn-start-bench').classList.remove('pulse');
+    const btn = document.getElementById('btn-toggle-bench');
+    btn.classList.remove('btn-danger', 'pulse');
+    btn.classList.add('btn-primary');
+    btn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 3l14 9-14 9V3z" />
+        </svg>
+        <span id="label-toggle-bench" data-i18n="benchmark.startTracking">${t('benchmark.startTracking') || 'Start Tracking'}</span>
+    `;
 
     toast("Tracking stopped", "success");
-    openBenchmarkModal();
+
+    // Sync PiP buttons
+    if (fullBenchmarkHistory.length > 0) {
+        updateFloatingMonitor(fullBenchmarkHistory[fullBenchmarkHistory.length - 1]);
+    } else {
+        renderEmptyMonitor();
+    }
 }
 
 function openBenchmarkModal() {
@@ -287,7 +357,7 @@ function renderEmptyMonitor() {
             No data yet
         </div>
         <div class="pip-actions">
-            <button class="pip-btn start" onclick="window.dispatchBenchmarkAction('start')">${t('benchmark.start')}</button>
+            <button class="pip-btn ${isBenchmarkActive ? 'stop' : 'start'}" onclick="window.dispatchBenchmarkAction('${isBenchmarkActive ? 'stop' : 'start'}')">${t(isBenchmarkActive ? 'benchmark.stop' : 'benchmark.start')}</button>
             <button class="pip-btn close" onclick="document.getElementById('benchmark-pip').classList.remove('active')">${t('common.close')}</button>
         </div>
     `;
@@ -330,6 +400,12 @@ function updateBenchmarkUI(isPlayback = false) {
     const stats = document.getElementById('benchmark-live-stats');
     if (stats) {
         stats.innerHTML = `<div style="color:var(--success); font-weight:700; font-size:12px; height:20px; text-align:center">${currentEvent ? '• ' + currentEvent : ''}</div>`;
+    }
+
+    const diskTitleSpan = document.querySelector('#disk-chart')?.closest('.chart-container')?.querySelector('.chart-title span');
+    if (diskTitleSpan) {
+        if (!diskTitleSpan.dataset.origText) diskTitleSpan.dataset.origText = diskTitleSpan.textContent;
+        diskTitleSpan.textContent = diskTitleSpan.dataset.origText + (activeDiskName ? ' [' + activeDiskName + ']' : '');
     }
 }
 
@@ -470,7 +546,7 @@ function updateFloatingMonitor(point, isPlayback = false) {
     const pip = document.getElementById('benchmark-pip');
     if (!pip || !pip.classList.contains('active')) return;
 
-    if (!pip.querySelector('.pip-body') || pip.querySelector('.READY-TO-RECORD')) {
+    if (!pip.querySelector('.pip-stat') || pip.querySelector('.READY-TO-RECORD')) {
         pip.innerHTML = `
             <div class="pip-header">
                 <span>${t('benchmark.title')}</span>
@@ -484,36 +560,47 @@ function updateFloatingMonitor(point, isPlayback = false) {
             <div class="pip-body">
                 <div class="pip-stat"><span class="stat-label">CPU</span><div class="pip-bar"><div id="pip-cpu-bar"></div></div><span id="pip-cpu-val" class="stat-value">0%</span></div>
                 <div class="pip-stat"><span class="stat-label">RAM</span><div class="pip-bar"><div id="pip-ram-bar"></div></div><span id="pip-ram-val" class="stat-value">0MB</span></div>
-                <div class="pip-stat"><span class="stat-label">DISK</span><div class="pip-bar"><div id="pip-disk-bar"></div></div><span id="pip-disk-val" class="stat-value">0K</span></div>
+                <div class="pip-stat"><span class="stat-label" id="pip-disk-label">DISK</span><div class="pip-bar"><div id="pip-disk-bar"></div></div><span id="pip-disk-val" class="stat-value">0K</span></div>
                 <div class="pip-event-list" id="pip-events"></div>
             </div>
             <div class="pip-actions" id="pip-actions-root"></div>
         `;
     }
 
-    document.getElementById('pip-timer').textContent = isPlayback ? "PLAYBACK" : getElapsedString();
+    const timerEl = document.getElementById('pip-timer');
+    if (timerEl) {
+        timerEl.textContent = isPlayback ? "PLAYBACK" : getElapsedString();
+    }
 
     const cpuBar = document.getElementById('pip-cpu-bar');
+    const cpuVal = document.getElementById('pip-cpu-val');
     if (cpuBar) {
         cpuBar.style.width = Math.min(point.cpu_usage, 100) + '%';
         cpuBar.style.background = '#3b82f6';
-        document.getElementById('pip-cpu-val').textContent = point.cpu_usage.toFixed(0) + '%';
+        if (cpuVal) cpuVal.textContent = point.cpu_usage.toFixed(0) + '%';
     }
 
     const ramBar = document.getElementById('pip-ram-bar');
+    const ramVal = document.getElementById('pip-ram-val');
     if (ramBar) {
         ramBar.style.width = Math.min((point.ram_usage / 4096) * 100, 100) + '%';
         ramBar.style.background = '#10b981';
-        document.getElementById('pip-ram-val').textContent = point.ram_usage + 'M';
+        if (ramVal) ramVal.textContent = point.ram_usage + 'M';
     }
 
     const totalDisk = point.disk_read + point.disk_write;
     const diskBar = document.getElementById('pip-disk-bar');
+    const diskVal = document.getElementById('pip-disk-val');
     if (diskBar) {
         diskBar.style.width = Math.min((totalDisk / 50000) * 100, 100) + '%';
         diskBar.style.background = '#f59e0b';
         const formatted = formatDisk(totalDisk);
-        document.getElementById('pip-disk-val').textContent = formatted.replace(' MB/s', 'M').replace(' KB/s', 'K');
+        if (diskVal) diskVal.textContent = formatted.replace(' MB/s', 'M').replace(' KB/s', 'K');
+    }
+
+    const pipDiskLabel = document.getElementById('pip-disk-label');
+    if (pipDiskLabel) {
+        pipDiskLabel.textContent = `DISK ${activeDiskName ? '[' + activeDiskName + ']' : ''}`;
     }
 
     const eventList = document.getElementById('pip-events');
@@ -534,14 +621,22 @@ function updateFloatingMonitor(point, isPlayback = false) {
 
     const actions = document.getElementById('pip-actions-root');
     if (actions) {
-        const actionsHtml = `
-            ${!isBenchmarkActive && !isPlayback ?
-                `<button class="pip-btn start" onclick="window.dispatchBenchmarkAction('start')">${t('benchmark.start')}</button>` :
-                (isPlayback ? '' : `<button class="pip-btn stop" onclick="window.dispatchBenchmarkAction('stop')">${t('benchmark.stop')}</button>`)
+        let actionBtn = '';
+        if (!isPlayback) {
+            if (isBenchmarkActive) {
+                actionBtn = `<button class="pip-btn stop" onclick="window.dispatchBenchmarkAction('stop')">${t('benchmark.stop') || 'Stop'}</button>`;
+            } else {
+                actionBtn = `<button class="pip-btn start" onclick="window.dispatchBenchmarkAction('start')">${t('benchmark.start') || 'Start'}</button>`;
             }
+        }
+
+        const actionsHtml = `
+            ${actionBtn}
             <button class="pip-btn close" onclick="document.getElementById('benchmark-pip').classList.remove('active')">${t('common.close')}</button>
         `;
-        if (actions.innerHTML !== actionsHtml) actions.innerHTML = actionsHtml;
+        if (actions.innerHTML !== actionsHtml) {
+            actions.innerHTML = actionsHtml;
+        }
     }
 }
 

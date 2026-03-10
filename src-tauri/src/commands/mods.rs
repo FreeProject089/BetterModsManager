@@ -5,6 +5,16 @@ use crate::state::AppState;
 use std::path::PathBuf;
 use tauri::{State, Window};
 use std::sync::Mutex;
+use serde::Serialize;
+
+#[derive(Serialize, Clone)]
+struct BenchEventPayload {
+    text: String,
+    disk_name: String,
+    total_mb: f64,
+    limit_mb_s: Option<u64>,
+    finished: bool,
+}
 
 lazy_static::lazy_static! {
     static ref MOD_OP_LOCK: Mutex<()> = Mutex::new(());
@@ -177,15 +187,45 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
         (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), active_id, m.name, others)
     };
 
-    let _ = window.emit("benchmark-event", format!("Activating mod: {}", mod_name));
-    
     let game_path_limit = crate::commands::disk::get_limit_for_path(&state, &game_path);
     let backup_path_limit = crate::commands::disk::get_limit_for_path(&state, &backup_path);
+
+    let mut total_bytes = 0;
+    if let Ok(files) = crate::fs_utils::list_mod_files(&mod_folder) {
+        for rel in files {
+            if let Ok(meta) = std::fs::metadata(mod_folder.join(rel)) {
+                total_bytes += meta.len();
+            }
+        }
+    }
+    let total_mb = total_bytes as f64 / 1_048_576.0;
+    let disk_name = game_path.to_string_lossy().chars().take(3).collect::<String>().to_uppercase();
+
+    let _ = window.emit("benchmark-event", BenchEventPayload {
+        text: format!("Activating mod: {}", mod_name),
+        disk_name,
+        total_mb,
+        limit_mb_s: game_path_limit,
+        finished: false,
+    });
     
-    let applied = tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         let _lock = MOD_OP_LOCK.lock().unwrap();
         fs_utils::apply_mod_stacked(&mod_folder, &game_path, &backup_path, &other_active_mods, game_path_limit, backup_path_limit)
-    }).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
+    }).await.map_err(|e| e.to_string())?;
+
+    let _ = window.emit("benchmark-event", BenchEventPayload {
+        text: match &result {
+            Ok(_) => format!("Mod activated: {}", mod_name),
+            Err(_) => format!("Error activating: {}", mod_name),
+        },
+        disk_name: "".to_string(),
+        total_mb: 0.0,
+        limit_mb_s: None,
+        finished: true,
+    });
+
+    let applied = result.map_err(|e| e.to_string())?;
 
     {
         let mut data = state.data.lock().unwrap();
@@ -239,14 +279,42 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
         (p.game_path.clone(), p.backup_path.clone(), active_id, m.name, unique_files.into_iter().collect::<Vec<String>>(), others)
     };
 
-    let _ = window.emit("benchmark-event", format!("Disabling mod: {}", mod_name));
-    
     let game_path_limit = crate::commands::disk::get_limit_for_path(&state, &game_path);
+
+    let mut total_bytes = 0;
+    for p in &files_to_remove {
+        if let Ok(meta) = std::fs::metadata(game_path.join(p)) {
+            total_bytes += meta.len();
+        }
+    }
+    let total_mb = total_bytes as f64 / 1_048_576.0;
+    let disk_name = game_path.to_string_lossy().chars().take(3).collect::<String>().to_uppercase();
+
+    let _ = window.emit("benchmark-event", BenchEventPayload {
+        text: format!("Disabling mod: {}", mod_name),
+        disk_name,
+        total_mb,
+        limit_mb_s: game_path_limit,
+        finished: false,
+    });
     
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         let _lock = MOD_OP_LOCK.lock().unwrap();
         fs_utils::unapply_mod_stacked(&game_path, &backup_path, files_to_remove, &other_active_mods, game_path_limit)
-    }).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
+    }).await.map_err(|e| e.to_string())?;
+
+    let _ = window.emit("benchmark-event", BenchEventPayload {
+        text: match &result {
+            Ok(_) => format!("Mod disabled: {}", mod_name),
+            Err(_) => format!("Error disabling: {}", mod_name),
+        },
+        disk_name: "".to_string(),
+        total_mb: 0.0,
+        limit_mb_s: None,
+        finished: true,
+    });
+
+    result.map_err(|e| e.to_string())?;
 
     {
         let mut data = state.data.lock().unwrap();

@@ -131,6 +131,7 @@ fn main() {
             // Disk Limiter
             commands::disk::get_system_disks,
             commands::disk::set_disk_limit,
+            commands::disk::benchmark_disk,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -13,6 +13,12 @@ The main purpose of the PTB is to:
 ### Performance & Refactoring
 - **Instant Mod Detail**: The mod detail panel now loads basic information instantly, with conflict checks running in the background.
 - **Selective Conflict Checking**: Drastically reduced lag when activating/deactivating mods by optimizing the conflict resolution engine.
+- **Bye-bye Freezes**: New chunked transfer engine ensures your PC stays lag-free even when moving gigabytes of mods.
+
+### 🚀 New Performance Engine
+- **Disk I/O Limiter**: Take control of your disk speed. Set custom limits for game, mod, and backup drives to keep your system responsive.
+- **Performance Dashboard**: Professional-grade PiP monitor for CPU, RAM, and Disk I/O with historical replay and CSV export.
+- **Storage Manager**: Deep analysis of your disks, including cloud (Drive, Dropbox, etc.) and network drive detection.
 - **Code Refactoring**: Centralized state management and modularized the frontend for better stability.
 
 ### UI Polish

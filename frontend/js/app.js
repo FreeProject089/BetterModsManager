@@ -1222,69 +1222,196 @@ async function main() {
 
     // ── Storage Performance Settings ──
     const initStorageSettings = async () => {
+        // Open modal button
+        const openBtn = document.getElementById('btn-open-storage');
+        if (openBtn) {
+            openBtn.addEventListener('click', () => {
+                const modal = document.getElementById('modal-storage');
+                if (modal) { modal.classList.add('open'); renderStorageModal(); }
+            });
+        }
+        // FAQ redirect button
+        const faqBtn = document.getElementById('btn-storage-faq');
+        if (faqBtn) {
+            faqBtn.addEventListener('click', () => {
+                document.getElementById('nav-docs')?.click();
+                setTimeout(() => {
+                    const ioFaq = document.querySelector('[data-i18n="faq.qIo"]');
+                    if (ioFaq) {
+                        const details = ioFaq.closest('details');
+                        if (details) { details.open = true; details.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+                    }
+                }, 200);
+            });
+        }
+    };
+
+    const renderStorageModal = async () => {
         const container = document.getElementById('storage-disks-container');
         if (!container) return;
+
+        container.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-bottom:8px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            <div data-i18n="common.loading">Chargement...</div></div>`;
 
         try {
             const disks = await invoke('get_system_disks');
             if (!disks || disks.length === 0) {
-                container.innerHTML = `<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:10px;">Aucun disque détecté.</div>`;
+                container.innerHTML = `<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:30px;">Aucun disque détecté.</div>`;
                 return;
             }
 
+            const formatBytes = (bytes) => {
+                if (bytes >= 1e12) return (bytes / 1e12).toFixed(1) + ' TB';
+                if (bytes >= 1e9) return (bytes / 1e9).toFixed(1) + ' GB';
+                return (bytes / 1e6).toFixed(0) + ' MB';
+            };
+
+            const usageTypeLabels = {
+                game_directory: { label: t('storage.gameDir') || 'Game Dir', color: '#60a5fa' },
+                mod_folder: { label: t('storage.modsDir') || 'Mods', color: '#a78bfa' },
+                backup: { label: t('storage.backupDir') || 'Backup', color: '#fbbf24' },
+            };
+
+            const getKindBadge = (disk) => {
+                if (disk.is_cloud && disk.cloud_provider) {
+                    if (disk.kind === 'Network') return `<span style="background:rgba(245,158,11,0.15);color:#fbbf24;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">🌐 ${disk.cloud_provider}</span>`;
+                    return `<span style="background:rgba(168,85,247,0.15);color:#c084fc;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">☁️ ${disk.cloud_provider}</span>`;
+                }
+                if (disk.kind === 'SSD') return '<span style="background:rgba(59,130,246,0.15);color:#60a5fa;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">SSD</span>';
+                if (disk.kind === 'HDD') return '<span style="background:rgba(245,158,11,0.15);color:#fbbf24;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">HDD</span>';
+                return '<span style="background:rgba(156,163,175,0.15);color:#9ca3af;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">' + disk.kind + '</span>';
+            };
+
             container.innerHTML = disks.map(disk => {
-                const limitVal = disk.current_limit_mb_s ? disk.current_limit_mb_s : 0;
-                const kindBadge = disk.kind === 'SSD' ? '<span style="background:rgba(59,130,246,0.15);color:#60a5fa;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">SSD</span>' :
-                    disk.kind === 'HDD' ? '<span style="background:rgba(245,158,11,0.15);color:#fbbf24;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">HDD</span>' :
-                        '<span style="background:rgba(156,163,175,0.15);color:#9ca3af;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">' + disk.kind + '</span>';
+                const limitVal = disk.current_limit_mb_s || 0;
+                const usedPct = disk.total_space_bytes > 0 ? ((disk.total_space_bytes - disk.available_space_bytes) / disk.total_space_bytes * 100).toFixed(0) : 0;
+                const usedColor = usedPct > 90 ? '#ef4444' : usedPct > 70 ? '#fbbf24' : '#60a5fa';
+
+                // Profile pills
+                let profilePills = '';
+                if (disk.profiles_using && disk.profiles_using.length > 0) {
+                    profilePills = disk.profiles_using.map(pu => {
+                        const info = usageTypeLabels[pu.usage_type] || { label: pu.usage_type, color: '#9ca3af' };
+                        return `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,0.05);border:1px solid ${info.color}33;color:${info.color};padding:2px 8px;border-radius:12px;font-size:10px;font-weight:500;">
+                            <span style="width:6px;height:6px;border-radius:50%;background:${info.color};flex-shrink:0;"></span>
+                            ${pu.profile_name} → ${info.label}
+                        </span>`;
+                    }).join('');
+                }
+
+                // Removed mountSafe because escaping backslashes breaks Rust exact string matching
 
                 return `
-                    <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.2);padding:10px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.05);">
-                        <div style="display:flex;align-items:center;gap:12px;">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2">
-                                <rect x="2" y="4" width="20" height="16" rx="2" ry="2"/>
-                                <line x1="6" y1="12" x2="6.01" y2="12"/>
-                            </svg>
-                            <div style="display:flex;flex-direction:column;">
-                                <div style="display:flex;align-items:center;gap:8px;">
-                                    <span style="font-size:13px;font-weight:600;color:var(--text-bright);">${disk.name}</span>
-                                    ${kindBadge}
+                <div style="background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:16px;transition:border-color 0.2s;" class="storage-disk-card">
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;">
+                        <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                            <div style="width:38px;height:38px;background:rgba(59,130,246,0.08);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2">
+                                    <rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><line x1="6" y1="12" x2="6.01" y2="12"/>
+                                </svg>
+                            </div>
+                            <div style="min-width:0;">
+                                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                    <span style="font-size:14px;font-weight:700;color:var(--text-bright);">${disk.name}</span>
+                                    ${getKindBadge(disk)}
+                                    <span style="font-size:10px;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:1px 6px;border-radius:4px;">${disk.file_system}</span>
                                 </div>
-                                <span style="font-size:11px;color:var(--text-muted);">${disk.mount_point.replace(/\\\\/g, '\\')}</span>
+                                <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${disk.mount_point}</div>
                             </div>
                         </div>
-                        <div style="display:flex;align-items:center;gap:8px;">
-                            <input type="number" min="0" step="10" class="form-input disk-limit-input" data-mount="${disk.mount_point.replace(/\\/g, '\\\\')}" value="${limitVal}" style="width:100px;font-size:12px;padding:6px;text-align:right;" placeholder="0 (illimité)">
-                            <span style="font-size:12px;color:var(--text-muted);">MB/s</span>
+                        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+                            <input type="number" min="0" step="10" class="form-input disk-limit-input" data-mount="${disk.mount_point}" value="${limitVal}" style="width:90px;font-size:13px;padding:6px 8px;text-align:right;border-radius:8px;" placeholder="0">
+                            <span style="font-size:12px;color:var(--text-muted);font-weight:600;">MB/s</span>
                         </div>
                     </div>
-                `;
+
+                    <!-- Capacity bar -->
+                    <div style="margin-bottom:8px;">
+                        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:4px;">
+                            <span>${formatBytes(disk.total_space_bytes - disk.available_space_bytes)} / ${formatBytes(disk.total_space_bytes)}</span>
+                            <span style="color:${usedColor};font-weight:600;">${usedPct}%</span>
+                        </div>
+                        <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;">
+                            <div style="height:100%;width:${usedPct}%;background:${usedColor};border-radius:2px;transition:width 0.3s;"></div>
+                        </div>
+                    </div>
+
+                    ${profilePills ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">${profilePills}</div>` : ''}
+
+                    <!-- Benchmark row -->
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button class="btn btn-ghost btn-sm disk-bench-btn" data-mount="${disk.mount_point}" style="font-size:11px;gap:6px;padding:4px 10px;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                            <span data-i18n="storage.benchmark">${t('storage.benchmark') || 'Tester la vitesse'}</span>
+                        </button>
+                        <span class="disk-bench-result" style="font-size:11px;color:var(--text-muted);"></span>
+                    </div>
+                </div>`;
             }).join('');
 
-            // Add listeners
+            // Input listeners (debounced)
             container.querySelectorAll('.disk-limit-input').forEach(input => {
-                let debounceTimer;
+                let timer;
                 input.addEventListener('input', (e) => {
-                    clearTimeout(debounceTimer);
-                    debounceTimer = setTimeout(async () => {
+                    clearTimeout(timer);
+                    timer = setTimeout(async () => {
                         let val = parseInt(e.target.value, 10);
                         if (isNaN(val) || val < 0) val = 0;
                         const limitMbS = val === 0 ? null : val;
                         const mountPoint = e.target.getAttribute('data-mount');
-
                         try {
                             await invoke('set_disk_limit', { mountPoint, limitMbS });
-                            toast('Storage limit updated.', 'success');
-                        } catch (err) {
-                            toast('Error: ' + err, 'error');
-                        }
+                            toast(t('common.success') || 'Saved', 'success');
+                        } catch (err) { toast('Error: ' + err, 'error'); }
                     }, 800);
+                });
+            });
+
+            // Benchmark buttons
+            container.querySelectorAll('.disk-bench-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const mountPoint = btn.getAttribute('data-mount');
+                    const resultSpan = btn.closest('div').querySelector('.disk-bench-result');
+                    const original = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> <span>${t('storage.benchmarking') || 'Test en cours...'}</span>`;
+
+                    try {
+                        const res = await invoke('benchmark_disk', { mountPoint });
+                        resultSpan.innerHTML = `
+                            <span style="color:#60a5fa;">↓ ${res.read_mb_s} MB/s</span>
+                            <span style="margin:0 4px;">·</span>
+                            <span style="color:#a78bfa;">↑ ${res.write_mb_s} MB/s</span>
+                            <span style="margin:0 4px;">·</span>
+                            <span style="color:#34d399;">${t('storage.suggestedLimit') || 'Suggestion'}: ${res.suggested_limit} MB/s</span>
+                            <button class="btn btn-ghost btn-sm disk-apply-suggestion" data-mount="${mountPoint}" data-value="${res.suggested_limit}" style="font-size:10px;padding:2px 8px;margin-left:4px;">${t('storage.applySuggested') || 'Appliquer'}</button>
+                        `;
+
+                        // Apply button
+                        resultSpan.querySelector('.disk-apply-suggestion')?.addEventListener('click', async (ev) => {
+                            const sugVal = parseInt(ev.target.getAttribute('data-value'), 10);
+                            const mp = ev.target.getAttribute('data-mount');
+                            // Use DOM traversal to avoid bad CSS selectors with backslashes
+                            const input = btn.closest('.storage-disk-card').querySelector('.disk-limit-input');
+                            if (input) input.value = sugVal;
+                            try {
+                                await invoke('set_disk_limit', { mountPoint: mp, limitMbS: sugVal });
+                                toast(t('common.success') || 'Saved', 'success');
+                            } catch (err) { toast('Error: ' + err, 'error'); }
+                        });
+                    } catch (err) {
+                        resultSpan.textContent = 'Error: ' + err;
+                        resultSpan.style.color = 'var(--error)';
+                    }
+                    btn.disabled = false;
+                    btn.innerHTML = original;
                 });
             });
 
         } catch (err) {
             console.error(err);
-            container.innerHTML = `<div style="font-size:12px;color:var(--error);text-align:center;padding:10px;">Erreur lors du chargement des disques.</div>`;
+            container.innerHTML = `<div style="font-size:12px;color:var(--error);text-align:center;padding:30px;">Erreur: ${err}</div>`;
         }
     };
     initStorageSettings();

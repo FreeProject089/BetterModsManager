@@ -160,9 +160,21 @@ BMM includes a high-reliability diagnostic system to ensure any issue can be ide
 
 | Feature | Description |
 | :--- | :--- |
-| **Detection** | BMM reads `app.cfg` at startup. If `PTB=true` is present, PTB mode is activated. |
 | **Welcome Modal** | On first launch, a themed welcome modal displays the PTB release notes. |
 | **Dynamic Markers** | Special badges and version suffixes appear based on this mode. |
+
+---
+
+## 14. Performance & Storage Management
+
+BMM features a suite of high-end diagnostic and optimization tools to ensure maximum stability.
+
+| Feature | Description |
+| :--- | :--- |
+| **Disk I/O Limiter** | Prevents system freezes by capping the transfer speed during mod activation/deactivation. Custom limits can be set per disk. |
+| **Performance Dashboard** | A real-time monitoring overlay (PiP) tracking CPU, RAM, and Disk activity. Supports timeline scrubbing and historical data export (CSV). |
+| **Storage Manager** | Detects SSD/HDD types, filesystems, and auto-identifies cloud (Google Drive, MEGA, etc.) or network drives. |
+| **Benchmark Tool** | Test your disk's real-world performance directly within BMM to find the optimal speed limit. |
 
 ---
 

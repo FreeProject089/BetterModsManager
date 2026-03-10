@@ -128,6 +128,13 @@ To improve performance during mod activation, BMM now uses **Selective Conflict 
 - Only active mods and the currently selected mod are processed for conflicts.
 - This results in up to 80% reduction in IPC calls and filesystem operations during bulk activation/deactivation.
 
+### Disk I/O Limiting (introduced in v0.9.7)
+
+BMM addresses the "system freeze" problem common in heavy I/O applications:
+- **Chunked Transfer**: Files are copied in 2MB chunks rather than a single stream.
+- **Adaptive Throttling**: After each chunk, the engine sleeps for a duration calculated based on the user-defined MB/s limit.
+- **Per-Disk Awareness**: The limiter detects which physical disk a path belongs to and applies the corresponding limit automatically.
+
 ### Why Physical Copy Instead of Symlinks
 
 | Method | Stability | Anti-Cheat Compatible | Network Drive Support |
@@ -350,6 +357,19 @@ BMM supports a PTB distribution mode controlled via `app.cfg`.
 | 5 | Renders content using `marked.parse()` (with `<br>` fallback) |
 | 6 | Displays a themed modal with header (icon + title + PTB badge), scrollable body, and blue primary dismiss button |
 | 7 | On dismiss, sets `sessionStorage` flag to prevent re-display until next app restart |
+
+---
+
+## 17. Real-Time Performance Monitoring
+
+The Performance Dashboard is a standalone monitoring sub-system.
+
+| Layer | Implementation |
+| :--- | :--- |
+| **Data Collection** | Rust-side `sysinfo` crate captures core-normalized CPU, global RAM, and per-process Disk I/O. |
+| **Visualization** | Re-usable Chart.js-style implementation using custom Canvas and SVG paths for high efficiency. |
+| **Timeline Replay** | Stores the entire tracking session in binary-compressed objects, allowing for Premiere-style frame scrubbing. |
+| **PiP Mode** | Leverages a secondary UI layer to remain visible even when the main manager is minimized or focused on another task. |
 
 ---
 

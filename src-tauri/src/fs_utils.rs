@@ -29,7 +29,7 @@ pub fn copy_file_force_limited(src: &Path, dst: &Path, limit_mb_s: Option<u64>) 
             let mut src_file = std::fs::File::open(src).with_context(|| format!("Failed to open src: {:?}", src))?;
             let mut dst_file = std::fs::File::create(dst).with_context(|| format!("Failed to create dst: {:?}", dst))?;
             
-            let chunk_size: usize = 1024 * 1024; // 1 MB buffer
+            let chunk_size: usize = 128 * 1024; // 128 KB buffer for smoother limiting
             let mut buffer = vec![0u8; chunk_size];
             
             loop {
