@@ -226,10 +226,8 @@
     "faq.a8": "BMM checks the space before each copy. If the disk is full, activation is blocked for safety, even if alerts are disabled in the settings.",
     "faq.q9": "Can I disable the disk safety limit?",
     "faq.a9": "No. Unlike visual alerts, blocking in case of a saturated disk is vital to prevent data or system corruption.",
-    
     "docs.title": "Documentation",
     "docs.subtitle": "Better Mod Manager User Guide",
-
     "crash.title": "BMM Crashed",
     "crash.subtitle": "A crash report has been generated",
     "crash.desc": "Something unexpected happened and BMM stopped working. A .zip file with diagnostic information (logs, DXDiag, app state) has been saved automatically.",
@@ -280,7 +278,6 @@
     "docs.basic.conflict.a2": "The application remembers everything it replaces in its local logs.",
     "docs.basic.conflict.q3": "Multi-Restoration",
     "docs.basic.conflict.a3": "By deactivating the « priority » mod, the previously activated mod's file is automatically restored!",
-
     "docs.profileCustom": "Profile Customization",
     "docs.profileCustom.q1": "Background Image",
     "docs.profileCustom.a1": "You can choose a custom background image for each profile. BMM features a smart cropping tool for a perfect fit.",
@@ -288,10 +285,8 @@
     "docs.profileCustom.a2": "Identify your games at a glance by customizing the interface color and the profile card icon.",
     "docs.profileCustom.q3": "Double-click",
     "docs.profileCustom.a3": "For safety, profile activation requires a double-click, preventing accidental loading while browsing.",
-    
     "onboard.performance.title": "Performance — Why is it slow?",
     "onboard.performance.text": "Activating a mod can take time if it's very heavy (several GB). No worries, Tasky shows you that the work is in progress. Patience is the key to successful modding!",
-
     "onboard.s1.title": "Welcome!",
     "onboard.s1.text": "Hi! I'm Tasky, your personal assistant. Ready to transform your modding experience? Let me show you the ropes in just a few seconds.",
     "onboard.s2.title": "Profiles — Your starting point",
@@ -318,7 +313,6 @@
     "onboard.explorer.text": "Need to check mod content? The 'Browse archive' button opens a full tree view with search and context menu for expert management.",
     "onboard.next": "Next →",
     "onboard.skip": "Skip",
-
     "integrity.title": "Integrity Report",
     "integrity.checking": "Verification in progress...",
     "integrity.ok": "Integrity OK",
@@ -371,7 +365,6 @@
     "prof.gameDirLabel": "GAME DIRECTORY",
     "prof.modsDirLabel": "MODS FOLDER",
     "prof.backupDirLabel": "BACKUP FOLDER",
-
     "ctx.openFolder": "Open Location",
     "ctx.openFile": "Open File",
     "ctx.copyPath": "Copy Relative Path",
@@ -519,10 +512,10 @@
     "repo.syncBackupDir": "Backup folder",
     "repo.errSyncFolders": "Please provide all 3 folders (Game, Mods, Backup) before synchronizing.",
     "repo.modeInfo": "This mode works like a traditional web server: you export your profiles to a folder, then host it from your PC or a VPS. Your friends enter the URL to automatically download and sync mods. No P2P, no decentralized network.",
-    "repo.stepOneTitle": "1 — Generate Repository",
+    "repo.stepOneTitle": "Generate Repository",
     "repo.stepOneDesc": "Select the profiles to share. BMM copies all their mods and creates a repo.json file in the destination folder.",
     "repo.outputDirHint": "💡 You can point directly to a folder that already contains a repo.json to serve it without regenerating.",
-    "repo.stepTwoTitle": "2 — Start HTTP Server",
+    "repo.stepTwoTitle": "Start HTTP Server",
     "repo.stepTwoDesc": "BMM launches an HTTP server on port 8000, accessible from your local network. With port forwarding on your router, it becomes accessible from the internet.",
     "repo.serverOffline": "Server offline",
     "repo.serverOnline": "Server online — port 8000",

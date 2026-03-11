@@ -510,7 +510,7 @@
 
             <!-- ══ REPO VIEW ══ -->
             <section class="view" id="view-repo">
-                <div class="view-header">
+                <div class="view-header" style="margin-bottom:32px;">
                     <div>
                         <h1 class="view-title" data-i18n="repo.title">...</h1>
                         <p class="view-subtitle" data-i18n="repo.subtitle">...</p>
@@ -529,10 +529,10 @@
                         data-i18n="repo.modeInfo">...</p>
                 </div>
 
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;">
 
                     <!-- ══ GAUCHE : HOST ══ -->
-                    <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div style="display:flex;flex-direction:column;gap:24px;">
 
                         <!-- Card: Generate Repo -->
                         <div class="glass-card" style="border-left:3px solid var(--cyan);">
@@ -548,8 +548,8 @@
                             <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;"
                                 data-i18n="repo.stepOneDesc">...</p>
 
-                            <div class="form-group">
-                                <label class="form-label" data-i18n="repo.selectProfiles">...</label>
+                            <div class="form-group" style="margin-bottom:12px;">
+                                <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.selectProfiles">...</label>
                                 <div id="repo-export-profiles-list"
                                     style="max-height:130px;overflow-y:auto;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:7px;">
                                     <div style="color:var(--text-muted);font-size:12px;text-align:center;"
@@ -557,8 +557,8 @@
                                 </div>
                             </div>
 
-                            <div class="form-group">
-                                <label class="form-label" data-i18n="repo.outputDir">...</label>
+                            <div class="form-group" style="margin-bottom:6px;">
+                                <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.outputDir">...</label>
                                 <div class="path-picker">
                                     <input type="text" class="form-input" id="repo-export-path" placeholder="C:\..."
                                         readonly />
@@ -605,11 +605,11 @@
                                 </svg>
                                 <span style="color:#2ecc71;" data-i18n="repo.stepTwoTitle">...</span>
                             </h3>
-                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.6;"
+                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;"
                                 data-i18n="repo.stepTwoDesc">...</p>
 
                             <div
-                                style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 12px;margin-bottom:12px;border:1px solid rgba(255,255,255,0.07);">
+                                style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px 14px;margin-bottom:16px;border:1px solid rgba(255,255,255,0.07);">
                                 <div id="repo-server-status-dot"
                                     style="width:8px;height:8px;border-radius:50%;background:#555;transition:all 0.3s;flex-shrink:0;">
                                 </div>
@@ -625,7 +625,7 @@
                             <div id="repo-server-url-container"
                                 style="display:none;margin-top:12px;display:flex;flex-direction:column;gap:10px;">
                                 <div id="repo-server-lan-section">
-                                    <label class="form-label" style="font-size:11px;"
+                                    <label class="form-label" style="font-size:11px;margin-bottom:4px;display:block;"
                                         data-i18n="repo.hostShareUrl">...</label>
                                     <div class="path-picker">
                                         <input type="text" class="form-input" id="repo-server-url" readonly
@@ -643,7 +643,7 @@
 
                                 <div id="repo-server-public-section" style="display:none;">
                                     <label class="form-label"
-                                        style="font-size:11px;display:flex;align-items:center;gap:5px;">
+                                        style="font-size:11px;display:flex;align-items:center;gap:5px;margin-bottom:4px;">
                                         <span data-i18n="repo.hostPublicUrl">...</span>
                                         <span id="upnp-status-badge"
                                             style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(46, 204, 113, 0.2);color:#2ecc71;font-weight:700;"
@@ -687,21 +687,21 @@
                             </svg>
                             <span style="color:var(--accent);" data-i18n="repo.syncTitle">...</span>
                         </h3>
-                        <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;"
+                        <p style="font-size:12px;color:var(--text-muted);margin-bottom:20px;line-height:1.6;"
                             data-i18n="repo.syncDesc">...</p>
 
-                        <div class="form-group">
-                            <label class="form-label" data-i18n="repo.url">...</label>
+                        <div class="form-group" style="margin-bottom:4px;">
+                            <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.url">...</label>
                             <input type="text" class="form-input" id="repo-sync-url"
                                 data-i18n-placeholder="repo.urlPlaceholder" />
                         </div>
 
                         <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:14px 0;" />
-                        <p style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.06em;margin-bottom:12px;text-transform:uppercase;"
+                        <p style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.06em;margin:8px 0 12px;text-transform:uppercase;"
                             data-i18n="repo.syncFolders">...</p>
 
-                        <div class="form-group">
-                            <label class="form-label" data-i18n="repo.syncGameDir">...</label>
+                        <div class="form-group" style="margin-bottom:10px;">
+                            <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.syncGameDir">...</label>
                             <div class="path-picker">
                                 <input type="text" class="form-input" id="repo-sync-game-path"
                                     placeholder="C:\Jeux\DCS..." readonly />
@@ -709,8 +709,8 @@
                                     data-i18n="prof.browse">Parcourir</button>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label" data-i18n="repo.syncModsDir">...</label>
+                        <div class="form-group" style="margin-bottom:10px;">
+                            <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.syncModsDir">...</label>
                             <div class="path-picker">
                                 <input type="text" class="form-input" id="repo-sync-mods-path" placeholder="C:\Mods\..."
                                     readonly />
@@ -718,8 +718,8 @@
                                     data-i18n="prof.browse">Parcourir</button>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label" data-i18n="repo.syncBackupDir">...</label>
+                        <div class="form-group" style="margin-bottom:4px;">
+                            <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.syncBackupDir">...</label>
                             <div class="path-picker">
                                 <input type="text" class="form-input" id="repo-sync-backup-path"
                                     placeholder="C:\Backups\..." readonly />
