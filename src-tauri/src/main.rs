@@ -99,6 +99,8 @@ fn main() {
             export_app_data,
             import_app_data,
             reset_app_data,
+            get_settings,
+            update_settings,
             is_debug_mode,
             is_ptb_mode,
             is_update_disabled,
@@ -116,6 +118,11 @@ fn main() {
             commands::mods::list_mod_files_recursive,
             // Crash Advanced
             commands::crash::open_crash_folder,
+            // Image
+            commands::image::crop_and_save_webp,
+            commands::image::remove_profile_background,
+            commands::image::get_profile_background_path,
+            commands::image::apply_profile_background,
             commands::crash::open_crash_zip,
             commands::crash::get_crash_reports,
             commands::crash::trigger_manual_crash_report,
@@ -132,6 +139,7 @@ fn main() {
             commands::disk::get_system_disks,
             commands::disk::set_disk_limit,
             commands::disk::benchmark_disk,
+            commands::disk::check_disk_space,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

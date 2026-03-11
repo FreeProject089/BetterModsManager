@@ -4,6 +4,32 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct AppSettings {
+    #[serde(default = "default_lang")]
+    pub language: String,
+    #[serde(default)]
+    pub github_token: String,
+    #[serde(default)]
+    pub shortcuts: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub onboarding_shown: bool,
+    #[serde(default)]
+    pub last_seen_crash: Option<String>,
+    #[serde(default)]
+    pub auto_io_calibration: bool,
+    #[serde(default)]
+    pub storage_alert_enabled: bool,
+    #[serde(default = "default_storage_warning")]
+    pub storage_warning_space_pct: u32,
+    #[serde(default = "default_storage_critical")]
+    pub storage_critical_space_pct: u32,
+}
+
+fn default_lang() -> String { "fr".to_string() }
+fn default_storage_warning() -> u32 { 40 }
+fn default_storage_critical() -> u32 { 30 }
+
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct AppData {
     pub profiles: Vec<Profile>,
@@ -13,6 +39,8 @@ pub struct AppData {
     pub custom_tags: Vec<crate::models::tag::TagDef>,
     #[serde(default)]
     pub disk_limits: std::collections::HashMap<String, u64>,
+    #[serde(default)]
+    pub settings: AppSettings,
 }
 
 pub struct AppState {

@@ -311,18 +311,18 @@ function renderImportedModlist(modlist) {
             <div>
                 <h3 style="font-size:20px; font-weight:800; color:var(--text-primary); margin:0">${escHtml(modlist.name)}</h3>
                 <div style="display:flex; align-items:center; gap:8px; margin-top:6px; flex-wrap:wrap">
-                    <span style="font-size:10px; font-weight:700; text-transform:uppercase; padding:2px 8px; background:var(--accent-dim); color:var(--accent); border-radius:4px">${t('mm.importedBadge')}</span>
-                    <span style="font-size:11px; color:var(--text-muted)">${t('mm.by')} <span style="color:var(--text-secondary); font-weight:600">${escHtml(modlist.author || 'Inconnu')}</span></span>
+                    <span data-i18n="mm.importedBadge" style="font-size:10px; font-weight:700; text-transform:uppercase; padding:2px 8px; background:var(--accent-dim); color:var(--accent); border-radius:4px">${t('mm.importedBadge')}</span>
+                    <span style="font-size:11px; color:var(--text-muted)"><span data-i18n="mm.by">${t('mm.by')}</span> <span style="color:var(--text-secondary); font-weight:600">${escHtml(modlist.author || 'Inconnu')}</span></span>
                     <span style="font-size:11px; color:var(--text-muted)">• v${modlist.format_version}</span>
                 </div>
             </div>
             <div style="display:flex; gap:20px; text-align:right">
                 <div>
-                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em">${t('mm.modsCount')}</div>
+                    <div data-i18n="mm.modsCount" style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em">${t('mm.modsCount')}</div>
                     <div style="font-size:20px; font-weight:800; color:var(--accent)">${modlist.mods.length}</div>
                 </div>
                 <div>
-                    <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em">${t('mm.totalWeight')}</div>
+                    <div data-i18n="mm.totalWeight" style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em">${t('mm.totalWeight')}</div>
                     <div style="font-size:20px; font-weight:800; color:var(--cyan)">${formatBytes(totalBytes)}</div>
                 </div>
             </div>
@@ -330,8 +330,8 @@ function renderImportedModlist(modlist) {
         
         <div style="display:flex; align-items:center; gap:10px; padding:12px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid var(--border); margin-top:10px">
             <div style="flex:1">
-                 <div style="font-size:12px; font-weight:700; color:var(--text-primary)">${t('mm.autoProfile')}</div>
-                 <div style="font-size:10px; color:var(--text-muted)">${t('mm.autoProfileDesc')}</div>
+                 <div data-i18n="mm.autoProfile" style="font-size:12px; font-weight:700; color:var(--text-primary)">${t('mm.autoProfile')}</div>
+                 <div data-i18n="mm.autoProfileDesc" style="font-size:10px; color:var(--text-muted)">${t('mm.autoProfileDesc')}</div>
             </div>
             <label class="switch">
                 <input type="checkbox" id="chk-import-as-profile" checked>
@@ -342,7 +342,7 @@ function renderImportedModlist(modlist) {
         <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:rgba(0,255,255,0.03); border-radius:8px; border:1px solid rgba(6,182,212,0.1); margin-top:10px">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             <div style="flex:1; min-width:0">
-                <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; font-weight:700">${t('mm.installPath')}</div>
+                <div data-i18n="mm.installPath" style="font-size:9px; color:var(--text-muted); text-transform:uppercase; font-weight:700">${t('mm.installPath')}</div>
                 <div style="font-family:var(--font-mono); font-size:11px; color:var(--cyan); white-space:nowrap; overflow:hidden; text-overflow:ellipsis" id="imported-path-hint">${escHtml(modlist.game_path_hint || '—')}</div>
             </div>
             <button class="btn btn-sm btn-ghost" id="btn-override-import-path" title="Modifier le dossier de destination" style="height:28px; width:28px; border-radius:6px; padding:0; display:flex; align-items:center; justify-content:center">
@@ -484,11 +484,18 @@ function formatBytes(bytes) {
 // ── GitHub PAT helper ─────────────────────────────────────
 const GITHUB_PAT_KEY = 'bmm_github_pat';
 
-export function getGithubPat() {
-    return localStorage.getItem(GITHUB_PAT_KEY) || '';
+// ── GitHub PAT helper ─────────────────────────────────────
+export async function getGithubPat() {
+    const { getSettings } = await import('./api.js');
+    try {
+        const settings = await getSettings();
+        return settings.github_token || '';
+    } catch {
+        return '';
+    }
 }
 
-function initGithubPatSettings() {
+async function initGithubPatSettings() {
     const input = document.getElementById('setting-github-pat');
     const saveBtn = document.getElementById('btn-save-github-pat');
     const clearBtn = document.getElementById('btn-clear-github-pat');
@@ -496,12 +503,17 @@ function initGithubPatSettings() {
     const statusMsg = document.getElementById('pat-status-msg');
     if (!input) return;
 
-    // Pre-fill from localStorage
-    const stored = getGithubPat();
-    if (stored) {
-        input.value = stored;
-        if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--success)">&#10003; Token saved (${stored.length} chars)</span>`;
-    }
+    const { getSettings, updateSettings } = await import('./api.js');
+
+    // Pre-fill from Backend
+    try {
+        const settings = await getSettings();
+        const stored = settings.github_token || '';
+        if (stored) {
+            input.value = stored;
+            if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--success)">&#10003; Token saved (${stored.length} chars)</span>`;
+        }
+    } catch (e) { console.error('Failed to load PAT:', e); }
 
     // Toggle show/hide
     if (toggleBtn) {
@@ -521,28 +533,40 @@ function initGithubPatSettings() {
 
     // Save
     if (saveBtn) {
-        saveBtn.addEventListener('click', () => {
+        saveBtn.addEventListener('click', async () => {
             const val = input.value.trim();
             if (!val) {
                 if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--warning)">⚠ No token entered. Use Clear to remove the stored token.</span>`;
                 return;
             }
-            localStorage.setItem(GITHUB_PAT_KEY, val);
-            if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--success)">&#10003; Token saved (${val.length} chars)</span>`;
-            toast(t('settings.githubPatSaved'), 'success');
+            try {
+                const settings = await getSettings();
+                settings.github_token = val;
+                await updateSettings(settings);
+                if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--success)">&#10003; Token saved (${val.length} chars)</span>`;
+                toast(t('settings.githubPatSaved'), 'success');
+            } catch (e) {
+                toast('Erreur sauvegarde token : ' + e, 'error');
+            }
         });
     }
 
     // Clear
     if (clearBtn) {
-        clearBtn.addEventListener('click', () => {
-            localStorage.removeItem(GITHUB_PAT_KEY);
-            input.value = '';
-            input.type = 'password';
-            const icon = document.getElementById('pat-eye-icon');
-            if (icon) icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
-            if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--text-muted)">Token cleared.</span>`;
-            toast(t('settings.githubPatCleared'), 'info');
+        clearBtn.addEventListener('click', async () => {
+            try {
+                const settings = await getSettings();
+                settings.github_token = '';
+                await updateSettings(settings);
+                input.value = '';
+                input.type = 'password';
+                const icon = document.getElementById('pat-eye-icon');
+                if (icon) icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+                if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--text-muted)">Token cleared.</span>`;
+                toast(t('settings.githubPatCleared'), 'info');
+            } catch (e) {
+                toast('Erreur suppression token : ' + e, 'error');
+            }
         });
     }
 
@@ -606,7 +630,9 @@ async function checkPreviousCrash() {
         if (!reports || reports.length === 0) return;
 
         const newest = reports[0]; // already sorted newest-first
-        const lastSeen = localStorage.getItem('bmm_last_seen_crash');
+        const { getSettings, updateSettings } = await import('./api.js');
+        const settings = await getSettings();
+        const lastSeen = settings.last_seen_crash;
 
         // If we already showed this report, don't show it again
         if (newest === lastSeen) return;
@@ -619,7 +645,8 @@ async function checkPreviousCrash() {
             // Un crash_*.zip a été détecté et on ne l'a pas encore "vu"
             // On l'affiche systématiquement si c'est nouveau, pour être sûr de ne pas le rater
             modal.classList.add('open');
-            localStorage.setItem('bmm_last_seen_crash', newest);
+            settings.last_seen_crash = newest;
+            await updateSettings(settings);
             invoke('log_frontend_line', { line: `Crash modal displayed for: ${newest}` });
         }
     } catch (_) {
@@ -705,19 +732,30 @@ function initInteractionLogging() {
 
 
 // ── Settings keyboard shortcuts ────────────────────────────
-export function getShortcuts() {
-    return JSON.parse(localStorage.getItem('bmm_shortcuts')) || {
-        "newProfile": "n",
-        "addMod": "m",
-        "exportModlist": "e",
-        "importModlist": "i"
-    };
+export async function getShortcuts() {
+    const { getSettings } = await import('./api.js');
+    try {
+        const settings = await getSettings();
+        return settings.shortcuts && Object.keys(settings.shortcuts).length > 0 ? settings.shortcuts : {
+            "newProfile": "n",
+            "addMod": "m",
+            "exportModlist": "e",
+            "importModlist": "i"
+        };
+    } catch {
+        return {
+            "newProfile": "n",
+            "addMod": "m",
+            "exportModlist": "e",
+            "importModlist": "i"
+        };
+    }
 }
 
-function initShortcuts() {
-    document.addEventListener('keydown', e => {
+async function initShortcuts() {
+    document.addEventListener('keydown', async e => {
         if (e.ctrlKey) {
-            const sc = getShortcuts();
+            const sc = await getShortcuts();
             const key = e.key.toLowerCase();
 
             if (key === sc.newProfile) {
@@ -741,20 +779,28 @@ function initShortcuts() {
     });
 }
 
-function renderSettingsShortcuts() {
-    const sc = getShortcuts();
+async function renderSettingsShortcuts() {
+    const sc = await getShortcuts();
+    const { getSettings, updateSettings } = await import('./api.js');
+    
     const updateShortcut = (id, keyName) => {
         const input = document.getElementById(id);
         if (input) {
             input.value = sc[keyName];
-            input.addEventListener('keydown', e => {
+            input.addEventListener('keydown', async e => {
                 e.preventDefault();
                 const newKey = e.key.toLowerCase();
                 if (newKey !== 'control' && newKey !== 'shift' && newKey !== 'alt') {
                     sc[keyName] = newKey;
-                    localStorage.setItem('bmm_shortcuts', JSON.stringify(sc));
-                    input.value = newKey;
-                    toast('Raccourci mis à jour (' + newKey + ')', 'success');
+                    try {
+                        const settings = await getSettings();
+                        settings.shortcuts = sc;
+                        await updateSettings(settings);
+                        input.value = newKey;
+                        toast('Raccourci mis à jour (' + newKey + ')', 'success');
+                    } catch (err) {
+                        toast('Erreur sauvegarde raccourci : ' + err, 'error');
+                    }
                 }
             });
         }
@@ -1180,7 +1226,7 @@ async function main() {
     }
 
     renderSettingsShortcuts();
-    initGithubPatSettings();
+    await initGithubPatSettings();
 
     const exportBtn = document.getElementById('btn-export-data');
     if (exportBtn) {
@@ -1216,8 +1262,21 @@ async function main() {
     }
 
     // Show onboarding on first launch (language is step 0 inside onboarding)
-    if (shouldShowOnboarding()) {
+    if (await shouldShowOnboarding()) {
         setTimeout(() => startOnboarding(), 500);
+    }
+
+    // ── Auto-Calibration trigger at startup ──
+    try {
+        const { getSettings } = await import('./api.js');
+        const settings = await getSettings();
+        if (settings.auto_io_calibration) {
+            console.log("[BMM] Auto-Calibration enabled, running boot optimization...");
+            const disks = await invoke('get_system_disks');
+            runAutoBenchmarks(disks, true); // true = silent/boot mode
+        }
+    } catch (e) {
+        console.error("[BMM] Auto-Calibration startup failed:", e);
     }
 
     // ── Storage Performance Settings ──
@@ -1273,6 +1332,105 @@ async function main() {
                 backup: { label: t('storage.backupDir') || 'Backup', color: '#fbbf24' },
             };
 
+            const { getSettings, updateSettings } = await import('./api.js');
+            const settings = await getSettings();
+            const isAuto = settings.auto_io_calibration || false;
+            const alertEnabled = settings.storage_alert_enabled || false;
+            const warningPct = settings.storage_warning_space_pct !== undefined ? settings.storage_warning_space_pct : 40;
+            const criticalPct = settings.storage_critical_space_pct !== undefined ? settings.storage_critical_space_pct : 30;
+
+            // Storage alert thresholds block
+            const thresholdsBlock = `
+                <div style="position:relative; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:20px; overflow:hidden;" id="storage-alert-thresholds-block" class="${alertEnabled ? '' : 'config-disabled'}" data-i18n-content="settings.disabledOverlay" data-content="${alertEnabled ? '' : (t('settings.disabledOverlay') || 'DÉSACTIVÉ')}">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:${alertEnabled ? '12px' : '0px'}">
+                        <div style="font-size:14px; font-weight:700; color:var(--text-primary); position:relative; z-index:60; pointer-events:auto;">${t('storage.alertThresholds') || "Seuils d'Alerte de Stockage"}</div>
+                        <label class="bmm-switch" title="${alertEnabled ? 'Désactiver' : 'Activer'}" style="position:relative; z-index:60; pointer-events:auto;">
+                            <input type="checkbox" id="chk-alert-enabled" ${alertEnabled ? 'checked' : ''}>
+                            <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                        </label>
+                    </div>
+                    ${alertEnabled ? `
+                    <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                        <div style="flex:1; min-width:200px;">
+                            <label style="font-size:11px; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">${t('storage.alertLimit') || 'Alerte Espace Limité (%)'}</label>
+                            <input type="number" id="input-warning-pct" class="form-input" value="${warningPct}" min="1" max="99" style="width:100%; font-size:13px; padding:8px 10px;">
+                        </div>
+                        <div style="flex:1; min-width:200px;">
+                            <label style="font-size:11px; font-weight:600; color:#ef4444; display:block; margin-bottom:4px;">${t('storage.alertCritical') || 'Alerte Espace Critique (%)'}</label>
+                            <input type="number" id="input-critical-pct" class="form-input" value="${criticalPct}" min="0" max="99" style="width:100%; font-size:13px; padding:8px 10px; border-color:rgba(239,68,68,0.3);">
+                        </div>
+                    </div>` : `
+                    <div style="padding-top:6px;">
+                        <span style="font-size:12px;color:var(--text-muted)">${t('storage.alertDisabledHint') || 'Activez pour définir des seuils d\'alerte de stockage.'}</span>
+                    </div>`}
+                </div>
+            `;
+
+            // Global auto/dynamic control
+            container.innerHTML = `
+                <div style="background:rgba(59,130,246,0.05); border:1px solid rgba(59,130,246,0.2); border-radius:12px; padding:16px; margin-bottom:20px; display:flex; align-items:center; gap:16px">
+                    <div style="width:40px; height:40px; background:rgba(59,130,246,0.1); border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2.5" style="${isAuto ? 'animation:pulse 2s infinite' : ''}"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                    </div>
+                    <div style="flex:1">
+                        <div style="font-size:14px; font-weight:800; color:var(--text-bright)">${t('storage.autoCalibTitle') || 'Auto-Calibration Performance'}</div>
+                        <div style="font-size:11px; color:var(--text-muted); line-height:1.4">${t('storage.autoCalibDesc') || 'Optimise automatiquement vos vitesses d\'écriture au démarrage et à l\'activation.'}</div>
+                    </div>
+                    <label class="bmm-switch">
+                        <input type="checkbox" id="chk-auto-io" ${isAuto ? 'checked' : ''}>
+                        <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                    </label>
+                </div>
+
+                ${thresholdsBlock}
+
+                <div id="disks-list-subcontainer" style="display:flex; flex-direction:column; gap:12px"></div>
+            `;
+
+            // Setup dynamic toggle listener
+            document.getElementById('chk-auto-io').addEventListener('change', async (e) => {
+                const checked = e.target.checked;
+                settings.auto_io_calibration = checked;
+                await updateSettings(settings);
+                renderStorageModal();
+                if (checked) {
+                    toast(t('storage.autoCalibToast') || 'Auto-Calibration activée. Optimisation en cours...', 'info');
+                    runAutoBenchmarks(disks);
+                }
+            });
+
+            // Alert enabled toggle
+            document.getElementById('chk-alert-enabled')?.addEventListener('change', async (e) => {
+                settings.storage_alert_enabled = e.target.checked;
+                await updateSettings(settings);
+                renderStorageModal();
+            });
+
+            const updateThresholds = async () => {
+                let w = parseInt(document.getElementById('input-warning-pct')?.value, 10);
+                let c = parseInt(document.getElementById('input-critical-pct')?.value, 10);
+                if (isNaN(w) || w < 1) w = 40;
+                if (isNaN(c) || c < 0) c = 30;
+
+                // Ensure warning is always >= critical
+                if (w < c) w = c + 1;
+
+                settings.storage_warning_space_pct = w;
+                settings.storage_critical_space_pct = c;
+                await updateSettings(settings);
+                renderStorageModal();
+            };
+
+            let thTimer;
+            document.getElementById('input-warning-pct')?.addEventListener('input', () => {
+                clearTimeout(thTimer);
+                thTimer = setTimeout(updateThresholds, 800);
+            });
+            document.getElementById('input-critical-pct')?.addEventListener('input', () => {
+                clearTimeout(thTimer);
+                thTimer = setTimeout(updateThresholds, 800);
+            });
+
             const getKindBadge = (disk) => {
                 if (disk.is_cloud && disk.cloud_provider) {
                     if (disk.kind === 'Network') return `<span style="background:rgba(245,158,11,0.15);color:#fbbf24;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">🌐 ${disk.cloud_provider}</span>`;
@@ -1283,7 +1441,9 @@ async function main() {
                 return '<span style="background:rgba(156,163,175,0.15);color:#9ca3af;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">' + disk.kind + '</span>';
             };
 
-            container.innerHTML = disks.map(disk => {
+
+            const subContainer = document.getElementById('disks-list-subcontainer');
+            subContainer.innerHTML = disks.map(disk => {
                 const limitVal = disk.current_limit_mb_s || 0;
                 const usedPct = disk.total_space_bytes > 0 ? ((disk.total_space_bytes - disk.available_space_bytes) / disk.total_space_bytes * 100).toFixed(0) : 0;
                 const usedColor = usedPct > 90 ? '#ef4444' : usedPct > 70 ? '#fbbf24' : '#60a5fa';
@@ -1303,7 +1463,7 @@ async function main() {
                 // Removed mountSafe because escaping backslashes breaks Rust exact string matching
 
                 return `
-                <div style="background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:16px;transition:border-color 0.2s;" class="storage-disk-card">
+                <div style="background:rgba(0,0,0,0.25);border:1px solid ${usedPct > 90 ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.06)'};border-radius:12px;padding:16px;transition:border-color 0.2s;" class="storage-disk-card">
                     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;">
                         <div style="display:flex;align-items:center;gap:12px;min-width:0;">
                             <div style="width:38px;height:38px;background:rgba(59,130,246,0.08);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
@@ -1337,12 +1497,23 @@ async function main() {
                         </div>
                     </div>
 
+                    ${(() => {
+                        const freePct = disk.total_space_bytes > 0 ? (disk.available_space_bytes / disk.total_space_bytes) * 100 : 0;
+                        const hasProfiles = disk.profiles_using && disk.profiles_using.length > 0;
+                        if (hasProfiles && freePct <= criticalPct) {
+                            return '<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:11px;color:#f87171;font-weight:600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Espace critique ! L&apos;activation de mods pourrait \u00e9chouer.</div>';
+                        } else if (hasProfiles && freePct <= warningPct) {
+                            return '<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:8px;font-size:11px;color:#fbbf24;font-weight:500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Espace limité — pensez à libérer de la place.</div>';
+                        }
+                        return '';
+                    })()}
+
                     ${profilePills ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">${profilePills}</div>` : ''}
 
                     <!-- Benchmark row -->
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <button class="btn btn-ghost btn-sm disk-bench-btn" data-mount="${disk.mount_point}" style="font-size:11px;gap:6px;padding:4px 10px;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        <button class="btn btn-add disk-bench-btn" data-mount="${disk.mount_point}" style="font-size:12px;gap:6px;padding:6px 14px;">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                             <span data-i18n="storage.benchmark">${t('storage.benchmark') || 'Tester la vitesse'}</span>
                         </button>
                         <span class="disk-bench-result" style="font-size:11px;color:var(--text-muted);"></span>
@@ -1414,6 +1585,7 @@ async function main() {
             container.innerHTML = `<div style="font-size:12px;color:var(--error);text-align:center;padding:30px;">Erreur: ${err}</div>`;
         }
     };
+    window._renderStorageModal = renderStorageModal;
     initStorageSettings();
 
     // ── Language Settings ──
@@ -1563,6 +1735,31 @@ async function main() {
             document.getElementById('view-library').classList.add('active');
             startOnboarding();
         });
+    }
+}
+
+/** Run benchmarks for all disks currently in use by profiles */
+async function runAutoBenchmarks(disksList, isBoot = false) {
+    const inUseDisks = disksList.filter(d => d.profiles_using && d.profiles_using.length > 0);
+    if (inUseDisks.length === 0) return;
+
+    if (!isBoot) toast('Optimisation en cours...', 'info');
+
+    for (const disk of inUseDisks) {
+        try {
+            const result = await invoke('benchmark_disk', { mountPoint: disk.mount_point });
+            await invoke('set_disk_limit', { mountPoint: disk.mount_point, limitMbS: result.suggested_limit });
+            if (!isBoot) toast(`Optimisation réussie pour ${disk.name}: ${result.suggested_limit} MB/s`, 'success');
+        } catch (e) {
+            console.error(`Failed auto-bench for ${disk.mount_point}:`, e);
+        }
+    }
+    
+    // Refresh modal UI if it's open
+    const modal = document.getElementById('modal-storage');
+    if (modal && modal.classList.contains('open')) {
+        // We use a safe check here
+        if (typeof window._renderStorageModal === 'function') window._renderStorageModal();
     }
 }
 
@@ -1721,7 +1918,8 @@ async function initAutoUpdate() {
             if (card) {
                 card.classList.add('config-disabled');
                 card.dataset.i18nContent = 'settings.disabledOverlay';
-                card.setAttribute('data-content', t('settings.disabledOverlay'));
+                card.setAttribute('data-content', t('settings.disabledOverlay') || 'DÉSACTIVÉ');
+                card.dataset.i18nTitle = 'update.disabled';
                 card.title = t('update.disabled') || 'Updates disabled via configuration.';
             }
         } else {

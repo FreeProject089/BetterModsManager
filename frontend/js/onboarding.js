@@ -19,6 +19,19 @@ function getSteps() {
             selector: 'profiles-list'
         },
         {
+            title: t('onboard.s3.title'),
+            text: t('onboard.s3.text'),
+            img: 'assets/Tasky_Happy.png',
+            navTarget: 'profiles',
+            selector: 'btn-import-ovgme'
+        },
+        {
+            title: t('onboard.bg.title'),
+            text: t('onboard.bg.text'),
+            img: 'assets/Tasky_Happy.png',
+            navTarget: 'profiles'
+        },
+        {
             title: t('onboard.s4.title'),
             text: t('onboard.s4.text'),
             img: 'assets/Tasky.png',
@@ -69,6 +82,13 @@ function getSteps() {
             icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-network-icon lucide-network"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>'
         },
         {
+            title: t('onboard.storage.title'),
+            text: t('onboard.storage.text'),
+            img: 'assets/Tasky.png',
+            navTarget: 'settings',
+            icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="M10 16h.01"/><path d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M21.946 12.013H2.054"/><path d="M6 16h.01"/></svg>'
+        },
+        {
             title: t('onboard.performance.title'),
             text: t('onboard.performance.text'),
             img: 'assets/Tasky.png',
@@ -83,25 +103,34 @@ function getSteps() {
             icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color:#3b82f6"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>'
         },
         {
-            title: t('onboard.storage.title'),
-            text: t('onboard.storage.text'),
-            img: 'assets/Tasky.png',
-            navTarget: 'settings',
-            icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="M10 16h.01"/><path d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M21.946 12.013H2.054"/><path d="M6 16h.01"/></svg>'
-        },
-        {
             title: t('onboard.s8.title'),
             text: t('onboard.s8.text'),
             img: 'assets/Tasky_Happy.png',
             navTarget: 'credits'
         },
+
     ];
 }
 
 let currentStep = -1; // -1 = language step
 
-export function shouldShowOnboarding() {
-    return !localStorage.getItem('bmm-onboarding-done');
+export async function shouldShowOnboarding() {
+    const { getSettings } = await import('./api.js');
+    try {
+        const settings = await getSettings();
+        return !settings.onboarding_shown;
+    } catch {
+        return false;
+    }
+}
+
+export async function markOnboardingShown() {
+    const { getSettings, updateSettings } = await import('./api.js');
+    try {
+        const settings = await getSettings();
+        settings.onboarding_shown = true;
+        await updateSettings(settings);
+    } catch (e) { console.error('Failed to save onboarding state:', e); }
 }
 
 export function startOnboarding() {
@@ -262,7 +291,7 @@ function renderOnboarding() {
 }
 
 function closeOnboarding() {
-    localStorage.setItem('bmm-onboarding-done', '1');
+    markOnboardingShown();
 
     // Restore interaction with the app
     const appShell = document.querySelector('.app-shell');

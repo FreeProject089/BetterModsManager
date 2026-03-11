@@ -168,12 +168,12 @@ pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files
 }
 
 #[tauri::command]
-pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
+pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: String) -> Result<Option<String>, String> {
     log_line(format!("[MOD] Enabling mod '{}'", mod_id));
-    let (mod_folder, game_path, backup_path, active_id, mod_name, other_active_mods) = {
+    let (mod_folder, game_path, backup_path, active_id, mod_name, other_active_mods, warning_pct, critical_pct, alert_enabled) = {
         let data = state.data.lock().unwrap();
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?.clone();
-        if m.enabled { return Ok(()); }
+        if m.enabled { return Ok(None); }
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
         
@@ -184,7 +184,11 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
             }
         }
         
-        (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), active_id, m.name, others)
+        let warning_pct = data.settings.storage_warning_space_pct;
+        let critical_pct = data.settings.storage_critical_space_pct;
+        let alert_enabled = data.settings.storage_alert_enabled;
+
+        (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), active_id, m.name, others, warning_pct, critical_pct, alert_enabled)
     };
 
     let game_path_limit = crate::commands::disk::get_limit_for_path(&state, &game_path);
@@ -198,6 +202,63 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
             }
         }
     }
+
+    // ── Disk space check ──
+    let safety_margin: u64 = 500 * 1024 * 1024; // 500 MB minimal safety
+    let mut warning_msg: Option<String> = None;
+
+    let mut check_space = |path: &std::path::Path, label: &str| -> Result<(), String> {
+        let disks = sysinfo::Disks::new_with_refreshed_list();
+        let mut path_str = path.canonicalize().unwrap_or(path.to_path_buf())
+            .to_string_lossy().to_lowercase();
+        if path_str.starts_with(r"\\?\") { path_str = path_str[4..].to_string(); }
+
+        let mut best: Option<(u64, u64, String)> = None;
+        for disk in disks.iter() {
+            let mut mp = disk.mount_point().to_string_lossy().to_lowercase();
+            if mp.starts_with(r"\\?\") { mp = mp[4..].to_string(); }
+            if path_str.starts_with(&mp) {
+                let len = mp.len();
+                if best.as_ref().map_or(true, |(_, _, prev_mp)| len > prev_mp.len()) {
+                    best = Some((disk.available_space(), disk.total_space(), mp));
+                }
+            }
+        }
+
+        if let Some((available, total, _)) = best {
+            // First check the absolute hard limit
+            if available < total_bytes + safety_margin {
+                return Err(format!(
+                    "Espace insuffisant sur le disque {} ! {} MB nécessaires.",
+                    label, (total_bytes + safety_margin) / (1024 * 1024)
+                ));
+            }
+
+            // Then check the % thresholds (only if alerts are enabled)
+            if alert_enabled && total > 0 {
+                // Simulate space after mod activation
+                let simulated_available = available.saturating_sub(total_bytes);
+                let free_pct = (simulated_available as f64 / total as f64 * 100.0) as u32;
+
+                if free_pct <= critical_pct {
+                    return Err(format!(
+                        "CRITICAL_SPACE|{}|{}|{}",
+                        label, free_pct, critical_pct
+                    ));
+                } else if free_pct <= warning_pct {
+                    warning_msg = Some(format!(
+                        "WARNING_SPACE|{}|{}|{}",
+                        label, free_pct, warning_pct
+                    ));
+                }
+            }
+        }
+        Ok(())
+    };
+
+    check_space(&game_path, "Game")?;
+    check_space(&backup_path, "Backup")?;
+
     let total_mb = total_bytes as f64 / 1_048_576.0;
     let disk_name = game_path.to_string_lossy().chars().take(3).collect::<String>().to_uppercase();
 
@@ -248,7 +309,7 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
     // Log history
     log_line(format!("[MOD] Mod '{}' enabled successfully ({} files installed)", mod_name, applied.len()));
     crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Enabled");
-    Ok(())
+    Ok(warning_msg)
 }
 
 #[tauri::command]

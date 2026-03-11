@@ -213,10 +213,13 @@ async function checkAllConflicts() {
   renderModList();
 }
 
-export async function refreshMods(autoScan = false) {
-  if (refreshTimeout) clearTimeout(refreshTimeout);
+export function refreshMods(autoScan = false, immediate = false) {
+  if (refreshTimeout) {
+    clearTimeout(refreshTimeout);
+    refreshTimeout = null;
+  }
 
-  refreshTimeout = setTimeout(async () => {
+  const doRefresh = async () => {
     // Prevent autoScan if any mod is still processing to avoid "spam refresh"
     if (autoScan && S.processingMods.size === 0) {
       try { await invoke('scan_mods_folder'); } catch (e) { }
@@ -254,12 +257,21 @@ export async function refreshMods(autoScan = false) {
     renderModList(); // Single final render
 
     if (S.selectedModId) {
-      const m = S.allMods.find(mod => mod.id === S.selectedModId);
-      if (m) renderModDetail(m);
-      else closeModDetail();
+      renderModDetail(S.selectedModId);
     }
-    refreshTimeout = null;
-  }, 200);
+  };
+
+  if (immediate) {
+    return doRefresh();
+  }
+
+  return new Promise(resolve => {
+    refreshTimeout = setTimeout(async () => {
+      await doRefresh();
+      refreshTimeout = null;
+      resolve();
+    }, 200);
+  });
 }
 
 function updateBadge() {
@@ -443,14 +455,58 @@ async function renderModList() {
       const toggle = card.querySelector('.mod-toggle-input');
       if (toggle && toggle.checked !== !!mod.enabled) toggle.checked = !!mod.enabled;
 
+      // Update name and meta
+      const nameEl = card.querySelector('.mod-name');
+      if (nameEl && nameEl.textContent !== mod.name) nameEl.textContent = mod.name;
+
+      const metaEl = card.querySelector('.mod-meta');
+      if (metaEl) {
+        // Since meta, tags and description are complex, we selectively update or use innerHTML here if it changed
+        // To be safe and fast, we check if anything besides the toggle/processing changed
+        const versionStr = `v${mod.version}`;
+        const versionEl = metaEl.querySelector('.mono');
+        if (versionEl && versionEl.textContent !== versionStr) versionEl.textContent = versionStr;
+
+        // For author/desc/tags, simpler to rebuild this small part if needed or just re-run the component helper for the meta part
+        // But to keep it "gentle", let's just update the meta container if the data is different
+        // actually, let's just update the text content of specific spans if we can find them,
+        // or just accept a small innerHTML update for the meta div only.
+        const tagsHtml = mod.tags && mod.tags.length > 0 ? mod.tags.slice(0, 3).map(tid => {
+          const tDef = S.userTags.find(t => t.id === tid);
+          return tDef ? `<span style="background:${tDef.color}15;color:${tDef.color};border:1px solid ${tDef.color}30;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600">${escHtml(tDef.name)}</span>` : '';
+        }).join('') : '';
+
+        const newMetaHtml = `
+          <span class="mono" style="color: var(--cyan)">v${escHtml(mod.version)}</span>
+          ${mod.author ? `<span>· ${escHtml(mod.author)}</span>` : ''}
+          ${tagsHtml && mod.tags.length > 3 ? `<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${tagsHtml}<span style="color:var(--text-muted);font-size:9px;align-self:center">+${mod.tags.length - 3}</span></div>` : tagsHtml ? `<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${tagsHtml}</div>` : ''}
+        `;
+        // Only update DOM if HTML changed to avoid unnecessary reflows
+        if (metaEl.dataset.lastHtml !== newMetaHtml) {
+          metaEl.innerHTML = newMetaHtml;
+          metaEl.dataset.lastHtml = newMetaHtml;
+        }
+      }
+
+      const statusPill = card.querySelector('.mod-status-pill');
+      if (statusPill) {
+        statusPill.className = `mod-status-pill ${mod.enabled ? 'enabled' : 'disabled'}`;
+        statusPill.style.background = mod.enabled ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)';
+        statusPill.style.color = mod.enabled ? 'var(--success)' : 'var(--text-muted)';
+        statusPill.textContent = mod.enabled ? 'ACTIF' : 'INACTIF';
+      }
+
       // Update conflict badge safely
       const hasConflict = !!(S.conflictCache[mod.id] && S.conflictCache[mod.id].length > 0);
-      const nameContainer = card.querySelector('.mod-name').parentNode;
-      const conflictBadge = nameContainer.querySelector('.conflict-badge');
-      if (hasConflict && !conflictBadge) {
-        nameContainer.insertAdjacentHTML('beforeend', `<div class="conflict-badge" style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.4);font-size:9px;font-weight:900;padding:1px 5px;border-radius:4px;letter-spacing:0.4px;text-transform:uppercase">Conflict</div>`);
-      } else if (!hasConflict && conflictBadge) {
-        conflictBadge.remove();
+      const modInfo = card.querySelector('.mod-info');
+      const nameRow = modInfo ? modInfo.firstElementChild : null;
+      if (nameRow) {
+        const conflictBadge = nameRow.querySelector('.conflict-badge');
+        if (hasConflict && !conflictBadge) {
+          nameRow.insertAdjacentHTML('beforeend', `<div class="conflict-badge" style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.4);font-size:9px;font-weight:900;padding:1px 5px;border-radius:4px;letter-spacing:0.4px;text-transform:uppercase">Conflict</div>`);
+        } else if (!hasConflict && conflictBadge) {
+          conflictBadge.remove();
+        }
       }
 
       // Update processing overlay safely
@@ -531,16 +587,28 @@ function createModCard(mod) {
 
     try {
       if (toggle.checked) {
-        await invoke('enable_mod', { modId: mod.id });
-        toast(t('mod.activated', { name: mod.name }), 'success');
-        if (localStorage.getItem('bmm_sysNotif') === 'true') sendOsNotification('Better Mod Manager', t('mod.activated', { name: mod.name }));
+        const warningMsg = await invoke('enable_mod', { modId: mod.id });
+        if (warningMsg && warningMsg.startsWith('WARNING_SPACE|')) {
+          const parts = warningMsg.split('|');
+          toast(t('storage.alertWarningMod', { label: parts[1], free: parts[2], limit: parts[3] }) || `Attention : l'espace sur le disque ${parts[1]} est faible (${parts[2]}% libres, limite à ${parts[3]}%).`, 'warning', 5000);
+        } else {
+          toast(t('mod.activated', { name: mod.name }), 'success');
+          if (localStorage.getItem('bmm_sysNotif') === 'true') sendOsNotification('Better Mod Manager', t('mod.activated', { name: mod.name }));
+        }
       } else {
         await invoke('disable_mod', { modId: mod.id });
         toast(t('mod.deactivated', { name: mod.name }), 'info');
         if (localStorage.getItem('bmm_sysNotif') === 'true') sendOsNotification('Better Mod Manager', t('mod.deactivated', { name: mod.name }));
       }
     } catch (err) {
-      toast('Erreur : ' + err, 'error');
+      if (typeof err === 'string' && err.startsWith('CRITICAL_SPACE|')) {
+        const parts = err.split('|');
+        toast(t('storage.alertCriticalMod', { label: parts[1], free: parts[2], limit: parts[3] }) || `Action bloquée : espace critique sur le disque ${parts[1]} (${parts[2]}% libres, limite à ${parts[3]}%).`, 'error', 6000);
+        toggle.checked = false; // Revert visually
+      } else {
+        toast('Erreur : ' + err, 'error');
+        toggle.checked = !toggle.checked; // Revert visually
+      }
     } finally {
       S.processingMods.delete(mod.id);
       await refreshMods();
@@ -572,13 +640,13 @@ function createModCard(mod) {
   // Click card to show detail
   card.addEventListener('click', (e) => {
     if (e.target.closest('.mod-toggle') || e.target.closest('.btn-remove-mod') || e.target.closest('.btn-edit-mod') || e.target.closest('.btn-open-folder')) return;
-    selectMod(mod);
+    selectMod(mod.id);
   });
 
   // Edit button
   card.querySelector('.btn-edit-mod').addEventListener('click', (e) => {
     e.stopPropagation();
-    selectMod(mod);
+    selectMod(mod.id);
   });
 
   // Remove handler
@@ -657,8 +725,8 @@ function createModCard(mod) {
 }
 
 // ── Detail / Edit Panel ──────────────────────────────────────
-function selectMod(mod) {
-  if (S.selectedModId === mod.id) {
+function selectMod(modId) {
+  if (S.selectedModId === modId) {
     closeModDetail();
     return;
   }
@@ -669,13 +737,13 @@ function selectMod(mod) {
     if (oldCard) oldCard.classList.remove('selected');
   }
 
-  S.selectedModId = mod.id;
+  S.selectedModId = modId;
 
   // Add .selected to the newly selected card
-  const newCard = document.querySelector(`.mod-card[data-id="${mod.id}"]`);
+  const newCard = document.querySelector(`.mod-card[data-id="${modId}"]`);
   if (newCard) newCard.classList.add('selected');
 
-  renderModDetail(mod);
+  renderModDetail(modId);
 }
 
 function closeModDetail() {
@@ -688,7 +756,13 @@ function closeModDetail() {
   if (panel) panel.remove();
 }
 
-async function renderModDetail(mod) {
+async function renderModDetail(modId) {
+  const mod = S.allMods.find(m => m.id === modId);
+  if (!mod) {
+    closeModDetail();
+    return;
+  }
+
   let panel = document.getElementById('mod-detail-panel');
   if (panel) panel.remove();
 
@@ -735,6 +809,18 @@ async function renderModDetail(mod) {
 
   // Archive Explorer button
   panel.querySelector('#btn-browse-archive').addEventListener('click', () => openArchiveExplorer(mod));
+
+  // Description auto-resize and explicit value set
+  const descTextarea = panel.querySelector('#detail-desc');
+  if (descTextarea) {
+    descTextarea.value = mod.description || '';
+    const autoResize = () => {
+      descTextarea.style.height = 'auto';
+      descTextarea.style.height = (descTextarea.scrollHeight + 2) + 'px';
+    };
+    descTextarea.addEventListener('input', autoResize);
+    setTimeout(autoResize, 0); // Initial resize
+  }
 
   // Load Tags logic
   const tagSelect = panel.querySelector('#detail-tag-select');
@@ -808,7 +894,7 @@ async function renderModDetail(mod) {
       }
 
       toast('Mod sauvegardé.', 'success');
-      await refreshMods();
+      await refreshMods(false, true);
     } catch (err) {
       toast('Erreur : ' + err, 'error');
     }

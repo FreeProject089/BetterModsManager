@@ -21,7 +21,24 @@ pub fn import_app_data(state: State<AppState>, src_path: String) -> Result<(), S
         active_profile_id: new_data.active_profile_id.clone(),
         custom_tags: new_data.custom_tags.clone(),
         disk_limits: new_data.disk_limits.clone(),
+        settings: new_data.settings.clone(),
     };
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_settings(state: State<AppState>) -> crate::state::AppSettings {
+    let data = state.data.lock().unwrap();
+    data.settings.clone()
+}
+
+#[tauri::command]
+pub fn update_settings(state: State<AppState>, settings: crate::state::AppSettings) -> Result<(), String> {
+    {
+        let mut data = state.data.lock().unwrap();
+        data.settings = settings;
+    }
+    state.save().map_err(|e| e.to_string())?;
     Ok(())
 }
 

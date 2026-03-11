@@ -25,8 +25,13 @@ async function loadLang(lang) {
 
 export async function initI18n() {
     try {
-        const { invoke } = await import('./api.js');
-        const langs = await invoke('get_available_languages').catch(() => ['fr', 'en']);
+        const { getSettings, invoke } = await import('./api.js');
+        const [langs, settings] = await Promise.all([
+            invoke('get_available_languages').catch(() => ['fr', 'en']),
+            getSettings().catch(() => ({ language: 'fr' }))
+        ]);
+        
+        currentLang = settings.language || 'fr';
         await Promise.all(langs.map(l => loadLang(l)));
     } catch (e) {
         console.warn('[i18n] Failed to fetch language list, falling back:', e);
@@ -49,10 +54,18 @@ export function getLang() {
     return currentLang;
 }
 
-export function setLang(lang) {
+export async function setLang(lang) {
     if (translations[lang]) {
         currentLang = lang;
-        localStorage.setItem('bmm-lang', lang);
+        const { getSettings, updateSettings } = await import('./api.js');
+        try {
+            const settings = await getSettings();
+            settings.language = lang;
+            await updateSettings(settings);
+        } catch (e) {
+            console.error('[i18n] Failed to save language setting to backend:', e);
+            localStorage.setItem('bmm-lang', lang); // Fallback
+        }
         applyTranslations();
     }
 }

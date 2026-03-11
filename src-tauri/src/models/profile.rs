@@ -12,6 +12,8 @@ pub struct Profile {
     pub active_mods: Vec<String>, // mod IDs currently enabled
     pub color: Option<String>,
     pub icon: Option<String>,
+    #[serde(default)]
+    pub background_image: Option<String>,
     pub created_at: String,
 }
 
@@ -33,6 +35,7 @@ impl Profile {
             active_mods: Vec::new(),
             color: None,
             icon: None,
+            background_image: None,
             created_at: chrono::Local::now().to_rfc3339(),
         }
     }

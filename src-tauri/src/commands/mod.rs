@@ -10,3 +10,4 @@ pub mod crash;
 pub mod autoupdate;
 pub mod benchmark;
 pub mod disk;
+pub mod image;

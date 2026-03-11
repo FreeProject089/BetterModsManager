@@ -298,3 +298,39 @@ pub fn benchmark_disk(mount_point: String) -> Result<BenchmarkResult, String> {
         suggested_limit,
     })
 }
+
+#[derive(Serialize)]
+pub struct DiskSpaceInfo {
+    pub available_bytes: u64,
+    pub total_bytes: u64,
+    pub mount_point: String,
+    pub free_percent: f64,
+}
+
+#[tauri::command]
+pub fn check_disk_space(path: String) -> Result<DiskSpaceInfo, String> {
+    let disks = Disks::new_with_refreshed_list();
+    let target = std::path::Path::new(&path);
+    let mut path_str = target.canonicalize().unwrap_or(target.to_path_buf())
+        .to_string_lossy().to_lowercase();
+    if path_str.starts_with(r"\\?\") { path_str = path_str[4..].to_string(); }
+
+    let mut best: Option<(u64, u64, String, usize)> = None;
+    for disk in disks.iter() {
+        let mut mp = disk.mount_point().to_string_lossy().to_lowercase();
+        if mp.starts_with(r"\\?\") { mp = mp[4..].to_string(); }
+        if path_str.starts_with(&mp) {
+            let len = mp.len();
+            if best.as_ref().map_or(true, |(_, _, _, l)| len > *l) {
+                best = Some((disk.available_space(), disk.total_space(), disk.mount_point().to_string_lossy().to_string(), len));
+            }
+        }
+    }
+
+    if let Some((available, total, mount_point, _)) = best {
+        let free_percent = if total > 0 { (available as f64 / total as f64) * 100.0 } else { 0.0 };
+        Ok(DiskSpaceInfo { available_bytes: available, total_bytes: total, mount_point, free_percent })
+    } else {
+        Err(format!("Impossible de trouver le disque pour: {}", path))
+    }
+}

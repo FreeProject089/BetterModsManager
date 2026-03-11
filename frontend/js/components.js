@@ -50,7 +50,6 @@ export function getModCardHTML(mod, ctx) {
             <div class="mod-meta">
                 <span class="mono" style="color: var(--cyan)">v${escHtml(mod.version)}</span>
                 ${mod.author ? `<span>· ${escHtml(mod.author)}</span>` : ''}
-                ${mod.description ? `<span style="color: var(--text-muted)">· ${escHtml(mod.description)}</span>` : ''}
                 ${tagsHtml}
             </div>
             <div class="mod-path-hint" style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);opacity:0.6;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;display:flex;align-items:center;gap:4px">
@@ -166,7 +165,7 @@ export function getModDetailHTML(mod, ctx) {
       </div>
       <div class="detail-section">
         <label class="detail-label">${t('detail.description')}</label>
-        <textarea id="detail-desc" class="input-field" rows="2" style="resize:vertical">${escHtml(mod.description || '')}</textarea>
+        <textarea id="detail-desc" class="input-field" rows="4" style="resize:vertical;min-height:80px;line-height:1.5;padding:10px">${escHtml(mod.description || '')}</textarea>
       </div>
 
       <!-- Tags Selection -->

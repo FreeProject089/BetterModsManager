@@ -2,8 +2,11 @@
  * profiles.js — Profile management
  */
 import { invoke, pickFolder, toast, updateLibraryProfileSelector } from './app.js';
+import { pickFile, convertFileSrc } from './api.js';
 import { refreshMods } from './mods.js';
 import { t, applyTranslations } from './i18n.js';
+
+window.pendingBgState = { action: null, tmpPath: null }; // Tracks 'apply', 'remove', or null
 
 export async function initProfiles() {
     document.getElementById('btn-new-profile').addEventListener('click', openNewProfileModal);
@@ -159,6 +162,15 @@ async function confirmEditProfile() {
 
     try {
         await invoke('update_profile', { profileId, name, gameName, gamePath, modsPath, backupPath, color, icon });
+        
+        // Handle pending background updates
+        if (window.pendingBgState.action === 'apply') {
+            await invoke('apply_profile_background', { profileId });
+        } else if (window.pendingBgState.action === 'remove') {
+            await invoke('remove_profile_background', { profileId });
+        }
+        window.pendingBgState = { action: null, tmpPath: null };
+
         document.getElementById('modal-edit-profile').classList.remove('open');
         toast(`Profil "${name}" mis à jour.`, 'success');
         await renderProfiles();
@@ -224,11 +236,24 @@ export async function renderProfiles() {
 
     emptyEl.style.display = 'none';
 
+    // Prefetch background paths for all profiles
+    const bgPaths = {};
+    await Promise.all(profiles.map(async p => {
+        if (p.background_image) {
+            try {
+                const path = await invoke('get_profile_background_path', { profileId: p.id });
+                if (path) bgPaths[p.id] = path;
+            } catch { }
+        }
+    }));
+
     profiles.forEach(p => {
         const isActive = p.id === activeId;
         const card = document.createElement('div');
         card.className = 'profile-card' + (isActive ? ' active-profile' : '');
         card.dataset.id = p.id;
+        card.style.position = 'relative';
+        card.style.overflow = 'hidden';
         const brandColor = p.color || '#3b82f6';
 
         // Count mods for this profile
@@ -251,9 +276,21 @@ export async function renderProfiles() {
             }
         } catch { }
 
+        // Background image layer
+        const bgPath = bgPaths[p.id];
+        const cb = Date.now();
+        const bgLayer = bgPath
+            ? `<div style="position:absolute;inset:0;z-index:0;border-radius:inherit;overflow:hidden;pointer-events:none">
+                <img src="${convertFileSrc(bgPath)}?t=${cb}" style="width:100%;height:100%;object-fit:cover;opacity:0.35;filter:blur(1px)" alt="">
+                <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0.1) 0%,rgba(0,0,0,0.6) 100%)"></div>
+              </div>`
+            : '';
+
         card.style.display = 'flex';
         card.style.flexDirection = 'column';
         card.innerHTML = `
+      ${bgLayer}
+      <div style="position:relative;z-index:1;display:flex;flex-direction:column;height:100%">
       <div class="profile-card-header" style="display:flex;align-items:flex-start;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:16px;min-height:54px;gap:12px">
         <div style="width:3px;height:32px;border-radius:2px;background:${brandColor};flex-shrink:0;margin-top:2px"></div>
         <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
@@ -307,6 +344,7 @@ export async function renderProfiles() {
           </svg>
         </button>
       </div>
+      </div>
     `;
         grid.appendChild(card);
     });
@@ -333,6 +371,11 @@ export async function renderProfiles() {
             document.getElementById('edit-prof-color').value = profile.color || '#3b82f6';
             document.getElementById('edit-prof-icon').value = profile.icon || '';
             updateIconPickerSelection('edit-prof-icon-grid', profile.icon || '');
+
+            window.pendingBgState = { action: null, tmpPath: null };
+            // Background image section
+            initEditBackgroundSection(profile);
+
             document.getElementById('modal-edit-profile').classList.add('open');
         }
     }
@@ -341,18 +384,11 @@ export async function renderProfiles() {
     grid.querySelectorAll('.profile-card').forEach(card => {
         const id = card.dataset.id;
 
-        // Single click -> Activate
-        card.addEventListener('click', (e) => {
-            // Don't trigger if clicking a button or a path
-            if (e.target.closest('button') || e.target.closest('.btn-open-path')) return;
-            activateProfile(id);
-        });
-
-        // Double click -> Edit
+        // Double click -> Activate
         card.addEventListener('dblclick', (e) => {
             // Don't trigger if clicking a button or a path
             if (e.target.closest('button') || e.target.closest('.btn-open-path')) return;
-            openEditProfile(id);
+            activateProfile(id);
         });
     });
 
@@ -481,6 +517,160 @@ export function getProfileIconSvg(iconName, extraStyle = '') {
         case 'crosshair': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>`;
         default: return '';
     }
+}
+
+// ── Background Image Section in Edit Modal ──
+function initEditBackgroundSection(profile) {
+    let container = document.getElementById('edit-prof-bg-section');
+    if (!container) {
+        // Find the modal-body and append there, before the modal-footer
+        const modalBody = document.querySelector('#modal-edit-profile .modal-body');
+        if (!modalBody) return;
+        container = document.createElement('div');
+        container.id = 'edit-prof-bg-section';
+        container.style.cssText = 'margin-top:16px;padding-top:16px;border-top:1px solid var(--border);';
+        modalBody.appendChild(container);
+    }
+
+    // Determine current visual state (includes pending changes)
+    let hasBg = !!profile.background_image;
+    let previewPath = null;
+    
+    if (window.pendingBgState.action === 'apply') {
+        hasBg = true;
+        previewPath = window.pendingBgState.tmpPath;
+    } else if (window.pendingBgState.action === 'remove') {
+        hasBg = false;
+        previewPath = null;
+    }
+
+    container.innerHTML = `
+        <label style="font-size:12px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-secondary);display:block;margin-bottom:12px">${t('prof.bgImage')}</label>
+        <div style="display:flex;align-items:center;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:8px 12px;gap:12px">
+            <div style="width:40px;height:40px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
+                ${hasBg ? 
+                    (previewPath ? `<img src="${convertFileSrc(previewPath)}?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover">` 
+                    : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`)
+                : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>'}
+            </div>
+            <div style="flex:1">
+                <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:2px">
+                    ${hasBg ? t('prof.bgDefined') : t('prof.bgNone')}
+                </div>
+                <div style="font-size:11px;color:var(--text-muted)">
+                    ${hasBg ? 'L\'image sera appliquée après sauvegarde.' : 'Ajoutez une touche personnelle à votre profil.'}
+                </div>
+            </div>
+            <div style="display:flex;gap:8px">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-edit-pick-bg" style="gap:6px">
+                    ${hasBg ? t('prof.bgChange') : t('prof.bgImage')}
+                </button>
+                ${hasBg ? `<button type="button" class="btn btn-danger btn-sm" id="btn-edit-remove-bg" style="padding:0 8px" title="${t('prof.bgRemove')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}
+            </div>
+        </div>
+    `;
+
+    document.getElementById('btn-edit-pick-bg').addEventListener('click', async () => {
+        const filePath = await pickFile([{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] }]);
+        if (!filePath) return;
+        openCropOverlay(filePath, profile);
+    });
+
+    if (hasBg) {
+        document.getElementById('btn-edit-remove-bg').addEventListener('click', () => {
+            window.pendingBgState = { action: 'remove', tmpPath: null };
+            initEditBackgroundSection(profile);
+            toast(t('prof.bgRemovePending') || 'La suppression sera appliquée lors de la sauvegarde.', 'info');
+        });
+    }
+}
+
+function openCropOverlay(sourcePath, profile) {
+    // Remove existing overlay
+    const existing = document.getElementById('crop-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'crop-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:16px;';
+
+    overlay.innerHTML = `
+        <div style="font-size:16px;font-weight:700;color:white;margin-bottom:8px">${t('prof.bgCropTitle')}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:4px">${t('prof.bgCropDesc')}</div>
+        <div style="width:100%;max-width:800px;height:500px;background:#111;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.1)">
+            <img id="cropper-image" style="display:block;max-width:100%;">
+        </div>
+        <div style="display:flex;gap:12px;margin-top:12px">
+            <button class="btn btn-ghost" id="crop-cancel" style="min-width:120px">${t('prof.bgCropCancel')}</button>
+            <button class="btn btn-primary" id="crop-confirm" style="min-width:120px">${t('prof.bgCropConfirm')}</button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const imageElement = document.getElementById('cropper-image');
+    imageElement.src = convertFileSrc(sourcePath);
+
+    let cropper;
+
+    imageElement.onload = () => {
+        cropper = new Cropper(imageElement, {
+            aspectRatio: 3.5 / 4.5,
+            viewMode: 1, // Restrict crop box to not exceed size of canvas
+            dragMode: 'move', // Allow moving the image inside the crop box
+            autoCropArea: 1, // Start with maximum crop area
+            restore: false,
+            guides: true,
+            center: true,
+            highlight: false,
+            cropBoxMovable: true,
+            cropBoxResizable: true,
+            toggleDragModeOnDblclick: false,
+        });
+    };
+
+    imageElement.onerror = () => {
+        toast('Impossible de charger l\'image.', 'error');
+        overlay.remove();
+    };
+
+    document.getElementById('crop-cancel').addEventListener('click', () => {
+        if (cropper) cropper.destroy();
+        overlay.remove();
+    });
+
+    document.getElementById('crop-confirm').addEventListener('click', async () => {
+        if (!cropper) return;
+        
+        const btn = document.getElementById('crop-confirm');
+        btn.disabled = true;
+        btn.textContent = t('prof.bgCropSaving') || 'Enregistrement...';
+
+        try {
+            // Get crop box data rounded to nearest integers
+            const cropData = cropper.getData(true);
+            
+            const tmpPath = await invoke('crop_and_save_webp', {
+                profileId: profile.id,
+                sourcePath,
+                x: cropData.x,
+                y: cropData.y,
+                width: cropData.width,
+                height: cropData.height,
+                isTemp: true
+            });
+            
+            window.pendingBgState = { action: 'apply', tmpPath };
+            initEditBackgroundSection(profile);
+            toast('L\'image sera appliquée lors de la sauvegarde.', 'success');
+            
+            if (cropper) cropper.destroy();
+            overlay.remove();
+        } catch (e) {
+            toast('Erreur recadrage: ' + e, 'error');
+            btn.disabled = false;
+            btn.textContent = 'Valider le recadrage';
+        }
+    });
 }
 
 function escHtml(str) {

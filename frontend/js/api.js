@@ -6,6 +6,7 @@
 let _invoke;
 let _dialog;
 let _notifModule;
+let _convertFileSrc;
 
 export async function loadTauri() {
     // 1. Prioritize window.__TAURI__ (injected locally by Tauri when withGlobalTauri is true)
@@ -13,6 +14,7 @@ export async function loadTauri() {
         _invoke = window.__TAURI__.invoke;
         _dialog = window.__TAURI__.dialog;
         _notifModule = window.__TAURI__.notification;
+        _convertFileSrc = window.__TAURI__.tauri.convertFileSrc;
         console.log('[BMM] Using local Tauri bridge');
         return;
     }
@@ -24,12 +26,14 @@ export async function loadTauri() {
         _notifModule = await import('https://unpkg.com/@tauri-apps/api@1/notification.js');
         _invoke = tauriModule.invoke;
         _dialog = dialogModule;
+        _convertFileSrc = tauriModule.convertFileSrc;
     } catch {
         // 3. Last fallback: mock for browser testing
         console.warn('[BMM] Running in browser mock mode');
         _invoke = mockInvoke;
         _dialog = { open: async () => 'C:\\mock\\folder', save: async () => null };
         _notifModule = null;
+        _convertFileSrc = (path) => `file://${path}`;
     }
 }
 
@@ -71,6 +75,9 @@ export async function saveFile(filters = []) {
     }
 }
 
+export async function getSettings() { return await invoke('get_settings'); }
+export async function updateSettings(settings) { return await invoke('update_settings', { settings }); }
+
 export async function listenFileDrop(callback) {
     try {
         const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
@@ -99,4 +106,9 @@ async function mockInvoke(command, args) {
         case 'get_all_mods': return [];
         default: return null;
     }
+}
+
+export function convertFileSrc(path) {
+    if (_convertFileSrc) return _convertFileSrc(path);
+    return `asset.localhost/${path}`;
 }
