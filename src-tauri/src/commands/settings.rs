@@ -151,36 +151,64 @@ pub fn is_update_disabled(app_handle: tauri::AppHandle) -> bool {
 
 #[tauri::command]
 pub fn get_ptb_notes(app_handle: tauri::AppHandle) -> Result<String, String> {
-    // Look for Update_v*_PTB.md in the project root
-    let exe_dir = app_handle
-        .path_resolver()
-        .resource_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    get_update_note_content(app_handle, "v0.9.7_PTB.md".to_string())
+}
 
-    let dev_base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+#[tauri::command]
+pub fn get_update_notes_list(app_handle: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let mut notes = Vec::new();
+    let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::path::PathBuf::from("."));
 
-    // Search in both dirs for a PTB markdown file
-    for base in &[exe_dir, dev_base] {
-        if let Ok(entries) = std::fs::read_dir(base) {
+    let update_dir = base.join("Update");
+    let old_update_dir = update_dir.join("Old_Update");
+
+    for dir in &[update_dir, old_update_dir] {
+        if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_file() {
+                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md") {
                     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        if name.contains("PTB") && name.ends_with(".md") {
-                            if let Ok(content) = std::fs::read_to_string(&path) {
-                                return Ok(content);
-                            }
-                        }
+                        notes.push(name.to_string());
                     }
                 }
             }
         }
     }
+    Ok(notes)
+}
 
-    Err("No PTB notes found".to_string())
+#[tauri::command]
+pub fn get_update_note_content(app_handle: tauri::AppHandle, filename: String) -> Result<String, String> {
+    let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    let update_dir = base.join("Update");
+    let old_update_dir = update_dir.join("Old_Update");
+
+    let paths = vec![
+        update_dir.join(&filename),
+        old_update_dir.join(&filename),
+    ];
+
+    for path in paths {
+        if path.exists() {
+            return std::fs::read_to_string(path).map_err(|e| e.to_string());
+        }
+    }
+
+    // fallback for prod if needed? (resource_dir)
+    let res_dir = app_handle.path_resolver().resource_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+    let final_res = res_dir.join("Update").join(&filename);
+    if final_res.exists() {
+         return std::fs::read_to_string(final_res).map_err(|e| e.to_string());
+    }
+
+    Err(format!("Note {} not found", filename))
 }
 #[tauri::command]
 pub fn get_available_languages(app_handle: tauri::AppHandle) -> Vec<String> {

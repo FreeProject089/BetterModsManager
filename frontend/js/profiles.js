@@ -12,29 +12,104 @@ export async function initProfiles() {
     document.getElementById('btn-new-profile').addEventListener('click', openNewProfileModal);
     document.getElementById('btn-confirm-profile').addEventListener('click', confirmCreateProfile);
 
-    document.getElementById('btn-import-ovgme').addEventListener('click', async () => {
-        const btn = document.getElementById('btn-import-ovgme');
-        const originalText = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Importation...';
+    // Generic dropdown logic
+    const importMenuBtn = document.getElementById('btn-import-menu');
+    const importDropdown = document.getElementById('import-dropdown-container');
+    if (importMenuBtn && importDropdown) {
+        importMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            importDropdown.classList.toggle('active');
+        });
+        document.addEventListener('click', () => {
+            importDropdown.classList.remove('active');
+        });
+    }
 
-        try {
-            const count = await invoke('import_ovgme_profiles');
-            if (count > 0) {
-                toast(t('prof.importSuccess').replace('{count}', count), 'success');
-                await renderProfiles();
-                updateProfileChip();
-                updateLibraryProfileSelector();
-            } else {
-                toast(t('prof.importNone'), 'info');
+    // OvGME Import
+    const btnImportOvgme = document.getElementById('btn-import-ovgme');
+    if (btnImportOvgme) {
+        btnImportOvgme.addEventListener('click', async (e) => {
+            e.preventDefault();
+            importDropdown.classList.remove('active');
+            const originalText = btnImportOvgme.innerHTML;
+            btnImportOvgme.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>...';
+
+            try {
+                const count = await invoke('import_ovgme_profiles');
+                if (count > 0) {
+                    toast(t('prof.importSuccess').replace('{count}', count), 'success');
+                    await renderProfiles();
+                    updateProfileChip();
+                    updateLibraryProfileSelector();
+                } else {
+                    toast(t('prof.importNone'), 'info');
+                }
+            } catch (err) {
+                toast(t('common.error') + ' OvGME : ' + err, 'error');
+            } finally {
+                btnImportOvgme.innerHTML = originalText;
             }
-        } catch (err) {
-            toast(t('common.error') + ' OvGME : ' + err, 'error');
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-        }
-    });
+        });
+    }
+
+    // OMM Auto Import
+    const btnImportOmmAuto = document.getElementById('btn-import-omm-auto');
+    if (btnImportOmmAuto) {
+        btnImportOmmAuto.addEventListener('click', async (e) => {
+            e.preventDefault();
+            importDropdown.classList.remove('active');
+            
+            const originalText = btnImportOmmAuto.innerHTML;
+            btnImportOmmAuto.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>...';
+
+            try {
+                const count = await invoke('auto_import_omm');
+                if (count > 0) {
+                    toast(t('prof.importSuccess').replace('OvGME ', '').replace('{count}', count), 'success');
+                    await renderProfiles();
+                    updateProfileChip();
+                    updateLibraryProfileSelector();
+                } else {
+                    toast(t('prof.importNone'), 'info');
+                }
+            } catch (err) {
+                toast(t('common.error') + ' OMM Auto : ' + err, 'error');
+            } finally {
+                btnImportOmmAuto.innerHTML = originalText;
+            }
+        });
+    }
+
+    // OMM Manual Import
+    const btnImportOmm = document.getElementById('btn-import-omm');
+    if (btnImportOmm) {
+        btnImportOmm.addEventListener('click', async (e) => {
+            e.preventDefault();
+            importDropdown.classList.remove('active');
+            
+            const path = await pickFile(['omx', 'omc']);
+            if (!path) return;
+
+            const originalText = btnImportOmm.innerHTML;
+            btnImportOmm.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>...';
+
+            try {
+                const count = await invoke('import_omm_profile', { path });
+                if (count > 0) {
+                    toast(t('prof.importSuccess').replace('OvGME ', '').replace('{count}', count), 'success');
+                    await renderProfiles();
+                    updateProfileChip();
+                    updateLibraryProfileSelector();
+                } else {
+                    toast(t('prof.importNone'), 'info');
+                }
+            } catch (err) {
+                toast(t('common.error') + ' OMM : ' + err, 'error');
+            } finally {
+                btnImportOmm.innerHTML = originalText;
+            }
+        });
+    }
 
     document.getElementById('btn-pick-game-path').addEventListener('click', async () => {
         const path = await pickFolder();
@@ -449,6 +524,10 @@ function openDeleteProfileModal(id, profile) {
     const btnFinal = document.getElementById('btn-final-delete-profile');
     const warningText = document.getElementById('delete-profile-warning-text');
     
+    // Ensure button is reset before cloning or using (in case it was disabled from a previous attempt)
+    btnFinal.disabled = false;
+    btnFinal.innerHTML = `<span>${t('lib.delete') || 'Supprimer définitivement'}</span>`;
+
     // Ensure all data-i18n in the modal are translated
     applyTranslations(modal);
     
@@ -463,7 +542,8 @@ function openDeleteProfileModal(id, profile) {
 
     newBtnFinal.addEventListener('click', async () => {
         newBtnFinal.disabled = true;
-        newBtnFinal.textContent = t('common.loading') || '...';
+        newBtnFinal.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> <span>${t('common.loading') || 'Chargement...'}</span>`;
+        
         try {
             await invoke('delete_profile', { profileId: id });
             modal.classList.remove('open');

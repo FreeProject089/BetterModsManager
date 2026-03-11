@@ -86,9 +86,25 @@ export function getModCardHTML(mod, ctx) {
             background: ${mod.enabled ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)'};
             color: ${mod.enabled ? 'var(--success)' : 'var(--text-muted)'};
             flex-shrink: 0;
+            width: 70px;
+            text-align: center;
         ">
             ${mod.enabled ? 'ACTIF' : 'INACTIF'}
         </div>
+
+        ${mod.shared_activations && mod.shared_activations.length > 1 ? `
+        <div class="mod-shared-info" style="border-left:1px solid var(--border); padding-left:14px; margin-left:8px; align-self:stretch; display:flex; flex-direction:column; justify-content:center; gap:4px; max-width:240px; overflow-y:auto; max-height:80px; scrollbar-width: none;">
+            ${mod.shared_activations.map(sa => `
+                <div class="shared-activation-item" style="display:flex; align-items:center; gap:8px; font-size:10.5px; opacity:${sa.active ? '1' : '0.4'}" title="${escAttr(sa.profile_name)}\n${escAttr(sa.game_path)}">
+                    <div style="width:8px; height:8px; border-radius:50%; background:${sa.active ? 'var(--success)' : 'var(--text-muted)'}; flex-shrink:0; box-shadow:${sa.active ? '0 0 6px var(--success)' : 'none'}"></div>
+                    <div style="display:flex; flex-direction:column; min-width:0; flex:1">
+                        <span style="font-weight:600; color:${sa.active ? 'var(--text-primary)' : 'var(--text-muted)'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${escHtml(sa.profile_name)}</span>
+                        <span style="font-size:9px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:var(--font-mono)">${escHtml(sa.game_path)}</span>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+        ` : ''}
         ${processingHtml}
     `;
 }

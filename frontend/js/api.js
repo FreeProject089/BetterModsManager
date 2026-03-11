@@ -60,7 +60,12 @@ export async function pickFolder() {
 
 export async function pickFile(filters = []) {
     try {
-        return await _dialog.open({ multiple: false, filters });
+        // If filters is a flat array like ['omx', 'omc'], convert to Tauri format
+        let normalizedFilters = filters;
+        if (filters.length > 0 && typeof filters[0] === 'string') {
+            normalizedFilters = [{ name: filters.join(', ').toUpperCase(), extensions: filters }];
+        }
+        return await _dialog.open({ multiple: false, filters: normalizedFilters });
     } catch {
         return null;
     }

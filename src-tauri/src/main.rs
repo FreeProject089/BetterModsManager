@@ -148,6 +148,9 @@ fn main() {
             commands::repo::cancel_repo_sync,
             commands::repo::pause_repo_sync,
             commands::repo::resume_repo_sync,
+            // OMM
+            commands::omm::import_omm_profile,
+            commands::omm::auto_import_omm,
             // Repo Server
             commands::repo_server::start_repo_server,
             commands::repo_server::stop_repo_server,

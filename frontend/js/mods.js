@@ -110,11 +110,18 @@ export async function initMods() {
 
   // Filter buttons
   document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
+    btn.addEventListener('click', async e => {
       document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
       e.currentTarget.classList.add('active');
       S.currentFilter = e.currentTarget.dataset.filter;
       renderModList();
+      
+      // Save setting
+      try {
+        const settings = await invoke('get_settings');
+        settings.current_filter = S.currentFilter;
+        await invoke('update_settings', { settings });
+      } catch (e) { console.error("Failed to save filter setting:", e); }
     });
   });
 
@@ -145,9 +152,16 @@ export async function initMods() {
   // Sort
   const sortSelect = document.getElementById('mod-sort');
   if (sortSelect) {
-    sortSelect.addEventListener('change', e => {
+    sortSelect.addEventListener('change', async e => {
       S.currentSort = e.target.value;
       renderModList();
+      
+      // Save setting
+      try {
+        const settings = await invoke('get_settings');
+        settings.current_sort_by = S.currentSort;
+        await invoke('update_settings', { settings });
+      } catch (e) { console.error("Failed to save sort setting:", e); }
     });
   }
 
@@ -175,6 +189,18 @@ export async function initMods() {
   if (closeDetail) closeDetail.addEventListener('click', closeModDetail);
 
   try {
+    const settings = await invoke('get_settings').catch(() => null);
+    if (settings) {
+      S.currentFilter = settings.current_filter || 'all';
+      S.currentSort = settings.current_sort_by || 'name_asc';
+      
+      // Update UI state
+      document.querySelectorAll('.filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === S.currentFilter);
+      });
+      if (sortSelect) sortSelect.value = S.currentSort;
+    }
+
     S.userTags = await invoke('get_tags').catch(() => []);
     S.allMods = await invoke('get_mods');
     renderModList();
@@ -507,6 +533,33 @@ async function renderModList() {
         } else if (!hasConflict && conflictBadge) {
           conflictBadge.remove();
         }
+      }
+
+      // Update Shared Info
+      let sharedInfo = card.querySelector('.mod-shared-info');
+      const hasShared = mod.shared_activations && mod.shared_activations.length > 1;
+
+      if (hasShared) {
+        const subHtml = mod.shared_activations.map(sa => `
+          <div class="shared-activation-item" style="display:flex; align-items:center; gap:8px; font-size:10.5px; opacity:${sa.active ? '1' : '0.4'}" title="${escAttr(sa.profile_name)}\n${escAttr(sa.game_path)}">
+            <div style="width:8px; height:8px; border-radius:50%; background:${sa.active ? 'var(--success)' : 'var(--text-muted)'}; flex-shrink:0; box-shadow:${sa.active ? '0 0 6px var(--success)' : 'none'}"></div>
+            <div style="display:flex; flex-direction:column; min-width:0; flex:1">
+              <span style="font-weight:600; color:${sa.active ? 'var(--text-primary)' : 'var(--text-muted)'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${escHtml(sa.profile_name)}</span>
+              <span style="font-size:9px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:var(--font-mono)">${escHtml(sa.game_path)}</span>
+            </div>
+          </div>
+        `).join('');
+
+        if (!sharedInfo) {
+           card.innerHTML = getModCardHTML(mod, { selectedModId: S.selectedModId, conflictCache: S.conflictCache, processingMods: S.processingMods, userTags: S.userTags });
+        } else {
+           if (sharedInfo.dataset.lastSharedHtml !== subHtml) {
+             sharedInfo.innerHTML = subHtml;
+             sharedInfo.dataset.lastSharedHtml = subHtml;
+           }
+        }
+      } else if (sharedInfo) {
+        sharedInfo.remove();
       }
 
       // Update processing overlay safely

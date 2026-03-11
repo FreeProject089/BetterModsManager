@@ -24,7 +24,14 @@ pub struct AppSettings {
     pub storage_warning_space_pct: u32,
     #[serde(default = "default_storage_critical")]
     pub storage_critical_space_pct: u32,
+    #[serde(default = "default_filter")]
+    pub current_filter: String,
+    #[serde(default = "default_sort")]
+    pub current_sort_by: String,
 }
+
+fn default_filter() -> String { "all".to_string() }
+fn default_sort() -> String { "name_asc".to_string() }
 
 fn default_lang() -> String { "fr".to_string() }
 fn default_storage_warning() -> u32 { 40 }

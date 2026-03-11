@@ -14,3 +14,4 @@ pub mod image;
 pub mod repo;
 pub mod repo_server;
 pub mod security;
+pub mod omm;

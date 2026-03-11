@@ -9,6 +9,7 @@ import { initI18n, setLang, getLang, applyTranslations, getLanguages, t } from '
 import { initBenchmark } from './benchmark.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
 import { initRepo } from './repo.js';
+import { appState } from './state.js';
 
 // ── Tauri bridge ──────────────────────────────────────────
 import { loadTauri, invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification } from './api.js';
@@ -133,11 +134,43 @@ function initModlist() {
         const path = await pickFile([{ name: 'Mod List', extensions: ['mm', 'json'] }]);
         if (!path) return;
         try {
+            // Refresh local mods to ensure "Present" status is accurate
+            const localMods = await invoke('get_mods');
+            appState.set('allMods', localMods);
+
             const modList = await invoke('import_modlist', { path });
             lastImportedModlistJson = JSON.stringify(modList);
             exportCard.style.display = 'none';
             previewCard.style.display = '';
             renderImportedModlist(modList);
+            updateInstallBtnText();
+
+            // Auto-update path hint based on active profile if not creating a new profile
+            const chkProfile = document.getElementById('chk-import-as-profile');
+            const pathHintEl = document.getElementById('imported-path-hint');
+            
+            if (chkProfile && pathHintEl) {
+                const updatePath = async () => {
+                    if (!chkProfile.checked) {
+                        try {
+                            const activeId = await invoke('get_active_profile_id');
+                            const profiles = await invoke('get_profiles');
+                            const activeP = profiles.find(p => p.id === activeId);
+                            if (activeP) {
+                                pathHintEl.textContent = activeP.mods_path;
+                            }
+                        } catch (e) {
+                            console.error("Failed to get active profile mods path:", e);
+                        }
+                    } else {
+                        // Use default game path hint from modList (the .MM creator's suggestion)
+                        pathHintEl.textContent = modList.game_path_hint || '—';
+                    }
+                };
+                
+                chkProfile.addEventListener('change', updatePath);
+                updatePath(); // Initial call
+            }
             toast(t('mm.importSuccess'), 'success');
         } catch (err) {
             toast(t('mm.importError').replace('{err}', err), 'error');
@@ -153,11 +186,24 @@ function initModlist() {
 
         // Sync the current path hint back into the JSON before sending to backend
         const pathHintEl = document.getElementById('imported-path-hint');
+        let currentList = JSON.parse(lastImportedModlistJson);
         if (pathHintEl) {
-            const currentList = JSON.parse(lastImportedModlistJson);
             currentList.game_path_hint = pathHintEl.textContent;
-            lastImportedModlistJson = JSON.stringify(currentList);
         }
+
+        // Filter: only install checked mods
+        const checkboxes = previewCard.querySelectorAll('.mm-mod-checkbox');
+        const selectedIndices = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => parseInt(cb.dataset.index));
+        
+        if (selectedIndices.length === 0) {
+            toast(t('mm.installNone') || 'Veuillez sélectionner au moins un mod.', 'warning');
+            return;
+        }
+
+        currentList.mods = currentList.mods.filter((_, idx) => selectedIndices.includes(idx));
+        lastImportedModlistJson = JSON.stringify(currentList);
 
         const createProfile = document.getElementById('chk-import-as-profile')?.checked || false;
 
@@ -226,12 +272,37 @@ function initModlist() {
         } finally {
             installBtn.disabled = false;
             installBtn.classList.remove('loading');
-            installBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installAll')}`;
+            installBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installSelection') || t('mm.installAll')}`;
             if (progressOverlay) {
                 setTimeout(() => { progressOverlay.style.display = 'none'; }, 2000);
             }
         }
     });
+
+    // Handle select/unselect all in imported list
+    previewCard.addEventListener('change', (e) => {
+        if (e.target.id === 'mm-select-all') {
+            const checked = e.target.checked;
+            const checkboxes = previewCard.querySelectorAll('.mm-mod-checkbox');
+            checkboxes.forEach(cb => { cb.checked = checked; });
+            updateInstallBtnText();
+        } else if (e.target.classList.contains('mm-mod-checkbox')) {
+            updateInstallBtnText();
+        }
+    });
+
+    function updateInstallBtnText() {
+        const count = previewCard.querySelectorAll('.mm-mod-checkbox:checked').length;
+        const total = previewCard.querySelectorAll('.mm-mod-checkbox').length;
+        const btn = document.getElementById('btn-install-from-mm');
+        if (!btn) return;
+        
+        if (count === total) {
+            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installAll')}`;
+        } else {
+            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installSelection')} (${count})`;
+        }
+    }
 
     // Cancel installation
     previewCard.addEventListener('click', async (e) => {
@@ -361,9 +432,13 @@ function renderImportedModlist(modlist) {
     `;
 
     // Cards for each mod
-    const modsHtml = modlist.mods.map(m => {
+    const currentMods = appState.state.allMods || [];
+    const modsHtml = modlist.mods.map((m, idx) => {
         const fileCount = m.file_tree ? m.file_tree.length : 0;
         const modSize = m.file_tree ? m.file_tree.reduce((acc, f) => acc + (f.size || 0), 0) : 0;
+        
+        // Presence check
+        const isAlreadyPresent = currentMods.some(cm => cm.name === m.name);
 
         return `
         <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; flex-direction:column; gap:8px; position:relative; overflow:hidden">
@@ -374,6 +449,7 @@ function renderImportedModlist(modlist) {
                 <span style="font-weight:700; font-size:14px; color:var(--text-primary)">${escHtml(m.name)}</span>
                 <span style="font-family:var(--font-mono); font-size:10px; color:var(--cyan); background:rgba(6,182,212,0.1); padding:1px 6px; border-radius:4px; border:1px solid rgba(6,182,212,0.2)">v${escHtml(m.version)}</span>
                 <span style="font-size:10px; color:var(--text-muted); font-family:var(--font-mono)">${formatBytes(modSize)}</span>
+                ${isAlreadyPresent ? `<span style="font-size:9px; font-weight:800; color:#10b981; background:rgba(16,185,129,0.15); padding:2px 6px; border-radius:4px; border:1px solid rgba(16,185,129,0.3)">${t('mm.modPresent')}</span>` : `<span style="font-size:9px; font-weight:800; color:var(--accent); background:var(--accent-dim); padding:2px 6px; border-radius:4px; border:1px solid var(--border-accent)">${t('mm.modNew')}</span>`}
             </div>
             <div style="font-size:10px; font-weight:700; font-family:var(--font-mono); padding:2px 6px; border-radius:4px; ${(() => {
                 const p = m.sort_priority || 0;
@@ -394,6 +470,16 @@ function renderImportedModlist(modlist) {
           
           ${m.description ? `<p style="font-size:12px; color:var(--text-secondary); margin:0; opacity:0.8">${escHtml(m.description)}</p>` : ''}
           
+          ${m.install_notes ? `
+            <div style="background:rgba(245,158,11,0.08); border:1px dashed rgba(245,158,11,0.3); border-radius:8px; padding:10px; margin-top:4px">
+                <div style="font-size:10px; font-weight:800; color:#fbbf24; text-transform:uppercase; margin-bottom:4px; display:flex; align-items:center; gap:6px">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    Installation Notes
+                </div>
+                <p style="font-size:11.5px; color:var(--text-secondary); margin:0; line-height:1.5">${escHtml(m.install_notes)}</p>
+            </div>
+          ` : ''}
+          
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
             ${m.tags && m.tags.length > 0 ? m.tags.map(t => `<span style="font-size:9px; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; color:var(--text-secondary); border:1px solid var(--border)">${escHtml(t)}</span>`).join('') : ''}
             
@@ -402,6 +488,11 @@ function renderImportedModlist(modlist) {
                     ${getLinkIcon(l.link_type)} ${escHtml(l.label || t('common.link'))}
                 </a>
             `).join('') : ''}
+          </div>
+
+          <!-- Mod Selection Checkbox -->
+          <div style="position:absolute; right:16px; top:50%; transform:translateY(-50%); display:flex; align-items:center; gap:10px">
+              <input type="checkbox" class="mm-mod-checkbox" data-index="${idx}" ${isAlreadyPresent ? '' : 'checked'} style="width:18px; height:18px; cursor:pointer">
           </div>
 
           ${fileCount > 0 ? `
@@ -453,6 +544,11 @@ function renderImportedModlist(modlist) {
                 <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px; display:flex; align-items:center; gap:8px">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                     ${t('mm.installPreview')}
+                    
+                    <div style="margin-left:auto; display:flex; align-items:center; gap:8px; font-size:10px; color:var(--text-secondary); cursor:pointer; user-select:none">
+                        <input type="checkbox" id="mm-select-all" checked style="cursor:pointer">
+                        <label for="mm-select-all" style="cursor:pointer">${t('common.selectAll') || 'Tout sélectionner'}</label>
+                    </div>
                 </div>
                 ${modsHtml}
             </div>
@@ -1680,19 +1776,7 @@ async function main() {
         const btnGuide = document.getElementById('btn-show-lang-guide');
         if (btnGuide) {
             btnGuide.addEventListener('click', () => {
-                const updateBtn = document.getElementById('btn-show-updates');
-                if (updateBtn) {
-                    updateBtn.click();
-                    // Wait for modal and select guide
-                    setTimeout(() => {
-                        const items = document.querySelectorAll('.archive-sidebar-item');
-                        items.forEach(item => {
-                            if (item.textContent.includes('TranslationGuide')) {
-                                item.click();
-                            }
-                        });
-                    }, 500);
-                }
+                checkPtbMode(true, "TranslationGuide");
             });
         }
 
@@ -1737,6 +1821,21 @@ async function main() {
             document.querySelectorAll('.nav-item').forEach(v => v.classList.remove('active'));
             document.getElementById('view-library').classList.add('active');
             startOnboarding();
+        });
+    }
+
+    // Version button and Release Notes buttons
+    const verBtn = document.getElementById('nav-version-btn');
+    if (verBtn) {
+        verBtn.addEventListener('click', () => {
+            sessionStorage.removeItem(PTB_DISMISSED_KEY); // Force reload
+            checkPtbMode();
+        });
+    }
+    const showNotesBtn = document.getElementById('btn-show-notes');
+    if (showNotesBtn) {
+        showNotesBtn.addEventListener('click', () => {
+            checkPtbMode(true);
         });
     }
 }
@@ -2137,86 +2236,141 @@ function showUpdateAvailableModal(info) {
 
 const PTB_DISMISSED_KEY = 'bmm_ptb_dismissed';
 
-async function checkPtbMode() {
+async function checkPtbMode(force = false, initialFileName = null) {
+    if (!force && sessionStorage.getItem(PTB_DISMISSED_KEY)) return;
+
     try {
         const isPtb = await invoke('is_ptb_mode');
-        if (!isPtb) return;
+        if (!isPtb && !force) return;
 
-        // Check if user already dismissed this session
-        if (sessionStorage.getItem(PTB_DISMISSED_KEY) === 'true') return;
+        // Fetch notes
+        const currentNotes = await invoke('get_update_notes', { subDir: null });
+        const oldNotes = await invoke('get_update_notes', { subDir: "Old_Update" });
 
-        // Load PTB notes
-        let content = '';
-        try {
-            content = await invoke('get_ptb_notes');
-        } catch (e) {
-            console.warn('[BMM] No PTB notes found:', e);
-            return;
-        }
-
-        // Render markdown
-        const rendered = typeof marked !== 'undefined'
-            ? marked.parse(content)
-            : content.replace(/\n/g, '<br>');
-
-        showPtbModal(rendered);
+        showPtbModal(currentNotes, oldNotes, initialFileName);
     } catch (e) {
         console.warn('[BMM] PTB check failed:', e);
     }
 }
 
-function showPtbModal(htmlContent) {
+function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
     const existing = document.getElementById('ptb-welcome-modal');
     if (existing) existing.remove();
+
+    const allNotes = [...currentNotes, ...oldNotes];
+    if (allNotes.length === 0) return;
 
     const modal = document.createElement('div');
     modal.id = 'ptb-welcome-modal';
     modal.className = 'update-modal-backdrop';
+    
+    // Default active is either the requested one or the first one
+    let activeNote = allNotes[0];
+    if (initialFileName) {
+        const found = allNotes.find(n => n.filename.includes(initialFileName));
+        if (found) activeNote = found;
+    }
+
+    const renderHeader = () => `
+        <div class="ptb-header-title">
+            <div class="ptb-header-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <span>${t('settings.notesTitle') || 'Notes de mise à jour'}</span>
+        </div>
+        <button class="update-modal-close" id="close-ptb-modal">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+    `;
+
+    const renderSidebar = () => {
+        let html = '<div class="ptb-sidebar">';
+        
+        // Release Notes Section
+        if (currentNotes.length > 0) {
+            html += `
+                <div class="ptb-sidebar-section">
+                    <div class="ptb-sidebar-label">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        RELEASE NOTES
+                    </div>
+                    ${currentNotes.map(n => `
+                        <div class="ptb-sidebar-item ${n.filename === activeNote.filename ? 'active' : ''}" data-file="${escAttr(n.filename)}">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            ${escHtml(n.filename)}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // Archives Section
+        if (oldNotes.length > 0) {
+            html += `
+                <div class="ptb-sidebar-section">
+                    <div class="ptb-sidebar-label">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        ARCHIVES
+                    </div>
+                    ${oldNotes.map(n => `
+                        <div class="ptb-sidebar-item ${n.filename === activeNote.filename ? 'active' : ''}" data-file="${escAttr(n.filename)}">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            ${escHtml(n.filename)}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        html += '</div>';
+        return html;
+    };
+
+    const renderContent = (note) => {
+        const rendered = typeof marked !== 'undefined'
+            ? marked.parse(note.content)
+            : note.content.replace(/\n/g, '<br>');
+        return `<div class="ptb-modal-body">${rendered}</div>`;
+    };
+
     modal.innerHTML = `
         <div class="ptb-modal-card">
-            <button class="update-modal-close" id="close-ptb-modal">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-            </button>
-
-            <div class="ptb-modal-header">
-                <div style="display:inline-flex;width:52px;height:52px;background:var(--accent-dim);border-radius:14px;align-items:center;justify-content:center;margin-bottom:14px;border:1px solid var(--border-accent)">
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
-                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-                    </svg>
+            <div class="ptb-modal-header">${renderHeader()}</div>
+            <div class="ptb-modal-layout">
+                ${renderSidebar()}
+                <div id="ptb-content-target" style="flex:1; display:flex; flex-direction:column; overflow:hidden">
+                    ${renderContent(activeNote)}
                 </div>
-                <h2 style="font-size:19px;font-weight:800;color:var(--text-primary);margin-bottom:6px">
-                    ${t('ptb.title') || 'Public Test Build'}
-                </h2>
-                <div style="display:inline-block;padding:3px 12px;background:var(--accent-dim);border:1px solid var(--border-accent);border-radius:var(--radius-chip);font-size:10px;font-weight:700;color:var(--accent);letter-spacing:0.06em;text-transform:uppercase;font-family:var(--font-mono)">
-                    PTB
-                </div>
-            </div>
-
-            <div class="ptb-modal-body">
-                ${htmlContent}
-            </div>
-
-            <div class="ptb-modal-footer">
-                <button class="btn-ptb-ok" id="btn-ptb-dismiss">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                    ${t('ptb.understood') || 'Understood!'}
-                </button>
             </div>
         </div>
     `;
+
     document.body.appendChild(modal);
 
-    // Close handlers
+    // Event listeners
+    modal.addEventListener('click', (e) => {
+        const item = e.target.closest('.ptb-sidebar-item');
+        if (item) {
+            const filename = item.dataset.file;
+            const note = allNotes.find(n => n.filename === filename);
+            if (note) {
+                activeNote = note;
+                // Update sidebar active class
+                modal.querySelectorAll('.ptb-sidebar-item').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+                // Update content
+                modal.querySelector('#ptb-content-target').innerHTML = renderContent(note);
+                // Scroll to top
+                modal.querySelector('.ptb-modal-body').scrollTop = 0;
+            }
+        }
+    });
+
     const close = () => {
         sessionStorage.setItem(PTB_DISMISSED_KEY, 'true');
         modal.remove();
     };
     modal.querySelector('#close-ptb-modal').addEventListener('click', close);
-    modal.querySelector('#btn-ptb-dismiss').addEventListener('click', close);
     modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
 }
 
@@ -2239,5 +2393,6 @@ async function openLicenseModal() {
 
 // Global expose for onclick
 window.openLicenseModal = openLicenseModal;
+window.checkPtbMode = checkPtbMode;
 
 main().catch(console.error);

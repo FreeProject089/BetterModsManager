@@ -38,6 +38,9 @@ pub struct ModEntry {
     /// Custom tags associated with this mod
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Instructions on placement and special setup (inherited from .MM)
+    #[serde(default)]
+    pub install_notes: String,
 }
 
 /// A download link for a mod
@@ -63,6 +66,7 @@ impl ModEntry {
             installed_files: Vec::new(),
             download_links: Vec::new(),
             tags: Vec::new(),
+            install_notes: String::new(),
         }
     }
 }

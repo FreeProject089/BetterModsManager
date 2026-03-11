@@ -97,7 +97,6 @@ pub fn delete_profile(state: State<AppState>, profile_id: String) -> Result<(), 
     {
         let mut data = state.data.lock().unwrap();
         data.profiles.retain(|p| p.id != profile_id);
-        data.mods.retain(|m| !profile_id.contains(&m.id)); // safety
         if data.active_profile_id.as_deref() == Some(&profile_id) {
             data.active_profile_id = data.profiles.first().map(|p| p.id.clone());
         }

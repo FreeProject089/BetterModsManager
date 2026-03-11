@@ -16,12 +16,26 @@ struct BenchEventPayload {
     finished: bool,
 }
 
+#[derive(Serialize, Clone)]
+pub struct EnrichedMod {
+    #[serde(flatten)]
+    pub mod_entry: ModEntry,
+    pub shared_activations: Vec<SharedActivation>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct SharedActivation {
+    pub profile_name: String,
+    pub game_path: String,
+    pub active: bool,
+}
+
 lazy_static::lazy_static! {
     static ref MOD_OP_LOCK: Mutex<()> = Mutex::new(());
 }
 
 #[tauri::command]
-pub fn get_mods(state: State<AppState>) -> Result<Vec<ModEntry>, String> {
+pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, String> {
     let data = state.data.lock().unwrap();
     let active_id = match data.active_profile_id.as_ref() {
         Some(id) => id,
@@ -29,24 +43,52 @@ pub fn get_mods(state: State<AppState>) -> Result<Vec<ModEntry>, String> {
     };
     let active_profile = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?;
     
-    let filtered_mods: Vec<ModEntry> = data.mods.iter()
-        .filter(|m| {
-            let mod_p = &m.mod_folder_path;
-            let prof_p = &active_profile.mods_path;
-            
-            // Simple string prefix check
-            if mod_p.starts_with(prof_p) { return true; }
-            
-            // Handle UNC/canonicalization mismatches
+    let mut results = Vec::new();
+    
+    for m in &data.mods {
+        let mod_p = &m.mod_folder_path;
+        let prof_p = &active_profile.mods_path;
+        
+        let belongs_to_active = if mod_p.starts_with(prof_p) { true } else {
             match (mod_p.canonicalize(), prof_p.canonicalize()) {
                 (Ok(m_can), Ok(p_can)) => m_can.starts_with(p_can),
                 _ => false
             }
-        })
-        .cloned()
-        .collect();
-        
-    Ok(filtered_mods)
+        };
+
+        if belongs_to_active {
+            let mut enriched = EnrichedMod {
+                mod_entry: m.clone(),
+                shared_activations: Vec::new(),
+            };
+            
+            // Set 'enabled' based on active profile
+            enriched.mod_entry.enabled = active_profile.active_mods.contains(&m.id);
+            
+            // Find shared activations in OTHER profiles sharing the same mods folder
+            for p in &data.profiles {
+                // If this profile shares the same mods folder (or is the active one, we'll list it too as per request)
+                let shares_folder = if p.mods_path == active_profile.mods_path { true } else {
+                    match (p.mods_path.canonicalize(), active_profile.mods_path.canonicalize()) {
+                        (Ok(a), Ok(b)) => a == b,
+                        _ => false
+                    }
+                };
+                
+                if shares_folder {
+                    enriched.shared_activations.push(SharedActivation {
+                        profile_name: p.name.clone(),
+                        game_path: p.game_path.to_string_lossy().to_string(),
+                        active: p.active_mods.contains(&m.id),
+                    });
+                }
+            }
+            
+            results.push(enriched);
+        }
+    }
+    
+    Ok(results)
 }
 
 #[tauri::command]
@@ -732,7 +774,7 @@ pub async fn install_from_modlist(
     let mut newly_added_mod_ids: Vec<String> = Vec::new();
     let mut newly_added_mod_folders: Vec<PathBuf> = Vec::new();
 
-    let mods_path = {
+    let (mods_path, profile_id_for_mods) = {
         let mut data = state.data.lock().unwrap();
         if create_profile {
             let new_id = uuid::Uuid::new_v4().to_string();
@@ -750,12 +792,19 @@ pub async fn install_from_modlist(
             new_p.id = new_id.clone();
             data.profiles.push(new_p);
             data.active_profile_id = Some(new_id.clone());
-            newly_created_profile_id = Some(new_id);
-            m_path
+            newly_created_profile_id = Some(new_id.clone());
+            (m_path, new_id)
         } else {
             let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
-            let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
-            p.mods_path.clone()
+            // If the user overrode the path, it is in modlist.game_path_hint
+            // If it's empty, use the active profile path
+            let path = if !modlist.game_path_hint.is_empty() {
+                PathBuf::from(&modlist.game_path_hint)
+            } else {
+                let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
+                p.mods_path.clone()
+            };
+            (path, active_id)
         }
     };
 
@@ -793,7 +842,15 @@ pub async fn install_from_modlist(
                 new_mod.version = entry.version.clone();
                 new_mod.author = entry.author.clone();
                 new_mod.tags = entry.tags.clone();
+                new_mod.install_notes = entry.install_notes.clone();
+                let mid = new_mod.id.clone();
                 data.mods.push(new_mod);
+                newly_added_mod_ids.push(mid);
+            } else {
+                // If it already exists in the global list, we still want to track it for the profile
+                if let Some(m) = data.mods.iter().find(|m| m.mod_folder_path == target_dir) {
+                    newly_added_mod_ids.push(m.id.clone());
+                }
             }
             results.push(format!("✅ {} — Déjà présent", entry.name));
             continue;
@@ -837,6 +894,7 @@ pub async fn install_from_modlist(
                 new_mod.version = entry.version.clone();
                 new_mod.author = entry.author.clone();
                 new_mod.tags = entry.tags.clone();
+                new_mod.install_notes = entry.install_notes.clone();
                 let mid = new_mod.id.clone();
                 data.mods.push(new_mod);
                 
@@ -944,6 +1002,7 @@ pub async fn install_from_modlist(
                     new_mod.version = entry.version.clone();
                     new_mod.author = entry.author.clone();
                     new_mod.tags = entry.tags.clone();
+                    new_mod.install_notes = entry.install_notes.clone();
                     let mid = new_mod.id.clone();
                     data.mods.push(new_mod);
                     
@@ -991,6 +1050,18 @@ pub async fn install_from_modlist(
             }
         }
         return Err("Installation annulée.".to_string());
+    }
+
+    // --- FINAL ASSOCIATION: Add mods to the profile ---
+    {
+        let mut data = state.data.lock().unwrap();
+        if let Some(p) = data.profiles.iter_mut().find(|p| p.id == profile_id_for_mods) {
+            for mid in newly_added_mod_ids {
+                if !p.active_mods.contains(&mid) {
+                    p.active_mods.push(mid);
+                }
+            }
+        }
     }
 
     let _ = state.save();
