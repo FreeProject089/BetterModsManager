@@ -512,9 +512,8 @@
             <section class="view" id="view-repo">
                 <div class="view-header">
                     <div>
-                        <h1 class="view-title" data-i18n="repo.title">D\u00e9p\u00f4t de Mods Partag\u00e9</h1>
-                        <p class="view-subtitle" data-i18n="repo.subtitle">Mode Full Server — H\u00e9bergez vos mods ou
-                            connectez-vous \u00e0 un serveur</p>
+                        <h1 class="view-title" data-i18n="repo.title">...</h1>
+                        <p class="view-subtitle" data-i18n="repo.subtitle">...</p>
                     </div>
                 </div>
 
@@ -527,18 +526,15 @@
                         <path d="M12 8h.01" />
                     </svg>
                     <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin:0;"
-                        data-i18n="repo.modeInfo">Ce mode fonctionne comme un <strong>serveur web classique</strong> :
-                        vous exportez vos profils dans un dossier, puis vous h\u00e9bergez ce dossier depuis votre PC ou
-                        un VPS. Vos amis entrent l'URL pour t\u00e9l\u00e9charger et synchroniser les mods
-                        automatiquement. <strong>Pas de P2P, pas de r\u00e9seau d\u00e9centralis\u00e9.</strong></p>
+                        data-i18n="repo.modeInfo">...</p>
                 </div>
 
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;">
 
-                    <!-- ══ GAUCHE : H\u00c9BERGER ══ -->
+                    <!-- ══ GAUCHE : HOST ══ -->
                     <div style="display:flex;flex-direction:column;gap:16px;">
 
-                        <!-- Card: G\u00e9n\u00e9rer le Repo -->
+                        <!-- Card: Generate Repo -->
                         <div class="glass-card" style="border-left:3px solid var(--cyan);">
                             <h3 class="card-title" style="margin-bottom:6px;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
@@ -547,35 +543,30 @@
                                     <polyline points="17 8 12 3 7 8" />
                                     <line x1="12" y1="3" x2="12" y2="15" />
                                 </svg>
-                                <span style="color:var(--cyan);" data-i18n="repo.stepOneTitle">1 — G\u00e9n\u00e9rer le
-                                    D\u00e9p\u00f4t</span>
+                                <span style="color:var(--cyan);" data-i18n="repo.stepOneTitle">...</span>
                             </h3>
                             <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;"
-                                data-i18n="repo.stepOneDesc">S\u00e9lectionnez les profils \u00e0 partager. BMM copie
-                                tous leurs mods et cr\u00e9e un fichier <code>repo.json</code> dans le dossier de
-                                destination.</p>
+                                data-i18n="repo.stepOneDesc">...</p>
 
                             <div class="form-group">
-                                <label class="form-label" data-i18n="repo.selectProfiles">Profils \u00e0 inclure</label>
+                                <label class="form-label" data-i18n="repo.selectProfiles">...</label>
                                 <div id="repo-export-profiles-list"
                                     style="max-height:130px;overflow-y:auto;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:7px;">
                                     <div style="color:var(--text-muted);font-size:12px;text-align:center;"
-                                        data-i18n="repo.loadingProfiles">Chargement des profils...</div>
+                                        data-i18n="repo.loadingProfiles">...</div>
                                 </div>
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label" data-i18n="repo.outputDir">Dossier de destination</label>
+                                <label class="form-label" data-i18n="repo.outputDir">...</label>
                                 <div class="path-picker">
-                                    <input type="text" class="form-input" id="repo-export-path"
-                                        placeholder="C:\MonServeur\repo..." readonly />
+                                    <input type="text" class="form-input" id="repo-export-path" placeholder="C:\..."
+                                        readonly />
                                     <button class="btn btn-secondary btn-sm" id="btn-pick-repo-export"
-                                        data-i18n="prof.browse">Parcourir</button>
+                                        data-i18n="prof.browse">...</button>
                                 </div>
                                 <p style="font-size:11px;color:var(--text-muted);margin-top:5px;line-height:1.5;"
-                                    data-i18n="repo.outputDirHint">&#128161; Vous pouvez pointer directement vers un
-                                    dossier qui contient d\u00e9j\u00e0 un <code>repo.json</code> pour le servir sans
-                                    regn\u00e9rer.</p>
+                                    data-i18n="repo.outputDirHint">...</p>
                             </div>
 
                             <button class="btn btn-primary" id="btn-start-repo-export"
@@ -586,13 +577,13 @@
                                     <polyline points="17 8 12 3 7 8" />
                                     <line x1="12" y1="3" x2="12" y2="15" />
                                 </svg>
-                                <span data-i18n="repo.exportBtn">G\u00e9n\u00e9rer le Repo</span>
+                                <span data-i18n="repo.exportBtn">...</span>
                             </button>
 
                             <div id="repo-export-progress-container" style="display:none;margin-top:14px;">
                                 <div
                                     style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-bottom:5px;">
-                                    <span id="repo-export-status">G\u00e9n\u00e9ration...</span>
+                                    <span id="repo-export-status" data-i18n="repo.exporting">...</span>
                                     <span id="repo-export-percent" style="font-weight:600;color:var(--cyan);">0%</span>
                                 </div>
                                 <div
@@ -612,13 +603,10 @@
                                     <rect x="2" y="3" width="20" height="14" rx="2" />
                                     <path d="M8 21h8M12 17v4" />
                                 </svg>
-                                <span style="color:#2ecc71;" data-i18n="repo.stepTwoTitle">2 — D\u00e9marrer le Serveur
-                                    HTTP</span>
+                                <span style="color:#2ecc71;" data-i18n="repo.stepTwoTitle">...</span>
                             </h3>
                             <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.6;"
-                                data-i18n="repo.stepTwoDesc">BMM lance un serveur HTTP sur le port 8000, accessible
-                                depuis votre r\u00e9seau local. Avec une redirection de port sur votre box, il est
-                                accessible depuis internet.</p>
+                                data-i18n="repo.stepTwoDesc">...</p>
 
                             <div
                                 style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 12px;margin-bottom:12px;border:1px solid rgba(255,255,255,0.07);">
@@ -626,25 +614,24 @@
                                     style="width:8px;height:8px;border-radius:50%;background:#555;transition:all 0.3s;flex-shrink:0;">
                                 </div>
                                 <span id="repo-server-status-label" style="font-size:12px;color:var(--text-muted);"
-                                    data-i18n="repo.serverOffline">Serveur hors ligne</span>
+                                    data-i18n="repo.serverOffline">...</span>
                             </div>
 
                             <button class="btn btn-secondary" id="btn-toggle-repo-server"
                                 style="width:100%;justify-content:center;background:rgba(46,204,113,0.1);color:#2ecc71;border-color:rgba(46,204,113,0.2);">
-                                <span id="repo-server-btn-text" data-i18n="repo.hostStart">&#9654; D\u00e9marrer le
-                                    serveur</span>
+                                <span id="repo-server-btn-text" data-i18n="repo.hostStart">...</span>
                             </button>
 
                             <div id="repo-server-url-container"
                                 style="display:none;margin-top:12px;display:flex;flex-direction:column;gap:10px;">
                                 <div id="repo-server-lan-section">
-                                    <label class="form-label" style="font-size:11px;" data-i18n="repo.hostShareUrl">🔗
-                                        URL réseau local (LAN) :</label>
+                                    <label class="form-label" style="font-size:11px;"
+                                        data-i18n="repo.hostShareUrl">...</label>
                                     <div class="path-picker">
                                         <input type="text" class="form-input" id="repo-server-url" readonly
                                             style="color:var(--cyan);background:rgba(0,0,0,0.3);font-family:var(--font-mono);font-size:12px;" />
-                                        <button class="btn btn-secondary btn-sm" id="btn-copy-repo-url" title="Copier"
-                                            style="padding:0 10px;">
+                                        <button class="btn btn-secondary btn-sm" id="btn-copy-repo-url"
+                                            data-i18n-title="common.copy" style="padding:0 10px;">
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2">
                                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -657,16 +644,16 @@
                                 <div id="repo-server-public-section" style="display:none;">
                                     <label class="form-label"
                                         style="font-size:11px;display:flex;align-items:center;gap:5px;">
-                                        🌍 <span data-i18n="repo.hostPublicUrl">URL Internet (Public) :</span>
+                                        <span data-i18n="repo.hostPublicUrl">...</span>
                                         <span id="upnp-status-badge"
-                                            style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(46, 204, 113, 0.2);color:#2ecc71;font-weight:700;">UPnP
-                                            OK</span>
+                                            style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(46, 204, 113, 0.2);color:#2ecc71;font-weight:700;"
+                                            data-i18n="repo.upnpOk">...</span>
                                     </label>
                                     <div class="path-picker">
                                         <input type="text" class="form-input" id="repo-server-public-url" readonly
                                             style="color:#bc74ff;background:rgba(0,0,0,0.3);font-family:var(--font-mono);font-size:12px;" />
                                         <button class="btn btn-secondary btn-sm" id="btn-copy-repo-public-url"
-                                            title="Copier" style="padding:0 10px;">
+                                            data-i18n-title="common.copy" style="padding:0 10px;">
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2">
                                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -676,20 +663,15 @@
                                     </div>
                                     <div
                                         style="margin-top:8px;background:rgba(52,152,219,0.06);border:1px solid rgba(52,152,219,0.18);border-radius:8px;padding:8px 10px;">
-                                        <p style="font-size:11px;color:rgba(52,152,219,0.9);line-height:1.6;margin:0;">
-                                            💡 <span data-i18n="repo.natLoopbackTip">Si l'URL public ne fonctionne pas
-                                                depuis ce PC, testez avec un téléphone en 4G/5G (NAT Loopback). Vérifiez
-                                                aussi que le Pare-feu Windows autorise BMM.</span>
-                                        </p>
+                                        <p style="font-size:11px;color:rgba(52,152,219,0.9);line-height:1.6;margin:0;"
+                                            data-i18n="repo.natLoopbackTip">...</p>
                                     </div>
                                 </div>
 
                                 <div style="margin-top:8px;background:rgba(255,193,7,0.06);border:1px solid rgba(255,193,7,0.18);border-radius:8px;padding:8px 10px;"
                                     id="public-ip-hint-box">
                                     <p style="font-size:11px;color:rgba(255,193,7,0.85);line-height:1.6;margin:0;"
-                                        data-i18n="repo.publicIPHint">⚠️ Pour un accès depuis <strong>internet</strong>
-                                        : remplacez l'IP locale par votre <strong>IP publique</strong> et configurez la
-                                        <strong>redirection du port 8000</strong> sur votre box ou routeur.</p>
+                                        data-i18n="repo.publicIPHint">...</p>
                                 </div>
                             </div>
                         </div>
@@ -703,26 +685,23 @@
                                 <polyline points="1 4 1 10 7 10" />
                                 <path d="M3.51 15a9 9 0 1 0 .49-3.8" />
                             </svg>
-                            <span style="color:var(--accent);" data-i18n="repo.syncTitle">Rejoindre un
-                                D\u00e9p\u00f4t</span>
+                            <span style="color:var(--accent);" data-i18n="repo.syncTitle">...</span>
                         </h3>
                         <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;"
-                            data-i18n="repo.syncDesc">Entrez l'URL du <code>repo.json</code> fournie par l'h\u00f4te.
-                            BMM t\u00e9l\u00e9charge uniquement les fichiers manquants ou modifi\u00e9s et cr\u00e9e un
-                            nouveau profil local.</p>
+                            data-i18n="repo.syncDesc">...</p>
 
                         <div class="form-group">
-                            <label class="form-label" data-i18n="repo.url">URL du repo.json</label>
+                            <label class="form-label" data-i18n="repo.url">...</label>
                             <input type="text" class="form-input" id="repo-sync-url"
-                                placeholder="http://192.168.1.X:8000/repo.json" />
+                                data-i18n-placeholder="repo.urlPlaceholder" />
                         </div>
 
                         <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:14px 0;" />
                         <p style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.06em;margin-bottom:12px;text-transform:uppercase;"
-                            data-i18n="repo.syncFolders">O\u00f9 installer les mods ?</p>
+                            data-i18n="repo.syncFolders">...</p>
 
                         <div class="form-group">
-                            <label class="form-label" data-i18n="repo.syncGameDir">R\u00e9pertoire du jeu</label>
+                            <label class="form-label" data-i18n="repo.syncGameDir">...</label>
                             <div class="path-picker">
                                 <input type="text" class="form-input" id="repo-sync-game-path"
                                     placeholder="C:\Jeux\DCS..." readonly />
@@ -731,7 +710,7 @@
                             </div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" data-i18n="repo.syncModsDir">Dossier des mods</label>
+                            <label class="form-label" data-i18n="repo.syncModsDir">...</label>
                             <div class="path-picker">
                                 <input type="text" class="form-input" id="repo-sync-mods-path" placeholder="C:\Mods\..."
                                     readonly />
@@ -740,7 +719,7 @@
                             </div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" data-i18n="repo.syncBackupDir">Dossier de sauvegarde</label>
+                            <label class="form-label" data-i18n="repo.syncBackupDir">...</label>
                             <div class="path-picker">
                                 <input type="text" class="form-input" id="repo-sync-backup-path"
                                     placeholder="C:\Backups\..." readonly />
@@ -756,13 +735,13 @@
                                 <polyline points="1 4 1 10 7 10" />
                                 <path d="M3.51 15a9 9 0 1 0 .49-3.8" />
                             </svg>
-                            <span data-i18n="repo.syncBtn">Smart Sync</span>
+                            <span data-i18n="repo.syncBtn">...</span>
                         </button>
 
                         <div id="repo-sync-progress-container" style="display:none;margin-top:14px;">
                             <div
                                 style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-bottom:5px;">
-                                <span id="repo-sync-status">Synchronisation...</span>
+                                <span id="repo-sync-status" data-i18n="common.loading">...</span>
                                 <span id="repo-sync-percent" style="font-weight:600;color:var(--accent);">0%</span>
                             </div>
                             <div
@@ -1196,7 +1175,8 @@
                                     direct</div>
                                 <div style="font-size:12px;color:var(--text-secondary);line-height:1.5">Cliquez sur
                                     <strong style="color:var(--text-primary)">Start Tracking</strong> pour capturer en
-                                    continu votre charge PC (CPU, RAM, Disque).</div>
+                                    continu votre charge PC (CPU, RAM, Disque).
+                                </div>
                             </div>
                             <div
                                 style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
