@@ -569,6 +569,12 @@
                                     data-i18n="repo.outputDirHint">...</p>
                             </div>
 
+                            <div class="form-group" style="margin-bottom:12px;">
+                                <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.authorName">...</label>
+                                <input type="text" class="form-input" id="repo-export-author-name"
+                                    data-i18n-placeholder="repo.authorPlaceholder" />
+                            </div>
+
                             <button class="btn btn-primary" id="btn-start-repo-export"
                                 style="width:100%;justify-content:center;">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -622,6 +628,16 @@
                                 <span id="repo-server-btn-text" data-i18n="repo.hostStart">...</span>
                             </button>
 
+                            <div id="repo-server-loading-bar" style="display:none;height:3px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;margin-top:8px;">
+                                <div style="height:100%;width:100%;background:var(--accent);animation:indeterminate 1.8s infinite ease-in-out;transform-origin:left;"></div>
+                            </div>
+
+                            <!-- Creator ID (Hidden by default) -->
+                            <div id="repo-creator-id-container" style="display:none;margin-top:8px;">
+                                <label class="form-label" style="font-size:10px;margin-bottom:2px;" data-i18n="repo.creatorId">...</label>
+                                <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted);background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;word-break:break-all;" id="repo-creator-id-value">...</div>
+                            </div>
+
                             <div id="repo-server-url-container"
                                 style="display:none;margin-top:12px;display:flex;flex-direction:column;gap:10px;">
                                 <div id="repo-server-lan-section">
@@ -640,14 +656,14 @@
                                         </button>
                                     </div>
                                 </div>
-
+                                
                                 <div id="repo-server-public-section" style="display:none;">
                                     <label class="form-label"
                                         style="font-size:11px;display:flex;align-items:center;gap:5px;margin-bottom:4px;">
-                                        <span data-i18n="repo.hostPublicUrl">...</span>
+                                        <span data-i18n="repo.hostPublicUrl">URL Publique (UPnP)</span>
                                         <span id="upnp-status-badge"
                                             style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(46, 204, 113, 0.2);color:#2ecc71;font-weight:700;"
-                                            data-i18n="repo.upnpOk">...</span>
+                                            data-i18n="repo.upnpOk">UPnP OK</span>
                                     </label>
                                     <div class="path-picker">
                                         <input type="text" class="form-input" id="repo-server-public-url" readonly
@@ -664,8 +680,30 @@
                                     <div
                                         style="margin-top:8px;background:rgba(52,152,219,0.06);border:1px solid rgba(52,152,219,0.18);border-radius:8px;padding:8px 10px;">
                                         <p style="font-size:11px;color:rgba(52,152,219,0.9);line-height:1.6;margin:0;"
-                                            data-i18n="repo.natLoopbackTip">...</p>
+                                            data-i18n="repo.natLoopbackTip">Astuce : Si l'URL publique ne fonctionne pas pour vous, utilisez l'URL Locale (NAT Loopback).</p>
                                     </div>
+                                </div>
+                                
+                                <div id="repo-server-tunnel-section" style="display:none;">
+                                    <label class="form-label"
+                                        style="font-size:11px;display:flex;align-items:center;gap:5px;margin-bottom:4px;">
+                                        <span data-i18n="repo.hostTunnelUrl">...</span>
+                                        <span
+                                            style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(52, 152, 219, 0.2);color:#3498db;font-weight:700;">LIVE</span>
+                                    </label>
+                                    <div class="path-picker">
+                                        <input type="text" class="form-input" id="repo-server-tunnel-url" readonly
+                                            style="color:#3498db;background:rgba(0,0,0,0.3);font-family:var(--font-mono);font-size:12px;" />
+                                        <button class="btn btn-secondary btn-sm" id="btn-copy-repo-tunnel-url"
+                                            data-i18n-title="common.copy" style="padding:0 10px;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <p style="font-size:10px;color:var(--text-muted);margin-top:5px;" data-i18n="repo.tunnelHint">...</p>
                                 </div>
 
                                 <div style="margin-top:8px;background:rgba(255,193,7,0.06);border:1px solid rgba(255,193,7,0.18);border-radius:8px;padding:8px 10px;"
@@ -692,8 +730,21 @@
 
                         <div class="form-group" style="margin-bottom:4px;">
                             <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.url">...</label>
-                            <input type="text" class="form-input" id="repo-sync-url"
-                                data-i18n-placeholder="repo.urlPlaceholder" />
+                            <div class="path-picker">
+                                <input type="text" class="form-input" id="repo-sync-url"
+                                    data-i18n-placeholder="repo.urlPlaceholder" />
+                                <button class="btn btn-secondary btn-sm" id="btn-fetch-repo-info" style="padding:0 12px; font-weight:700;">FETCH</button>
+                            </div>
+                        </div>
+
+                        <div id="repo-sync-info-card" style="display:none;margin-top:12px;background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.06);">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                <span id="repo-sync-author-badge" style="font-size:10px;padding:2px 8px;border-radius:100px;font-weight:700;"></span>
+                                <span id="repo-sync-game-badge" style="font-size:10px;color:var(--text-muted);text-transform:uppercase;"></span>
+                            </div>
+                            <div style="font-size:14px;font-weight:700;margin-bottom:2px;" id="repo-sync-name-display"></div>
+                            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;" id="repo-sync-author-display"></div>
+                            <div style="font-size:12px;color:var(--text-muted);line-height:1.5;" id="repo-sync-desc-display"></div>
                         </div>
 
                         <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:14px 0;" />
@@ -741,17 +792,31 @@
                         <div id="repo-sync-progress-container" style="display:none;margin-top:14px;">
                             <div
                                 style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-bottom:5px;">
-                                <span id="repo-sync-status" data-i18n="common.loading">...</span>
+                                <div style="display:flex;align-items:center;gap:8px">
+                                    <span id="repo-sync-status" data-i18n="common.loading">...</span>
+                                    <span id="repo-sync-paused-badge" style="display:none;background:rgba(245,158,11,0.2);color:var(--warning);padding:2px 6px;border-radius:4px;font-size:9px;font-weight:800;letter-spacing:0.5px">PAUSED</span>
+                                </div>
                                 <span id="repo-sync-percent" style="font-weight:600;color:var(--accent);">0%</span>
                             </div>
                             <div
                                 style="height:5px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">
                                 <div id="repo-sync-progress-fill"
-                                    style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),#bc74ff);transition:width 0.25s ease;box-shadow:0 0 8px var(--accent);border-radius:4px;">
+                                    style="height:100%;width:0%;background:var(--accent);transition:width 0.25s ease;box-shadow:0 0 10px rgba(59, 130, 246, 0.5);border-radius:4px;position:relative;overflow:hidden;">
+                                    <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);animation:sync-progress-shine 2s infinite;"></div>
                                 </div>
                             </div>
                             <div id="repo-sync-details"
-                                style="font-size:10px;color:var(--text-muted);margin-top:8px;font-family:var(--font-mono);line-height:1.8;max-height:80px;overflow-y:auto;background:rgba(0,0,0,0.2);border-radius:6px;padding:6px 8px;">
+                                style="font-size:10px;color:var(--text-muted);margin-top:8px;font-family:var(--font-mono);line-height:1.8;max-height:80px;overflow-y:auto;background:rgba(0,0,0,0.2);border-radius:6px;padding:6px 8px;word-break:break-all;">
+                            </div>
+                            <div style="display:flex;gap:8px;margin-top:10px">
+                                <button class="btn btn-secondary btn-sm" id="btn-pause-sync" style="display:none;flex:1;justify-content:center;gap:6px">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                    <span id="repo-sync-pause-text">Pause</span>
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm" id="btn-cancel-sync" style="display:none;flex:1;justify-content:center;gap:6px;color:var(--danger);border-color:rgba(239,68,68,0.2)">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                    <span>Annuler</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -2575,7 +2640,36 @@
         </div>
     </div>
 
-    <!-- Archive Explorer Modal -->
+    <!-- Delete Profile Modal -->
+    <div class="modal-overlay" id="modal-delete-profile">
+        <div class="modal glass" style="max-width: 480px;">
+            <div class="modal-header">
+                <h2 class="modal-title" style="color:var(--danger)" data-i18n="prof.deleteTitle">Supprimer le profil</h2>
+                <button class="modal-close" data-close="modal-delete-profile">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 24px; text-align: center;">
+                <div
+                    style="background:rgba(239, 68, 68, 0.1); color:var(--danger); padding:20px; border-radius:16px; margin-bottom:20px; border:1px solid rgba(239, 68, 68, 0.2)">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        style="margin-bottom:16px">
+                        <path
+                            d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />
+                    </svg>
+                    <h3 style="margin-bottom:8px; font-size:18px" data-i18n="prof.deleteConfirmMsg">Confirmation de suppression</h3>
+                    <p style="font-size:14px; opacity:0.8; line-height:1.5" id="delete-profile-warning-text">
+                        Voulez-vous vraiment supprimer ce profil ? Cette action est irréversible.
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 12px 20px; display:flex; gap:10px; justify-content:flex-end">
+                <button class="btn btn-ghost" data-close="modal-delete-profile" data-i18n="prof.cancel">Annuler</button>
+                <button class="btn btn-danger" id="btn-final-delete-profile"
+                    style="padding-left:24px; padding-right:24px; font-size:12px">
+                    <span data-i18n="lib.delete">Supprimer définitivement</span>
+                </button>
+            </div>
+        </div>
+    </div>
     <div class="modal-overlay" id="modal-archive-explorer">
         <div class="modal glass" style="max-width: 850px;">
             <div class="modal-header">

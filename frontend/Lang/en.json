@@ -106,6 +106,9 @@
     "prof.editTitle": "Edit profile",
     "prof.saveBtn": "Save",
     "prof.deleted": "Profile deleted.",
+    "prof.deleteTitle": "Delete Profile",
+    "prof.deleteConfirmMsg": "Delete Confirmation",
+    "prof.deleteConfirmLabel": "Do you really want to delete the profile \"{name}\"? This action cannot be undone.",
     "prof.confirmDelete": "Delete this profile?",
     "prof.hasActiveMods": "{count} mod(s) are still active in this profile. Disable them all before deleting?",
     "prof.updated": "Profile \"{name}\" updated.",
@@ -525,5 +528,13 @@
     "repo.genericGame": "Generic game",
     "repo.upnpOk": "UPnP OK",
     "repo.upnpFail": "UPnP FAIL",
-    "repo.syncFolders": "Where to install mods?"
+    "repo.syncFolders": "Where to install mods ?",
+    "repo.hostTunnelUrl": "☁️ Tunnel URL (Cloudflare):",
+    "repo.tunnelHint": "This tunnel is temporary and expires when the server stops.",
+    "repo.authorName": "Creator Name:",
+    "repo.authorPlaceholder": "Your nickname",
+    "repo.creatorId": "Your Creator ID:",
+    "repo.verified": "Verified ✅",
+    "repo.unverified": "Unverified ⚠️",
+    "repo.authorShort": "Author:"
 }

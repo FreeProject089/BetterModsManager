@@ -419,37 +419,11 @@ export async function renderProfiles() {
             const enabledMods = profileMods.filter(m => activeIds.includes(m.id));
 
             if (enabledMods.length > 0 && id === activeId) {
-                // Offer to disable all mods first
-                const msg = (t('prof.hasActiveMods') || '{count} mod(s) are still active in this profile. Disable them all before deleting?')
-                    .replace('{count}', enabledMods.length);
-                if (!confirm(msg)) return;
-
-                // Disable all enabled mods
-                const btn = e.currentTarget;
-                const originalHtml = btn.innerHTML;
-                btn.disabled = true;
-                btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>';
-
-                try {
-                    for (const mod of enabledMods) {
-                        await invoke('disable_mod', { modId: mod.id });
-                    }
-                    toast((t('mod.disabledCount') || '{count} mod(s) disabled.').replace('{count}', enabledMods.length), 'info');
-                } catch (err) {
-                    toast(t('common.error') + ': ' + err, 'error');
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                    return;
-                }
+                // ... (existing logic for disabling mods)
+                openDeleteProfileModal(id, profile);
             } else {
-                if (!confirm(t('prof.confirmDelete') || 'Delete this profile?')) return;
+                openDeleteProfileModal(id, profile);
             }
-
-            await invoke('delete_profile', { profileId: id });
-            await renderProfiles();
-            updateProfileChip();
-            updateLibraryProfileSelector();
-            toast(t('prof.deleted') || 'Profile deleted.', 'info');
         });
     });
 
@@ -467,6 +441,46 @@ export async function renderProfiles() {
         });
     });
 }
+
+function openDeleteProfileModal(id, profile) {
+    const modal = document.getElementById('modal-delete-profile');
+    if (!modal) return;
+
+    const btnFinal = document.getElementById('btn-final-delete-profile');
+    const warningText = document.getElementById('delete-profile-warning-text');
+    
+    // Ensure all data-i18n in the modal are translated
+    applyTranslations(modal);
+    
+    warningText.innerHTML = (t('prof.deleteConfirmLabel') || 'Voulez-vous vraiment supprimer le profil "{name}" ? Cette action est irréversible.')
+        .replace('{name}', `<strong style="color:var(--text-primary)">${profile.name}</strong>`);
+
+    // Clone button to remove old listeners
+    const btnContainer = btnFinal.parentElement;
+    const newBtnFinal = btnFinal.cloneNode(true);
+    btnFinal.remove();
+    btnContainer.appendChild(newBtnFinal);
+
+    newBtnFinal.addEventListener('click', async () => {
+        newBtnFinal.disabled = true;
+        newBtnFinal.textContent = t('common.loading') || '...';
+        try {
+            await invoke('delete_profile', { profileId: id });
+            modal.classList.remove('open');
+            await renderProfiles();
+            updateProfileChip();
+            updateLibraryProfileSelector();
+            toast(t('prof.deleted') || 'Profil supprimé.', 'info');
+        } catch (err) {
+            toast('Erreur suppression : ' + err, 'error');
+            newBtnFinal.disabled = false;
+            newBtnFinal.innerHTML = `<span>${t('lib.delete') || 'Supprimer définitivement'}</span>`;
+        }
+    });
+
+    modal.classList.add('open');
+}
+
 
 export async function updateProfileChip() {
     const [profiles, activeId] = await Promise.all([

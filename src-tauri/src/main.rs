@@ -145,9 +145,14 @@ fn main() {
             commands::repo::export_server_repo,
             commands::repo::fetch_repo_info,
             commands::repo::sync_server_repo,
+            commands::repo::cancel_repo_sync,
+            commands::repo::pause_repo_sync,
+            commands::repo::resume_repo_sync,
             // Repo Server
             commands::repo_server::start_repo_server,
             commands::repo_server::stop_repo_server,
+            commands::security::get_creator_id,
+            commands::security::verify_repo_signature,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

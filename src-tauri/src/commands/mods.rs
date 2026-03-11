@@ -23,7 +23,10 @@ lazy_static::lazy_static! {
 #[tauri::command]
 pub fn get_mods(state: State<AppState>) -> Result<Vec<ModEntry>, String> {
     let data = state.data.lock().unwrap();
-    let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;
+    let active_id = match data.active_profile_id.as_ref() {
+        Some(id) => id,
+        None => return Ok(Vec::new()),
+    };
     let active_profile = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?;
     
     let filtered_mods: Vec<ModEntry> = data.mods.iter()

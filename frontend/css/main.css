@@ -3451,4 +3451,8 @@ select:focus {
         transform: translateY(0);
         scale: 1;
     }
-}
+}. p a t h - w r a p  
+   w o r d - b r e a k :   b r e a k - a l l ;    
+ @keyframes sync-progress-shine { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+:root { --accent-rgb: 59, 130, 246; }
+@keyframes indeterminate { 0% { transform: translateX(-100%) scaleX(0.2); } 50% { transform: translateX(0%) scaleX(0.5); } 100% { transform: translateX(100%) scaleX(0.2); } }

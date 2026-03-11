@@ -1,5 +1,6 @@
 import { invoke, pickFolder } from './api.js';
-import { toast } from './app.js';
+import { toast, updateLibraryProfileSelector } from './app.js';
+import { renderProfiles } from './profiles.js';
 import { t } from './i18n.js';
 
 export function initRepo() {
@@ -26,6 +27,10 @@ export function initRepo() {
     const syncPercent = document.getElementById('repo-sync-percent');
     const syncFill = document.getElementById('repo-sync-progress-fill');
     const syncDetails = document.getElementById('repo-sync-details');
+    const btnPauseSync = document.getElementById('btn-pause-sync');
+    const btnCancelSync = document.getElementById('btn-cancel-sync');
+    const pauseText = document.getElementById('repo-sync-pause-text');
+    const pausedBadge = document.getElementById('repo-sync-paused-badge');
 
     // ── Host Server elements ──────────────────────────────────────────
     const profilesListEl = document.getElementById('repo-export-profiles-list');
@@ -39,8 +44,23 @@ export function initRepo() {
     const publicSection = document.getElementById('repo-server-public-section');
     const publicUrlInput = document.getElementById('repo-server-public-url');
     const btnCopyPublicUrl = document.getElementById('btn-copy-repo-public-url');
-    const upnpBadge = document.getElementById('upnp-status-badge');
+    const upnpBadgeStatus = document.getElementById('upnp-status-badge');
     const publicHintBox = document.getElementById('public-ip-hint-box');
+    const repoCreatorIdContainer = document.getElementById('repo-creator-id-container');
+    const repoCreatorIdValue = document.getElementById('repo-creator-id-value');
+    const inputExportAuthor = document.getElementById('repo-export-author-name');
+    const tunnelSection = document.getElementById('repo-server-tunnel-section');
+    const tunnelUrlInput = document.getElementById('repo-server-tunnel-url');
+    const btnCopyTunnelUrl = document.getElementById('btn-copy-repo-tunnel-url');
+    
+    // Sync elements
+    const btnFetchInfo = document.getElementById('btn-fetch-repo-info');
+    const syncInfoCard = document.getElementById('repo-sync-info-card');
+    const syncBadge = document.getElementById('repo-sync-author-badge');
+    const syncGameBadge = document.getElementById('repo-sync-game-badge');
+    const syncNameDisplay = document.getElementById('repo-sync-name-display');
+    const syncAuthorDisplay = document.getElementById('repo-sync-author-display');
+    const syncDescDisplay = document.getElementById('repo-sync-desc-display');
     
     let isServerRunning = false;
 
@@ -158,10 +178,57 @@ export function initRepo() {
         });
     }
 
+    // ─── Initialize Creator ID ────────────────────────────────────────
+    const initCreatorId = async () => {
+        try {
+            const creatorId = await invoke('get_creator_id');
+            if (repoCreatorIdValue) repoCreatorIdValue.textContent = creatorId;
+            if (repoCreatorIdContainer) repoCreatorIdContainer.style.display = 'block';
+        } catch (err) {
+            console.error("Failed to load Creator ID:", err);
+        }
+    };
+    initCreatorId();
+
+    // ─── Fetch Repo Info Callback ─────────────────────────────────────
+    if (btnFetchInfo) {
+        btnFetchInfo.addEventListener('click', async () => {
+            const url = inputSyncUrl.value.trim();
+            if (!url) return toast(t('repo.errNoUrl'), 'warning');
+
+            try {
+                btnFetchInfo.disabled = true;
+                const repo = await invoke('fetch_repo_info', { url });
+                const isVerified = await invoke('verify_repo_signature', { repo });
+
+                syncInfoCard.style.display = 'block';
+                syncNameDisplay.textContent = repo.name;
+                syncAuthorDisplay.textContent = (t('repo.authorShort') || "Auteur :") + " " + (repo.author || "Inconnu");
+                syncDescDisplay.textContent = repo.description || "";
+                syncGameBadge.textContent = repo.game_name;
+
+                if (isVerified) {
+                    syncBadge.textContent = t('repo.verified') || "Vérifié ✅";
+                    syncBadge.style.background = 'rgba(46, 204, 113, 0.2)';
+                    syncBadge.style.color = '#2ecc71';
+                } else {
+                    syncBadge.textContent = t('repo.unverified') || "Non vérifié ⚠️";
+                    syncBadge.style.background = 'rgba(231, 76, 60, 0.2)';
+                    syncBadge.style.color = '#e74c3c';
+                }
+            } catch (err) {
+                toast(String(err), 'error');
+            } finally {
+                btnFetchInfo.disabled = false;
+            }
+        });
+    }
+
     // ─── Export button ────────────────────────────────────────────────
     if (btnStartExport) {
         btnStartExport.addEventListener('click', async () => {
             const outPath = inputExportPath.value.trim();
+            const authorName = inputExportAuthor ? inputExportAuthor.value.trim() : null;
             if (!outPath) {
                 toast(t('repo.errNoOutDir') || "Veuillez sélectionner un dossier de destination.", 'warning');
                 return;
@@ -186,7 +253,7 @@ export function initRepo() {
                     const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
                     // Rust emits: { step: String, progress: f32, current_file: String }
                     unlisten = await listen('bmm://repo-export-progress', (event) => {
-                        const { step, progress, current_file } = event.payload;
+                        const { step, progress } = event.payload;
                         if (progress !== undefined) {
                             const pct = Math.round(progress);
                             exportPercent.textContent = `${pct}%`;
@@ -198,7 +265,7 @@ export function initRepo() {
                     });
                 }
 
-                await invoke('export_server_repo', { profileIds, outputDir: outPath });
+                await invoke('export_server_repo', { profileIds, outputDir: outPath, authorName });
 
                 exportStatus.textContent = t('repo.exportDone') || "Génération terminée avec succès !";
                 exportPercent.textContent = "100%";
@@ -240,6 +307,11 @@ export function initRepo() {
                 syncPercent.textContent = "0%";
                 syncFill.style.width = "0%";        // ← Start at 0, not 100 !
                 syncDetails.textContent = t('repo.syncStarting') || "Démarrage...";
+                if (btnPauseSync) btnPauseSync.style.display = 'flex';
+                if (btnCancelSync) {
+                    btnCancelSync.style.display = 'flex';
+                    btnCancelSync.disabled = false;
+                }
 
                 if (window.__TAURI__) {
                     const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
@@ -277,12 +349,53 @@ export function initRepo() {
                 if (window._refreshModsFn) {
                     window._refreshModsFn(true);
                 }
+                await renderProfiles();
+                updateLibraryProfileSelector();
             } catch (err) {
                 syncStatus.textContent = t('repo.syncError') || "Erreur de synchro";
                 toast(String(err), 'error');
             } finally {
                 btnStartSync.disabled = false;
                 if (unlisten) unlisten();
+                if (btnPauseSync) {
+                    btnPauseSync.style.display = 'none';
+                    pausedBadge.style.display = 'none';
+                    pauseText.textContent = "Pause";
+                }
+                if (btnCancelSync) btnCancelSync.style.display = 'none';
+            }
+        });
+    }
+
+    if (btnPauseSync) {
+        btnPauseSync.addEventListener('click', async () => {
+            const isPaused = pausedBadge.style.display === 'block';
+            try {
+                if (isPaused) {
+                    await invoke('resume_repo_sync');
+                    pausedBadge.style.display = 'none';
+                    pauseText.textContent = "Pause";
+                    btnPauseSync.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> <span>Pause</span>';
+                } else {
+                    await invoke('pause_repo_sync');
+                    pausedBadge.style.display = 'block';
+                    pauseText.textContent = "Reprendre";
+                    btnPauseSync.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>Reprendre</span>';
+                }
+            } catch (err) {
+                toast("Erreur Pause/Reprise : " + err, 'error');
+            }
+        });
+    }
+
+    if (btnCancelSync) {
+        btnCancelSync.addEventListener('click', async () => {
+            try {
+                await invoke('cancel_repo_sync');
+                toast("Demande d'annulation envoyée...", 'info');
+                btnCancelSync.disabled = true;
+            } catch (err) {
+                toast("Erreur Annulation : " + err, 'error');
             }
         });
     }
@@ -294,7 +407,9 @@ export function initRepo() {
                 try {
                     await invoke('stop_repo_server');
                     isServerRunning = false;
-                    textToggleServer.textContent = t('repo.hostStart') || "▶ Démarrer le serveur";
+                    btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
+                    const txt = btnToggleServer.querySelector('#repo-server-btn-text');
+                    txt.textContent = t('repo.hostStart') || "▶ Démarrer le serveur";
                     btnToggleServer.style.background = "rgba(46, 204, 113, 0.1)";
                     btnToggleServer.style.color = "#2ecc71";
                     btnToggleServer.style.borderColor = "rgba(46, 204, 113, 0.2)";
@@ -315,12 +430,20 @@ export function initRepo() {
                     return;
                 }
                 try {
+                    const loadingBar = document.getElementById('repo-server-loading-bar');
+                    if (loadingBar) loadingBar.style.display = 'block';
                     btnToggleServer.disabled = true;
+                    const originalBtnContent = btnToggleServer.innerHTML;
+                    btnToggleServer.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1s linear infinite;margin-right:8px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> <span>Initialisation...</span>';
+                    
                     // Now returns { lan_url, public_url, upnp_success }
                     const result = await invoke('start_repo_server', { path });
                     
                     isServerRunning = true;
-                    textToggleServer.textContent = t('repo.hostStop') || "⏹ Arrêter le serveur";
+                    // Re-set HTML structure properly
+                    btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
+                    const newTextEl = btnToggleServer.querySelector('#repo-server-btn-text');
+                    newTextEl.textContent = t('repo.hostStop') || "⏹ Arrêter le serveur";
                     btnToggleServer.style.background = "rgba(231, 76, 60, 0.1)";
                     btnToggleServer.style.color = "#e74c3c";
                     btnToggleServer.style.borderColor = "rgba(231, 76, 60, 0.2)";
@@ -337,15 +460,15 @@ export function initRepo() {
                         publicSection.style.display = 'block';
                         publicHintBox.style.display = 'none'; // Hide manual hint if we have public URL
                         
-                        if (upnpBadge) {
+                        if (upnpBadgeStatus) {
                             if (result.upnp_success) {
-                                upnpBadge.style.background = 'rgba(46, 204, 113, 0.2)';
-                                upnpBadge.style.color = '#2ecc71';
-                                upnpBadge.textContent = t('repo.upnpOk') || 'UPnP OK';
+                                upnpBadgeStatus.style.background = 'rgba(46, 204, 113, 0.2)';
+                                upnpBadgeStatus.style.color = '#2ecc71';
+                                upnpBadgeStatus.textContent = t('repo.upnpOk') || 'UPnP OK';
                             } else {
-                                upnpBadge.style.background = 'rgba(231, 76, 60, 0.2)';
-                                upnpBadge.style.color = '#e74c3c';
-                                upnpBadge.textContent = t('repo.upnpFail') || 'UPnP FAIL';
+                                upnpBadgeStatus.style.background = 'rgba(231, 76, 60, 0.2)';
+                                upnpBadgeStatus.style.color = '#e74c3c';
+                                upnpBadgeStatus.textContent = t('repo.upnpFail') || 'UPnP FAIL';
                             }
                         }
                     } else {
@@ -353,12 +476,25 @@ export function initRepo() {
                         publicHintBox.style.display = 'block';
                     }
 
+                    if (result.tunnel_url) {
+                        tunnelUrlInput.value = result.tunnel_url;
+                        tunnelSection.style.display = 'block';
+                    } else {
+                        tunnelSection.style.display = 'none';
+                    }
+
                     urlContainerServer.style.display = "flex";
                     toast(t('repo.hostServerStarted') || "Serveur démarré !", "success");
                 } catch (err) {
                     toast(String(err), "error");
+                    // Revert button content on error
+                    btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
+                    const txt = btnToggleServer.querySelector('#repo-server-btn-text');
+                    txt.textContent = t('repo.hostStart') || "▶ Démarrer le serveur";
                 } finally {
                     btnToggleServer.disabled = false;
+                    const loadingBar = document.getElementById('repo-server-loading-bar');
+                    if (loadingBar) loadingBar.style.display = 'none';
                 }
             }
         });
@@ -379,6 +515,17 @@ export function initRepo() {
         btnCopyPublicUrl.addEventListener('click', async () => {
             try {
                 await navigator.clipboard.writeText(publicUrlInput.value);
+                toast(t('repo.urlCopied') || "URL copiée dans le presse-papier", "success");
+            } catch(e) {
+                toast(t('repo.urlCopyError') || "Erreur lors de la copie", "error");
+            }
+        });
+    }
+
+    if (btnCopyTunnelUrl) {
+        btnCopyTunnelUrl.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(tunnelUrlInput.value);
                 toast(t('repo.urlCopied') || "URL copiée dans le presse-papier", "success");
             } catch(e) {
                 toast(t('repo.urlCopyError') || "Erreur lors de la copie", "error");

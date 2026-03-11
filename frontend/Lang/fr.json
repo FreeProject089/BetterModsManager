@@ -106,6 +106,9 @@
     "prof.editTitle": "Éditer le profil",
     "prof.saveBtn": "Enregistrer",
     "prof.deleted": "Profil supprimé.",
+    "prof.deleteTitle": "Supprimer le profil",
+    "prof.deleteConfirmMsg": "Confirmation de suppression",
+    "prof.deleteConfirmLabel": "Voulez-vous vraiment supprimer le profil \"{name}\" ? Cette action est irréversible.",
     "prof.confirmDelete": "Supprimer ce profil ?",
     "prof.hasActiveMods": "{count} mod(s) sont encore actifs dans ce profil. Voulez-vous les désactiver avant de supprimer ?",
     "prof.updated": "Profil \"{name}\" mis à jour.",
@@ -525,5 +528,13 @@
     "repo.genericGame": "Jeu générique",
     "repo.upnpOk": "UPnP OK",
     "repo.upnpFail": "UPnP ÉCHEC",
-    "repo.syncFolders": "Où installer les mods ?"
+    "repo.syncFolders": "Où installer les mods ?",
+    "repo.hostTunnelUrl": "☁️ URL de Tunnel (Cloudflare) :",
+    "repo.tunnelHint": "Ce tunnel est temporaire et expire à l'arrêt du serveur.",
+    "repo.authorName": "Nom du Créateur :",
+    "repo.authorPlaceholder": "Votre pseudo",
+    "repo.creatorId": "Votre ID Créateur :",
+    "repo.verified": "Vérifié ✅",
+    "repo.unverified": "Non vérifié ⚠️",
+    "repo.authorShort": "Auteur :"
 }

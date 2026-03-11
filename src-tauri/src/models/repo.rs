@@ -5,6 +5,8 @@ pub struct ServerRepo {
     pub name: String,
     pub description: String,
     pub author: String,
+    pub author_id: Option<String>,
+    pub signature: Option<String>,
     pub version: String,
     pub game_name: String,
     pub created_at: String,
@@ -28,6 +30,7 @@ pub struct RepoMod {
     pub description: String,
     pub tags: Vec<RepoTag>,
     pub files: Vec<RepoFile>,
+    pub download_links: Vec<crate::models::mod_entry::DownloadLink>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -43,6 +46,13 @@ pub struct RepoFile {
     pub relative_path: String,
     pub size: u64,
     pub sha256_hash: String,
+    pub chunks: Option<Vec<RepoChunk>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RepoChunk {
+    pub size: u32,
+    pub sha256_hash: String,
 }
 
 impl ServerRepo {
@@ -51,6 +61,8 @@ impl ServerRepo {
             name,
             description: String::new(),
             author: String::new(),
+            author_id: None,
+            signature: None,
             version: "1.0.0".to_string(),
             game_name,
             created_at: chrono::Utc::now().to_rfc3339(),
