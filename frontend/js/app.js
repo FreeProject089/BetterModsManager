@@ -8,6 +8,7 @@ import { initMods, refreshMods } from './mods.js';
 import { initI18n, setLang, getLang, applyTranslations, getLanguages, t } from './i18n.js';
 import { initBenchmark } from './benchmark.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
+import { initRepo } from './repo.js';
 
 // ── Tauri bridge ──────────────────────────────────────────
 import { loadTauri, invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification } from './api.js';
@@ -182,10 +183,11 @@ function initModlist() {
         existingResults.forEach(r => r.remove());
 
         try {
+            const githubToken = await getGithubPat();
             const results = await invoke('install_from_modlist', {
                 modlistJson: lastImportedModlistJson,
                 createProfile: createProfile,
-                githubToken: getGithubPat()
+                githubToken: githubToken
             });
 
             // Final results summary
@@ -1170,6 +1172,7 @@ async function main() {
     initBenchmark();
     await initTitlebar();
     initModlist();
+    initRepo();
     initShortcuts();
     initNavbarLangDropdown();
     initNavbarVersion();

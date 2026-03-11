@@ -185,3 +185,19 @@ pub fn unapply_mod_stacked(
     }
     Ok(())
 }
+
+/// Recursively removes empty directories within the given path
+pub fn remove_empty_dirs(dir: &Path) -> Result<()> {
+    if !dir.is_dir() { return Ok(()); }
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            let _ = remove_empty_dirs(&path);
+        }
+    }
+    if std::fs::read_dir(dir)?.next().is_none() {
+        let _ = std::fs::remove_dir(dir);
+    }
+    Ok(())
+}

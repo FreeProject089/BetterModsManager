@@ -12,7 +12,7 @@ tauri-build = { version = "1", features = [] }
 chrono = "0.4"
 
 [dependencies]
-tauri = { version = "1", features = [ "protocol-asset", "custom-protocol", "notification-all", "dialog-open", "dialog-save", "fs-all", "path-all", "window-all", "shell-open"] }
+tauri = { version = "1", features = [ "dialog-message", "dialog-confirm", "dialog-ask", "protocol-asset", "custom-protocol", "notification-all", "dialog-open", "dialog-save", "fs-all", "path-all", "window-all", "shell-open"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
@@ -28,6 +28,10 @@ sysinfo = "0.30"
 tokio = { version = "1", features = ["full"] }
 discord-rich-presence = "0.2.4"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+sha2 = "0.10.9"
+warp = "0.3"
+local-ip-address = "0.6"
+igd = "0.12"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

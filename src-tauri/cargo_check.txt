@@ -1,0 +1,31 @@
+﻿cargo :     Blocking waiting for file lock 
+on build directory
+Au caractère Ligne:1 : 1
++ cargo check 2>&1 | Out-File -FilePath 
+cargo_check.txt -Encoding utf8; ...
++ ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified:  
+   (    Blocking wa...build directory:Strin  
+  g) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandE 
+   rror
+ 
+    Checking better-mods-manager v0.9.6 
+(E:\Travaille\CodageAutres\Better 
+Project\BetterModsManager\src-tauri)
+warning: unused imports: `PathBuf` and `Path`
+ --> src\commands\image.rs:4:17
+  |
+4 | use std::path::{Path, PathBuf};
+  |                 ^^^^  ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of 
+`#[warn(unused)]`) on by default
+
+warning: `better-mods-manager` (bin 
+"better-mods-manager") generated 1 warning 
+(run `cargo fix --bin "better-mods-manager" 
+-p better-mods-manager` to apply 1 
+suggestion)
+    Finished `dev` profile [unoptimized + 
+debuginfo] target(s) in 7.11s

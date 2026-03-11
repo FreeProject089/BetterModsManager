@@ -1,7 +1,7 @@
 use crate::state::AppState;
 use crate::commands::crash::log_line;
 use tauri::State;
-use std::fmt::Write;
+use std::path::{Path, PathBuf};
 
 #[tauri::command]
 pub fn crop_and_save_webp(

@@ -15,7 +15,10 @@
             "all": false,
             "dialog": {
                 "open": true,
-                "save": true
+                "save": true,
+                "confirm": true,
+                "ask": true,
+                "message": true
             },
             "fs": {
                 "all": true,

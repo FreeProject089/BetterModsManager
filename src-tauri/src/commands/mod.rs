@@ -11,3 +11,5 @@ pub mod autoupdate;
 pub mod benchmark;
 pub mod disk;
 pub mod image;
+pub mod repo;
+pub mod repo_server;

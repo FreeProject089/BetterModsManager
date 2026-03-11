@@ -23,6 +23,7 @@ fn main() {
                 .unwrap_or_else(|| PathBuf::from("."));
             let data_path = app_dir.join("data.json");
             app.manage(AppState::load(data_path));
+            app.manage(crate::commands::repo_server::RepoServerState::default());
 
             // Log du démarrage
             commands::crash::log_line(format!(
@@ -140,6 +141,13 @@ fn main() {
             commands::disk::set_disk_limit,
             commands::disk::benchmark_disk,
             commands::disk::check_disk_space,
+            // Server Repo
+            commands::repo::export_server_repo,
+            commands::repo::fetch_repo_info,
+            commands::repo::sync_server_repo,
+            // Repo Server
+            commands::repo_server::start_repo_server,
+            commands::repo_server::stop_repo_server,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
