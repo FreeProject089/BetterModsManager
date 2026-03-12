@@ -3688,3 +3688,290 @@ select:focus {
 .shared-activation-item:hover {
     background: rgba(255, 255, 255, 0.05);
 }
+
+/* ── PTB Welcome & Update Notes Modal ── */
+.update-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.update-modal-backdrop.closing {
+    animation: fadeOut 0.2s forwards;
+}
+
+.ptb-modal-card {
+    width: 900px;
+    max-width: 95vw;
+    height: 80vh;
+    background: #0d1117;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+    animation: modalIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ptb-modal-header {
+    padding: 22px 32px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(13, 17, 23, 0.8);
+    backdrop-filter: blur(20px) saturate(180%);
+}
+
+.ptb-modal-header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.ptb-modal-icon {
+    width: 44px;
+    height: 44px;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+}
+
+.ptb-modal-title-group h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+}
+
+.ptb-modal-title-group p {
+    margin: 2px 0 0;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.ptb-modal-close {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ptb-modal-close:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    transform: rotate(90deg);
+}
+
+.ptb-modal-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* Sidebar Styling */
+.ptb-modal-sidebar {
+    width: 260px;
+    background: rgba(0, 0, 0, 0.2);
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    flex-direction: column;
+    padding: 16px 0;
+    overflow-y: auto;
+}
+
+.ptb-sidebar-label {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 0 24px;
+    margin-bottom: 12px;
+    opacity: 0.6;
+}
+
+.ptb-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 24px;
+    color: #8b949e;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+    border-left: 2px solid transparent;
+}
+
+.ptb-sidebar-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-primary);
+}
+
+.ptb-sidebar-item.active {
+    background: rgba(59, 130, 246, 0.1);
+    color: #58a6ff;
+    border-left-color: #58a6ff;
+    font-weight: 600;
+}
+
+.ptb-sidebar-item i {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+}
+
+.ptb-sidebar-item.active i {
+    opacity: 1;
+}
+
+/* Markdown Reader Styling */
+.ptb-modal-main {
+    flex: 1;
+    background: #0d1117;
+    overflow-y: auto;
+    padding: 40px 60px;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: #30363d transparent;
+}
+
+.ptb-markdown-body {
+    max-width: 800px;
+    margin: 0 auto;
+    color: #e6edf3;
+    font-size: 15px;
+    line-height: 1.6;
+    font-family: var(--font-inter);
+}
+
+.ptb-markdown-body h1 {
+    font-size: 32px;
+    font-weight: 800;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #30363d;
+    color: #ffffff;
+}
+
+.ptb-markdown-body h2 {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 40px 0 20px;
+    color: #ffffff;
+}
+
+.ptb-markdown-body blockquote {
+    margin: 24px 0;
+    padding: 16px 24px;
+    background: rgba(59, 130, 246, 0.05);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    color: #8b949e;
+    font-style: italic;
+}
+
+.ptb-markdown-body blockquote strong {
+    color: var(--accent);
+}
+
+.ptb-markdown-body code {
+    background: #161b22;
+    padding: 0.2em 0.4em;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 85%;
+    color: #ff7b72;
+}
+
+.ptb-markdown-body pre {
+    background: #161b22;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #30363d;
+    margin: 24px 0;
+    overflow-x: auto;
+}
+
+.ptb-markdown-body pre code {
+    background: none;
+    padding: 0;
+    color: #c9d1d9;
+    font-size: 13px;
+    display: block;
+}
+
+.ptb-markdown-body ul, .ptb-markdown-body ol {
+    padding-left: 20px;
+    margin: 20px 0;
+}
+
+.ptb-markdown-body li {
+    margin-bottom: 8px;
+}
+
+.ptb-markdown-body hr {
+    height: 1px;
+    background: #30363d;
+    border: none;
+    margin: 40px 0;
+}
+
+.ptb-markdown-body img {
+    max-width: 100%;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    margin: 24px 0;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+}
+
+.ptb-modal-footer {
+    padding: 20px 28px;
+    border-top: 1px solid #30363d;
+    background: rgba(22, 27, 34, 0.95);
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+}
+
+@keyframes modalIn {
+    from { opacity: 0; transform: scale(0.95) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}

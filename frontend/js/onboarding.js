@@ -103,6 +103,13 @@ function getSteps() {
             icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color:#3b82f6"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>'
         },
         {
+            title: t('onboard.tips.title'),
+            text: t('onboard.tips.text'),
+            img: 'assets/Tasky_Happy.png',
+            navTarget: 'docs',
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+        },
+        {
             title: t('onboard.s8.title'),
             text: t('onboard.s8.text'),
             img: 'assets/Tasky_Happy.png',

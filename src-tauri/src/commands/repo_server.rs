@@ -13,6 +13,10 @@ pub struct RepoServerState {
     pub shutdown_tx: Mutex<Option<oneshot::Sender<()>>>,
     pub upnp_mapped: Mutex<bool>,
     pub tunnel_process: Mutex<Option<Child>>,
+    pub lan_url: Mutex<Option<String>>,
+    pub public_url: Mutex<Option<String>>,
+    pub tunnel_url: Mutex<Option<String>>,
+    pub serve_path: Mutex<Option<String>>,
 }
 
 impl Default for RepoServerState {
@@ -21,6 +25,10 @@ impl Default for RepoServerState {
             shutdown_tx: Mutex::new(None),
             upnp_mapped: Mutex::new(false),
             tunnel_process: Mutex::new(None),
+            lan_url: Mutex::new(None),
+            public_url: Mutex::new(None),
+            tunnel_url: Mutex::new(None),
+            serve_path: Mutex::new(None),
         }
     }
 }
@@ -179,12 +187,35 @@ pub async fn start_repo_server(
         }
     }
 
+    // 9. Store state
+    {
+        *state.lan_url.lock().unwrap() = Some(lan_url.clone());
+        *state.public_url.lock().unwrap() = public_url.clone();
+        *state.tunnel_url.lock().unwrap() = tunnel_url.clone();
+        *state.serve_path.lock().unwrap() = Some(path);
+    }
+
     Ok(StartServerResult {
         lan_url,
         public_url,
         tunnel_url,
         upnp_success,
     })
+}
+
+#[tauri::command]
+pub fn get_repo_server_status(state: tauri::State<'_, RepoServerState>) -> Result<Option<StartServerResult>, String> {
+    let tx_lock = state.shutdown_tx.lock().unwrap();
+    if tx_lock.is_none() {
+        return Ok(None);
+    }
+    
+    Ok(Some(StartServerResult {
+        lan_url: state.lan_url.lock().unwrap().clone().unwrap_or_default(),
+        public_url: state.public_url.lock().unwrap().clone(),
+        tunnel_url: state.tunnel_url.lock().unwrap().clone(),
+        upnp_success: *state.upnp_mapped.lock().unwrap(),
+    }))
 }
 
 #[tauri::command]
@@ -210,6 +241,12 @@ pub async fn stop_repo_server(state: tauri::State<'_, RepoServerState>) -> Resul
     // 3. Shutdown the server
     let mut tx_lock = state.shutdown_tx.lock().unwrap();
     if let Some(tx) = tx_lock.take() {
+        // Clear state
+        *state.lan_url.lock().unwrap() = None;
+        *state.public_url.lock().unwrap() = None;
+        *state.tunnel_url.lock().unwrap() = None;
+        *state.serve_path.lock().unwrap() = None;
+        
         let _ = tx.send(());
         Ok(())
     } else {

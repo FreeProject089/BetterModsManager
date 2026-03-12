@@ -15,6 +15,7 @@ pub struct Profile {
     #[serde(default)]
     pub background_image: Option<String>,
     pub created_at: String,
+    pub origin_repo_profile_id: Option<String>,
 }
 
 impl Profile {
@@ -37,6 +38,7 @@ impl Profile {
             icon: None,
             background_image: None,
             created_at: chrono::Local::now().to_rfc3339(),
+            origin_repo_profile_id: None,
         }
     }
 }

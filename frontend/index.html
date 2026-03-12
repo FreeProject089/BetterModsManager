@@ -647,6 +647,22 @@
                             <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;"
                                 data-i18n="repo.stepTwoDesc">...</p>
 
+                            <div class="form-group" style="margin-bottom:12px;">
+                                <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.hostFolderLabel">Dossier du dépôt</label>
+                                <div class="path-picker">
+                                    <input type="text" class="form-input" id="repo-host-path" placeholder="C:\..." readonly />
+                                    <button class="btn btn-secondary btn-sm" id="btn-pick-repo-host" data-i18n="prof.browse">...</button>
+                                </div>
+                            </div>
+
+                            <div id="repo-host-history-container" style="display:none;margin-bottom:12px;">
+                                <label class="form-label" style="font-size:11px; color:var(--text-muted); margin-bottom:4px;" data-i18n="repo.hostHistoryLabel">Historique</label>
+                                <select class="form-input" id="repo-host-history-select" style="font-size:12px; padding:6px; background:rgba(255,255,255,0.05);">
+                                    <option value="" data-i18n="repo.hostHistoryDefault">-- Choisir un ancien dépôt --</option>
+                                </select>
+                            </div>
+                            <div id="repo-host-metadata-preview" style="display:none; margin-bottom:12px; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:8px; font-size:12px;"></div>
+
                             <div
                                 style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px 14px;margin-bottom:16px;border:1px solid rgba(255,255,255,0.07);">
                                 <div id="repo-server-status-dot"
@@ -769,6 +785,13 @@
                                 <button class="btn btn-secondary btn-sm" id="btn-fetch-repo-info" style="padding:0 12px; font-weight:700;">FETCH</button>
                             </div>
                         </div>
+                        
+                        <div id="repo-sync-history-container" style="display:none;margin-top:12px;margin-bottom:12px;">
+                            <label class="form-label" style="font-size:11px; color:var(--text-muted); margin-bottom:6px;" data-i18n="repo.syncHistoryLabel">Serveurs récents</label>
+                            <div id="repo-sync-history-list" style="display:flex;flex-direction:column;gap:6px;">
+                                <!-- Injected by JS -->
+                            </div>
+                        </div>
 
                         <div id="repo-sync-info-card" style="display:none;margin-top:12px;background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.06);">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -778,37 +801,44 @@
                             <div style="font-size:14px;font-weight:700;margin-bottom:2px;" id="repo-sync-name-display"></div>
                             <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;" id="repo-sync-author-display"></div>
                             <div style="font-size:12px;color:var(--text-muted);line-height:1.5;" id="repo-sync-desc-display"></div>
+                            
+                            <div id="repo-sync-profiles-selection" style="margin-top:15px; display:flex; flex-direction:column; gap:10px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+                                <!-- Selection logic will inject profiles here -->
+                            </div>
+                            <div id="repo-sync-total-size" style="font-size:11px; color:var(--text-muted); margin:10px 0; text-align:right; font-weight:600;"></div>
                         </div>
 
-                        <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:14px 0;" />
-                        <p style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.06em;margin:8px 0 12px;text-transform:uppercase;"
-                            data-i18n="repo.syncFolders">...</p>
+                        <div id="repo-sync-paths-section">
+                            <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:14px 0;" />
+                            <p style="font-size:11px;font-weight:700;color:var(--text-secondary);letter-spacing:0.06em;margin:8px 0 12px;text-transform:uppercase;"
+                                data-i18n="repo.syncFolders">...</p>
 
-                        <div class="form-group" style="margin-bottom:10px;">
-                            <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.syncGameDir">...</label>
-                            <div class="path-picker">
-                                <input type="text" class="form-input" id="repo-sync-game-path"
-                                    placeholder="C:\Jeux\DCS..." readonly />
-                                <button class="btn btn-secondary btn-sm" id="btn-pick-sync-game"
-                                    data-i18n="prof.browse">Parcourir</button>
+                            <div class="form-group" style="margin-bottom:10px;">
+                                <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.syncGameDir">...</label>
+                                <div class="path-picker">
+                                    <input type="text" class="form-input" id="repo-sync-game-path"
+                                        placeholder="C:\Jeux\DCS..." readonly />
+                                    <button class="btn btn-secondary btn-sm" id="btn-pick-sync-game"
+                                        data-i18n="prof.browse">Parcourir</button>
+                                </div>
                             </div>
-                        </div>
-                        <div class="form-group" style="margin-bottom:10px;">
-                            <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.syncModsDir">...</label>
-                            <div class="path-picker">
-                                <input type="text" class="form-input" id="repo-sync-mods-path" placeholder="C:\Mods\..."
-                                    readonly />
-                                <button class="btn btn-secondary btn-sm" id="btn-pick-sync-mods"
-                                    data-i18n="prof.browse">Parcourir</button>
+                            <div class="form-group" style="margin-bottom:10px;">
+                                <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.syncModsDir">...</label>
+                                <div class="path-picker">
+                                    <input type="text" class="form-input" id="repo-sync-mods-path" placeholder="C:\Mods\..."
+                                        readonly />
+                                    <button class="btn btn-secondary btn-sm" id="btn-pick-sync-mods"
+                                        data-i18n="prof.browse">Parcourir</button>
+                                </div>
                             </div>
-                        </div>
-                        <div class="form-group" style="margin-bottom:4px;">
-                            <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.syncBackupDir">...</label>
-                            <div class="path-picker">
-                                <input type="text" class="form-input" id="repo-sync-backup-path"
-                                    placeholder="C:\Backups\..." readonly />
-                                <button class="btn btn-secondary btn-sm" id="btn-pick-sync-backup"
-                                    data-i18n="prof.browse">Parcourir</button>
+                            <div class="form-group" style="margin-bottom:4px;">
+                                <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.syncBackupDir">...</label>
+                                <div class="path-picker">
+                                    <input type="text" class="form-input" id="repo-sync-backup-path"
+                                        placeholder="C:\Backups\..." readonly />
+                                    <button class="btn btn-secondary btn-sm" id="btn-pick-sync-backup"
+                                        data-i18n="prof.browse">Parcourir</button>
+                                </div>
                             </div>
                         </div>
 
@@ -1005,15 +1035,7 @@
                                     Parfais pour les listes .MM.</div>
 
                             </div>
-                            <div
-                                style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px"
-                                    data-i18n="docs.basic.links.q3">Cloud Storage</div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                    data-i18n="docs.basic.links.a3">Google Drive, MEGA... N&eacute;cessitent souvent une
-                                    interaction manuelle.</div>
 
-                            </div>
                             <div
                                 style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                 <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px"
@@ -1174,35 +1196,31 @@
                             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                             <div
                                 style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px">Pourquoi ?
-                                </div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5">Lors de
-                                    l'activation de grands mods, les copies massives peuvent faire laguer tout le
-                                    syst&egrave;me.</div>
+                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
+                                    data-i18n="docs.ioLimiter.why">Why?</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.ioLimiter.whyDesc">...</div>
                             </div>
                             <div
                                 style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px">Comment ?
-                                </div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5">BMM
-                                    d&eacute;coupe la copie en blocs avec micro-pauses. Mettez <strong>0</strong> pour
-                                    vitesse maximale.</div>
+                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
+                                    data-i18n="docs.ioLimiter.how">How?</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.ioLimiter.howDesc">...</div>
                             </div>
                             <div
                                 style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px">Benchmark
-                                </div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5">Cliquez "Tester
-                                    la vitesse" pour mesurer vos disques. BMM sugg&egrave;re ≈70% de la vitesse
-                                    r&eacute;elle.</div>
+                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
+                                    data-i18n="docs.ioLimiter.benchmark">Benchmark</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.ioLimiter.benchmarkDesc">...</div>
                             </div>
                             <div
                                 style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px">Cloud / NAS
-                                </div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5">Les disques
-                                    cloud sont d&eacute;tect&eacute;s auto. Limitez leur vitesse — ils sont souvent plus
-                                    lents.</div>
+                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
+                                    data-i18n="docs.ioLimiter.cloud">Cloud / NAS</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.ioLimiter.cloudDesc">...</div>
                             </div>
                         </div>
                     </div>
@@ -1223,35 +1241,31 @@
                             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                             <div
                                 style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#fbbf24;margin-bottom:4px">
-                                    Avertissement</div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5">Si l'espace
-                                    libre passe sous le seuil d'alerte, un toast s'affiche mais l'activation continue.
-                                </div>
+                                <div style="font-size:12px;font-weight:700;color:#fbbf24;margin-bottom:4px"
+                                    data-i18n="docs.storageAlerts.warning">Warning</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.storageAlerts.warningDesc">...</div>
                             </div>
                             <div
                                 style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px">Critique
-                                </div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5">En dessous du
-                                    seuil critique, l'activation est <strong>bloqu&eacute;e</strong> pour
-                                    prot&eacute;ger votre disque.</div>
+                                <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
+                                    data-i18n="docs.storageAlerts.critical">Critical</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.storageAlerts.criticalDesc">...</div>
                             </div>
                             <div
                                 style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px">Configurer
-                                </div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5">Activez les
-                                    alertes depuis <strong>Param&egrave;tres → Stockage</strong> et d&eacute;finissez
-                                    les seuils en %.</div>
+                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
+                                    data-i18n="docs.storageAlerts.configure">Configure</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.storageAlerts.configureDesc">...</div>
                             </div>
                             <div
                                 style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px">
-                                    Multi-disques</div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5">Chaque profil
-                                    peut avoir ses dossiers sur des disques diff&eacute;rents — BMM v&eacute;rifie
-                                    chacun.</div>
+                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
+                                    data-i18n="docs.storageAlerts.multiDisk">Multi-disk</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.storageAlerts.multiDiskDesc">...</div>
                             </div>
                         </div>
                     </div>
@@ -1269,35 +1283,75 @@
                             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                             <div
                                 style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px">Suivi en
-                                    direct</div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5">Cliquez sur
-                                    <strong style="color:var(--text-primary)">Start Tracking</strong> pour capturer en
-                                    continu votre charge PC (CPU, RAM, Disque).
-                                </div>
+                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
+                                    data-i18n="docs.benchmark.live">Live Tracking</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.benchmark.liveDesc">...</div>
                             </div>
                             <div
                                 style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px">Moniteur
-                                    flottant PiP</div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5">Gardez le
-                                    dashcam mini actif sur l'interface parentale pour surveiller le lag.</div>
+                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
+                                    data-i18n="docs.benchmark.pip">Floating Monitor (PiP)</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.benchmark.pipDesc">...</div>
                             </div>
                             <div
                                 style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px">Timeline
-                                    professionnelle</div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5">Vitesse de
-                                    lecture et graphes navigables dans le temps (façon Premiere Pro). Repérez
-                                    visuellement les zones rouges.</div>
+                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
+                                    data-i18n="docs.benchmark.timeline">Professional Timeline</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.benchmark.timelineDesc">...</div>
                             </div>
                             <div
                                 style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px">Exports &
-                                    Auto-Stop</div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5">Partagez les
-                                    stats par fichier <strong>CSV</strong>. Progammez un d&eacute;lai d'auto-arr&ecirc;t
-                                    en cas de session prolongee.</div>
+                                <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
+                                    data-i18n="docs.benchmark.export">Exports &amp; Auto-Stop</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.benchmark.exportDesc">...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Best Practices & Tips -->
+                    <div class="glass-card" style="border-left: 3px solid #22c55e;">
+                        <h3 class="card-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e"
+                                stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            <span style="color:#22c55e" data-i18n="docs.bestPractices">Best Practices &amp; Tips</span>
+                        </h3>
+                        <div
+                            style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
+                            <div
+                                style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
+                                <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
+                                    data-i18n="docs.bestPractices.oneProfile">1 Profile = 1 Mod Folder</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.bestPractices.oneProfileDesc">...</div>
+                            </div>
+                            <div
+                                style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
+                                <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
+                                    data-i18n="docs.bestPractices.modStructure">Mod Folder Structure</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.bestPractices.modStructureDesc">...</div>
+                            </div>
+                            <div
+                                style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:12px">
+                                <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
+                                    data-i18n="docs.bestPractices.noDelete">Never Delete an Active Mod</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.bestPractices.noDeleteDesc">...</div>
+                            </div>
+                            <div
+                                style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
+                                <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
+                                    data-i18n="docs.bestPractices.noMix">Don't Mix Mod Folders</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.bestPractices.noMixDesc">...</div>
                             </div>
                         </div>
                     </div>
@@ -2006,14 +2060,25 @@
                                     </svg>
                                     <span data-i18n="settings.langGuide">Guide</span>
                                 </button>
-                                <button class="btn btn-secondary btn-sm" id="btn-copy-lang-template"
+                                <button class="btn btn-secondary btn-sm" id="btn-download-lang-template"
                                     style="font-size:11px;gap:6px">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
-                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4" />
+                                        <polyline points="7 10 12 15 17 10" />
+                                        <line x1="12" y1="15" x2="12" y2="3" />
                                     </svg>
-                                    <span data-i18n="settings.langCopyTemplate">Copier Modèle</span>
+                                    <span data-i18n="settings.langDownloadTemplate">Télécharger Modèle</span>
+                                </button>
+                                <button class="btn btn-primary btn-sm" id="btn-import-lang"
+                                    style="font-size:11px;gap:6px">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                        <polyline points="17 8 12 3 7 8" />
+                                        <line x1="12" y1="3" x2="12" y2="15" />
+                                    </svg>
+                                    <span data-i18n="settings.langImport">Importer</span>
                                 </button>
                             </div>
                         </div>
@@ -2595,6 +2660,7 @@
 
     <script src="js/marked.min.js"></script>
     <script src="assets/cropper/cropper.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="js/app.js" type="module"></script>
     <!-- Conflict Warning Modal -->
     <div class="modal-overlay" id="modal-conflict-warning">
@@ -2966,6 +3032,32 @@
                 <div id="storage-disks-container" style="display:flex;flex-direction:column;gap:12px;">
                     <!-- Disks will be injected by JS -->
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Repo Sync Summary Modal -->
+    <div class="modal-overlay" id="modal-repo-sync-summary">
+        <div class="modal glass" style="max-width:550px; width:90%;">
+            <div class="modal-header">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:36px; height:36px; background:rgba(16,185,129,0.1); border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div>
+                        <h2 class="modal-title" data-i18n="repo.summaryTitle">Synchronisation terminée</h2>
+                        <p style="font-size:11px; color:var(--text-muted); margin:2px 0 0;" data-i18n="repo.summarySubtitle">Voici le détail des modifications effectuées</p>
+                    </div>
+                </div>
+                <button class="modal-close" data-close="modal-repo-sync-summary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="modal-body" id="repo-sync-summary-body" style="padding:20px; max-height:450px; overflow-y:auto;">
+                <!-- Summary content injected by JS -->
+            </div>
+            <div class="modal-footer" style="padding:15px 20px; background:rgba(255,255,255,0.02); display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border);">
+                <button class="btn btn-primary" data-close="modal-repo-sync-summary" style="padding:0 24px;">OK</button>
             </div>
         </div>
     </div>

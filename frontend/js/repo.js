@@ -1,5 +1,5 @@
 import { invoke, pickFolder } from './api.js';
-import { toast, updateLibraryProfileSelector } from './app.js';
+import { toast, updateLibraryProfileSelector, formatBytes, escHtml, escAttr } from './app.js';
 import { renderProfiles } from './profiles.js';
 import { t } from './i18n.js';
 
@@ -62,7 +62,146 @@ export function initRepo() {
     const syncAuthorDisplay = document.getElementById('repo-sync-author-display');
     const syncDescDisplay = document.getElementById('repo-sync-desc-display');
     
+    // History Elements
+    const hostHistorySelect = document.getElementById('repo-host-history-select');
+    const hostHistoryContainer = document.getElementById('repo-host-history-container');
+    const hostMetadataPreview = document.getElementById('repo-host-metadata-preview');
+    
+    // Sync History Elements
+    const syncHistoryContainer = document.getElementById('repo-sync-history-container');
+    const syncHistoryList = document.getElementById('repo-sync-history-list');
+
     let isServerRunning = false;
+
+    // ── Load Histories ──
+    const loadRepoHistories = () => {
+        try {
+            const urls = JSON.parse(localStorage.getItem('bmm_repo_history_client') || '[]');
+            if (syncHistoryContainer && syncHistoryList) {
+                if (urls.length > 0) {
+                    syncHistoryContainer.style.display = 'block';
+                    syncHistoryList.innerHTML = urls.map(u => `
+                        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 10px;">
+                            <div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;" title="${escAttr(u)}">
+                                ${escHtml(u)}
+                            </div>
+                            <div style="display:flex;gap:4px;">
+                                <button class="btn btn-secondary btn-sm sync-hist-connect" data-url="${escAttr(u)}" style="padding:2px 8px;font-size:10px;background:rgba(59,130,246,0.15);color:var(--accent);border:none;">
+                                    ${t('repo.connectBtn') || 'Connecter'}
+                                </button>
+                                <button class="btn btn-secondary btn-sm sync-hist-delete" data-url="${escAttr(u)}" style="padding:2px 6px;background:rgba(231,76,60,0.1);color:#e74c3c;border:none;">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    // Attach listeners
+                    syncHistoryList.querySelectorAll('.sync-hist-connect').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            if (inputSyncUrl) inputSyncUrl.value = btn.dataset.url;
+                            if (btnFetchInfo) btnFetchInfo.click();
+                        });
+                    });
+                    
+                    syncHistoryList.querySelectorAll('.sync-hist-delete').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            let current = JSON.parse(localStorage.getItem('bmm_repo_history_client') || '[]');
+                            current = current.filter(url => url !== btn.dataset.url);
+                            localStorage.setItem('bmm_repo_history_client', JSON.stringify(current));
+                            loadRepoHistories();
+                        });
+                    });
+                    
+                } else {
+                    syncHistoryContainer.style.display = 'none';
+                }
+            }
+        } catch(e) {}
+        try {
+            const paths = JSON.parse(localStorage.getItem('bmm_repo_history_host') || '[]');
+            if (hostHistorySelect) {
+                if (paths.length > 0) {
+                    if (hostHistoryContainer) hostHistoryContainer.style.display = 'block';
+                    hostHistorySelect.innerHTML = `<option value="">${t('repo.hostHistoryDefault')}</option>` +
+                        paths.map(p => `<option value="${escAttr(p)}">${escHtml(p)}</option>`).join('');
+                } else if (hostHistoryContainer) {
+                    hostHistoryContainer.style.display = 'none';
+                }
+            }
+        } catch(e) {}
+    };
+    loadRepoHistories();
+
+    // --- Extracted Metadata Preview Function ---
+    const previewHostRepo = async (path) => {
+        if (!path) {
+            if (hostMetadataPreview) hostMetadataPreview.style.display = 'none';
+            return;
+        }
+        const hostInput = document.getElementById('repo-host-path');
+        if (hostInput) hostInput.value = path;
+        
+        try {
+            if (window.__TAURI__) {
+                const { readTextFile } = window.__TAURI__.fs;
+                const content = await readTextFile(path + '/repo.json');
+                const repo = JSON.parse(content);
+                const pCount = repo.profiles ? repo.profiles.length : 0;
+                const pNames = repo.profiles ? repo.profiles.map(p => p.name).join(', ') : '';
+                let totalSize = 0;
+                if (repo.profiles) {
+                    repo.profiles.forEach(p => {
+                        if (p.mods) p.mods.forEach(m => {
+                            if (m.files) m.files.forEach(f => totalSize += f.size);
+                        });
+                    });
+                }
+                if (hostMetadataPreview) {
+                    hostMetadataPreview.style.display = 'block';
+                    hostMetadataPreview.innerHTML = `
+                        <div style="color:var(--accent);font-weight:700;margin-bottom:4px;font-size:14px;">${escHtml(repo.name)}</div>
+                        <div style="color:var(--text-secondary);margin-bottom:2px;">Auteur : <span style="color:var(--text-primary)">${escHtml(repo.author || '-')}</span></div>
+                        <div style="color:var(--text-secondary);margin-bottom:2px;">Profils (${pCount}) : <span style="color:var(--text-primary)">${escHtml(pNames)}</span></div>
+                        <div style="color:var(--cyan);margin-top:6px;font-family:var(--font-mono)">Taille Totale : ${formatBytes(totalSize)}</div>
+                    `;
+                }
+            }
+        } catch (err) {
+            if (hostMetadataPreview) {
+                hostMetadataPreview.style.display = 'block';
+                hostMetadataPreview.innerHTML = `<div style="color:var(--danger);">Impossible de lire le repo.json généré (${err})</div>`;
+            }
+        }
+    };
+
+    if (hostHistorySelect) {
+        hostHistorySelect.addEventListener('change', (e) => {
+            previewHostRepo(e.target.value);
+        });
+    }
+
+    const saveClientHistory = (url) => {
+        try {
+            let urls = JSON.parse(localStorage.getItem('bmm_repo_history_client') || '[]');
+            urls = urls.filter(u => u !== url);
+            urls.unshift(url);
+            if (urls.length > 10) urls.length = 10;
+            localStorage.setItem('bmm_repo_history_client', JSON.stringify(urls));
+            loadRepoHistories();
+        } catch(e) {}
+    };
+
+    const saveHostHistory = (path) => {
+        try {
+            let paths = JSON.parse(localStorage.getItem('bmm_repo_history_host') || '[]');
+            paths = paths.filter(p => p !== path);
+            paths.unshift(path);
+            if (paths.length > 10) paths.length = 10;
+            localStorage.setItem('bmm_repo_history_host', JSON.stringify(paths));
+            loadRepoHistories();
+        } catch(e) {}
+    };
 
     // ─── Load available profiles for the export checklist ────────────
     const loadProfilesForExport = async () => {
@@ -157,6 +296,17 @@ export function initRepo() {
             if (folder) inputExportPath.value = folder;
         });
     }
+    
+    // ─── Folder picker for Host repository ───────────────────────────
+    const btnPickRepoHost = document.getElementById('btn-pick-repo-host');
+    if (btnPickRepoHost) {
+        btnPickRepoHost.addEventListener('click', async () => {
+            const folder = await pickFolder();
+            if (folder) {
+                previewHostRepo(folder);
+            }
+        });
+    }
 
     // ─── Folder pickers for sync ──────────────────────────────────────
     if (btnPickSyncGame) {
@@ -190,7 +340,44 @@ export function initRepo() {
     };
     initCreatorId();
 
-    // ─── Fetch Repo Info Callback ─────────────────────────────────────
+    const syncPathsSection = document.getElementById('repo-sync-paths-section');
+    const profilesSelectionEl = document.getElementById('repo-sync-profiles-selection');
+    let lastFetchedRepo = null;
+    
+    const updateSyncPathsVisibility = () => {
+        const sec = document.getElementById('repo-sync-paths-section');
+        if (!sec) return;
+        const boxes = document.querySelectorAll('.repo-sync-choice-cb:checked');
+        const hasNew = Array.from(boxes).some(cb => cb.value === 'NEW');
+        sec.style.display = hasNew ? 'block' : 'none';
+        updateSyncTotalSize();
+    };
+
+    const updateSyncTotalSize = () => {
+        const totalSizeEl = document.getElementById('repo-sync-total-size');
+        if (!totalSizeEl || !lastFetchedRepo) return;
+
+        const checkedBoxes = document.querySelectorAll('.repo-sync-choice-cb:checked');
+        let total = 0;
+        checkedBoxes.forEach(cb => {
+            const profileId = cb.dataset.repoProfileId;
+            const profile = lastFetchedRepo.profiles.find(p => p.id === profileId);
+            if (profile && profile.mods) {
+                profile.mods.forEach(m => {
+                    if (m.files) {
+                        m.files.forEach(f => total += f.size);
+                    }
+                });
+            }
+        });
+
+        if (total > 0) {
+            totalSizeEl.textContent = (t('repo.totalSize') || "Taille totale :") + " " + formatBytes(total);
+        } else {
+            totalSizeEl.textContent = "";
+        }
+    };
+
     if (btnFetchInfo) {
         btnFetchInfo.addEventListener('click', async () => {
             const url = inputSyncUrl.value.trim();
@@ -199,6 +386,8 @@ export function initRepo() {
             try {
                 btnFetchInfo.disabled = true;
                 const repo = await invoke('fetch_repo_info', { url });
+                saveClientHistory(url);
+                lastFetchedRepo = repo;
                 const isVerified = await invoke('verify_repo_signature', { repo });
 
                 syncInfoCard.style.display = 'block';
@@ -216,6 +405,79 @@ export function initRepo() {
                     syncBadge.style.background = 'rgba(231, 76, 60, 0.2)';
                     syncBadge.style.color = '#e74c3c';
                 }
+
+                // Render profiles selection
+                if (profilesSelectionEl && repo.profiles) {
+                    profilesSelectionEl.innerHTML = `<div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:10px; opacity:0.8;">${t('repo.selectSyncTasks') || 'SÉLECTION DES PROFILS À SYNCHRONISER :'}</div>`;
+                    
+                    const localProfiles = await invoke('get_profiles');
+
+                    repo.profiles.forEach(rp => {
+                        const rpSizeTotal = rp.mods.reduce((acc, m) => acc + (m.files ? m.files.reduce((a, f) => a + f.size, 0) : 0), 0);
+
+                        const group = document.createElement('div');
+                        group.style.background = 'rgba(255,255,255,0.02)';
+                        group.style.border = '1px solid rgba(255,255,255,0.05)';
+                        group.style.borderRadius = '8px';
+                        group.style.padding = '10px';
+                        group.style.marginBottom = '8px';
+
+                        const title = document.createElement('div');
+                        title.style.display = 'flex';
+                        title.style.justifyContent = 'space-between';
+                        title.style.alignItems = 'center';
+                        title.innerHTML = `
+                            <span style="font-size:12px; font-weight:700;">${rp.name}</span>
+                            <span style="font-size:10px; color:var(--text-muted);">${formatBytes(rpSizeTotal)}</span>
+                        `;
+                        title.style.color = 'var(--accent)';
+                        title.style.marginBottom = '8px';
+                        group.appendChild(title);
+
+                        const optionsContainer = document.createElement('div');
+                        optionsContainer.style.display = 'flex';
+                        optionsContainer.style.flexDirection = 'column';
+                        optionsContainer.style.gap = '6px';
+
+                        // Helper for checkboxes
+                        const addOption = (label, value, checked = false) => {
+                            const row = document.createElement('label');
+                            row.style.display = 'flex';
+                            row.style.alignItems = 'center';
+                            row.style.gap = '8px';
+                            row.style.cursor = 'pointer';
+                            row.style.fontSize = '11px';
+                            row.style.color = 'var(--text-secondary)';
+                            
+                            const cb = document.createElement('input');
+                            cb.type = 'checkbox';
+                            cb.value = value;
+                            cb.dataset.repoProfileId = rp.id;
+                            cb.className = 'repo-sync-choice-cb';
+                            cb.checked = checked;
+                            
+                            cb.addEventListener('change', updateSyncPathsVisibility);
+                            
+                            row.appendChild(cb);
+                            row.appendChild(document.createTextNode(label));
+                            optionsContainer.appendChild(row);
+                        };
+
+                        // 1. Choice: New Profile
+                        addOption(t('repo.syncNew') || "+ Créer un nouveau profil", "NEW", !localProfiles.some(lp => lp.origin_repo_profile_id === rp.id));
+
+                        // 2. Choice: Update existing local matches
+                        const matches = localProfiles.filter(lp => lp.origin_repo_profile_id === rp.id);
+                        matches.forEach(m => {
+                            addOption(`${t('repo.syncUpdate') || 'Mettre à jour :'} ${m.name}`, m.id, true);
+                        });
+
+                        group.appendChild(optionsContainer);
+                        profilesSelectionEl.appendChild(group);
+                    });
+                    updateSyncPathsVisibility();
+                }
+
             } catch (err) {
                 toast(String(err), 'error');
             } finally {
@@ -266,6 +528,7 @@ export function initRepo() {
                 }
 
                 await invoke('export_server_repo', { profileIds, outputDir: outPath, authorName });
+                saveHostHistory(outPath);
 
                 exportStatus.textContent = t('repo.exportDone') || "Génération terminée avec succès !";
                 exportPercent.textContent = "100%";
@@ -294,8 +557,24 @@ export function initRepo() {
             const modsDir   = inputSyncModsPath   ? inputSyncModsPath.value.trim()   : '';
             const backupDir = inputSyncBackupPath ? inputSyncBackupPath.value.trim() : '';
 
-            if (!gameDir || !modsDir || !backupDir) {
-                toast("Veuillez renseigner les 3 dossiers (Jeu, Mods, Backup) avant de synchroniser.", 'warning');
+            if (syncPathsSection && syncPathsSection.style.display !== 'none') {
+                if (!gameDir || !modsDir || !backupDir) {
+                    toast(t('repo.errSyncFolders') || "Veuillez renseigner les 3 dossiers (Jeu, Mods, Backup) avant de synchroniser.", 'warning');
+                    return;
+                }
+            }
+
+            // Collect choices
+            const selectedBoxes = document.querySelectorAll('.repo-sync-choice-cb:checked');
+            const choices = Array.from(selectedBoxes).map(cb => {
+                return {
+                    repo_profile_id: cb.dataset.repoProfileId,
+                    target_local_profile_id: cb.value === 'NEW' ? null : cb.value
+                };
+            });
+
+            if (choices.length === 0) {
+                toast(t('repo.errNoSelection') || "Veuillez sélectionner au moins une action à synchroniser.", 'warning');
                 return;
             }
 
@@ -332,12 +611,17 @@ export function initRepo() {
                     });
                 }
 
-                await invoke('sync_server_repo', {
-                    url,
-                    gameDir,
-                    modsDir,
-                    backupDir,
+                const summary = await invoke('sync_server_repo', {
+                    args: {
+                        url,
+                        game_dir: gameDir,
+                        mods_dir: modsDir,
+                        backup_dir: backupDir,
+                        choices
+                    }
                 });
+
+                showSyncSummary(summary);
 
                 syncStatus.textContent = t('repo.syncDone') || "Synchronisation terminée !";
                 syncPercent.textContent = "100%";
@@ -352,8 +636,14 @@ export function initRepo() {
                 await renderProfiles();
                 updateLibraryProfileSelector();
             } catch (err) {
-                syncStatus.textContent = t('repo.syncError') || "Erreur de synchro";
-                toast(String(err), 'error');
+                const errMsg = String(err);
+                if (errMsg.includes("Synchronisation annulée")) {
+                    syncStatus.textContent = t('repo.syncCancelled') || "Synchronisation annulée";
+                    toast(t('repo.syncCancelled') || "Synchronisation annulée", 'info');
+                } else {
+                    syncStatus.textContent = t('repo.syncError') || "Erreur de synchro";
+                    toast(errMsg, 'error');
+                }
             } finally {
                 btnStartSync.disabled = false;
                 if (unlisten) unlisten();
@@ -424,9 +714,12 @@ export function initRepo() {
                     toast(String(err), "error");
                 }
             } else {
-                const path = inputExportPath.value.trim();
+                const hostPathInput = document.getElementById('repo-host-path');
+                let path = hostPathInput ? hostPathInput.value.trim() : "";
+                if (!path && inputExportPath) path = inputExportPath.value.trim();
+
                 if (!path) {
-                    toast(t('repo.hostServerStartReq') || "Veuillez d'abord définir un dossier de destination et générer le repo.", "warning");
+                    toast(t('repo.hostServerStartReq') || "Veuillez d'abord sélectionner un dossier de dépôt à héberger.", "warning");
                     return;
                 }
                 try {
@@ -532,4 +825,83 @@ export function initRepo() {
             }
         });
     }
+
+    // ─── Restore Server Status ───────────────────────────────────────
+    const restoreServerStatus = async () => {
+        try {
+            const status = await invoke('get_repo_server_status');
+            if (status) {
+                isServerRunning = true;
+                const btnTxt = btnToggleServer.querySelector('#repo-server-btn-text');
+                if (btnTxt) btnTxt.textContent = t('repo.hostStop') || "⏹ Arrêter le serveur";
+                btnToggleServer.style.background = "rgba(231, 76, 60, 0.1)";
+                btnToggleServer.style.color = "#e74c3c";
+                btnToggleServer.style.borderColor = "rgba(231, 76, 60, 0.2)";
+                
+                if (serverStatusDot) {
+                    serverStatusDot.style.background = '#2ecc71';
+                    serverStatusDot.style.boxShadow = '0 0 8px #2ecc71';
+                }
+                if (serverStatusLabel) serverStatusLabel.textContent = t('repo.serverOnline') || 'Serveur en ligne — port 8000';
+                
+                urlInputServer.value = status.lan_url;
+                if (status.public_url) {
+                    publicUrlInput.value = status.public_url;
+                    publicSection.style.display = 'block';
+                    if (publicHintBox) publicHintBox.style.display = 'none';
+                    if (upnpBadgeStatus) {
+                        upnpBadgeStatus.style.background = status.upnp_success ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)';
+                        upnpBadgeStatus.style.color = status.upnp_success ? '#2ecc71' : '#e74c3c';
+                        upnpBadgeStatus.textContent = status.upnp_success ? (t('repo.upnpOk') || 'UPnP OK') : (t('repo.upnpFail') || 'UPnP FAIL');
+                    }
+                }
+                if (status.tunnel_url) {
+                    tunnelUrlInput.value = status.tunnel_url;
+                    tunnelSection.style.display = 'block';
+                }
+                urlContainerServer.style.display = "flex";
+            }
+        } catch (err) {
+            console.error("[BMM] restoreServerStatus error:", err);
+        }
+    };
+    restoreServerStatus();
+}
+
+function showSyncSummary(summary) {
+    const body = document.getElementById('repo-sync-summary-body');
+    const modal = document.getElementById('modal-repo-sync-summary');
+    if (!body || !modal) return;
+
+    if (!summary || !summary.profiles || summary.profiles.length === 0) {
+        body.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted);">${t('repo.noChanges') || "Aucun changement détecté."}</div>`;
+    } else {
+        body.innerHTML = summary.profiles.map(p => `
+            <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:15px; margin-bottom:12px;">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+                    <div style="width:8px; height:8px; border-radius:50%; background:var(--accent);"></div>
+                    <span style="font-weight:700; font-size:14px; color:var(--text-primary);">${p.name}</span>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+                        <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">MODS</div>
+                        <div style="display:flex; flex-direction:column; gap:4px;">
+                            <div style="font-size:12px; color:var(--success); font-weight:600;">+ ${p.mods_added} ${t('repo.summaryAdded') || 'ajoutés'}</div>
+                            <div style="font-size:12px; color:var(--accent); font-weight:600;">~ ${p.mods_updated} ${t('repo.summaryUpdated') || 'mis à jour'}</div>
+                            <div style="font-size:12px; color:var(--danger); font-weight:600;">- ${p.mods_removed} ${t('repo.summaryRemoved') || 'supprimés'}</div>
+                        </div>
+                    </div>
+                    <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+                        <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">TRANSFERT</div>
+                        <div style="display:flex; flex-direction:column; gap:4px;">
+                            <div style="font-size:12px; color:var(--text-primary); font-weight:600;">${p.files_downloaded} ${t('repo.summaryFiles') || 'fichiers'}</div>
+                            <div style="font-size:12px; color:var(--cyan); font-weight:600;">${formatBytes(p.bytes_downloaded)}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    modal.classList.add('open');
 }

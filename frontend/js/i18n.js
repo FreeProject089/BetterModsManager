@@ -10,16 +10,18 @@ let loaded = false;
 
 async function loadLang(lang) {
     try {
-        const resp = await fetch(`Lang/${lang}.json`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        const { invoke } = await import('./api.js');
+        const jsonStr = await invoke('get_language_content', { lang });
+        const data = JSON.parse(jsonStr);
+        
         // Extract _info and store it separately
         const info = data._info || { name: lang, flag: '⚪' };
         delete data._info;
         translations[lang] = data;
         langInfo[lang] = info;
+        console.log(`[i18n] Successfully loaded: Lang/${lang}.json`);
     } catch (err) {
-        console.warn(`[i18n] Failed to load Lang/${lang}.json:`, err);
+        console.error(`[i18n] Failed to load language ${lang}:`, err);
     }
 }
 
@@ -102,4 +104,23 @@ export function applyTranslations(root = document) {
         const key = el.dataset.i18nContent;
         el.setAttribute('data-content', t(key));
     });
+}
+export async function refreshLanguages() {
+    try {
+        const { invoke } = await import('./api.js');
+        const langs = await invoke('get_available_languages');
+        
+        // Load only missing languages
+        const existingLangs = Object.keys(langInfo);
+        const newLangs = langs.filter(l => !existingLangs.includes(l));
+        
+        if (newLangs.length > 0) {
+            await Promise.all(newLangs.map(l => loadLang(l)));
+        }
+        
+        return true;
+    } catch (e) {
+        console.error('[i18n] Failed to refresh languages:', e);
+        return false;
+    }
 }

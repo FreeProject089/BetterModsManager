@@ -105,11 +105,13 @@ fn main() {
             is_debug_mode,
             is_ptb_mode,
             is_update_disabled,
-            get_ptb_notes,
             get_license_text,
             get_app_version,
             get_build_date,
             get_available_languages,
+            get_language_content,
+            import_language,
+            // ... (other commands)
             commands::mods::open_folder,
             commands::mods::open_file,
             commands::mods::open_mod_folder_at,
@@ -154,6 +156,7 @@ fn main() {
             // Repo Server
             commands::repo_server::start_repo_server,
             commands::repo_server::stop_repo_server,
+            commands::repo_server::get_repo_server_status,
             commands::security::get_creator_id,
             commands::security::verify_repo_signature,
         ])

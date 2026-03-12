@@ -1,6 +1,6 @@
 use crate::models::profile::Profile;
 use crate::state::AppState;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tauri::State;
 use regex::Regex;
 

@@ -140,8 +140,6 @@ export function getModDetailHTML(mod, ctx) {
             <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.2);padding:6px 8px;border-radius:8px">
               <select class="detail-link-type input-field" style="width:100px;padding:3px;font-size:10px" data-index="${i}">
                 <option value="github" ${dl.link_type === 'github' ? 'selected' : ''}>GitHub</option>
-                <option value="google_drive" ${dl.link_type === 'google_drive' ? 'selected' : ''}>Google Drive</option>
-                <option value="mega" ${dl.link_type === 'mega' ? 'selected' : ''}>MEGA</option>
                 <option value="direct" ${dl.link_type === 'direct' ? 'selected' : ''}>Direct</option>
                 <option value="other" ${dl.link_type === 'other' ? 'selected' : ''}>Autre</option>
               </select>
@@ -211,7 +209,11 @@ export function getModDetailHTML(mod, ctx) {
 
       <!-- Download Links -->
       <div class="detail-section">
-        <label class="detail-label" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> ${t('detail.links')}</label>
+        <label class="detail-label" style="display:flex;align-items:center;gap:4px;margin-bottom:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> ${t('detail.links')}</label>
+        <div style="font-size:10px;background:rgba(59,130,246,0.1);color:var(--accent);padding:6px 8px;border-radius:6px;margin-bottom:8px;line-height:1.4;border:1px solid rgba(59,130,246,0.2)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:2px;margin-top:-2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span data-i18n="detail.linksInfo">${t('detail.linksInfo') || 'Pour les listes .MM, seuls les liens directs (téléchargement immédiat) fonctionnent.'}</span>
+        </div>
         <div id="detail-links-list" style="display:flex;flex-direction:column;gap:6px">
           ${linksHtml}
         </div>

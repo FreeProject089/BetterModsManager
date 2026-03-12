@@ -149,76 +149,12 @@ pub fn is_update_disabled(app_handle: tauri::AppHandle) -> bool {
     false
 }
 
-#[tauri::command]
-pub fn get_ptb_notes(app_handle: tauri::AppHandle) -> Result<String, String> {
-    get_update_note_content(app_handle, "v0.9.7_PTB.md".to_string())
-}
-
-#[tauri::command]
-pub fn get_update_notes_list(app_handle: tauri::AppHandle) -> Result<Vec<String>, String> {
-    let mut notes = Vec::new();
-    let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
-
-    let update_dir = base.join("Update");
-    let old_update_dir = update_dir.join("Old_Update");
-
-    for dir in &[update_dir, old_update_dir] {
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md") {
-                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        notes.push(name.to_string());
-                    }
-                }
-            }
-        }
-    }
-    Ok(notes)
-}
-
-#[tauri::command]
-pub fn get_update_note_content(app_handle: tauri::AppHandle, filename: String) -> Result<String, String> {
-    let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
-
-    let update_dir = base.join("Update");
-    let old_update_dir = update_dir.join("Old_Update");
-
-    let paths = vec![
-        update_dir.join(&filename),
-        old_update_dir.join(&filename),
-    ];
-
-    for path in paths {
-        if path.exists() {
-            return std::fs::read_to_string(path).map_err(|e| e.to_string());
-        }
-    }
-
-    // fallback for prod if needed? (resource_dir)
-    let res_dir = app_handle.path_resolver().resource_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-    let final_res = res_dir.join("Update").join(&filename);
-    if final_res.exists() {
-         return std::fs::read_to_string(final_res).map_err(|e| e.to_string());
-    }
-
-    Err(format!("Note {} not found", filename))
-}
-#[tauri::command]
-pub fn get_available_languages(app_handle: tauri::AppHandle) -> Vec<String> {
+fn get_lang_dir(app_handle: &tauri::AppHandle) -> std::path::PathBuf {
     let mut path = app_handle
         .path_resolver()
         .resource_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."));
 
-    // In dev mode, we might be inside src-tauri or a subdirectory of target
-    // We try to find the project root by looking for "src-tauri" in the path components
     let mut lang_dir = path.clone();
     let mut found = false;
 
@@ -240,22 +176,28 @@ pub fn get_available_languages(app_handle: tauri::AppHandle) -> Vec<String> {
     }
 
     if !found {
-        // Fallback to original logic if climbing failed
-        lang_dir = if path.ends_with("src-tauri") {
-            path.pop();
-            path.join("frontend").join("Lang")
+        if path.ends_with("src-tauri") {
+            let mut p = path.clone();
+            p.pop();
+            p.join("frontend").join("Lang")
         } else {
             path.join("Lang")
-        };
+        }
+    } else {
+        lang_dir
     }
+}
 
+#[tauri::command]
+pub fn get_available_languages(app_handle: tauri::AppHandle) -> Vec<String> {
+    let lang_dir = get_lang_dir(&app_handle);
     let mut languages = Vec::new();
+    
     if let Ok(entries) = std::fs::read_dir(lang_dir) {
         for entry in entries.flatten() {
             let p = entry.path();
             if p.is_file() && p.extension().and_then(|s| s.to_str()) == Some("json") {
                 if let Some(name) = p.file_stem().and_then(|n| n.to_str()) {
-                    // Skip template if exists
                     if name != "template" {
                         languages.push(name.to_string());
                     }
@@ -264,11 +206,57 @@ pub fn get_available_languages(app_handle: tauri::AppHandle) -> Vec<String> {
         }
     }
     
-    // Default fallback if empty
     if languages.is_empty() {
         languages.push("fr".to_string());
         languages.push("en".to_string());
     }
     
     languages
+}
+
+#[tauri::command]
+pub fn get_language_content(app_handle: tauri::AppHandle, lang: String) -> Result<String, String> {
+    let lang_dir = get_lang_dir(&app_handle);
+    let file_path = lang_dir.join(format!("{}.json", lang));
+    
+    if !file_path.exists() {
+        return Err(format!("Language file not found: {}.json", lang));
+    }
+    
+    std::fs::read_to_string(file_path).map_err(|e| e.to_string())
+}
+#[tauri::command]
+pub fn import_language(app_handle: tauri::AppHandle) -> Result<String, String> {
+    use tauri::api::dialog::blocking::FileDialogBuilder;
+    use std::fs;
+
+    let file_path = FileDialogBuilder::new()
+        .add_filter("Language JSON", &["json"])
+        .set_title("Select Language File")
+        .pick_file();
+
+    if let Some(src_path) = file_path {
+        let file_name = src_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .ok_or("Invalid filename")?;
+
+        if file_name == "template.json" {
+            return Err("Cannot import template.json directly. Please rename it.".to_string());
+        }
+
+        // Get Lang directory path using helper
+        let lang_dir = get_lang_dir(&app_handle);
+
+        if !lang_dir.exists() {
+            fs::create_dir_all(&lang_dir).map_err(|e| e.to_string())?;
+        }
+
+        let dest_path = lang_dir.join(file_name);
+        fs::copy(&src_path, &dest_path).map_err(|e| e.to_string())?;
+
+        Ok(file_name.replace(".json", ""))
+    } else {
+        Err("Canceled".to_string())
+    }
 }

@@ -15,6 +15,21 @@ pub struct RepoProgress {
     pub current_file: String,
 }
 
+#[derive(serde::Serialize, Default, Clone)]
+pub struct ProfileSyncSummary {
+    pub name: String,
+    pub mods_added: usize,
+    pub mods_updated: usize,
+    pub mods_removed: usize,
+    pub files_downloaded: usize,
+    pub bytes_downloaded: u64,
+}
+
+#[derive(serde::Serialize, Default)]
+pub struct SyncSummary {
+    pub profiles: Vec<ProfileSyncSummary>,
+}
+
 const CHUNK_SIZE: usize = 4 * 1024 * 1024; // 4MB
 
 fn compute_file_hash_and_chunks(path: &Path, need_chunks: bool) -> Result<(String, Option<Vec<RepoChunk>>), String> {
@@ -245,15 +260,33 @@ pub async fn fetch_repo_info(url: String) -> Result<ServerRepo, String> {
     Ok(repo)
 }
 
+#[derive(serde::Deserialize, Clone)]
+pub struct SyncChoice {
+    pub repo_profile_id: String,
+    pub target_local_profile_id: Option<String>, // None = Create New
+}
+
+#[derive(serde::Deserialize)]
+pub struct SyncArgs {
+    pub url: String,
+    pub game_dir: String,
+    pub mods_dir: String,
+    pub backup_dir: String,
+    pub choices: Vec<SyncChoice>,
+}
+
 #[tauri::command]
 pub async fn sync_server_repo(
     window: Window,
     state: State<'_, AppState>,
-    url: String,
-    game_dir: String,
-    mods_dir: String,
-    backup_dir: String,
-) -> Result<(), String> {
+    args: SyncArgs,
+) -> Result<SyncSummary, String> {
+    let url = args.url;
+    let game_dir = args.game_dir;
+    let mods_dir = args.mods_dir;
+    let backup_dir = args.backup_dir;
+    let choices = args.choices;
+
     state.install_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
     state.sync_paused.store(false, std::sync::atomic::Ordering::SeqCst);
     let cancel_flag = state.install_cancelled.clone();
@@ -287,35 +320,105 @@ pub async fn sync_server_repo(
         format!("{}/", url)
     };
 
-    let game_path = PathBuf::from(&game_dir);
-    let backup_path = PathBuf::from(&backup_dir);
-    let base_mods_path = PathBuf::from(&mods_dir);
-    fs::create_dir_all(&base_mods_path).map_err(|e| e.to_string())?;
+    // Only create base mods dir if it's actually provided
+    if !mods_dir.is_empty() {
+        fs::create_dir_all(PathBuf::from(&mods_dir)).map_err(|e| e.to_string())?;
+    }
 
-    let total_profiles = repo.profiles.len();
-    let mut newly_created_profiles = Vec::new();
+    let total_tasks = choices.len();
+    let mut overall_summary = SyncSummary::default();
+    let mut synced_profile_ids = Vec::new();
+    let mut folders_to_rollback: Vec<PathBuf> = Vec::new();
 
-    for (p_idx, repo_profile) in repo.profiles.into_iter().enumerate() {
+    for (c_idx, choice) in choices.into_iter().enumerate() {
         if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause() {
+            for path in &folders_to_rollback {
+                if path.exists() { let _ = fs::remove_dir_all(path); }
+            }
             return Err("Synchronisation annulée".to_string());
         }
 
-        let new_profile_id = uuid::Uuid::new_v4().to_string();
-        let safe_profile_name = repo_profile.name.replace(|c: char| !c.is_alphanumeric() && c != ' ', "_");
-        let mods_path = base_mods_path.join(format!("{}", safe_profile_name));
+        let repo_profile = repo.profiles.iter().find(|p| p.id == choice.repo_profile_id)
+            .ok_or(format!("Profil source {} non trouvé dans le dépôt", choice.repo_profile_id))?.clone();
+
+        // Check if we already have a profile from this repo
+        let existing_profile = if let Some(target_id) = &choice.target_local_profile_id {
+            let data = state.data.lock().unwrap();
+            data.profiles.iter().find(|p| &p.id == target_id).cloned()
+        } else {
+            None
+        };
+
+        let is_new_profile = choice.target_local_profile_id.is_none();
+        let profile_id = choice.target_local_profile_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        
+        let target_game_path = if !game_dir.is_empty() {
+            PathBuf::from(&game_dir)
+        } else if let Some(p) = &existing_profile {
+            p.game_path.clone()
+        } else {
+            return Err("Dossier jeu requis pour un nouveau profil".to_string());
+        };
+
+        let target_backup_path = if !backup_dir.is_empty() {
+            PathBuf::from(&backup_dir)
+        } else if let Some(p) = &existing_profile {
+            p.backup_path.clone()
+        } else {
+            return Err("Dossier backup requis pour un nouveau profil".to_string());
+        };
+
+        let mods_path = if let Some(p) = &existing_profile {
+            p.mods_path.clone()
+        } else {
+            let base_mods_path = PathBuf::from(&mods_dir);
+            if mods_dir.is_empty() {
+                return Err("Dossier mods requis pour un nouveau profil".to_string());
+            }
+            let safe_profile_name = repo_profile.name.replace(|c: char| !c.is_alphanumeric() && c != ' ', "_");
+            let mut path = base_mods_path.join(format!("{}", safe_profile_name));
+            // Avoid collision if creating new
+            if path.exists() && is_new_profile {
+                path = base_mods_path.join(format!("{}_{}", safe_profile_name, &profile_id[..4]));
+            }
+            if is_new_profile {
+                folders_to_rollback.push(path.clone());
+            }
+            path
+        };
+        
         fs::create_dir_all(&mods_path).map_err(|e| e.to_string())?;
+
+        let mut prof_summary = ProfileSyncSummary {
+            name: repo_profile.name.clone(),
+            ..Default::default()
+        };
 
         let total_mods = repo_profile.mods.len();
         let mut successfully_synced_mods = Vec::new();
+        let mut server_mod_subfolders = std::collections::HashSet::new();
 
         for (idx, repo_mod) in repo_profile.mods.into_iter().enumerate() {
             if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause() {
+                for path in &folders_to_rollback {
+                    if path.exists() { let _ = fs::remove_dir_all(path); }
+                }
                 return Err("Synchronisation annulée".to_string());
             }
 
             let safe_mod_name = repo_mod.name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "_");
             // Add ID prefix to original folder name to avoid collisions if multiple mods sanitize to same name
-            let target_mod_dir = mods_path.join(format!("{}_{}", &repo_mod.id[..8], safe_mod_name));
+            let mod_subfolder_name = format!("{}_{}", &repo_mod.id[..8], safe_mod_name);
+            let target_mod_dir = mods_path.join(&mod_subfolder_name);
+            server_mod_subfolders.insert(mod_subfolder_name);
+            
+            let is_new_mod = !target_mod_dir.exists();
+            if is_new_mod {
+                prof_summary.mods_added += 1;
+            } else {
+                prof_summary.mods_updated += 1;
+            }
+
             fs::create_dir_all(&target_mod_dir).map_err(|e| e.to_string())?;
 
             let total_files = repo_mod.files.len();
@@ -323,6 +426,9 @@ pub async fn sync_server_repo(
 
             for (f_idx, file) in repo_mod.files.iter().enumerate() {
                 if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause() {
+                    for path in &folders_to_rollback {
+                        if path.exists() { let _ = fs::remove_dir_all(path); }
+                    }
                     return Err("Synchronisation annulée".to_string());
                 }
 
@@ -334,7 +440,7 @@ pub async fn sync_server_repo(
                     if local_size == file.size {
                         let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
                             step: format!("[{}] Vérification: {} ({}/{})", repo_profile.name, repo_mod.name, idx + 1, total_mods),
-                            progress: ((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods * total_profiles) as f32))) * 100.0,
+                            progress: ((c_idx as f32 / total_tasks as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_tasks as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods as f32 * total_files as f32 * total_tasks as f32)))) * 100.0,
                             current_file: file.relative_path.clone(),
                         });
                         
@@ -349,7 +455,7 @@ pub async fn sync_server_repo(
                 if needs_download {
                     let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
                         step: format!("[{}] Téléchargement: {} ({}/{})", repo_profile.name, repo_mod.name, idx + 1, total_mods),
-                        progress: ((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods * total_profiles) as f32))) * 100.0,
+                        progress: ((c_idx as f32 / total_tasks as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_tasks as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods as f32 * total_files as f32 * total_tasks as f32)))) * 100.0,
                         current_file: file.relative_path.clone(),
                     });
 
@@ -366,20 +472,17 @@ pub async fn sync_server_repo(
                         if let Ok(local_chunks) = compute_local_chunk_hashes(&local_path) {
                             let remote_chunks = file.chunks.as_ref().unwrap();
                             
-                            // Check if we can do a partial update (same length or at least chunks match where they exist)
-                            // To keep it simple: we only do partial if it's the same number of chunks or if we can truncate/extend
                             let mut file_to_patch = fs::OpenOptions::new().read(true).write(true).create(true).open(&local_path).map_err(|e| e.to_string())?;
                             
                             let mut current_offset: u64 = 0;
-                            let mut chunks_downloaded = 0;
 
-                            for (c_idx, r_chunk) in remote_chunks.iter().enumerate() {
-                                let matches = local_chunks.get(c_idx).map(|lh| lh == &r_chunk.sha256_hash).unwrap_or(false);
+                            for (chunk_idx, r_chunk) in remote_chunks.iter().enumerate() {
+                                let matches = local_chunks.get(chunk_idx).map(|lh| lh == &r_chunk.sha256_hash).unwrap_or(false);
                                 
                                 if !matches {
                                     let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
-                                        step: format!("[{}] Patching: {} (Chunk {}/{})", repo_profile.name, repo_mod.name, c_idx + 1, remote_chunks.len()),
-                                        progress: ((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32)) + ((c_idx as f32 / remote_chunks.len() as f32) * (1.0 / (total_mods * total_profiles) as f32))) * 100.0,
+                                        step: format!("[{}] Patching: {} (Chunk {}/{})", repo_profile.name, repo_mod.name, chunk_idx + 1, remote_chunks.len()),
+                                        progress: ((c_idx as f32 / total_tasks as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_tasks as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods as f32 * total_files as f32 * total_tasks as f32))) + ((chunk_idx as f32 / remote_chunks.len() as f32) * (1.0 / (total_mods as f32 * total_files as f32 * total_tasks as f32)))) * 100.0,
                                         current_file: file.relative_path.clone(),
                                     });
 
@@ -390,7 +493,6 @@ pub async fn sync_server_repo(
                                         let bytes = res.bytes().await.map_err(|e| format!("Lecture chunk échouée: {}", e))?;
                                         file_to_patch.seek(SeekFrom::Start(current_offset)).map_err(|e| e.to_string())?;
                                         file_to_patch.write_all(&bytes).map_err(|e| e.to_string())?;
-                                        chunks_downloaded += 1;
                                     } else {
                                         return Err(format!("Le serveur ne supporte pas les Range requests ou erreur HTTP {}", res.status()));
                                     }
@@ -398,33 +500,30 @@ pub async fn sync_server_repo(
                                 current_offset += r_chunk.size as u64;
                             }
                             
-                            // Ensure the file size is correct (truncate if original was larger)
                             file_to_patch.set_len(file.size).map_err(|e| e.to_string())?;
                             partial_success = true;
-                            println!("[Sync] Differential sync for {}: {}/{} chunks downloaded", file.relative_path, chunks_downloaded, remote_chunks.len());
                         }
                     }
 
                     if !partial_success {
                         let res = client.get(&file_url).send().await.map_err(|e| format!("Erreur réseau ({}): {}", file.relative_path, e))?;
-                        
                         if !res.status().is_success() {
                             return Err(format!("Erreur HTTP {} pour le fichier: {}", res.status(), file.relative_path));
                         }
-
                         let bytes = res.bytes().await.map_err(|e| format!("Lecture échouée: {}", e))?;
                         fs::write(&local_path, &bytes).map_err(|e| format!("Ecriture échouée: {}", e))?;
                     }
+                    prof_summary.files_downloaded += 1;
+                    prof_summary.bytes_downloaded += file.size;
+                }
 
-                    let (downloaded_hash, _) = compute_file_hash_and_chunks(&local_path, false)?;
-                    if downloaded_hash != file.sha256_hash {
-                        return Err(format!("Erreur d'intégrité après téléchargement: {}", file.relative_path));
-                    }
+                let (downloaded_hash, _) = compute_file_hash_and_chunks(&local_path, false)?;
+                if downloaded_hash != file.sha256_hash {
+                    return Err(format!("Erreur d'intégrité après téléchargement: {}", file.relative_path));
                 }
 
                 local_valid_files.insert(file.relative_path.replace("\\", "/"));
-            }
-
+            } // End of for (f_idx, file)
             if let Ok(all_local) = crate::fs_utils::list_mod_files(&target_mod_dir) {
                 for rel in all_local {
                     let rel_str = rel.to_string_lossy().to_string().replace("\\", "/");
@@ -437,19 +536,48 @@ pub async fn sync_server_repo(
             
             let _ = crate::fs_utils::remove_empty_dirs(&target_mod_dir);
             successfully_synced_mods.push(repo_mod);
+        } // End of for (idx, repo_mod)
+
+        // Cleanup: remove mods no longer in the server profile
+        if let Ok(entries) = fs::read_dir(&mods_path) {
+            for entry in entries.flatten() {
+                if let Ok(file_type) = entry.file_type() {
+                    if file_type.is_dir() {
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        // Only delete if it follows BMM repo pattern "ID_Name" 
+                        // and is NOT in current list
+                        if name.len() > 9 && name.chars().nth(8) == Some('_') && !server_mod_subfolders.contains(&name) {
+                            let _ = fs::remove_dir_all(entry.path());
+                            prof_summary.mods_removed += 1;
+                        }
+                    }
+                }
+            }
         }
 
-        // Add this specific profile to AppState
+        // Add or update this specific profile in AppState
         {
             let mut data = state.data.lock().unwrap();
-            let mut new_profile = crate::models::profile::Profile::new(
-                format!("{} - {}", repo.name, repo_profile.name),
-                repo_profile.game_name.clone(),
-                game_path.clone(),
-                mods_path.clone(),
-                backup_path.clone(),
-            );
-            new_profile.id = new_profile_id.clone();
+            
+            if let Some(p) = data.profiles.iter_mut().find(|p| p.id == profile_id) {
+                p.name = format!("{} - {}", repo.name, repo_profile.name);
+                p.game_name = repo_profile.game_name.clone();
+                p.origin_repo_profile_id = Some(repo_profile.id.clone());
+            } else {
+                let mut new_profile = crate::models::profile::Profile::new(
+                    format!("{} - {}", repo.name, repo_profile.name),
+                    repo_profile.game_name.clone(),
+                    target_game_path,
+                    mods_path.clone(),
+                    target_backup_path,
+                );
+                new_profile.id = profile_id.clone();
+                new_profile.origin_repo_profile_id = Some(repo_profile.id.clone());
+                data.profiles.push(new_profile);
+            }
+            
+            synced_profile_ids.push(profile_id.clone());
+            overall_summary.profiles.push(prof_summary);
             
             for repo_mod in successfully_synced_mods {
                 let safe_mod_name = repo_mod.name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "_");
@@ -481,7 +609,6 @@ pub async fn sync_server_repo(
                 if !data.mods.iter().any(|m| m.mod_folder_path == new_mod.mod_folder_path) {
                     data.mods.push(new_mod);
                 } else if let Some(existing) = data.mods.iter_mut().find(|m| m.mod_folder_path == new_mod.mod_folder_path) {
-                    // Update existing mod metadata
                     existing.name = new_mod.name;
                     existing.version = new_mod.version;
                     existing.author = new_mod.author;
@@ -489,18 +616,14 @@ pub async fn sync_server_repo(
                     existing.tags = new_mod.tags;
                     existing.download_links = new_mod.download_links;
                 }
-                // Mods are installed but NOT active by default
             }
-            
-            data.profiles.push(new_profile);
-            newly_created_profiles.push(new_profile_id.clone());
         }
-    }
+    } // End of for (c_idx, choice)
 
-    // Assign active profile to the first downloaded one
+    // Assign active profile to the first synced one
     {
         let mut data = state.data.lock().unwrap();
-        if let Some(first_id) = newly_created_profiles.first() {
+        if let Some(first_id) = synced_profile_ids.first() {
             data.active_profile_id = Some(first_id.clone());
         }
     }
@@ -513,7 +636,7 @@ pub async fn sync_server_repo(
         current_file: String::new(),
     });
 
-    Ok(())
+    Ok(overall_summary)
 }
 
 #[tauri::command]

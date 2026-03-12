@@ -962,8 +962,6 @@ async function renderModDetail(modId) {
     row.innerHTML = `
             <select class="detail-link-type input-field" style="width:100px;padding:3px;font-size:10px" data-index="${idx}">
                 <option value="github">GitHub</option>
-                <option value="google_drive">Google Drive</option>
-                <option value="mega">MEGA</option>
                 <option value="direct" selected>Direct</option>
                 <option value="other">Autre</option>
             </select>

@@ -1,7 +1,7 @@
 {
     "_info": {
-        "name": "English",
-        "flag": "us"
+        "name": "italy",
+        "flag": "it"
     },
     "nav.library": "Library",
     "nav.profiles": "Profiles",
@@ -153,10 +153,6 @@
     "settings.langContributeDesc": "Help us translate BMM into other languages.",
     "settings.langGuide": "Guide",
     "settings.langCopyTemplate": "Copy Template",
-    "settings.langDownloadTemplate": "Download Template",
-    "settings.langImport": "Import Language",
-    "settings.langImportSuccess": "Language imported successfully!",
-    "settings.langImportError": "Failed to import language: {err}",
     "settings.updateNotes": "Update notes",
     "settings.viewNotes": "View notes",
     "settings.tutorialTitle": "Tutorial (Tasky)",

@@ -11,7 +11,7 @@ The file must start with an `_info` block that defines the language name and its
 For the flag, you can use either a standard emoji (e.g., standard flag emoji) or a **2-letter ISO country code** (e.g., "us", "fr", "de"). 
 BMM will automatically convert ISO codes into high-quality flag icons!
 
-```json
+``` 
 {
     "_info": {
         "name": "Español",

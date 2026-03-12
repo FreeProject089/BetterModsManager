@@ -572,7 +572,7 @@ function getLinkIcon(type) {
     }
 }
 
-function formatBytes(bytes) {
+export function formatBytes(bytes) {
     if (bytes === 0) return '0 B';
     const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -1180,14 +1180,98 @@ function initUpdateNotes() {
     });
 }
 
+/**
+ * Copies text to clipboard with a toast notification
+ */
+window.copyCodeToClipboard = (text, btn) => {
+    navigator.clipboard.writeText(text).then(() => {
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.classList.remove('copied');
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy text: ', err);
+    });
+};
+
+
 // Simple Markdown renderer
 function renderMarkdown(md) {
     if (!md) return '';
+    let html = '';
     if (typeof marked !== 'undefined') {
-        return marked.parse(md);
+        // Reset renderer to default
+        marked.setOptions({ renderer: new marked.Renderer() });
+        html = marked.parse(md);
+    } else {
+        html = md.replace(/\n/g, '<br>');
     }
-    return md.replace(/\n/g, '<br>');
+    return `<div class="md-body">${html}</div>`;
 }
+
+// Inject markdown body styles once
+(function injectMarkdownStyles() {
+    if (document.getElementById('md-body-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'md-body-styles';
+    style.textContent = `
+        .md-body { font-size: 13.5px; line-height: 1.7; color: var(--text-secondary); font-family: var(--font-sans, inherit); }
+        .md-body h1 { font-size: 20px; font-weight: 700; color: #ffffff; margin: 0 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+        .md-body h2 { font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 24px 0 10px; }
+        .md-body h3 { font-size: 13px; font-weight: 700; color: var(--accent); margin: 18px 0 8px; }
+        .md-body p { margin: 8px 0; }
+        .md-body ul, .md-body ol { padding-left: 18px; margin: 8px 0; }
+        .md-body li { color: var(--text-secondary); margin: 4px 0; }
+        .md-body strong { color: var(--text-primary); font-weight: 700; }
+        .md-body em { color: var(--text-muted); font-style: italic; }
+        
+        .md-body code { 
+            font-family: var(--font-mono, monospace);
+            background: rgba(255, 255, 255, 0.06);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #e6edf3;
+        }
+
+        .md-body pre { 
+            background: rgba(0, 0, 0, 0.2);
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 12px 0;
+            border: 1px solid var(--border);
+        }
+        
+        .md-body pre code { 
+            background: none !important;
+            padding: 0 !important;
+            border: none !important;
+            font-size: 12px;
+            color: #e6edf3;
+        }
+        
+        .md-body blockquote {
+            border-left: 3px solid var(--accent);
+            padding: 2px 16px;
+            margin: 16px 0;
+            background: rgba(59, 130, 246, 0.05);
+            border-radius: 0 8px 8px 0;
+            color: var(--text-secondary);
+        }
+        
+        .md-body hr { height: 1px; border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+        .md-body table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 12.5px; }
+        .md-body th { background: rgba(255,255,255,0.03); color: var(--text-primary); font-weight: 600; padding: 10px; text-align: left; border: 1px solid var(--border); }
+        .md-body td { padding: 8px 10px; border: 1px solid var(--border); color: var(--text-secondary); }
+        .md-body a { color: var(--accent); text-decoration: none; }
+        .md-body a:hover { text-decoration: underline; }
+    `;
+    document.head.appendChild(style);
+})();
 
 // ── Boot ──────────────────────────────────────────────────
 async function main() {
@@ -1692,7 +1776,7 @@ async function main() {
         const langContainer = document.getElementById('settings-lang-container');
         if (!langContainer) return;
 
-        const { getLanguages, setLang } = await import('./i18n.js');
+        const { getLanguages, setLang, refreshLanguages, loadLang } = await import('./i18n.js');
 
         const getFlag = (l) => {
             if (!l || !l.flag) return '⚪';
@@ -1780,17 +1864,43 @@ async function main() {
             });
         }
 
-        // Copy Template button
-        const btnCopyTemplate = document.getElementById('btn-copy-lang-template');
-        if (btnCopyTemplate) {
-            btnCopyTemplate.addEventListener('click', async () => {
+        // Download Template button
+        const btnDownloadTemplate = document.getElementById('btn-download-lang-template');
+        if (btnDownloadTemplate) {
+            btnDownloadTemplate.addEventListener('click', async () => {
                 try {
                     const resp = await fetch('Lang/template.json');
                     const text = await resp.text();
-                    await navigator.clipboard.writeText(text);
-                    toast('Modèle de traduction copié !', 'success');
+                    const blob = new Blob([text], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'template.json';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast(t('common.success') || 'OK', 'success');
                 } catch (e) {
-                    toast('Erreur copie : ' + e, 'error');
+                    toast('Erreur download : ' + e, 'error');
+                }
+            });
+        }
+
+        // Import Language button
+        const btnImportLang = document.getElementById('btn-import-lang');
+        if (btnImportLang) {
+            btnImportLang.addEventListener('click', async () => {
+                try {
+                    const res = await invoke('import_language');
+                    if (res) {
+                        toast(t('settings.langImportSuccess'), 'success');
+                        const { refreshLanguages } = await import('./i18n.js');
+                        await refreshLanguages();
+                        renderLangs();
+                    }
+                } catch (e) {
+                    if (e !== 'Canceled') {
+                        toast(t('settings.langImportError', { err: e }), 'error');
+                    }
                 }
             });
         }
@@ -2327,10 +2437,7 @@ function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
     };
 
     const renderContent = (note) => {
-        const rendered = typeof marked !== 'undefined'
-            ? marked.parse(note.content)
-            : note.content.replace(/\n/g, '<br>');
-        return `<div class="ptb-modal-body">${rendered}</div>`;
+        return `<div class="ptb-modal-body" style="overflow-y:auto; flex:1; padding:32px;">${renderMarkdown(note.content)}</div>`;
     };
 
     modal.innerHTML = `
