@@ -22,14 +22,46 @@ fn main() {
                 .app_data_dir()
                 .unwrap_or_else(|| PathBuf::from("."));
             let data_path = app_dir.join("data.json");
-            app.manage(AppState::load(data_path));
-            app.manage(crate::commands::repo_server::RepoServerState::default());
+            
+            let app_state = AppState::load(data_path);
+            
+            // Comprehensive State Dump for Diagnostics
+            {
+                {
+                    let mut data = app_state.data.lock().unwrap();
+                    commands::crash::log_line(format!("[STARTUP] BMM v{} initialized.", env!("CARGO_PKG_VERSION")));
+                    
+                    // Capture previous state for UI
+                    app_state.previous_session_clean.store(data.settings.last_session_clean, std::sync::atomic::Ordering::SeqCst);
+                    
+                    // Set dirty flag: if we crash, this stays false
+                    data.settings.last_session_clean = false;
+                }
+                // Lock released here, now it's safe to save
+                let _ = app_state.save();
 
-            // Log du démarrage
-            commands::crash::log_line(format!(
-                "[STARTUP] Better Mod Manager v{} initializing system...",
-                env!("CARGO_PKG_VERSION")
-            ));
+                let data = app_state.data.lock().unwrap();
+                commands::crash::log_line(format!("[STARTUP-INFO] Profile Count: {}", data.profiles.len()));
+                for p in &data.profiles {
+                    commands::crash::log_line(format!("  - Profile: {} (ID: {})", p.name, p.id));
+                }
+                commands::crash::log_line(format!("[STARTUP-INFO] Mod Count: {}", data.mods.len()));
+                if let Some(active_id) = &data.active_profile_id {
+                    if let Some(active_profile) = data.profiles.iter().find(|p| &p.id == active_id) {
+                        commands::crash::log_line(format!("[STARTUP-INFO] Mods in Active Profile ({}):", active_profile.name));
+                        for mod_id in &active_profile.active_mods {
+                            if let Some(m) = data.mods.iter().find(|m| &m.id == mod_id) {
+                                commands::crash::log_line(format!("    - Mod: {} | Status: {}", m.name, if m.enabled { "ENABLED" } else { "DISABLED" }));
+                            }
+                        }
+                    }
+                }
+                commands::crash::log_line(format!("[STARTUP-INFO] Settings: Filter: {}, Sort: {}, Lang: {}", 
+                    data.settings.current_filter, data.settings.current_sort_by, data.settings.language));
+            }
+
+            app.manage(app_state);
+            app.manage(crate::commands::repo_server::RepoServerState::default());
 
             Ok(())
         })
@@ -37,24 +69,40 @@ fn main() {
         // On intercepte pour générer un rapport de session avant que le processus ne soit tué.
         .on_window_event(|event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event.event() {
-                api.prevent_close();
+                // Si on ferme déjà, on ne fait rien (évite la récursion de window.close())
+                if commands::crash::is_shutting_down() {
+                    return;
+                }
 
+                api.prevent_close();
                 let window = event.window().clone();
                 let state = window.state::<AppState>();
 
-                // Capture de l'état actuel pour le diagnostic
-                let state_snapshot = state.data.lock().ok().and_then(|d| serde_json::to_string_pretty(&*d).ok());
+                // 1. Marquer immédiatement le shutdown (bloque les écritures ultérieures)
+                commands::crash::log_line("[SHUTDOWN] Window close-requested event received. Marking as shutting down...");
+                commands::crash::set_shutting_down();
 
-                commands::crash::log_line("[SHUTDOWN] Window close-requested. Generating session report...");
+                // 2. Capture de l'état actuel pour le diagnostic
+                let state_snapshot = {
+                    let mut data = state.data.lock().ok();
+                    if let Some(ref mut d) = data {
+                        // On marque propre pour la prochaine fois
+                        d.settings.last_session_clean = true;
+                    }
+                    data.and_then(|d| serde_json::to_string_pretty(&*d).ok())
+                };
+                let _ = state.save();
 
-                // Thread de sauvegarde rapide du rapport de session
+                // 3. Thread de sauvegarde du rapport (évite de bloquer l'event loop)
                 std::thread::spawn(move || {
-                    commands::crash::generate_report(
-                        false, 
-                        "User requested close (Alt+F4 / Window X)", 
+                    commands::crash::log_line("[SHUTDOWN] Thread: Generating session report...");
+                    let _ = commands::crash::generate_report(
+                        false, // false = Session Zip
+                        "Clean Exit (Window Close / Alt+F4)", 
                         state_snapshot,
                         None
                     );
+                    commands::crash::log_line("[SHUTDOWN] Thread: Done. Closing window.");
                     let _ = window.close();
                 });
             }
@@ -130,6 +178,7 @@ fn main() {
             commands::crash::get_crash_reports,
             commands::crash::trigger_manual_crash_report,
             commands::crash::log_frontend_line,
+            commands::crash::get_startup_status,
             // Auto Update
             commands::autoupdate::check_for_update,
             commands::autoupdate::download_and_install_update,
@@ -158,7 +207,7 @@ fn main() {
             commands::repo_server::stop_repo_server,
             commands::repo_server::get_repo_server_status,
             commands::security::get_creator_id,
-            commands::security::verify_repo_signature,
+            commands::crash::finalize_and_close_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{Write, Read};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
@@ -12,6 +12,8 @@ const MAX_LOG_LINES: usize = 500;
 
 lazy_static::lazy_static! {
     static ref LOG_BUFFER: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::with_capacity(MAX_LOG_LINES)));
+    static ref PREVIOUS_SESSION_CRASHED: Arc<std::sync::atomic::AtomicBool> = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    static ref SHUTTING_DOWN: Arc<std::sync::atomic::AtomicBool> = Arc::new(std::sync::atomic::AtomicBool::new(false));
 }
 
 /// Ajoute une ligne de log dans le buffer mémoire ET dans le fichier temps réel (flush immédiat).
@@ -29,19 +31,30 @@ pub fn log_line(line: impl Into<String>) {
     }
 
     // 2. Fichier temps réel (On l'ouvre, on écrit, on flush, on ferme pour être safe contre les crashes)
-    if let Ok(mut file) = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(get_realtime_log_path()) {
-        let _ = writeln!(file, "{}", entry);
-        let _ = file.sync_all(); // Force l'écriture physique sur le disque
+    // On ne recrée PAS le fichier si on est en train de fermer (pour éviter les faux positifs dirty session)
+    if !SHUTTING_DOWN.load(std::sync::atomic::Ordering::SeqCst) {
+        if let Ok(mut file) = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(get_realtime_log_path()) {
+            let _ = writeln!(file, "{}", entry);
+            let _ = file.sync_all(); // Force l'écriture physique sur le disque
+        }
     }
+}
+
+pub fn set_shutting_down() {
+    SHUTTING_DOWN.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+pub fn is_shutting_down() -> bool {
+    SHUTTING_DOWN.load(std::sync::atomic::Ordering::SeqCst)
 }
 
 // ─── DIRECTORIES & PATHS ─────────────────────────────────────────────────────
 
 fn get_realtime_log_path() -> PathBuf {
-    get_crash_dir(None).join("current_session.log")
+    get_crash_dir(None).join(format!("session_{}.log", std::process::id()))
 }
 
 pub fn get_crash_dir(app_handle: Option<&tauri::AppHandle>) -> PathBuf {
@@ -56,37 +69,108 @@ pub fn get_crash_dir(app_handle: Option<&tauri::AppHandle>) -> PathBuf {
     }
 }
 
+fn get_report_dir(is_crash: bool) -> PathBuf {
+    let base = get_crash_dir(None);
+    if is_crash { base.join("Reports").join("Crash") } else { base.join("Reports").join("Session") }
+}
+
+fn get_archive_dir(is_crash: bool) -> PathBuf {
+    let base = get_crash_dir(None);
+    if is_crash { base.join("Archive").join("Crash") } else { base.join("Archive").join("Session") }
+}
+
+fn archive_old_reports(dir: &Path, archive_dir: &Path) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        let mut files: Vec<_> = entries.flatten()
+            .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("zip"))
+            .collect();
+        
+        // On garde seulement les 5 derniers rapports actifs, le reste va en archive
+        if files.len() > 5 {
+            files.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+            let _ = fs::create_dir_all(archive_dir);
+            for i in 0..(files.len() - 5) {
+                let old_path = files[i].path();
+                if let Some(name) = old_path.file_name() {
+                    let new_path = archive_dir.join(name);
+                    let _ = fs::rename(&old_path, &new_path);
+                }
+            }
+        }
+    }
+    
+    // Nettoyage de l'archive : Max 20 fichiers par catégorie
+    if let Ok(entries) = fs::read_dir(archive_dir) {
+        let mut archive_files: Vec<_> = entries.flatten().collect();
+        if archive_files.len() > 20 {
+            archive_files.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+            for i in 0..(archive_files.len() - 20) {
+                let _ = fs::remove_file(archive_files[i].path());
+            }
+        }
+    }
+}
+
 // ─── INITIALISATION / RÉCUPÉRATION APRÈS CRASH ──────────────────────────────
 
 pub fn init_session() {
-    let log_path = get_realtime_log_path();
-    let dir = log_path.parent().expect("Crashes dir not calculated");
+    let dir = get_crash_dir(None);
     let _ = fs::create_dir_all(&dir);
 
-    // Si un log existe déjà alors qu'on vient d'ouvrir l'app, c'est que l'app a été tuée sauvagement.
-    if log_path.exists() {
-        let mut old_content = String::new();
-        if let Ok(mut file) = fs::File::open(&log_path) {
-            let _ = file.read_to_string(&mut old_content);
-        }
-        
-        if !old_content.trim().is_empty() {
-            eprintln!("[CRASH_LOGGER] Recovering logs from previous session...");
-            
-            // On vérifie si les logs contiennent une trace de panic
-            let was_panic = old_content.contains("[PANIC DETECTED]");
-            
-            // Génère un rapport automatique
-            // On utilise le préfixe 'crash' seulement si on est sûr que c'était un vrai crash
-            generate_report(was_panic, "Detected uncontrolled shutdown (dirty session)", None, Some(old_content));
+    let my_pid = std::process::id();
+    let mut system = System::new_all();
+    system.refresh_processes();
+
+    // 1. Migration/Nettoyage : Déplace les vieux zips/logs de la racine vers l'Archive
+    if let Ok(entries) = fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                    if (name.starts_with("crash_") || name.starts_with("session_")) && name.ends_with(".zip") {
+                        let target_dir = get_archive_dir(name.starts_with("crash_"));
+                        let _ = fs::create_dir_all(&target_dir);
+                        let _ = fs::rename(&path, target_dir.join(name));
+                    } else if name.starts_with("session_") && name.ends_with(".log") {
+                         // Check orphelins (comme avant)
+                         let pid_str = name.replace("session_", "").replace(".log", "");
+                         if let Ok(old_pid_val) = pid_str.parse::<usize>() {
+                             let old_pid = Pid::from(old_pid_val);
+                             if old_pid != Pid::from(my_pid as usize) && system.process(old_pid).is_none() {
+                                 if let Ok(content) = fs::read_to_string(&path) {
+                                     if !content.trim().is_empty() {
+                                         let was_shutdown = content.contains("[SHUTDOWN]");
+                                         if !was_shutdown {
+                                             eprintln!("[CRASH_LOGGER] Found dirty orphaned log: {}", name);
+                                             PREVIOUS_SESSION_CRASHED.store(true, std::sync::atomic::Ordering::SeqCst);
+                                             generate_report_from_content(true, "Detected uncontrolled shutdown (dirty legacy session)", None, content);
+                                         }
+                                     }
+                                 }
+                                 let _ = fs::remove_file(&path);
+                             }
+                         }
+                    } else if name == "current_session.log" {
+                        let _ = fs::remove_file(&path);
+                    }
+                }
+            }
         }
     }
 
-    // On écrase/démarre un nouveau log "propre" pour cette session.
+    // 2. Démarre notre propre log pour cette session
+    let log_path = get_realtime_log_path();
     if let Ok(mut file) = fs::File::create(&log_path) {
-        let _ = writeln!(file, "--- NEW SESSION STARTED AT {} ---", chrono::Local::now().to_rfc3339());
+        let _ = writeln!(file, "--- NEW SESSION STARTED AT {} (PID: {}) ---", chrono::Local::now().to_rfc3339(), my_pid);
         let _ = file.sync_all();
     }
+}
+
+// function removed as consolidate into generate_report
+
+/// Helper pour générer un rapport à partir d'un contenu de log déjà chargé (utilisé pour les orphelins)
+fn generate_report_from_content(is_crash: bool, reason: &str, app_state: Option<String>, log_content: String) -> Option<PathBuf> {
+    generate_report_internal(is_crash, reason, app_state, Some(log_content), None)
 }
 
 // ─── COLLECTE DES DONNÉES DIAGNOSTICS ────────────────────────────────────────
@@ -122,12 +206,22 @@ pub fn generate_report(
     app_state: Option<String>,
     override_log: Option<String>,
 ) -> Option<PathBuf> {
-    let dir = get_crash_dir(None);
-    let _ = fs::create_dir_all(&dir);
+    generate_report_internal(is_crash, reason, app_state, override_log, Some(get_realtime_log_path()))
+}
+
+fn generate_report_internal(
+    is_crash: bool,
+    reason: &str,
+    app_state: Option<String>,
+    override_log: Option<String>,
+    log_to_delete: Option<PathBuf>,
+) -> Option<PathBuf> {
+    let report_dir = get_report_dir(is_crash);
+    let _ = fs::create_dir_all(&report_dir);
 
     let prefix = if is_crash { "crash" } else { "session" };
     let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
-    let zip_path = dir.join(format!("{}_{}.zip", prefix, timestamp));
+    let zip_path = report_dir.join(format!("{}_{}.zip", prefix, timestamp));
 
     let file = fs::File::create(&zip_path).ok()?;
     let mut zip = zip::ZipWriter::new(file);
@@ -189,25 +283,13 @@ pub fn generate_report(
 
     let _ = zip.finish();
     
-    // Nettoyage : Garde seulement les 10 derniers rapports pour éviter de saturer le disque
-    if let Ok(entries) = fs::read_dir(&dir) {
-        let mut files: Vec<_> = entries.flatten()
-            .filter(|e| {
-                let name = e.file_name().to_string_lossy().to_string();
-                name.starts_with("crash_") || name.starts_with("session_")
-            })
-            .collect();
-        
-        if files.len() > 10 {
-            files.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
-            for i in 0..(files.len() - 10) {
-                let _ = fs::remove_file(files[i].path());
-            }
-        }
-    }
+    // Archivage et nettoyage
+    archive_old_reports(&report_dir, &get_archive_dir(is_crash));
 
-    // Après avoir généré le zip (qui contient les logs), on vide le log temps réel.
-    let _ = fs::remove_file(get_realtime_log_path());
+    // Après avoir généré le zip (qui contient les logs), on vide le log temps réel spécifié.
+    if let Some(path) = log_to_delete {
+        let _ = fs::remove_file(path);
+    }
 
     Some(zip_path)
 }
@@ -273,13 +355,16 @@ pub fn trigger_manual_crash_report() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn get_crash_reports(app_handle: tauri::AppHandle) -> Vec<String> {
-    let dir = get_crash_dir(Some(&app_handle));
+pub fn get_crash_reports(_app_handle: tauri::AppHandle) -> Vec<String> {
+    let dir = get_report_dir(true); // Seulement le dossier Crash/
     if !dir.exists() { return vec![]; }
     
     let mut files = fs::read_dir(&dir).ok().map(|entries| {
         entries.flatten()
-            .filter(|e| e.file_name().to_string_lossy().starts_with("crash_"))
+            .filter(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                name.starts_with("crash_") && name.ends_with(".zip")
+            })
             .map(|e| e.path().to_string_lossy().to_string())
             .collect::<Vec<String>>()
     }).unwrap_or_default();
@@ -291,5 +376,52 @@ pub fn get_crash_reports(app_handle: tauri::AppHandle) -> Vec<String> {
 #[tauri::command]
 pub fn log_frontend_line(line: String) {
     log_line(format!("[UI] {}", line));
+}
+
+#[derive(serde::Serialize)]
+pub struct StartupStatus {
+    pub backend_crashed: bool,
+    pub previously_clean: bool,
+}
+
+#[tauri::command]
+pub fn get_startup_status(state: tauri::State<crate::state::AppState>) -> StartupStatus {
+    StartupStatus {
+        backend_crashed: PREVIOUS_SESSION_CRASHED.load(std::sync::atomic::Ordering::SeqCst),
+        previously_clean: state.previous_session_clean.load(std::sync::atomic::Ordering::SeqCst),
+    }
+}
+
+#[tauri::command]
+pub fn finalize_and_close_app(window: tauri::Window, state: tauri::State<crate::state::AppState>) {
+    log_line("[SHUTDOWN] finalize_and_close_app called from UI.");
+    
+    if is_shutting_down() {
+        return;
+    }
+    set_shutting_down();
+
+    // Capture de l'état
+    let state_snapshot = {
+        let mut data = state.data.lock().ok();
+        if let Some(ref mut d) = data {
+            d.settings.last_session_clean = true;
+        }
+        data.and_then(|d| serde_json::to_string_pretty(&*d).ok())
+    };
+    let _ = state.save();
+
+    // On fait le zip en bloquant un tout petit peu si nécessaire, ou on spawn
+    std::thread::spawn(move || {
+        log_line("[SHUTDOWN] Thread: Generating session report (via command)...");
+        let _ = generate_report(
+            false, 
+            "Clean Exit (UI Close Button)", 
+            state_snapshot,
+            None
+        );
+        log_line("[SHUTDOWN] Thread: Done. Closing window.");
+        let _ = window.close();
+    });
 }
 

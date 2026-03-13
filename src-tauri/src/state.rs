@@ -28,7 +28,11 @@ pub struct AppSettings {
     pub current_filter: String,
     #[serde(default = "default_sort")]
     pub current_sort_by: String,
+    #[serde(default = "default_true")]
+    pub last_session_clean: bool,
 }
+
+fn default_true() -> bool { true }
 
 fn default_filter() -> String { "all".to_string() }
 fn default_sort() -> String { "name_asc".to_string() }
@@ -56,6 +60,7 @@ pub struct AppState {
     pub install_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub sync_paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub benchmark_running: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub previous_session_clean: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl AppState {
@@ -72,6 +77,7 @@ impl AppState {
             install_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             sync_paused: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             benchmark_running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            previous_session_clean: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
         }
     }
 
