@@ -44,7 +44,7 @@ export async function initMods() {
     localStorage.setItem('bmm-view-compact', S.isCompact);
     modlist.classList.toggle('compact', S.isCompact);
     renderModList(); // Re-render with new heights
-    toast(S.isCompact ? 'Mode compact activé' : 'Mode standard activé', 'info', 1500);
+    toast(S.isCompact ? t('mod.viewCompact') : t('mod.viewStandard'), 'info', 1500);
   });
 
   const altDisable = document.getElementById('btn-disable-all-alt');
@@ -137,14 +137,14 @@ export async function initMods() {
     historyBtn.addEventListener('click', async () => {
       const activeId = await invoke('get_active_profile_id').catch(() => null);
       if (!activeId) {
-        toast('Aucun profil actif.', 'error');
+        toast(t('prof.noneActive'), 'error');
         return;
       }
       try {
         const history = await invoke('get_activity_history', { profileId: activeId });
         renderHistoryModal(history);
       } catch (err) {
-        toast('Erreur historique : ' + err, 'error');
+        toast(t('history.error') + ' : ' + err, 'error');
       }
     });
   }
@@ -310,9 +310,18 @@ function updateSubtitle() {
   const enabled = S.allMods.filter(m => m.enabled).length;
   const total = S.allMods.length;
   const el = document.getElementById('lib-subtitle');
-  el.textContent = total === 0
-    ? 'Ajoutez votre premier mod.'
-    : `${enabled} actif${enabled !== 1 ? 's' : ''} sur ${total} mod${total !== 1 ? 's' : ''}`;
+  if (!el) return;
+  
+  if (total === 0) {
+    el.textContent = t('lib.subtitle.empty');
+  } else {
+    el.textContent = t('lib.subtitle', {
+      enabled,
+      total,
+      s1: enabled !== 1 ? 's' : '',
+      s2: total !== 1 ? 's' : ''
+    });
+  }
 }
 
 function getFilteredMods() {
@@ -349,7 +358,7 @@ function renderHistoryModal(history) {
   const list = document.getElementById('history-list');
   list.innerHTML = '';
   if (!history || history.length === 0) {
-    list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px" data-i18n="history.empty">Aucun historique disponible.</div>';
+    list.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:20px" data-i18n="history.empty">${t('history.empty')}</div>`;
     import('./i18n.js').then(m => m.applyTranslations());
   } else {
     // sort newest first
@@ -649,7 +658,7 @@ function createModCard(mod) {
         const warningMsg = await invoke('enable_mod', { modId: mod.id });
         if (warningMsg && warningMsg.startsWith('WARNING_SPACE|')) {
           const parts = warningMsg.split('|');
-          toast(t('storage.alertWarningMod', { label: parts[1], free: parts[2], limit: parts[3] }) || `Attention : l'espace sur le disque ${parts[1]} est faible (${parts[2]}% libres, limite à ${parts[3]}%).`, 'warning', 5000);
+          toast(t('storage.alertWarningMod', { label: parts[1], free: parts[2], limit: parts[3] }), 'warning', 5000);
         } else {
           toast(t('mod.activated', { name: mod.name }), 'success');
           if (localStorage.getItem('bmm_sysNotif') === 'true') sendOsNotification('Better Mod Manager', t('mod.activated', { name: mod.name }));
@@ -662,10 +671,10 @@ function createModCard(mod) {
     } catch (err) {
       if (typeof err === 'string' && err.startsWith('CRITICAL_SPACE|')) {
         const parts = err.split('|');
-        toast(t('storage.alertCriticalMod', { label: parts[1], free: parts[2], limit: parts[3] }) || `Action bloquée : espace critique sur le disque ${parts[1]} (${parts[2]}% libres, limite à ${parts[3]}%).`, 'error', 6000);
+        toast(t('storage.alertCriticalMod', { label: parts[1], free: parts[2], limit: parts[3] }), 'error', 6000);
         toggle.checked = false; // Revert visually
       } else {
-        toast('Erreur : ' + err, 'error');
+        toast(t('common.error') + ' : ' + err, 'error');
         toggle.checked = !toggle.checked; // Revert visually
       }
     } finally {
@@ -691,7 +700,7 @@ function createModCard(mod) {
         try {
           await invoke('open_folder', { path: mod.mod_folder_path });
         } catch (err) {
-          toast('Erreur dossier : ' + err, 'error');
+          toast(t('common.error') + ' : ' + err, 'error');
         }
       }
     });
@@ -766,7 +775,7 @@ function createModCard(mod) {
         if (S.selectedModId === mod.id) closeModDetail();
         await refreshMods();
       } catch (err) {
-        toast('Erreur : ' + err, 'error');
+        toast(t('common.error') + ' : ' + err, 'error');
       } finally {
         activeBtn.disabled = false;
         otherBtn.disabled = false;

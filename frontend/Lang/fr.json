@@ -63,6 +63,8 @@
     "mod.activated": "\"{name}\" activé.",
     "mod.active": "ACTIF",
     "mod.added": "\"{name}\" importé et ajouté à la bibliothèque.",
+    "mod.viewCompact": "Mode compact activé",
+    "mod.viewStandard": "Mode standard activé",
     "mod.allEnabled": "Tous les mods sont déjà actifs.",
     "mod.deactivate": "Désactiver",
     "mod.deactivated": "\"{name}\" désactivé.",
@@ -323,6 +325,7 @@
     "credits.title": "Crédits",
 
     "__SECTION_FAQ__": "--- FAQ ---",
+    "faq.title": "FAQ & Aide",
     "faq.a1": "Oui ! Chaque profil garde son propre état de mods. Quand vous revenez sur un profil, vos mods activés sont toujours là, même après redémarrage.",
     "faq.a2": "Aucune techniquement ! .MM est simplement un fichier .JSON renommé pour faciliter le partage entre joueurs.",
     "faq.a3": "Vous devez d'abord désactiver le mod pour que ses fichiers soient retirés du jeu, puis vous pouvez le supprimer en toute sécurité.",

@@ -3,7 +3,6 @@
         "name": "English",
         "flag": "us"
     },
-
     "__SECTION_COMMON__": "--- COMMON / BASICS ---",
     "common.close": "Close",
     "common.copy": "Copy",
@@ -21,7 +20,6 @@
     "common.success": "Success",
     "common.unselectAll": "Unselect All",
     "common.copying": "Copying...",
-
     "__SECTION_NAV__": "--- NAVIGATION ---",
     "nav.activeProfile": "ACTIVE PROFILE",
     "nav.docs": "Documentation",
@@ -30,7 +28,6 @@
     "nav.profiles": "Profiles",
     "nav.repo": "Server Repo",
     "nav.settings": "Settings",
-
     "__SECTION_LIB__": "--- MOD LIBRARY ---",
     "lib.addMod": "Add a mod",
     "lib.confirm": "Confirm Activation",
@@ -51,18 +48,19 @@
     "lib.selectProfile": "— Select a profile —",
     "lib.sortNameAsc": "Name (A-Z)",
     "lib.sortNameDesc": "Name (Z-A)",
-    "lib.sortStatus": "Status (Enabled first)",
+    "lib.sortStatus": "Status (Active 1st)",
     "lib.subtitle": "{enabled} active on {total} mod{s2}",
     "lib.subtitle.empty": "Add your first mod.",
     "lib.title": "Mod Library",
     "lib.verify": "Verify",
     "lib.verifyTitle": "Verify integrity",
-
     "__SECTION_MOD__": "--- MOD CARDS & ACTIONS ---",
     "mod.activate": "Enable",
     "mod.activated": "\"{name}\" enabled.",
     "mod.active": "ACTIVE",
     "mod.added": "\"{name}\" imported and added to library.",
+    "mod.viewCompact": "Compact mode enabled",
+    "mod.viewStandard": "Standard mode enabled",
     "mod.allEnabled": "All mods are already active.",
     "mod.deactivate": "Disable",
     "mod.deactivated": "\"{name}\" disabled.",
@@ -92,7 +90,6 @@
     "mod.transferComplete": "Transfer complete!",
     "mod.conflictsDesc": "This mod shares files with: {mods}.",
     "mod.conflictsTitle": "CONFLICTS DETECTED",
-
     "__SECTION_DETAIL__": "--- MOD DETAIL PANEL ---",
     "detail.addLink": "Add a link",
     "detail.author": "Author",
@@ -106,7 +103,6 @@
     "detail.selectTag": "— Add a tag —",
     "detail.tags": "Tags",
     "detail.version": "Version",
-
     "__SECTION_PROF__": "--- PROFILES ---",
     "prof.active": "Active",
     "prof.backupDir": "Backup folder",
@@ -178,7 +174,6 @@
     "prof.subtitle": "Manage your configurations per game",
     "prof.title": "Profiles",
     "prof.updated": "Profile \"{name}\" updated.",
-
     "__SECTION_MM__": "--- MOD LISTS (.MM) ---",
     "mm.alreadyPresent": "Already present",
     "mm.by": "by",
@@ -218,7 +213,6 @@
     "mm.autoProfile": "Create profile automatically",
     "mm.autoProfileDesc": "Generates a new dedicated profile for this list",
     "mm.copyLocal": "Local copy...",
-
     "__SECTION_SETTINGS__": "--- SETTINGS ---",
     "settings.about": "About",
     "settings.aboutDesc": "Universal modern mod manager. Built for all games.",
@@ -301,7 +295,6 @@
     "settings.langImport": "Import Language",
     "settings.langImportSuccess": "Language imported successfully!",
     "settings.langImportError": "Failed to import language: {err}",
-
     "__SECTION_CREDITS__": "--- CREDITS ---",
     "credits.author": "AUTHOR",
     "credits.devLabel": "Developer",
@@ -321,8 +314,8 @@
     "credits.rustSub": "Built with Rust & Tauri v1",
     "credits.subtitle": "Better Mod Manager — Version {version}",
     "credits.title": "Credits",
-
     "__SECTION_FAQ__": "--- FAQ ---",
+    "faq.title": "FAQ & Help",
     "faq.a1": "Yes! Each profile keeps its own mod state. When you return to a profile, your enabled mods are still there, even after a restart.",
     "faq.a2": "Technically none! .MM is simply a .JSON file renamed to make sharing between players easier.",
     "faq.a3": "You must first disable the mod so its files are removed from the game, then you can safely delete it.",
@@ -361,7 +354,6 @@
     "faq.aCrash": "BMM uses a 'clean shutdown flag'. On each startup, it checks if the previous session ended normally. If not, a report is automatically generated.",
     "faq.qHidden": "Are there hidden features?",
     "faq.aHidden": "Not really 'hidden', but less known: auto-calibration adjusts your speed limits based on real disk load at startup.",
-
     "__SECTION_DOCS__": "--- DOCUMENTATION & GUIDES ---",
     "docs.backups": "What is the Backup folder for?",
     "docs.basic.backup.a1": "If enabling a mod requires replacing an original game file, BMM will discreetly back it up first.",
@@ -454,10 +446,8 @@
     "docs.benchmark.pipDesc": "Keep the mini dashboard active on the parent interface to monitor lag.",
     "docs.benchmark.timeline": "Professional Timeline",
     "docs.benchmark.timelineDesc": "Navigate your data like Premiere Pro. Visually identify the red zones.",
-
     "__SECTION_LICENSE__": "--- LICENSE & LEGAL ---",
     "license.loading": "Loading license...",
-
     "__SECTION_CRASH__": "--- CRASH MODAL ---",
     "crash.desc": "Something unexpected happened and BMM stopped working. A .zip file with diagnostic information (logs, DXDiag, app state) has been saved automatically.",
     "crash.discord": "Join Discord",
@@ -466,7 +456,6 @@
     "crash.subtitle": "A crash report has been generated",
     "crash.title": "BMM Crashed",
     "crash.pathLabel": "Report File",
-
     "__SECTION_ONBOARD__": "--- ONBOARDING (TASKY) ---",
     "onboard.benchmark.text": "The Performance Dashboard monitors CPU, RAM, and disk in real-time. It's the perfect tool to see exactly what's happening under the hood during your copies.",
     "onboard.benchmark.title": "Performance & Monitoring",
@@ -504,7 +493,6 @@
     "onboard.storage.title": "I/O Limiter (Storage Manager)",
     "onboard.tips.text": "Golden rule: 1 Profile = 1 dedicated Mod Folder. Never share the same folder between two profiles to avoid activating a mod that doesn't belong there. Also remember to always DISABLE a mod before deleting it!",
     "onboard.tips.title": "Tips — Best Practices",
-
     "__SECTION_INTEGRITY__": "--- INTEGRITY REPORT ---",
     "integrity.checking": "Verification in progress...",
     "integrity.issues": "Issues detected!",
@@ -513,7 +501,6 @@
     "integrity.okDesc": "All active modded files perfectly match their versions in the game folder.",
     "integrity.title": "Integrity Report",
     "integrity.tip": "Tip: Disable then re-enable the affected mods to repair the installation.",
-
     "__SECTION_UPDATE__": "--- UPDATE NOTES ---",
     "update.disabled": "Updates are currently disabled.",
     "update.fallback": "Update notes will be available soon.",
@@ -521,13 +508,11 @@
     "update.none": "No update notes available.",
     "update.showOld": "View archives",
     "update.title": "Update notes",
-
     "__SECTION_CTX__": "--- CONTEXT MENUS ---",
     "ctx.copyPath": "Copy Relative Path",
     "ctx.openFile": "Open File",
     "ctx.openFolder": "Open Location",
     "ctx.searchPlaceholder": "Search files...",
-
     "__SECTION_STORAGE__": "--- STORAGE MANAGER ---",
     "storage.alertCritical": "Critical space alert (%)",
     "storage.alertCriticalMod": "Action blocked: Critical space on {label} disk ({free}% free, limit at {limit}%).",
@@ -548,11 +533,9 @@
     "storage.openManager": "Open Storage Manager",
     "storage.suggestedLimit": "Suggested",
     "storage.alertDisabledHint": "Enable to set storage alert thresholds.",
-
     "__SECTION_PTB__": "--- PUBLIC TEST BUILD ---",
     "ptb.title": "Public Test Build",
     "ptb.understood": "Understood!",
-
     "__SECTION_BENCHMARK__": "--- BENCHMARK DASHBOARD ---",
     "benchmark.autostop": "Auto-stop",
     "benchmark.avg": "Average",
@@ -572,7 +555,6 @@
     "benchmark.stop": "Stop Tracking",
     "benchmark.title": "Performance Dashboard",
     "benchmark.maxSpeed": "Unlimited Speed",
-
     "__SECTION_REPO__": "--- SERVER REPOSITORY (SERVER MODE) ---",
     "repo.authorName": "Creator Name:",
     "repo.authorPlaceholder": "Your nickname",

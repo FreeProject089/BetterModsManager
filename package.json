@@ -5,7 +5,8 @@
     "scripts": {
         "tauri": "tauri",
         "dev": "npx tauri dev",
-        "build": "npx tauri build"
+        "build": "npx tauri build",
+        "test:i18n": "python tests/i18n_parity.test.py"
     },
     "devDependencies": {
         "@tauri-apps/cli": "^1"

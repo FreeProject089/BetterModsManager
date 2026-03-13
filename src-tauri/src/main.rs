@@ -205,7 +205,7 @@ fn main() {
             // Repo Server
             commands::repo_server::start_repo_server,
             commands::repo_server::stop_repo_server,
-            commands::repo_server::get_repo_server_current_status,
+            commands::repo_server::get_repo_server_status,
             commands::security::get_creator_id,
             commands::security::verify_repo_signature,
             commands::crash::finalize_and_close_app,
