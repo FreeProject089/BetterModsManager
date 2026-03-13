@@ -194,6 +194,57 @@ function openNewProfileModal() {
     document.getElementById('modal-new-profile').classList.add('open');
 }
 
+async function checkDuplicateModsFolder(targetPath, currentProfileId = null) {
+    if (localStorage.getItem('bmm_ignore_duplicate_folder') === 'true') return null;
+    try {
+        const profiles = await invoke('get_profiles');
+        const duplicate = profiles.find(p => p.id !== currentProfileId && p.mods_path.toLowerCase().replace(/[\\/]$/, '') === targetPath.toLowerCase().replace(/[\\/]$/, ''));
+        return duplicate ? duplicate.name : null;
+    } catch { return null; }
+}
+
+function showDuplicateFolderModal(conflictingProfileName) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('modal-duplicate-folder-warning');
+        const btnConfirm = document.getElementById('btn-confirm-duplicate-folder');
+        const btnCancel = modal.querySelector('[data-close="modal-duplicate-folder-warning"]');
+        const checkbox = document.getElementById('duplicate-folder-ignore-forever');
+        const msgText = document.getElementById('duplicate-folder-msg-text') || modal.querySelector('[data-i18n="prof.duplicateFolderMsg"]');
+
+        if (!modal || !btnConfirm) { resolve(true); return; }
+
+        if (msgText) {
+            msgText.innerHTML = t('prof.duplicateFolderMsg', { profile: `<strong style="color:var(--text-primary)">${escHtml(conflictingProfileName)}</strong>` });
+        }
+        
+        applyTranslations(modal);
+        
+        // Re-inject the profile name even after applyTranslations if it was overwritten
+        if (msgText) {
+            msgText.innerHTML = t('prof.duplicateFolderMsg', { profile: `<strong style="color:var(--text-primary)">${escHtml(conflictingProfileName)}</strong>` });
+        }
+
+        const onConfirm = () => {
+            if (checkbox.checked) localStorage.setItem('bmm_ignore_duplicate_folder', 'true');
+            cleanup();
+            resolve(true);
+        };
+        const onCancel = () => {
+            cleanup();
+            resolve(false);
+        };
+        const cleanup = () => {
+            btnConfirm.removeEventListener('click', onConfirm);
+            if (btnCancel) btnCancel.removeEventListener('click', onCancel);
+            modal.classList.remove('open');
+        };
+
+        btnConfirm.addEventListener('click', onConfirm);
+        if (btnCancel) btnCancel.addEventListener('click', onCancel);
+        modal.classList.add('open');
+    });
+}
+
 async function confirmCreateProfile() {
     const name = document.getElementById('prof-name').value.trim();
     const gameName = document.getElementById('prof-game').value.trim();
@@ -206,6 +257,13 @@ async function confirmCreateProfile() {
     if (!name || !gamePath || !modsPath || !backupPath) {
         toast(t('prof.missingFields'), 'error');
         return;
+    }
+
+    // Duplicate Check
+    const conflictingName = await checkDuplicateModsFolder(modsPath);
+    if (conflictingName) {
+        const confirmed = await showDuplicateFolderModal(conflictingName);
+        if (!confirmed) return;
     }
 
     try {
@@ -235,6 +293,13 @@ async function confirmEditProfile() {
         return;
     }
 
+    // Duplicate Check
+    const conflictingName = await checkDuplicateModsFolder(modsPath, profileId);
+    if (conflictingName) {
+        const confirmed = await showDuplicateFolderModal(conflictingName);
+        if (!confirmed) return;
+    }
+
     try {
         await invoke('update_profile', { profileId, name, gameName, gamePath, modsPath, backupPath, color, icon });
         
@@ -247,7 +312,7 @@ async function confirmEditProfile() {
         window.pendingBgState = { action: null, tmpPath: null };
 
         document.getElementById('modal-edit-profile').classList.remove('open');
-        toast(`Profil "${name}" mis à jour.`, 'success');
+        toast(t('prof.updated').replace('{name}', name), 'success');
         await renderProfiles();
         updateProfileChip();
         updateLibraryProfileSelector();

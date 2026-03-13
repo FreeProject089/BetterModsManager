@@ -2672,12 +2672,10 @@
                 </div>
                 <p style="font-size:13px; color:var(--text-muted); line-height:1.5" data-i18n="conflict.warningDesc">
                     L'ordre d'activation déterminera quel mod a la priorité. Voulez-vous continuer ?</p>
-                <div
-                    style="margin-top:20px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:13px; color:var(--text-secondary)">
-                    <input type="checkbox" id="conflict-ignore-forever" style="cursor:pointer" />
-                    <label for="conflict-ignore-forever" style="cursor:pointer" data-i18n="conflict.dontShow">Ne plus
-                        m'avertir</label>
-                </div>
+                <label class="checkbox-container" style="margin-top:20px; display:flex; align-items:center; justify-content:center; gap:10px; font-size:13px; color:var(--text-secondary); cursor:pointer; padding:10px; border-radius:10px; transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                    <input type="checkbox" id="conflict-ignore-forever" style="width:18px; height:18px; cursor:pointer" />
+                    <span data-i18n="conflict.dontShow">Ne plus m'avertir</span>
+                </label>
             </div>
             <div class="modal-footer" style="padding: 12px 20px;">
                 <button class="btn btn-ghost" data-close="modal-conflict-warning"
@@ -2685,6 +2683,45 @@
                 <button class="btn btn-primary" id="btn-confirm-conflict-toggle"
                     style="background:var(--warning); border-color:var(--warning); color:#000">
                     <span data-i18n="lib.confirm">Continuer l'activation</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Duplicate Folder Warning Modal -->
+    <div class="modal-overlay" id="modal-duplicate-folder-warning">
+        <div class="modal glass" style="max-width:550px; border:1px solid rgba(239, 68, 68, 0.3); border-radius:12px; overflow:hidden">
+            <div class="modal-header" style="background: linear-gradient(to right, rgba(239, 68, 68, 0.15), transparent); border-bottom: 1px solid rgba(239, 68, 68, 0.1); padding: 20px 24px;">
+                <div style="display:flex; align-items:center; gap:16px">
+                    <div style="width:40px; height:40px; border-radius:10px; background:rgba(239,68,68,0.2); display:flex; align-items:center; justify-content:center; border:1px solid rgba(239,68,68,0.3)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                    </div>
+                    <h2 class="modal-title" style="color:#ef4444; font-weight:800; margin:0" data-i18n="prof.duplicateFolderTitle">Action Risquée Détectée</h2>
+                    <button class="modal-close" data-close="modal-duplicate-folder-warning">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body" style="padding: 24px; text-align: left;">
+                <div style="background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.1); border-radius:12px; padding:16px; margin-bottom:20px">
+                    <p style="font-weight:600; font-size:15px; color:var(--text-primary); line-height:1.5; margin:0" data-i18n="prof.duplicateFolderMsg">Attention : Ce dossier de mods est déjà utilisé par un autre profil !</p>
+                </div>
+                
+                <p style="color:var(--text-secondary); line-height:1.6; font-size:13px; margin-bottom:20px" data-i18n="prof.duplicateFolderDesc">
+                    Partager un même dossier entre plusieurs profils est une source majeure d'<strong>erreur humaine</strong>. Vous risquez d'activer par inadvertance des mods destinés à un autre jeu ou une autre configuration.
+                </p>
+
+                <label class="checkbox-container" style="margin-top:20px; padding:12px; border-radius:10px; background:rgba(255,255,255,0.02); display:flex; align-items:center; gap:12px; cursor:pointer; transition:all 0.2s; user-select:none" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+                    <input type="checkbox" id="duplicate-folder-ignore-forever" style="width:20px; height:20px; cursor:pointer" />
+                    <span data-i18n="prof.duplicateFolderDontShow" style="font-size:13px; font-weight:500; color:var(--text-muted)">Ne plus m'avertir</span>
+                </label>
+            </div>
+            <div class="modal-footer" style="padding: 16px 24px; background:rgba(255,255,255,0.01)">
+                <button class="btn btn-ghost" data-close="modal-duplicate-folder-warning"
+                    data-i18n="prof.cancel">Annuler</button>
+                <button class="btn btn-primary" id="btn-confirm-duplicate-folder"
+                    style="background:#ef4444; border:none; color:white; font-weight:700; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2)">
+                    <span data-i18n="lib.confirm">Continuer malgré les risques</span>
                 </button>
             </div>
         </div>

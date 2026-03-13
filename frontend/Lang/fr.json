@@ -180,6 +180,11 @@
     "prof.subtitle": "Gérez vos configurations par jeu",
     "prof.title": "Profils",
     "prof.updated": "Profil \"{name}\" mis à jour.",
+    "prof.duplicateFolderTitle": "Avertissement : Dossier en double",
+    "prof.duplicateFolderMsg": "Attention : Ce dossier de mods est déjà utilisé par le profil : {profile}",
+    "prof.duplicateFolderDesc": "Partager un même dossier entre plusieurs profils est une source majeure d'<strong>erreur humaine</strong>. Vous risquez d'activer par inadvertance des mods destinés à un autre jeu ou une autre configuration, ce qui peut corrompre votre installation ou provoquer des plantages imprévus. Êtes-vous sûr de vouloir continuer ?",
+    "prof.duplicateFolderDontShow": "Ne plus m'avertir",
+
 
     "__SECTION_MM__": "--- LISTES DE MODS (.MM) ---",
     "mm.alreadyPresent": "Déjà présent",

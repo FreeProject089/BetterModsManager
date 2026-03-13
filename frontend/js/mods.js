@@ -523,6 +523,11 @@ async function renderModList() {
         }
       }
 
+      const statusDot = card.querySelector('.mod-status-dot');
+      if (statusDot) {
+        statusDot.className = `mod-status-dot ${mod.enabled ? 'enabled' : 'disabled'}`;
+      }
+
       const statusPill = card.querySelector('.mod-status-pill');
       if (statusPill) {
         statusPill.className = `mod-status-pill ${mod.enabled ? 'enabled' : 'disabled'}`;

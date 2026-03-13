@@ -42,21 +42,56 @@ fn main() {
 
                 let data = app_state.data.lock().unwrap();
                 commands::crash::log_line(format!("[STARTUP-INFO] Profile Count: {}", data.profiles.len()));
+                
+                // Track paths to detect collisions
+                let mut mods_folders: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+                let mut game_folders: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+
                 for p in &data.profiles {
-                    commands::crash::log_line(format!("  - Profile: {} (ID: {})", p.name, p.id));
+                    commands::crash::log_line(format!("  [PROFILE] {} (ID: {})", p.name, p.id));
+                    commands::crash::log_line(format!("    - Icon: {:?}", p.icon));
+                    commands::crash::log_line(format!("    - Background: {:?}", p.background_image));
+                    commands::crash::log_line(format!("    - Game Path: {:?}", p.game_path));
+                    commands::crash::log_line(format!("    - Mods Path: {:?}", p.mods_path));
+                    commands::crash::log_line(format!("    - Backup Path: {:?}", p.backup_path));
+                    commands::crash::log_line(format!("    - Active Mods: {}", p.active_mods.len()));
+
+                    // Collect for collision analysis (normalized lowercase strings)
+                    let m_path = p.mods_path.to_string_lossy().to_lowercase().trim_end_matches(['/', '\\']).to_string();
+                    let g_path = p.game_path.to_string_lossy().to_lowercase().trim_end_matches(['/', '\\']).to_string();
+                    
+                    if !m_path.is_empty() {
+                        mods_folders.entry(m_path).or_default().push(p.name.clone());
+                    }
+                    if !g_path.is_empty() {
+                        game_folders.entry(g_path).or_default().push(p.name.clone());
+                    }
                 }
-                commands::crash::log_line(format!("[STARTUP-INFO] Mod Count: {}", data.mods.len()));
+
+                // Path Collision Analysis
+                for (path, profiles) in mods_folders {
+                    if profiles.len() > 1 {
+                        commands::crash::log_line(format!("[WARNING] SHARED MODS FOLDER DETECTED: '{}' is used by {} profiles: {:?}", path, profiles.len(), profiles));
+                    }
+                }
+                for (path, profiles) in game_folders {
+                    if profiles.len() > 1 {
+                        commands::crash::log_line(format!("[WARNING] SHARED GAME FOLDER DETECTED: '{}' is used by {} profiles: {:?}", path, profiles.len(), profiles));
+                    }
+                }
+
+                commands::crash::log_line(format!("[STARTUP-INFO] Total Mod Registry Count: {}", data.mods.len()));
                 if let Some(active_id) = &data.active_profile_id {
                     if let Some(active_profile) = data.profiles.iter().find(|p| &p.id == active_id) {
-                        commands::crash::log_line(format!("[STARTUP-INFO] Mods in Active Profile ({}):", active_profile.name));
+                        commands::crash::log_line(format!("[STARTUP-INFO] Active Profile: {} ({} mods enabled)", active_profile.name, active_profile.active_mods.len()));
                         for mod_id in &active_profile.active_mods {
                             if let Some(m) = data.mods.iter().find(|m| &m.id == mod_id) {
-                                commands::crash::log_line(format!("    - Mod: {} | Status: {}", m.name, if m.enabled { "ENABLED" } else { "DISABLED" }));
+                                commands::crash::log_line(format!("    - Enabled Mod: {} (ID: {})", m.name, m.id));
                             }
                         }
                     }
                 }
-                commands::crash::log_line(format!("[STARTUP-INFO] Settings: Filter: {}, Sort: {}, Lang: {}", 
+                commands::crash::log_line(format!("[STARTUP-INFO] App Settings: Filter: {}, Sort: {}, Lang: {}", 
                     data.settings.current_filter, data.settings.current_sort_by, data.settings.language));
             }
 
