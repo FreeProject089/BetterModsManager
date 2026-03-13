@@ -8,6 +8,35 @@ let _dialog;
 let _notifModule;
 let _convertFileSrc;
 
+// --- Console Interceptor ---
+const originalLog = console.log;
+const originalWarn = console.warn;
+const originalError = console.error;
+
+function bridgeLog(level, args) {
+    const message = args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+    ).join(' ');
+    
+    // Send to backend if bridge is available
+    if (_invoke) {
+        _invoke('log_frontend_line', { line: `[${level}] ${message}` }).catch(() => {});
+    }
+}
+
+console.log = (...args) => {
+    originalLog.apply(console, args);
+    bridgeLog('INFO', args);
+};
+console.warn = (...args) => {
+    originalWarn.apply(console, args);
+    bridgeLog('WARN', args);
+};
+console.error = (...args) => {
+    originalError.apply(console, args);
+    bridgeLog('ERROR', args);
+};
+
 export async function loadTauri() {
     // 1. Prioritize window.__TAURI__ (injected locally by Tauri when withGlobalTauri is true)
     if (window.__TAURI__) {

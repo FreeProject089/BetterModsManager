@@ -774,7 +774,7 @@ pub async fn install_from_modlist(
     let mut newly_added_mod_ids: Vec<String> = Vec::new();
     let mut newly_added_mod_folders: Vec<PathBuf> = Vec::new();
 
-    let (mods_path, profile_id_for_mods) = {
+    let (mods_path, _profile_id_for_mods) = {
         let mut data = state.data.lock().unwrap();
         if create_profile {
             let new_id = uuid::Uuid::new_v4().to_string();
@@ -1052,17 +1052,7 @@ pub async fn install_from_modlist(
         return Err("Installation annulée.".to_string());
     }
 
-    // --- FINAL ASSOCIATION: Add mods to the profile ---
-    {
-        let mut data = state.data.lock().unwrap();
-        if let Some(p) = data.profiles.iter_mut().find(|p| p.id == profile_id_for_mods) {
-            for mid in newly_added_mod_ids {
-                if !p.active_mods.contains(&mid) {
-                    p.active_mods.push(mid);
-                }
-            }
-        }
-    }
+
 
     let _ = state.save();
     Ok(results)

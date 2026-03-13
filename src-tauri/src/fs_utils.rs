@@ -133,6 +133,20 @@ pub fn apply_mod_stacked(
     Ok(applied)
 }
 
+/// Strip Windows UNC prefix (\\?\) or (\??\) if present, and normalize to common format
+fn normalize_path(path: PathBuf) -> PathBuf {
+    let path_str = path.to_string_lossy();
+    let mut s = path_str.as_ref();
+    if s.starts_with(r"\\?\") {
+        s = &s[4..];
+    } else if s.starts_with(r"\??\") {
+        s = &s[4..];
+    }
+    
+    // Normalize slashes to backslashes for consistency on Windows
+    PathBuf::from(s.replace('/', "\\"))
+}
+
 /// Unapply a mod: for each file, find if another active mod provides it.
 /// If not, restore from _original.
 pub fn unapply_mod_stacked(
@@ -142,7 +156,8 @@ pub fn unapply_mod_stacked(
     other_active_mods: &[(String, PathBuf)],
     game_path_limit: Option<u64>,
 ) -> Result<()> {
-    let game_path_can = game_path.canonicalize().unwrap_or(game_path.to_path_buf());
+    // Canonicalize to follow symlinks/junctions, then normalize to strip UNC prefixes
+    let game_path_norm = normalize_path(game_path.canonicalize().unwrap_or_else(|_| game_path.to_path_buf()));
     
     for rel_str in files_to_remove {
         let rel = PathBuf::from(&rel_str);
@@ -153,7 +168,7 @@ pub fn unapply_mod_stacked(
         for (_, mod_folder) in other_active_mods {
             let mod_src = mod_folder.join(&rel);
             if mod_src.exists() && mod_src.is_file() {
-                let _ = copy_file_force_limited(&mod_src, &dst_path, game_path_limit);
+                copy_file_force_limited(&mod_src, &dst_path, game_path_limit)?;
                 restored = true;
                 break;
             }
@@ -163,23 +178,37 @@ pub fn unapply_mod_stacked(
         if !restored {
             let original_src = profile_backup_root.join("_original").join(&rel);
             if original_src.exists() {
-                let _ = copy_file_force_limited(&original_src, &dst_path, game_path_limit);
+                copy_file_force_limited(&original_src, &dst_path, game_path_limit)?;
             } else {
                 // File was added by mod and no original exists — DELETE IT
-                let _ = ensure_removed(&dst_path);
+                let _ = ensure_removed(&dst_path); 
             }
         }
 
         // 3. Clean up empty parent directories
-        let mut parent = dst_path.parent().map(|p| p.to_path_buf());
-        while let Some(p) = parent {
-            let p_can = p.canonicalize().unwrap_or(p.clone());
-            if p_can == game_path_can || !p_can.starts_with(&game_path_can) { break; }
-            if p_can.exists() && std::fs::read_dir(&p_can).map(|mut d| d.next().is_none()).unwrap_or(false) {
-                let _ = std::fs::remove_dir(&p_can);
-                parent = p_can.parent().map(|p| p.to_path_buf());
+        let mut current_p = dst_path.parent().map(|p| p.to_path_buf());
+        while let Some(p) = current_p {
+            let p_norm = normalize_path(p.canonicalize().unwrap_or_else(|_| p.clone()));
+            
+            // Safety: Don't go above or out of game_path
+            if p_norm == game_path_norm || !p_norm.starts_with(&game_path_norm) { break; }
+            
+            if p_norm.exists() {
+                match fs::read_dir(&p_norm) {
+                    Ok(mut entries) => {
+                        if entries.next().is_none() {
+                            let _ = fs::remove_dir(&p_norm);
+                            current_p = p_norm.parent().map(|parent| parent.to_path_buf());
+                        } else {
+                            // Directory is not empty
+                            break;
+                        }
+                    }
+                    Err(_) => break, // Permission denied or other error
+                }
             } else {
-                break;
+                // Already deleted?
+                current_p = p_norm.parent().map(|parent| parent.to_path_buf());
             }
         }
     }

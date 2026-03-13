@@ -68,6 +68,7 @@ export const appState = new StateManager({
     currentSort: 'name_asc',
     selectedModId: null,
     processingMods: new Set(),
+    isGlobalProcessing: false,
     conflictCache: {},
     isCompact: localStorage.getItem('bmm-view-compact') === 'true'
 });

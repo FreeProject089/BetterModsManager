@@ -150,7 +150,7 @@ pub fn is_update_disabled(app_handle: tauri::AppHandle) -> bool {
 }
 
 fn get_lang_dir(app_handle: &tauri::AppHandle) -> std::path::PathBuf {
-    let mut path = app_handle
+    let path = app_handle
         .path_resolver()
         .resource_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."));

@@ -611,6 +611,11 @@ function createModCard(mod) {
   // Toggle handler
   const toggle = card.querySelector('.mod-toggle-input');
   toggle.addEventListener('change', async () => {
+    if (S.isGlobalProcessing || S.processingMods.has(mod.id)) {
+      toggle.checked = !toggle.checked;
+      return;
+    }
+
     // Conflict Check (Keep it blocking for safety)
     const conflicts = S.conflictCache[mod.id];
     const ignoreConflicts = localStorage.getItem('bmm_ignore_conflicts') === 'true';
@@ -635,6 +640,7 @@ function createModCard(mod) {
     }
 
     const originalState = !toggle.checked;
+    S.isGlobalProcessing = true;
     S.processingMods.add(mod.id);
     renderModList(); // Show loading state immediately
 
@@ -664,6 +670,7 @@ function createModCard(mod) {
       }
     } finally {
       S.processingMods.delete(mod.id);
+      S.isGlobalProcessing = false;
       await refreshMods();
     }
   });
@@ -1046,6 +1053,11 @@ async function toggleAllMods(forcedEnable = null) {
   const targetMods = enable ? S.allMods.filter(m => !m.enabled) : S.allMods.filter(m => m.enabled);
   if (targetMods.length === 0) return;
 
+  // Add all target mods to processing set
+  S.isGlobalProcessing = true;
+  targetMods.forEach(m => S.processingMods.add(m.id));
+  renderModList(); // Show loading state immediately on all affected cards
+
   const btn = document.getElementById('btn-enable-all');
   const altBtn = document.getElementById('btn-disable-all-alt');
   const originalHtml = btn.innerHTML;
@@ -1063,9 +1075,12 @@ async function toggleAllMods(forcedEnable = null) {
   } catch (err) {
     toast(t('common.error') + ' : ' + err, 'error');
   } finally {
+    targetMods.forEach(m => S.processingMods.delete(m.id));
+    S.isGlobalProcessing = false;
     btn.disabled = false;
     if (altBtn) altBtn.disabled = false;
     btn.innerHTML = originalHtml;
+    await refreshMods();
   }
 }
 
@@ -1091,14 +1106,14 @@ function updateToggleAllBtn() {
   const allEnabled = S.allMods.length > 0 && S.allMods.every(m => m.enabled);
 
   if (allEnabled) {
-    label.innerHTML = t('lib.disableAll');
-    svg.innerHTML = '<path d="M18 6L6 18M6 6l12 12" /><circle cx="12" cy="12" r="10" />';
+    if (label) label.innerHTML = t('lib.disableAll');
+    if (svg) svg.innerHTML = '<path d="M18 6L6 18M6 6l12 12" /><circle cx="12" cy="12" r="10" />';
     btn.className = 'btn btn-ghost btn-split-main';
     btn.style.color = 'var(--danger)';
     if (container) container.classList.add('all-enabled');
   } else {
-    label.innerHTML = t('lib.enableAll');
-    svg.innerHTML = '<path d="m5 12 5 5L20 7" /><circle cx="12" cy="12" r="10" />';
+    if (label) label.innerHTML = t('lib.enableAll');
+    if (svg) svg.innerHTML = '<path d="m5 12 5 5L20 7" /><circle cx="12" cy="12" r="10" />';
     btn.className = 'btn btn-primary btn-split-main';
     btn.style.color = '';
     if (container) container.classList.remove('all-enabled');
