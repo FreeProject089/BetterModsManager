@@ -762,7 +762,7 @@ function openCropOverlay(sourcePath, profile) {
         } catch (e) {
             toast('Erreur recadrage: ' + e, 'error');
             btn.disabled = false;
-            btn.textContent = 'Valider le recadrage';
+            btn.textContent = t('prof.bgCropConfirm');
         }
     });
 }

@@ -204,7 +204,7 @@ pub async fn start_repo_server(
 }
 
 #[tauri::command]
-pub fn get_repo_server_status(state: tauri::State<'_, RepoServerState>) -> Result<Option<StartServerResult>, String> {
+pub fn get_repo_server_current_status(state: tauri::State<'_, RepoServerState>) -> Result<Option<StartServerResult>, String> {
     let tx_lock = state.shutdown_tx.lock().unwrap();
     if tx_lock.is_none() {
         return Ok(None);

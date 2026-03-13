@@ -1113,6 +1113,7 @@ function initNavbarLangDropdown() {
         });
     }
     render();
+    document.addEventListener('langChanged', render);
 }
 
 // ── Navbar Version Button ────────────────────────────────
@@ -1407,7 +1408,7 @@ async function main() {
     const loaderImg = document.getElementById('loader-img');
     const loaderText = document.getElementById('loader-text');
     if (loaderImg) loaderImg.src = 'assets/Tasky_Happy.png';
-    if (loaderText) loaderText.textContent = 'CHARGÉ !';
+    if (loaderText) loaderText.textContent = t('common.loaded');
 
     // Hide loader smoothly after a small delay to see the happy face
     const loader = document.getElementById('app-loader');
@@ -1790,7 +1791,7 @@ async function main() {
                             } catch (err) { toast('Error: ' + err, 'error'); }
                         });
                     } catch (err) {
-                        resultSpan.textContent = 'Error: ' + err;
+                        resultSpan.textContent = t('common.error') + ': ' + err;
                         resultSpan.style.color = 'var(--error)';
                     }
                     btn.disabled = false;
@@ -2362,7 +2363,7 @@ function showUpdateAvailableModal(info) {
                 let filename = info.download_url.split('/').pop() || 'setup.exe';
                 if (!filename.includes('.')) filename += '.exe';
                 await invoke('download_and_install_update', { url: info.download_url, filename });
-                downloadBtn.innerHTML = 'Installing...';
+                downloadBtn.innerHTML = t('common.installing');
             } catch (err) {
                 toast(`Failed to download update: ${err}`, 'error');
                 downloadBtn.disabled = false;
@@ -2529,7 +2530,7 @@ async function openLicenseModal() {
         const text = await invoke('get_license_text');
         contentEl.textContent = text;
     } catch (err) {
-        contentEl.textContent = "Error loading license: " + err;
+        contentEl.textContent = t('common.error') + " (License): " + err;
     }
 }
 

@@ -1,7 +1,7 @@
 /**
  * onboarding.js — Tasky onboarding tutorial with language selection
  */
-import { t, setLang, applyTranslations } from './i18n.js';
+import { t, getLang, setLang, applyTranslations, getLanguages, refreshLanguages } from './i18n.js';
 
 function getSteps() {
     return [
@@ -143,6 +143,13 @@ export async function markOnboardingShown() {
 export function startOnboarding() {
     currentStep = -1;
     renderOnboarding();
+
+    // Reactive re-render on language change
+    document.addEventListener('langChanged', () => {
+        if (document.getElementById('onboarding-overlay')) {
+            renderOnboarding();
+        }
+    });
 }
 
 function renderOnboarding() {
@@ -160,6 +167,20 @@ function renderOnboarding() {
 
     // Step -1: Language selection
     if (currentStep === -1) {
+        const languages = getLanguages();
+        const appLang = getLang();
+        const current = languages.find(l => l.code === appLang) || languages.find(l => l.active) || languages[0];
+
+        const getFlag = (l) => {
+            if (!l || !l.flag) return '⚪';
+            const f = l.flag.trim();
+            if (f.length === 2) {
+                const code = f.toLowerCase();
+                return `<img src="https://flagcdn.com/w20/${code}.png" width="20" height="14" style="border-radius:2px;object-fit:cover;margin-right:8px">`;
+            }
+            return `<span style="margin-right:8px">${f}</span>`;
+        };
+
         overlay.innerHTML = `
         <div class="onboarding-card">
           <div class="onboarding-mascot">
@@ -169,27 +190,62 @@ function renderOnboarding() {
             <div class="onboarding-header">
               <span class="onboarding-label">TASKY</span>
             </div>
-            <h3 class="onboarding-title">🌐 Select Language</h3>
-            <p class="onboarding-text" style="opacity:1">Choisissez votre langue / Choose your language</p>
-            <div class="onboarding-actions" style="flex-direction:column;gap:8px;margin-top:16px">
-              <button class="btn btn-primary" id="btn-lang-fr" style="justify-content:center;width:100%"><svg width="16" height="12" viewBox="0 0 3 2" style="margin-right:8px"><rect width="1" height="2" fill="#002395"/><rect width="1" height="2" x="1" fill="#fff"/><rect width="1" height="2" x="2" fill="#ED2939"/></svg> Français</button>
-              <button class="btn btn-primary" id="btn-lang-en" style="justify-content:center;width:100%"><svg width="16" height="12" viewBox="0 0 60 30" style="margin-right:8px"><clipPath id="s"><path d="M0,0 v30 h60 v-30 z"/></clipPath><clipPath id="t"><path d="M30,15 h30 v15 z v0 h-30 z v-15 h-30 z v0 h30 z"/></clipPath><g clip-path="url(#s)"><path d="M0,0 v30 h60 v-30 z" fill="#012169"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/><path d="M0,0 L60,30 M60,0 L0,30" stroke="#C8102E" stroke-width="4" clip-path="url(#t)"/><path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"/><path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"/></g></svg> English</button>
+            <h3 class="onboarding-title" data-i18n="onboarding.lang_title">🌐 Select Language</h3>
+            <p class="onboarding-text" style="opacity:1" data-i18n="onboarding.lang_desc">Choisissez votre langue / Choose your language</p>
+            
+            <div class="onboarding-actions" style="position:relative; flex-direction:column; gap:8px; margin-top:16px; height:auto">
+              <button class="nav-lang-btn" id="onboarding-lang-toggle" style="width:100%; background:rgba(255,255,255,0.05); border:1px solid var(--border)">
+                <span class="nav-lang-flag">${getFlag(current)}</span>
+                <span class="nav-lang-name">${current.name}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="nav-lang-chevron"><polyline points="18 15 12 9 6 15"/></svg>
+              </button>
+              
+              <div class="settings-lang-menu" id="onboarding-lang-menu" style="position:absolute; bottom:100%; left:0; right:0; margin-bottom:8px; top:auto; z-index:10001">
+                ${languages.map(l => `
+                  <button class="nav-lang-option ${l.active ? 'active' : ''}" data-lang="${l.code}">
+                    <span class="nav-lang-flag">${getFlag(l)}</span>
+                    <span>${l.name}</span>
+                    ${l.active ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+                  </button>
+                `).join('')}
+              </div>
+
+              <button class="btn btn-primary" id="btn-lang-confirm" style="width:100%; margin-top:12px; justify-content:center">OK</button>
             </div>
           </div>
         </div>
         `;
-        document.getElementById('btn-lang-fr').addEventListener('click', () => {
-            setLang('fr');
-            applyTranslations();
+
+        const toggle = document.getElementById('onboarding-lang-toggle');
+        const menu = document.getElementById('onboarding-lang-menu');
+        const confirmBtn = document.getElementById('btn-lang-confirm');
+
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menu.classList.toggle('open');
+            toggle.classList.toggle('open');
+        });
+
+        menu.querySelectorAll('.nav-lang-option').forEach(opt => {
+            opt.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const lang = opt.dataset.lang;
+                await setLang(lang);
+                // renderOnboarding() will be triggered by the 'langChanged' event
+            });
+        });
+
+        confirmBtn.addEventListener('click', () => {
             currentStep = 0;
             renderOnboarding();
         });
-        document.getElementById('btn-lang-en').addEventListener('click', () => {
-            setLang('en');
-            applyTranslations();
-            currentStep = 0;
-            renderOnboarding();
-        });
+
+        // Close menu on click outside
+        document.addEventListener('click', () => {
+            menu.classList.remove('open');
+            toggle.classList.remove('open');
+        }, { once: true });
+
         return;
     }
 

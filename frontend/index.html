@@ -874,11 +874,11 @@
                             <div style="display:flex;gap:8px;margin-top:10px">
                                 <button class="btn btn-secondary btn-sm" id="btn-pause-sync" style="display:none;flex:1;justify-content:center;gap:6px">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                                    <span id="repo-sync-pause-text">Pause</span>
+                                    <span id="repo-sync-pause-text" data-i18n="common.pause">Pause</span>
                                 </button>
                                 <button class="btn btn-outline-danger btn-sm" id="btn-cancel-sync" style="display:none;flex:1;justify-content:center;gap:6px;color:var(--danger);border-color:rgba(239,68,68,0.2)">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                    <span>Annuler</span>
+                                    <span data-i18n="common.cancel">Annuler</span>
                                 </button>
                             </div>
                         </div>
@@ -1624,31 +1624,19 @@
 
                 <div style="max-width: 850px; margin: 0 auto; padding: 20px 20px 60px;">
                     <!-- HERO SECTION -->
-                    <div class="glass-card"
-                        style="padding: 48px 32px; border-radius: 24px; text-align: center; margin-bottom: 32px; position: relative; overflow: hidden; border: 1px solid rgba(59, 130, 246, 0.15); background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.2) 100%);">
-                        <div
-                            style="position: absolute; top: -50px; left: 50%; transform: translateX(-50%); width: 300px; height: 300px; background: var(--accent); opacity: 0.03; filter: blur(80px); pointer-events: none;">
-                        </div>
+                    <div class="glass-card credits-hero-section">
+                        <div class="credits-hero-inner-glow"></div>
 
-                        <div
-                            style="display: inline-flex; width: 84px; height: 84px; background: rgba(0,0,0,0.5); border: 1px solid var(--border); border-radius: 20px; align-items: center; justify-content: center; margin-bottom: 24px; position: relative; z-index: 1; box-shadow: 0 8px 32px rgba(0,0,0,0.4); overflow: hidden;">
+                        <div class="credits-hero-logo-box">
                             <img src="assets/BMm.png" alt="BM" style="width: 100%; height: 100%; object-fit: cover;" />
                         </div>
 
-                        <h1
-                            style="font-size: 32px; font-weight: 800; color: var(--text-primary); margin-bottom: 12px; letter-spacing: -0.02em;">
-                            Better Mod.Manager</h1>
-                        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 24px;"
-                            id="app-build-display">Build: 2026-03-10 —
-                            v0.9.7-PTB</p>
+                        <h1 class="credits-hero-title">Better Mod.Manager</h1>
+                        <p class="credits-hero-build" id="app-build-display">Build: 2026-03-10 — v0.9.7-PTB</p>
 
-                        <div id="credits-hero-version"
-                            style="display: inline-flex; align-items: center; background: rgba(59, 130, 246, 0.12); color: var(--accent); padding: 5px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; font-family: var(--font-mono); border: 1px solid rgba(59, 130, 246, 0.25); margin-bottom: 32px;">
-                            —
-                        </div>
+                        <div id="credits-hero-version" class="credits-hero-version-pill">—</div>
 
-                        <p style="font-size: 15px; color: var(--text-secondary); line-height: 1.7; max-width: 560px; margin: 0 auto; font-weight: 500;"
-                            data-i18n="credits.heroDesc">
+                        <p class="credits-hero-description" data-i18n="credits.heroDesc">
                             Un outil complet pour gérer vos mods et optimiser votre expérience. Sélectionnez vos
                             fichiers, automatisez vos installations et gérez vos profils avec une interface workstation
                             moderne.
@@ -1656,48 +1644,35 @@
                     </div>
 
                     <!-- INFO CARDS GRID -->
-                    <div class="credit-info-grid"
-                        style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px;">
-                        <div class="credit-info-card glass-card"
-                            style="padding: 24px; border-radius: 18px; display: flex; align-items: center; gap: 18px; border: 1px solid var(--border);">
-                            <img src="assets/pfp.webp" alt="FreeProject089"
-                                style="width: 58px; height: 58px; border-radius: 16px; border: 2px solid rgba(255,255,255,0.1); object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" />
+                    <div class="credit-info-grid">
+                        <div class="credit-info-card credit-info-card-full glass-card">
+                            <img src="assets/pfp.webp" alt="FreeProject089" class="credit-author-avatar" />
                             <div>
-                                <div class="credit-info-label" data-i18n="credits.author"
-                                    style="margin-bottom: 4px; opacity: 0.5; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;">
+                                <div class="credit-info-label credit-info-label-sub" data-i18n="credits.author">
                                     AUTEUR</div>
-                                <div class="credit-info-value"
-                                    style="font-size: 19px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em;">
+                                <div class="credit-info-value credit-info-value-large">
                                     FreeProject089</div>
-                                <div class="credit-info-sub" data-i18n="credits.devRole"
-                                    style="font-size: 13px; color: var(--text-muted); font-weight: 500;">Créateur &
+                                <div class="credit-info-sub credit-info-sub-muted" data-i18n="credits.devRole">Créateur &
                                     Développeur</div>
                             </div>
                         </div>
 
-                        <div class="credit-info-card glass-card"
-                            style="padding: 24px; border-radius: 18px; display: flex; align-items: center; gap: 18px; border: 1px solid var(--border);">
-                            <div class="credit-icon-box"
-                                style="width: 58px; height: 58px; border-radius: 16px; background:rgba(255,100,50,0.1); border: 1px solid rgba(255,100,50,0.2); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);">
-                                <img src="assets/rust-logo.svg" alt="Rust"
-                                    style="width: 32px; height: 32px; filter: invert(41%) sepia(34%) saturate(3033%) hue-rotate(345deg) brightness(98%) contrast(92%);" />
+                        <div class="credit-info-card credit-info-card-full glass-card">
+                            <div class="credit-rust-icon-box">
+                                <img src="assets/rust-logo.svg" alt="Rust" class="credit-rust-logo" />
                             </div>
                             <div class="credit-info-text">
-                                <div class="credit-info-label" data-i18n="credits.rustLabel"
-                                    style="margin-bottom: 4px; opacity: 0.5; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;">
+                                <div class="credit-info-label credit-info-label-sub" data-i18n="credits.rustLabel">
                                     RUST ARCHITECTURE</div>
-                                <div class="credit-info-value" data-i18n="credits.rustSub"
-                                    style="font-size: 17px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; line-height: 1.3;">
+                                <div class="credit-info-value credit-info-value-main" data-i18n="credits.rustSub">
                                     Moteur robuste : Sécurité mémoire & Performance brute</div>
                             </div>
                         </div>
                     </div>
 
                     <!-- COMMUNITY LINKS CARD (IMAGE 4) -->
-                    <div class="glass-card"
-                        style="padding: 24px; border-radius: 20px; border: 1px solid var(--border);">
-                        <div
-                            style="display:flex; align-items:center; gap:10px; margin-bottom:20px; color:var(--text-primary); font-weight:700; font-size:15px; letter-spacing: -0.01em;">
+                    <div class="glass-card credits-community-card">
+                        <div class="credits-section-title">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
                                 stroke-width="2.5">
                                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
@@ -1706,10 +1681,10 @@
                             <span data-i18n="credits.linksTitle">Liens & Communauté</span>
                         </div>
 
-                        <div class="credit-links-list" style="display: flex; flex-direction: column; gap: 12px;">
-                            <a href="https://github.com/better-dcs/BetterModsManager" target="_blank"
-                                class="credit-link-card" style="border-left: 3px solid #64748b;">
-                                <div class="credit-icon-box" style="background: rgba(255,255,255,0.08); color: #fff;">
+                        <div class="credit-links-list credit-links-list-container">
+                            <a href="https://github.com/better-dcs/BetterModsManager" target="_blank" rel="noopener noreferrer"
+                                class="credit-link-card credit-link-card-github">
+                                <div class="credit-icon-box credit-icon-box-github">
                                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2.2">
                                         <path
@@ -1717,10 +1692,10 @@
                                     </svg>
                                 </div>
                                 <div class="credit-info">
-                                    <div class="credit-title" style="color: var(--text-primary); font-size: 15px;"
+                                    <div class="credit-title credit-title-github"
                                         data-i18n="credits.githubRepo">Dépôt
                                         GitHub</div>
-                                    <div class="credit-subtitle" data-i18n="credits.githubSub">Code source &
+                                    <div class="credit-subtitle credit-subtitle-muted" data-i18n="credits.githubSub">Code source &
                                         contributions</div>
                                 </div>
                                 <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -1731,18 +1706,17 @@
                                 </svg>
                             </a>
 
-                            <a href="https://discord.com/invite/CTaaEF9R75" target="_blank" class="credit-link-card"
-                                style="border-left: 3px solid #5865F2;">
-                                <div class="credit-icon-box" style="background: rgba(88,101,242,0.1); color: #5865F2;">
+                            <a href="https://discord.com/invite/CTaaEF9R75" target="_blank" rel="noopener noreferrer" class="credit-link-card credit-link-card-discord">
+                                <div class="credit-icon-box credit-icon-box-discord">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                         <path
                                             d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 11.756 11.756 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.078.078 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.332c-1.183 0-2.157-1.085-2.157-2.42s.955-2.42 2.157-2.42c1.21 0 2.176 1.085 2.156 2.42 0 1.335-.956 2.42-2.156 2.42zm7.974 0c-1.183 0-2.157-1.085-2.157-2.42s.955-2.42 2.157-2.42c1.21 0 2.176 1.085 2.156 2.42 0 1.335-.946 2.42-2.156 2.42z" />
                                     </svg>
                                 </div>
                                 <div class="credit-info">
-                                    <div class="credit-title" style="color: #8b9dfa; font-size: 15px;"
+                                    <div class="credit-title credit-title-discord"
                                         data-i18n="credits.discord">Communauté Discord</div>
-                                    <div class="credit-subtitle" style="font-size: 12px; opacity: 0.7;"
+                                    <div class="credit-subtitle credit-subtitle-muted"
                                         data-i18n="credits.discordSub">Aide & Mises à jour</div>
                                 </div>
                                 <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -1753,18 +1727,17 @@
                                 </svg>
                             </a>
 
-                            <a href="https://forum.dcs.world/topic/385941-better-modmanager/" target="_blank"
-                                class="credit-link-card" style="border-left: 3px solid #ff9800;">
-                                <div class="credit-icon-box"
-                                    style="background: rgba(0,0,0,0.4); border-radius: 10px; overflow: hidden; padding: 0; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
+                            <a href="https://forum.dcs.world/topic/385941-better-modmanager/" target="_blank" rel="noopener noreferrer"
+                                class="credit-link-card credit-link-card-ed">
+                                <div class="credit-icon-box credit-icon-box-ed">
                                     <img src="assets/ED.webp" alt="ED"
                                         style="width: 100%; height: 100%; object-fit: cover; filter: brightness(1.2);" />
                                 </div>
                                 <div class="credit-info">
-                                    <div class="credit-title" style="color: #ffb74d; font-size: 15px;"
+                                    <div class="credit-title credit-title-ed"
                                         data-i18n="credits.edForum">Forums Eagle
                                         Dynamics</div>
-                                    <div class="credit-subtitle" style="font-size: 12px; opacity: 0.7;"
+                                    <div class="credit-subtitle credit-subtitle-muted"
                                         data-i18n="credits.edSub">Ressources de modding DCS World</div>
                                 </div>
                                 <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -1775,9 +1748,8 @@
                                 </svg>
                             </a>
 
-                            <a href="#" onclick="openLicenseModal()" class="credit-link-card"
-                                style="border-left: 3px solid #2563eb;">
-                                <div class="credit-icon-box" style="background: rgba(37,99,235,0.1); color: #3b82f6;">
+                            <a href="#" onclick="openLicenseModal()" class="credit-link-card credit-link-card-license">
+                                <div class="credit-icon-box credit-icon-box-license">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
                                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -1785,17 +1757,16 @@
                                     </svg>
                                 </div>
                                 <div class="credit-info">
-                                    <div class="credit-title" style="color: #60a5fa; font-size: 15px;"
+                                    <div class="credit-title credit-title-license"
                                         data-i18n="credits.license">License</div>
-                                    <div class="credit-subtitle" style="font-size: 12px; opacity: 0.7;"
+                                    <div class="credit-subtitle credit-subtitle-muted"
                                         data-i18n="credits.licenseSub">View Apache-2.0 License</div>
                                 </div>
                             </a>
                         </div>
                     </div>
 
-                    <div
-                        style="margin-top: 40px; text-align: center; color: var(--text-muted); font-size: 11px; font-family: var(--font-mono); letter-spacing: 0.05em;">
+                    <div class="credits-footer-legal">
                         &copy; 2026 BETTER MOD.MANAGER. ALL RIGHTS RESERVED.
                     </div>
                 </div>
@@ -1969,7 +1940,7 @@
                                     data-i18n-placeholder="settings.githubPatPlaceholder"
                                     placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                     style="width:100%;padding:9px 40px 9px 12px;border-radius:8px;background:rgba(0,0,0,0.25);color:white;border:1px solid var(--border);font-family:var(--font-mono);font-size:12px;box-sizing:border-box;transition:border 0.2s" />
-                                <button id="btn-toggle-pat-visibility" title="Show/Hide token"
+                                <button id="btn-toggle-pat-visibility" title="Show/Hide token" aria-label="Toggle PAT visibility"
                                     style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;display:flex;align-items:center">
                                     <svg id="pat-eye-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
                                         stroke="currentColor" stroke-width="2">
@@ -2400,7 +2371,7 @@
             </div>
             <div class="modal-body"
                 style="max-height: 500px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 20px; margin-top:10px; border: 1px solid var(--border);">
-                <pre id="license-content"
+                <pre id="license-content" data-i18n="license.loading"
                     style="white-space: pre-wrap; word-wrap: break-word; font-family: var(--font-mono); font-size: 11px; line-height: 1.6; color: rgba(255,255,255,0.7); margin: 0; text-align: left;">Chargement de la licence...</pre>
             </div>
         </div>
@@ -3065,7 +3036,7 @@
                 <!-- Summary content injected by JS -->
             </div>
             <div class="modal-footer" style="padding:15px 20px; background:rgba(255,255,255,0.02); display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border);">
-                <button class="btn btn-primary" data-close="modal-repo-sync-summary" style="padding:0 24px;">OK</button>
+                <button class="btn btn-primary" data-close="modal-repo-sync-summary" style="padding:0 24px;" data-i18n="common.ok">OK</button>
             </div>
         </div>
     </div>

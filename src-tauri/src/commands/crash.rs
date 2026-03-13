@@ -16,7 +16,7 @@ lazy_static::lazy_static! {
     static ref SHUTTING_DOWN: Arc<std::sync::atomic::AtomicBool> = Arc::new(std::sync::atomic::AtomicBool::new(false));
 }
 
-/// Ajoute une ligne de log dans le buffer mémoire ET dans le fichier temps réel (flush immédiat).
+/// Adds a log line to the memory buffer AND to the real-time file (immediate flush).
 pub fn log_line(line: impl Into<String>) {
     let s_line: String = line.into();
     let ts = chrono::Local::now().format("%H:%M:%S%.3f").to_string();
@@ -30,15 +30,15 @@ pub fn log_line(line: impl Into<String>) {
         buf.push_back(entry.clone());
     }
 
-    // 2. Fichier temps réel (On l'ouvre, on écrit, on flush, on ferme pour être safe contre les crashes)
-    // On ne recrée PAS le fichier si on est en train de fermer (pour éviter les faux positifs dirty session)
+    // 2. Real-time file (Open, write, flush, close to be safe against crashes)
+    // Do NOT recreate the file if shutting down (to avoid dirty session false positives)
     if !SHUTTING_DOWN.load(std::sync::atomic::Ordering::SeqCst) {
         if let Ok(mut file) = fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(get_realtime_log_path()) {
             let _ = writeln!(file, "{}", entry);
-            let _ = file.sync_all(); // Force l'écriture physique sur le disque
+            let _ = file.sync_all(); // Force physical write to disk
         }
     }
 }
@@ -85,7 +85,7 @@ fn archive_old_reports(dir: &Path, archive_dir: &Path) {
             .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("zip"))
             .collect();
         
-        // On garde seulement les 5 derniers rapports actifs, le reste va en archive
+        // Keep only the 5 most recent active reports, the rest go to the archive
         if files.len() > 5 {
             files.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
             let _ = fs::create_dir_all(archive_dir);
@@ -158,7 +158,7 @@ pub fn init_session() {
         }
     }
 
-    // 2. Démarre notre propre log pour cette session
+    // 2. Start our own log for this session
     let log_path = get_realtime_log_path();
     if let Ok(mut file) = fs::File::create(&log_path) {
         let _ = writeln!(file, "--- NEW SESSION STARTED AT {} (PID: {}) ---", chrono::Local::now().to_rfc3339(), my_pid);
@@ -168,7 +168,7 @@ pub fn init_session() {
 
 // function removed as consolidate into generate_report
 
-/// Helper pour générer un rapport à partir d'un contenu de log déjà chargé (utilisé pour les orphelins)
+/// Helper to generate a report from already loaded log content (used for orphans)
 fn generate_report_from_content(is_crash: bool, reason: &str, app_state: Option<String>, log_content: String) -> Option<PathBuf> {
     generate_report_internal(is_crash, reason, app_state, Some(log_content), None)
 }
@@ -263,7 +263,7 @@ fn generate_report_internal(
         let _ = zip.write_all(state.as_bytes());
     }
 
-    // 6. dxdiag.txt (Windows Only, uniquement si crash pour booster la fermeture normale)
+    // 6. dxdiag.txt (Windows Only, only if crash to speed up normal closure)
     #[cfg(target_os = "windows")]
     if is_crash {
         let tmp_file = std::env::temp_dir().join("bmm_dxdiag_tmp.txt");

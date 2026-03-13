@@ -69,6 +69,7 @@ export async function setLang(lang) {
             localStorage.setItem('bmm-lang', lang); // Fallback
         }
         applyTranslations();
+        document.dispatchEvent(new CustomEvent('langChanged', { detail: { lang } }));
     }
 }
 

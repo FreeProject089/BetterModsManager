@@ -536,8 +536,10 @@ img {
     border: 1px solid var(--border-accent);
     border-radius: 8px;
     padding: 4px;
-    z-index: 100;
+    z-index: 10005; /* Increase z-index for overlay compatibility */
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    max-height: 200px; /* Limit height and allow scroll */
+    overflow-y: auto;
 }
 
 .settings-lang-menu.open {
@@ -2224,7 +2226,7 @@ select.input-field option {
     font-size: 13px;
     color: var(--text-secondary);
     line-height: 1.5;
-    min-height: 40px;
+    min-height: 62px; /* Stabilizes for 3-4 lines of text */
     margin: 0 0 16px;
 }
 
@@ -2232,10 +2234,15 @@ select.input-field option {
     display: flex;
     gap: 10px;
     align-items: center;
+    height: 40px; /* Fixed height for actions container */
 }
 
 .onboarding-next {
     flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* ═══════════════════════════════════
@@ -3974,4 +3981,234 @@ select:focus {
 @keyframes fadeOut {
     from { opacity: 1; }
     to { opacity: 0; }
+}
+
+/* ═══════════════════════════════════
+   CREDITS & COMMUNITY
+   ═══════════════════════════════════ */
+.credits-hero-card {
+    padding: 32px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 24px;
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 24px;
+}
+
+.credits-hero-icon-box {
+    width: 64px;
+    height: 64px;
+    background: var(--accent-dim);
+    border: 1px solid var(--border-accent);
+    color: var(--accent);
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.credits-community-card {
+    padding: 24px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(255,255,255,0.01) 0%, rgba(0,0,0,0.1) 100%);
+}
+
+.credits-section-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+}
+
+.credits-section-title svg {
+    filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.3));
+}
+
+.credits-hero-section {
+    padding: 48px 32px;
+    border-radius: 24px;
+    text-align: center;
+    margin-bottom: 32px;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(59, 130, 246, 0.15);
+    background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.2) 100%);
+}
+
+.credits-hero-inner-glow {
+    position: absolute;
+    top: -50px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    height: 300px;
+    background: var(--accent);
+    opacity: 0.03;
+    filter: blur(80px);
+    pointer-events: none;
+}
+
+.credits-hero-logo-box {
+    display: inline-flex;
+    width: 84px;
+    height: 84px;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 24px;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    overflow: hidden;
+}
+
+.credits-hero-title {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    letter-spacing: -0.02em;
+}
+
+.credits-hero-build {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+}
+
+.credits-hero-version-pill {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--accent);
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 800;
+    font-family: var(--font-mono);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    margin-bottom: 32px;
+}
+
+.credits-hero-description {
+    font-size: 15px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    max-width: 560px;
+    margin: 0 auto;
+    font-weight: 500;
+}
+
+.credit-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 32px;
+}
+
+.credit-info-card-full {
+    padding: 24px;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    border: 1px solid var(--border);
+}
+
+.credit-author-avatar {
+    width: 58px;
+    height: 58px;
+    border-radius: 16px;
+    border: 2px solid rgba(255,255,255,0.1);
+    object-fit: cover;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.credit-info-value-large {
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+}
+
+.credit-info-sub-muted {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.credit-link-card-github { border-left: 3px solid #64748b; }
+.credit-link-card-discord { border-left: 3px solid #5865F2; }
+.credit-link-card-ed { border-left: 3px solid #ff9800; }
+
+.credit-info-label-sub {
+    margin-bottom: 4px;
+    opacity: 0.5;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.credit-info-value-main {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+}
+
+.credit-rust-icon-box {
+    width: 58px;
+    height: 58px;
+    border-radius: 16px;
+    background: rgba(255, 100, 50, 0.15);
+    border: 1px solid rgba(255, 100, 50, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);
+}
+
+.credit-rust-logo {
+    width: 32px;
+    height: 32px;
+    filter: invert(41%) sepia(34%) saturate(3033%) hue-rotate(345deg) brightness(98%) contrast(92%);
+}
+
+.credit-links-list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.credit-link-card-license { border-left: 3px solid #2563eb; }
+
+.credit-icon-box-github { background: rgba(255,255,255,0.08); color: #fff; }
+.credit-icon-box-discord { background: rgba(88,101,242,0.1); color: #5865F2; }
+.credit-icon-box-ed { background: rgba(0,0,0,0.4); border-radius: 10px; overflow: hidden; padding: 0; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
+.credit-icon-box-license { background: rgba(37,99,235,0.1); color: #3b82f6; }
+
+.credit-title-github { color: var(--text-primary); font-size: 15px; }
+.credit-title-discord { color: #8b9dfa; font-size: 15px; }
+.credit-title-ed { color: #ffb74d; font-size: 15px; }
+.credit-title-license { color: #60a5fa; font-size: 15px; }
+
+.credit-subtitle-muted { font-size: 12px; opacity: 0.7; }
+
+.credits-footer-legal {
+    margin-top: 40px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.05em;
 }

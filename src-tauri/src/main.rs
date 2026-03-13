@@ -66,7 +66,7 @@ fn main() {
             Ok(())
         })
         // 2. Capture de la fermeture (Alt+F4 / Croix)
-        // On intercepte pour générer un rapport de session avant que le processus ne soit tué.
+        // Intercept to generate a session report before the process is killed.
         .on_window_event(|event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event.event() {
                 // Si on ferme déjà, on ne fait rien (évite la récursion de window.close())
@@ -82,11 +82,11 @@ fn main() {
                 commands::crash::log_line("[SHUTDOWN] Window close-requested event received. Marking as shutting down...");
                 commands::crash::set_shutting_down();
 
-                // 2. Capture de l'état actuel pour le diagnostic
+                // 2. Capture current state for diagnostic
                 let state_snapshot = {
                     let mut data = state.data.lock().ok();
                     if let Some(ref mut d) = data {
-                        // On marque propre pour la prochaine fois
+                        // Mark clean for the next time
                         d.settings.last_session_clean = true;
                     }
                     data.and_then(|d| serde_json::to_string_pretty(&*d).ok())
@@ -205,8 +205,9 @@ fn main() {
             // Repo Server
             commands::repo_server::start_repo_server,
             commands::repo_server::stop_repo_server,
-            commands::repo_server::get_repo_server_status,
+            commands::repo_server::get_repo_server_current_status,
             commands::security::get_creator_id,
+            commands::security::verify_repo_signature,
             commands::crash::finalize_and_close_app,
         ])
         .run(tauri::generate_context!())
