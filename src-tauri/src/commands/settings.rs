@@ -52,57 +52,64 @@ pub fn reset_app_data(state: State<AppState>) -> Result<(), String> {
     Ok(())
 }
 
+fn resolve_path(app_handle: &tauri::AppHandle, path: &str) -> Option<std::path::PathBuf> {
+    // 1. Production: Try multiple patterns via Tauri resolve_resource
+    let candidates = [
+        path.to_string(), // As requested (e.g. "Lang/en.json")
+        format!("_up_/{}", path), // Bundled relative parent (e.g. "_up_/app.cfg")
+        format!("_up_/frontend/{}", path), // Bundled relative sibling (e.g. "_up_/frontend/Lang/en.json")
+        path.split('/').last().unwrap_or(path).to_string(), // Flattened (e.g. "en.json")
+        format!("frontend/{}", path), // Deep (e.g. "frontend/Lang/en.json")
+    ];
+
+    for candidate in &candidates {
+        if let Some(p) = app_handle.path_resolver().resolve_resource(candidate) {
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+
+    // 2. Development: Try climbing up from resource_dir
+    if let Some(mut p) = app_handle.path_resolver().resource_dir() {
+        for _ in 0..5 {
+            let check = p.join(path);
+            if check.exists() {
+                return Some(check);
+            }
+            // Also check frontend/path if we are at root
+            let check_frontend = p.join("frontend").join(path);
+            if check_frontend.exists() {
+                return Some(check_frontend);
+            }
+            if !p.pop() { break; }
+        }
+    }
+    
+    // 3. Last resort: Direct path from current working directory
+    let direct = std::path::PathBuf::from(path);
+    if direct.exists() {
+        return Some(direct);
+    }
+
+    None
+}
+
 #[tauri::command]
 pub fn is_debug_mode(app_handle: tauri::AppHandle) -> bool {
-    let cfg_path = app_handle
-        .path_resolver()
-        .resolve_resource("../app.cfg")
-        .or_else(|| {
-            // Fallback pour le mode dev direct si resolve_resource échoue
-            Some(std::path::PathBuf::from("app.cfg"))
-        });
-
-    if let Some(path) = cfg_path {
-        println!("[DEBUG_SYSTEM] Final path resolved: {:?}", path);
+    if let Some(path) = resolve_path(&app_handle, "app.cfg") {
         if let Ok(content) = std::fs::read_to_string(&path) {
             let normalized = content.to_lowercase();
             let is_debug = normalized.contains("prod=false");
-            println!("[DEBUG_SYSTEM] Content read: '{}', is_debug: {}", normalized.trim(), is_debug);
+            println!("[DEBUG_SYSTEM] Resolution: {:?}, is_debug: {}", path, is_debug);
             return is_debug;
         }
     }
     
-    println!("[DEBUG_SYSTEM] app.cfg could not be resolved or read.");
+    println!("[DEBUG_SYSTEM] app.cfg could not be resolved.");
     false
 }
-#[tauri::command]
-pub fn get_license_text(app_handle: tauri::AppHandle) -> Result<String, String> {
-    let mut path = app_handle
-        .path_resolver()
-        .resource_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
 
-    // If we're inside src-tauri (dev mode), go up to find LICENSE.md
-    if path.ends_with("src-tauri") {
-        path.pop();
-    }
-    
-    let license_path = path.join("LICENSE.md");
-    
-    if !license_path.exists() {
-        // Try manifest dir parent as last resort for dev
-        let dev_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .join("LICENSE.md");
-        if dev_path.exists() {
-            return std::fs::read_to_string(dev_path).map_err(|e| e.to_string());
-        }
-        return Err("LICENSE.md not found".to_string());
-    }
-
-    std::fs::read_to_string(license_path).map_err(|e| e.to_string())
-}
 #[tauri::command]
 pub fn get_app_version(app_handle: tauri::AppHandle) -> String {
     app_handle.package_info().version.to_string()
@@ -114,15 +121,17 @@ pub fn get_build_date() -> String {
 }
 
 #[tauri::command]
-pub fn is_ptb_mode(app_handle: tauri::AppHandle) -> bool {
-    let cfg_path = app_handle
-        .path_resolver()
-        .resolve_resource("../app.cfg")
-        .or_else(|| {
-            Some(std::path::PathBuf::from("app.cfg"))
-        });
+pub fn get_license_text(app_handle: tauri::AppHandle) -> Result<String, String> {
+    if let Some(path) = resolve_path(&app_handle, "LICENSE.md") {
+        return std::fs::read_to_string(path).map_err(|e| e.to_string());
+    }
+    
+    Err("LICENSE.md not found".to_string())
+}
 
-    if let Some(path) = cfg_path {
+#[tauri::command]
+pub fn is_ptb_mode(app_handle: tauri::AppHandle) -> bool {
+    if let Some(path) = resolve_path(&app_handle, "app.cfg") {
         if let Ok(content) = std::fs::read_to_string(&path) {
             let normalized = content.to_lowercase();
             return normalized.contains("ptb=true");
@@ -133,14 +142,7 @@ pub fn is_ptb_mode(app_handle: tauri::AppHandle) -> bool {
 
 #[tauri::command]
 pub fn is_update_disabled(app_handle: tauri::AppHandle) -> bool {
-    let cfg_path = app_handle
-        .path_resolver()
-        .resolve_resource("../app.cfg")
-        .or_else(|| {
-            Some(std::path::PathBuf::from("app.cfg"))
-        });
-
-    if let Some(path) = cfg_path {
+    if let Some(path) = resolve_path(&app_handle, "app.cfg") {
         if let Ok(content) = std::fs::read_to_string(&path) {
             let normalized = content.to_lowercase();
             return normalized.contains("disableupdate=true");
@@ -150,42 +152,32 @@ pub fn is_update_disabled(app_handle: tauri::AppHandle) -> bool {
 }
 
 fn get_lang_dir(app_handle: &tauri::AppHandle) -> std::path::PathBuf {
+    // Use our robust helper to find en.json and take its parent
+    if let Some(path) = resolve_path(app_handle, "Lang/en.json") {
+        if let Some(parent) = path.parent() {
+            return parent.to_path_buf();
+        }
+    }
+    
+    // Manual fallbacks if even resolve_path failed or for weird dev environments
     let path = app_handle
         .path_resolver()
         .resource_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."));
 
-    let mut lang_dir = path.clone();
-    let mut found = false;
-
-    // Climb up until we find a directory containing "frontend/Lang" or until we hit root
-    for _ in 0..10 {
-        let check = lang_dir.join("frontend").join("Lang");
-        if check.exists() && check.is_dir() {
-            lang_dir = check;
-            found = true;
-            break;
-        }
-        let check_prod = lang_dir.join("Lang");
-        if check_prod.exists() && check_prod.is_dir() {
-            lang_dir = check_prod;
-            found = true;
-            break;
-        }
-        if !lang_dir.pop() { break; }
+    let mut current = path.clone();
+    for _ in 0..5 {
+        let check_prod = current.join("Lang");
+        if check_prod.exists() && check_prod.is_dir() { return check_prod; }
+        
+        let check_dev = current.join("frontend").join("Lang");
+        if check_dev.exists() && check_dev.is_dir() { return check_dev; }
+        
+        if !current.pop() { break; }
     }
 
-    if !found {
-        if path.ends_with("src-tauri") {
-            let mut p = path.clone();
-            p.pop();
-            p.join("frontend").join("Lang")
-        } else {
-            path.join("Lang")
-        }
-    } else {
-        lang_dir
-    }
+    // Absolute fallback
+    path.join("Lang")
 }
 
 #[tauri::command]
@@ -259,4 +251,36 @@ pub fn import_language(app_handle: tauri::AppHandle) -> Result<String, String> {
     } else {
         Err("Canceled".to_string())
     }
+}
+
+#[tauri::command]
+pub fn get_resource_debug_info(app_handle: tauri::AppHandle) -> String {
+    let mut debug = String::new();
+    debug.push_str(&format!("Resource Dir: {:?}\n", app_handle.path_resolver().resource_dir()));
+    
+    let checks = [
+        "app.cfg", 
+        "_up_/app.cfg",
+        "LICENSE.md", 
+        "_up_/LICENSE.md",
+        "Lang", 
+        "_up_/frontend/Lang",
+        "Lang/en.json", 
+        "_up_/frontend/Lang/en.json"
+    ];
+    for check in &checks {
+        let res = app_handle.path_resolver().resolve_resource(check);
+        debug.push_str(&format!("Resolve '{}': {:?} (Exists: {})\n", check, res, res.as_ref().map(|p| p.exists()).unwrap_or(false)));
+    }
+
+    if let Some(res_dir) = app_handle.path_resolver().resource_dir() {
+        if let Ok(entries) = std::fs::read_dir(&res_dir) {
+            debug.push_str("\nResource Dir Listing:\n");
+            for entry in entries.flatten() {
+                debug.push_str(&format!(" - {:?}\n", entry.path()));
+            }
+        }
+    }
+
+    debug
 }

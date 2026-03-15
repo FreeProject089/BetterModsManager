@@ -373,4 +373,19 @@ The Performance Dashboard is a standalone monitoring sub-system.
 
 ---
 
-*Created by FreeProject089 — Engineered for uncompromising performance, file safety, and modern mod management.*
+## 18. Server Repository System (Server Mode)
+
+BMM 0.9.8 introduces the **Server Repository** system, a robust alternative to decentralized sharing methods.
+
+### 18.1. Architecture
+- **Host Engine**: Uses an integrated HTTP server to serve static mod files and the `repo.json` manifest. No external dependencies required for local hosting.
+- **Manifest (repo.json)**: A cryptographically signed (SHA-256) JSON file containing the complete state of the repository.
+- **Smart Sync Engine**: The client fetches the manifest, performs a local diff against its active profiles, and downloads only the delta (missing or changed files).
+
+### 18.2. Security & Integrity
+- **Collision Resistance**: Uses SHA-256 hashes to ensure that mod files aren't corrupted during transfer.
+- **Path Isolation**: The server strictly limits file access to the designated repository folder, preventing path traversal attacks.
+
+---
+
+*Better Mod Manager is developed by FreeProject089 — Engineered for uncompromising performance, file safety, and modern mod management.*

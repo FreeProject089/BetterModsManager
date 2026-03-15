@@ -17,6 +17,7 @@ pub struct RepoServerState {
     pub public_url: Mutex<Option<String>>,
     pub tunnel_url: Mutex<Option<String>>,
     pub serve_path: Mutex<Option<String>>,
+    pub active_port: Mutex<u16>,
 }
 
 impl Default for RepoServerState {
@@ -29,6 +30,7 @@ impl Default for RepoServerState {
             public_url: Mutex::new(None),
             tunnel_url: Mutex::new(None),
             serve_path: Mutex::new(None),
+            active_port: Mutex::new(8000),
         }
     }
 }
@@ -66,6 +68,7 @@ pub async fn start_repo_server(
     handle: tauri::AppHandle,
     state: tauri::State<'_, RepoServerState>,
     path: String,
+    port: u16,
 ) -> Result<StartServerResult, String> {
     // 1. Check if already running
     // 2. Validate path
@@ -98,7 +101,6 @@ pub async fn start_repo_server(
     let routes = dir.with(cors);
 
     // 5. Port and Address
-    let port: u16 = 8000;
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
     
     // 6. UPnP Port Forwarding
@@ -193,6 +195,7 @@ pub async fn start_repo_server(
         *state.public_url.lock().unwrap() = public_url.clone();
         *state.tunnel_url.lock().unwrap() = tunnel_url.clone();
         *state.serve_path.lock().unwrap() = Some(path);
+        *state.active_port.lock().unwrap() = port;
     }
 
     Ok(StartServerResult {
@@ -224,8 +227,9 @@ pub async fn stop_repo_server(state: tauri::State<'_, RepoServerState>) -> Resul
     {
         let mut upnp_lock = state.upnp_mapped.lock().unwrap();
         if *upnp_lock {
+            let port = *state.active_port.lock().unwrap();
             if let Ok(gateway) = search_gateway(Default::default()) {
-                let _ = gateway.remove_port(PortMappingProtocol::TCP, 8000);
+                let _ = gateway.remove_port(PortMappingProtocol::TCP, port);
             }
             *upnp_lock = false;
         }

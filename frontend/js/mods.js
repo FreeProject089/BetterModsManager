@@ -421,9 +421,33 @@ async function renderModList() {
             <button class="btn btn-primary" onclick="document.getElementById('nav-profiles').click(); document.getElementById('btn-new-profile').click();" style="padding:12px 24px; font-size:14px">
               <span data-i18n="prof.create">Créer un profil</span>
             </button>
-            <button class="btn btn-secondary" onclick="document.getElementById('nav-profiles').click(); document.getElementById('btn-import-ovgme').click();" style="padding:12px 24px; font-size:14px">
-              <span data-i18n="prof.importOvgme">Importer OvGME</span>
-            </button>
+            <div class="dropdown dropdown-center">
+              <button class="btn btn-secondary" style="padding:12px 24px; font-size:14px; display:flex; align-items:center; gap:8px;">
+                <span data-i18n="prof.import">Importer</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <div class="dropdown-content glass">
+                 <a href="#" onclick="document.getElementById('nav-profiles').click(); setTimeout(() => document.getElementById('btn-import-ovgme').click(), 100)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                    <span data-i18n="prof.importOvgme">Logiciel OvGME</span>
+                </a>
+                <a href="#" onclick="document.getElementById('nav-profiles').click(); setTimeout(() => document.getElementById('btn-import-omm-auto').click(), 100)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                    </svg>
+                    <span data-i18n="prof.importOmmAuto">Auto-detect OMM</span>
+                </a>
+                <a href="#" onclick="document.getElementById('nav-profiles').click(); setTimeout(() => document.getElementById('btn-import-omm').click(), 100)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                        <polyline points="13 2 13 9 20 9"></polyline>
+                    </svg>
+                    <span data-i18n="prof.importOmm">Open Mod Manager (.omx)</span>
+                </a>
+              </div>
+            </div>
           </div>
         `;
         list.appendChild(noProf);

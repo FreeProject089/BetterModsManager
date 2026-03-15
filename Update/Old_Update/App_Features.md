@@ -178,4 +178,18 @@ BMM features a suite of high-end diagnostic and optimization tools to ensure max
 
 ---
 
+## 15. Server Repository (Server Mode)
+
+Server Mode is the premium synchronization system for large-scale mod sharing.
+
+| Feature | Description |
+| :--- | :--- |
+| **Integrated HTTP Server** | BMM can act as a web server, hosting your profiles directly from your PC. |
+| **repo.json Manifest** | Automated generation of a manifest containing all files, sizes, and SHA-256 hashes. |
+| **Smart Synchronization** | Clients compare their local state with the server and only download missing or changed files. |
+| **Security Verification** | Every downloaded file is verified against its cryptographic hash before installation. |
+| **Tunneling Support** | Integrated support for local sharing (LAN) and public sharing via UPnP or manual port forwarding. |
+
+---
+
 *Better Mod Manager is developed by FreeProject089.*

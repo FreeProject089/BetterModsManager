@@ -93,6 +93,13 @@ fn main() {
                 }
                 commands::crash::log_line(format!("[STARTUP-INFO] App Settings: Filter: {}, Sort: {}, Lang: {}", 
                     data.settings.current_filter, data.settings.current_sort_by, data.settings.language));
+
+                // Add resource diagnostic dump
+                let debug_info = get_resource_debug_info(app.handle());
+                commands::crash::log_line("[STARTUP-DIAGNOSTIC] Resource Resolution Report:");
+                for line in debug_info.lines() {
+                    commands::crash::log_line(format!("  {}", line));
+                }
             }
 
             app.manage(app_state);
@@ -194,6 +201,7 @@ fn main() {
             get_available_languages,
             get_language_content,
             import_language,
+            get_resource_debug_info,
             // ... (other commands)
             commands::mods::open_folder,
             commands::mods::open_file,

@@ -17,10 +17,28 @@ pub struct BenchmarkPoint {
 
 #[tauri::command]
 pub fn is_benchmark_enabled(app_handle: tauri::AppHandle) -> bool {
-    let cfg_path = app_handle
-        .path_resolver()
-        .resolve_resource("../app.cfg")
-        .or_else(|| Some(std::path::PathBuf::from("app.cfg")));
+    // Try to find app.cfg using robust resolution similar to settings.rs
+    // We don't have resolve_path here, so we implement a quick version
+    let mut cfg_path = None;
+    
+    // 1. Prod check
+    if let Some(p) = app_handle.path_resolver().resolve_resource("app.cfg") {
+        if p.exists() { cfg_path = Some(p); }
+    }
+    
+    // 2. Dev check
+    if cfg_path.is_none() {
+        if let Some(mut p) = app_handle.path_resolver().resource_dir() {
+            for _ in 0..4 {
+                let check = p.join("app.cfg");
+                if check.exists() {
+                    cfg_path = Some(check);
+                    break;
+                }
+                if !p.pop() { break; }
+            }
+        }
+    }
 
     if let Some(path) = cfg_path {
         if let Ok(content) = std::fs::read_to_string(&path) {

@@ -52,6 +52,7 @@ export function initRepo() {
     const tunnelSection = document.getElementById('repo-server-tunnel-section');
     const tunnelUrlInput = document.getElementById('repo-server-tunnel-url');
     const btnCopyTunnelUrl = document.getElementById('btn-copy-repo-tunnel-url');
+    const inputServerPort = document.getElementById('repo-server-port');
     
     // Sync elements
     const btnFetchInfo = document.getElementById('btn-fetch-repo-info');
@@ -709,6 +710,7 @@ export function initRepo() {
                         serverStatusDot.style.boxShadow = 'none';
                     }
                     if (serverStatusLabel) serverStatusLabel.textContent = t('repo.serverOffline') || 'Serveur hors ligne';
+                    if (inputServerPort) inputServerPort.disabled = false;
                     toast(t('repo.hostServerStopped') || "Serveur arrêté", "success");
                 } catch (err) {
                     toast(String(err), "error");
@@ -729,8 +731,11 @@ export function initRepo() {
                     const originalBtnContent = btnToggleServer.innerHTML;
                     btnToggleServer.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1s linear infinite;margin-right:8px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> <span>Initialisation...</span>';
                     
+                    const port = parseInt(inputServerPort ? inputServerPort.value : "8000") || 8000;
+                    if (inputServerPort) inputServerPort.disabled = true;
+
                     // Now returns { lan_url, public_url, upnp_success }
-                    const result = await invoke('start_repo_server', { path });
+                    const result = await invoke('start_repo_server', { path, port });
                     
                     isServerRunning = true;
                     // Re-set HTML structure properly
@@ -744,7 +749,7 @@ export function initRepo() {
                         serverStatusDot.style.background = '#2ecc71';
                         serverStatusDot.style.boxShadow = '0 0 8px #2ecc71';
                     }
-                    if (serverStatusLabel) serverStatusLabel.textContent = t('repo.serverOnline') || 'Serveur en ligne — port 8000';
+                    if (serverStatusLabel) serverStatusLabel.textContent = t('repo.serverOnline', { port }) || `Serveur en ligne — port ${port}`;
                     
                     urlInputServer.value = result.lan_url;
                     
@@ -780,6 +785,7 @@ export function initRepo() {
                     toast(t('repo.hostServerStarted') || "Serveur démarré !", "success");
                 } catch (err) {
                     toast(String(err), "error");
+                    if (inputServerPort) inputServerPort.disabled = false;
                     // Revert button content on error
                     btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
                     const txt = btnToggleServer.querySelector('#repo-server-btn-text');
