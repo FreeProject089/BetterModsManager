@@ -58,6 +58,12 @@
         </div>
     </div>
 
+    <!-- Offline Banner -->
+    <div id="offline-banner" class="offline-banner">
+        <div class="offline-dot"></div>
+        <span class="offline-text" data-i18n="common.offline">NO CONNECTION</span>
+    </div>
+
     <!-- App Shell -->
     <div class="app-shell">
 
@@ -339,14 +345,24 @@
                             </svg>
                         </div>
                         <p class="empty-title" data-i18n="lib.emptyTitle">Aucun mod trouvé</p>
-                        <p class="empty-desc" data-i18n="lib.emptyDesc">Créez un profil et ajoutez vos premiers mods.</p>
+                        <p class="empty-desc" data-i18n="lib.emptyDesc">Créez un profil et ajoutez vos premiers mods.
+                        </p>
                         <div style="display:flex; justify-content:center; gap:12px; margin-top:24px;">
-                            <button class="btn btn-primary" onclick="document.getElementById('btn-scan-mods').click()" style="padding:10px 20px; font-size:13px">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                            <button class="btn btn-primary" onclick="document.getElementById('btn-scan-mods').click()"
+                                style="padding:10px 20px; font-size:13px">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:8px">
+                                    <path d="M23 4v6h-6M1 20v-6h6" />
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                                </svg>
                                 <span data-i18n="lib.scan">Scanner</span>
                             </button>
-                            <button class="btn btn-secondary" onclick="document.getElementById('btn-add-mod').click()" style="padding:10px 20px; font-size:13px">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px"><path d="M12 5v14M5 12h14"/></svg>
+                            <button class="btn btn-secondary" onclick="document.getElementById('btn-add-mod').click()"
+                                style="padding:10px 20px; font-size:13px">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:8px">
+                                    <path d="M12 5v14M5 12h14" />
+                                </svg>
                                 <span data-i18n="lib.addMod">Ajouter un mod</span>
                             </button>
                         </div>
@@ -375,23 +391,34 @@
                                     <line x1="12" y1="15" x2="12" y2="3" />
                                 </svg>
                                 <span data-i18n="prof.import">Importer</span>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:4px; opacity:0.7"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-left:4px; opacity:0.7">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
                             </button>
                             <div class="dropdown-content glass" id="import-menu-content">
                                 <a href="#" id="btn-import-ovgme">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                                    </svg>
                                     <span data-i18n="prof.importOvgme">Logiciel OvGME</span>
                                 </a>
                                 <a href="#" id="btn-import-omm-auto">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path
+                                            d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                                        </path>
                                         <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                                         <line x1="12" y1="22.08" x2="12" y2="12"></line>
                                     </svg>
                                     <span data-i18n="prof.importOmmAuto">Auto-detect OMM</span>
                                 </a>
                                 <a href="#" id="btn-import-omm">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
                                         <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
                                         <polyline points="13 2 13 9 20 9"></polyline>
                                     </svg>
@@ -582,7 +609,8 @@
                                 data-i18n="repo.stepOneDesc">...</p>
 
                             <div class="form-group" style="margin-bottom:12px;">
-                                <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.selectProfiles">...</label>
+                                <label class="form-label" style="margin-bottom:4px;"
+                                    data-i18n="repo.selectProfiles">...</label>
                                 <div id="repo-export-profiles-list"
                                     style="max-height:130px;overflow-y:auto;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:7px;">
                                     <div style="color:var(--text-muted);font-size:12px;text-align:center;"
@@ -591,7 +619,8 @@
                             </div>
 
                             <div class="form-group" style="margin-bottom:6px;">
-                                <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.outputDir">...</label>
+                                <label class="form-label" style="margin-bottom:4px;"
+                                    data-i18n="repo.outputDir">...</label>
                                 <div class="path-picker">
                                     <input type="text" class="form-input" id="repo-export-path" placeholder="C:\..."
                                         readonly />
@@ -603,21 +632,33 @@
                             </div>
 
                             <div class="form-group" style="margin-bottom:12px;">
-                                <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.authorName">...</label>
+                                <label class="form-label" style="margin-bottom:4px;"
+                                    data-i18n="repo.authorName">...</label>
                                 <input type="text" class="form-input" id="repo-export-author-name"
                                     data-i18n-placeholder="repo.authorPlaceholder" />
                             </div>
 
-                            <button class="btn btn-primary" id="btn-start-repo-export"
-                                style="width:100%;justify-content:center;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2.2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="17 8 12 3 7 8" />
-                                    <line x1="12" y1="3" x2="12" y2="15" />
-                                </svg>
-                                <span data-i18n="repo.exportBtn">...</span>
-                            </button>
+                            <div style="display:flex; gap:10px;">
+                                <button class="btn btn-primary" id="btn-start-repo-export"
+                                    style="flex:1;justify-content:center;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                        <polyline points="17 8 12 3 7 8" />
+                                        <line x1="12" y1="3" x2="12" y2="15" />
+                                    </svg>
+                                    <span data-i18n="repo.exportBtn">...</span>
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm" id="btn-cancel-repo-export"
+                                    style="display:none; justify-content:center; gap:6px; color:var(--danger); border-color:rgba(239,68,68,0.3); padding: 0 14px; flex-shrink:0;">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.5">
+                                        <line x1="18" y1="6" x2="6" y2="18" />
+                                        <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                    <span data-i18n="repo.cancelExport">Annuler</span>
+                                </button>
+                            </div>
 
                             <div id="repo-export-progress-container" style="display:none;margin-top:14px;">
                                 <div
@@ -648,25 +689,37 @@
                                 data-i18n="repo.stepTwoDesc">...</p>
 
                             <div class="form-group" style="margin-bottom:12px;">
-                                <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.hostFolderLabel">Dossier du dépôt</label>
+                                <label class="form-label" style="margin-bottom:4px;"
+                                    data-i18n="repo.hostFolderLabel">Dossier du dépôt</label>
                                 <div class="path-picker">
-                                    <input type="text" class="form-input" id="repo-host-path" placeholder="C:\..." readonly />
-                                    <button class="btn btn-secondary btn-sm" id="btn-pick-repo-host" data-i18n="prof.browse">...</button>
+                                    <input type="text" class="form-input" id="repo-host-path" placeholder="C:\..."
+                                        readonly />
+                                    <button class="btn btn-secondary btn-sm" id="btn-pick-repo-host"
+                                        data-i18n="prof.browse">...</button>
                                 </div>
                             </div>
 
                             <div id="repo-host-history-container" style="display:none;margin-bottom:12px;">
-                                <label class="form-label" style="font-size:11px; color:var(--text-muted); margin-bottom:4px;" data-i18n="repo.hostHistoryLabel">Historique</label>
-                                <select class="form-input" id="repo-host-history-select" style="font-size:12px; padding:6px; background:rgba(255,255,255,0.05);">
-                                    <option value="" data-i18n="repo.hostHistoryDefault">-- Choisir un ancien dépôt --</option>
+                                <label class="form-label"
+                                    style="font-size:11px; color:var(--text-muted); margin-bottom:4px;"
+                                    data-i18n="repo.hostHistoryLabel">Historique</label>
+                                <select class="form-input" id="repo-host-history-select"
+                                    style="font-size:12px; padding:6px; background:rgba(255,255,255,0.05);">
+                                    <option value="" data-i18n="repo.hostHistoryDefault">-- Choisir un ancien dépôt --
+                                    </option>
                                 </select>
                             </div>
-                            <div id="repo-host-metadata-preview" style="display:none; margin-bottom:12px; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:8px; font-size:12px;"></div>
+                            <div id="repo-host-metadata-preview"
+                                style="display:none; margin-bottom:12px; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:8px; font-size:12px;">
+                            </div>
 
                             <div style="display:flex; gap:12px; margin-bottom:12px;">
                                 <div style="flex:1;">
-                                    <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;" data-i18n="repo.portLabel">Port du serveur</label>
-                                    <input type="number" id="repo-server-port" class="form-input" value="8000" min="1" max="65535" style="font-size:12px; padding:6px; background:rgba(0,0,0,0.2); border:1px solid var(--border);" />
+                                    <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;"
+                                        data-i18n="repo.portLabel">Port du serveur</label>
+                                    <input type="number" id="repo-server-port" class="form-input" value="8000" min="1"
+                                        max="65535"
+                                        style="font-size:12px; padding:6px; background:rgba(0,0,0,0.2); border:1px solid var(--border);" />
                                 </div>
                             </div>
 
@@ -684,14 +737,19 @@
                                 <span id="repo-server-btn-text" data-i18n="repo.hostStart">...</span>
                             </button>
 
-                            <div id="repo-server-loading-bar" style="display:none;height:3px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;margin-top:8px;">
-                                <div style="height:100%;width:100%;background:var(--accent);animation:indeterminate 1.8s infinite ease-in-out;transform-origin:left;"></div>
+                            <div id="repo-server-loading-bar"
+                                style="display:none;height:3px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;margin-top:8px;">
+                                <div
+                                    style="height:100%;width:100%;background:var(--accent);animation:indeterminate 1.8s infinite ease-in-out;transform-origin:left;">
+                                </div>
                             </div>
 
                             <!-- Creator ID (Hidden by default) -->
                             <div id="repo-creator-id-container" style="display:none;margin-top:8px;">
-                                <label class="form-label" style="font-size:10px;margin-bottom:2px;" data-i18n="repo.creatorId">...</label>
-                                <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted);background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;word-break:break-all;" id="repo-creator-id-value">...</div>
+                                <label class="form-label" style="font-size:10px;margin-bottom:2px;"
+                                    data-i18n="repo.creatorId">...</label>
+                                <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted);background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;word-break:break-all;"
+                                    id="repo-creator-id-value">...</div>
                             </div>
 
                             <div id="repo-server-url-container"
@@ -712,7 +770,7 @@
                                         </button>
                                     </div>
                                 </div>
-                                
+
                                 <div id="repo-server-public-section" style="display:none;">
                                     <label class="form-label"
                                         style="font-size:11px;display:flex;align-items:center;gap:5px;margin-bottom:4px;">
@@ -736,10 +794,11 @@
                                     <div
                                         style="margin-top:8px;background:rgba(52,152,219,0.06);border:1px solid rgba(52,152,219,0.18);border-radius:8px;padding:8px 10px;">
                                         <p style="font-size:11px;color:rgba(52,152,219,0.9);line-height:1.6;margin:0;"
-                                            data-i18n="repo.natLoopbackTip">Astuce : Si l'URL publique ne fonctionne pas pour vous, utilisez l'URL Locale (NAT Loopback).</p>
+                                            data-i18n="repo.natLoopbackTip">Astuce : Si l'URL publique ne fonctionne pas
+                                            pour vous, utilisez l'URL Locale (NAT Loopback).</p>
                                     </div>
                                 </div>
-                                
+
                                 <div id="repo-server-tunnel-section" style="display:none;">
                                     <label class="form-label"
                                         style="font-size:11px;display:flex;align-items:center;gap:5px;margin-bottom:4px;">
@@ -759,7 +818,8 @@
                                             </svg>
                                         </button>
                                     </div>
-                                    <p style="font-size:10px;color:var(--text-muted);margin-top:5px;" data-i18n="repo.tunnelHint">...</p>
+                                    <p style="font-size:10px;color:var(--text-muted);margin-top:5px;"
+                                        data-i18n="repo.tunnelHint">...</p>
                                 </div>
 
                                 <div style="margin-top:8px;background:rgba(255,193,7,0.06);border:1px solid rgba(255,193,7,0.18);border-radius:8px;padding:8px 10px;"
@@ -789,30 +849,43 @@
                             <div class="path-picker">
                                 <input type="text" class="form-input" id="repo-sync-url"
                                     data-i18n-placeholder="repo.urlPlaceholder" />
-                                <button class="btn btn-secondary btn-sm" id="btn-fetch-repo-info" style="padding:0 12px; font-weight:700;">FETCH</button>
+                                <button class="btn btn-secondary btn-sm" id="btn-fetch-repo-info"
+                                    style="padding:0 12px; font-weight:700;">FETCH</button>
                             </div>
                         </div>
-                        
+
                         <div id="repo-sync-history-container" style="display:none;margin-top:12px;margin-bottom:12px;">
-                            <label class="form-label" style="font-size:11px; color:var(--text-muted); margin-bottom:6px;" data-i18n="repo.syncHistoryLabel">Serveurs récents</label>
+                            <label class="form-label"
+                                style="font-size:11px; color:var(--text-muted); margin-bottom:6px;"
+                                data-i18n="repo.syncHistoryLabel">Serveurs récents</label>
                             <div id="repo-sync-history-list" style="display:flex;flex-direction:column;gap:6px;">
                                 <!-- Injected by JS -->
                             </div>
                         </div>
 
-                        <div id="repo-sync-info-card" style="display:none;margin-top:12px;background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.06);">
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                                <span id="repo-sync-author-badge" style="font-size:10px;padding:2px 8px;border-radius:100px;font-weight:700;"></span>
-                                <span id="repo-sync-game-badge" style="font-size:10px;color:var(--text-muted);text-transform:uppercase;"></span>
+                        <div id="repo-sync-info-card"
+                            style="display:none;margin-top:12px;background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.06);">
+                            <div
+                                style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                <span id="repo-sync-author-badge"
+                                    style="font-size:10px;padding:2px 8px;border-radius:100px;font-weight:700;"></span>
+                                <span id="repo-sync-game-badge"
+                                    style="font-size:10px;color:var(--text-muted);text-transform:uppercase;"></span>
                             </div>
-                            <div style="font-size:14px;font-weight:700;margin-bottom:2px;" id="repo-sync-name-display"></div>
-                            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;" id="repo-sync-author-display"></div>
-                            <div style="font-size:12px;color:var(--text-muted);line-height:1.5;" id="repo-sync-desc-display"></div>
-                            
-                            <div id="repo-sync-profiles-selection" style="margin-top:15px; display:flex; flex-direction:column; gap:10px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+                            <div style="font-size:14px;font-weight:700;margin-bottom:2px;" id="repo-sync-name-display">
+                            </div>
+                            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;"
+                                id="repo-sync-author-display"></div>
+                            <div style="font-size:12px;color:var(--text-muted);line-height:1.5;"
+                                id="repo-sync-desc-display"></div>
+
+                            <div id="repo-sync-profiles-selection"
+                                style="margin-top:15px; display:flex; flex-direction:column; gap:10px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
                                 <!-- Selection logic will inject profiles here -->
                             </div>
-                            <div id="repo-sync-total-size" style="font-size:11px; color:var(--text-muted); margin:10px 0; text-align:right; font-weight:600;"></div>
+                            <div id="repo-sync-total-size"
+                                style="font-size:11px; color:var(--text-muted); margin:10px 0; text-align:right; font-weight:600;">
+                            </div>
                         </div>
 
                         <div id="repo-sync-paths-section">
@@ -821,7 +894,8 @@
                                 data-i18n="repo.syncFolders">...</p>
 
                             <div class="form-group" style="margin-bottom:10px;">
-                                <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.syncGameDir">...</label>
+                                <label class="form-label" style="margin-bottom:4px;"
+                                    data-i18n="repo.syncGameDir">...</label>
                                 <div class="path-picker">
                                     <input type="text" class="form-input" id="repo-sync-game-path"
                                         placeholder="C:\Jeux\DCS..." readonly />
@@ -830,16 +904,18 @@
                                 </div>
                             </div>
                             <div class="form-group" style="margin-bottom:10px;">
-                                <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.syncModsDir">...</label>
+                                <label class="form-label" style="margin-bottom:4px;"
+                                    data-i18n="repo.syncModsDir">...</label>
                                 <div class="path-picker">
-                                    <input type="text" class="form-input" id="repo-sync-mods-path" placeholder="C:\Mods\..."
-                                        readonly />
+                                    <input type="text" class="form-input" id="repo-sync-mods-path"
+                                        placeholder="C:\Mods\..." readonly />
                                     <button class="btn btn-secondary btn-sm" id="btn-pick-sync-mods"
                                         data-i18n="prof.browse">Parcourir</button>
                                 </div>
                             </div>
                             <div class="form-group" style="margin-bottom:4px;">
-                                <label class="form-label" style="margin-bottom:4px;" data-i18n="repo.syncBackupDir">...</label>
+                                <label class="form-label" style="margin-bottom:4px;"
+                                    data-i18n="repo.syncBackupDir">...</label>
                                 <div class="path-picker">
                                     <input type="text" class="form-input" id="repo-sync-backup-path"
                                         placeholder="C:\Backups\..." readonly />
@@ -859,12 +935,25 @@
                             <span data-i18n="repo.syncBtn">...</span>
                         </button>
 
+                        <button class="btn btn-ghost btn-sm" id="btn-docs-resumable"
+                            style="width:100%; margin-top:10px; color:var(--cyan); border:1px dashed var(--cyan-dim); gap:8px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                            <span style="font-size:11px; font-weight:700; letter-spacing:0.05em;"
+                                data-i18n="repo.howDoesItWork">COMMENT ÇA MARCHE ?</span>
+                        </button>
+
                         <div id="repo-sync-progress-container" style="display:none;margin-top:14px;">
                             <div
                                 style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-bottom:5px;">
                                 <div style="display:flex;align-items:center;gap:8px">
                                     <span id="repo-sync-status" data-i18n="common.loading">...</span>
-                                    <span id="repo-sync-paused-badge" style="display:none;background:rgba(245,158,11,0.2);color:var(--warning);padding:2px 6px;border-radius:4px;font-size:9px;font-weight:800;letter-spacing:0.5px">PAUSED</span>
+                                    <span id="repo-sync-paused-badge"
+                                        style="display:none;background:rgba(245,158,11,0.2);color:var(--warning);padding:2px 6px;border-radius:4px;font-size:9px;font-weight:800;letter-spacing:0.5px">PAUSED</span>
                                 </div>
                                 <span id="repo-sync-percent" style="font-weight:600;color:var(--accent);">0%</span>
                             </div>
@@ -872,19 +961,31 @@
                                 style="height:5px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">
                                 <div id="repo-sync-progress-fill"
                                     style="height:100%;width:0%;background:var(--accent);transition:width 0.25s ease;box-shadow:0 0 10px rgba(59, 130, 246, 0.5);border-radius:4px;position:relative;overflow:hidden;">
-                                    <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);animation:sync-progress-shine 2s infinite;"></div>
+                                    <div
+                                        style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);animation:sync-progress-shine 2s infinite;">
+                                    </div>
                                 </div>
                             </div>
                             <div id="repo-sync-details"
                                 style="font-size:10px;color:var(--text-muted);margin-top:8px;font-family:var(--font-mono);line-height:1.8;max-height:80px;overflow-y:auto;background:rgba(0,0,0,0.2);border-radius:6px;padding:6px 8px;word-break:break-all;">
                             </div>
                             <div style="display:flex;gap:8px;margin-top:10px">
-                                <button class="btn btn-secondary btn-sm" id="btn-pause-sync" style="display:none;flex:1;justify-content:center;gap:6px">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                <button class="btn btn-secondary btn-sm" id="btn-pause-sync"
+                                    style="display:none;flex:1;justify-content:center;gap:6px">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.5">
+                                        <rect x="6" y="4" width="4" height="16" />
+                                        <rect x="14" y="4" width="4" height="16" />
+                                    </svg>
                                     <span id="repo-sync-pause-text" data-i18n="common.pause">Pause</span>
                                 </button>
-                                <button class="btn btn-outline-danger btn-sm" id="btn-cancel-sync" style="display:none;flex:1;justify-content:center;gap:6px;color:var(--danger);border-color:rgba(239,68,68,0.2)">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                <button class="btn btn-outline-danger btn-sm" id="btn-cancel-sync"
+                                    style="display:none;flex:1;justify-content:center;gap:6px;color:var(--danger);border-color:rgba(239,68,68,0.2)">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.5">
+                                        <line x1="18" y1="6" x2="6" y2="18" />
+                                        <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
                                     <span data-i18n="common.cancel">Annuler</span>
                                 </button>
                             </div>
@@ -916,6 +1017,28 @@
                                 <line x1="12" x2="12.01" y1="8" y2="8" />
                             </svg>
                             <span data-i18n="docs.howModdingWorks">Comment fonctionne le modding ?</span>
+                            <div style="margin-left:auto; display:flex; gap:8px">
+                                <button class="btn btn-xs btn-ghost" onclick="openDiagram('app-architecture')"
+                                    style="font-size:10px; color:var(--text-primary); border:1px dashed rgba(255,255,255,0.2); padding: 2px 8px;">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" style="margin-right:4px">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                        <path d="M2 17l10 5 10-5" />
+                                        <path d="M2 12l10 5 10-5" />
+                                    </svg>
+                                    <span data-i18n="docs.exploreArch">ARCHITECTURE</span>
+                                </button>
+                                <button class="btn btn-xs btn-ghost" onclick="openDiagram('modding-mechanics')"
+                                    style="font-size:10px; color:#ffffff; border:1px dashed rgba(255,255,255,0.3); padding: 2px 8px;">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" style="margin-right:4px">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                        <path d="M2 17l10 5 10-5" />
+                                        <path d="M2 12l10 5 10-5" />
+                                    </svg>
+                                    <span data-i18n="docs.exploreMods">MÉCANIQUES</span>
+                                </button>
+                            </div>
                         </h3>
                         <div
                             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
@@ -954,6 +1077,16 @@
                                 <path d="M10 12h4" />
                             </svg>
                             <span style="color:#ce8a17" data-i18n="docs.backups">À quoi sert le dossier Backup ?</span>
+                            <button class="btn btn-xs btn-ghost" onclick="openDiagram('backup-system')"
+                                style="margin-left:auto; font-size:10px; color:#ce8a17; border:1px dashed rgba(206,138,23,0.3); padding: 2px 8px;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:4px">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="docs.exploreSafety">EXPLORER LA SÉCURITÉ</span>
+                            </button>
                         </h3>
                         <div
                             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
@@ -984,6 +1117,16 @@
                                 <path d="m9 12 2 2 4-4" />
                             </svg>
                             <span style="color:#22c55e" data-i18n="docs.integrityReport">Rapport d'intégrité</span>
+                            <button class="btn btn-xs btn-ghost" onclick="openDiagram('mod-sync')"
+                                style="margin-left:auto; font-size:10px; color:#22c55e; border:1px dashed rgba(34,197,94,0.3); padding: 2px 8px;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:4px">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="docs.exploreSync">EXPLORER LA SYNC</span>
+                            </button>
                         </h3>
                         <div
                             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
@@ -1029,7 +1172,7 @@
                                 <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px"
                                     data-i18n="docs.basic.links.q1">GitHub</div>
                                 <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                    data-i18n="docs.basic.links.a1">Plateforme tr&egrave;s stable, id&eacute;ale pour le
+                                    data-i18n="docs.basic.links.a1">Plateforme très stable, idéale pour le
                                     code source et les releases.</div>
 
                             </div>
@@ -1038,8 +1181,8 @@
                                 <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px"
                                     data-i18n="docs.basic.links.q2">Direct</div>
                                 <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                    data-i18n="docs.basic.links.a2">T&eacute;l&eacute;chargement et extraction auto.
-                                    Parfais pour les listes .MM.</div>
+                                    data-i18n="docs.basic.links.a2">Téléchargement et extraction auto.
+                                    Parfait pour les listes .MM.</div>
 
                             </div>
 
@@ -1048,7 +1191,7 @@
                                 <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px"
                                     data-i18n="docs.basic.links.q4">Autre</div>
                                 <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                    data-i18n="docs.basic.links.a4">Forums sp&eacute;cialis&eacute;s (Nexus, DCS). Pas
+                                    data-i18n="docs.basic.links.a4">Forums spécialisés (Nexus, DCS). Pas
                                     d'automation native possible.</div>
 
                             </div>
@@ -1106,27 +1249,106 @@
                                 <path d="M8 21h8M12 17v4" />
                             </svg>
                             <span style="color:#bc74ff" data-i18n="docs.repo">Server Repository (Server Mode)</span>
+                            <button class="btn btn-xs btn-ghost" onclick="openDiagram('server-mode')"
+                                style="margin-left:auto; font-size:10px; color:#bc74ff; border:1px dashed rgba(188,116,255,0.3); padding: 2px 8px;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:4px">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="docs.serverMode">ARCHITECTURE SERVEUR</span>
+                            </button>
                         </h3>
                         <div
                             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
-                            <div style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px" data-i18n="docs.repo.concept">Comment ça marche ?</div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5" data-i18n="docs.repo.conceptDesc">...</div>
+                            <div
+                                style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
+                                <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
+                                    data-i18n="docs.repo.concept">Comment ça marche ?</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.repo.conceptDesc">...</div>
                             </div>
-                            <div style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px" data-i18n="docs.repo.hosting">Héberger</div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5" data-i18n="docs.repo.hostingDesc">...</div>
+                            <div
+                                style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
+                                <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
+                                    data-i18n="docs.repo.hosting">Héberger</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.repo.hostingDesc">...</div>
                             </div>
-                            <div style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px" data-i18n="docs.repo.syncing">Synchroniser</div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5" data-i18n="docs.repo.syncingDesc">...</div>
+                            <div
+                                style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px; position: relative;">
+                                <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
+                                    data-i18n="docs.repo.syncing">Synchroniser</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.repo.syncingDesc">...</div>
+                                <button class="btn btn-xs btn-ghost" onclick="openDiagram('mod-sync')"
+                                    style="margin-top:10px; font-size:10px; color:#bc74ff; border:1px dashed rgba(188,116,255,0.2); display:flex; align-items:center; gap:5px;">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                        <path d="M2 17l10 5 10-5" />
+                                        <path d="M2 12l10 5 10-5" />
+                                    </svg>
+                                    <span data-i18n="docs.viewDiagram">VOIR LE DIAGRAMME</span>
+                                </button>
                             </div>
-                            <div style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
-                                <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px" data-i18n="docs.repo.security">Sécurité</div>
-                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5" data-i18n="docs.repo.securityDesc">...</div>
+                            <div
+                                style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
+                                <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
+                                    data-i18n="docs.repo.security">Sécurité</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.repo.securityDesc">...</div>
                             </div>
                         </div>
                     </div>
+
+                    <!-- Dedicated Hosting Guide -->
+                    <div class="glass-card" style="border-left: 3px solid #8b5cf6;">
+                        <h3 class="card-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6"
+                                stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                <rect x="2" y="3" width="20" height="14" rx="2" />
+                                <path d="M8 21h8M12 17v4" />
+                            </svg>
+                            <span style="color:#8b5cf6" data-i18n="docs.dedicatedHosting">Guide de Déploiement Dédié (Self-Hosting)</span>
+                            <button class="btn btn-xs btn-ghost" onclick="openDiagram('dedicated-hosting')"
+                                style="margin-left:auto; font-size:10px; color:#8b5cf6; border:1px dashed rgba(139,92,246,0.3); padding: 2px 8px;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:4px">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="docs.viewDeployment">VOIR LE DÉPLOIEMENT</span>
+                            </button>
+                        </h3>
+                        <div
+                            style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
+                            <div
+                                style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:12px">
+                                <div style="font-size:12px;font-weight:700;color:#a78bfa;margin-bottom:4px"
+                                    data-i18n="docs.dedicatedHosting.gen">1. Générer le Repo</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.dedicatedHosting.genDesc">Utilisez l'onglet 'Serveur Repo' pour générer le dépôt.</div>
+                            </div>
+                            <div
+                                style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:12px">
+                                <div style="font-size:12px;font-weight:700;color:#a78bfa;margin-bottom:4px"
+                                    data-i18n="docs.dedicatedHosting.transfer">2. Transférer</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.dedicatedHosting.transferDesc">Copiez TOUT le dossier généré (pas seulement le .json) sur votre serveur.</div>
+                            </div>
+                            <div
+                                style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:12px">
+                                <div style="font-size:12px;font-weight:700;color:#a78bfa;margin-bottom:4px"
+                                    data-i18n="docs.dedicatedHosting.config">3. Configurer</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.dedicatedHosting.configDesc">Utilisez Nginx ou Cloudflare Tunnel. N'oubliez pas les headers CORS !</div>
+                            </div>
+                        </div>
+                    </div>
+
 
                     <!-- Conflicts -->
                     <div class="glass-card" style="border-left: 3px solid var(--warning);">
@@ -1140,6 +1362,16 @@
                             </svg>
                             <span style="color:var(--warning)" data-i18n="docs.conflicts">Système de conflits &
                                 priorité</span>
+                            <button class="btn btn-xs btn-ghost" onclick="openDiagram('conflict-management')"
+                                style="margin-left:auto; font-size:10px; color:var(--warning); border:1px dashed rgba(245,158,11,0.3); padding: 2px 8px;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:4px">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="docs.exploreConflicts">EXPLORER L'ALGORITHME</span>
+                            </button>
                         </h3>
                         <div
                             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
@@ -1184,6 +1416,28 @@
                             </svg>
                             <span style="color:#60a5fa" data-i18n="docs.profileCustom">Personnalisation des
                                 profils</span>
+                            <div style="margin-left:auto; display:flex; gap:8px">
+                                <button class="btn btn-xs btn-ghost" onclick="openDiagram('profile-system')"
+                                    style="font-size:10px; color:#60a5fa; border:1px dashed rgba(96,165,250,0.3); padding: 2px 8px;">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" style="margin-right:4px">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                        <path d="M2 17l10 5 10-5" />
+                                        <path d="M2 12l10 5 10-5" />
+                                    </svg>
+                                    <span data-i18n="docs.exploreLifecycle">LIFECYCLE</span>
+                                </button>
+                                <button class="btn btn-xs btn-ghost" onclick="openDiagram('profile-customization')"
+                                    style="font-size:10px; color:#60a5fa; border:1px dashed rgba(255,255,255,0.3); padding: 2px 8px;">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" style="margin-right:4px">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                        <path d="M2 17l10 5 10-5" />
+                                        <path d="M2 12l10 5 10-5" />
+                                    </svg>
+                                    <span data-i18n="docs.exploreImageMeta">IMAGE &amp; META</span>
+                                </button>
+                            </div>
                         </h3>
                         <div
                             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
@@ -1229,6 +1483,16 @@
                                 <path d="M6 16h.01" />
                             </svg>
                             <span data-i18n="docs.ioLimiter">Limiteur d'E/S Disque</span>
+                            <button class="btn btn-xs btn-ghost" onclick="openDiagram('perf-monitoring')"
+                                style="margin-left:auto; font-size:10px; color:var(--accent); border:1px dashed rgba(59,130,246,0.3); padding: 2px 8px;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:4px">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="docs.explorePerf">MONITORING PERFORMANCE</span>
+                            </button>
                         </h3>
                         <div
                             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
@@ -1274,6 +1538,16 @@
                                 <line x1="12" y1="17" x2="12.01" y2="17" />
                             </svg>
                             <span data-i18n="docs.storageAlerts">Alertes de Stockage</span>
+                            <button class="btn btn-xs btn-ghost" onclick="openDiagram('faq-disk-full')"
+                                style="margin-left:auto; font-size:10px; color:#f59e0b; border:1px dashed rgba(245,158,11,0.3); padding: 2px 8px;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:4px">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="docs.exploreDiskFull">SCÉNARIO DISQUE PLEIN</span>
+                            </button>
                         </h3>
                         <div
                             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
@@ -1316,6 +1590,16 @@
                                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                             </svg>
                             <span data-i18n="docs.benchmark">Performance & Monitoring</span>
+                            <button class="btn btn-xs btn-ghost" onclick="openDiagram('perf-monitoring')"
+                                style="margin-left:auto; font-size:10px; color:#3b82f6; border:1px dashed rgba(59,130,246,0.3); padding: 2px 8px;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:4px">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="docs.explorePerf">VOIR LE MONITORING</span>
+                            </button>
                         </h3>
                         <div
                             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
@@ -1355,11 +1639,21 @@
                         <h3 class="card-title">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e"
                                 stroke-width="2" style="margin-right:8px;vertical-align:middle">
-                                <circle cx="12" cy="12" r="10"/>
-                                <line x1="12" y1="8" x2="12" y2="12"/>
-                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="8" x2="12" y2="12" />
+                                <line x1="12" y1="16" x2="12.01" y2="16" />
                             </svg>
                             <span style="color:#22c55e" data-i18n="docs.bestPractices">Best Practices &amp; Tips</span>
+                            <button class="btn btn-xs btn-ghost" onclick="openDiagram('best-practices')"
+                                style="margin-left:auto; font-size:10px; color:#22c55e; border:1px dashed rgba(34,197,94,0.3); padding: 2px 8px;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:4px">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="docs.diagram.btn.explore">EXPLORER</span>
+                            </button>
                         </h3>
                         <div
                             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
@@ -1368,33 +1662,119 @@
                                 <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
                                     data-i18n="docs.bestPractices.oneProfile">1 Profile = 1 Mod Folder</div>
                                 <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                    data-i18n="docs.bestPractices.oneProfileDesc">...</div>
+                                    data-i18n="docs.bestPractices.oneProfileDesc">Utilisez un dossier de mods distinct
+                                    par profil pour éviter les mélanges de fichiers entre jeux.</div>
                             </div>
                             <div
                                 style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
                                 <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
                                     data-i18n="docs.bestPractices.modStructure">Mod Folder Structure</div>
                                 <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                    data-i18n="docs.bestPractices.modStructureDesc">...</div>
+                                    data-i18n="docs.bestPractices.modStructureDesc">Assurez-vous que vos dossiers de
+                                    mods respectent la structure racine du jeu pour une injection correcte.</div>
                             </div>
                             <div
                                 style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:12px">
                                 <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
                                     data-i18n="docs.bestPractices.noDelete">Never Delete an Active Mod</div>
                                 <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                    data-i18n="docs.bestPractices.noDeleteDesc">...</div>
+                                    data-i18n="docs.bestPractices.noDeleteDesc">Désactivez toujours un mod via BMM avant
+                                    de le supprimer manuellement de votre disque.</div>
                             </div>
                             <div
                                 style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
                                 <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
                                     data-i18n="docs.bestPractices.noMix">Don't Mix Mod Folders</div>
                                 <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                    data-i18n="docs.bestPractices.noMixDesc">...</div>
+                                    data-i18n="docs.bestPractices.noMixDesc">Évitez de pointer deux profils vers le même
+                                    dossier de mods pour prévenir les conflits d'état.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- App Updates Documentation -->
+                    <div class="glass-card" style="border-left: 3px solid var(--accent);">
+                        <h3 class="card-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                                stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            <span style="color:var(--accent)" data-i18n="docs.appUpdates">Mises à jour de
+                                l'application</span>
+                            <button class="btn btn-xs btn-ghost" onclick="openDiagram('app-update')"
+                                style="margin-left:auto; font-size:10px; color:var(--accent); border:1px dashed rgba(59,130,246,0.3); padding: 2px 8px;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:4px">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="docs.exploreCycle">EXPLORER LE CYCLE</span>
+                            </button>
+                        </h3>
+                        <div
+                            style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
+                            <div
+                                style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px"
+                                    data-i18n="docs.updateCycle.title">Cycle Intelligent</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                    data-i18n="docs.updateCycle.desc">BMM gère automatiquement la vérification, le
+                                    téléchargement sécurisé et le remplacement à chaud du binaire.</div>
                             </div>
                         </div>
                     </div>
 
                     <!-- FAQ -->
+                    <!-- Technical Stack & Architecture -->
+                    <div class="glass-card" id="tech-stack-card"
+                        style="border-left: 3px solid var(--cyan); margin-bottom: 24px;">
+                        <h3 class="card-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
+                                stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                <path
+                                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                                <line x1="12" y1="22.08" x2="12" y2="12" />
+                            </svg>
+                            <span style="color:var(--cyan)" data-i18n="docs.techStack">Technologies &
+                                Architecture</span>
+                            <button class="btn btn-xs btn-ghost" onclick="openDiagram('app-architecture')"
+                                style="margin-left:auto; font-size:10px; color:var(--cyan); border:1px dashed rgba(6,182,212,0.3); padding: 2px 8px;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:4px">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="docs.exploreArch">ARCHITECTURE</span>
+                            </button>
+                        </h3>
+                        <div
+                            style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
+                            <div
+                                style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                <div style="font-size:12px;font-weight:700;color:var(--cyan)">Tauri & Rust</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.4">Cœur technique
+                                    assurant sécurité, rapidité d'exécution et gestion bas-niveau.</div>
+                            </div>
+                            <div
+                                style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                <div style="font-size:12px;font-weight:700;color:var(--cyan)">Mermaid.js</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.4">Moteur de
+                                    visualisation interactive avec traductions dynamiques et pan/zoom stable.</div>
+                            </div>
+                            <div
+                                style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                <div style="font-size:12px;font-weight:700;color:var(--cyan)" data-i18n="docs.techStack.json">JSON & Symlinks</div>
+                                <div style="font-size:12px;color:var(--text-secondary);line-height:1.4" data-i18n="docs.techStack.jsonDesc">Utilisation
+                                    optimisée de la persistance JSON et de la redirection NT.</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <h2 style="margin-top:28px;font-size:18px;color:var(--text-primary)" data-i18n="faq.title">Questions
                         fréquentes (FAQ)</h2>
 
@@ -1587,13 +1967,61 @@
                                 <polyline points="6 9 12 15 18 9"></polyline>
                             </svg>
                         </summary>
-                        <div class="faq-content">
-                            <p data-i18n="faq.aIo" style="line-height:1.6">
-                                Il empêche BMM de copier les fichiers trop vite, ce qui pourrait faire laguer votre PC.
-                                Rendez-vous dans <strong>Paramètres → Gestionnaire de Stockage</strong> pour ajuster la
-                                limite de vitesse par disque.
-                                Vous pouvez aussi lancer un benchmark pour obtenir une valeur suggérée automatiquement.
+                        <div class="faq-content" style="display: flex; flex-direction: column; gap: 12px; align-items: flex-start;">
+                            <p data-i18n="faq.aIo" style="line-height:1.6; margin: 0;">
+                                Le limiteur d'E/S (entrées/sorties) permet de réduire l'impact de BMM sur les
+                                performances générales de votre PC pendant les opérations de copie ou de téléchargement,
+                                en limitant la vitesse à laquelle les données sont lues ou écrites sur le disque.
                             </p>
+                            <button class="btn btn-xs btn-ghost" onclick="openDiagram('disk-io-limiter')"
+                                style="font-size:10px; color:var(--accent); border:1px dashed rgba(59,130,246,0.3); padding: 4px 10px; margin-top: 4px;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:6px">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="docs.diagram.btn.view">VOIR LE DIAGRAMME</span>
+                            </button>
+                        </div>
+                    </details>
+
+                    <details class="faq-accordion">
+                        <summary class="faq-summary">
+                            <span style="display:flex;align-items:center;gap:8px">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
+                                    stroke-width="2.2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                <span data-i18n="faq.qResumable">Comment fonctionne la reprise de téléchargement
+                                    ?</span>
+                            </span>
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <button class="btn-docs-trigger" id="btn-faq-resumable" title="Voir le diagramme">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                        <path d="M2 17l10 5 10-5" />
+                                        <path d="M2 12l10 5 10-5" />
+                                    </svg>
+                                </button>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </div>
+                        </summary>
+                        <div class="faq-content">
+                            <p data-i18n="faq.aResumable" style="margin-bottom:10px;">BMM découpe les fichiers
+                                volumineux en morceaux de 4 Mo. Si une erreur survient (coupure internet, crash ou
+                                fermeture), BMM vérifie quels morceaux sont déjà validés et ne télécharge que les
+                                parties manquantes.</p>
+                            <button class="btn btn-sm btn-ghost" id="btn-faq-resumable-alt"
+                                style="color:var(--cyan); border:1px dashed var(--cyan-dim); font-size:11px;">
+                                VOIR LE DIAGRAMME INTERACTIF
+                            </button>
                         </div>
                     </details>
 
@@ -1632,12 +2060,37 @@
                                 </svg>
                                 <span data-i18n="faq.qRepo">C'est quoi le Server Repo ?</span>
                             </span>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <button class="btn-docs-trigger" onclick="openDiagram('mod-sync')"
+                                    title="Voir le diagramme">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                        <path d="M2 17l10 5 10-5" />
+                                        <path d="M2 12l10 5 10-5" />
+                                    </svg>
+                                </button>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </div>
                         </summary>
-                        <div class="faq-content" data-i18n="faq.aRepo">...</div>
+                        <div class="faq-content">
+                            <p data-i18n="faq.aRepo" style="margin-bottom:10px;">Une méthode premium pour partager des
+                                mods. Un utilisateur héberge un dépôt, et les autres se connectent via une URL pour
+                                synchroniser automatiquement leurs fichiers.</p>
+                            <button class="btn btn-sm btn-ghost" onclick="openDiagram('mod-sync')"
+                                style="color:#bc74ff; border:1px dashed rgba(188,116,255,0.3); font-size:11px; display:inline-flex; align-items:center; gap:6px; margin-top:8px;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="repo.exploreSyncLogic">EXPLORER LA LOGIQUE DE SYNCHRO</span>
+                            </button>
+                        </div>
                     </details>
 
                     <details class="faq-accordion">
@@ -1746,7 +2199,8 @@
                                     AUTEUR</div>
                                 <div class="credit-info-value credit-info-value-large">
                                     FreeProject089</div>
-                                <div class="credit-info-sub credit-info-sub-muted" data-i18n="credits.devRole">Créateur &
+                                <div class="credit-info-sub credit-info-sub-muted" data-i18n="credits.devRole">Créateur
+                                    &
                                     Développeur</div>
                             </div>
                         </div>
@@ -1776,8 +2230,8 @@
                         </div>
 
                         <div class="credit-links-list credit-links-list-container">
-                            <a href="https://github.com/better-dcs/BetterModsManager" target="_blank" rel="noopener noreferrer"
-                                class="credit-link-card credit-link-card-github">
+                            <a href="https://github.com/better-dcs/BetterModsManager" target="_blank"
+                                rel="noopener noreferrer" class="credit-link-card credit-link-card-github">
                                 <div class="credit-icon-box credit-icon-box-github">
                                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2.2">
@@ -1786,10 +2240,10 @@
                                     </svg>
                                 </div>
                                 <div class="credit-info">
-                                    <div class="credit-title credit-title-github"
-                                        data-i18n="credits.githubRepo">Dépôt
+                                    <div class="credit-title credit-title-github" data-i18n="credits.githubRepo">Dépôt
                                         GitHub</div>
-                                    <div class="credit-subtitle credit-subtitle-muted" data-i18n="credits.githubSub">Code source &
+                                    <div class="credit-subtitle credit-subtitle-muted" data-i18n="credits.githubSub">
+                                        Code source &
                                         contributions</div>
                                 </div>
                                 <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -1800,7 +2254,8 @@
                                 </svg>
                             </a>
 
-                            <a href="https://discord.com/invite/CTaaEF9R75" target="_blank" rel="noopener noreferrer" class="credit-link-card credit-link-card-discord">
+                            <a href="https://discord.com/invite/CTaaEF9R75" target="_blank" rel="noopener noreferrer"
+                                class="credit-link-card credit-link-card-discord">
                                 <div class="credit-icon-box credit-icon-box-discord">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                         <path
@@ -1808,10 +2263,10 @@
                                     </svg>
                                 </div>
                                 <div class="credit-info">
-                                    <div class="credit-title credit-title-discord"
-                                        data-i18n="credits.discord">Communauté Discord</div>
-                                    <div class="credit-subtitle credit-subtitle-muted"
-                                        data-i18n="credits.discordSub">Aide & Mises à jour</div>
+                                    <div class="credit-title credit-title-discord" data-i18n="credits.discord">
+                                        Communauté Discord</div>
+                                    <div class="credit-subtitle credit-subtitle-muted" data-i18n="credits.discordSub">
+                                        Aide & Mises à jour</div>
                                 </div>
                                 <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
                                     stroke="currentColor" stroke-width="2">
@@ -1821,18 +2276,17 @@
                                 </svg>
                             </a>
 
-                            <a href="https://forum.dcs.world/topic/385941-better-modmanager/" target="_blank" rel="noopener noreferrer"
-                                class="credit-link-card credit-link-card-ed">
+                            <a href="https://forum.dcs.world/topic/385941-better-modmanager/" target="_blank"
+                                rel="noopener noreferrer" class="credit-link-card credit-link-card-ed">
                                 <div class="credit-icon-box credit-icon-box-ed">
                                     <img src="assets/ED.webp" alt="ED"
                                         style="width: 100%; height: 100%; object-fit: cover; filter: brightness(1.2);" />
                                 </div>
                                 <div class="credit-info">
-                                    <div class="credit-title credit-title-ed"
-                                        data-i18n="credits.edForum">Forums Eagle
+                                    <div class="credit-title credit-title-ed" data-i18n="credits.edForum">Forums Eagle
                                         Dynamics</div>
-                                    <div class="credit-subtitle credit-subtitle-muted"
-                                        data-i18n="credits.edSub">Ressources de modding DCS World</div>
+                                    <div class="credit-subtitle credit-subtitle-muted" data-i18n="credits.edSub">
+                                        Ressources de modding DCS World</div>
                                 </div>
                                 <svg class="credit-external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
                                     stroke="currentColor" stroke-width="2">
@@ -1851,10 +2305,10 @@
                                     </svg>
                                 </div>
                                 <div class="credit-info">
-                                    <div class="credit-title credit-title-license"
-                                        data-i18n="credits.license">License</div>
-                                    <div class="credit-subtitle credit-subtitle-muted"
-                                        data-i18n="credits.licenseSub">View Apache-2.0 License</div>
+                                    <div class="credit-title credit-title-license" data-i18n="credits.license">License
+                                    </div>
+                                    <div class="credit-subtitle credit-subtitle-muted" data-i18n="credits.licenseSub">
+                                        View Apache-2.0 License</div>
                                 </div>
                             </a>
                         </div>
@@ -2034,7 +2488,8 @@
                                     data-i18n-placeholder="settings.githubPatPlaceholder"
                                     placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                     style="width:100%;padding:9px 40px 9px 12px;border-radius:8px;background:rgba(0,0,0,0.25);color:white;border:1px solid var(--border);font-family:var(--font-mono);font-size:12px;box-sizing:border-box;transition:border 0.2s" />
-                                <button id="btn-toggle-pat-visibility" title="Show/Hide token" aria-label="Toggle PAT visibility"
+                                <button id="btn-toggle-pat-visibility" title="Show/Hide token"
+                                    aria-label="Toggle PAT visibility"
                                     style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;display:flex;align-items:center">
                                     <svg id="pat-eye-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
                                         stroke="currentColor" stroke-width="2">
@@ -2280,16 +2735,26 @@
                     <!-- ── App Notes ── -->
                     <div class="glass-card">
                         <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                                stroke-width="2.2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="16" y1="13" x2="8" y2="13" />
+                                <line x1="16" y1="17" x2="8" y2="17" />
+                                <polyline points="10 9 9 9 8 9" />
+                            </svg>
                             <span data-i18n="settings.notesTitle">Release Notes</span>
                         </h3>
                         <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
                             Consultez les dernières nouveautés et les changements de la version actuelle.
                         </p>
                         <button class="btn btn-secondary btn-sm" id="btn-show-notes">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="16" x2="12" y2="12" />
+                                <line x1="12" y1="8" x2="12.01" y2="8" />
+                            </svg>
                             <span>Afficher les notes</span>
                         </button>
                     </div>
@@ -2391,14 +2856,17 @@
                     onmouseover="this.style.background='rgba(239,68,68,0.1)';this.style.borderColor='rgba(239,68,68,0.3)';"
                     onmouseout="this.style.background='rgba(239,68,68,0.06)';this.style.borderColor='rgba(239,68,68,0.15)';"
                     title="Cliquer pour ouvrir le fichier">
-                    <div style="width:32px;height:32px;background:rgba(239,68,68,0.1);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <div
+                        style="width:32px;height:32px;background:rgba(239,68,68,0.1);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.2">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                             <polyline points="14 2 14 8 20 8" />
                         </svg>
                     </div>
                     <div style="display:flex;flex-direction:column;gap:2px;overflow:hidden">
-                        <span style="font-size:9px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.05em;opacity:0.8" data-i18n="crash.pathLabel">Fichier du rapport</span>
+                        <span
+                            style="font-size:9px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.05em;opacity:0.8"
+                            data-i18n="crash.pathLabel">Fichier du rapport</span>
                         <code id="crash-zip-path"
                             style="font-size:11px;font-family:var(--font-mono);color:var(--text-secondary);word-break:break-all;white-space:normal;line-height:1.4">—</code>
                     </div>
@@ -2406,7 +2874,8 @@
                 <p style="font-size:12px;color:var(--text-muted);margin-top:8px" data-i18n="crash.helpText">Please share
                     this file on our Discord so we can investigate.</p>
             </div>
-            <div class="modal-footer" style="border-color:rgba(239,68,68,0.15);gap:10px;flex-wrap:nowrap;align-items:center">
+            <div class="modal-footer"
+                style="border-color:rgba(239,68,68,0.15);gap:10px;flex-wrap:nowrap;align-items:center">
                 <a href="https://discord.com/invite/CTaaEF9R75" target="_blank" class="btn btn-primary"
                     style="background:rgba(88,101,242,0.85);border-color:rgba(88,101,242,0.4);text-decoration:none;display:flex;align-items:center;gap:8px;white-space:nowrap;flex-shrink:0">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
@@ -2415,8 +2884,10 @@
                     </svg>
                     <span data-i18n="crash.discord">Join Discord</span>
                 </a>
-                <button class="btn btn-secondary" id="btn-crash-open-zip" style="border-radius:10px;padding:0 16px;height:38px;font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px">
+                <button class="btn btn-secondary" id="btn-crash-open-zip"
+                    style="border-radius:10px;padding:0 16px;height:38px;font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        style="margin-right:6px">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                     </svg>
                     <span data-i18n="crash.openZip">Open in Explorer</span>
@@ -2766,8 +3237,12 @@
                 </div>
                 <p style="font-size:13px; color:var(--text-muted); line-height:1.5" data-i18n="conflict.warningDesc">
                     L'ordre d'activation déterminera quel mod a la priorité. Voulez-vous continuer ?</p>
-                <label class="checkbox-container" style="margin-top:20px; display:flex; align-items:center; justify-content:center; gap:10px; font-size:13px; color:var(--text-secondary); cursor:pointer; padding:10px; border-radius:10px; transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-                    <input type="checkbox" id="conflict-ignore-forever" style="width:18px; height:18px; cursor:pointer" />
+                <label class="checkbox-container"
+                    style="margin-top:20px; display:flex; align-items:center; justify-content:center; gap:10px; font-size:13px; color:var(--text-secondary); cursor:pointer; padding:10px; border-radius:10px; transition:background 0.2s"
+                    onmouseover="this.style.background='rgba(255,255,255,0.03)'"
+                    onmouseout="this.style.background='transparent'">
+                    <input type="checkbox" id="conflict-ignore-forever"
+                        style="width:18px; height:18px; cursor:pointer" />
                     <span data-i18n="conflict.dontShow">Ne plus m'avertir</span>
                 </label>
             </div>
@@ -2784,30 +3259,48 @@
 
     <!-- Duplicate Folder Warning Modal -->
     <div class="modal-overlay" id="modal-duplicate-folder-warning">
-        <div class="modal glass" style="max-width:550px; border:1px solid rgba(239, 68, 68, 0.3); border-radius:12px; overflow:hidden">
-            <div class="modal-header" style="background: linear-gradient(to right, rgba(239, 68, 68, 0.15), transparent); border-bottom: 1px solid rgba(239, 68, 68, 0.1); padding: 20px 24px;">
+        <div class="modal glass"
+            style="max-width:550px; border:1px solid rgba(239, 68, 68, 0.3); border-radius:12px; overflow:hidden">
+            <div class="modal-header"
+                style="background: linear-gradient(to right, rgba(239, 68, 68, 0.15), transparent); border-bottom: 1px solid rgba(239, 68, 68, 0.1); padding: 20px 24px;">
                 <div style="display:flex; align-items:center; gap:16px">
-                    <div style="width:40px; height:40px; border-radius:10px; background:rgba(239,68,68,0.2); display:flex; align-items:center; justify-content:center; border:1px solid rgba(239,68,68,0.3)">
+                    <div
+                        style="width:40px; height:40px; border-radius:10px; background:rgba(239,68,68,0.2); display:flex; align-items:center; justify-content:center; border:1px solid rgba(239,68,68,0.3)">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5">
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                            <path
+                                d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                            <line x1="12" y1="9" x2="12" y2="13" />
+                            <line x1="12" y1="17" x2="12.01" y2="17" />
                         </svg>
                     </div>
-                    <h2 class="modal-title" style="color:#ef4444; font-weight:800; margin:0" data-i18n="prof.duplicateFolderTitle">Action Risquée Détectée</h2>
+                    <h2 class="modal-title" style="color:#ef4444; font-weight:800; margin:0"
+                        data-i18n="prof.duplicateFolderTitle">Action Risquée Détectée</h2>
                     <button class="modal-close" data-close="modal-duplicate-folder-warning">&times;</button>
                 </div>
             </div>
             <div class="modal-body" style="padding: 24px; text-align: left;">
-                <div style="background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.1); border-radius:12px; padding:16px; margin-bottom:20px">
-                    <p style="font-weight:600; font-size:15px; color:var(--text-primary); line-height:1.5; margin:0" data-i18n="prof.duplicateFolderMsg">Attention : Ce dossier de mods est déjà utilisé par un autre profil !</p>
+                <div
+                    style="background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.1); border-radius:12px; padding:16px; margin-bottom:20px">
+                    <p style="font-weight:600; font-size:15px; color:var(--text-primary); line-height:1.5; margin:0"
+                        data-i18n="prof.duplicateFolderMsg">Attention : Ce dossier de mods est déjà utilisé par un autre
+                        profil !</p>
                 </div>
-                
-                <p style="color:var(--text-secondary); line-height:1.6; font-size:13px; margin-bottom:20px" data-i18n="prof.duplicateFolderDesc">
-                    Partager un même dossier entre plusieurs profils est une source majeure d'<strong>erreur humaine</strong>. Vous risquez d'activer par inadvertance des mods destinés à un autre jeu ou une autre configuration.
+
+                <p style="color:var(--text-secondary); line-height:1.6; font-size:13px; margin-bottom:20px"
+                    data-i18n="prof.duplicateFolderDesc">
+                    Partager un même dossier entre plusieurs profils est une source majeure d'<strong>erreur
+                        humaine</strong>. Vous risquez d'activer par inadvertance des mods destinés à un autre jeu ou
+                    une autre configuration.
                 </p>
 
-                <label class="checkbox-container" style="margin-top:20px; padding:12px; border-radius:10px; background:rgba(255,255,255,0.02); display:flex; align-items:center; gap:12px; cursor:pointer; transition:all 0.2s; user-select:none" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
-                    <input type="checkbox" id="duplicate-folder-ignore-forever" style="width:20px; height:20px; cursor:pointer" />
-                    <span data-i18n="prof.duplicateFolderDontShow" style="font-size:13px; font-weight:500; color:var(--text-muted)">Ne plus m'avertir</span>
+                <label class="checkbox-container"
+                    style="margin-top:20px; padding:12px; border-radius:10px; background:rgba(255,255,255,0.02); display:flex; align-items:center; gap:12px; cursor:pointer; transition:all 0.2s; user-select:none"
+                    onmouseover="this.style.background='rgba(255,255,255,0.05)'"
+                    onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+                    <input type="checkbox" id="duplicate-folder-ignore-forever"
+                        style="width:20px; height:20px; cursor:pointer" />
+                    <span data-i18n="prof.duplicateFolderDontShow"
+                        style="font-size:13px; font-weight:500; color:var(--text-muted)">Ne plus m'avertir</span>
                 </label>
             </div>
             <div class="modal-footer" style="padding: 16px 24px; background:rgba(255,255,255,0.01)">
@@ -2870,7 +3363,8 @@
     <div class="modal-overlay" id="modal-delete-profile">
         <div class="modal glass" style="max-width: 480px;">
             <div class="modal-header">
-                <h2 class="modal-title" style="color:var(--danger)" data-i18n="prof.deleteTitle">Supprimer le profil</h2>
+                <h2 class="modal-title" style="color:var(--danger)" data-i18n="prof.deleteTitle">Supprimer le profil
+                </h2>
                 <button class="modal-close" data-close="modal-delete-profile">&times;</button>
             </div>
             <div class="modal-body" style="padding: 24px; text-align: center;">
@@ -2881,7 +3375,8 @@
                         <path
                             d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />
                     </svg>
-                    <h3 style="margin-bottom:8px; font-size:18px" data-i18n="prof.deleteConfirmMsg">Confirmation de suppression</h3>
+                    <h3 style="margin-bottom:8px; font-size:18px" data-i18n="prof.deleteConfirmMsg">Confirmation de
+                        suppression</h3>
                     <p style="font-size:14px; opacity:0.8; line-height:1.5" id="delete-profile-warning-text">
                         Voulez-vous vraiment supprimer ce profil ? Cette action est irréversible.
                     </p>
@@ -3151,26 +3646,95 @@
         <div class="modal glass" style="max-width:550px; width:90%;">
             <div class="modal-header">
                 <div style="display:flex; align-items:center; gap:12px;">
-                    <div style="width:36px; height:36px; background:rgba(16,185,129,0.1); border-radius:10px; display:flex; align-items:center; justify-content:center;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    <div
+                        style="width:36px; height:36px; background:rgba(16,185,129,0.1); border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--success)"
+                            stroke-width="2.5">
+                            <polyline points="20 6 9 17 4 12" />
+                        </svg>
                     </div>
                     <div>
                         <h2 class="modal-title" data-i18n="repo.summaryTitle">Synchronisation terminée</h2>
-                        <p style="font-size:11px; color:var(--text-muted); margin:2px 0 0;" data-i18n="repo.summarySubtitle">Voici le détail des modifications effectuées</p>
+                        <p style="font-size:11px; color:var(--text-muted); margin:2px 0 0;"
+                            data-i18n="repo.summarySubtitle">Voici le détail des modifications effectuées</p>
                     </div>
                 </div>
                 <button class="modal-close" data-close="modal-repo-sync-summary">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
                 </button>
             </div>
-            <div class="modal-body" id="repo-sync-summary-body" style="padding:20px; max-height:450px; overflow-y:auto;">
+            <div class="modal-body" id="repo-sync-summary-body"
+                style="padding:20px; max-height:450px; overflow-y:auto;">
                 <!-- Summary content injected by JS -->
             </div>
-            <div class="modal-footer" style="padding:15px 20px; background:rgba(255,255,255,0.02); display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border);">
-                <button class="btn btn-primary" data-close="modal-repo-sync-summary" style="padding:0 24px;" data-i18n="common.ok">OK</button>
+            <div class="modal-footer"
+                style="padding:15px 20px; background:rgba(255,255,255,0.02); display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border);">
+                <button class="btn btn-primary" data-close="modal-repo-sync-summary" style="padding:0 24px;"
+                    data-i18n="common.ok">OK</button>
             </div>
         </div>
     </div>
+
+    <!-- Interactive Documentation Diagram Modal -->
+    <div class="modal-overlay" id="modal-docs-diagram" style="z-index: 10000;">
+        <div class="modal-docs-container glass">
+            <div class="modal-docs-header">
+                <div class="modal-docs-title-group">
+                    <div class="modal-docs-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                            <path d="M2 17l10 5 10-5" />
+                            <path d="M2 12l10 5 10-5" />
+                        </svg>
+                    </div>
+                    <div class="modal-docs-title" id="docs-diagram-title">Fonctionnement</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px">
+                    <button class="btn-docs-util" id="btn-docs-reset-zoom" title="Reset Zoom">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                            <path d="M3 3v5h5" />
+                        </svg>
+                    </button>
+                    <button class="btn-docs-close" id="btn-close-docs-diagram">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-docs-content">
+                <div class="diagram-wrapper">
+                    <div id="mermaid-diagram-container" class="mermaid-container"></div>
+                </div>
+            </div>
+            <!-- Tasky mascot overlay - REMOVED FROM HERE, MOVED TO GLOBAL BODY LEVEL -->
+        </div>
+    </div>
+
+    <!-- Global Tasky Layer (Docs) -->
+    <div class="tasky-bubble-container" id="tasky-bubble-docs" style="display:none; opacity:0;">
+        <div class="tasky-mascot-wrapper">
+            <img src="assets/Tasky.png" alt="Tasky" id="tasky-mascot-img" class="tasky-mascot-anim">
+        </div>
+        <div class="tasky-speech-bubble">
+            <div style="display:flex; align-items:flex-start; gap:12px;">
+                <div id="tasky-bubble-eyes" style="width:24px; height:24px; flex-shrink:0; margin-top:2px;"></div>
+                <p id="tasky-explanation">Passez votre souris sur une étape pour que je vous explique !</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+    <script src="js/interactive-docs.js" type="module"></script>
 
 </body>
 

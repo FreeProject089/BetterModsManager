@@ -1,0 +1,161 @@
+import json
+import os
+
+def update_json(path, new_keys):
+    try:
+        if not os.path.exists(path):
+            print(f'File {path} does not exist')
+            return
+            
+        with open(path, 'r', encoding='utf-8-sig') as f:
+            data = json.load(f)
+            
+        data.update(new_keys)
+        
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+        print(f'Successfully updated {path}')
+    except Exception as e:
+        print(f'Error updating {path}: {e}')
+
+fr_keys = {
+    "docs.diagram.cluster.INPUT": "ENTRÉE UTILISATEUR",
+    "docs.diagram.cluster.LOGIC": "LOGIQUE BMM",
+    "docs.diagram.cluster.READY": "PRÊT",
+    "docs.diagram.cluster.DETECTION": "DÉTECTION",
+    "docs.diagram.cluster.ANALYSIS": "ANALYSE",
+    "docs.diagram.cluster.RESOLUTION": "RÉSOLUTION",
+    "docs.diagram.cluster.UPDATE_CHECK": "VÉRIFICATION MAJ",
+    "docs.diagram.cluster.DEPLOYMENT": "DÉPLOIEMENT",
+    "docs.diagram.cluster.GAME_FS": "MOTEUR JEU",
+    "docs.diagram.cluster.VIRTUAL": "REDIRECTION VIRTUELLE",
+    "docs.diagram.cluster.IO": "OPÉRATION E/S",
+    "docs.diagram.cluster.ERROR": "GESTION ERREUR",
+    "docs.diagram.cluster.RECOVERY": "RÉCUPÉRATION",
+    "docs.diagram.cluster.TRIG": "DÉCLENCHEUR",
+    "docs.diagram.cluster.CORE": "CŒUR LOGIQUE",
+    "docs.diagram.cluster.SENSORS": "MONITORING",
+    "docs.diagram.cluster.ENGINE": "LIMITEUR RUST",
+    "docs.diagram.cluster.UI": "INTERFACE",
+    "docs.diagram.cluster.CLIENT": "CLIENT BMM",
+    "docs.diagram.cluster.SERVER": "MODE SERVEUR",
+    "docs.diagram.cluster.DATA": "DÉPÔT DISTANT",
+    "docs.diagram.cluster.PROC": "TRAITEMENT",
+    "docs.diagram.cluster.STORAGE": "PERSISTANCE",
+    "docs.diagram.cluster.ASSETS": "RÉSERVE BMM",
+    "docs.diagram.cluster.TRAP": "DÉTECTION ORPHELIN",
+    "docs.diagram.cluster.SYNC": "SYNC BMM",
+    "docs.diagram.cluster.FIX": "RÉPARATION AUTO",
+    "docs.diagram.perf.title": "Performance & Monitoring",
+    "docs.diagram.perf.node.DISK_IO": "Capteur E/S : Mesure de la charge disque en temps réel.",
+    "docs.diagram.perf.node.MEM_USE": "Audit Mémoire : Surveillance de l'empreinte RAM (Backend Rust).",
+    "docs.diagram.perf.node.THROTTLE": "Limiteur : Ralentissement intelligent pour préserver le système.",
+    "docs.diagram.perf.node.QUEUE": "File d'Attente : Ordonnancement des requêtes prioritaires.",
+    "docs.diagram.perf.node.STATS": "Feedback UI : Visualisation des métriques (BMM Charts).",
+    "docs.diagram.server.title": "Architecture Serveur (Centralisé & P2P)",
+    "docs.diagram.server.node.REQ": "Requête Client : Demande initiale de synchronisation.",
+    "docs.diagram.server.node.AUTH": "Handshake : Authentification sécurisée (TLS 1.3).",
+    "docs.diagram.server.node.STREAM": "Streaming Binaire : Transfert fragmenté des ressources.",
+    "docs.diagram.server.node.P2P_MESH": "Maillage P2P : Récupération depuis d'autres clients actifs.",
+    "docs.diagram.server.node.MODS": "Assets : Fichiers binaires du dépôt.",
+    "docs.diagram.server.node.META": "Manifeste : Structure et signatures MD5/SHA.",
+    "docs.diagram.custom.title": "Personnalisation & Images",
+    "docs.diagram.custom.node.FILE": "Saisie Image : Sélection d'un fichier source (PNG/JPG).",
+    "docs.diagram.custom.node.DESC": "Méta-données : Édition des notes et descriptions locales.",
+    "docs.diagram.custom.node.B64": "Encodage : Conversion en Base64 pour stockage binaire sûr.",
+    "docs.diagram.custom.node.CROP": "Traitement : Optimisation du ratio et redimensionnement.",
+    "docs.diagram.custom.node.DB": "Persistance : Écriture dans la base SQLite locale.",
+    "docs.diagram.custom.node.CACHE": "Mise en Cache : Stockage des assets décodés pour fluidité UI.",
+    "docs.diagram.mech.title": "Mécanique du Modding (Symlinks)",
+    "docs.diagram.mech.node.EXE": "Exécutable : Le jeu démarre et demande ses fichiers.",
+    "docs.diagram.mech.node.ACCESS": "Appel Système : Lecture d'un fichier dans le dossier 'Mods'.",
+    "docs.diagram.mech.node.SYMLINK": "Lien NT : Redirection transparente via le Filesystem Windows.",
+    "docs.diagram.mech.node.REDIRECT": "Cœur BMM : Le kernel redirige vers le fichier du mod.",
+    "docs.diagram.mech.node.MOD_FILE": "Fichier Mod : La version modifiée est chargée par le jeu.",
+    "docs.diagram.mech.node.ORIG_BKP": "Original : Backup intact utilisé si le mod est OFF.",
+    "docs.diagram.faq_disk.title": "FAQ : Disque Plein",
+    "docs.diagram.faq_disk.node.WRITE": "Écriture : Tentative de stockage d'un nouveau chunk.",
+    "docs.diagram.faq_disk.node.OS_ERR": "Erreur OS : Interruption par manque d'espace physique.",
+    "docs.diagram.faq_disk.node.ABORT": "Annulation : Rollback immédiat de la transaction en cours.",
+    "docs.diagram.faq_disk.node.NOTIF": "Alerte : Notification utilisateur (Storage Critical).",
+    "docs.diagram.faq_disk.node.PURGE": "Nettoyage : Suppression automatique des segments corrompus.",
+    "docs.diagram.faq_del.title": "FAQ : Mod Supprimé Manuellement",
+    "docs.diagram.faq_del.node.DEL": "Action Externe : Fichier supprimé hors de BMM.",
+    "docs.diagram.faq_del.node.SCAN": "Audit : Détection de l'absence lors de la sync UI.",
+    "docs.diagram.faq_del.node.FOUND": "Diagnostic : Le lien pointe vers un fichier inexistant.",
+    "docs.diagram.faq_del.node.REMOVE": "Nettoyage : Retrait propre du lien symbolique orphelin.",
+    "docs.diagram.faq_del.node.RESTORE": "Restauration : Remise en place de l'original par sécurité."
+}
+
+en_keys = {
+    "docs.diagram.cluster.INPUT": "USER INPUT",
+    "docs.diagram.cluster.LOGIC": "BMM LOGIC",
+    "docs.diagram.cluster.READY": "READY",
+    "docs.diagram.cluster.DETECTION": "DETECTION",
+    "docs.diagram.cluster.ANALYSIS": "ANALYSIS",
+    "docs.diagram.cluster.RESOLUTION": "RESOLUTION",
+    "docs.diagram.cluster.UPDATE_CHECK": "UPDATE CHECK",
+    "docs.diagram.cluster.DEPLOYMENT": "DEPLOYMENT",
+    "docs.diagram.cluster.GAME_FS": "GAME ENGINE",
+    "docs.diagram.cluster.VIRTUAL": "VIRTUAL REDIRECTION",
+    "docs.diagram.cluster.IO": "I/O OPERATION",
+    "docs.diagram.cluster.ERROR": "ERROR HANDLING",
+    "docs.diagram.cluster.RECOVERY": "RECOVERY",
+    "docs.diagram.cluster.TRIG": "TRIGGER",
+    "docs.diagram.cluster.CORE": "CORE LOGIC",
+    "docs.diagram.cluster.SENSORS": "MONITORING",
+    "docs.diagram.cluster.ENGINE": "RUST LIMITER",
+    "docs.diagram.cluster.UI": "INTERFACE",
+    "docs.diagram.cluster.CLIENT": "BMM CLIENT",
+    "docs.diagram.cluster.SERVER": "SERVER MODE",
+    "docs.diagram.cluster.DATA": "REMOTE REPOSITORY",
+    "docs.diagram.cluster.PROC": "PROCESSING",
+    "docs.diagram.cluster.STORAGE": "PERSISTENCE",
+    "docs.diagram.cluster.ASSETS": "BMM STORAGE",
+    "docs.diagram.cluster.TRAP": "ORPHAN DETECTION",
+    "docs.diagram.cluster.SYNC": "BMM SYNC",
+    "docs.diagram.cluster.FIX": "AUTO REPAIR",
+    "docs.diagram.perf.title": "Performance & Monitoring",
+    "docs.diagram.perf.node.DISK_IO": "I/O Sensor: Real-time measurement of disk load.",
+    "docs.diagram.perf.node.MEM_USE": "Memory Audit: Tracking RAM footprint (Rust Backend).",
+    "docs.diagram.perf.node.THROTTLE": "Limiter: Intelligent slowdown to preserve system stability.",
+    "docs.diagram.perf.node.QUEUE": "Request Queue: Prioritized I/O scheduling.",
+    "docs.diagram.perf.node.STATS": "UI Feedback: Metric visualization via BMM Charts.",
+    "docs.diagram.server.title": "Server Architecture (Centralized & P2P)",
+    "docs.diagram.server.node.REQ": "Client Request: Initial synchronization demand.",
+    "docs.diagram.server.node.AUTH": "Handshake: Secure authentication (TLS 1.3).",
+    "docs.diagram.server.node.STREAM": "Binary Streaming: Segmented asset transfer.",
+    "docs.diagram.server.node.P2P_MESH": "P2P Mesh: Data retrieval from active peers.",
+    "docs.diagram.server.node.MODS": "Assets: Binary files in the remote repository.",
+    "docs.diagram.server.node.META": "Manifest: Structure and MD5/SHA signatures.",
+    "docs.diagram.custom.title": "Customization & Images",
+    "docs.diagram.custom.node.FILE": "Image Input: Selecting source file (PNG/JPG).",
+    "docs.diagram.custom.node.DESC": "Metadata: Editing local notes and descriptions.",
+    "docs.diagram.custom.node.B64": "Encoding: Base64 conversion for safe binary storage.",
+    "docs.diagram.custom.node.CROP": "Processing: Aspect ratio optimization and resizing.",
+    "docs.diagram.custom.node.DB": "Persistence: Writing to local SQLite database.",
+    "docs.diagram.custom.node.CACHE": "Asset Caching: Decoding and storing images for UI smoothness.",
+    "docs.diagram.mech.title": "Modding Mechanics (Symlinks)",
+    "docs.diagram.mech.node.EXE": "Executable: Game starts and requests its files.",
+    "docs.diagram.mech.node.ACCESS": "System Call: Accessing a file in the 'Mods' folder.",
+    "docs.diagram.mech.node.SYMLINK": "NT Link: Transparent redirection via Windows Filesystem.",
+    "docs.diagram.mech.node.REDIRECT": "BMM Core: Kernel redirection to the mod file.",
+    "docs.diagram.mech.node.MOD_FILE": "Mod File: The modified version is loaded by the game.",
+    "docs.diagram.mech.node.ORIG_BKP": "Original: Intact backup used if mod is OFF.",
+    "docs.diagram.faq_disk.title": "FAQ: Disk Full",
+    "docs.diagram.faq_disk.node.WRITE": "Write Operation: Attempting to store a new chunk.",
+    "docs.diagram.faq_disk.node.OS_ERR": "OS Error: Interruption due to lack of physical space.",
+    "docs.diagram.faq_disk.node.ABORT": "Abort: Immediate rollback of the current transaction.",
+    "docs.diagram.faq_disk.node.NOTIF": "Alert: User notification (Storage Critical).",
+    "docs.diagram.faq_disk.node.PURGE": "Cleanup: Automatic deletion of corrupted segments.",
+    "docs.diagram.faq_del.title": "FAQ: Manually Deleted Mod",
+    "docs.diagram.faq_del.node.DEL": "External Action: File deleted outside of BMM.",
+    "docs.diagram.faq_del.node.SCAN": "Audit: Detecting absence during UI sync.",
+    "docs.diagram.faq_del.node.FOUND": "Diagnosis: Link points to a non-existent file.",
+    "docs.diagram.faq_del.node.REMOVE": "Cleanup: Proper removal of orphan symbolic link.",
+    "docs.diagram.faq_del.node.RESTORE": "Restoration: Reinstating original for safety."
+}
+
+base_path = r'e:/Travaille/CodageAutres/Better Project/BetterModsManager/frontend/Lang/'
+update_json(os.path.join(base_path, 'fr.json'), fr_keys)
+update_json(os.path.join(base_path, 'en.json'), en_keys)

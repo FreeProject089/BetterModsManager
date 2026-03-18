@@ -49,6 +49,7 @@ export function initRepo() {
     const repoCreatorIdContainer = document.getElementById('repo-creator-id-container');
     const repoCreatorIdValue = document.getElementById('repo-creator-id-value');
     const inputExportAuthor = document.getElementById('repo-export-author-name');
+    const btnCancelExport = document.getElementById('btn-cancel-repo-export');
     const tunnelSection = document.getElementById('repo-server-tunnel-section');
     const tunnelUrlInput = document.getElementById('repo-server-tunnel-url');
     const btnCopyTunnelUrl = document.getElementById('btn-copy-repo-tunnel-url');
@@ -162,9 +163,9 @@ export function initRepo() {
                     hostMetadataPreview.style.display = 'block';
                     hostMetadataPreview.innerHTML = `
                         <div style="color:var(--accent);font-weight:700;margin-bottom:4px;font-size:14px;">${escHtml(repo.name)}</div>
-                        <div style="color:var(--text-secondary);margin-bottom:2px;">Auteur : <span style="color:var(--text-primary)">${escHtml(repo.author || '-')}</span></div>
-                        <div style="color:var(--text-secondary);margin-bottom:2px;">Profils (${pCount}) : <span style="color:var(--text-primary)">${escHtml(pNames)}</span></div>
-                        <div style="color:var(--cyan);margin-top:6px;font-family:var(--font-mono)">Taille Totale : ${formatBytes(totalSize)}</div>
+                        <div style="color:var(--text-secondary);margin-bottom:2px;">${t('repo.authorShort') || 'Auteur :'} <span style="color:var(--text-primary)">${escHtml(repo.author || '-')}</span></div>
+                        <div style="color:var(--text-secondary);margin-bottom:2px;">${(t('repo.profilesCount') || 'Profils ({count}) :').replace('{count}', pCount)} <span style="color:var(--text-primary)">${escHtml(pNames)}</span></div>
+                        <div style="color:var(--cyan);margin-top:6px;font-family:var(--font-mono)">${t('repo.totalSizeLabel') || 'Taille Totale :'} ${formatBytes(totalSize)}</div>
                     `;
                 }
             }
@@ -511,6 +512,10 @@ export function initRepo() {
                 exportStatus.textContent = t('repo.exporting') || "Génération en cours...";
                 exportPercent.textContent = "0%";
                 exportFill.style.width = "0%";
+                if (btnCancelExport) {
+                    btnCancelExport.style.display = 'flex';
+                    btnCancelExport.disabled = false;
+                }
 
                 if (window.__TAURI__) {
                     const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
@@ -536,10 +541,17 @@ export function initRepo() {
                 exportFill.style.width = "100%";
                 toast(t('repo.exportSuccess') || "Repository serveur généré.", 'success');
             } catch (err) {
-                exportStatus.textContent = t('repo.exportError') || "Erreur...";
-                toast(String(err), 'error');
+                const errMsg = String(err);
+                if (errMsg.includes('annul') || errMsg.includes('cancel')) {
+                    exportStatus.textContent = t('repo.cancelExport') || "Génération annulée";
+                    toast(t('repo.cancelExport') || "Génération annulée", 'info');
+                } else {
+                    exportStatus.textContent = t('repo.exportError') || "Erreur...";
+                    toast(errMsg, 'error');
+                }
             } finally {
                 btnStartExport.disabled = false;
+                if (btnCancelExport) btnCancelExport.style.display = 'none';
                 if (unlisten) unlisten();
             }
         });
@@ -665,13 +677,13 @@ export function initRepo() {
                 if (isPaused) {
                     await invoke('resume_repo_sync');
                     pausedBadge.style.display = 'none';
-                    pauseText.textContent = "Pause";
-                    btnPauseSync.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> <span>Pause</span>';
+                    pauseText.textContent = t('repo.pauseSync') || "Pause";
+                    btnPauseSync.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> <span>${t('repo.pauseSync') || 'Pause'}</span>`;
                 } else {
                     await invoke('pause_repo_sync');
                     pausedBadge.style.display = 'block';
-                    pauseText.textContent = "Reprendre";
-                    btnPauseSync.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>Reprendre</span>';
+                    pauseText.textContent = t('repo.resumeSync') || "Reprendre";
+                    btnPauseSync.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>${t('repo.resumeSync') || 'Reprendre'}</span>`;
                 }
             } catch (err) {
                 toast("Erreur Pause/Reprise : " + err, 'error');
@@ -683,10 +695,26 @@ export function initRepo() {
         btnCancelSync.addEventListener('click', async () => {
             try {
                 await invoke('cancel_repo_sync');
-                toast("Demande d'annulation envoyée...", 'info');
+                toast(t('repo.syncCancelled') || "Annulation en cours...", 'info');
                 btnCancelSync.disabled = true;
             } catch (err) {
-                toast("Erreur Annulation : " + err, 'error');
+                toast(t('common.error') + ': ' + err, 'error');
+            }
+        });
+    }
+
+    // ─── Cancel Export button ─────────────────────────────────────────
+    if (btnCancelExport) {
+        btnCancelExport.addEventListener('click', async () => {
+            try {
+                btnCancelExport.disabled = true;
+                // Try invoking a cancel command - graceful fallback if not implemented
+                if (window.__TAURI__) {
+                    try { await invoke('cancel_repo_export'); } catch(e) {}
+                }
+                toast(t('repo.cancelExport') || "Annulation en cours...", 'info');
+            } catch (err) {
+                toast(String(err), 'error');
             }
         });
     }
@@ -729,7 +757,7 @@ export function initRepo() {
                     if (loadingBar) loadingBar.style.display = 'block';
                     btnToggleServer.disabled = true;
                     const originalBtnContent = btnToggleServer.innerHTML;
-                    btnToggleServer.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1s linear infinite;margin-right:8px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> <span>Initialisation...</span>';
+                    btnToggleServer.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1s linear infinite;margin-right:8px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> <span>${t('repo.initServer') || 'Initialisation...'}</span>`;
                     
                     const port = parseInt(inputServerPort ? inputServerPort.value : "8000") || 8000;
                     if (inputServerPort) inputServerPort.disabled = true;

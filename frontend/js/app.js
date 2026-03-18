@@ -10,6 +10,7 @@ import { initBenchmark } from './benchmark.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
 import { initRepo } from './repo.js';
 import { appState } from './state.js';
+import { initInteractiveDocs, openDiagram } from './interactive-docs.js';
 
 // ── Tauri bridge ──────────────────────────────────────────
 import { loadTauri, invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification } from './api.js';
@@ -1309,9 +1310,42 @@ function renderMarkdown(md) {
     document.head.appendChild(style);
 })();
 
+// ── Offline Detection ─────────────────────────────────────
+function initOfflineDetection() {
+    const banner = document.getElementById('offline-banner');
+    if (!banner) return;
+
+    function updateStatus() {
+        if (navigator.onLine) {
+            banner.classList.remove('visible');
+        } else {
+            banner.classList.add('active'); // active matches the CSS transition
+            banner.classList.add('visible');
+        }
+    }
+
+    window.addEventListener('online', () => {
+        banner.classList.remove('visible');
+        setTimeout(() => banner.classList.remove('active'), 400);
+    });
+    window.addEventListener('offline', () => {
+        banner.classList.add('active');
+        setTimeout(() => banner.classList.add('visible'), 10);
+    });
+    
+    // Initial check
+    if (!navigator.onLine) {
+        banner.classList.add('active');
+        banner.classList.add('visible');
+    }
+}
+
 // ── Boot ──────────────────────────────────────────────────
 async function main() {
-    // ── Version & Build Display ──
+    console.log('[BMM] App starting...');
+    
+    // Initialize Offline Detection
+    initOfflineDetection();
     const initVersionDisplay = async () => {
         // Safety delay
         await new Promise(r => setTimeout(r, 300));
@@ -1389,6 +1423,16 @@ async function main() {
     await initTitlebar();
     initModlist();
     initRepo();
+    initInteractiveDocs();
+
+    // Bind Docs Diagram buttons
+    document.getElementById('btn-docs-resumable')?.addEventListener('click', () => openDiagram('resumable-downloads'));
+    document.getElementById('btn-faq-resumable')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openDiagram('resumable-downloads');
+    });
+    document.getElementById('btn-faq-resumable-alt')?.addEventListener('click', () => openDiagram('resumable-downloads'));
     initShortcuts();
     initNavbarLangDropdown();
     initNavbarVersion();

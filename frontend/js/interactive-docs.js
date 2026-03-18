@@ -1,0 +1,532 @@
+import { t } from './i18n.js';
+import { resumableDownloads } from './diagrams/resumable-downloads.js';
+import { modSync } from './diagrams/mod-sync.js';
+import { profileSystem } from './diagrams/profile-system.js';
+import { conflictManagement } from './diagrams/conflict-management.js';
+import { appUpdate } from './diagrams/app-update.js';
+import { modImport } from './diagrams/mod-import.js';
+import { backupSystem } from './diagrams/backup-system.js';
+import { appArchitecture } from './diagrams/app-architecture.js';
+import { perfMonitoring } from './diagrams/perf-monitoring.js';
+import { serverMode } from './diagrams/server-mode.js';
+import { profileCustomization } from './diagrams/profile-customization.js';
+import { moddingMechanics } from './diagrams/modding-mechanics.js';
+import { faqDiskFull } from './diagrams/faq-disk-full.js';
+import { faqDeletedMod } from './diagrams/faq-deleted-mod.js';
+import { bestPractices } from './diagrams/best-practices.js';
+import { crashReporting } from './diagrams/crash-reporting.js';
+import { cacheManagement } from './diagrams/cache-management.js';
+import { dedicatedHosting } from './diagrams/dedicated-hosting.js';
+
+// Diagram Registry
+const diagrams = {
+    'resumable-downloads': resumableDownloads,
+    'mod-sync': modSync,
+    'profile-system': profileSystem,
+    'conflict-management': conflictManagement,
+    'app-update': appUpdate,
+    'mod-import': modImport,
+    'backup-system': backupSystem,
+    'app-architecture': appArchitecture,
+    'perf-monitoring': perfMonitoring,
+    'server-mode': serverMode,
+    'profile-customization': profileCustomization,
+    'modding-mechanics': moddingMechanics,
+    'faq-disk-full': faqDiskFull,
+    'faq-deleted-mod': faqDeletedMod,
+    'best-practices': bestPractices,
+    'crash-reporting': crashReporting,
+    'cache-management': cacheManagement,
+    'dedicated-hosting': dedicatedHosting
+};
+
+// State
+let currentDiagramID = null;
+let panZoomInstance = null;
+let isDragging = false;
+
+/**
+ * Initialize Mermaid and Documentation logic
+ */
+export function initInteractiveDocs() {
+    console.log('[Docs] Initializing sub-system...');
+    
+    // Mermaid Config
+    mermaid.initialize({
+        startOnLoad: false,
+        theme: 'base',
+        useMaxWidth: false,
+        htmlLabels: true, // Enable HTML labels for icons
+        securityLevel: 'loose', // Required for HTML labels
+        flowchart: {
+            clusterPadding: 65, // Increased space to allow labels at the top without overlap
+            nodeSpacing: 50,
+            rankSpacing: 50,
+            curve: 'basis'
+        },
+        themeVariables: {
+            primaryColor: '#3b82f6',
+            primaryTextColor: '#f1f5f9',
+            primaryBorderColor: '#3b82f6',
+            lineColor: '#475569',
+            fontFamily: 'Inter, sans-serif',
+            fontSize: '14px',
+            mainBkg: '#1e293b'
+        }
+    });
+
+    // Global listeners
+    document.getElementById('btn-close-docs-diagram')?.addEventListener('click', closeDiagram);
+    document.getElementById('btn-docs-reset-zoom')?.addEventListener('click', resetZoom);
+
+    // Click outside to close (Robust version to avoid closing on drag)
+    const modal = document.getElementById('modal-docs-diagram');
+    if (modal) {
+        let mouseMoved = false;
+        
+        modal.addEventListener('mousedown', (e) => {
+            mouseMoved = false;
+        });
+
+        modal.addEventListener('mousemove', () => {
+            mouseMoved = true;
+        });
+
+        modal.addEventListener('mouseup', (e) => {
+            // Only close if it was a distinct click on the overlay, NOT a drag
+            if (!mouseMoved && e.target.id === 'modal-docs-diagram') {
+                closeDiagram();
+            }
+        });
+    }
+
+    // Close on Escape
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && document.getElementById('modal-docs-diagram')?.classList.contains('active')) {
+            closeDiagram();
+        }
+    });
+
+    console.log('[Docs] Sub-system ready.');
+}
+
+/**
+ * Open a specific diagram
+ * @param {string} id - The diagram ID from the registry
+ */
+export async function openDiagram(id) {
+    const diagram = diagrams[id];
+    if (!diagram) {
+        console.error(`[Docs] Diagram "${id}" not found.`);
+        return;
+    }
+
+    const modal = document.getElementById('modal-docs-diagram');
+    const container = document.getElementById('mermaid-diagram-container');
+    const title = document.getElementById('docs-diagram-title');
+    const taskyText = document.getElementById('tasky-explanation');
+
+    currentDiagramID = id;
+    title.textContent = t(diagram.titleKey);
+    taskyText.textContent = "Passez votre souris sur une étape pour que je vous explique !";
+    
+    // Reset Tasky mascot to default
+    updateTaskyMascot('Tasky.png');
+
+    // Show modal
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('active'), 10);
+
+    // Show Global Tasky
+    const taskyContainer = document.getElementById('tasky-bubble-docs');
+    if (taskyContainer) {
+        taskyContainer.style.display = 'flex';
+        setTimeout(() => taskyContainer.style.opacity = '1', 10);
+    }
+
+    // Render Mermaid
+    try {
+        container.innerHTML = '';
+        const { render } = mermaid;
+        
+        // Pre-translate definitions (handles {{key}} placeholders)
+        const translatedDefinition = diagram.definition.replace(/\{\{([a-zA-Z0-9._-]+)\}\}/g, (match, key) => t(key));
+        
+        const { svg } = await render('mermaid-svg-' + id, translatedDefinition);
+        container.innerHTML = svg;
+
+        // Initialize Pan & Zoom
+        initPanZoom();
+
+        // Fix Cluster Labels Layout (Mermaid Centering override)
+        // We use multiple calls to catch various render cycles
+        fixClusterLabels();
+        setTimeout(fixClusterLabels, 50);
+        setTimeout(fixClusterLabels, 150);
+        setTimeout(fixClusterLabels, 500);
+
+        // Attach interactions
+        attachNodeListeners(id);
+    } catch (err) {
+        console.error('[Docs] Mermaid render error:', err);
+        container.innerHTML = `<p style="color:var(--danger)">${t('common.error')}: Mermaid render error</p>`;
+    }
+}
+
+/**
+ * Robustly fix cluster (subgraph) label positioning.
+ * Mermaid default centers labels in a small foreignObject.
+ * We expand the foreignObject to match the cluster rect and align left.
+ */
+function fixClusterLabels() {
+    const container = document.getElementById('mermaid-diagram-container');
+    const svg = container.querySelector('svg');
+    if (!svg) return;
+
+    // Create a dedicated top layer for labels if it doesn't exist
+    // We append it to the viewport group so it pans and zooms with the diagram
+    const viewport = svg.querySelector('.svg-pan-zoom_viewport');
+    if (!viewport) return; // Wait for pan-zoom to init
+
+    let topLayer = viewport.querySelector('.top-labels-layer');
+    if (!topLayer) {
+        topLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        topLayer.setAttribute('class', 'top-labels-layer');
+        viewport.appendChild(topLayer);
+    }
+
+    const clusters = svg.querySelectorAll('.cluster');
+    clusters.forEach(cluster => {
+        const rect = cluster.querySelector('rect.outer') || cluster.querySelector('rect');
+        const labelGroup = cluster.querySelector('.cluster-label');
+        if (!rect || !labelGroup) return;
+
+        const foreign = labelGroup.querySelector('foreignObject');
+        if (!foreign) return;
+
+        // Get rect bounds in local coordinate system
+        const rectBox = rect.getBBox();
+        
+        // Position the label at the top-left of its cluster
+        // We shift it up by 12px to give breathing room to nodes inside
+        // while maintaining the "inside the box" feel.
+        foreign.setAttribute('x', rectBox.x);
+        foreign.setAttribute('y', rectBox.y - 12); 
+        foreign.setAttribute('width', Math.max(rectBox.width, 250)); 
+        foreign.setAttribute('height', 80); 
+
+        // Style the inner div for premium appearance
+        const innerDiv = foreign.querySelector('div');
+        if (innerDiv) {
+            innerDiv.style.width = '100%';
+            innerDiv.style.height = '100%';
+            innerDiv.style.display = 'flex';
+            innerDiv.style.flexDirection = 'column'; // Vertical stack if needed
+            innerDiv.style.alignItems = 'flex-start';
+            innerDiv.style.justifyContent = 'flex-start';
+            innerDiv.style.paddingLeft = '18px';
+            innerDiv.style.paddingTop = '18px';
+            innerDiv.style.boxSizing = 'border-box';
+            innerDiv.style.textAlign = 'left';
+            innerDiv.style.background = 'transparent';
+            innerDiv.style.pointerEvents = 'none'; 
+            innerDiv.querySelectorAll('*').forEach(el => el.style.pointerEvents = 'auto');
+        }
+
+        // Ensure the labelGroup itself doesn't have a conflicting transform
+        labelGroup.removeAttribute('transform');
+        labelGroup.style.transform = 'none';
+        
+        // Move to the top layer for correct Z-index
+        if (labelGroup.parentElement !== topLayer) {
+            topLayer.appendChild(labelGroup);
+        }
+    });
+}
+
+/**
+ * Close the modal
+ */
+function closeDiagram() {
+    const modal = document.getElementById('modal-docs-diagram');
+    modal.classList.remove('active');
+    
+    // Hide Global Tasky
+    const taskyContainer = document.getElementById('tasky-bubble-docs');
+    if (taskyContainer) {
+        taskyContainer.style.opacity = '0';
+        setTimeout(() => taskyContainer.style.display = 'none', 400);
+    }
+
+    if (panZoomInstance) {
+        panZoomInstance.destroy();
+        panZoomInstance = null;
+    }
+
+    setTimeout(() => {
+        modal.style.display = 'none';
+        document.getElementById('mermaid-diagram-container').innerHTML = '';
+    }, 400);
+}
+
+/**
+ * Attach hover listeners to SVG elements (nodes, edges, clusters)
+ */
+function attachNodeListeners(diagramID) {
+    const container = document.getElementById('mermaid-diagram-container');
+    const diagram = diagrams[diagramID];
+    const bubble = document.querySelector('.tasky-speech-bubble');
+    const eyes = document.getElementById('tasky-bubble-eyes');
+    const explanationEl = document.getElementById('tasky-explanation');
+
+    // 1. Class Sync (Ensure .edgeLabel container gets the semantic class from inner span)
+    const edgeLabels = Array.from(container.querySelectorAll('.edgeLabel'));
+    console.log(`[Docs] Syncing ${edgeLabels.length} edge labels...`);
+    edgeLabels.forEach(label => {
+        const innerSpan = label.querySelector('span[class^="label-"]');
+        if (innerSpan) {
+            const cls = Array.from(innerSpan.classList).find(c => c.startsWith('label-'));
+            if (cls) {
+                console.log(`[Docs] Label sync: found ${cls} adding to parent`);
+                label.classList.add(cls);
+                label.classList.add(`${cls}-parent`);
+            }
+        }
+    });
+
+    // 2. Nodes (Steps)
+    const nodes = container.querySelectorAll('.node');
+    nodes.forEach(node => {
+        const parts = node.id.split('-');
+        const cleanId = parts[1]?.toLowerCase().replace(/_/g, '-');
+        if (!cleanId) return;
+        
+        const isJumpLink = !!diagrams[cleanId];
+
+        node.addEventListener('mouseenter', () => {
+            if (isJumpLink) {
+                node.style.cursor = 'pointer';
+                const rect = node.querySelector('rect');
+                if (rect) {
+                    rect.style.strokeWidth = '3px';
+                    rect.style.filter = 'drop-shadow(0 0 8px var(--accent))';
+                }
+            }
+            showExplanation(diagram.explanationPrefix + parts[1], node.querySelector('i')?.className);
+            updateTaskyMascot('Tasky_Happy.png');
+        });
+
+        node.addEventListener('mouseleave', () => {
+            node.style.cursor = 'default';
+            const rect = node.querySelector('rect');
+            if (rect) {
+                rect.style.strokeWidth = '1px';
+                rect.style.filter = 'none';
+            }
+            hideExplanation();
+        });
+
+        // Click to drill-down / jump
+        node.addEventListener('click', () => {
+            if (isJumpLink) {
+                openDiagram(cleanId);
+            }
+        });
+    });
+
+    // 2. Edges (Arrows & Path interactions) - V3 Robust Class Matching
+    const edgePaths = Array.from(container.querySelectorAll('.edgePath'));
+    // edgeLabels already declared above in step 1
+
+    // Helper to extract IDs from class (e.g., "LS-A LE-B")
+    const getEdgePair = (el) => {
+        if (!el) return null;
+        const cls = Array.from(el.classList).join(' ');
+        const sourceMatch = cls.match(/LS-([^\s]+)/);
+        const targetMatch = cls.match(/LE-([^\s]+)/);
+        return sourceMatch && targetMatch ? `${sourceMatch[1]}-${targetMatch[1]}` : null;
+    };
+
+    edgePaths.forEach((pathGroup) => {
+        const pairKey = getEdgePair(pathGroup);
+        if (!pairKey) return;
+
+        const internalPath = pathGroup.querySelector('path');
+        if (!internalPath) return;
+
+        // Use a composite key: docs.diagram.edge.[DIAGRAM_ID].[SOURCE]_[TARGET]
+        const edgeKey = `docs.diagram.edge.${diagramID}.${pairKey.replace('-', '_')}`;
+        
+        // Fallback to label-based if specific key doesn't exist (backwards compatibility)
+        const label = edgeLabels.find(l => getEdgePair(l) === pairKey);
+        const labelSpan = label ? label.querySelector('span') : null;
+        const labelKeyFromData = labelSpan ? labelSpan.getAttribute('data-key') : null;
+        const labelText = label ? label.textContent.trim() : null;
+
+        pathGroup.addEventListener('mouseenter', () => {
+            // Priority: Node-based key > data-key from span > Label-based key
+            const exp = t(edgeKey);
+            if (exp && exp !== edgeKey) {
+                showExplanation(edgeKey, 'icon-network');
+            } else if (labelKeyFromData) {
+                showExplanation(`docs.diagram.edge.${labelKeyFromData}`, 'icon-network');
+            } else if (labelText) {
+                showExplanation(`docs.diagram.edge.${labelText}`, 'icon-network');
+            } else {
+                updateTaskyMascot('Tasky_yeux1.png');
+            }
+        });
+
+        pathGroup.addEventListener('mouseleave', hideExplanation);
+    });
+
+    edgeLabels.forEach((edge) => {
+        const pairKey = getEdgePair(edge);
+        if (!pairKey) return;
+
+        const edgeKey = `docs.diagram.edge.${diagramID}.${pairKey.replace('-', '_')}`;
+        const labelText = edge.textContent.trim();
+
+        edge.addEventListener('mouseenter', () => {
+            const labelSpan = edge.querySelector('span');
+            const labelKeyFromData = labelSpan ? labelSpan.getAttribute('data-key') : null;
+            
+            const exp = t(edgeKey);
+            if (exp && exp !== edgeKey) {
+                showExplanation(edgeKey, 'icon-network');
+            } else if (labelKeyFromData) {
+                showExplanation(`docs.diagram.edge.${labelKeyFromData}`, 'icon-network');
+            } else if (labelText) {
+                showExplanation(`docs.diagram.edge.${labelText}`, 'icon-network');
+            }
+            updateTaskyMascot('Tasky_yeux1.png');
+        });
+        edge.addEventListener('mouseleave', hideExplanation);
+    });
+
+    /**
+     * Internal helper to find the SVG path associated with a label
+     */
+    // findPathForLabel is now integrated into the loop logic above for better sync
+
+    // 3. Clusters (Logical Cards)
+    const clusters = container.querySelectorAll('.cluster');
+    clusters.forEach(cluster => {
+        const labelDiv = cluster.querySelector('.group-label');
+        if (!labelDiv) return;
+        
+        // Extract from data attribute if present, fallback to ID regex or class
+        let groupID = labelDiv.getAttribute('data-cluster-id');
+        
+        if (!groupID) {
+             // Fallback: try to extract the original English ID from the SVG node's ID if possible, 
+             // but strongly prefer the data attribute approach.
+             const classMatch = cluster.getAttribute('class')?.match(/cluster-?([a-zA-Z0-9_]+)?/);
+             const rawId = cluster.getAttribute('id') || "";
+             groupID = rawId.replace('cluster-', '') || (classMatch ? classMatch[1] : null);
+        }
+
+        if (groupID) {
+            cluster.addEventListener('mouseenter', () => {
+                showExplanation(`docs.diagram.cluster.${groupID}`, cluster.querySelector('i')?.className);
+                updateTaskyMascot('Tasky_Happy.png');
+            });
+            cluster.addEventListener('mouseleave', hideExplanation);
+        }
+    });
+
+    function showExplanation(key, iconClass) {
+        // Fallback: Check if a dedicated .desc key exists for longer tooltips
+        const descKey = key + '.desc';
+        const descExp = t(descKey);
+        
+        // Priority 1: Use .desc if available. Priority 2: Use regular key if it's translated
+        const exp = (descExp && descExp !== descKey) ? descExp : t(key);
+        
+        if (exp && exp !== key) {
+            explanationEl.textContent = exp;
+            bubble.classList.add('active');
+            
+            if (eyes) {
+                eyes.className = iconClass || 'icon-verify'; // Default to verify/eye icon
+                eyes.style.display = 'flex'; // Match CSS flex display
+            }
+        }
+    }
+
+    function hideExplanation() {
+        bubble.classList.remove('active');
+        updateTaskyMascot('Tasky.png');
+    }
+}
+
+/**
+ * Change Tasky appearance
+ */
+let currentMascotUrl = ''; // Optimization to prevent flickering
+
+function updateTaskyMascot(file) {
+    const mascotImg = document.getElementById('tasky-mascot-img');
+    if (!mascotImg) return;
+    
+    const newUrl = `assets/${file}`;
+    if (currentMascotUrl === newUrl) return; // Only load if different
+    
+    mascotImg.src = newUrl;
+    currentMascotUrl = newUrl;
+}
+
+/**
+ * Initialize svg-pan-zoom on the rendered SVG
+ */
+function initPanZoom() {
+    const svgElement = document.querySelector('#mermaid-diagram-container svg');
+    if (!svgElement) return;
+
+    // Remove fixed attributes and styles set by Mermaid to allow pan-zoom control
+    svgElement.removeAttribute('width');
+    svgElement.removeAttribute('height');
+    svgElement.style.maxWidth = 'none';
+    svgElement.style.width = '100%';
+    svgElement.style.height = '100%';
+
+    // Clear existing
+    if (panZoomInstance) panZoomInstance.destroy();
+
+    panZoomInstance = svgPanZoom(svgElement, {
+        zoomEnabled: true,
+        controlIconsEnabled: false,
+        fit: true,
+        center: true,
+        minZoom: 0.05,
+        maxZoom: 20,
+        zoomScaleSensitivity: 0.4
+    });
+
+    // Force fit after a short delay to handle container transition
+    setTimeout(() => {
+        if (panZoomInstance) {
+            panZoomInstance.resize();
+            panZoomInstance.fit();
+            panZoomInstance.center();
+        }
+    }, 50);
+}
+
+/**
+ * Reset zoom and pan
+ */
+function resetZoom() {
+    if (panZoomInstance) {
+        panZoomInstance.reset();
+        panZoomInstance.fit();
+        panZoomInstance.center();
+    }
+}
+
+// Auto-init on load if not module
+window.openDiagram = openDiagram;
+window.initInteractiveDocs = initInteractiveDocs;
+
+// If imported as module, we need to export
+export default { initInteractiveDocs, openDiagram };

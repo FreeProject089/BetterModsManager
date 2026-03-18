@@ -446,9 +446,14 @@ pub async fn sync_server_repo(
                         
                         if let Ok((local_hash, _)) = compute_file_hash_and_chunks(&local_path, false) {
                             if local_hash == file.sha256_hash {
+                                println!("[Sync] File {} is up to date (hash matches)", file.relative_path);
                                 needs_download = false;
+                            } else {
+                                println!("[Sync] Hash mismatch for {}, checking chunks...", file.relative_path);
                             }
                         }
+                    } else {
+                        println!("[Sync] File size mismatch for {} (expected {}, got {}), checking chunks...", file.relative_path, file.size, local_size);
                     }
                 }
 
@@ -480,8 +485,9 @@ pub async fn sync_server_repo(
                                 let matches = local_chunks.get(chunk_idx).map(|lh| lh == &r_chunk.sha256_hash).unwrap_or(false);
                                 
                                 if !matches {
+                                    println!("[Sync] Patching chunk {}/{} for {}", chunk_idx + 1, remote_chunks.len(), file.relative_path);
                                     let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
-                                        step: format!("[{}] Patching: {} (Chunk {}/{})", repo_profile.name, repo_mod.name, chunk_idx + 1, remote_chunks.len()),
+                                        step: format!("[{}] Récupération part: {} (Bloc {}/{})", repo_profile.name, repo_mod.name, chunk_idx + 1, remote_chunks.len()),
                                         progress: ((c_idx as f32 / total_tasks as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_tasks as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods as f32 * total_files as f32 * total_tasks as f32))) + ((chunk_idx as f32 / remote_chunks.len() as f32) * (1.0 / (total_mods as f32 * total_files as f32 * total_tasks as f32)))) * 100.0,
                                         current_file: file.relative_path.clone(),
                                     });
@@ -501,7 +507,10 @@ pub async fn sync_server_repo(
                             }
                             
                             file_to_patch.set_len(file.size).map_err(|e| e.to_string())?;
+                            println!("[Sync] Successfully patched {} using chunks", file.relative_path);
                             partial_success = true;
+                        } else {
+                            println!("[Sync] No matching chunks found for {}, falling back to full download", file.relative_path);
                         }
                     }
 
@@ -652,4 +661,50 @@ pub fn pause_repo_sync(state: State<'_, AppState>) {
 #[tauri::command]
 pub fn resume_repo_sync(state: State<'_, AppState>) {
     state.sync_paused.store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_compute_local_chunk_hashes() {
+        let mut file = NamedTempFile::new().unwrap();
+        // Create a file with slightly more than one chunk (4MB + 1KB)
+        let large_data = vec![0u8; CHUNK_SIZE + 1024];
+        file.write_all(&large_data).unwrap();
+        
+        let path = file.path();
+        let hashes = compute_local_chunk_hashes(path).unwrap();
+        
+        assert_eq!(hashes.len(), 2);
+        assert!(!hashes[0].is_empty());
+        assert!(!hashes[1].is_empty());
+        assert_ne!(hashes[0], hashes[1]);
+    }
+
+    #[test]
+    fn test_compute_file_hash_and_chunks() {
+        let mut file = NamedTempFile::new().unwrap();
+        let data = b"small file content";
+        file.write_all(data).unwrap();
+        
+        let path = file.path();
+        let (hash, chunks) = compute_file_hash_and_chunks(path, false).unwrap();
+        
+        assert!(!hash.is_empty());
+        assert!(chunks.is_none());
+
+        // Test with chunks
+        let mut large_file = NamedTempFile::new().unwrap();
+        let large_data = vec![0u8; CHUNK_SIZE + 1024];
+        large_file.write_all(&large_data).unwrap();
+        let (large_hash, chunks) = compute_file_hash_and_chunks(large_file.path(), true).unwrap();
+        
+        assert!(!large_hash.is_empty());
+        assert!(chunks.is_some());
+        assert_eq!(chunks.unwrap().len(), 2);
+    }
 }

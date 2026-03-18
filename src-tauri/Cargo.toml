@@ -36,6 +36,7 @@ regex = "1"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 hex = "0.4"
 rand = "0.8"
+tempfile = "3"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

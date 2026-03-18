@@ -309,6 +309,7 @@ dependencies = [
  "sysinfo",
  "tauri",
  "tauri-build",
+ "tempfile",
  "tokio",
  "uuid 1.21.0",
  "walkdir",

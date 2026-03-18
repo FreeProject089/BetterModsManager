@@ -31,6 +31,8 @@ Les workflows sont des procédures structurées pour accomplir des tâches compl
 ### 🧠 Évolution de l'Agent
 - **`/skill_evolve`** : Audit et amélioration continue de mes propres Skills.
 - **`/workflows_help`** : Affiche ce guide récapitulatif.
+- **`/workflows_router`** : Analyse ta demande pour te suggérer le bon workflow/skill.
+- **`/workflows_sync`** : Met à jour ce guide automatiquement en analysant le dossier `.agent`.
 
 ---
 
