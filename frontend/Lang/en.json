@@ -1,5 +1,8 @@
 {
-    "_info": {"name":"English","flag":"us"},
+    "_info": {
+        "name": "English",
+        "flag": "us"
+    },
     "__SECTION_BENCHMARK__": "--- BENCHMARK DASHBOARD ---",
     "benchmark.autostop": "Auto-stop",
     "benchmark.avg": "Average",
