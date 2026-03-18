@@ -373,19 +373,53 @@ The Performance Dashboard is a standalone monitoring sub-system.
 
 ---
 
-## 18. Server Repository System (Server Mode)
+## 18. Interactive Documentation Engine
 
-BMM 0.9.8 introduces the **Server Repository** system, a robust alternative to decentralized sharing methods.
+BMM 0.9.8 integrates a custom-built Mermaid.js bridge for high-fidelity technical visualization.
 
-### 18.1. Architecture
+| Feature | Implementation |
+| :--- | :--- |
+| **Dynamic Translation** | A specialized key-mapping layer intercepts Mermaid node rendering to inject localized strings from `fr.json`/`en.json`. |
+| **Pan-Zoom Integration** | Uses `svg-pan-zoom` library with a persistent state manager to maintain viewport coordinates across view switches. |
+| **Explanation Bridge** | Tooltips and sidebars are populated via the `explanationPrefix` system, linking diagram nodes to deep-level i18n keys. |
+
+---
+
+## 19. Multimedia & Credits Engine
+
+| Feature | Implementation |
+| :--- | :--- |
+| **Video Backgrounds** | The Credits page features a high-performance looping MP4 background served via the `asset://` protocol. |
+| **State-Aware Playback** | A specialized Intersection Observer pauses video processing when the view is not visible, reducing CPU/GPU overhead to 0%. |
+
+---
+
+## 20. Server Repository System (Server Mode)
+
+BMM 0.9.8 introduces the **Server Repository** system, a robust alternative to download-based sharing.
+
+### 20.1. Architecture
 - **Host Engine**: Uses an integrated HTTP server to serve static mod files and the `repo.json` manifest. No external dependencies required for local hosting.
 - **Manifest (repo.json)**: A cryptographically signed (SHA-256) JSON file containing the complete state of the repository.
 - **Smart Sync Engine**: The client fetches the manifest, performs a local diff against its active profiles, and downloads only the delta (missing or changed files).
 
-### 18.2. Security & Integrity
+### 20.2. Security & Integrity
 - **Collision Resistance**: Uses SHA-256 hashes to ensure that mod files aren't corrupted during transfer.
 - **Path Isolation**: The server strictly limits file access to the designated repository folder, preventing path traversal attacks.
 
 ---
+
+## 21. UI Consistency & State Normalization
+
+### Unified Empty States
+BMM 0.9.8 implements a shared component strategy for empty states across views.
+- **State Hijacking**: The `renderModList` logic now detects the absence of an active profile and redirects to a dedicated `empty-library-no-profile` container, which is a structural clone of the primary `empty-profiles` component.
+- **Cognitive Clarity**: The system explicitly distinguishes between "No Profile Selected" (Global State) and "Empty Result Set" (Contextual State), reducing user confusion during onboarding.
+
+### Metadata System Refactoring
+To reduce frontend complexity and eliminate redundant I/O during mod ingestion, the `_InfoBetterMod.Manager_` auto-fill bridge was removed. Mod information is now exclusively user-managed, ensuring total database predictability without reliance on external configuration files.
+
+---
+
 
 *Better Mod Manager is developed by FreeProject089 — Engineered for uncompromising performance, file safety, and modern mod management.*

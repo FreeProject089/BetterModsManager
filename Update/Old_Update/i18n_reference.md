@@ -4,7 +4,7 @@ Ce document sert de référence pour toutes les clés de traduction utilisées d
 
 ---
 
-## 🏗️ Structure des Fichiers JSON
+## ️ Structure des Fichiers JSON
 Les fichiers de langue se trouvent dans `frontend/Lang/`.
 - `en.json` : Référence principale (Anglais).
 - `fr.json` : Traduction Française.
@@ -14,9 +14,9 @@ Les fichiers de langue se trouvent dans `frontend/Lang/`.
 
 ---
 
-## 📖 Glossaire des Sections
+##  Glossaire des Sections
 
-### 🛠️ common
+### ️ common
 *Generic strings used across the entire application.*
 - `common.error` : Titre générique pour les erreurs.
 - `common.success` : Message de confirmation.
@@ -25,14 +25,14 @@ Les fichiers de langue se trouvent dans `frontend/Lang/`.
 - `common.pause` / `common.resume` : Utilisé dans les barres de progression (RepoSync).
 - `common.loaded` : Affiché par Tasky après le chargement initial.
 
-### 🧭 nav
+###  nav
 *Navigation sidebar items.*
 - `nav.library` : Lien vers la bibliothèque de mods.
 - `nav.profiles` : Lien vers la gestion des profils.
 - `nav.settings` : Accès aux paramètres.
 - `nav.activeProfile` : Label du profil actuellement chargé.
 
-### 📚 lib
+###  lib
 *Mod Library view management.*
 - `lib.title` : Titre de la page.
 - `lib.scan` : Déclenche le scan du dossier mods.
@@ -40,38 +40,38 @@ Les fichiers de langue se trouvent dans `frontend/Lang/`.
 - `lib.filter*` : Options de filtrage (All, Enabled, Disabled).
 - `lib.emptyTitle` / `lib.emptyDesc` : Affiché quand aucun mod n'est présent.
 
-### 📦 mod
+###  mod
 *Mod cards and basic operations.*
 - `mod.active` / `mod.inactive` : Badges d'état sur les cartes.
 - `mod.activate` : Action pour activer un mod.
 - `mod.deleteTitle` : Titre de la modal de suppression.
 - `mod.conflictsTitle` : Alerte quand deux mods utilisent les mêmes fichiers.
 
-### 👤 prof
+###  prof
 *Profile management system.*
 - `prof.new` : Créer un nouveau profil.
 - `prof.importOvgme` : Importation depuis OvGME.
 - `prof.gamePath` / `prof.modsPath` : Labels pour la configuration des dossiers.
 
-### 🌐 repo
+###  repo
 *Server Repo (Full Server Mode).*
 - `repo.hostTitle` : Section pour héberger un dépôt.
 - `repo.syncBtn` : Bouton de synchronisation intelligente (Smart Sync).
 - `repo.tunnelHint` : Info sur le tunnel Cloudflare.
 
-### ⚙️ settings
+### ️ settings
 *Application configuration page.*
 - `settings.githubPatTitle` : Configuration du token GitHub.
 - `settings.crashTitle` : Gestion des rapports d'erreurs.
 - `settings.benchmarkTitle` : Activation du monitoring de performance.
 
-### 🐧 onboard
+###  onboard
 *Tasky's tutorial messages.*
 - `onboard.s1` à `onboard.s8` : Étapes du tutoriel de bienvenue.
 
 ---
 
-## 🛠️ Maintenance du système i18n
+## ️ Maintenance du système i18n
 Pour ajouter une nouvelle clé de traduction :
 1.  Ajouter la clé dans `en.json` et `fr.json`.
 2.  Ajouter la clé avec la valeur `"..."` dans `template.json`.

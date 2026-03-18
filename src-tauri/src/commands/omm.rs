@@ -201,7 +201,9 @@ async fn import_single_channel(state: &State<'_, AppState>, p: &PathBuf) -> Resu
                     let is_already_added = data.mods.iter().any(|m| m.mod_folder_path == inner_path || m.mod_folder_path.canonicalize().ok() == inner_path.canonicalize().ok());
 
                     if !is_already_added {
-                        data.mods.push(crate::models::mod_entry::ModEntry::new(mod_name, inner_path));
+                        let mut new_mod = crate::models::mod_entry::ModEntry::new(mod_name, inner_path);
+                        new_mod.load_metadata();
+                        data.mods.push(new_mod);
                     }
                 }
             }

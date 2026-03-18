@@ -13,7 +13,6 @@ import { escHtml, escAttr } from './utils.js';
  * @returns {string} HTML string
  */
 export function getModCardHTML(mod, ctx) {
-  const hasConflict = ctx.conflictCache[mod.id] && ctx.conflictCache[mod.id].length > 0;
   const isProcessing = ctx.processingMods.has(mod.id);
 
   let tagsHtml = '';
@@ -27,8 +26,21 @@ export function getModCardHTML(mod, ctx) {
     const extraTagsCount = mod.tags.length > 3 ? `<span style="color:var(--text-muted);font-size:9px;align-self:center">+${mod.tags.length - 3}</span>` : '';
     tagsHtml = `<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${visibleTags}${extraTagsCount}</div>`;
   }
+  let conflictHtml = '';
+  const conflicts = ctx && ctx.conflictCache ? ctx.conflictCache[mod.id] : (mod.conflicts || []);
+  if (conflicts && conflicts.length > 0) {
+    const hasIntraActive = conflicts.some(c => c.category === 'Intra' && c.status === 'Active');
+    const hasIntraPotential = conflicts.some(c => c.category === 'Intra' && c.status === 'Potential');
+    const hasInterActive = conflicts.some(c => c.category === 'Inter' && c.status === 'Active');
+    const hasInterPotential = conflicts.some(c => c.category === 'Inter' && c.status === 'Potential');
 
-  const conflictHtml = hasConflict ? `<div class="conflict-badge" style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.4);font-size:9px;font-weight:900;padding:1px 5px;border-radius:4px;letter-spacing:0.4px;text-transform:uppercase">Conflict</div>` : '';
+    if (hasIntraActive) conflictHtml += `<div class="tag-conflict tag-intra-conflict active" title="Conflit Interne Actif" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
+    else if (hasIntraPotential) conflictHtml += `<div class="tag-conflict tag-intra-conflict potential" title="Risque de Conflit Interne" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
+
+    if (hasInterActive) conflictHtml += `<div class="tag-conflict tag-inter-conflict active" title="Conflit Entre Profils Actif" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
+    else if (hasInterPotential) conflictHtml += `<div class="tag-conflict tag-inter-conflict potential" title="Risque de Conflit Entre Profils" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
+  }
+
 
   const processingHtml = isProcessing ? `<div class="mod-loading-overlay" style="position:absolute;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-card);z-index:10;animation:fadeIn 0.2s ease"><div style="display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div></div>` : '';
 
@@ -116,58 +128,52 @@ export function getModCardHTML(mod, ctx) {
  * @returns {string} HTML string
  */
 export function getModDetailHTML(mod, ctx) {
-  const conflictsHtml = ctx.conflicts.length > 0 ? `
-      <div id="conflict-alert" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;margin-bottom:8px">
-        <h4 style="color:var(--danger);font-size:12px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          ${t('mod.conflictsTitle')}
-        </h4>
-        <p style="font-size:11px;color:rgba(255,255,255,0.7);line-height:1.4">
-          ${t('mod.conflictsDesc').replace('{mods}', `<strong style="color:var(--text-primary)">${ctx.conflicts.join(', ')}</strong>`)}
-        </p>
-      </div>` : '';
-
-  const installedFilesHtml = mod.installed_files && mod.installed_files.length > 0 ? `
-      <div class="detail-section">
-        <label class="detail-label" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ${t('detail.files')} (${mod.installed_files.length})</label>
-        <div style="max-height:120px;overflow-y:auto;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:8px">
-          ${mod.installed_files.map(f => `<div style="padding:1px 0;display:flex;align-items:center;gap:4px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${escHtml(f)}</div>`).join('')}
+  // Helper for collapsible sections
+  const renderSection = (id, title, icon, content, defaultExpanded = false) => {
+    const storageKey = `bmm_section_${id}_expanded`;
+    const isExpanded = localStorage.getItem(storageKey) === null ? defaultExpanded : localStorage.getItem(storageKey) === 'true';
+    
+    return `
+      <div class="collapsible-section ${isExpanded ? '' : 'collapsed'}" id="section-${id}">
+        <div class="collapsible-header" onclick="window.toggleDetailSection('${id}')">
+          <h4>${icon} ${title}</h4>
+          <svg class="collapsible-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="collapsible-content">
+          ${content}
         </div>
       </div>
-      ` : '';
+    `;
+  };
 
-  const linksHtml = ctx.links.map((dl, i) => `
-            <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.2);padding:6px 8px;border-radius:8px">
-              <select class="detail-link-type input-field" style="width:100px;padding:3px;font-size:10px" data-index="${i}">
-                <option value="github" ${dl.link_type === 'github' ? 'selected' : ''}>GitHub</option>
-                <option value="direct" ${dl.link_type === 'direct' ? 'selected' : ''}>Direct</option>
-                <option value="other" ${dl.link_type === 'other' ? 'selected' : ''}>Autre</option>
-              </select>
-              <input type="text" class="detail-link-url input-field" style="flex:1;padding:3px 6px;font-size:10px" value="${escAttr(dl.url)}" placeholder="URL" data-index="${i}" />
-              <input type="text" class="detail-link-label input-field" style="width:80px;padding:3px 6px;font-size:10px" value="${escAttr(dl.label)}" placeholder="Label" data-index="${i}" />
-              <button class="btn-remove-link" data-index="${i}" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;display:flex;align-items:center" title="Supprimer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  const conflictsContent = (mod.conflicts && mod.conflicts.length > 0) ? `
+        <div id="detail-conflicts-list" style="display:flex;flex-direction:column;gap:8px">
+          ${mod.conflicts.map(c => `
+            <div style="background:rgba(0,0,0,0.2);padding:8px 10px;border-radius:8px;border:1px solid ${c.status === 'Active' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <span class="tag-conflict tag-${c.category.toLowerCase()}-conflict ${c.status.toLowerCase()}" 
+                      style="cursor:pointer" 
+                      onclick="window.openGlobalConflictModal('${mod.id}')">
+                   ${c.category === 'Intra' ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'}
+                   ${c.category}
+                </span>
+                <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted)">${c.file_count} f.</span>
+              </div>
+              <div style="font-size:11px;color:var(--text-primary);font-weight:600">${escHtml(c.other_mod_name)}</div>
+              <div style="font-size:10px;color:var(--text-muted)">Profil: ${escHtml(c.other_profile_name)}</div>
             </div>
-          `).join('');
+          `).join('')}
+        </div>` : '<div id="detail-conflicts-list" style="font-size:12px;color:var(--text-muted);font-style:italic">Aucun conflit détecté.</div>';
 
-  return `
-    <div class="detail-header">
-      <div>
-        <h3 style="margin:0;font-size:16px;color:var(--text-primary)">${escHtml(mod.name)}</h3>
-        <span style="font-family:var(--font-mono);font-size:11px;color:var(--cyan)">v${escHtml(mod.version)}</span>
-        <span style="font-size:11px;color:var(--text-muted);margin-left:8px;display:inline-flex;align-items:center;gap:4px">${mod.enabled ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="var(--success)" stroke="none"><circle cx="12" cy="12" r="6"/></svg> ACTIF' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="var(--text-muted)" stroke="none"><circle cx="12" cy="12" r="6"/></svg> INACTIF'}</span>
-      </div>
-      <button id="btn-close-detail-inner" class="btn btn-sm btn-icon" style="background:rgba(255,255,255,0.05);border:none;color:var(--text-muted);cursor:pointer;padding:4px 8px;border-radius:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    </div>
-
-    <div class="detail-body" style="display:flex;flex-direction:column;gap:12px;margin-top:12px">
-      ${conflictsHtml}
-
+  const infoContent = `
       <!-- Editable Fields -->
       <div class="detail-section">
-        <label class="detail-label">${t('detail.name')}</label>
+        <label class="detail-label">
+          <span>${t('detail.name')}</span>
+        </label>
         <input type="text" id="detail-name" class="input-field" value="${escAttr(mod.name)}" />
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
         <div class="detail-section">
           <label class="detail-label">${t('detail.version')}</label>
           <input type="text" id="detail-version" class="input-field" value="${escAttr(mod.version)}" />
@@ -177,53 +183,98 @@ export function getModDetailHTML(mod, ctx) {
           <input type="text" id="detail-author" class="input-field" value="${escAttr(mod.author || '')}" />
         </div>
       </div>
-      <div class="detail-section">
+      <div class="detail-section" style="margin-top:10px">
         <label class="detail-label">${t('detail.description')}</label>
         <textarea id="detail-desc" class="input-field" rows="4" style="resize:vertical;min-height:80px;line-height:1.5;padding:10px">${escHtml(mod.description || '')}</textarea>
       </div>
 
       <!-- Tags Selection -->
-      <div class="detail-section" id="detail-tags-container">
+      <div class="detail-section" id="detail-tags-container" style="margin-top:10px">
         <label class="detail-label" data-i18n="detail.tags" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Tags</label>
         <div id="detail-tags-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
         <select id="detail-tag-select" class="input-field" style="width:100%;padding:6px;font-size:11px">
             <option value="">— ${t('detail.selectTag')} —</option>
         </select>
       </div>
+  `;
 
-      <!-- Mod Folder Path -->
-      <div class="detail-section">
-        <label class="detail-label" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ${t('prof.modsDir')}</label>
-        <div style="display:flex;gap:8px">
-          <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);background:rgba(0,0,0,0.3);padding:8px 10px;border-radius:8px;word-break:break-all;flex:1">
-            ${escHtml(mod.mod_folder_path || 'Non défini')}
-          </div>
-          <button id="btn-browse-archive" class="btn btn-secondary btn-sm" title="${t('mod.explorerBtn')}" style="padding:6px 12px">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><rect x="8" y="8" width="6" height="6"/></svg>
+  const filesContent = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">
+          <span style="font-size:11px; color:var(--text-muted)">${mod.installed_files ? mod.installed_files.length : 0} fichiers installés</span>
+          <button id="btn-browse-archive" class="btn btn-sm" style="background:rgba(59,130,246,0.15); color:var(--accent); border:none; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:11px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle; margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Explorer l'archive
           </button>
         </div>
-      </div>
+        ${mod.installed_files && mod.installed_files.length > 0 ? `
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);background:rgba(0,0,0,0.3);padding:10px;border-radius:8px;max-height:200px;overflow-y:auto">
+            ${mod.installed_files.slice(0, 50).map(f => `<div style="padding:1px 0;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${escHtml(f)}</div>`).join('')}
+            ${mod.installed_files.length > 50 ? `<div style="padding:6px 0;color:var(--text-muted);font-style:italic">+ ${mod.installed_files.length - 50} autres fichiers non-affichés pour les performances (cliquez sur Explorer l'archive en haut).</div>` : ''}
+          </div>
+        ` : '<div style="font-size:12px;color:var(--text-muted);font-style:italic">Aucun fichier listé.</div>'}
+      `;
 
-      <!-- Installed Files -->
-      ${installedFilesHtml}
-
-      <!-- Download Links -->
-      <div class="detail-section">
-        <label class="detail-label" style="display:flex;align-items:center;gap:4px;margin-bottom:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> ${t('detail.links')}</label>
+  const linksContent = `
         <div style="font-size:10px;background:rgba(59,130,246,0.1);color:var(--accent);padding:6px 8px;border-radius:6px;margin-bottom:8px;line-height:1.4;border:1px solid rgba(59,130,246,0.2)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:2px;margin-top:-2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-          <span data-i18n="detail.linksInfo">${t('detail.linksInfo') || 'Pour les listes .MM, seuls les liens directs (téléchargement immédiat) fonctionnent.'}</span>
+          <span data-i18n="detail.linksInfo">${t('detail.linksInfo') || 'Pour les listes .MM, seuls les liens directs fonctionnent.'}</span>
         </div>
         <div id="detail-links-list" style="display:flex;flex-direction:column;gap:6px">
-          ${linksHtml}
+          ${ctx.links.map((dl, i) => `
+            <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.2);padding:6px 8px;border-radius:8px">
+              <select class="detail-link-type input-field" style="width:90px;padding:3px;font-size:10px" data-index="${i}">
+                <option value="github" ${dl.link_type === 'github' ? 'selected' : ''}>GitHub</option>
+                <option value="direct" ${dl.link_type === 'direct' ? 'selected' : ''}>Direct</option>
+                <option value="other" ${dl.link_type === 'other' ? 'selected' : ''}>Autre</option>
+              </select>
+              <input type="text" class="detail-link-url input-field" style="flex:1;padding:3px 6px;font-size:10px" value="${escAttr(dl.url)}" placeholder="URL" data-index="${i}" />
+              <button class="btn-remove-link" data-index="${i}" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;display:flex;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+          `).join('')}
         </div>
-        <button id="btn-add-link" class="btn btn-sm" style="margin-top:6px;background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px">+ ${t('detail.addLink')}</button>
-      </div>
+        <button id="btn-add-link" class="btn btn-sm" style="margin-top:8px;background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px">+ ${t('detail.addLink')}</button>
+  `;
 
-      <!-- Save Button -->
-      <button id="btn-save-detail" class="btn btn-primary" style="align-self:flex-start;margin-top:6px">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> ${t('detail.save')}
+  return `
+    <div class="detail-header">
+      <div style="flex:1; min-width:0">
+        <h3 style="margin:0;font-size:16px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(mod.name)}</h3>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+          <span style="font-family:var(--font-mono);font-size:11px;color:var(--cyan)">v${escHtml(mod.version)}</span>
+          <span style="font-size:10px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px">
+            ${mod.enabled ? '<svg width="8" height="8" viewBox="0 0 24 24" fill="var(--success)"><circle cx="12" cy="12" r="10"/></svg> ACTIF' : '<svg width="8" height="8" viewBox="0 0 24 24" fill="var(--text-muted)"><circle cx="12" cy="12" r="10"/></svg> INACTIF'}
+          </span>
+        </div>
+      </div>
+      <button id="btn-close-detail-inner" class="btn btn-sm btn-icon" style="background:rgba(255,255,255,0.05);border:none;color:var(--text-muted);cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+
+    <div class="detail-body" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;padding:0 4px;overflow-y:auto;max-height:calc(100vh - 180px);scrollbar-width:thin">
+      ${renderSection('info', t('detail.sectionGeneral') || 'Général', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>', infoContent, true)}
+      ${renderSection('conflicts', t('detail.sectionConflicts') || 'Conflits', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>', conflictsContent, false)}
+      ${renderSection('links', t('detail.sectionLinks') || 'Liens', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>', linksContent, false)}
+      ${renderSection('files', t('detail.sectionFiles') || 'Fichiers', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>', filesContent, false)}
+
+      <button id="btn-save-detail" class="btn btn-primary" style="margin-top:12px;width:100%;height:38px;font-weight:700;flex-shrink:0">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> 
+        ${t('detail.save') || 'SAUVEGARDER'}
       </button>
     </div>
   `;
+}
+
+// Add global toggle function for collapsible sections
+if (typeof window !== 'undefined') {
+  window.toggleDetailSection = (id) => {
+    const el = document.getElementById(`section-${id}`);
+    if (!el) return;
+    const isCollapsed = el.classList.contains('collapsed');
+    if (isCollapsed) {
+      el.classList.remove('collapsed');
+      localStorage.setItem(`bmm_section_${id}_expanded`, 'true');
+    } else {
+      el.classList.add('collapsed');
+      localStorage.setItem(`bmm_section_${id}_expanded`, 'false');
+    }
+  };
 }

@@ -1,8 +1,10 @@
 use crate::models::profile::Profile;
 use crate::models::mod_entry::ModEntry;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::Instant;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct AppSettings {
@@ -30,6 +32,8 @@ pub struct AppSettings {
     pub current_sort_by: String,
     #[serde(default = "default_true")]
     pub last_session_clean: bool,
+    #[serde(default)]
+    pub auto_fill_metadata: bool,
 }
 
 fn default_true() -> bool { true }
@@ -61,6 +65,11 @@ pub struct AppState {
     pub sync_paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub benchmark_running: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub previous_session_clean: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    
+    // Cache for O(1) conflict detection (In-Memory only, not saved to JSON)
+    pub mod_files_cache: Mutex<HashMap<String, HashSet<PathBuf>>>,
+    pub conflict_index: Mutex<HashMap<PathBuf, Vec<String>>>,
+    pub last_cache_update: Mutex<Option<Instant>>,
 }
 
 impl AppState {
@@ -78,6 +87,9 @@ impl AppState {
             sync_paused: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             benchmark_running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             previous_session_clean: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            mod_files_cache: Mutex::new(HashMap::new()),
+            conflict_index: Mutex::new(HashMap::new()),
+            last_cache_update: Mutex::new(None),
         }
     }
 

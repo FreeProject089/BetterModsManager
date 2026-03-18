@@ -1,11 +1,13 @@
 use crate::fs_utils;
-use crate::models::mod_entry::{ModEntry, ModStatus};
+use crate::models::mod_entry::{ModEntry, ModStatus, ConflictReport, ConflictCategory, ConflictStatus};
 use crate::commands::crash::log_line;
 use crate::state::AppState;
 use std::path::PathBuf;
 use tauri::{State, Window};
 use std::sync::Mutex;
 use serde::Serialize;
+use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 #[derive(Serialize, Clone)]
 struct BenchEventPayload {
@@ -36,6 +38,9 @@ lazy_static::lazy_static! {
 
 #[tauri::command]
 pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, String> {
+    // 1. Ensure cache is populated (Lazy but thread-safe)
+    ensure_cache_populated(&state)?;
+
     let data = state.data.lock().unwrap();
     let active_id = match data.active_profile_id.as_ref() {
         Some(id) => id,
@@ -43,15 +48,17 @@ pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, String> {
     };
     let active_profile = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?;
     
+    // Canonicalize once outside the loop
+    let active_mods_path = active_profile.mods_path.canonicalize().unwrap_or(active_profile.mods_path.clone());
+    
     let mut results = Vec::new();
     
     for m in &data.mods {
         let mod_p = &m.mod_folder_path;
-        let prof_p = &active_profile.mods_path;
         
-        let belongs_to_active = if mod_p.starts_with(prof_p) { true } else {
-            match (mod_p.canonicalize(), prof_p.canonicalize()) {
-                (Ok(m_can), Ok(p_can)) => m_can.starts_with(p_can),
+        let belongs_to_active = if mod_p.starts_with(&active_mods_path) { true } else {
+            match mod_p.canonicalize() {
+                Ok(m_can) => m_can.starts_with(&active_mods_path),
                 _ => false
             }
         };
@@ -65,17 +72,12 @@ pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, String> {
             // Set 'enabled' based on active profile
             enriched.mod_entry.enabled = active_profile.active_mods.contains(&m.id);
             
-            // Find shared activations in OTHER profiles sharing the same mods folder
+            // Recalculate conflicts using MEMORY CACHE (O(1))
+            enriched.mod_entry.conflicts = calculate_conflicts_from_cache(&m, &data, active_id, &state);
+
+            // Find shared activations...
             for p in &data.profiles {
-                // If this profile shares the same mods folder (or is the active one, we'll list it too as per request)
-                let shares_folder = if p.mods_path == active_profile.mods_path { true } else {
-                    match (p.mods_path.canonicalize(), active_profile.mods_path.canonicalize()) {
-                        (Ok(a), Ok(b)) => a == b,
-                        _ => false
-                    }
-                };
-                
-                if shares_folder {
+                if p.mods_path == active_profile.mods_path {
                     enriched.shared_activations.push(SharedActivation {
                         profile_name: p.name.clone(),
                         game_path: p.game_path.to_string_lossy().to_string(),
@@ -89,6 +91,93 @@ pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, String> {
     }
     
     Ok(results)
+}
+
+fn ensure_cache_populated(state: &State<AppState>) -> Result<(), String> {
+    let mut last_update = state.last_cache_update.lock().unwrap();
+    if last_update.is_some() { return Ok(()); }
+
+    log_line("[CACHE] Populating mod file cache for the first time...");
+    let data = state.data.lock().unwrap();
+    let mut cache = state.mod_files_cache.lock().unwrap();
+    let mut index = state.conflict_index.lock().unwrap();
+
+    for m in &data.mods {
+        if let Ok(files) = crate::fs_utils::list_mod_files(&m.mod_folder_path) {
+            let set: HashSet<PathBuf> = files.into_iter().collect();
+            for f in &set {
+                let f_path: PathBuf = f.clone();
+                index.entry(f_path).or_insert_with(Vec::new).push(m.id.clone());
+            }
+            cache.insert(m.id.clone(), set);
+        }
+    }
+    
+    *last_update = Some(Instant::now());
+    log_line(format!("[CACHE] Cached {} mods and {} unique files.", cache.len(), index.len()));
+    Ok(())
+}
+
+fn calculate_conflicts_from_cache(
+    target_mod: &ModEntry, 
+    data: &crate::state::AppData, 
+    current_profile_id: &String,
+    state: &State<AppState>
+) -> Vec<ConflictReport> {
+    let mut reports = Vec::new();
+    let current_profile = match data.profiles.iter().find(|p| &p.id == current_profile_id) {
+        Some(p) => p,
+        None => return reports,
+    };
+
+    let target_is_active = current_profile.active_mods.contains(&target_mod.id);
+    let cache = state.mod_files_cache.lock().unwrap();
+    let index = state.conflict_index.lock().unwrap();
+
+    let target_files = match cache.get(&target_mod.id) {
+        Some(f) => f,
+        None => return reports,
+    };
+
+    // Use the conflict index to find overlapping mods instantly
+    let mut overlaps: HashMap<String, usize> = HashMap::new();
+    for f in target_files {
+        if let Some(mod_ids) = index.get(f) {
+            for mid in mod_ids {
+                if mid == &target_mod.id { continue; }
+                *overlaps.entry(mid.clone()).or_insert(0) += 1;
+            }
+        }
+    }
+
+    for (other_id, count) in overlaps {
+        if let Some(other_mod) = data.mods.iter().find(|m| m.id == other_id) {
+            // Determine if it's Inter or Intra
+            for profile in &data.profiles {
+                let is_same_profile = &profile.id == current_profile_id;
+                let shares_root = profile.game_path == current_profile.game_path;
+
+                if !is_same_profile && !shares_root { continue; }
+
+                // Actually, if it overlaps, it's a conflict for this profile if it shares the root.
+                
+                let is_active_in_prof = profile.active_mods.contains(&other_id);
+                let status = if target_is_active && is_active_in_prof { ConflictStatus::Active } else { ConflictStatus::Potential };
+
+                reports.push(ConflictReport {
+                    category: if is_same_profile { ConflictCategory::Intra } else { ConflictCategory::Inter },
+                    status,
+                    other_mod_id: other_id.clone(),
+                    other_mod_name: other_mod.name.clone(),
+                    other_profile_name: profile.name.clone(),
+                    file_count: count,
+                    activation_order: other_mod.activation_order,
+                });
+            }
+        }
+    }
+
+    reports
 }
 
 #[tauri::command]
@@ -106,6 +195,7 @@ pub async fn add_mod(
     description: String,
     version: String,
     tags: Option<Vec<String>>,
+    download_links: Option<Vec<crate::models::mod_entry::DownloadLink>>,
 ) -> Result<ModEntry, String> {
     log_line(format!("[MOD] Adding mod '{}' from '{}'", name, mod_folder_path));
     let mods_path = {
@@ -174,13 +264,19 @@ pub async fn add_mod(
     if let Some(t) = tags {
         entry.tags = t;
     }
+    if let Some(l) = download_links {
+        entry.download_links = l;
+    }
     
     let result = entry.clone();
+    let mod_folder = entry.mod_folder_path.clone();
     {
         let mut data = state.data.lock().unwrap();
         data.mods.push(entry);
     }
+    let _ = save_mod_metadata_file(&mod_folder, &result);
     let _ = state.save();
+    invalidate_cache(&state);
     Ok(result)
 }
 
@@ -209,6 +305,7 @@ pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files
     }
 
     let _ = state.save();
+    invalidate_cache(&state);
     Ok(())
 }
 
@@ -228,6 +325,17 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
                 others.push((other_m.id.clone(), other_m.mod_folder_path.clone()));
             }
         }
+
+        // --- NEW: Block activation if already active on the same root in ANOTHER profile ---
+        for op in &data.profiles {
+            if op.id == active_id { continue; } // Skip current profile
+            if op.game_path == p.game_path { // Same root
+                if op.active_mods.contains(&mod_id) {
+                    return Err(format!("Ce mod est déjà actif sur ce dossier de jeu dans le profil '{}'.", op.name));
+                }
+            }
+        }
+        // ---------------------------------------------------------------------------------
         
         let warning_pct = data.settings.storage_warning_space_pct;
         let critical_pct = data.settings.storage_critical_space_pct;
@@ -335,14 +443,29 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
 
     {
         let mut data = state.data.lock().unwrap();
+        
+        // Calculate next activation order
+        let next_order = data.mods.iter()
+            .map(|m| m.activation_order)
+            .max()
+            .unwrap_or(0) + 1;
+
         if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
             m.enabled = true;
             m.status = ModStatus::Enabled;
             m.installed_files = applied.iter().map(|p| p.to_string_lossy().to_string()).collect();
+            m.activation_order = next_order;
         }
-        // Sync with active profile
-        if let Some(active_id) = data.active_profile_id.clone() {
-            if let Some(p) = data.profiles.iter_mut().find(|p| p.id == active_id) {
+        
+        // Sync with all profiles sharing the same root and mod folder
+        let active_profile_id = data.active_profile_id.clone().ok_or("Aucun profil actif")?;
+        let active_profile = data.profiles.iter().find(|p| p.id == active_profile_id).cloned().ok_or("Profil introuvable")?;
+        
+        for p in data.profiles.iter_mut() {
+            let same_root = p.game_path == active_profile.game_path;
+            let same_mods = p.mods_path == active_profile.mods_path;
+            
+            if same_root && same_mods {
                 if !p.active_mods.contains(&mod_id) {
                     p.active_mods.push(mod_id.clone());
                 }
@@ -424,14 +547,34 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
 
     {
         let mut data = state.data.lock().unwrap();
-        if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+        
+        let removed_order = if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+            let order = m.activation_order;
             m.enabled = false;
             m.status = ModStatus::Disabled;
             m.installed_files.clear();
+            m.activation_order = 0;
+            order
+        } else { 0 };
+
+        // Re-order remaining mods to keep sequence tight
+        if removed_order > 0 {
+            for m in data.mods.iter_mut() {
+                if m.activation_order > removed_order {
+                    m.activation_order -= 1;
+                }
+            }
         }
-        // Sync with active profile
-        if let Some(active_id) = data.active_profile_id.clone() {
-            if let Some(p) = data.profiles.iter_mut().find(|p| p.id == active_id) {
+        
+        // Sync with all profiles sharing the same root and mod folder
+        let active_profile_id = data.active_profile_id.clone().ok_or("Aucun profil actif")?;
+        let active_profile = data.profiles.iter().find(|p| p.id == active_profile_id).cloned().ok_or("Profil introuvable")?;
+
+        for p in data.profiles.iter_mut() {
+            let same_root = p.game_path == active_profile.game_path;
+            let same_mods = p.mods_path == active_profile.mods_path;
+            
+            if same_root && same_mods {
                 p.active_mods.retain(|id| id != &mod_id);
             }
         }
@@ -442,6 +585,11 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
     log_line(format!("[MOD] Mod '{}' disabled successfully", mod_name));
     crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Disabled");
     Ok(())
+}
+
+#[tauri::command]
+pub fn path_join(base: std::path::PathBuf, relative: String) -> Result<String, String> {
+    Ok(base.join(relative).to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -554,9 +702,10 @@ pub fn update_mod_meta(
     description: String,
     version: String,
     tags: Vec<String>,
+    download_links: Vec<crate::models::mod_entry::DownloadLink>,
 ) -> Result<(), String> {
     log_line(format!("[MOD] Updating metadata for '{}' ({})", name, mod_id));
-    {
+    let mod_path = {
         let mut data = state.data.lock().unwrap();
         if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
             m.name = name;
@@ -564,10 +713,58 @@ pub fn update_mod_meta(
             m.description = description;
             m.version = version;
             m.tags = tags;
+            m.download_links = download_links;
+            Some((m.clone(), m.mod_folder_path.clone()))
+        } else {
+            None
         }
+    };
+
+    if let Some((entry, path)) = mod_path {
+        let _ = save_mod_metadata_file(&path, &entry);
     }
+
     let _ = state.save();
     Ok(())
+}
+
+fn save_mod_metadata_file(mod_folder_path: &std::path::Path, entry: &crate::models::mod_entry::ModEntry) -> Result<(), String> {
+    let metadata: crate::models::mod_entry::ModMetadata = entry.into();
+    let file_path = mod_folder_path.join("_InfoBetterMod.Manager_");
+    let json = serde_json::to_string_pretty(&metadata).map_err(|e| e.to_string())?;
+    std::fs::write(file_path, json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn check_mod_metadata(folder_path: String) -> Result<Option<crate::models::mod_entry::ModMetadata>, String> {
+    let path = std::path::PathBuf::from(folder_path);
+    if !path.exists() { return Ok(None); }
+
+    if path.is_file() && path.extension().and_then(|s| s.to_str()).unwrap_or("").eq_ignore_ascii_case("zip") {
+        let file = std::fs::File::open(&path).map_err(|e| e.to_string())?;
+        let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+        let mut content = String::new();
+        let has_meta = if let Ok(mut f) = archive.by_name("_InfoBetterMod.Manager_") {
+            use std::io::Read;
+            f.read_to_string(&mut content).is_ok()
+        } else {
+            false
+        };
+        
+        if has_meta {
+            let metadata: crate::models::mod_entry::ModMetadata = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+            return Ok(Some(metadata));
+        }
+    } else if path.is_dir() {
+        let meta_file = path.join("_InfoBetterMod.Manager_");
+        if meta_file.exists() {
+            let content = std::fs::read_to_string(meta_file).map_err(|e| e.to_string())?;
+            let metadata: crate::models::mod_entry::ModMetadata = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+            return Ok(Some(metadata));
+        }
+    }
+    Ok(None)
 }
 
 #[tauri::command]
@@ -653,8 +850,14 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<Vec<ModEntry
                 mod_name = mod_name[..mod_name.len() - 4].to_string();
             }
 
-            let mut entry = ModEntry::new(mod_name.clone(), path);
-            entry.name = mod_name;
+            let mut entry = ModEntry::new(mod_name.clone(), path.clone());
+            let has_meta = entry.load_metadata();
+            
+            // If no metadata file and it's a folder, create one with default info
+            if !has_meta && is_dir {
+                let _ = save_mod_metadata_file(&path, &entry);
+            }
+
             discovered.push(entry);
         }
         Ok(discovered)
@@ -666,6 +869,7 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<Vec<ModEntry
         data.mods.extend(added.clone());
         drop(data);
         let _ = state.save();
+        invalidate_cache(&state);
     } else {
         log_line("[MOD] Scan complete, no new mods found");
     }
@@ -844,8 +1048,10 @@ pub async fn install_from_modlist(
                 new_mod.tags = entry.tags.clone();
                 new_mod.install_notes = entry.install_notes.clone();
                 let mid = new_mod.id.clone();
-                data.mods.push(new_mod);
+                let mod_folder = new_mod.mod_folder_path.clone();
+                data.mods.push(new_mod.clone());
                 newly_added_mod_ids.push(mid);
+                let _ = save_mod_metadata_file(&mod_folder, &new_mod);
             } else {
                 // If it already exists in the global list, we still want to track it for the profile
                 if let Some(m) = data.mods.iter().find(|m| m.mod_folder_path == target_dir) {
@@ -1001,12 +1207,20 @@ pub async fn install_from_modlist(
                     new_mod.name = entry.name.clone();
                     new_mod.version = entry.version.clone();
                     new_mod.author = entry.author.clone();
+                    new_mod.description = entry.description.clone();
                     new_mod.tags = entry.tags.clone();
                     new_mod.install_notes = entry.install_notes.clone();
+                    new_mod.download_links = entry.download_links.iter().map(|l| crate::models::mod_entry::DownloadLink {
+                        url: l.url.clone(),
+                        link_type: l.link_type.clone(),
+                        label: l.label.clone(),
+                    }).collect();
                     let mid = new_mod.id.clone();
-                    data.mods.push(new_mod);
+                    let mod_folder = new_mod.mod_folder_path.clone();
+                    data.mods.push(new_mod.clone());
                     
                     newly_added_mod_ids.push(mid);
+                    let _ = save_mod_metadata_file(&mod_folder, &new_mod);
                     results.push(format!("✅ {} — Téléchargé", entry.name));
                     
                     let _ = window.emit("bmm://mod-download-progress", crate::commands::mods::DownloadProgress {
@@ -1193,4 +1407,43 @@ pub async fn list_mod_files_recursive(state: State<'_, AppState>, mod_id: String
     
     let files = fs_utils::list_mod_files(&mod_folder).map_err(|e| e.to_string())?;
     Ok(files.into_iter().map(|p| p.to_string_lossy().to_string()).collect())
+}
+
+
+
+#[tauri::command]
+pub fn get_mod_conflicts(state: State<AppState>, mod_id: String) -> Result<Vec<ConflictReport>, String> {
+    ensure_cache_populated(&state)?;
+    
+    let data = state.data.lock().unwrap();
+    let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;
+    let target_mod = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+    
+    Ok(calculate_conflicts_from_cache(target_mod, &data, active_id, &state))
+}
+
+fn invalidate_cache(state: &State<AppState>) {
+    let mut last_update = state.last_cache_update.lock().unwrap();
+    *last_update = None; // Force re-population on next call
+}
+
+#[tauri::command]
+pub fn get_conflict_file_tree(state: State<AppState>, mod_id: String, other_mod_id: String) -> Result<Vec<String>, String> {
+    let data = state.data.lock().unwrap();
+    let m1 = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod 1 introuvable")?;
+    let m2 = data.mods.iter().find(|m| m.id == other_mod_id).ok_or("Mod 2 introuvable")?;
+
+    let files1 = crate::fs_utils::list_mod_files(&m1.mod_folder_path).map_err(|e| e.to_string())?;
+    let files2: std::collections::HashSet<PathBuf> = crate::fs_utils::list_mod_files(&m2.mod_folder_path)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .collect();
+
+    let mut overlap = Vec::new();
+    for f in files1 {
+        if files2.contains(&f) {
+            overlap.push(f.to_string_lossy().to_string());
+        }
+    }
+    Ok(overlap)
 }

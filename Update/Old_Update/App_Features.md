@@ -105,7 +105,23 @@ BMM ensures that version information is always accurate and synchronized.
 
 ---
 
-## 8. Integrity Report
+---
+
+## 8. Interactive Documentation & Diagrams
+
+BMM 0.9.8 introduces a state-of-the-art interactive documentation system.
+
+| Feature | Description |
+| :--- | :--- |
+| **Mermaid.js Integration** | Technical processes (Mod Activation, Sync, Backups) are visualized using high-definition Mermaid diagrams. |
+| **Dynamic Localization** | All labels and tooltips within the diagrams translate instantly when you switch languages. |
+| **Tasky Mascots** | Our assistant, Tasky, guides you through complex flows directly within the diagrams. |
+| **Interactive Pan & Zoom** | Navigate complex diagrams comfortably with mouse-based pan and zoom controls. |
+| **Persistent Viewport** | The app remembers your zoom level and position when switching between different diagrams. |
+
+---
+
+## 9. Integrity Report
 
 | Feature | Description |
 | :--- | :--- |
@@ -175,10 +191,20 @@ BMM features a suite of high-end diagnostic and optimization tools to ensure max
 | **Performance Dashboard** | A real-time monitoring overlay (PiP) tracking CPU, RAM, and Disk activity. Supports timeline scrubbing and historical data export (CSV). |
 | **Storage Manager** | Detects SSD/HDD types, filesystems, and auto-identifies cloud (Google Drive, MEGA, etc.) or network drives. |
 | **Benchmark Tool** | Test your disk's real-world performance directly within BMM to find the optimal speed limit. |
+| **Interactive Performance Guide** | Integrated diagrams explain exactly how the I/O limiter and chunked transfer engine work together. |
 
 ---
 
-## 15. Server Repository (Server Mode)
+## 15. UI Guidance & Empty States
+
+| Feature | Description |
+| :--- | :--- |
+| **"How it Works" Buttons** | Context-sensitive help buttons appear on empty views (Library, Profiles) to guide new users. |
+| **Instructional Modals** | Direct access to relevant documentation and diagrams from the main interface. |
+
+---
+
+## 16. Server Repository (Server Mode)
 
 Server Mode is the premium synchronization system for large-scale mod sharing.
 

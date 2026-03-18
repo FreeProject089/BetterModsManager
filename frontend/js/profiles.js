@@ -357,7 +357,7 @@ export async function renderProfiles() {
             <p data-i18n="prof.emptyDesc" style="color:var(--text-secondary); max-width:440px; text-align:center; margin-bottom:32px; line-height:1.6">
                 Organisez vos mods par jeu ou par configuration. Créez votre premier profil pour commencer à modder en toute sécurité.
             </p>
-            <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:16px; width:100%;">
+            <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:16px; width:100%; margin-bottom: 24px;">
                 <button class="btn btn-primary btn-lg" id="empty-create-profile" style="padding:12px 24px; font-size:14px; font-weight:600; min-width:180px">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                     <span data-i18n="prof.create">Créer un profil</span>
@@ -390,6 +390,12 @@ export async function renderProfiles() {
                     </div>
                 </div>
             </div>
+            <button class="btn btn-ghost btn-sm" onclick="openDiagram('mod-architecture')" style="color:var(--accent); font-size:12px; border:1px solid rgba(59,130,246,0.3); margin: 0 auto; display: flex; align-items: center; gap: 8px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <span data-i18n="prof.howItWorks">Comment ça marche ?</span>
+            </button>
         `;
         document.getElementById('empty-create-profile').onclick = () => document.getElementById('btn-new-profile').click();
         applyTranslations(emptyEl);
@@ -514,9 +520,13 @@ export async function renderProfiles() {
     // Functions for card actions
     async function activateProfile(id) {
         await invoke('set_active_profile', { profileId: id });
+        // Cache the new profile ID immediately so renderModList skips IPC
+        const { appState } = await import('./state.js');
+        appState.set('cachedActiveProfileId', id);
         await renderProfiles();
         updateProfileChip();
         updateLibraryProfileSelector();
+        // The import and call are already here, ensuring they are executed
         const { refreshMods } = await import('./mods.js');
         await refreshMods(true);
     }

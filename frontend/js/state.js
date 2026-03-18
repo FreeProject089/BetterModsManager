@@ -70,5 +70,6 @@ export const appState = new StateManager({
     processingMods: new Set(),
     isGlobalProcessing: false,
     conflictCache: {},
+    cachedActiveProfileId: null,
     isCompact: localStorage.getItem('bmm-view-compact') === 'true'
 });

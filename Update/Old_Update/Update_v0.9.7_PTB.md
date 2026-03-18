@@ -15,7 +15,7 @@ The main purpose of the PTB is to:
 - **Selective Conflict Checking**: Drastically reduced lag when activating/deactivating mods by optimizing the conflict resolution engine.
 - **Bye-bye Freezes**: New chunked transfer engine ensures your PC stays lag-free even when moving gigabytes of mods.
 
-### 🚀 New Performance Engine
+###  New Performance Engine
 - **Disk I/O Limiter**: Take control of your disk speed. Set custom limits for game, mod, and backup drives to keep your system responsive.
 - **Performance Dashboard**: Professional-grade PiP monitor for CPU, RAM, and Disk I/O with historical replay and CSV export.
 - **Storage Manager**: Deep analysis of your disks, including cloud (Drive, Dropbox, etc.) and network drive detection.
@@ -37,7 +37,7 @@ The main purpose of the PTB is to:
 ### Help us improve!
 Found a bug? Have a suggestion? Let us know on the **official Discord** — your reports make BMM better for everyone.
 
-👉 **[Join our Discord](https://discord.com/invite/CTaaEF9R75)**
+ **[Join our Discord](https://discord.com/invite/CTaaEF9R75)**
 
 ---
 *Better Mod Manager — Engineered for performance.*

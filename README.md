@@ -17,6 +17,7 @@ Better Mod Manager (BMM) simplifies the process of managing, installing, and sha
 - **Automated Versioning**: Build-time date capture and dynamic UI injection for synchronized versioning information.
 - **Integrity Reporting**: Diagnostic tool to verify if modded files have been corrupted or overwritten by game updates.
 - **Archive Explorer**: Built-in tree view for navigating .zip and .rar contents without extraction.
+- **Interactive Documentation**: Technical architecture visualized through dynamic Mermaid.js diagrams with live translation.
 - **Mod Link Support**: Categorize links (GitHub, MEGA, etc.) with custom icons and behavior.
 
 ## Mod Link Types
@@ -68,4 +69,4 @@ Detailed documentation is available in the `Update/` directory:
 
 ## License
 
-This project is licensed under the Apache License 2.0.
+This project is licensed under the GNU General Public License v3.0 (GPL-3.0).

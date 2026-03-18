@@ -171,7 +171,7 @@
 
             <!-- Sidebar footer -->
             <div class="sidebar-footer">
-                <button class="footer-nav-item" id="btn-restart-onboarding">
+                <button class="footer-nav-item" id="btn-open-mod-architecture" onclick="openDiagram('mod-architecture')">
                     <span class="nav-icon">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
@@ -333,7 +333,38 @@
                     <!-- Spacer to maintain scrollbar height -->
                     <div id="mod-list-spacer" style="height: 0px;"></div>
                     <!-- Empty state -->
-                    <div class="empty-state" id="empty-mods"
+                    <!-- Identical to Profiles empty state (image 1) -->
+                <div id="empty-library-no-profile" class="empty-state" style="display: none; margin-top: 60px;">
+                    <div class="empty-icon-wrapper">
+                        <div class="empty-circle-bg">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                                <circle cx="12" cy="8" r="4"/>
+                                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <h2 class="empty-title" data-i18n="prof.emptyTitle">Aucun profil configuré</h2>
+                    <p class="empty-desc" data-i18n="prof.emptyDesc">Organisez vos mods par jeu ou par configuration. Créez votre premier profil ou importez vos configurations existantes pour commencer à modder en toute sécurité.</p>
+                    
+                    <div class="empty-actions" style="display:flex; gap:12px; justify-content:center; margin-top:30px">
+                        <button class="btn btn-primary btn-lg btn-new-profile" style="padding: 12px 24px;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            <span data-i18n="prof.create">Créer un profil</span>
+                        </button>
+                        
+                        <button class="btn btn-secondary btn-lg" onclick="window.showProfiles()">
+                            <span data-i18n="nav.profiles">Profils</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:8px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        </button>
+                    </div>
+
+                    <button class="btn btn-ghost" style="margin-top:25px; opacity:0.7; font-size:12px" onclick="window.openDocs('how-it-works')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px; vertical-align:middle"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <span data-i18n="prof.howItWorks">Comment ça fonctionne ?</span>
+                    </button>
+                </div>
+
+                <div class="empty-state" id="empty-mods"
                         style="position: absolute; top: 0; left: 0; right: 0; padding-top: 60px;">
                         <div class="empty-icon">
                             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -347,23 +378,34 @@
                         <p class="empty-title" data-i18n="lib.emptyTitle">Aucun mod trouvé</p>
                         <p class="empty-desc" data-i18n="lib.emptyDesc">Créez un profil et ajoutez vos premiers mods.
                         </p>
-                        <div style="display:flex; justify-content:center; gap:12px; margin-top:24px;">
-                            <button class="btn btn-primary" onclick="document.getElementById('btn-scan-mods').click()"
-                                style="padding:10px 20px; font-size:13px">
+                        <div style="display:flex; flex-direction:column; align-items:center; gap:16px; margin-top:24px;">
+                            <div style="display:flex; justify-content:center; gap:12px;">
+                                <button class="btn btn-primary" onclick="document.getElementById('btn-scan-mods').click()"
+                                    style="padding:10px 20px; font-size:13px">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" style="margin-right:8px">
+                                        <path d="M23 4v6h-6M1 20v-6h6" />
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                                    </svg>
+                                    <span data-i18n="lib.scan">Scanner</span>
+                                </button>
+                                <button class="btn btn-secondary" onclick="document.getElementById('btn-add-mod').click()"
+                                    style="padding:10px 20px; font-size:13px">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" style="margin-right:8px">
+                                        <path d="M12 5v14M5 12h14" />
+                                    </svg>
+                                    <span data-i18n="lib.addMod">Ajouter un mod</span>
+                                </button>
+                            </div>
+
+                            <button class="btn btn-ghost btn-sm" onclick="openDiagram('mod-architecture')"
+                                style="color:var(--accent); font-size:12px; border:1px solid rgba(59,130,246,0.3); margin: 0 auto; display: flex; align-items: center; gap: 8px; opacity: 0.8;">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2" style="margin-right:8px">
-                                    <path d="M23 4v6h-6M1 20v-6h6" />
-                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                                    stroke-width="2.2">
+                                    <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                                 </svg>
-                                <span data-i18n="lib.scan">Scanner</span>
-                            </button>
-                            <button class="btn btn-secondary" onclick="document.getElementById('btn-add-mod').click()"
-                                style="padding:10px 20px; font-size:13px">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2" style="margin-right:8px">
-                                    <path d="M12 5v14M5 12h14" />
-                                </svg>
-                                <span data-i18n="lib.addMod">Ajouter un mod</span>
+                                <span data-i18n="prof.howItWorks">How it works?</span>
                             </button>
                         </div>
                     </div>
@@ -426,6 +468,12 @@
                                 </a>
                             </div>
                         </div>
+                        <button class="btn btn-sm btn-ghost" onclick="openDiagram('mod-architecture')" style="color:var(--accent); font-size:12px; height: 32px; border: 1px solid rgba(59,130,246,0.3); margin-right: 8px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:6px">
+                                <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                            </svg>
+                            <span data-i18n="prof.howItWorks">Comment ça fonctionne ?</span>
+                        </button>
                         <button class="btn btn-primary" id="btn-new-profile">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.2">
@@ -445,8 +493,15 @@
                         </svg>
                     </div>
                     <p class="empty-title" data-i18n="prof.emptyTitle">Aucun profil configuré</p>
-                    <p class="empty-desc" data-i18n="prof.emptyDesc">Organisez vos mods par jeu ou par configuration.
+                    <p class="empty-desc" data-i18n="prof.emptyDesc" style="margin-bottom: 20px;">Organisez vos mods par jeu ou par configuration.
                         Créez votre premier profil pour commencer à modder en toute sécurité.</p>
+                    
+                    <button class="btn btn-ghost btn-sm" onclick="openDiagram('mod-architecture')" style="color:var(--accent); font-size:12px; border:1px solid rgba(59,130,246,0.3); margin: 0 auto;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:6px">
+                            <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        <span data-i18n="prof.howItWorks">Comment ça fonctionne ?</span>
+                    </button>
                 </div>
 
                 <div class="profile-grid" id="profile-grid">
@@ -1004,6 +1059,15 @@
                     </div>
                 </div>
 
+                <div id="docs-ai-disclaimer" style="margin: 0 0 16px 0; padding: 12px 16px; background: rgba(234, 179, 8, 0.1); border-left: 4px solid #eab308; border-radius: 4px; display: flex; align-items: flex-start; gap: 12px; position: relative;">
+                    <div style="color:#fbbf24; font-size:13px; line-height: 1.5; flex:1;" data-i18n="docs.aiDisclaimer">
+                        ⚠️ This documentation is currently in development and partly AI-generated.
+                    </div>
+                    <button onclick="this.parentElement.style.opacity='0'; setTimeout(()=>this.parentElement.style.display='none', 300)" style="background:none; border:none; color:#fbbf24; cursor:pointer; padding:4px; align-self:flex-start; transition: opacity 0.2s;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+
                 <div class="settings-sections" style="grid-template-columns:1fr">
                     <!-- Comment fonctionne le modding -->
                     <div class="glass-card" style="border-left: 3px solid #ffffff;">
@@ -1037,6 +1101,10 @@
                                         <path d="M2 12l10 5 10-5" />
                                     </svg>
                                     <span data-i18n="docs.exploreMods">MÉCANIQUES</span>
+                                </button>
+                                <button id="btn-open-mod-architecture" onclick="openDiagram('mod-architecture')" style="background:#ffffff; color:#0f172a; border:none; border-radius:4px; padding:2px 10px; font-size:11px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; margin-left:6px; box-shadow: 0 0 8px rgba(255,255,255,0.3);">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                    <span data-i18n="docs.modArchitecture">Architecture</span>
                                 </button>
                             </div>
                         </h3>
@@ -2171,8 +2239,14 @@
 
                 <div style="max-width: 850px; margin: 0 auto; padding: 20px 20px 60px;">
                     <!-- HERO SECTION -->
-                    <div class="glass-card credits-hero-section">
-                        <div class="credits-hero-inner-glow"></div>
+                    <div class="glass-card credits-hero-section" style="position: relative; overflow: hidden;">
+                        <!-- Background Video -->
+                        <video id="credits-bg-video" loop muted playsinline 
+                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; opacity: 0.2; pointer-events: none;">
+                            <source src="assets/videos/credits_bg.mp4" type="video/mp4">
+                        </video>
+                        
+                        <div class="credits-hero-inner-glow" style="z-index: 1;"></div>
 
                         <div class="credits-hero-logo-box">
                             <img src="assets/BMm.png" alt="BM" style="width: 100%; height: 100%; object-fit: cover;" />
@@ -2308,7 +2382,7 @@
                                     <div class="credit-title credit-title-license" data-i18n="credits.license">License
                                     </div>
                                     <div class="credit-subtitle credit-subtitle-muted" data-i18n="credits.licenseSub">
-                                        View Apache-2.0 License</div>
+                                        View GPL-3.0 License</div>
                                 </div>
                             </a>
                         </div>
@@ -2390,6 +2464,53 @@
                         </div>
                     </div>
                     <!-- ── END Auto Update ── -->
+
+                    <!-- ── Mod Metadata Auto-fill ── -->
+                    <div class="glass-card" id="settings-auto-fill-metadata-card"
+                        style="border: 1px solid rgba(59, 130, 246, 0.15); position: relative; overflow: hidden;">
+                        <div
+                            style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(59,130,246,0.06);border-radius:50%;filter:blur(30px);pointer-events:none">
+                        </div>
+                        <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                                stroke-width="2.2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="16" y1="13" x2="8" y2="13" />
+                                <line x1="16" y1="17" x2="8" y2="17" />
+                                <circle cx="12" cy="15" r="3" />
+                            </svg>
+                            <span data-i18n="settings.autoFillMetadataTitle">Auto-fill Mod Info</span>
+                        </h3>
+
+                        <div
+                            style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;margin-bottom:16px">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                                stroke-width="2" style="flex-shrink:0;margin-top:1px">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="8" x2="12" y2="12" />
+                                <line x1="12" y1="16" x2="12.01" y2="16" />
+                            </svg>
+                            <p style="font-size:12px;line-height:1.6;color:var(--text-secondary);margin:0"
+                                data-i18n="settings.autoFillMetadataDesc">
+                                Automatically import mod information (version, author, tags...) if a metadata file is found when adding or importing a mod.
+                            </p>
+                        </div>
+
+                        <div
+                            style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                            <div style="flex:1">
+                                <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                    data-i18n="settings.autoFillMetadataToggle">Import automatically</div>
+                                <div style="font-size:10px;color:var(--text-muted)"
+                                    data-i18n="settings.autoFillMetadataToggleDesc">Don't ask anymore if file exists</div>
+                            </div>
+                            <label class="bmm-switch">
+                                <input type="checkbox" id="chk-auto-fill-metadata">
+                                <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                            </label>
+                        </div>
+                    </div>
 
                     <div class="glass-card">
                         <h3 class="card-title" data-i18n="settings.tagsTitle">Gestion des tags personnalisés</h3>
@@ -2925,7 +3046,7 @@
     <div class="modal-overlay" id="modal-license">
         <div class="modal glass" style="max-width: 600px; width: 90%;">
             <div class="modal-header">
-                <h2 class="modal-title">Apache License 2.0</h2>
+                <h2 class="modal-title">GNU General Public License v3.0</h2>
                 <button class="modal-close" data-close="modal-license">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                         stroke-width="2.5">
@@ -3177,6 +3298,11 @@
         </div>
     </div>
 
+    <!-- Metadata Found Modal -->
+
+
+
+
     <!-- Toast notifications -->
     <div class="toast-container" id="toast-container"></div>
 
@@ -3197,7 +3323,7 @@
                 <div id="integrity-report-content"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-primary" data-close="modal-integrity">Fermer</button>
+                <button class="btn btn-primary" data-close="modal-integrity" data-i18n="common.close">Fermer</button>
             </div>
         </div>
     </div>
@@ -3247,8 +3373,8 @@
                 </label>
             </div>
             <div class="modal-footer" style="padding: 12px 20px;">
-                <button class="btn btn-ghost" data-close="modal-conflict-warning"
-                    data-i18n="prof.cancel">Annuler</button>
+                <button class="btn btn-ghost modal-close" data-close="modal-conflict-warning"
+                    data-i18n="common.close">Fermer</button>
                 <button class="btn btn-primary" id="btn-confirm-conflict-toggle"
                     style="background:var(--warning); border-color:var(--warning); color:#000">
                     <span data-i18n="lib.confirm">Continuer l'activation</span>
@@ -3734,8 +3860,114 @@
 
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
-    <script src="js/interactive-docs.js" type="module"></script>
+    <!-- Modal: Conflict Warning with Tree -->
+    <div class="modal-overlay" id="modal-conflict-tree">
+        <div class="modal glass" style="max-width: 600px; width: 90%;">
+            <div class="modal-header">
+                <h3 class="modal-title" style="color:var(--danger);display:flex;align-items:center;gap:10px">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <span data-i18n="conflict.criticalWarningTitle">Alerte de Conflit Critique</span>
+                </h3>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom:16px; font-size:14px; color:var(--text-secondary); line-height:1.5" data-i18n="conflict.warningDesc">
+                    L'activation de ce mod va écraser les fichiers des mods suivants.
+                </p>
+                <div id="conflict-tree-container" style="background:rgba(0,0,0,0.3); border-radius:10px; border:1px solid var(--border); padding:12px; max-height:300px; overflow-y:auto; font-family:var(--font-mono); font-size:12px;">
+                    <!-- Tree content injected by JS -->
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 24px; display: flex; justify-content: flex-end; gap: 12px;">
+                <button class="btn btn-ghost modal-close" style="min-width: 100px;" data-i18n="common.close">Fermer</button>
+                <button class="btn btn-danger" id="btn-confirm-conflict-tree" style="min-width: 160px;">Activer quand même</button>
+            </div>
+        </div>
+    </div>
 
+    <!-- Modal: Activation Warning (Conflicts) -->
+    <div class="modal-overlay" id="modal-activation-warning">
+        <div class="modal glass" style="max-width: 520px; width: 90%;">
+            <div class="modal-header">
+                <h3 class="modal-title" style="display:flex;align-items:center;gap:10px;color:var(--danger)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <span data-i18n="conflict.warningTitle">Alerte de Conflit</span>
+                </h3>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <p data-i18n="conflict.warningDesc" style="margin-bottom: 16px; line-height: 1.6; color: var(--text-muted);">L'activation de ce mod va écraser les fichiers des mods suivants.</p>
+                <div id="activation-warning-list" style="max-height: 220px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px; border: 1px solid var(--border); display:flex;flex-direction:column;gap:6px;"></div>
+                <!-- Activation order -->
+                <div id="activation-order-panel" style="margin-top:16px;display:none">
+                    <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px" data-i18n="conflict.activationOrderTitle">Ordre d'Activation des Conflits Actifs</div>
+                    <div id="activation-order-list" style="display:flex;flex-direction:column;gap:4px"></div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 24px; display: flex; justify-content: flex-end; gap: 12px;">
+                <button class="btn btn-ghost modal-close" id="btn-cancel-activation-warning" data-i18n="common.close">Fermer</button>
+                <button class="btn btn-danger" id="btn-confirm-activation-anyway" data-i18n="conflict.activateAnyway">Activer quand même</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Global Conflict View -->
+    <div class="modal-overlay" id="modal-global-conflicts">
+        <div class="modal glass" style="max-width: 820px; width: 95%; max-height: 90vh;">
+            <div class="modal-header">
+                <h3 class="modal-title" style="display:flex;align-items:center;gap:10px">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <span data-i18n="conflict.globalTitle">Vue Globale des Conflits</span>
+                </h3>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <input type="text" id="global-conflict-search" class="input-field" data-i18n-placeholder="conflict.searchPlaceholder" placeholder="Rechercher un mod..." style="width:180px; font-size:12px;">
+                    <select id="global-conflict-profile-filter" class="input-field" style="width:140px; font-size:12px;">
+                        <option value="all" data-i18n="conflict.allProfiles">Tous les profils</option>
+                    </select>
+                    <select id="global-conflict-type-filter" class="input-field" style="width:110px; font-size:12px;">
+                        <option value="all" data-i18n="conflict.allTypes">Tous types</option>
+                        <option value="intra" data-i18n="conflict.intraProfile">Intra-Profil</option>
+                        <option value="inter" data-i18n="conflict.interProfile">Inter-Profil</option>
+                    </select>
+                    <select id="global-conflict-sort-order" class="input-field" style="width:130px; font-size:12px;">
+                        <option value="asc" data-i18n="conflict.sortOldest">Plus vieux (#0...)</option>
+                        <option value="desc" data-i18n="conflict.sortNewest">Plus récent (#9...)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-body" id="global-conflicts-list" style="display:flex; flex-direction:column; gap:10px; overflow-y:auto; padding:20px 24px;"></div>
+            <div class="modal-footer" style="padding: 16px 24px; display: flex; justify-content: flex-end;">
+                <button class="btn btn-secondary modal-close" id="btn-close-global-conflicts" style="min-width: 120px; padding: 10px 24px;" data-i18n="common.close">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Conflict File Tree -->
+    <div class="modal-overlay" id="modal-conflict-tree">
+        <div class="modal glass" style="max-width: 600px; width: 90%; max-height: 80vh;">
+            <div class="modal-header">
+                <h3 class="modal-title" style="display:flex;align-items:center;gap:10px">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    <span data-i18n="conflict.treeTitle">Fichiers en Conflit</span>
+                </h3>
+            </div>
+            <div class="modal-body" style="padding:20px 24px;overflow-y:auto;">
+                <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px" data-i18n="conflict.treeDesc">Ces fichiers se trouvent dans les deux mods et créent un conflit direct.</p>
+                <div id="conflict-tree-container" style="max-height:400px;overflow-y:auto;background:rgba(0,0,0,0.2);border-radius:8px;padding:12px;border:1px solid var(--border);font-family:var(--font-mono);font-size:11px;color:var(--text-muted);"></div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 24px; display: flex; justify-content: flex-end;">
+                <button class="btn btn-secondary modal-close" id="btn-close-conflict-tree" data-i18n="common.close">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Context Menu for Conflicts -->
+    <div id="conflict-context-menu" class="custom-context-menu">
+        <div class="menu-item" id="ctx-open-explorer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span data-i18n="conflict.openExplorer">Voir les fichiers en conflit</span>
+        </div>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
 </body>
 
 </html>

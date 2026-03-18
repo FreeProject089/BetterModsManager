@@ -45,13 +45,27 @@ function initNavigation() {
 
             navItems.forEach(n => n.classList.remove('active'));
             item.classList.add('active');
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.getElementById('view-' + viewId)?.classList.add('active');
 
-            // Auto-sync when entering library
-            if (viewId === 'library') {
-                window._refreshModsFn?.(true);
-            }
+            // Yield to main thread so the nav button highlights instantly
+            setTimeout(() => {
+                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                document.getElementById('view-' + viewId)?.classList.add('active');
+
+                // Auto-sync when entering library
+                if (viewId === 'library') {
+                    window._refreshModsFn?.(true);
+                }
+
+                // Credits video background control
+                const creditsVideo = document.getElementById('credits-bg-video');
+                if (creditsVideo) {
+                    if (viewId === 'credits') {
+                        creditsVideo.play().catch(() => {});
+                    } else {
+                        creditsVideo.pause();
+                    }
+                }
+            }, 15);
         });
     });
 
@@ -61,6 +75,19 @@ function initNavigation() {
         const detailOpen = !!document.getElementById('mod-detail-panel');
         if (libView && libView.classList.contains('active') && !detailOpen) {
             window._refreshModsFn?.(true);
+        }
+    });
+
+    // Credits video visibility control
+    document.addEventListener('visibilitychange', () => {
+        const creditsVideo = document.getElementById('credits-bg-video');
+        const creditsView = document.getElementById('view-credits');
+        if (creditsVideo && creditsView && creditsView.classList.contains('active')) {
+            if (document.hidden) {
+                creditsVideo.pause();
+            } else {
+                creditsVideo.play().catch(() => {});
+            }
         }
     });
 }
@@ -73,6 +100,15 @@ function initModals() {
             invoke('log_frontend_line', { line: `Modal closed: ${id}` });
             document.getElementById(id)?.classList.remove('open');
         });
+    });
+
+    // Support for .modal-close class anywhere inside a modal
+    document.addEventListener('click', e => {
+        const btn = e.target.closest('.modal-close');
+        if (btn) {
+            const modal = btn.closest('.modal-overlay');
+            if (modal) modal.classList.remove('open');
+        }
     });
 
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
@@ -1371,7 +1407,7 @@ async function main() {
                 console.warn("[BMM] Failed to fetch PTB mode:", err);
             }
 
-            const suffix = isPtb ? "-PTB" : "";
+            const suffix = isPtb ? "-FAB" : "";
             const versionStr = `v${version}${suffix}`;
 
             let buildDate = "Unknown";
@@ -1424,6 +1460,7 @@ async function main() {
     initModlist();
     initRepo();
     initInteractiveDocs();
+    await initAutoFillMetadata();
 
     // Bind Docs Diagram buttons
     document.getElementById('btn-docs-resumable')?.addEventListener('click', () => openDiagram('resumable-downloads'));
@@ -2004,6 +2041,11 @@ async function main() {
     // PTB Mode check
     checkPtbMode();
 
+    // Onboarding check
+    if (await shouldShowOnboarding()) {
+        startOnboarding();
+    }
+
     const restartBtn = document.getElementById('btn-restart-onboarding');
     if (restartBtn) {
         restartBtn.addEventListener('click', () => {
@@ -2559,6 +2601,29 @@ function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
     };
     modal.querySelector('#close-ptb-modal').addEventListener('click', close);
     modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+}
+
+// ── Mod Metadata Auto-fill ──────────────────────────────
+async function initAutoFillMetadata() {
+    const chk = document.getElementById('chk-auto-fill-metadata');
+    if (!chk) return;
+
+    try {
+        const { getSettings, updateSettings } = await import('./api.js');
+        const settings = await getSettings();
+        chk.checked = settings.auto_fill_metadata || false;
+
+        chk.addEventListener('change', async () => {
+            const s = await getSettings();
+            s.auto_fill_metadata = chk.checked;
+            await updateSettings(s);
+            const msg = chk.checked ? "Auto-remplissage activé" : "Auto-remplissage désactivé";
+            // Use translation if possible, else fallback
+            toast(msg, 'info');
+        });
+    } catch (e) {
+        console.error("[BMM] Failed to init auto-fill metadata setting:", e);
+    }
 }
 
 // ── Licenses ──────────────────────────────────────────────

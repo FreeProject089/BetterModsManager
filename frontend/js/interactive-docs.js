@@ -17,6 +17,8 @@ import { bestPractices } from './diagrams/best-practices.js';
 import { crashReporting } from './diagrams/crash-reporting.js';
 import { cacheManagement } from './diagrams/cache-management.js';
 import { dedicatedHosting } from './diagrams/dedicated-hosting.js';
+import { modArchitecture } from './diagrams/mod-architecture.js';
+import { diskIoLimiter } from './diagrams/disk-io-limiter.js';
 
 // Diagram Registry
 const diagrams = {
@@ -37,7 +39,9 @@ const diagrams = {
     'best-practices': bestPractices,
     'crash-reporting': crashReporting,
     'cache-management': cacheManagement,
-    'dedicated-hosting': dedicatedHosting
+    'dedicated-hosting': dedicatedHosting,
+    'mod-architecture': modArchitecture,
+    'disk-io-limiter': diskIoLimiter
 };
 
 // State
@@ -251,11 +255,11 @@ function closeDiagram() {
     const modal = document.getElementById('modal-docs-diagram');
     modal.classList.remove('active');
     
-    // Hide Global Tasky
+    // Hide Global Tasky (faster)
     const taskyContainer = document.getElementById('tasky-bubble-docs');
     if (taskyContainer) {
         taskyContainer.style.opacity = '0';
-        setTimeout(() => taskyContainer.style.display = 'none', 400);
+        setTimeout(() => taskyContainer.style.display = 'none', 200);
     }
 
     if (panZoomInstance) {
@@ -263,10 +267,12 @@ function closeDiagram() {
         panZoomInstance = null;
     }
 
+    // Hide overlay after animation
     setTimeout(() => {
         modal.style.display = 'none';
         document.getElementById('mermaid-diagram-container').innerHTML = '';
-    }, 400);
+        currentDiagramID = null;
+    }, 250);
 }
 
 /**
