@@ -203,7 +203,7 @@
     "docs.diagram.arch.node.FS": "File Manager",
     "docs.diagram.arch.node.FS.desc": "Smart Copy engine optimizing file transfers and binary delta management.",
     "docs.diagram.arch.node.JS": "UI Layer (JS)",
-    "docs.diagram.arch.node.JS.desc": "Modern responsive interface built with vanilla JS and optimized CSS.",
+    "docs.diagram.arch.node.JS.desc": "Modern responsive interface built with vanilla JS and optimized CSS. 💀  , Promise, I will do it again in React or something else",
     "docs.diagram.arch.node.JS_DEPS": "NPM Packages (Tauri API)",
     "docs.diagram.arch.node.JS_DEPS.desc": "Framework-less frontend using Vanilla JS, native CSS, and Tauri API to safely bridge with Rust.",
     "docs.diagram.arch.node.MODS_DIR": "Active Mods",

@@ -211,9 +211,13 @@ function fixClusterLabels() {
         // Get rect bounds in local coordinate system
         const rectBox = rect.getBBox();
         
+        // Extract group ID and store it on the cluster element for easier access later
+        const rawId = cluster.getAttribute('id') || "";
+        const groupID = rawId.replace('cluster-', '');
+        cluster.setAttribute('data-cluster-id', groupID);
+
         // Position the label at the top-left of its cluster
         // We shift it up by 12px to give breathing room to nodes inside
-        // while maintaining the "inside the box" feel.
         foreign.setAttribute('x', rectBox.x);
         foreign.setAttribute('y', rectBox.y - 12); 
         foreign.setAttribute('width', Math.max(rectBox.width, 250)); 
@@ -225,7 +229,7 @@ function fixClusterLabels() {
             innerDiv.style.width = '100%';
             innerDiv.style.height = '100%';
             innerDiv.style.display = 'flex';
-            innerDiv.style.flexDirection = 'column'; // Vertical stack if needed
+            innerDiv.style.flexDirection = 'column';
             innerDiv.style.alignItems = 'flex-start';
             innerDiv.style.justifyContent = 'flex-start';
             innerDiv.style.paddingLeft = '18px';
@@ -233,9 +237,10 @@ function fixClusterLabels() {
             innerDiv.style.boxSizing = 'border-box';
             innerDiv.style.textAlign = 'left';
             innerDiv.style.background = 'transparent';
-            innerDiv.style.pointerEvents = 'none'; 
-            innerDiv.querySelectorAll('*').forEach(el => el.style.pointerEvents = 'auto');
+            innerDiv.style.pointerEvents = 'none'; // Ensure label doesn't block cluster interaction
         }
+        foreign.style.pointerEvents = 'none';
+
 
         // Ensure the labelGroup itself doesn't have a conflicting transform
         labelGroup.removeAttribute('transform');
@@ -418,28 +423,25 @@ function attachNodeListeners(diagramID) {
     // 3. Clusters (Logical Cards)
     const clusters = container.querySelectorAll('.cluster');
     clusters.forEach(cluster => {
-        const labelDiv = cluster.querySelector('.group-label');
-        if (!labelDiv) return;
-        
-        // Extract from data attribute if present, fallback to ID regex or class
-        let groupID = labelDiv.getAttribute('data-cluster-id');
+        // ID Priority: data attribute (set in fixClusterLabels) > SVG ID
+        let groupID = cluster.getAttribute('data-cluster-id');
         
         if (!groupID) {
-             // Fallback: try to extract the original English ID from the SVG node's ID if possible, 
-             // but strongly prefer the data attribute approach.
-             const classMatch = cluster.getAttribute('class')?.match(/cluster-?([a-zA-Z0-9_]+)?/);
              const rawId = cluster.getAttribute('id') || "";
-             groupID = rawId.replace('cluster-', '') || (classMatch ? classMatch[1] : null);
+             groupID = rawId.replace('cluster-', '');
         }
 
         if (groupID) {
             cluster.addEventListener('mouseenter', () => {
-                showExplanation(`docs.diagram.cluster.${groupID}`, cluster.querySelector('i')?.className);
+                // Try to find an icon class from any nested element (optional enhancement)
+                const iconClass = cluster.querySelector('i')?.className;
+                showExplanation(`docs.diagram.cluster.${groupID}`, iconClass);
                 updateTaskyMascot('Tasky_Happy.png');
             });
             cluster.addEventListener('mouseleave', hideExplanation);
         }
     });
+
 
     function showExplanation(key, iconClass) {
         // Fallback: Check if a dedicated .desc key exists for longer tooltips

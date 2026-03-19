@@ -202,7 +202,7 @@
     "docs.diagram.arch.node.FS": "Gestionnaire Fichiers",
     "docs.diagram.arch.node.FS.desc": "Module Rust spécialisé dans le Smart Copy, capable de manipuler des milliers de fichiers avec un impact minimal sur le disque.",
     "docs.diagram.arch.node.JS": "Interface JS / HTML",
-    "docs.diagram.arch.node.JS.desc": "Frontend moderne communiquant avec le Backend via des appels IPC (Inter-Process Communication).",
+    "docs.diagram.arch.node.JS.desc": "Interface réactive moderne construite avec vanilla JS et CSS optimisé. 💀 , Promis, je le referai dans React ou autre",
     "docs.diagram.arch.node.JS_DEPS": "Packages NPM (Tauri API)",
     "docs.diagram.arch.node.JS_DEPS.desc": "Frontend sans framework utilisant Vanilla JS, CSS natif, et Tauri API pour faire le pont en toute sécurité avec Rust.",
     "docs.diagram.arch.node.MODS_DIR": "Dossier Mods du Jeu",
@@ -1376,7 +1376,6 @@
     "__SECTION_SETTINGS__": "--- PARAMÈTRES ---",
     "settings.about": "À propos",
     "settings.aboutDesc": "Gestionnaire de mods universel moderne. Conçu pour tous les jeux.",
-
     "settings.autoUpdateDesc": "Lorsque activé, BMM vérifie automatiquement les nouvelles versions à chaque lancement de l'application. Vous serez averti si une mise à jour est disponible.",
     "settings.autoUpdateDisabled": "Vérification automatique désactivée.",
     "settings.autoUpdateEnabled": "Vérification automatique activée.",

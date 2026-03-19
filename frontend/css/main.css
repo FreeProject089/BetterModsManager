@@ -4964,6 +4964,7 @@ select:focus {
     background: transparent;
     width: fit-content;
     white-space: nowrap;
+    pointer-events: none;
 }
 
 /* Visual Utilites (Customizability) */
@@ -4986,6 +4987,7 @@ select:focus {
     align-items: center;
     gap: 10px;
     padding: 4px;
+    pointer-events: none;
 }
 
 /* Simple CSS Icons using masking */
@@ -5149,10 +5151,15 @@ select:focus {
     color: var(--text-primary) !important;
     font-family: var(--font-sans) !important;
     font-weight: 500 !important;
+    pointer-events: none;
 }
 
 .mermaid [id^="mermaid-svg"] .markerPath {
     transition: fill 0.4s ease;
+}
+
+.mermaid foreignObject {
+    pointer-events: none !important;
 }
 
 /* --- PREMIUM BACKGROUND LABELS FOR EDGES --- */
@@ -5177,6 +5184,7 @@ select:focus {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.1);
     transition: all 0.3s ease;
+    pointer-events: none;
 }
 
 /* Base style for SVG text fallback (if spans aren't used) */
