@@ -1,0 +1,160 @@
+$port = PORT_PLACEHOLDER
+$useCloudflare = USE_CLOUDFLARE_PLACEHOLDER
+$useUPnP = USE_UPNP_PLACEHOLDER
+$url = "http://*:$port/"
+$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+Set-Location $PSScriptRoot
+
+$listener = New-Object System.Net.HttpListener
+$listener.Prefixes.Add($url)
+
+try {
+    # Check for Admin rights and warn early
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Write-Host "  [!] {{ADMIN_WARN}}" -ForegroundColor Yellow
+        Write-Host "  {{NETWORK_WARN}}" -ForegroundColor Yellow
+    } else {
+        # Try to add Firewall rule automatically if Admin
+        if (-not (Get-NetFirewallRule -DisplayName "BMM Mini-Server" -ErrorAction SilentlyContinue)) {
+            New-NetFirewallRule -DisplayName "BMM Mini-Server" -Direction Inbound -LocalPort $port -Protocol TCP -Action Allow -ErrorAction SilentlyContinue
+        }
+
+        if ($useUPnP) {
+            Write-Host "  [UPNP] {{UPNP_STARTING}}" -ForegroundColor Cyan
+            try {
+                $upnp = New-Object -ComObject HNetCfg.NATUPnP
+                $mappings = $upnp.StaticPortMappingCollection
+                if ($mappings) {
+                    # Get local IP
+                    $localIpForUPnP = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias 'Wi-Fi*', 'Ethernet*' | Select-Object -First 1).IPAddress
+                    $mappings.Add($port, "TCP", $port, $localIpForUPnP, $true, "BMM Mini-Server")
+                    Write-Host "  [UPNP] {{UPNP_SUCCESS}}" -ForegroundColor Green
+                }
+            } catch {
+                Write-Host "  [UPNP] {{UPNP_ERROR}}" -ForegroundColor Yellow
+            }
+        }
+    }
+
+    # Check if port is already in use
+    $tcpProperties = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties()
+    $connections = $tcpProperties.GetActiveTcpListeners()
+    foreach ($conn in $connections) {
+        if ($conn.Port -eq $port) {
+            Write-Host "  [FATAL] PORT $port IS ALREADY IN USE!" -ForegroundColor Red
+            Write-Host "  Please close the other application or choose another port." -ForegroundColor Yellow
+            Read-Host "Press Enter to exit"
+            exit
+        }
+    }
+
+    $listener.Start()
+    
+    # Get local IP address for better accessibility
+    $localIp = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias 'Wi-Fi*', 'Ethernet*' | Select-Object -First 1).IPAddress
+    if (-not $localIp) { $localIp = "127.0.0.1" }
+
+    # Get Public IP (Optional, best effort)
+    $internetIp = $null
+    try {
+        $internetIp = (Invoke-WebRequest -Uri "http://api.ipify.org" -TimeoutSec 2 -ErrorAction SilentlyContinue).Content
+    } catch { }
+
+    $publicUrl = $null
+    if ($useCloudflare) {
+        $cfPath = "CLOUDFLARE_BINARY_PLACEHOLDER"
+        if ($cfPath -eq "AUTO") {
+            $cfPath = Join-Path $PSScriptRoot "cloudflared.exe"
+            if (-not (Test-Path $cfPath)) {
+                Write-Host "  [Tunnel] Downloading cloudflared..." -ForegroundColor Cyan
+                Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile $cfPath
+            }
+        }
+        Write-Host "  [Tunnel] {{CF_STARTING}}" -ForegroundColor Cyan
+        $process = Start-Process -FilePath $cfPath -ArgumentList "tunnel", "--url", "http://localhost:$port" -NoNewWindow -PassThru -RedirectStandardError "cf_error.log"
+        # Wait a bit for the URL
+        for ($i=0; $i -lt 15; $i++) {
+            if (Test-Path "cf_error.log") {
+                $log = Get-Content "cf_error.log"
+                $match = $log | Select-String -Pattern "https://[a-z0-9-]+\.trycloudflare\.com"
+                if ($match) {
+                    $publicUrl = $match.Matches.Value
+                    break
+                }
+            }
+            Start-Sleep -Seconds 1
+        }
+    }
+
+    Write-Host ""
+    Write-Host "  ===============================================" -ForegroundColor Cyan
+    Write-Host "  [{{TITLE}}]" -ForegroundColor Green
+    Write-Host "  ===============================================" -ForegroundColor Cyan
+    Write-Host "  {{FOLDER}}: $PSScriptRoot"
+    Write-Host "  {{IP_LABEL}}: http://${localIp}:$port/" -ForegroundColor Green
+    if ($internetIp) {
+        Write-Host "  {{PUBLIC_IP_LABEL}}: http://${internetIp}:$port/ (Direct)" -ForegroundColor Yellow
+    }
+    if ($publicUrl) {
+        Write-Host "  {{PUBLIC_LABEL}}: $publicUrl" -ForegroundColor Magenta
+    }
+    Write-Host "  {{STOP}}"
+    Write-Host ""
+
+    while ($listener.IsListening) {
+        # Use a non-blocking way to check for requests to allow Ctrl+C to propagate
+        $asyncResult = $listener.BeginGetContext($null, $null)
+        if (-not $asyncResult.AsyncWaitHandle.WaitOne(1000)) {
+            continue
+        }
+
+        $context = $listener.EndGetContext($asyncResult)
+        $request = $context.Request
+        $response = $context.Response
+        
+        $path = $request.Url.LocalPath
+        if ($path -eq "/" -or $path -eq "") { $path = "/repo.json" }
+        
+        $localPath = Join-Path $PSScriptRoot $path
+        
+        if (Test-Path $localPath -PathType Leaf) {
+            $bytes = [System.IO.File]::ReadAllBytes($localPath)
+            
+            # Basic Content-Type detection
+            if ($path.EndsWith(".json")) { $response.ContentType = "application/json" }
+            elseif ($path.EndsWith(".zip")) { $response.ContentType = "application/zip" }
+            
+            $response.ContentLength64 = $bytes.Length
+            $response.OutputStream.Write($bytes, 0, $bytes.Length)
+        } else {
+            $response.StatusCode = 404
+            Write-Host "  [!] 404 Not Found: $path" -ForegroundColor Red
+        }
+        $response.Close()
+    }
+} catch {
+    $msg = $_.Exception.Message
+    if ($msg -match "denied" -or $msg -match "refus") {
+        Write-Host "  [FATAL] {{FATAL_ACCESS}}" -ForegroundColor Red
+        Write-Host "  {{ADMIN_REQUIRED}}" -ForegroundColor Yellow
+        Write-Host "  -> {{RUN_AS_ADMIN}}" -ForegroundColor Cyan
+    } else {
+        # Silent exit on pipeline stop (Ctrl+C)
+        if ($_.Exception -is [System.Management.Automation.PipelineStoppedException]) {
+            return
+        }
+        Write-Host "  [ERROR] Failed to start server: $msg" -ForegroundColor Red
+    }
+} finally {
+    Write-Host "  [System] Stopping..." -ForegroundColor Gray
+    if ($process) { 
+        Write-Host "  [Tunnel] Stopping tunnel..." -ForegroundColor Gray
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue 
+    }
+    if ($listener) {
+        $listener.Stop()
+        $listener.Close()
+    }
+}

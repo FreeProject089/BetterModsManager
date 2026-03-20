@@ -81,7 +81,8 @@
                 "fullscreen": false,
                 "decorations": false,
                 "transparent": false,
-                "center": true
+                "center": true,
+                "url": "index.html"
             }
         ]
     }

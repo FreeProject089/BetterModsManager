@@ -1145,8 +1145,7 @@
     "mod.inactive": "INACTIVE",
     "mod.listName": "List Name",
     "mod.metadataFillBtn": "Fill fields",
-    "mod.metadataFoundDesc": "A configuration file was found for this mod. Do you want to auto-fill the fields (Name, Version, Author, Description)?",
-    "mod.metadataFoundTitle": "Metadata Detected",
+
     "mod.namePlaceholder": "My super mod...",
     "mod.removeOnly": "Remove from list only",
     "mod.removeOnlyDesc": "Keep files on hard drive.",
@@ -1380,10 +1379,7 @@
     "__SECTION_SETTINGS__": "--- SETTINGS ---",
     "settings.about": "About",
     "settings.aboutDesc": "Universal modern mod manager. Built for all games.",
-    "settings.autoFillMetadataDesc": "Automatically import mod information (version, author, tags...) if a metadata file is found when adding or importing a mod.",
-    "settings.autoFillMetadataTitle": "Auto-fill Mod Info",
-    "settings.autoFillMetadataToggle": "Import automatically",
-    "settings.autoFillMetadataToggleDesc": "Don't ask anymore if file exists",
+
     "settings.autoUpdateDesc": "When enabled, BMM will automatically check for new versions each time the app starts. You will be notified if a new version is available.",
     "settings.autoUpdateDisabled": "Automatic update check disabled.",
     "settings.autoUpdateEnabled": "Automatic update check enabled.",

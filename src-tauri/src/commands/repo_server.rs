@@ -8,6 +8,7 @@ use tokio::process::{Command, Child};
 use std::process::Stdio;
 use tokio::io::{BufReader, AsyncBufReadExt};
 use regex::Regex;
+use tauri::Manager;
 
 pub struct RepoServerState {
     pub shutdown_tx: Mutex<Option<oneshot::Sender<()>>>,
@@ -36,6 +37,22 @@ impl Default for RepoServerState {
 }
 
 async fn get_cloudflared_path(handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    // 1. Check user settings first
+    let state = handle.state::<crate::state::AppState>();
+    let settings = {
+        let data = state.data.lock().unwrap();
+        data.settings.clone()
+    };
+
+    if let Some(ref path_str) = settings.cloudflared_path {
+        let path = PathBuf::from(path_str);
+        if path.exists() && path.is_file() {
+            return Ok(path);
+        }
+        println!("[Tunnel] User specified cloudflared path does not exist: {}", path_str);
+    }
+
+    // 2. Default auto-download path
     let app_dir = handle.path_resolver().app_data_dir().ok_or("Impossible de trouver le dossier AppData")?;
     let bin_dir = app_dir.join("bin");
     if !bin_dir.exists() {
@@ -102,6 +119,11 @@ pub async fn start_repo_server(
 
     // 5. Port and Address
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
+
+    // Check if port is already in use
+    if let Err(e) = std::net::TcpListener::bind(addr) {
+        return Err(format!("Le port {} est déjà utilisé par une autre application : {}", port, e));
+    }
     
     // 6. UPnP Port Forwarding
     let mut upnp_success = false;

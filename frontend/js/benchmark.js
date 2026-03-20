@@ -168,7 +168,7 @@ function resetBenchmarkSession() {
     benchmarkStartTime = isBenchmarkActive ? Date.now() : null;
     playbackIndex = -1;
     updateBenchmarkUI();
-    toast("Session reset", "info");
+    toast(t('benchmark.sessionReset'), "info");
 }
 
 async function importBenchmark() {
@@ -205,13 +205,13 @@ async function importBenchmark() {
                 fullBenchmarkHistory = data;
                 isBenchmarkActive = false; // It's a static view
                 updateBenchmarkUI();
-                toast(`Imported ${data.length} data points`, "success");
+                toast(t('benchmark.importSuccess').replace('{count}', data.length), "success");
             } else {
-                toast("Invalid BMM Benchmark CSV", "error");
+                toast(t('benchmark.importInvalid'), "error");
             }
         }
     } catch (e) {
-        toast("Import failed: " + e, "error");
+        toast(t('common.error') + " : " + e, "error");
     }
 }
 
@@ -256,9 +256,9 @@ async function startBenchmark() {
             </svg>
             <span id="label-toggle-bench" data-i18n="benchmark.stop">${t('benchmark.stop') || 'Stop Tracking'}</span>
         `;
-        toast("Benchmark started", "info");
+        toast(t('benchmark.started'), "info");
     } catch (e) {
-        toast("Failed to start benchmark: " + e, "error");
+        toast(t('common.error') + " : " + e, "error");
     }
 }
 
@@ -282,7 +282,7 @@ async function stopBenchmark() {
         <span id="label-toggle-bench" data-i18n="benchmark.startTracking">${t('benchmark.startTracking') || 'Start Tracking'}</span>
     `;
 
-    toast("Tracking stopped", "success");
+    toast(t('benchmark.stopped'), "success");
 
     // Sync PiP buttons
     if (fullBenchmarkHistory.length > 0) {
@@ -354,7 +354,7 @@ function renderEmptyMonitor() {
             <span>${t('benchmark.title')}</span>
         </div>
         <div class="pip-body" style="text-align:center; padding:20px 0; color:var(--text-muted); font-size:11px">
-            No data yet
+            ${t('benchmark.noData')}
         </div>
         <div class="pip-actions">
             <button class="pip-btn ${isBenchmarkActive ? 'stop' : 'start'}" onclick="window.dispatchBenchmarkAction('${isBenchmarkActive ? 'stop' : 'start'}')">${t(isBenchmarkActive ? 'benchmark.stop' : 'benchmark.start')}</button>
@@ -662,7 +662,7 @@ function renderChart(elementId, data, maxValue, color, unit, maxPoints, currentV
     }
 
     if (data.length < 2) {
-        container.innerHTML = `<div style="height:${height}px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px; opacity:0.5; letter-spacing:1px">WAITING FOR SENSORS...</div>`;
+        container.innerHTML = `<div style="height:${height}px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px; opacity:0.5; letter-spacing:1px">${t('benchmark.waitingSensors')}</div>`;
         return;
     }
 
@@ -760,9 +760,9 @@ async function exportBenchmark() {
 
             const { writeTextFile } = window.__TAURI__.fs;
             await writeTextFile(dest, csv);
-            toast("Report exported with metadata", "success");
+            toast(t('benchmark.exportSuccessStatus'), "success");
         }
     } catch (e) {
-        toast("Export failed: " + e, "error");
+        toast(t('common.error') + " : " + e, "error");
     }
 }

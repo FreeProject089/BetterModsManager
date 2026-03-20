@@ -34,6 +34,8 @@ pub struct AppSettings {
     pub last_session_clean: bool,
     #[serde(default)]
     pub auto_fill_metadata: bool,
+    #[serde(default)]
+    pub cloudflared_path: Option<String>,
 }
 
 fn default_true() -> bool { true }

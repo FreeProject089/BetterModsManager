@@ -19,6 +19,7 @@ import { cacheManagement } from './diagrams/cache-management.js';
 import { dedicatedHosting } from './diagrams/dedicated-hosting.js';
 import { modArchitecture } from './diagrams/mod-architecture.js';
 import { diskIoLimiter } from './diagrams/disk-io-limiter.js';
+import { hostingFlow } from './diagrams/hosting-flow.js';
 
 // Diagram Registry
 const diagrams = {
@@ -41,7 +42,8 @@ const diagrams = {
     'cache-management': cacheManagement,
     'dedicated-hosting': dedicatedHosting,
     'mod-architecture': modArchitecture,
-    'disk-io-limiter': diskIoLimiter
+    'disk-io-limiter': diskIoLimiter,
+    'hosting-flow': hostingFlow
 };
 
 // State

@@ -188,9 +188,9 @@ function renderOnboarding() {
           </div>
           <div class="onboarding-content">
             <div class="onboarding-header">
-              <span class="onboarding-label">TASKY</span>
+              <span class="onboarding-label">${t('onboarding.tasky')}</span>
             </div>
-            <h3 class="onboarding-title" data-i18n="onboarding.lang_title">🌐 Select Language</h3>
+            <h3 class="onboarding-title" data-i18n="onboarding.lang_title">${t('onboarding.lang_title')}</h3>
             <p class="onboarding-text" style="opacity:1" data-i18n="onboarding.lang_desc">Choisissez votre langue / Choose your language</p>
             
             <div class="onboarding-actions" style="position:relative; flex-direction:column; gap:8px; margin-top:16px; height:auto">
@@ -210,7 +210,7 @@ function renderOnboarding() {
                 `).join('')}
               </div>
 
-              <button class="btn btn-primary" id="btn-lang-confirm" style="width:100%; margin-top:12px; justify-content:center">OK</button>
+              <button class="btn btn-primary" id="btn-lang-confirm" style="width:100%; margin-top:12px; justify-content:center">${t('common.ok')}</button>
             </div>
           </div>
         </div>
@@ -266,12 +266,12 @@ function renderOnboarding() {
       </div>
       <div class="onboarding-content" style="position:relative">
         <div class="onboarding-header">
-          <span class="onboarding-label">TASKY</span>
+          <span class="onboarding-label">${t('onboarding.tasky')}</span>
           <div class="onboarding-dots">
             ${Array.from({ length: totalSteps }, (_, i) => `<span class="onboarding-dot ${i === currentStep ? 'active' : ''}"></span>`).join('')}
           </div>
         </div>
-        <p class="onboarding-step-counter">STEP ${currentStep + 1} / ${totalSteps}</p>
+        <p class="onboarding-step-counter">${t('onboarding.stepCounter').replace('{current}', currentStep + 1).replace('{total}', totalSteps)}</p>
         <h3 class="onboarding-title" style="display:flex;align-items:center;gap:10px">
             ${step.icon ? step.icon : ''}
             <span>${step.title}</span>

@@ -241,6 +241,7 @@ fn main() {
             commands::disk::check_disk_space,
             // Server Repo
             commands::repo::export_server_repo,
+            commands::repo::generate_standalone_server,
             commands::repo::fetch_repo_info,
             commands::repo::sync_server_repo,
             commands::repo::cancel_repo_sync,
@@ -256,6 +257,9 @@ fn main() {
             commands::security::get_creator_id,
             commands::security::verify_repo_signature,
             commands::crash::finalize_and_close_app,
+            commands::debug::get_project_files,
+            commands::debug::read_project_file,
+            commands::debug::get_debug_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

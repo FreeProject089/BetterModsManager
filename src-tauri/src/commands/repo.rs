@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{Read, Write, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use tauri::{State, Window};
+use tauri::{Window, State, Manager};
 use crate::models::repo::RepoTag;
 
 #[derive(serde::Serialize, Clone)]
@@ -89,33 +89,39 @@ pub async fn export_server_repo(
     state: State<'_, AppState>,
     profile_ids: Vec<String>,
     output_dir: String,
-    author_name: Option<String>,
+    author_name: String,
 ) -> Result<(), String> {
+    if author_name.trim().is_empty() {
+        return Err("repo.errAuthorRequired".to_string());
+    }
+
     let output_path = PathBuf::from(&output_dir);
     if !output_path.exists() {
-        fs::create_dir_all(&output_path).map_err(|e| e.to_string())?;
+        fs::create_dir_all(&output_path).map_err(|_| "repo.errCreateOutputDir".to_string())?;
+    } else if !output_path.is_dir() {
+        return Err("repo.errOutputDirNotDir".to_string());
     }
 
     let repo_mods_dir = output_path.join("mods");
     if !repo_mods_dir.exists() {
-        fs::create_dir_all(&repo_mods_dir).map_err(|e| e.to_string())?;
+        fs::create_dir_all(&repo_mods_dir).map_err(|_| "repo.errCreateModDir".to_string())?;
+    } else if !repo_mods_dir.is_dir() {
+        return Err("repo.errOutputDirNotDir".to_string());
     }
 
     let (mut repo, profiles_data, all_tags) = {
         let data = state.data.lock().unwrap();
         
         let first_profile = data.profiles.iter().find(|p| profile_ids.contains(&p.id))
-            .ok_or("Aucun profil valide sélectionné")?;
+            .ok_or("repo.errNoProfile")?;
 
         let mut repo = ServerRepo::new(
             format!("{} Repo", first_profile.name),
             first_profile.game_name.clone(),
         );
         
-        if let Some(name) = author_name {
-            if !name.trim().is_empty() {
-                repo.author = name;
-            }
+        if !author_name.trim().is_empty() {
+            repo.author = author_name.clone();
         }
 
         let mut profiles_data = Vec::new();
@@ -152,13 +158,15 @@ pub async fn export_server_repo(
         let total_mods = exported_mods.len();
         for (idx, mod_entry) in exported_mods.iter().enumerate() {
             let _ = window.emit("bmm://repo-export-progress", RepoProgress {
-                step: format!("[{}] Préparation: {} ({}/{})", profile.name, mod_entry.name, idx + 1, total_mods),
+                step: format!(r#"{{"key":"repo.stepPreparing","profile":"{}","mod":"{}","current":{},"total":{}}}"#, profile.name, mod_entry.name, idx + 1, total_mods),
                 progress: ((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32))) * 100.0,
                 current_file: String::new(),
             });
 
             let target_mod_dir = repo_mods_dir.join(&mod_entry.id);
-            fs::create_dir_all(&target_mod_dir).map_err(|e| e.to_string())?;
+            if !target_mod_dir.exists() {
+                fs::create_dir_all(&target_mod_dir).map_err(|_| "repo.errCreateModDir".to_string())?;
+            }
 
             // Resolve Tags
             let mut resolved_tags = Vec::new();
@@ -192,11 +200,13 @@ pub async fn export_server_repo(
                 let dst_path = target_mod_dir.join(rel_path);
                 
                 if let Some(parent) = dst_path.parent() {
-                    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                    if !parent.exists() {
+                        fs::create_dir_all(parent).map_err(|_| "repo.errCreateSubfolder".to_string())?;
+                    }
                 }
 
                 // Copy file
-                fs::copy(&src_path, &dst_path).map_err(|e| e.to_string())?;
+                fs::copy(&src_path, &dst_path).map_err(|_| "repo.errCopyFile".to_string())?;
 
                 // Compute Hash
                 let size = fs::metadata(&dst_path).map(|m| m.len()).unwrap_or(0);
@@ -211,7 +221,7 @@ pub async fn export_server_repo(
 
                 if f_idx % 10 == 0 || f_idx == total_files - 1 {
                     let _ = window.emit("bmm://repo-export-progress", RepoProgress {
-                        step: format!("[{}] Export: {} ({}/{})", profile.name, mod_entry.name, idx + 1, total_mods),
+                        step: format!(r#"{{"key":"repo.stepExporting","profile":"{}","mod":"{}","current":{},"total":{}}}"#, profile.name, mod_entry.name, idx + 1, total_mods),
                         progress: ((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods * total_profiles) as f32))) * 100.0,
                         current_file: rel_path.to_string_lossy().to_string(),
                     });
@@ -223,7 +233,7 @@ pub async fn export_server_repo(
     }
 
     let _ = window.emit("bmm://repo-export-progress", RepoProgress {
-        step: "Finalisation du manifest...".to_string(),
+        step: "repo.stepFinalizing".to_string(),
         progress: 99.0,
         current_file: "repo.json".to_string(),
     });
@@ -236,15 +246,124 @@ pub async fn export_server_repo(
     repo.signature = Some(signature);
 
     let final_json = serde_json::to_string_pretty(&repo).map_err(|e| e.to_string())?;
-    fs::write(output_path.join("repo.json"), final_json).map_err(|e| e.to_string())?;
+    let manifest_path = output_path.join("repo.json");
+    fs::write(&manifest_path, final_json).map_err(|_| "repo.errWriteManifest".to_string())?;
+
+    // Auto-generate mini server by default if it's a new export? 
+    // Actually better to have the dedicated button as requested.
 
     let _ = window.emit("bmm://repo-export-progress", RepoProgress {
-        step: "Terminé".to_string(),
+        step: "repo.stepFinished".to_string(),
         progress: 100.0,
         current_file: String::new(),
     });
 
     Ok(())
+}
+
+fn generate_mini_server_files(
+    handle: &tauri::AppHandle,
+    output_path: &Path,
+    port: u16,
+    auto_start: bool,
+    use_cloudflare: bool,
+    use_upnp: bool,
+    lang: &str,
+) -> Result<(), String> {
+    // Load translations for the script
+    let lang_dir = crate::fs_utils::get_lang_dir(&handle);
+    let lang_path = lang_dir.join(format!("{}.json", lang));
+    let lang_data: serde_json::Value = if lang_path.exists() {
+        let content = fs::read_to_string(&lang_path).unwrap_or_default();
+        serde_json::from_str(&content).unwrap_or(serde_json::Value::Object(serde_json::Map::new()))
+    } else {
+        serde_json::Value::Object(serde_json::Map::new())
+    };
+
+    let t_script = |key: &str, default: &str| -> String {
+        lang_data.get(key).and_then(|v| v.as_str()).unwrap_or(default).to_string()
+    };
+
+    let ps1_template = include_str!("../templates/mini-server/server.ps1.template");
+
+    // 1. Create PowerShell Server Script
+    let mut ps1_content = ps1_template.replace("PORT_PLACEHOLDER", &port.to_string());
+    ps1_content = ps1_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "$true" } else { "$false" });
+    ps1_content = ps1_content.replace("USE_UPNP_PLACEHOLDER", if use_upnp { "$true" } else { "$false" });
+    
+    // Inject custom cloudflared path if set
+    let state = handle.state::<crate::state::AppState>();
+    let cf_path = {
+        let data = state.data.lock().unwrap();
+        data.settings.cloudflared_path.clone().unwrap_or_else(|| "AUTO".to_string())
+    };
+    ps1_content = ps1_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path);
+    
+    // Inject Translations
+    ps1_content = ps1_content.replace("{{TITLE}}", &t_script("repo.miniServerScriptTitle", "BMM MINI-SERVER IS ONLINE"));
+    ps1_content = ps1_content.replace("{{FOLDER}}", &t_script("repo.miniServerScriptFolder", "Folder"));
+    ps1_content = ps1_content.replace("{{STOP}}", &t_script("repo.miniServerScriptStop", "Stop: Press Ctrl+C"));
+    ps1_content = ps1_content.replace("{{IP_LABEL}}", &t_script("repo.miniServerScriptIp", "Local IP URL"));
+    ps1_content = ps1_content.replace("{{PUBLIC_IP_LABEL}}", &t_script("repo.miniServerScriptPublicDirect", "Public IP (Direct)"));
+    ps1_content = ps1_content.replace("{{PUBLIC_LABEL}}", &t_script("repo.miniServerScriptPublic", "Public URL (Tunnel)"));
+    ps1_content = ps1_content.replace("{{ADMIN_WARN}}", &t_script("repo.miniServerScriptAdminWarn", "No Administrator rights detected."));
+    ps1_content = ps1_content.replace("{{NETWORK_WARN}}", &t_script("repo.miniServerScriptNetworkWarn", "Network accessibility might be limited."));
+    ps1_content = ps1_content.replace("{{FATAL_ACCESS}}", &t_script("repo.miniServerScriptFatalAccess", "Access Denied. Port might be in use or reserved."));
+    ps1_content = ps1_content.replace("{{ADMIN_REQUIRED}}", &t_script("repo.miniServerScriptAdminRequired", "Administrator privileges are required for this port."));
+    ps1_content = ps1_content.replace("{{RUN_AS_ADMIN}}", &t_script("repo.miniServerScriptRunAsAdmin", "Please run as Administrator."));
+    ps1_content = ps1_content.replace("{{CF_STARTING}}", &t_script("repo.miniServerScriptCloudflareStarting", "Starting Cloudflare Tunnel..."));
+    ps1_content = ps1_content.replace("{{UPNP_STARTING}}", &t_script("repo.miniServerScriptUPnPStarting", "Attempting UPnP port forwarding..."));
+    ps1_content = ps1_content.replace("{{UPNP_SUCCESS}}", &t_script("repo.miniServerScriptUPnPSuccess", "UPnP port mapping successful!"));
+    ps1_content = ps1_content.replace("{{UPNP_ERROR}}", &t_script("repo.miniServerScriptUPnPError", "UPnP mapping failed (Router may not support it)."));
+
+    // Add UTF-8 BOM for Windows PowerShell 5.1 compatibility
+    let mut ps1_bytes = vec![0xEF, 0xBB, 0xBF];
+    ps1_bytes.extend_from_slice(ps1_content.as_bytes());
+
+    let ps1_path = output_path.join("bmm-mini-server.ps1");
+    fs::write(&ps1_path, ps1_bytes).map_err(|_| "repo.errWriteScript".to_string())?;
+
+    // 2. Create Batch Launcher
+    let bat_content = include_str!("../templates/mini-server/launcher.bat.template");
+    let bat_path = output_path.join("Lancer-Serveur.bat");
+    fs::write(&bat_path, bat_content).map_err(|_| "repo.errWriteScript".to_string())?;
+
+    // 3. Auto-start (Registry Key)
+    if auto_start {
+        #[cfg(target_os = "windows")]
+        {
+            use winreg::enums::*;
+            use winreg::RegKey;
+            let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+            let run_result: std::io::Result<RegKey> = hkcu.open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_WRITE);
+            if let Ok(run) = run_result {
+                let val = bat_path.to_string_lossy().to_string();
+                let _ = run.set_value("BMM-Mini-Server", &val);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn generate_standalone_server(
+    handle: tauri::AppHandle,
+    repo_path: String,
+    port: u16,
+    auto_start: bool,
+    use_cloudflare: bool,
+    use_upnp: bool,
+    lang: String,
+) -> Result<(), String> {
+    let repo_json = PathBuf::from(&repo_path);
+    if !repo_json.exists() {
+        return Err("repo.miniServerErrNoRepo".to_string());
+    }
+
+    let output_path = repo_json.parent().ok_or_else(|| "repo.miniServerErrNoDir".to_string())?;
+
+    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang)
 }
 
 #[tauri::command]
@@ -253,10 +372,10 @@ pub async fn fetch_repo_info(url: String) -> Result<ServerRepo, String> {
     let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
     
     if !res.status().is_success() {
-        return Err(format!("HTTP Error: {}", res.status()));
+        return Err("repo.errInvalidRepo".to_string());
     }
 
-    let repo: ServerRepo = res.json().await.map_err(|e| format!("Invalid repo.json: {}", e))?;
+    let repo: ServerRepo = res.json().await.map_err(|_| "repo.errInvalidRepo".to_string())?;
     Ok(repo)
 }
 
@@ -304,7 +423,7 @@ pub async fn sync_server_repo(
 
     // 1. Fetch remote repo info
     let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
-        step: "Connexion au dépôt...".to_string(),
+        step: "repo.stepConnecting".to_string(),
         progress: 0.0,
         current_file: url.clone(),
     });
@@ -339,7 +458,7 @@ pub async fn sync_server_repo(
         }
 
         let repo_profile = repo.profiles.iter().find(|p| p.id == choice.repo_profile_id)
-            .ok_or(format!("Profil source {} non trouvé dans le dépôt", choice.repo_profile_id))?.clone();
+            .ok_or("repo.errProfileNotFound")?.clone();
 
         // Check if we already have a profile from this repo
         let existing_profile = if let Some(target_id) = &choice.target_local_profile_id {
@@ -357,7 +476,7 @@ pub async fn sync_server_repo(
         } else if let Some(p) = &existing_profile {
             p.game_path.clone()
         } else {
-            return Err("Dossier jeu requis pour un nouveau profil".to_string());
+            return Err("repo.errGameDirRequired".to_string());
         };
 
         let target_backup_path = if !backup_dir.is_empty() {
@@ -365,7 +484,7 @@ pub async fn sync_server_repo(
         } else if let Some(p) = &existing_profile {
             p.backup_path.clone()
         } else {
-            return Err("Dossier backup requis pour un nouveau profil".to_string());
+            return Err("repo.errBackupDirRequired".to_string());
         };
 
         let mods_path = if let Some(p) = &existing_profile {
@@ -373,7 +492,7 @@ pub async fn sync_server_repo(
         } else {
             let base_mods_path = PathBuf::from(&mods_dir);
             if mods_dir.is_empty() {
-                return Err("Dossier mods requis pour un nouveau profil".to_string());
+                return Err("repo.errModsDirRequired".to_string());
             }
             let safe_profile_name = repo_profile.name.replace(|c: char| !c.is_alphanumeric() && c != ' ', "_");
             let mut path = base_mods_path.join(format!("{}", safe_profile_name));
@@ -439,7 +558,7 @@ pub async fn sync_server_repo(
                     let local_size = fs::metadata(&local_path).map(|m| m.len()).unwrap_or(0);
                     if local_size == file.size {
                         let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
-                            step: format!("[{}] Vérification: {} ({}/{})", repo_profile.name, repo_mod.name, idx + 1, total_mods),
+                            step: format!(r#"{{"key":"repo.stepChecking","profile":"{}","mod":"{}","current":{},"total":{}}}"#, repo_profile.name, repo_mod.name, idx + 1, total_mods),
                             progress: ((c_idx as f32 / total_tasks as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_tasks as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods as f32 * total_files as f32 * total_tasks as f32)))) * 100.0,
                             current_file: file.relative_path.clone(),
                         });
@@ -459,7 +578,7 @@ pub async fn sync_server_repo(
 
                 if needs_download {
                     let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
-                        step: format!("[{}] Téléchargement: {} ({}/{})", repo_profile.name, repo_mod.name, idx + 1, total_mods),
+                        step: format!(r#"{{"key":"repo.stepDownloading","profile":"{}","mod":"{}","current":{},"total":{}}}"#, repo_profile.name, repo_mod.name, idx + 1, total_mods),
                         progress: ((c_idx as f32 / total_tasks as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_tasks as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods as f32 * total_files as f32 * total_tasks as f32)))) * 100.0,
                         current_file: file.relative_path.clone(),
                     });
@@ -487,7 +606,7 @@ pub async fn sync_server_repo(
                                 if !matches {
                                     println!("[Sync] Patching chunk {}/{} for {}", chunk_idx + 1, remote_chunks.len(), file.relative_path);
                                     let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
-                                        step: format!("[{}] Récupération part: {} (Bloc {}/{})", repo_profile.name, repo_mod.name, chunk_idx + 1, remote_chunks.len()),
+                                        step: format!(r#"{{"key":"repo.stepFetchingPart","profile":"{}","mod":"{}","current":{},"total":{}}}"#, repo_profile.name, repo_mod.name, chunk_idx + 1, remote_chunks.len()),
                                         progress: ((c_idx as f32 / total_tasks as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_tasks as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods as f32 * total_files as f32 * total_tasks as f32))) + ((chunk_idx as f32 / remote_chunks.len() as f32) * (1.0 / (total_mods as f32 * total_files as f32 * total_tasks as f32)))) * 100.0,
                                         current_file: file.relative_path.clone(),
                                     });
@@ -506,7 +625,7 @@ pub async fn sync_server_repo(
                                 current_offset += r_chunk.size as u64;
                             }
                             
-                            file_to_patch.set_len(file.size).map_err(|e| e.to_string())?;
+                            file_to_patch.set_len(file.size).map_err(|_| "repo.errWriteFile".to_string())?;
                             println!("[Sync] Successfully patched {} using chunks", file.relative_path);
                             partial_success = true;
                         } else {
@@ -528,7 +647,7 @@ pub async fn sync_server_repo(
 
                 let (downloaded_hash, _) = compute_file_hash_and_chunks(&local_path, false)?;
                 if downloaded_hash != file.sha256_hash {
-                    return Err(format!("Erreur d'intégrité après téléchargement: {}", file.relative_path));
+                    return Err("repo.errIntegrity".to_string());
                 }
 
                 local_valid_files.insert(file.relative_path.replace("\\", "/"));
@@ -640,7 +759,7 @@ pub async fn sync_server_repo(
     let _ = state.save();
 
     let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
-        step: "Synchronisation terminée avec succès".to_string(),
+        step: "repo.stepFinished".to_string(),
         progress: 100.0,
         current_file: String::new(),
     });

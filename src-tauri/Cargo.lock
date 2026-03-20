@@ -291,6 +291,7 @@ version = "0.9.8"
 dependencies = [
  "anyhow",
  "backtrace",
+ "base64 0.21.7",
  "chrono",
  "discord-rich-presence",
  "ed25519-dalek",
@@ -314,6 +315,7 @@ dependencies = [
  "uuid 1.21.0",
  "walkdir",
  "warp",
+ "winreg 0.52.0",
  "zip",
 ]
 

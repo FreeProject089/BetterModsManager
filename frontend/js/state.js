@@ -28,6 +28,7 @@ class StateManager {
      */
     set(key, value) {
         this.state[key] = value;
+        if (this.onChange) this.onChange(key, value);
         this.notify(key, value);
     }
 

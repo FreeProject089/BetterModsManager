@@ -3,6 +3,8 @@
  * Handles communication between frontend and Rust backend
  */
 
+import { debugHub } from './debug.js';
+
 let _invoke;
 let _dialog;
 let _notifModule;
@@ -14,6 +16,9 @@ const originalWarn = console.warn;
 const originalError = console.error;
 
 function bridgeLog(level, args) {
+    // Record in debugHub
+    debugHub.recordLog(level, args);
+
     const message = args.map(arg => 
         typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
     ).join(' ');
@@ -67,13 +72,17 @@ export async function loadTauri() {
 }
 
 export async function invoke(command, args = {}) {
-    console.log(`[BMM] Invoke: ${command}`, args);
-    // Log every tauri invoke for real-time tracking
-    // const start = Date.now();
+    const startTime = performance.now();
+    const call = debugHub.recordIPC(command, args, 'pending');
+
     try {
         const res = await _invoke(command, args);
+        const duration = Math.round(performance.now() - startTime);
+        debugHub.recordIPC(command, args, 'success', res, duration);
         return res;
     } catch (err) {
+        const duration = Math.round(performance.now() - startTime);
+        debugHub.recordIPC(command, args, 'error', err, duration);
         console.error(`[RPC ERROR] ${command}:`, err);
         throw err;
     }

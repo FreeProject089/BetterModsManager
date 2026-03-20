@@ -45,7 +45,7 @@ export async function initProfiles() {
                     toast(t('prof.importNone'), 'info');
                 }
             } catch (err) {
-                toast(t('common.error') + ' OvGME : ' + err, 'error');
+                toast(t('prof.importError', { type: 'OvGME', err }), 'error');
             } finally {
                 btnImportOvgme.innerHTML = originalText;
             }
@@ -65,7 +65,7 @@ export async function initProfiles() {
             try {
                 const count = await invoke('auto_import_omm');
                 if (count > 0) {
-                    toast(t('prof.importSuccess').replace('OvGME ', '').replace('{count}', count), 'success');
+                    toast(t('prof.importSuccess', { type: 'OMM', count }), 'success');
                     await renderProfiles();
                     updateProfileChip();
                     updateLibraryProfileSelector();
@@ -73,7 +73,7 @@ export async function initProfiles() {
                     toast(t('prof.importNone'), 'info');
                 }
             } catch (err) {
-                toast(t('common.error') + ' OMM Auto : ' + err, 'error');
+                toast(t('prof.importError', { type: 'OMM Auto', err }), 'error');
             } finally {
                 btnImportOmmAuto.innerHTML = originalText;
             }
@@ -96,7 +96,7 @@ export async function initProfiles() {
             try {
                 const count = await invoke('import_omm_profile', { path });
                 if (count > 0) {
-                    toast(t('prof.importSuccess').replace('OvGME ', '').replace('{count}', count), 'success');
+                    toast(t('prof.importSuccess', { type: 'OMM', count }), 'success');
                     await renderProfiles();
                     updateProfileChip();
                     updateLibraryProfileSelector();
@@ -104,7 +104,7 @@ export async function initProfiles() {
                     toast(t('prof.importNone'), 'info');
                 }
             } catch (err) {
-                toast(t('common.error') + ' OMM : ' + err, 'error');
+                toast(t('prof.importError', { type: 'OMM', err }), 'error');
             } finally {
                 btnImportOmm.innerHTML = originalText;
             }
@@ -184,7 +184,7 @@ function updateIconPickerSelection(gridId, iconName) {
     });
 }
 
-function openNewProfileModal() {
+export function openNewProfileModal() {
     // Clear fields
     ['prof-name', 'prof-game', 'prof-game-path', 'prof-mods-path', 'prof-backup-path']
         .forEach(id => document.getElementById(id).value = '');
@@ -274,7 +274,7 @@ async function confirmCreateProfile() {
         updateProfileChip();
         updateLibraryProfileSelector();
     } catch (err) {
-        toast('Erreur : ' + err, 'error');
+        toast(t('common.error') + ' : ' + err, 'error');
     }
 }
 
@@ -289,7 +289,7 @@ async function confirmEditProfile() {
     const icon = document.getElementById('edit-prof-icon').value || null;
 
     if (!name || !gamePath || !modsPath || !backupPath) {
-        toast('Veuillez remplir tous les champs obligatoires.', 'error');
+        toast(t('prof.missingFields'), 'error');
         return;
     }
 
@@ -317,7 +317,7 @@ async function confirmEditProfile() {
         updateProfileChip();
         updateLibraryProfileSelector();
     } catch (err) {
-        toast('Erreur : ' + err, 'error');
+        toast(t('common.error') + ' : ' + err, 'error');
     }
 }
 
@@ -607,7 +607,7 @@ export async function renderProfiles() {
                 try {
                     await invoke('open_folder', { path });
                 } catch (err) {
-                    toast('Erreur dossier : ' + err, 'error');
+                    toast(t('prof.folderError') + err, 'error');
                 }
             }
         });
@@ -649,7 +649,7 @@ function openDeleteProfileModal(id, profile) {
             updateLibraryProfileSelector();
             toast(t('prof.deleted') || 'Profil supprimé.', 'info');
         } catch (err) {
-            toast('Erreur suppression : ' + err, 'error');
+            toast(t('prof.deleteError') + err, 'error');
             newBtnFinal.disabled = false;
             newBtnFinal.innerHTML = `<span>${t('lib.delete') || 'Supprimer définitivement'}</span>`;
         }

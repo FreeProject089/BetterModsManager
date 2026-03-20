@@ -3,7 +3,7 @@
  * Entry point for Better Mod Manager frontend
  */
 
-import { initProfiles, renderProfiles, updateProfileChip } from './profiles.js';
+import { initProfiles, renderProfiles, updateProfileChip, openNewProfileModal } from './profiles.js';
 import { initMods, refreshMods } from './mods.js';
 import { initI18n, setLang, getLang, applyTranslations, getLanguages, t } from './i18n.js';
 import { initBenchmark } from './benchmark.js';
@@ -397,7 +397,7 @@ function initModlist() {
             if (newPath) {
                 const hintEl = document.getElementById('imported-path-hint');
                 if (hintEl) hintEl.textContent = newPath;
-                toast('Destination mise à jour.', 'info');
+                toast(t('common.destUpdated'), 'info');
             }
         }
     });
@@ -683,7 +683,7 @@ async function initGithubPatSettings() {
                 if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--success)">&#10003; Token saved (${val.length} chars)</span>`;
                 toast(t('settings.githubPatSaved'), 'success');
             } catch (e) {
-                toast('Erreur sauvegarde token : ' + e, 'error');
+                toast(t('common.error') + ' : ' + e, 'error');
             }
         });
     }
@@ -702,7 +702,7 @@ async function initGithubPatSettings() {
                 if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--text-muted)">Token cleared.</span>`;
                 toast(t('settings.githubPatCleared'), 'info');
             } catch (e) {
-                toast('Erreur suppression token : ' + e, 'error');
+                toast(t('common.error') + ' : ' + e, 'error');
             }
         });
     }
@@ -738,7 +738,7 @@ function initCrashReportUI() {
             try {
                 await invoke('open_crash_folder');
             } catch (err) {
-                toast('Could not open crash folder: ' + err, 'error');
+                toast(t('common.crashFolderError') + ': ' + err, 'error');
             }
         });
     }
@@ -1382,6 +1382,11 @@ async function main() {
     
     // Initialize Offline Detection
     initOfflineDetection();
+
+    // Initialize DevTools
+    const { debugUI } = await import('./debug-ui.js');
+    debugUI.init();
+
     const initVersionDisplay = async () => {
         // Safety delay
         await new Promise(r => setTimeout(r, 300));
@@ -1460,7 +1465,7 @@ async function main() {
     initModlist();
     initRepo();
     initInteractiveDocs();
-    await initAutoFillMetadata();
+
 
     // Bind Docs Diagram buttons
     document.getElementById('btn-docs-resumable')?.addEventListener('click', () => openDiagram('resumable-downloads'));
@@ -2045,8 +2050,8 @@ async function main() {
     if (await shouldShowOnboarding()) {
         startOnboarding();
     }
-
-    const restartBtn = document.getElementById('btn-restart-onboarding');
+    
+    const restartBtn = document.getElementById('btn-restart-tutorial');
     if (restartBtn) {
         restartBtn.addEventListener('click', () => {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -2055,6 +2060,18 @@ async function main() {
             startOnboarding();
         });
     }
+
+    const newProfileLibBtn = document.getElementById('btn-new-profile-lib');
+    if (newProfileLibBtn) {
+        newProfileLibBtn.addEventListener('click', () => {
+            openNewProfileModal();
+        });
+    }
+
+    // Global helper for navigation
+    window.showProfiles = () => {
+        document.querySelector('.nav-item[data-view="profiles"]')?.click();
+    };
 
     // Version button and Release Notes buttons
     const verBtn = document.getElementById('nav-version-btn');
@@ -2601,29 +2618,6 @@ function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
     };
     modal.querySelector('#close-ptb-modal').addEventListener('click', close);
     modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-}
-
-// ── Mod Metadata Auto-fill ──────────────────────────────
-async function initAutoFillMetadata() {
-    const chk = document.getElementById('chk-auto-fill-metadata');
-    if (!chk) return;
-
-    try {
-        const { getSettings, updateSettings } = await import('./api.js');
-        const settings = await getSettings();
-        chk.checked = settings.auto_fill_metadata || false;
-
-        chk.addEventListener('change', async () => {
-            const s = await getSettings();
-            s.auto_fill_metadata = chk.checked;
-            await updateSettings(s);
-            const msg = chk.checked ? "Auto-remplissage activé" : "Auto-remplissage désactivé";
-            // Use translation if possible, else fallback
-            toast(msg, 'info');
-        });
-    } catch (e) {
-        console.error("[BMM] Failed to init auto-fill metadata setting:", e);
-    }
 }
 
 // ── Licenses ──────────────────────────────────────────────

@@ -54,6 +54,13 @@ export function initRepo() {
     const tunnelUrlInput = document.getElementById('repo-server-tunnel-url');
     const btnCopyTunnelUrl = document.getElementById('btn-copy-repo-tunnel-url');
     const inputServerPort = document.getElementById('repo-server-port');
+
+    // Advanced Repo Settings
+    const advancedToggle = document.getElementById('repo-server-advanced-toggle');
+    const advancedContent = document.getElementById('repo-server-advanced-content');
+    const advancedCaret = document.getElementById('repo-advanced-caret');
+    const inputCloudflaredPath = document.getElementById('settings-cloudflared-path');
+    const btnPickCloudflared = document.getElementById('btn-pick-cloudflared');
     
     // Sync elements
     const btnFetchInfo = document.getElementById('btn-fetch-repo-info');
@@ -75,6 +82,61 @@ export function initRepo() {
 
     let isServerRunning = false;
 
+    // ── Load Settings ──
+    const loadRepoSettings = async () => {
+        try {
+            const settings = await invoke('get_settings');
+            if (inputCloudflaredPath && settings.cloudflared_path) {
+                inputCloudflaredPath.value = settings.cloudflared_path;
+            }
+        } catch (e) {
+            console.error("[BMM] Failed to load repo settings:", e);
+        }
+    };
+    loadRepoSettings();
+
+    // ── Advanced Toggle ──
+    if (advancedToggle) {
+        advancedToggle.addEventListener('click', () => {
+            const isHidden = advancedContent.style.display === 'none';
+            advancedContent.style.display = isHidden ? 'block' : 'none';
+            if (advancedCaret) {
+                advancedCaret.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
+            }
+        });
+    }
+
+    if (btnPickCloudflared) {
+        btnPickCloudflared.addEventListener('click', async () => {
+            const { pickFile } = await import('./api.js');
+            const path = await pickFile(['exe']);
+            if (path) {
+                inputCloudflaredPath.value = path;
+                // Save immediately
+                try {
+                    const settings = await invoke('get_settings');
+                    settings.cloudflared_path = path;
+                    await invoke('update_settings', { settings });
+                    toast(t('repo.cloudflaredPathUpdated') || "Chemin cloudflared mis à jour.", 'success');
+                } catch (e) {
+                    toast(String(e), 'error');
+                }
+            }
+        });
+    }
+
+    if (inputCloudflaredPath) {
+        inputCloudflaredPath.addEventListener('change', async () => {
+            try {
+                const settings = await invoke('get_settings');
+                settings.cloudflared_path = inputCloudflaredPath.value.trim() || null;
+                await invoke('update_settings', { settings });
+            } catch (e) {
+                console.error("[BMM] Failed to save cloudflared path:", e);
+            }
+        });
+    }
+
     // ── Load Histories ──
     const loadRepoHistories = () => {
         try {
@@ -89,7 +151,7 @@ export function initRepo() {
                             </div>
                             <div style="display:flex;gap:4px;">
                                 <button class="btn btn-secondary btn-sm sync-hist-connect" data-url="${escAttr(u)}" style="padding:2px 8px;font-size:10px;background:rgba(59,130,246,0.15);color:var(--accent);border:none;">
-                                    ${t('repo.connectBtn') || 'Connecter'}
+                                    ${t('repo.connectBtn')}
                                 </button>
                                 <button class="btn btn-secondary btn-sm sync-hist-delete" data-url="${escAttr(u)}" style="padding:2px 6px;background:rgba(231,76,60,0.1);color:#e74c3c;border:none;">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -163,16 +225,16 @@ export function initRepo() {
                     hostMetadataPreview.style.display = 'block';
                     hostMetadataPreview.innerHTML = `
                         <div style="color:var(--accent);font-weight:700;margin-bottom:4px;font-size:14px;">${escHtml(repo.name)}</div>
-                        <div style="color:var(--text-secondary);margin-bottom:2px;">${t('repo.authorShort') || 'Auteur :'} <span style="color:var(--text-primary)">${escHtml(repo.author || '-')}</span></div>
-                        <div style="color:var(--text-secondary);margin-bottom:2px;">${(t('repo.profilesCount') || 'Profils ({count}) :').replace('{count}', pCount)} <span style="color:var(--text-primary)">${escHtml(pNames)}</span></div>
-                        <div style="color:var(--cyan);margin-top:6px;font-family:var(--font-mono)">${t('repo.totalSizeLabel') || 'Taille Totale :'} ${formatBytes(totalSize)}</div>
+                        <div style="color:var(--text-secondary);margin-bottom:2px;">${t('repo.authorShort')} <span style="color:var(--text-primary)">${escHtml(repo.author || '-')}</span></div>
+                        <div style="color:var(--text-secondary);margin-bottom:2px;">${t('repo.profilesCount').replace('{count}', pCount)} <span style="color:var(--text-primary)">${escHtml(pNames)}</span></div>
+                        <div style="color:var(--cyan);margin-top:6px;font-family:var(--font-mono)">${t('repo.totalSizeLabel')} ${formatBytes(totalSize)}</div>
                     `;
                 }
             }
         } catch (err) {
             if (hostMetadataPreview) {
                 hostMetadataPreview.style.display = 'block';
-                hostMetadataPreview.innerHTML = `<div style="color:var(--danger);">Impossible de lire le repo.json généré (${err})</div>`;
+                hostMetadataPreview.innerHTML = `<div style="color:var(--danger);">${t('repo.readError')} (${err})</div>`;
             }
         }
     };
@@ -213,7 +275,7 @@ export function initRepo() {
             profilesListEl.innerHTML = '';
             
             if (!profiles || profiles.length === 0) {
-                profilesListEl.innerHTML = `<div style="color:var(--text-muted); font-size:12px; text-align:center;">${t('repo.noProfiles') || "Aucun profil trouvé."}</div>`;
+                profilesListEl.innerHTML = `<div style="color:var(--text-muted); font-size:12px; text-align:center;">${t('repo.noProfiles')}</div>`;
                 return;
             }
 
@@ -492,16 +554,25 @@ export function initRepo() {
     if (btnStartExport) {
         btnStartExport.addEventListener('click', async () => {
             const outPath = inputExportPath.value.trim();
-            const authorName = inputExportAuthor ? inputExportAuthor.value.trim() : null;
+            const authorName = inputExportAuthor ? inputExportAuthor.value.trim() : "";
+            
             if (!outPath) {
-                toast(t('repo.errNoOutDir') || "Veuillez sélectionner un dossier de destination.", 'warning');
+                toast(t('repo.errNoOutDir'), 'warning');
                 return;
             }
+            if (!authorName) {
+                toast(t('repo.errNoAuthor') || "Le nom du créateur est requis.", 'warning');
+                if (inputExportAuthor) inputExportAuthor.focus();
+                return;
+            }
+            // Save author name for next time
+            localStorage.setItem('bmm_last_author', authorName);
+
 
             const cbs = document.querySelectorAll('.repo-profile-cb:checked');
             const profileIds = Array.from(cbs).map(c => c.value);
             if (profileIds.length === 0) {
-                toast(t('repo.errNoProfile') || "Veuillez sélectionner au moins un profil à exporter.", 'warning');
+                toast(t('repo.errNoProfile'), 'warning');
                 return;
             }
 
@@ -528,12 +599,25 @@ export function initRepo() {
                             exportFill.style.width = `${pct}%`;
                         }
                         if (step) {
-                            exportStatus.textContent = step;
+                            if (step.startsWith('{')) {
+                                try {
+                                    const data = JSON.parse(step);
+                                    exportStatus.textContent = t(data.key, data);
+                                } catch (e) {
+                                    exportStatus.textContent = t(step) || step;
+                                }
+                            } else {
+                                exportStatus.textContent = t(step) || step;
+                            }
                         }
                     });
                 }
 
-                await invoke('export_server_repo', { profileIds, outputDir: outPath, authorName });
+                await invoke('export_server_repo', { 
+                    profileIds, 
+                    outputDir: outPath, 
+                    authorName
+                });
                 saveHostHistory(outPath);
 
                 exportStatus.textContent = t('repo.exportDone') || "Génération terminée avec succès !";
@@ -562,7 +646,7 @@ export function initRepo() {
         btnStartSync.addEventListener('click', async () => {
             const url = inputSyncUrl.value.trim();
             if (!url) {
-                toast(t('repo.errNoUrl') || "Veuillez entrer une URL valide.", 'warning');
+                toast(t('repo.errNoUrl'), 'warning');
                 return;
             }
 
@@ -572,7 +656,7 @@ export function initRepo() {
 
             if (syncPathsSection && syncPathsSection.style.display !== 'none') {
                 if (!gameDir || !modsDir || !backupDir) {
-                    toast(t('repo.errSyncFolders') || "Veuillez renseigner les 3 dossiers (Jeu, Mods, Backup) avant de synchroniser.", 'warning');
+                    toast(t('repo.errSyncFolders'), 'warning');
                     return;
                 }
             }
@@ -587,7 +671,7 @@ export function initRepo() {
             });
 
             if (choices.length === 0) {
-                toast(t('repo.errNoSelection') || "Veuillez sélectionner au moins une action à synchroniser.", 'warning');
+                toast(t('repo.errNoSelection'), 'warning');
                 return;
             }
 
@@ -616,7 +700,16 @@ export function initRepo() {
                             syncFill.style.width = `${pct}%`;
                         }
                         if (step) {
-                            syncStatus.textContent = step;
+                            if (step.startsWith('{')) {
+                                try {
+                                    const data = JSON.parse(step);
+                                    syncStatus.textContent = t(data.key, data);
+                                } catch (e) {
+                                    syncStatus.textContent = t(step) || step;
+                                }
+                            } else {
+                                syncStatus.textContent = t(step) || step;
+                            }
                         }
                         if (current_file) {
                             syncDetails.textContent = current_file;
@@ -677,13 +770,13 @@ export function initRepo() {
                 if (isPaused) {
                     await invoke('resume_repo_sync');
                     pausedBadge.style.display = 'none';
-                    pauseText.textContent = t('repo.pauseSync') || "Pause";
-                    btnPauseSync.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> <span>${t('repo.pauseSync') || 'Pause'}</span>`;
+                    pauseText.textContent = t('repo.pauseSync');
+                    btnPauseSync.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> <span>${t('repo.pauseSync')}</span>`;
                 } else {
                     await invoke('pause_repo_sync');
                     pausedBadge.style.display = 'block';
-                    pauseText.textContent = t('repo.resumeSync') || "Reprendre";
-                    btnPauseSync.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>${t('repo.resumeSync') || 'Reprendre'}</span>`;
+                    pauseText.textContent = t('repo.resumeSync');
+                    btnPauseSync.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>${t('repo.resumeSync')}</span>`;
                 }
             } catch (err) {
                 toast("Erreur Pause/Reprise : " + err, 'error');
@@ -812,7 +905,9 @@ export function initRepo() {
                     urlContainerServer.style.display = "flex";
                     toast(t('repo.hostServerStarted') || "Serveur démarré !", "success");
                 } catch (err) {
-                    toast(String(err), "error");
+                    const errMsg = String(err);
+                    // Try to translate if it looks like a key, or show as is
+                    toast(t(errMsg) || errMsg, "error");
                     if (inputServerPort) inputServerPort.disabled = false;
                     // Revert button content on error
                     btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
@@ -900,6 +995,102 @@ export function initRepo() {
         }
     };
     restoreServerStatus();
+
+    // ─── Mini-Server Generation ──────────────────────────────────────
+    const btnGenMiniServer = document.getElementById('btn-generate-mini-server');
+    const btnPickMiniRepo = document.getElementById('btn-pick-mini-server-repo');
+    const btnPickMiniFolder = document.getElementById('btn-pick-mini-folder');
+    const inputMiniRepoPath = document.getElementById('repo-mini-server-json-path');
+    const cbAutoStart = document.getElementById('repo-mini-server-autostart');
+    
+    if (btnPickMiniRepo) {
+        btnPickMiniRepo.addEventListener('click', async () => {
+            const { pickFile } = await import('./api.js');
+            const path = await pickFile(['json']);
+            if (path) {
+                inputMiniRepoPath.value = path;
+                localStorage.setItem('bmm_last_mini_repo_json', path);
+            }
+        });
+    }
+
+    if (btnPickMiniFolder) {
+        btnPickMiniFolder.addEventListener('click', async () => {
+            const { pickFolder } = await import('./api.js');
+            const path = await pickFolder();
+            if (path) {
+                const fullPath = path.endsWith('\\') || path.endsWith('/') ? path + 'repo.json' : path + '/repo.json';
+                inputMiniRepoPath.value = fullPath;
+                localStorage.setItem('bmm_last_mini_repo_json', fullPath);
+            }
+        });
+    }
+
+    // Restore last mini repo path
+    if (inputMiniRepoPath) {
+        const last = localStorage.getItem('bmm_last_mini_repo_json');
+        if (last) inputMiniRepoPath.value = last;
+    }
+    
+    if (btnGenMiniServer) {
+        btnGenMiniServer.addEventListener('click', async () => {
+            let jsonPath = inputMiniRepoPath ? inputMiniRepoPath.value.trim() : '';
+            
+            // Fallback if empty
+            if (!jsonPath) {
+                const fallbackDir = (document.getElementById('repo-host-path').value || inputExportPath.value).trim();
+                if (fallbackDir) {
+                    // Try to guess repo.json in that folder
+                    jsonPath = fallbackDir.endsWith('.json') ? fallbackDir : (fallbackDir.endsWith('\\') || fallbackDir.endsWith('/') ? fallbackDir + 'repo.json' : fallbackDir + '/repo.json');
+                }
+            }
+
+            if (!jsonPath) {
+                return toast(t('repo.errNoOutDir'), 'warning');
+            }
+
+            // Extract directory from jsonPath
+            let outPath = jsonPath;
+            if (jsonPath.toLowerCase().endsWith('.json')) {
+                outPath = jsonPath.substring(0, Math.max(jsonPath.lastIndexOf('/'), jsonPath.lastIndexOf('\\')));
+            }
+            const miniPortInput = document.getElementById('repo-mini-server-port');
+            const port = parseInt(miniPortInput ? miniPortInput.value : "8000") || 8000;
+            const autoStart = cbAutoStart ? cbAutoStart.checked : false;
+            const useCloudflare = document.getElementById('repo-mini-server-cloudflare').checked;
+            const useUpnp = document.getElementById('repo-mini-server-upnp').checked;
+            const lang = localStorage.getItem('bmm-lang') || 'en';
+
+            try {
+                btnGenMiniServer.disabled = true;
+                const originalText = btnGenMiniServer.innerHTML;
+                btnGenMiniServer.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> <span>Génération...</span>`;
+
+                await invoke('generate_standalone_server', { 
+                    repoPath: jsonPath, 
+                    port, 
+                    autoStart, 
+                    useCloudflare, 
+                    useUpnp, 
+                    lang 
+                });
+
+                toast(t('repo.miniServerSuccess') || "Scripts du serveur autonome générés ! (Lancer-Serveur.bat)", "success");
+            } catch (err) {
+                const errMsg = String(err);
+                toast(t(errMsg) || errMsg, "error");
+            } finally {
+                btnGenMiniServer.disabled = false;
+                btnGenMiniServer.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px"><path d="M12 5v14M5 12h14"/></svg> <span data-i18n="repo.miniServerGenerate">${t('repo.miniServerGenerate') || 'Générer le Serveur'}</span>`;
+            }
+        });
+    }
+
+    // Restore last author name
+    const lastAuthor = localStorage.getItem('bmm_last_author');
+    if (lastAuthor && inputExportAuthor) {
+        inputExportAuthor.value = lastAuthor;
+    }
 }
 
 function showSyncSummary(summary) {

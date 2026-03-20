@@ -230,3 +230,72 @@ pub fn remove_empty_dirs(dir: &Path) -> Result<()> {
     }
     Ok(())
 }
+
+pub fn resolve_path(app_handle: &tauri::AppHandle, path: &str) -> Option<std::path::PathBuf> {
+    // 1. Production: Try multiple patterns via Tauri resolve_resource
+    let candidates = [
+        path.to_string(), // As requested (e.g. "Lang/en.json")
+        format!("_up_/{}", path), // Bundled relative parent (e.g. "_up_/app.cfg")
+        format!("_up_/frontend/{}", path), // Bundled relative sibling (e.g. "_up_/frontend/Lang/en.json")
+        path.split('/').last().unwrap_or(path).to_string(), // Flattened (e.g. "en.json")
+        format!("frontend/{}", path), // Deep (e.g. "frontend/Lang/en.json")
+    ];
+
+    for candidate in &candidates {
+        if let Some(p) = app_handle.path_resolver().resolve_resource(candidate) {
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+
+    // 2. Development: Try climbing up from resource_dir
+    if let Some(mut p) = app_handle.path_resolver().resource_dir() {
+        for _ in 0..5 {
+            let check = p.join(path);
+            if check.exists() {
+                return Some(check);
+            }
+            // Also check frontend/path if we are at root
+            let check_frontend = p.join("frontend").join(path);
+            if check_frontend.exists() {
+                return Some(check_frontend);
+            }
+            if !p.pop() { break; }
+        }
+    }
+    
+    // 3. Last resort: Direct path from current working directory
+    let direct = std::path::PathBuf::from(path);
+    if direct.exists() {
+        return Some(direct);
+    }
+
+    None
+}
+
+pub fn get_lang_dir(app_handle: &tauri::AppHandle) -> std::path::PathBuf {
+    if let Some(path) = resolve_path(app_handle, "Lang/en.json") {
+        if let Some(parent) = path.parent() {
+            return parent.to_path_buf();
+        }
+    }
+    
+    let path = app_handle
+        .path_resolver()
+        .resource_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    let mut current = path.clone();
+    for _ in 0..5 {
+        let check_prod = current.join("Lang");
+        if check_prod.exists() && check_prod.is_dir() { return check_prod; }
+        
+        let check_dev = current.join("frontend").join("Lang");
+        if check_dev.exists() && check_dev.is_dir() { return check_dev; }
+        
+        if !current.pop() { break; }
+    }
+
+    path.join("Lang")
+}

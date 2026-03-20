@@ -5,7 +5,7 @@ import { invoke, pickFolder, listenFileDrop, toast, sendOsNotification } from '.
 import { renderProfiles } from './profiles.js';
 import { t, applyTranslations } from './i18n.js';
 import { escHtml, escAttr } from './utils.js';
-import { getModCardHTML, getModDetailHTML } from './components.js';
+import { getModCardHTML, getModDetailHTML, getLoadingOverlayHTML } from './components.js';
 import { appState } from './state.js';
 
 const S = new Proxy(appState.state, {
@@ -37,12 +37,19 @@ export async function initMods() {
 
   if (S.isCompact) modlist.classList.add('compact');
 
+  // React to state changes (e.g. from DevTools)
+  appState.subscribe('isCompact', (val) => {
+    modlist.classList.toggle('compact', val);
+    renderModList(true);
+  });
+
+  appState.subscribe('currentFilter', () => renderModList(true));
+  appState.subscribe('currentSort', () => renderModList(true));
+
   viewBtn.addEventListener('click', () => {
     S.isCompact = !S.isCompact;
     localStorage.setItem('bmm-view-compact', S.isCompact);
-    modlist.classList.toggle('compact', S.isCompact);
-    renderModList(true); // Force full re-calc of heights
-    toast(S.isCompact ? t('mod.viewCompact') : t('mod.viewStandard'), 'info', 1500);
+    // Subscription above handles the rest
   });
 
   // Attach scroll listener for virtualization
@@ -445,7 +452,7 @@ function renderHistoryModal(history) {
     history.forEach(item => {
       const isEnabled = item.action === 'Enabled';
       const color = isEnabled ? 'var(--success)' : 'var(--text-muted)';
-      const actionText = isEnabled ? 'ACTIF' : 'INACTIF';
+      const actionText = isEnabled ? t('mod.statusActive') : t('mod.statusInactive');
       const dateStr = new Date(item.timestamp).toLocaleString();
       const safeName = escHtml(item.mod_name);
 
@@ -556,6 +563,8 @@ async function renderModList(force = false) {
       if (S.selectedModId === mod.id) {
         setTimeout(() => renderModDetail(mod.id), 0);
       }
+    } else {
+      updateCardState(card, mod);
     }
 
     // Insert or move at the specific position (insertBefore is sub-ms if already in place)
@@ -566,6 +575,20 @@ async function renderModList(force = false) {
 
   // Trigger translations only on new elements (optional optimization, but applyTranslations is recursive)
   applyTranslations(viewport);
+}
+
+function updateCardState(card, mod) {
+  card.classList.toggle('enabled', mod.enabled);
+  card.classList.toggle('disabled', !mod.enabled);
+  
+  const toggle = card.querySelector('.mod-toggle-input');
+  if (toggle) toggle.checked = mod.enabled;
+  
+  const dot = card.querySelector('.mod-status-dot');
+  if (dot) {
+    dot.classList.toggle('enabled', mod.enabled);
+    dot.classList.toggle('disabled', !mod.enabled);
+  }
 }
 
 export function updateModListDisplay() {
@@ -612,7 +635,7 @@ function createModCard(mod) {
 
     S.isGlobalProcessing = true;
     S.processingMods.add(mod.id);
-    renderModList(); 
+    setModLoading(mod.id, true);
 
     try {
       if (toggle.checked) {
@@ -639,6 +662,9 @@ function createModCard(mod) {
         toggle.checked = !toggle.checked;
       }
     } finally {
+      setModLoading(mod.id, false);
+      // Give time for fade-out before the card is potentially replaced by refreshMods
+      await new Promise(r => setTimeout(r, 250));
       S.processingMods.delete(mod.id);
       S.isGlobalProcessing = false;
       await refreshMods();
@@ -696,6 +722,19 @@ function createModCard(mod) {
   });
 
   return card;
+}
+
+function setModLoading(modId, isLoading) {
+  const card = document.querySelector(`.mod-card[data-id="${modId}"]`);
+  if (!card) return;
+
+  const existingOverlay = card.querySelector('.mod-loading-overlay');
+  if (isLoading && !existingOverlay) {
+    card.insertAdjacentHTML('beforeend', getLoadingOverlayHTML());
+  } else if (!isLoading && existingOverlay) {
+    existingOverlay.classList.add('fade-out');
+    setTimeout(() => existingOverlay.remove(), 300);
+  }
 }
 
 // ── Detail / Edit Panel ──────────────────────────────────────
@@ -782,7 +821,7 @@ async function renderModDetail(modId) {
                 <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted)">${c.file_count} f.</span>
               </div>
               <div style="font-size:11px;color:var(--text-primary);font-weight:600" title="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</div>
-              <div style="font-size:10px;color:var(--text-muted)">Profil: ${escHtml(c.other_profile_name)}</div>
+              <div style="font-size:10px;color:var(--text-muted)">${t('mod.profilLabel')}${escHtml(c.other_profile_name)}</div>
             </div>
           `).join('');
         }
@@ -1001,8 +1040,10 @@ async function toggleAllMods(forcedEnable = null) {
 
   // Add all target mods to processing set
   S.isGlobalProcessing = true;
-  targetMods.forEach(m => S.processingMods.add(m.id));
-  renderModList(); // Show loading state immediately on all affected cards
+  targetMods.forEach(m => {
+    S.processingMods.add(m.id);
+    setModLoading(m.id, true);
+  });
 
   const btn = document.getElementById('btn-enable-all');
   const altBtn = document.getElementById('btn-disable-all-alt');
@@ -1021,6 +1062,8 @@ async function toggleAllMods(forcedEnable = null) {
   } catch (err) {
     toast(t('common.error') + ' : ' + err, 'error');
   } finally {
+    targetMods.forEach(m => setModLoading(m.id, false));
+    await new Promise(r => setTimeout(r, 250));
     targetMods.forEach(m => S.processingMods.delete(m.id));
     S.isGlobalProcessing = false;
     btn.disabled = false;
