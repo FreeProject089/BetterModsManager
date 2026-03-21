@@ -1,6 +1,7 @@
 import { debugHub } from './debug.js';
 import { appState } from './state.js';
 import { invoke } from './api.js';
+import { t, applyTranslations } from './i18n.js';
 
 /**
  * debug-ui.js — UI Logic for BMM DevTools
@@ -16,18 +17,72 @@ class DebugUI {
         this.highlightEl = null;
         this.tooltipEl = null;
         this.container = null;
+        this.modalOverlay = null;
+        this.crashOverlay = null;
+
+        // Tool state
+        this.a11yWarnings = false;
+        this.a11yReader = false;
+        this.jsEvents = false;
+        this.jsDynamic = false;
+        this.mutationObserver = null;
+        this.a11yInterval = null;
+    }
+
+    // Helper to find elements within devtools containers
+    _get(id) {
+        if (!this.container) return document.getElementById(id);
+        return this.container.querySelector(`#${id}`) || 
+               (this.modalOverlay ? this.modalOverlay.querySelector(`#${id}`) : null) ||
+               (this.crashOverlay ? this.crashOverlay.querySelector(`#${id}`) : null) ||
+               document.getElementById(id);
     }
 
     init() {
+        if (this.container) return; // Already initialized
+        
+        // Ensure no leftover overlay from previous failed init or duplicate call
+        const existing = document.getElementById('bmm-debug-overlay');
+        if (existing) existing.remove();
+
         this.createContainer();
         this.createContextMenu();
         this.attachListeners();
+        this.translateUI();
         this.loadSources();
         this.startUpdateLoop();
         console.info('[BMM-Debug] UI Initialized. Toggle with Ctrl+Alt+D');
     }
 
+    toggle(force) {
+        // Strict lock check
+        if (!appState.get('debugMode') && force !== true) return;
+
+        if (!this.container) this.init();
+        
+        this.isOpen = force !== undefined ? force : !this.isOpen;
+        this.container.classList.toggle('open', this.isOpen);
+        
+        if (this.isOpen) {
+            this.updateStateView();
+            // Refresh sources only if needed
+            if (!this.currentSource) this.loadSources();
+            
+            this.translateUI();
+
+            // Adjust z-index to be on top when opened
+            this.container.style.zIndex = '200000';
+        } else {
+            this.toggleInspector(false);
+            this.container.style.zIndex = '20000';
+        }
+    }
+
     createContainer() {
+        // Double check removal
+        const old = document.getElementById('bmm-debug-overlay');
+        if (old) old.remove();
+
         const div = document.createElement('div');
         div.id = 'bmm-debug-overlay';
         div.innerHTML = `
@@ -52,18 +107,19 @@ class DebugUI {
                 </div>
             </div>
             <div class="debug-tabs">
-                <div class="debug-tab active" data-tab="console">Console</div>
-                <div class="debug-tab" data-tab="timeline">Timeline</div>
-                <div class="debug-tab" data-tab="inspect-view">Inspect</div>
-                <div class="debug-tab" data-tab="sources">Sources</div>
-                <div class="debug-tab" data-tab="state">State</div>
-                <div class="debug-tab" data-tab="playground">Playground</div>
+                <div class="debug-tab active" data-tab="console" data-i18n="dev.tab.console">Console</div>
+                <div class="debug-tab" data-tab="timeline" data-i18n="dev.tab.timeline">Timeline</div>
+                <div class="debug-tab" data-tab="debugger" data-i18n="dev.tab.debugger">Debugger</div>
+                <div class="debug-tab" data-tab="inspect-view" data-i18n="dev.tab.inspect">Inspect</div>
+                <div class="debug-tab" data-tab="sources" data-i18n="dev.tab.sources">Sources</div>
+                <div class="debug-tab" data-tab="state" data-i18n="dev.tab.state">State</div>
+                <div class="debug-tab" data-tab="playground" data-i18n="dev.tab.playground">Playground</div>
             </div>
             <div class="debug-content">
                 <div class="debug-pane active" id="pane-console">
                     <div class="console-tools" style="padding:8px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; gap:8px">
-                    <input type="text" id="console-search" placeholder="Search logs..." style="flex:1; background:rgba(0,0,0,0.2); border:1px solid var(--debug-border); border-radius:4px; color:white; font-size:10px; padding:4px 8px; outline:none">
-                        <button class="debug-btn" id="console-clear-manual" title="Clear Console">
+                    <input type="text" id="console-search" data-i18n-placeholder="dev.placeholder.search" placeholder="Search..." style="flex:1; background:rgba(0,0,0,0.2); border:1px solid var(--debug-border); border-radius:4px; color:white; font-size:10px; padding:4px 8px; outline:none">
+                        <button class="debug-btn" id="console-clear-manual" data-i18n-title="dev.btn.clearConsole" title="Clear Console">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                         </button>
                     </div>
@@ -71,32 +127,201 @@ class DebugUI {
                 </div>
                 <div class="debug-pane" id="pane-timeline">
                     <div class="timeline-filters" style="padding:8px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; gap:6px; align-items:center">
-                        <button class="filter-btn active" data-filter="all">ALL</button>
-                        <button class="filter-btn" data-filter="rpc">RPC</button>
-                        <button class="filter-btn" data-filter="action">ACT</button>
-                        <button class="filter-btn" data-filter="error">ERR</button>
+                        <button class="filter-btn active" data-filter="all" data-i18n="dev.label.all">ALL</button>
+                        <button class="filter-btn" data-filter="ipc" data-i18n="dev.label.ipc">IPC</button>
+                        <button class="filter-btn" data-filter="logs" data-i18n="dev.label.logs">LOGS</button>
+                        <button class="filter-btn" data-filter="tasks" data-i18n="dev.label.tasks">TASKS</button>
+                        <button class="filter-btn" data-filter="error" data-i18n="dev.label.error">ERR</button>
                         <div style="flex:1"></div>
-                        <button class="debug-btn" id="timeline-clear-manual" title="Clear Timeline">
+                        <button class="debug-btn" id="timeline-clear-manual" data-i18n-title="dev.btn.clearHistory" title="Clear History">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                         </button>
                     </div>
                     <div id="timeline-list" style="flex:1; overflow-y:auto"></div>
                 </div>
+                <div class="debug-pane" id="pane-debugger">
+                    <div class="debugger-layout" style="display:flex; height:100%; flex-direction:column">
+                        <div class="debugger-subtabs" style="display:flex; border-bottom:1px solid rgba(255,255,255,0.05); background:rgba(0,0,0,0.1)">
+                            <div class="debug-subtab active" data-sub="js" data-i18n="dev.subtab.js">JS</div>
+                            <div class="debug-subtab" data-sub="rust" data-i18n="dev.subtab.rust">RUST</div>
+                            <div class="debug-subtab" data-sub="html" data-i18n="dev.subtab.html">HTML</div>
+                            <div class="debug-subtab" data-sub="css" data-i18n="dev.subtab.css">CSS</div>
+                        </div>
+                        <div class="debugger-subcontent" style="flex:1; position:relative; overflow:hidden">
+                            <div class="debug-subpane active" id="subpane-js" style="height:100%; display:flex; flex-direction:column">
+                                <div style="padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2)">
+                                    <div>
+                                        <div style="font-size:13px; font-weight:600; color:white; margin-bottom:2px" data-i18n="dev.title.js">Vanilla JS Debugger</div>
+                                        <div style="font-size:11px; color:var(--text-muted)" data-i18n="dev.msg.jsDesc">Press F12 to open Chrome DevTools or inspect below.</div>
+                                    </div>
+                                    <button class="debug-btn debug-btn-primary" id="js-open-devtools" style="font-size:10px; padding:4px 12px" data-i18n="dev.btn.openDevtools">OPEN DEVTOOLS</button>
+                                </div>
+                                <div style="flex:1; overflow-y:auto; padding:8px" id="js-errors">
+                                    <div style="color:var(--text-muted); font-size:10px" data-i18n="dev.msg.noJsErrors">No JS errors recorded.</div>
+                                </div>
+                                <div style="height:150px; border-top:1px solid var(--debug-border); display:flex; flex-direction:column">
+                                    <div style="padding:4px 8px; font-size:10px; color:var(--text-muted); background:rgba(0,0,0,0.2); display:flex; justify-content:space-between">
+                                        <span data-i18n="dev.label.repl">REPL & Watchers</span>
+                                        <button class="debug-btn debug-btn-ghost" id="js-add-watcher" style="padding:0; font-size:10px; height:auto" data-i18n="dev.btn.addWatcher">ADD</button>
+                                    </div>
+                                    <div style="flex:1; overflow-y:auto; padding:4px" id="js-watchers"></div>
+                                    <div style="display:flex; border-top:1px solid var(--debug-border)">
+                                        <span style="color:var(--debug-accent); padding:4px 8px; font-family:'JetBrains Mono'; font-size:11px">&gt;</span>
+                                        <input type="text" id="js-repl-input" style="flex:1; background:transparent; border:none; color:white; font-family:'JetBrains Mono'; font-size:11px; outline:none" data-i18n-placeholder="dev.placeholder.eval" placeholder="Evaluate an expression...">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="debug-subpane" id="subpane-rust" style="height:100%; display:flex; flex-direction:column; display:none">
+                                <div style="padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2)">
+                                    <div>
+                                        <div style="font-size:13px; font-weight:600; color:white; margin-bottom:2px" data-i18n="dev.title.rust">Rust Debugger (GDB/LLDB)</div>
+                                        <div style="font-size:11px; color:var(--text-muted)" data-i18n="dev.msg.rustDesc">Attach a native debugger or view backend logs.</div>
+                                    </div>
+                                    <div style="display:flex; gap:8px">
+                                        <button class="debug-btn debug-btn-ghost" id="rust-copy-lldb" style="font-size:10px; padding:4px 12px; border:1px solid rgba(255,255,255,0.1)" data-i18n="dev.btn.copyCmd">COPY CMD</button>
+                                        <button class="debug-btn debug-btn-primary" id="rust-refresh-logs" style="font-size:10px; padding:4px 12px" data-i18n="dev.btn.refreshLogs">REFRESH LOGS</button>
+                                    </div>
+                                </div>
+                                <div style="flex:1; overflow-y:auto; padding:8px; font-family:'JetBrains Mono'; font-size:10px; user-select:text" id="rust-logs-container">
+                                    <div style="color:var(--text-muted)" data-i18n="dev.msg.clickRefresh">Click Refresh to load logs...</div>
+                                </div>
+                            </div>
+                            <div class="debug-subpane" id="subpane-html" style="height:100%; overflow-y:auto; padding:8px; display:none">
+                                <div style="margin-bottom:8px; display:flex; gap:8px">
+                                    <button class="debug-btn" id="html-refresh-dom" style="font-size:10px; padding:2px 8px" data-i18n="dev.btn.refreshDom">Generate DOM Tree</button>
+                                    <button class="debug-btn debug-btn-ghost" id="html-collapse-all" style="font-size:10px; padding:2px 8px" data-i18n="dev.btn.collapseAll">Collapse All</button>
+                                </div>
+                                <div id="html-dom-tree" style="font-family:'JetBrains Mono'; font-size:11px"></div>
+                            </div>
+                            <div class="debug-subpane" id="subpane-css" style="height:100%; display:flex; flex-direction:column; display:none">
+                                <div style="flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:16px">
+                                    <div style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:6px; padding:16px;">
+                                        <div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); margin-bottom:16px; font-weight:700" data-i18n="dev.title.design">Design & Accessibility Tools</div>
+                                        <div id="dbg-css-toggles-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:12px; margin-bottom:16px">
+                                            <div class="debug-toggle-row">
+                                                <div class="debug-toggle-info">
+                                                    <div class="debug-toggle-title" data-i18n="dev.tool.cssPink.title">CSS Debugging</div>
+                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.cssPink.desc">Outline all elements.</div>
+                                                </div>
+                                                <div style="display:flex; align-items:center; gap:4px">
+                                                    <input type="color" id="dbg-css-color" value="#ff1493" style="width:20px; height:20px; border:none; padding:0; cursor:pointer; border-radius:4px">
+                                                    <input type="checkbox" id="dbg-css-pink" class="debug-switch debug-switch-pink">
+                                                </div>
+                                            </div>
+
+                                            <div class="debug-toggle-row">
+                                                <div class="debug-toggle-info">
+                                                    <div class="debug-toggle-title" data-i18n="dev.tool.zIndex.title">Z-Index Layers</div>
+                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.zIndex.desc">Layer viewer.</div>
+                                                </div>
+                                                <input type="checkbox" id="dbg-css-zindex" class="debug-switch debug-switch-pink">
+                                            </div>
+
+                                            <div class="debug-toggle-row">
+                                                <div class="debug-toggle-info">
+                                                    <div class="debug-toggle-title" data-i18n="dev.tool.cssEvents.title">Event Components</div>
+                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.cssEvents.desc">Highlights elements with events (onclick, href) in green.</div>
+                                                </div>
+                                                <input type="checkbox" id="dbg-css-events" class="debug-switch debug-switch-blue">
+                                            </div>
+
+                                            <div class="debug-toggle-row">
+                                                <div class="debug-toggle-info">
+                                                    <div class="debug-toggle-title" data-i18n="dev.tool.cssInteractive.title">Interactive Components (Hi-Vis)</div>
+                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.cssInteractive.desc">Highlights all graphical interface hitboxes.</div>
+                                                </div>
+                                                <input type="checkbox" id="dbg-css-interactive" class="debug-switch debug-switch-blue">
+                                            </div>
+
+                                            <div class="debug-toggle-row">
+                                                <div class="debug-toggle-info">
+                                                    <div class="debug-toggle-title" data-i18n="dev.tool.a11yWarnings.title">Live Accessibility Warnings</div>
+                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.a11yWarnings.desc">Signals missing alt/label attributes.</div>
+                                                </div>
+                                                <input type="checkbox" id="dbg-a11y-warnings" class="debug-switch debug-switch-warning">
+                                            </div>
+
+                                            <div class="debug-toggle-row">
+                                                <div class="debug-toggle-info">
+                                                    <div class="debug-toggle-title" data-i18n="dev.tool.a11yReader.title">Screen Reader Simulation</div>
+                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.a11yReader.desc">Displays what assistive tools see.</div>
+                                                </div>
+                                                <input type="checkbox" id="dbg-a11y-reader" class="debug-switch debug-switch-pink">
+                                            </div>
+
+                                            <div class="debug-toggle-row">
+                                                <div class="debug-toggle-info">
+                                                    <div class="debug-toggle-title" data-i18n="dev.tool.jsEvents.title">Event Overlay (All types)</div>
+                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.jsEvents.desc">Highlights elements with JS listeners.</div>
+                                                </div>
+                                                <input type="checkbox" id="dbg-js-events" class="debug-switch debug-switch-blue">
+                                            </div>
+
+                                            <div class="debug-toggle-row">
+                                                <div class="debug-toggle-info">
+                                                    <div class="debug-toggle-title" data-i18n="dev.tool.a11yHardcoded.title">Hardcoded Text</div>
+                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.a11yHardcoded.desc">Detects non-i18n text.</div>
+                                                </div>
+                                                <input type="checkbox" id="dbg-a11y-hardcoded" class="debug-switch debug-switch-warning">
+                                            </div>
+
+                                            <div class="debug-toggle-row">
+                                                <div class="debug-toggle-info">
+                                                    <div class="debug-toggle-title" data-i18n="dev.tool.cssGrid.title">Layout Grid</div>
+                                                    <div class="debug-toggle-desc" data-i18n="dev.tool.cssGrid.desc">Customizable grid.</div>
+                                                </div>
+                                                <input type="checkbox" id="dbg-css-grid" class="debug-switch debug-switch-blue">
+                                            </div>
+                                        </div>
+
+                                        <div id="dbg-grid-config" style="display:none; padding-top:12px; border-top:1px dashed rgba(255,255,255,0.1)">
+                                            <div style="margin-bottom:12px">
+                                                <div style="display:flex; justify-content:space-between; margin-bottom:4px">
+                                                    <div id="dbg-label-grid-h" style="font-size:12px; font-weight:600; color:white" data-i18n="dev.label.gridH">Horizontal Spacing</div>
+                                                    <div style="font-size:12px; color:var(--text-muted)"><span id="dbg-grid-h-val">16</span>px</div>
+                                                </div>
+                                                <input type="range" id="dbg-grid-h" min="0" max="64" value="16" class="custom-range" style="width:100%; --val:25%">
+                                            </div>
+                                            <div>
+                                                <div style="display:flex; justify-content:space-between; margin-bottom:4px">
+                                                    <div id="dbg-label-grid-v" style="font-size:12px; font-weight:600; color:white" data-i18n="dev.label.gridV">Vertical Spacing</div>
+                                                    <div style="font-size:12px; color:var(--text-muted)"><span id="dbg-grid-v-val">16</span>px</div>
+                                                </div>
+                                                <input type="range" id="dbg-grid-v" min="0" max="64" value="16" class="custom-range" style="width:100%; --val:25%">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div style="display:flex; justify-content:space-between; align-items:center; padding:0 4px">
+                                        <select id="css-stylesheet-select" style="background:rgba(0,0,0,0.3); border:1px solid var(--debug-border); color:white; padding:4px; font-size:11px; border-radius:4px; outline:none; max-width:200px">
+                                            <option value="" data-i18n="dev.msg.selectStylesheet">Select a stylesheet...</option>
+                                        </select>
+                                        <input type="text" id="css-rule-search" data-i18n-placeholder="dev.placeholder.filter" placeholder="Filter..." style="background:rgba(0,0,0,0.3); border:1px solid var(--debug-border); padding:4px 8px; font-size:11px; color:white; border-radius:4px; outline:none; width:120px">
+                                    </div>
+
+                                    <div style="flex:1; overflow-y:auto; min-height:100px" id="css-rules-container">
+                                        <div style="color:var(--text-muted); font-size:10px; text-align:center; margin-top:20px" data-i18n="dev.msg.selectStylesheet">Select a stylesheet to view/edit rules, or use the Inspect panel.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div class="debug-pane" id="pane-inspect-view">
                     <div id="inspect-header" style="padding:8px 16px; border-bottom:1px solid var(--debug-border); display:none; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02)">
-                        <span style="font-size:10px; font-weight:700; color:var(--text-muted)">INSPECTOR</span>
-                        <button class="tb-btn" id="inspect-btn-clear" style="font-size:10px; padding:2px 8px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:white; cursor:pointer">CLEAR SELECTION</button>
+                        <span style="font-size:10px; font-weight:700; color:var(--text-muted)" data-i18n="dev.label.inspector">INSPECTOR</span>
+                                <button class="debug-btn debug-btn-ghost" id="inspect-btn-clear" style="font-size:10px; padding:4px 10px" data-i18n="dev.btn.clearSelection">CLEAR SELECTION</button>
                     </div>
                     <div id="inspect-content" style="padding:16px; border-bottom:1px solid var(--debug-border); overflow-y:auto; height:100%">
-                        <div style="color:var(--text-muted); font-size:11px">Select an element to inspect...</div>
+                        <div style="color:var(--text-muted); font-size:11px" data-i18n="dev.msg.selectElement">Select an element to inspect...</div>
                     </div>
                 </div>
                 <div class="debug-pane" id="pane-sources">
                     <div class="sources-layout">
                         <div class="sources-tree-container" style="display:flex; flex-direction:column; border-right:1px solid var(--debug-border); background:rgba(0,0,0,0.1)">
                             <div style="padding:8px; border-bottom:1px solid var(--debug-border); display:flex; justify-content:space-between; align-items:center">
-                                <span style="font-size:10px; font-weight:700; color:var(--text-muted)">PROJECT</span>
-                                <button class="debug-btn" id="sources-refresh" title="Refresh Files">
+                                <span style="font-size:10px; font-weight:700; color:var(--text-muted)" data-i18n="dev.label.project">PROJECT</span>
+                                <button class="debug-btn" id="sources-refresh" data-i18n-title="dev.btn.refreshFiles" title="Refresh Files">
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                                 </button>
                             </div>
@@ -104,7 +329,7 @@ class DebugUI {
                         </div>
                         <div class="sources-editor">
                             <div id="sources-code-container" style="height:100%; position:relative">
-                                <pre id="sources-code" style="margin:0; padding:16px; font-family:'JetBrains Mono'; font-size:11px; color:var(--text-muted)">Select a file to view source...</pre>
+                                <pre id="sources-code" style="margin:0; padding:16px; font-family:'JetBrains Mono'; font-size:11px; color:var(--text-muted)" data-i18n="dev.msg.selectSourceFile">Select a file to view source...</pre>
                             </div>
                         </div>
                     </div>
@@ -113,27 +338,27 @@ class DebugUI {
                 <div class="debug-pane" id="pane-playground">
                     <div style="padding:16px">
                         <div style="margin-bottom:12px; font-size:10px; color:var(--text-muted); display:flex; justify-content:space-between">
-                            <span>HOT-PATCH: CSS / JS</span>
+                            <span data-i18n="dev.label.hotPatch">HOT-PATCH: CSS / JS</span>
                             <div style="display:flex; gap:8px">
-                                <button id="playground-reset" class="tb-btn" style="background:none; border:none; color:var(--debug-accent); font-size:10px; padding:0; cursor:pointer">RESET</button>
-                                <button id="playground-export" class="tb-btn" style="background:none; border:none; color:var(--debug-success); font-size:10px; padding:0; cursor:pointer">EXPORT PATCH</button>
+                                <button id="playground-reset" class="debug-btn debug-btn-ghost" style="color:var(--debug-accent); font-size:10px; padding:2px 6px" data-i18n="dev.btn.reset">RESET</button>
+                                <button id="playground-export" class="debug-btn debug-btn-ghost" style="color:var(--debug-success); font-size:10px; padding:2px 6px" data-i18n="dev.btn.exportPatch">EXPORT PATCH</button>
                             </div>
                         </div>
-                        <textarea id="playground-code" style="width:100%; height:120px; background:rgba(0,0,0,0.3); border:1px solid var(--debug-border); border-radius:8px; color:var(--debug-accent); font-family:inherit; padding:12px; font-size:11px; outline:none" placeholder="/* Enter CSS or JS here... */"></textarea>
+                        <textarea id="playground-code" style="width:100%; height:120px; background:rgba(0,0,0,0.3); border:1px solid var(--debug-border); border-radius:8px; color:var(--debug-accent); font-family:inherit; padding:12px; font-size:11px; outline:none" data-i18n-placeholder="dev.placeholder.playground" placeholder="/* Enter CSS or JS here... */"></textarea>
                         <div style="margin-top:12px; display:flex; gap:8px">
-                            <button class="tb-btn" style="background:var(--debug-accent); color:white; padding:6px 16px; border-radius:6px; font-size:11px" id="playground-apply-css">Apply CSS</button>
-                            <button class="tb-btn" style="background:var(--debug-success); color:white; padding:6px 16px; border-radius:6px; font-size:11px" id="playground-run-js">Run JS</button>
+                            <button class="debug-btn debug-btn-primary" style="flex:1" id="playground-apply-css" data-i18n="dev.btn.applyCss">APPLIQUER CSS</button>
+                            <button class="debug-btn debug-btn-success" style="flex:1" id="playground-run-js" data-i18n="dev.btn.runJs">EXÉCUTER JS</button>
                         </div>
-                        <div style="margin-top:20px; font-size:10px; color:var(--text-muted)">ACTIVE PATCHES</div>
+                        <div style="margin-top:20px; font-size:10px; color:var(--text-muted)" data-i18n="dev.label.activePatches">ACTIVE PATCHES</div>
                         <div id="patch-tree" style="margin-top:8px; display:flex; flex-direction:column; gap:6px"></div>
                     </div>
                 </div>
             </div>
             <div class="debug-footer">
-                <div class="metric-item">FPS: <b id="dbg-fps">0</b></div>
-                <div class="metric-item">Heap: <b id="dbg-mem">0MB</b></div>
-                <div class="metric-item">PID: <b id="dbg-pid">-</b></div>
-                <div class="metric-item">Uptime: <b id="dbg-uptime">0s</b></div>
+                <div class="metric-item"><span data-i18n="dev.metric.fps">FPS: </span><b id="dbg-fps">0</b></div>
+                <div class="metric-item"><span data-i18n="dev.metric.heap">Heap: </span><b id="dbg-mem">0MB</b></div>
+                <div class="metric-item"><span data-i18n="dev.metric.pid">PID: </span><b id="dbg-pid">-</b></div>
+                <div class="metric-item"><span data-i18n="dev.metric.uptime">Uptime: </span><b id="dbg-uptime">0s</b></div>
             </div>
             <div class="debug-resizer"></div>
         `;
@@ -141,23 +366,23 @@ class DebugUI {
         this.container = div;
 
         // Modal components
-        const modalOverlay = document.createElement('div');
-        modalOverlay.id = 'debug-modal-overlay';
-        modalOverlay.style = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; z-index:20002';
+        const modalOverlay = document.createElement('div'); // Declare modalOverlay here
+        modalOverlay.className = 'debug-modal-overlay';
         modalOverlay.innerHTML = `
-            <div id="debug-modal-content" style="background:var(--bg-panel); border:1px solid var(--border); border-radius:12px; padding:24px; min-width:320px; box-shadow:0 20px 40px rgba(0,0,0,0.4); transform:translateY(20px); transition:transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28)">
-                <h3 id="debug-modal-title" style="margin:0 0 12px 0; font-size:16px; color:var(--text-primary)">Confirm Action</h3>
-                <p id="debug-modal-text" style="margin:0 0 24px 0; font-size:13px; color:var(--text-secondary); line-height:1.5">Are you sure?</p>
+            <div id="debug-modal-content" class="debug-modal-content">
+                <h3 id="debug-modal-title" style="margin:0 0 12px 0; font-size:18px; color:var(--text-primary); font-weight:800" data-i18n="dev.modal.confirmTitle">Confirm Action</h3>
+                <p id="debug-modal-text" style="margin:0 0 24px 0; font-size:14px; color:var(--text-secondary); line-height:1.6; opacity:0.8" data-i18n="dev.modal.confirmText">Are you sure?</p>
                 <div id="debug-modal-input-container" style="display:none; margin-bottom:24px">
-                    <input type="text" id="debug-modal-input" style="width:100%; padding:10px; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:6px; color:white; outline:none">
+                    <input type="text" id="debug-modal-input" style="width:100%; padding:12px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:white; outline:none; font-family:'JetBrains Mono'">
                 </div>
                 <div style="display:flex; justify-content:flex-end; gap:12px">
-                    <button id="debug-modal-cancel" class="tb-btn" style="padding:8px 16px">Cancel</button>
-                    <button id="debug-modal-confirm" class="tb-btn" style="padding:8px 24px; background:var(--debug-accent); color:white">OK</button>
+                    <button id="debug-modal-cancel" class="debug-btn debug-btn-ghost" style="padding:10px 20px" data-i18n="common.cancel">Cancel</button>
+                    <button id="debug-modal-confirm" class="debug-btn debug-btn-primary" style="padding:10px 32px" data-i18n="common.ok">OK</button>
                 </div>
             </div>
         `;
-        document.body.appendChild(modalOverlay);
+        this.modalOverlay = modalOverlay;
+        this.container.appendChild(modalOverlay); // Append to DevTools container instead of body!
 
         // Load persisted position/size
         this.loadPosition();
@@ -166,24 +391,39 @@ class DebugUI {
         const crashDiv = document.createElement('div');
         crashDiv.className = 'debug-crash-overlay';
         crashDiv.innerHTML = `
-            <img src="assets/Tasky.png" style="width:100px; height:auto; filter: grayscale(1) contrast(2) brightness(0.5) sepia(1) hue-rotate(-50deg); margin-bottom:24px; opacity:0.6;">
-            <div class="crash-title">System Halt</div>
-            <div class="crash-subtitle">CRITICAL_LEVEL_EXCEPTION // KERNEL_PANIC_PREVENTED</div>
-            <div class="crash-details" id="crash-details">An unhandled exception has occurred. A debug dump has been saved to your local storage.</div>
-            <div style="display:flex; gap:16px; flex-wrap:wrap; justify-content:center">
-                <button class="tb-btn" style="background:var(--debug-error); color:white; padding:12px 32px; border-radius:12px; font-weight:800; border:none; cursor:pointer; box-shadow:0 8px 20px rgba(239, 68, 68, 0.3)" onclick="location.reload()">RELOAD APPLICATION</button>
-                <button class="tb-btn" style="background:rgba(255,255,255,0.05); color:white; padding:12px 24px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); cursor:pointer" id="crash-copy-dump">COPY ERROR DUMP</button>
-                <button class="tb-btn" style="background:none; color:var(--text-muted); padding:12px 24px; font-size:11px; text-decoration:underline; border:none; cursor:pointer" id="crash-dismiss">Dismiss & Continue (Unstable)</button>
+            <div style="background: radial-gradient(circle at center, rgba(239, 68, 68, 0.15) 0%, transparent 70%); position: absolute; top:0; left:0; right:0; bottom:0; z-index:-1; pointer-events:none;"></div>
+            <img src="assets/Tasky.png" style="width:120px; height:auto; filter: grayscale(1) contrast(2) brightness(0.6) sepia(1) hue-rotate(-50deg) drop-shadow(0 0 30px rgba(239, 68, 68, 0.3)); margin-bottom:32px; opacity:0.8; animation: pulse-tasky 4s infinite;">
+            <div class="crash-title" style="letter-spacing: 0.2em; font-size: 28px; font-weight: 900; background: linear-gradient(to bottom, #ffffff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" data-i18n="dev.crash.title">SYSTEM HALT</div>
+            <div class="crash-subtitle" style="color: var(--danger); font-weight: 800; font-family: var(--font-mono); margin-bottom: 24px; text-shadow: 0 0 15px rgba(239, 68, 68, 0.4);" data-i18n="dev.crash.subtitle">CRITICAL_LEVEL_EXCEPTION // KERNEL_PANIC_PREVENTED</div>
+            
+            <div class="crash-details" id="crash-details" style="background: rgba(0,0,0,0.4); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 24px; margin: 20px 0; max-width: 600px; line-height: 1.6; font-size: 13px; color: #cbd5e1; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);" data-i18n="dev.crash.details">
+                An unhandled exception has occurred. A debug dump has been saved to your local storage.
             </div>
-            <div style="margin-top:48px; font-size:10px; opacity:0.3; font-family:'JetBrains Mono'">BMM_OS_DEBUG_v0.9.7 // ${new Date().toISOString()}</div>
+
+            <div style="display:flex; flex-direction:column; align-items:center; gap:24px; margin-top: 40px; width: 100%; max-width: 480px;">
+                <div style="display:flex; flex-direction:row; align-items:center; justify-content:center; gap:16px; width:100%;">
+                    <button class="debug-btn" style="flex:1; background: linear-gradient(135deg, rgba(239,68,68,0.9), rgba(185,28,28,0.9)); color:white; padding:16px; border-radius:12px; font-weight:800; border:1px solid rgba(248, 113, 113, 0.5); cursor:pointer; box-shadow: 0 8px 32px rgba(239, 68, 68, 0.3); text-transform: uppercase; letter-spacing: 0.1em; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-size: 13px; backdrop-filter: blur(8px);" data-i18n="dev.crash.reload">
+                        RELOAD APPLICATION
+                    </button>
+                    <button class="debug-btn" style="flex:1; background: rgba(30,41,59,0.5); color:#f8fafc; padding:16px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); cursor:pointer; font-weight: 700; backdrop-filter: blur(12px); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); text-transform: uppercase; letter-spacing: 0.05em; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);" id="crash-copy-dump" data-i18n="dev.crash.copyDump">
+                        COPY DUMP
+                    </button>
+                </div>
+                
+                <button class="debug-btn" style="background:none; color:rgba(239, 68, 68, 0.7); font-size:12px; font-weight: 600; text-decoration:none; border:none; cursor:pointer; transition: all 0.2s; padding: 10px 20px; border-radius: 8px; white-space: nowrap; display: inline-block; width: max-content;" id="crash-dismiss" data-i18n="dev.crash.dismiss">
+                    Dismiss & Continue (Unstable System State)
+                </button>
+            </div>
+
+            <div style="margin-top:60px; font-size:10px; color:rgba(255,255,255,0.2); font-family:var(--font-mono); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 24px; letter-spacing: 1px; width: 80%; text-align: center;">BMM_OS_DEBUG_v0.9.8 // ${new Date().toISOString()}</div>
         `;
-        document.body.appendChild(crashDiv);
+        this.container.appendChild(crashDiv); // Append to DevTools container
         this.crashOverlay = crashDiv;
 
-        document.getElementById('crash-copy-dump').onclick = () => {
+        this.crashOverlay.querySelector('#crash-copy-dump').onclick = () => {
             const dump = localStorage.getItem('bmm_last_crash_dump');
             navigator.clipboard.writeText(dump);
-            const btn = document.getElementById('crash-copy-dump');
+            const btn = this.crashOverlay.querySelector('#crash-copy-dump');
             const originalText = btn.textContent;
             btn.textContent = 'COPIED!';
             btn.style.borderColor = 'var(--debug-success)';
@@ -195,8 +435,8 @@ class DebugUI {
             }, 2000);
         };
 
-        document.getElementById('crash-dismiss').onclick = () => {
-            if (confirm("DANGER: Continuing after a System Halt may cause data corruption or unpredictable behavior. Proceed?")) {
+        this.crashOverlay.querySelector('#crash-dismiss').onclick = () => {
+            if (confirm(t('dev.crash.dismissConfirm'))) {
                 this.crashOverlay.classList.remove('active');
             }
         };
@@ -211,121 +451,316 @@ class DebugUI {
         this.tooltipEl.className = 'debug-inspect-tooltip';
         this.tooltipEl.style.display = 'none';
         document.body.appendChild(this.tooltipEl);
+
+        this.translateUI();
     }
 
     showConfirm(title, text, onConfirm) {
-        const overlay = document.getElementById('debug-modal-overlay');
-        const modal = document.getElementById('debug-modal-content');
-        const inputContainer = document.getElementById('debug-modal-input-container');
-        
-        document.getElementById('debug-modal-title').textContent = title;
-        document.getElementById('debug-modal-text').textContent = text;
+        if (!this.container) this.init();
+        if (!this.isOpen) return; // Don't show DevTools modals if DevTools is closed
+
+        const overlay = this.modalOverlay;
+        const titleEl = this._get('debug-modal-title');
+        const textEl = this._get('debug-modal-text');
+        const confirmBtn = this._get('debug-modal-confirm');
+        const cancelBtn = this._get('debug-modal-cancel');
+        const inputContainer = this._get('debug-modal-input-container');
+
+        titleEl.textContent = title || t('dev.modal.confirmTitle');
+        textEl.textContent = text || t('dev.modal.confirmText');
         inputContainer.style.display = 'none';
-        overlay.style.display = 'flex';
-        setTimeout(() => modal.style.transform = 'translateY(0)', 10);
+        cancelBtn.style.display = 'block'; // Ensure cancel button is visible for confirm
 
         const close = () => {
-            modal.style.transform = 'translateY(20px)';
-            setTimeout(() => overlay.style.display = 'none', 300);
+            overlay.classList.remove('active');
+            setTimeout(() => { if (!overlay.classList.contains('active')) overlay.style.display = 'none'; }, 300);
         };
 
-        document.getElementById('debug-modal-cancel').onclick = close;
-        document.getElementById('debug-modal-confirm').onclick = () => {
-            onConfirm();
+        overlay.style.display = 'flex';
+        setTimeout(() => overlay.classList.add('active'), 10);
+
+        confirmBtn.onclick = () => {
+            if (onConfirm) onConfirm();
             close();
         };
+        cancelBtn.onclick = close;
+        overlay.onclick = (e) => { if (e.target === overlay) close(); };
     }
 
     showPrompt(title, text, defaultValue, onConfirm) {
-        const overlay = document.getElementById('debug-modal-overlay');
-        const modal = document.getElementById('debug-modal-content');
-        const inputContainer = document.getElementById('debug-modal-input-container');
-        const input = document.getElementById('debug-modal-input');
+        if (!this.container) this.init();
+        if (!this.isOpen) return;
+
+        const overlay = this.modalOverlay;
+        const titleEl = this._get('debug-modal-title');
+        const textEl = this._get('debug-modal-text');
+        const inputContainer = this._get('debug-modal-input-container');
+        const input = this._get('debug-modal-input');
+        const confirmBtn = this._get('debug-modal-confirm');
+        const cancelBtn = this._get('debug-modal-cancel');
         
-        document.getElementById('debug-modal-title').textContent = title;
-        document.getElementById('debug-modal-text').textContent = text;
+        titleEl.textContent = title || t('dev.modal.confirmTitle');
+        textEl.textContent = text || t('dev.modal.confirmText');
         inputContainer.style.display = 'block';
         input.value = defaultValue || '';
-        overlay.style.display = 'flex';
-        input.focus();
-        setTimeout(() => modal.style.transform = 'translateY(0)', 10);
+        cancelBtn.style.display = 'block'; // Ensure cancel button is visible for prompt
 
         const close = () => {
-            modal.style.transform = 'translateY(20px)';
-            setTimeout(() => overlay.style.display = 'none', 300);
+            overlay.classList.remove('active');
+            setTimeout(() => { if (!overlay.classList.contains('active')) overlay.style.display = 'none'; }, 300);
         };
 
-        document.getElementById('debug-modal-cancel').onclick = close;
-        document.getElementById('debug-modal-confirm').onclick = () => {
-            onConfirm(input.value);
+        overlay.style.display = 'flex';
+        setTimeout(() => {
+            overlay.classList.add('active');
+            input.focus();
+        }, 10);
+
+        cancelBtn.onclick = close;
+        confirmBtn.onclick = () => {
+            if (onConfirm) onConfirm(input.value);
             close();
         };
+        overlay.onclick = (e) => { if (e.target === overlay) close(); };
     }
 
     showAlert(title, text) {
-        const overlay = document.getElementById('debug-modal-overlay');
-        const modal = document.getElementById('debug-modal-content');
-        const inputContainer = document.getElementById('debug-modal-input-container');
-        const cancelBtn = document.getElementById('debug-modal-cancel');
-        
-        document.getElementById('debug-modal-title').textContent = title;
-        document.getElementById('debug-modal-text').textContent = text;
-        inputContainer.style.display = 'none';
+        if (!this.container) this.init();
+        // Allow alerts if explicitly triggered, but they will only be visible if DevTools is open
+        // OR we can explicitly open DevTools for important alerts? 
+        // User said they are visible when NOT activated, so we should probably not show them or open DevTools.
+        if (!this.isOpen) return; 
+
+        const overlay = this.modalOverlay;
+        const titleEl = this._get('debug-modal-title');
+        const textEl = this._get('debug-modal-text');
+        const confirmBtn = this._get('debug-modal-confirm');
+        const cancelBtn = this._get('debug-modal-cancel');
+        const inputContainer = this._get('debug-modal-input-container');
+
+        titleEl.textContent = title || t('common.error');
+        textEl.textContent = text;
         cancelBtn.style.display = 'none'; // Only OK for alert
-        overlay.style.display = 'flex';
-        setTimeout(() => modal.style.transform = 'translateY(0)', 10);
+        inputContainer.style.display = 'none';
 
         const close = () => {
-            modal.style.transform = 'translateY(20px)';
-            setTimeout(() => {
-                overlay.style.display = 'none';
-                cancelBtn.style.display = 'block'; // Restore for next calls
+            overlay.classList.remove('active');
+            setTimeout(() => { 
+                if (!overlay.classList.contains('active')) {
+                    overlay.style.display = 'none';
+                    cancelBtn.style.display = 'block'; // Restore for next calls
+                }
             }, 300);
         };
 
-        document.getElementById('debug-modal-confirm').onclick = close;
+        overlay.style.display = 'flex';
+        setTimeout(() => overlay.classList.add('active'), 10);
+
+        confirmBtn.onclick = close;
+        overlay.onclick = (e) => { if (e.target === overlay) close(); };
     }
 
     attachListeners() {
-        // Keyboard toggle
-        document.addEventListener('keydown', e => {
-            if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'd') {
-                this.toggle();
-            }
-        });
-
         // Tab switching
         this.container.querySelectorAll('.debug-tab').forEach(tab => {
             tab.addEventListener('click', () => this.switchTab(tab.dataset.tab));
         });
 
+        // Live language update
+        document.addEventListener('langChanged', () => {
+            this.translateUI();
+        });
+
+        // Debugger Sub-tab switching
+        this.container.querySelectorAll('.debug-subtab').forEach(t => {
+            t.addEventListener('click', () => {
+                const subId = t.dataset.sub;
+                this.switchDebuggerSubtab(subId);
+            });
+        });
+
+        // Debugger JS
+        this._get('js-open-devtools')?.addEventListener('click', async () => {
+            try {
+                if (window.__TAURI__ && window.__TAURI__.tauri) {
+                    await window.__TAURI__.tauri.invoke('plugin:devtools|open');
+                }
+            } catch (e) {
+                console.log("F12 is the standard fallback for opening DevTools.", e);
+                this.showAlert('Vanilla JS Debugger', "Tauri devtools API couldn't be invoked automatically. Please press F12 on your keyboard to open the Chrome DevTools inspector.");
+            }
+        });
+
+        this._get('js-add-watcher')?.addEventListener('click', () => {
+            const input = this._get('js-repl-input');
+            const cmd = input?.value.trim();
+            if (cmd) {
+                this.evalJSCommand(cmd);
+                if (input) input.value = '';
+            }
+        });
+
+        this._get('js-repl-input')?.addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+                const val = e.target.value.trim();
+                if (val) {
+                    this.evalJSCommand(val);
+                    e.target.value = '';
+                }
+            }
+        });
+
+        // Debugger Rust
+        this._get('rust-copy-lldb')?.addEventListener('click', () => {
+            const isWindows = navigator.userAgent.includes('Windows');
+            const cmd = isWindows ? 'rust-gdb target/debug/better-mods-manager.exe' : 'rust-lldb target/debug/better-mods-manager';
+            this.copyToClipboard(cmd);
+            this.showAlert('Rust Debugger Command Copied', `Copied: ${cmd}\n\nPaste this in your terminal to attach LLDB/GDB. You must run the app in debug mode.`);
+        });
+
+        this._get('rust-refresh-logs')?.addEventListener('click', () => this.refreshRustLogs());
+
+        // Debugger HTML
+        this._get('html-refresh-dom')?.addEventListener('click', () => this.buildDomTree());
+        this._get('html-collapse-all')?.addEventListener('click', () => {
+            const tree = this._get('html-dom-tree');
+            if (tree) {
+                tree.querySelectorAll('.dom-children').forEach(el => el.style.display = 'none');
+                tree.querySelectorAll('.dom-toggle').forEach(el => el.textContent = '▶');
+            }
+        });
+
+        // Debugger CSS
+        this._get('css-stylesheet-select')?.addEventListener('change', e => this.loadStylesheet(e.target.value));
+        this._get('css-rule-search')?.addEventListener('input', e => this.filterCSSRules(e.target.value));
+
+        // Debugger CSS - A11y & Design Tools
+        this._get('dbg-css-pink')?.addEventListener('change', e => {
+            document.body.classList.toggle('bmm-debug-pink', e.target.checked);
+        });
+
+        this._get('dbg-css-color')?.addEventListener('input', e => {
+            document.documentElement.style.setProperty('--bmm-dbg-color', e.target.value);
+        });
+
+        this._get('dbg-css-interactive')?.addEventListener('change', e => {
+            document.body.classList.toggle('bmm-debug-interactive', e.target.checked);
+        });
+
+        this._get('dbg-css-zindex')?.addEventListener('change', e => {
+            if (e.target.checked) {
+                document.querySelectorAll('*').forEach(el => {
+                    if(!el.style) return;
+                    const z = window.getComputedStyle(el).zIndex;
+                    if (z !== 'auto' && z !== '0') {
+                        el.dataset.bmmZIndex = z;
+                        el.classList.add('bmm-show-zindex');
+                    }
+                });
+            } else {
+                document.querySelectorAll('.bmm-show-zindex').forEach(el => {
+                    el.classList.remove('bmm-show-zindex');
+                    delete el.dataset.bmmZIndex;
+                });
+            }
+        });
+
+        this._get('dbg-css-events')?.addEventListener('change', e => {
+            this.toggleJSEvents(e.target.checked);
+        });
+
+        this._get('dbg-a11y-hardcoded')?.addEventListener('change', e => {
+            this.toggleHardcodedDetector(e.target.checked);
+        });
+
+        this._get('dbg-a11y-warnings')?.addEventListener('change', e => {
+            this.toggleA11yWarnings(e.target.checked);
+        });
+
+        this._get('dbg-a11y-reader')?.addEventListener('change', e => {
+            this.toggleA11yReader(e.target.checked);
+        });
+
+        this._get('dbg-js-events')?.addEventListener('change', e => {
+            this.toggleJSEvents(e.target.checked);
+        });
+
+        const updateGrid = () => {
+            const gridEl = document.getElementById('bmm-layout-grid');
+            if (!gridEl) return;
+            const hInput = document.getElementById('dbg-grid-h');
+            const vInput = document.getElementById('dbg-grid-v');
+            if (!hInput || !vInput) return;
+            
+            const h = hInput.value;
+            const v = vInput.value;
+            
+            hInput.style.setProperty('--val', ((h / 64) * 100) + '%');
+            vInput.style.setProperty('--val', ((v / 64) * 100) + '%');
+
+            const hValSpan = document.getElementById('dbg-grid-h-val');
+            const vValSpan = document.getElementById('dbg-grid-v-val');
+            if (hValSpan) hValSpan.textContent = h;
+            if (vValSpan) vValSpan.textContent = v;
+            
+            const hBg = h > 0 ? `linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px)` : '';
+            const vBg = v > 0 ? `linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px)` : '';
+            const bgStr = [hBg, vBg].filter(Boolean).join(', ');
+            
+            gridEl.style.backgroundImage = bgStr;
+            gridEl.style.backgroundSize = `${v > 0 ? v : 10}px ${h > 0 ? h : 10}px`;
+        };
+
+        this._get('dbg-css-grid')?.addEventListener('change', e => {
+            const config = document.getElementById('dbg-grid-config');
+            if (config) config.style.display = e.target.checked ? 'block' : 'none';
+            
+            let gridEl = document.getElementById('bmm-layout-grid');
+            if (e.target.checked) {
+                if (!gridEl) {
+                    gridEl = document.createElement('div');
+                    gridEl.id = 'bmm-layout-grid';
+                    document.body.appendChild(gridEl);
+                }
+                updateGrid();
+            } else if (gridEl) {
+                gridEl.remove();
+            }
+        });
+
+        this._get('dbg-grid-h')?.addEventListener('input', updateGrid);
+        this._get('dbg-grid-v')?.addEventListener('input', updateGrid);
+
+        // Sources Tree Toggle
         // Controls
-        document.getElementById('debug-btn-close').addEventListener('click', () => this.toggle(false));
-        document.getElementById('dbg-clear-all').addEventListener('click', () => {
+        this.container.querySelector('#debug-btn-close').addEventListener('click', () => this.toggle(false));
+        this.container.querySelector('#dbg-clear-all').addEventListener('click', () => {
             this.showConfirm('Clear Everything', 'This will wipe all console logs and the activity timeline. Proceed?', () => {
                 debugHub.recordLog('info', ['[System] History cleared by user']);
                 debugHub.logs = [];
                 debugHub.ipcCalls = [];
                 debugHub.actions = [];
-                document.getElementById('console-logs').innerHTML = '';
-                document.getElementById('timeline-list').innerHTML = '';
+                const logs = this.container.querySelector('#console-logs');
+                const timeline = this.container.querySelector('#timeline-list');
+                if (logs) logs.innerHTML = '';
+                if (timeline) timeline.innerHTML = '';
             });
         });
-        document.getElementById('debug-btn-inspect').addEventListener('click', () => this.toggleInspector());
-        document.getElementById('debug-btn-export').addEventListener('click', () => this.exportSession());
+        this.container.querySelector('#debug-btn-inspect').addEventListener('click', () => this.toggleInspector());
+        this.container.querySelector('#debug-btn-export').addEventListener('click', () => this.exportSession());
 
-        document.getElementById('console-clear-manual').addEventListener('click', () => {
-             document.getElementById('console-logs').innerHTML = '';
+        this._get('console-clear-manual').addEventListener('click', () => {
+             this._get('console-logs').innerHTML = '';
              debugHub.logs = [];
         });
 
-        document.getElementById('timeline-clear-manual').addEventListener('click', () => {
-             document.getElementById('timeline-list').innerHTML = '';
+        this._get('timeline-clear-manual').addEventListener('click', () => {
+             this._get('timeline-list').innerHTML = '';
              debugHub.ipcCalls = [];
              debugHub.actions = [];
         });
 
-        document.getElementById('sources-refresh').addEventListener('click', () => this.loadSources());
+        this._get('sources-refresh').addEventListener('click', () => this.loadSources());
 
         // Context Menu in Sources
         this.container.querySelector('.sources-editor').addEventListener('contextmenu', e => {
@@ -344,7 +779,7 @@ class DebugUI {
                 this.toggleInspector(false);
             }
         });
-        document.getElementById('console-search').addEventListener('input', e => {
+        this._get('console-search').addEventListener('input', e => {
             const query = e.target.value.toLowerCase();
             this.container.querySelectorAll('#console-logs .log-entry').forEach(entry => {
                 const text = entry.textContent.toLowerCase();
@@ -358,33 +793,33 @@ class DebugUI {
             debugHub.recordAction('CLICK', target, target.innerText?.trim() || target.value || '');
         }, true);
 
-        document.getElementById('inspect-btn-clear').addEventListener('click', () => this.clearSelection());
+        this._get('inspect-btn-clear').addEventListener('click', () => this.clearSelection());
 
-        document.getElementById('playground-apply-css').addEventListener('click', () => {
+        this._get('playground-apply-css').addEventListener('click', () => {
             try {
-                const code = document.getElementById('playground-code').value;
+                const code = this._get('playground-code').value;
                 debugHub.applyPatch('CSS', code);
             } catch (err) {
                 this.showAlert('CSS Error', err.message || 'Invalid CSS syntax.');
             }
         });
 
-        document.getElementById('playground-run-js').addEventListener('click', () => {
+        this._get('playground-run-js').addEventListener('click', () => {
             try {
-                const code = document.getElementById('playground-code').value;
+                const code = this._get('playground-code').value;
                 debugHub.applyPatch('JS', code);
             } catch (err) {
                 this.showAlert('JS Error', err.message || 'Execution failed.');
             }
         });
 
-        document.getElementById('playground-reset').addEventListener('click', () => {
-            document.getElementById('playground-code').value = '';
+        this._get('playground-reset').addEventListener('click', () => {
+            this._get('playground-code').value = '';
             // Remove all CSS patches
             debugHub.patches.filter(p => p.type === 'CSS').forEach(p => debugHub.removePatch(p.id));
         });
 
-        document.getElementById('playground-export').addEventListener('click', () => {
+        this._get('playground-export').addEventListener('click', () => {
             const content = debugHub.patches.map(p => `/* Patch ${p.id} (${p.type}) */\n${p.content}`).join('\n\n');
             const blob = new Blob([content], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
@@ -395,7 +830,7 @@ class DebugUI {
         });
 
         // Patch tree interaction
-        document.getElementById('patch-tree').addEventListener('click', e => {
+        this._get('patch-tree').addEventListener('click', e => {
             const btn = e.target.closest('.patch-remove');
             if (btn) {
                 const id = btn.dataset.id;
@@ -439,6 +874,7 @@ class DebugUI {
 
         header.addEventListener('mousedown', e => {
             if (e.target.closest('.debug-btn')) return;
+            e.preventDefault();
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
@@ -458,6 +894,7 @@ class DebugUI {
         let initialWidth, initialHeight;
 
         resizer.addEventListener('mousedown', e => {
+            e.preventDefault();
             isResizing = true;
             startX = e.clientX;
             startY = e.clientY;
@@ -495,18 +932,21 @@ class DebugUI {
             if (event.type === 'log') this.appendLog(event.data);
             if (event.type === 'ipc' || event.type === 'action') this.updateTimeline(event.data);
             if (event.type === 'clear') {
-                document.getElementById('console-logs').innerHTML = '';
-                document.getElementById('timeline-list').innerHTML = '';
+                this._get('console-logs').innerHTML = '';
+                this._get('timeline-list').innerHTML = '';
                 debugHub.logs = [];
                 debugHub.ipcCalls = [];
                 debugHub.actions = [];
             }
-            if (event.type === 'state') this.updateStateView();
+            if (event.type === 'state') {
+                this.updateStateView();
+                this.translateUI();
+            }
             if (event.type === 'metrics') this.updateMetrics(event.data);
             if (event.type === 'patches') this.updatePatchTree();
             if (event.type === 'crash') {
                 this.crashOverlay.classList.add('active');
-                document.getElementById('crash-details').textContent = event.data.msg || 'Unknown internal error';
+                this._get('crash-details').textContent = event.data.msg || 'Unknown internal error';
             }
         });
 
@@ -526,6 +966,8 @@ class DebugUI {
             e.preventDefault();
             e.stopPropagation();
             const target = this.hoveredEl;
+            if (!target) return; // FIX: Prevent crash if clicking empty space
+
             this.selectElement(target);
             
             console.debug('[Inspector] Selected:', target);
@@ -534,22 +976,19 @@ class DebugUI {
             const computed = window.getComputedStyle(target);
             const styleSnippet = `/* Edit styles for ${target.tagName.toLowerCase()} */\n` + 
                 `selector {\n  background: ${computed.backgroundColor};\n  color: ${computed.color};\n  border: ${computed.border};\n}`;
-            document.getElementById('playground-code').value = styleSnippet;
+            const playground = this._get('playground-code');
+            if (playground) playground.value = styleSnippet;
         }, true);
     }
 
-    toggle(force) {
-        this.isOpen = force !== undefined ? force : !this.isOpen;
-        this.container.classList.toggle('open', this.isOpen);
-        if (this.isOpen) {
-            this.switchTab(this.activeTab);
-            this.updateStateView();
-        }
+    translateUI() {
+        if (!this.container) return;
+        applyTranslations(this.container);
     }
 
     toggleInspector(force) {
         this.isInspecting = force !== undefined ? force : !this.isInspecting;
-        const btn = document.getElementById('debug-btn-inspect');
+        const btn = this._get('debug-btn-inspect');
         btn.classList.toggle('active', this.isInspecting);
         document.body.style.cursor = this.isInspecting ? 'crosshair' : '';
         
@@ -563,19 +1002,12 @@ class DebugUI {
     }
 
     appendLog(item) {
-        const logs = document.getElementById('console-logs');
+        const logs = this._get('console-logs');
         if (!logs) return;
 
         const entry = document.createElement('div');
         entry.className = `log-entry ${item.level}`;
-        
-        const timestamp = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        
-        entry.innerHTML = `
-            <span style="color:var(--text-muted); min-width:60px; font-size:9px">[${timestamp}]</span>
-            <span class="log-msg">${this.escapeHtml(item.message)}</span>
-        `;
-        
+        entry.innerHTML = `<span style="opacity:0.5; font-size:9px">[${new Date().toLocaleTimeString()}]</span> <span>${this.escapeHtml(item.message)}</span>`;
         logs.appendChild(entry);
         
         // Auto-scroll if at bottom
@@ -597,11 +1029,17 @@ class DebugUI {
         this.tooltipEl.style.display = 'block';
         this.tooltipEl.style.top = (rect.top - 24) + 'px';
         this.tooltipEl.style.left = rect.left + 'px';
-        this.tooltipEl.textContent = `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${el.className ? '.' + el.className.split(' ').join('.') : ''}`;
+        
+        // Fix: safely handle className (especially for SVG elements where it's an object)
+        const classAttr = el.getAttribute('class');
+        const classStr = (typeof classAttr === 'string' && classAttr) 
+            ? '.' + classAttr.trim().split(/\s+/).join('.') 
+            : '';
+        this.tooltipEl.textContent = `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${classStr}`;
     }
 
     updatePatchTree() {
-        const list = document.getElementById('patch-tree');
+        const list = this._get('patch-tree');
         list.innerHTML = debugHub.patches.map(p => `
             <div class="patch-row" style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); padding:6px 10px; border-radius:4px; font-size:10px">
                 <span style="color:var(--debug-accent)">${p.type}: ${p.id}</span>
@@ -621,6 +1059,160 @@ class DebugUI {
         this.savePosition();
         if (tabId === 'inspect-view' && !this.selectedEl) {
             this.clearSelection();
+        }
+        if (tabId === 'debugger') {
+            const activeSub = this.container.querySelector('.debug-subtab.active');
+            if (activeSub) this.switchDebuggerSubtab(activeSub.dataset.sub);
+        }
+    }
+
+    switchDebuggerSubtab(subId) {
+        this.container.querySelectorAll('.debug-subtab').forEach(t => {
+            t.classList.toggle('active', t.dataset.sub === subId);
+        });
+        this.container.querySelectorAll('.debug-subpane').forEach(p => {
+            p.style.display = p.id === `subpane-${subId}` ? 'flex' : 'none';
+        });
+
+        if (subId === 'css') {
+            this.loadStylesheetsList();
+        }
+    }
+
+    loadStylesheetsList() {
+        const select = this._get('css-stylesheet-select');
+        if (!select) return;
+        
+        // Preserve current selection if possible
+        const currentVal = select.value;
+        select.innerHTML = '<option value="">Sélectionner une feuille...</option>';
+        
+        let found = false;
+        Array.from(document.styleSheets).forEach((sheet, i) => {
+            try {
+                // Must access cssRules to trigger CORS error early
+                if (!sheet.cssRules) return;
+                let name = sheet.href ? sheet.href.split('/').pop() : 'inline style';
+                if (name.includes('debug.css')) return; // Ignore debug styles
+                
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = `[${i}] ${name} (${sheet.cssRules.length} règles)`;
+                select.appendChild(opt);
+                if (currentVal && currentVal == i) found = true;
+            } catch (e) {
+                // CORS or restricted
+            }
+        });
+        
+        if (found) select.value = currentVal;
+    }
+
+    loadStylesheet(sheetIndex) {
+        const container = this._get('css-rules-container');
+        if (!container) return;
+
+        if (sheetIndex === '') {
+            container.innerHTML = '<div style="color:var(--text-muted); font-size:10px; text-align:center; margin-top:20px">Sélectionnez une feuille de style.</div>';
+            return;
+        }
+
+        try {
+            const sheet = document.styleSheets[sheetIndex];
+            const rules = sheet.cssRules;
+            let html = '';
+
+            for (let r = 0; r < rules.length; r++) {
+                const rule = rules[r];
+                if (rule.type !== CSSRule.STYLE_RULE) continue;
+                
+                // Format the cssText
+                const cssText = rule.cssText;
+                const match = cssText.match(/\{([\s\S]*)\}/);
+                let styles = match ? match[1].trim() : '';
+                
+                // Add minor syntax highlighting manually
+                styles = styles.split(';').map(s => s.trim()).filter(s => s).map(s => {
+                    const parts = s.split(':');
+                    if (parts.length < 2) return s;
+                    return `<span style="color:#9cdcfe">${parts[0].trim()}</span>: <span style="color:#ce9178">${parts.slice(1).join(':').trim()}</span>;`;
+                }).join('<br>  ');
+
+                if (styles) styles = '  ' + styles;
+
+                // Live Edit Structure
+                html += `
+                    <div class="css-rule-block" style="margin-bottom:12px; font-family:'JetBrains Mono'; font-size:11px; padding:8px; border-radius:4px; background:rgba(255,255,255,0.02); border:1px solid var(--debug-border)">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
+                            <div style="color:var(--debug-accent); font-weight:700">${this.escapeHtml(rule.selectorText || '')} {</div>
+                            <button class="rule-inspect-btn" data-selector="${this.escapeHtml(rule.selectorText || '')}" title="Inspect matching element" style="background:none; border:none; color:var(--debug-accent); cursor:pointer; padding:4px; border-radius:4px; display:flex; align-items:center; transition:background 0.2s">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.94-.49-7-3.85-7-7.93s3.06-7.44 7-7.93V19.93z"></path></svg>
+                            </button>
+                        </div>
+                        <div class="live-css-editor" contenteditable="true" spellcheck="false" data-sheet="${sheetIndex}" data-rule="${r}" data-selector="${this.escapeHtml(rule.selectorText || '')}" style="outline:none; padding:4px; border:1px dashed transparent; transition:border 0.2s" onfocus="this.style.borderColor='var(--debug-accent)'" onblur="this.style.borderColor='transparent'">${styles.replace(/<span.*?>/g, '').replace(/<\/span>/g, '')}</div>
+                        <div style="color:var(--debug-accent); font-weight:700; margin-top:4px">}</div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html || '<div style="color:var(--text-muted); font-size:10px; text-align:center">Aucune règle CSS standard trouvée.</div>';
+
+            // Attach Live CSS Modifiers
+            container.querySelectorAll('.live-css-editor').forEach(editor => {
+                editor.addEventListener('input', (e) => {
+                    const sheetIdx = e.target.dataset.sheet;
+                    const ruleIdx = e.target.dataset.rule;
+                    const selector = e.target.dataset.selector;
+                    const liveStyles = e.target.innerText;
+                    
+                    const overrideId = `live-override-${sheetIdx}-${ruleIdx}`;
+                    let overrideNode = document.getElementById(overrideId);
+                    if (!overrideNode) {
+                        overrideNode = document.createElement('style');
+                        overrideNode.id = overrideId;
+                        document.head.appendChild(overrideNode);
+                    }
+                    overrideNode.textContent = `${selector} { ${liveStyles} }`;
+                });
+            });
+
+            // Attach Rule Inspection
+            container.querySelectorAll('.rule-inspect-btn').forEach(btn => {
+                btn.onclick = () => {
+                    this.inspectSelector(btn.dataset.selector);
+                };
+            });
+
+            // Re-apply search filter if any
+            const query = this._get('css-rule-search')?.value.toLowerCase() || '';
+            if (query) this.filterCSSRules(query);
+
+        } catch (e) {
+            container.innerHTML = `<div style="color:var(--debug-error); font-size:10px">Impossible de lire la feuille: ${e.message}</div>`;
+        }
+    }
+
+    filterCSSRules(query) {
+        const container = this._get('css-rules-container');
+        if (!container) return;
+        query = query.toLowerCase();
+        container.querySelectorAll('.css-rule-block').forEach(block => {
+            const text = block.textContent.toLowerCase();
+            block.style.display = text.includes(query) ? 'block' : 'none';
+        });
+    }
+
+    inspectSelector(selector) {
+        try {
+            const match = document.querySelector(selector);
+            if (match) {
+                this.selectElement(match);
+                this.switchTab('inspect-view');
+            } else {
+                console.warn('[BMM-Debug] No element matches selector:', selector);
+            }
+        } catch (e) {
+            console.error('[BMM-Debug] Invalid selector or error during inspection:', e);
         }
     }
 
@@ -655,8 +1247,8 @@ class DebugUI {
     }
 
     updateTimeline(item) {
-        const pane = document.getElementById('timeline-list');
-        let entry = document.getElementById(`timeline-${item.id}`);
+        const pane = this._get('timeline-list');
+        let entry = this._get(`timeline-${item.id}`);
         
         if (!entry) {
             entry = document.createElement('div');
@@ -680,8 +1272,8 @@ class DebugUI {
 
     clearSelection() {
         this.selectedEl = null;
-        document.getElementById('inspect-header').style.display = 'none';
-        document.getElementById('inspect-content').innerHTML = '<div style="color:var(--text-muted); font-size:11px">Select an element to inspect...</div>';
+        this._get('inspect-header').style.display = 'none';
+        this._get('inspect-content').innerHTML = '<div style="color:var(--text-muted); font-size:11px">Select an element to inspect...</div>';
         if (this.highlightEl) this.highlightEl.style.display = 'none';
         if (this.tooltipEl) this.tooltipEl.style.display = 'none';
     }
@@ -692,8 +1284,8 @@ class DebugUI {
         this.toggleInspector(false);
         this.switchTab('inspect-view');
 
-        document.getElementById('inspect-header').style.display = 'flex';
-        const pane = document.getElementById('inspect-content');
+        this._get('inspect-header').style.display = 'flex';
+        const pane = this._get('inspect-content');
         pane.innerHTML = ''; // Clear previous content
         const sourceGuess = this.guessSourceFile(target);
         const computed = window.getComputedStyle(target);
@@ -709,8 +1301,8 @@ class DebugUI {
                         <div style="color:var(--text-muted); font-size:10px">${target.id ? '#' + target.id : ''} ${Array.from(target.classList).map(c => '.' + c).join(' ')}</div>
                     </div>
                     <div style="display:flex; gap:4px">
-                        <button class="tb-btn" id="inspect-copy-node" title="Copy HTML" style="padding:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-                        <button class="tb-btn" id="inspect-send-playground" title="Send to Playground" style="padding:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l2.233 2.233L21 2z"/></svg></button>
+                        <button class="debug-btn" id="inspect-copy-node" title="Copy HTML" style="padding:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                        <button class="debug-btn" id="inspect-send-playground" title="Send to Playground" style="padding:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l2.233 2.233L21 2z"/></svg></button>
                     </div>
                 </div>
                 <div style="font-size:10px; color:var(--text-muted); margin-bottom:4px">SOURCE GUESS</div>
@@ -751,7 +1343,7 @@ class DebugUI {
                 }).join('')}
                 
                 <div style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px">
-                    <button class="tb-btn" id="inspect-add-prop" style="width:100%; border-style:dashed; opacity:0.6; font-size:10px">+ ADD CUSTOM PROPERTY</button>
+                    <button class="debug-btn" id="inspect-add-prop" style="width:100%; border-style:dashed; opacity:0.6; font-size:10px">+ ADD CUSTOM PROPERTY</button>
                 </div>
             </div>
         `;
@@ -782,7 +1374,7 @@ class DebugUI {
             };
         });
 
-        document.getElementById('inspect-add-prop').onclick = () => {
+        this._get('inspect-add-prop').onclick = () => {
             this.showPrompt('Custom Property', 'Enter CSS property name (e.g. border-radius):', '', (prop) => {
                 if (prop) {
                     this.showPrompt('Property Value', `Enter value for ${prop}:`, '', (value) => {
@@ -796,16 +1388,16 @@ class DebugUI {
             });
         };
 
-        document.getElementById('inspect-copy-node').onclick = () => {
+        this._get('inspect-copy-node').onclick = () => {
             navigator.clipboard.writeText(target.outerHTML);
             console.info('[Inspector] Copied HTML to clipboard');
         };
         
-        document.getElementById('inspect-send-playground').onclick = () => {
+        this._get('inspect-send-playground').onclick = () => {
             this.switchTab('playground');
             const styleSnippet = `/* Edit styles for ${target.tagName.toLowerCase()} */\n` + 
                 `selector {\n  background: ${computed.backgroundColor};\n  color: ${computed.color};\n  border: ${computed.border};\n}`;
-            document.getElementById('playground-code').value = styleSnippet;
+            this._get('playground-code').value = styleSnippet;
         };
     }
 
@@ -816,7 +1408,7 @@ class DebugUI {
     }
 
     updateStateView() {
-        const pane = document.getElementById('pane-state');
+        const pane = this._get('pane-state');
         const state = appState.state;
         let html = '<div style="padding:16px; font-family:inherit">';
         
@@ -842,13 +1434,179 @@ class DebugUI {
 
 
     clearUI() {
-        document.getElementById('pane-console').innerHTML = '';
-        document.getElementById('pane-network').innerHTML = '';
+        this._get('pane-console').innerHTML = '';
+        this._get('pane-network').innerHTML = '';
         this.updateStateView();
     }
 
     escapeHtml(str) {
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // --- ADVANCED A11Y & DEBUG TOOLS ---
+
+    toggleA11yWarnings(enabled) {
+        this.a11yWarnings = enabled;
+        if (enabled) {
+            this.auditA11y();
+            this.a11yInterval = setInterval(() => this.auditA11y(), 2000);
+            console.info('[BMM-Debug] Live A11y Warnings enabled.');
+        } else {
+            if (this.a11yInterval) clearInterval(this.a11yInterval);
+            document.querySelectorAll('.bmm-a11y-error-outline').forEach(el => {
+                el.classList.remove('bmm-a11y-error-outline');
+                el.removeAttribute('title');
+            });
+        }
+    }
+
+    auditA11y() {
+        if (!this.a11yWarnings) return;
+        
+        // 1. Missing ALT on images
+        document.querySelectorAll('img').forEach(img => {
+            if (!img.hasAttribute('alt') || img.alt.trim() === '') {
+                img.classList.add('bmm-a11y-error-outline');
+                img.title = "A11y Warning: Image missing alt attribute";
+            } else {
+                img.classList.remove('bmm-a11y-error-outline');
+            }
+        });
+
+        // 2. Buttons without labels/text
+        document.querySelectorAll('button').forEach(btn => {
+            const hasText = btn.innerText.trim().length > 0;
+            const hasLabel = btn.hasAttribute('aria-label') || btn.hasAttribute('title');
+            if (!hasText && !hasLabel) {
+                btn.classList.add('bmm-a11y-error-outline');
+                btn.title = "A11y Warning: Button has no visible text and no aria-label";
+            } else {
+                btn.classList.remove('bmm-a11y-error-outline');
+            }
+        });
+
+        // 3. Inputs without labels
+        document.querySelectorAll('input:not([type="hidden"]), select, textarea').forEach(input => {
+            if (input.id) {
+                const label = document.querySelector(`label[for="${input.id}"]`);
+                if (!label && !input.hasAttribute('aria-label') && !input.hasAttribute('placeholder')) {
+                    input.classList.add('bmm-a11y-error-outline');
+                    input.title = "A11y Warning: Form field has no associated label or aria-label";
+                } else {
+                    input.classList.remove('bmm-a11y-error-outline');
+                }
+            } else if (!input.hasAttribute('aria-label') && !input.hasAttribute('placeholder')) {
+                    input.classList.add('bmm-a11y-error-outline');
+                    input.title = "A11y Warning: Form field has no associated label or aria-label";
+            } else {
+                input.classList.remove('bmm-a11y-error-outline');
+            }
+        });
+    }
+
+    toggleA11yReader(enabled) {
+        this.a11yReader = enabled;
+        if (enabled) {
+            this._a11yMouseOver = (e) => {
+                const target = e.target;
+                if (target.closest('#bmm-debug-overlay')) return;
+
+                let readerOverlay = document.getElementById('bmm-a11y-reader-overlay');
+                if (!readerOverlay) {
+                    readerOverlay = document.createElement('div');
+                    readerOverlay.id = 'bmm-a11y-reader-overlay';
+                    readerOverlay.className = 'bmm-a11y-reader-label';
+                    document.body.appendChild(readerOverlay);
+                }
+
+                const rect = target.getBoundingClientRect();
+                const accessibleName = target.getAttribute('aria-label') || target.getAttribute('alt') || (target.innerText || target.textContent || "").trim() || target.getAttribute('title') || target.tagName.toLowerCase();
+                
+                readerOverlay.textContent = `Accessible: "${accessibleName}"`;
+                readerOverlay.style.display = 'block';
+                readerOverlay.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+                readerOverlay.style.left = (rect.left + window.scrollX) + 'px';
+            };
+            this._a11yMouseOut = () => {
+                const overlay = document.getElementById('bmm-a11y-reader-overlay');
+                if (overlay) overlay.style.display = 'none';
+            };
+            document.addEventListener('mouseover', this._a11yMouseOver);
+            document.addEventListener('mouseout', this._a11yMouseOut);
+            console.info('[BMM-Debug] A11y Reader Simulation enabled.');
+        } else {
+            document.removeEventListener('mouseover', this._a11yMouseOver);
+            document.removeEventListener('mouseout', this._a11yMouseOut);
+            const overlay = document.getElementById('bmm-a11y-reader-overlay');
+            if (overlay) overlay.remove();
+        }
+    }
+
+    toggleJSEvents(enabled) {
+        this.jsEvents = enabled;
+        if (enabled) {
+            document.querySelectorAll('*').forEach(el => {
+                if (el.hasAttribute('data-bmm-events') || el.onclick) {
+                    el.classList.add('bmm-js-event-node');
+                    const events = el.getAttribute('data-bmm-events') || 'inline click';
+                    el.title = `JS Events: ${events}`;
+                }
+            });
+            console.info('[BMM-Debug] Event Listener Overlay enabled.');
+        } else {
+            document.querySelectorAll('.bmm-js-event-node').forEach(el => {
+                el.classList.remove('bmm-js-event-node');
+                el.removeAttribute('title');
+            });
+        }
+    }
+
+
+    toggleHardcodedDetector(enabled) {
+        this.hardcodedDetector = enabled;
+        if (enabled) {
+            this.auditHardcoded();
+            this.hardcodedInterval = setInterval(() => this.auditHardcoded(), 3000);
+            console.info('[BMM-Debug] Hardcoded Text Detector enabled.');
+        } else {
+            if (this.hardcodedInterval) clearInterval(this.hardcodedInterval);
+            document.querySelectorAll('.bmm-hardcoded-error').forEach(el => {
+                el.classList.remove('bmm-hardcoded-error');
+                el.removeAttribute('title');
+            });
+        }
+    }
+
+    auditHardcoded() {
+        if (!this.hardcodedDetector) return;
+
+        const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+            acceptNode: (node) => {
+                // Skip if inside debug overlay
+                if (node.parentElement?.closest('#bmm-debug-overlay')) return NodeFilter.FILTER_REJECT;
+                // Skip script/style
+                if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE'].includes(node.parentElement?.tagName)) return NodeFilter.FILTER_REJECT;
+                // Skip icons, symbols, or very short strings (usually UI decor)
+                if (!node.textContent.trim()) return NodeFilter.FILTER_REJECT;
+                // Skip if already has i18n
+                if (node.parentElement?.closest('[data-i18n], [data-i18n-placeholder], [data-i18n-title]')) return NodeFilter.FILTER_REJECT;
+                
+                return NodeFilter.FILTER_ACCEPT;
+            }
+        });
+
+        const nodes = [];
+        let curr;
+        while (curr = walk.nextNode()) nodes.push(curr);
+
+        nodes.forEach(textNode => {
+            const parent = textNode.parentElement;
+            if (parent && !parent.classList.contains('bmm-hardcoded-error')) {
+                parent.classList.add('bmm-hardcoded-error');
+                parent.dataset.bmmHardcoded = textNode.textContent.trim();
+            }
+        });
     }
 
     savePosition() {
@@ -955,7 +1713,7 @@ class DebugUI {
         if (!window.__TAURI__) return;
         const { invoke } = window.__TAURI__.tauri;
 
-        editorArea.innerHTML = '<div style="padding:20px; color:var(--text-muted)">Loading...</div>';
+        editorArea.innerHTML = `<div style="padding:20px; color:var(--text-muted)">${t('common.loading')}</div>`;
 
         try {
             const data = await invoke('read_project_file', { path });
@@ -963,21 +1721,53 @@ class DebugUI {
             
             const ext = path.split('.').pop().toLowerCase();
             const isImage = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'].includes(ext);
+            const isVideo = ['mp4', 'webm', 'ogg'].includes(ext);
 
             if (isImage) {
                 editorArea.innerHTML = `
                     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:20px; background:rgba(0,0,0,0.3)">
                         <img src="${data}" style="max-width:90%; max-height:80%; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:4px; margin-bottom:12px">
-                        <div style="color:var(--text-muted); font-size:10px; font-family:'JetBrains Mono'">${path}<br>Click image to download</div>
+                        <div style="color:var(--text-muted); font-size:10px; font-family:'JetBrains Mono'">${path}<br>Clic droit pour télécharger</div>
+                    </div>
+                `;
+            } else if (isVideo) {
+                editorArea.innerHTML = `
+                    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:20px; background:rgba(0,0,0,0.3)">
+                        <video src="${data}" controls style="max-width:90%; max-height:80%; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:4px; margin-bottom:12px"></video>
+                        <div style="color:var(--text-muted); font-size:10px; font-family:'JetBrains Mono'">${path}</div>
                     </div>
                 `;
             } else {
                 const highlighted = this.highlightCode(data, ext);
                 editorArea.innerHTML = `<pre id="sources-code" style="margin:0; padding:16px; font-family:'JetBrains Mono'; font-size:11px; color:var(--text-primary); white-space:pre-wrap; line-height:1.5">${highlighted}</pre>`;
             }
+
+            editorArea.oncontextmenu = (e) => {
+                e.preventDefault();
+                
+                this.showContextMenu(e.clientX, e.clientY, [
+                    { 
+                        label: t('common.copy'), 
+                        action: () => {
+                            if (isImage || isVideo) {
+                                this.copyToClipboard(data);
+                            } else {
+                                navigator.clipboard.writeText(data).then(() => {
+                                    this.showAlert(t('common.success'), t('dev.msg.contentCopied'));
+                                });
+                            }
+                        }
+                    },
+                    { 
+                        label: t('common.downloadFile'), 
+                        action: () => this.downloadFile(path.split(/[\\/]/).pop(), data)
+                    }
+                ]);
+            };
+
         } catch (e) {
             console.error('[BMM-Debug] Failed to read source file:', e);
-            editorArea.innerHTML = `<div style="padding:20px; color:var(--debug-error)">Error: ${e}</div>`;
+            editorArea.innerHTML = `<div style="padding:20px; color:var(--debug-error)">${t('common.error')}: ${e}</div>`;
         }
     }
 
@@ -996,14 +1786,18 @@ class DebugUI {
         // Order matters: match larger patterns first
         if (ext === 'css') {
             h = h.replace(/(\/\*[\s\S]*?\*\/)/g, m => pushToken('#6a9955', m))
+                 .replace(/(@[\w-]+)/g, m => pushToken('#c586c0', m)) // Media queries
                  .replace(/([^{}\n;]+)\s*\{/g, (m, p1) => pushToken('#d7ba7d', p1) + ' {')
                  .replace(/([\w-]+)\s*:/g, (m, p1) => pushToken('#9cdcfe', p1) + ':')
-                 .replace(/:\s*([^;\}]+)/g, (m, p1) => ': ' + pushToken('#ce9178', p1));
+                 .replace(/:\s*([^;\}]+)/g, (m, p1) => ': ' + pushToken('#ce9178', p1))
+                 .replace(/(#[0-9a-fA-F]{3,8})/g, m => pushToken('#b5cea8', m)) // Hex colors
+                 .replace(/(:hover|:active|:focus|:before|:after|:nth-child\([\w+n-]+\))/g, m => pushToken('#d7ba7d', m));
         } 
         else if (ext === 'js' || ext === 'ts' || ext === 'rust' || ext === 'rs') {
-            const keywords = ext.startsWith('r') 
+            const isRust = ext.startsWith('r');
+            const keywords = isRust 
                 ? /\b(fn|let|mut|match|if|else|loop|while|for|return|pub|use|mod|struct|enum|impl|trait|type|where|async|await|dyn|static|crate)\b/g
-                : /\b(const|let|var|function|return|if|else|for|while|import|export|from|class|extends|new|async|await|try|catch|finally|this|super|case|switch|break|continue|default|typeof|instanceof)\b/g;
+                : /\b(const|let|var|function|return|if|else|for|while|import|export|from|class|extends|new|async|await|try|catch|finally|this|super|case|switch|break|continue|default|typeof|instanceof|window|document|console)\b/g;
 
             h = h.replace(/(\/\/.*$)/gm, m => pushToken('#6a9955', m))
                  .replace(/(\/\*[\s\S]*?\*\/)/g, m => pushToken('#6a9955', m))
@@ -1011,9 +1805,17 @@ class DebugUI {
                  .replace(keywords, m => pushToken('#569cd6', m))
                  .replace(/\b(true|false|null|undefined|None|Some|Ok|Err|Self|self)\b/g, m => pushToken('#569cd6', m))
                  .replace(/\b(\d+)\b/g, m => pushToken('#b5cea8', m));
+
+            if (isRust) {
+                h = h.replace(/(\w+!)/g, m => pushToken('#dcdcaa', m)) // Macros
+                     .replace(/('[\w]+)/g, m => pushToken('#4ec9b0', m)); // Lifetimes
+            } else {
+                h = h.replace(/(\w+)\(/g, (m, p1) => pushToken('#dcdcaa', p1) + '('); // Function calls
+            }
         }
         else if (ext === 'html' || ext === 'svg' || ext === 'xml') {
-            h = h.replace(/(&lt;[\w-]+)/g, m => pushToken('#569cd6', m))
+            h = h.replace(/(&lt;!--[\s\S]*?--&gt;)/g, m => pushToken('#6a9955', m)) // Comments
+                 .replace(/(&lt;\/|&lt;)([\w-]+)/g, (m, p1, p2) => p1 + pushToken('#569cd6', p2)) // Tags
                  .replace(/(&gt;)/g, m => pushToken('#569cd6', m))
                  .replace(/(\w+)=/g, (m, p1) => pushToken('#9cdcfe', p1) + '=')
                  .replace(/(".*?")/g, m => pushToken('#ce9178', m));
@@ -1025,6 +1827,9 @@ class DebugUI {
                  .replace(/\b(\d+)\b/g, m => pushToken('#b5cea8', m));
         }
 
+        // Parenthesis and Brackets (all files)
+        h = h.replace(/([(){}\[\]])/g, m => pushToken('#ffd700', m));
+
         // Final replacement of tokens
         tokens.forEach(t => {
             h = h.replace(t.id, t.html);
@@ -1035,10 +1840,10 @@ class DebugUI {
 
     async updateMetrics(metrics) {
         try {
-            const fps = document.getElementById('dbg-fps');
-            const mem = document.getElementById('dbg-mem');
-            const pid = document.getElementById('dbg-pid');
-            const uptime = document.getElementById('dbg-uptime');
+            const fps = this._get('dbg-fps');
+            const mem = this._get('dbg-mem');
+            const pid = this._get('dbg-pid');
+            const uptime = this._get('dbg-uptime');
 
             const stats = await invoke('get_debug_stats');
             
@@ -1137,6 +1942,224 @@ class DebugUI {
         setInterval(() => {
             if (this.isOpen && this.activeTab === 'state') this.updateStateView();
         }, 1000);
+    }
+
+    // --- DEBUGGER TAB METHODS ---
+
+    switchDebuggerSubtab(subId) {
+        this.container.querySelectorAll('.debug-subtab').forEach(t => t.classList.toggle('active', t.dataset.sub === subId));
+        this.container.querySelectorAll('.debug-subpane').forEach(p => p.style.display = p.id === `subpane-${subId}` ? 'flex' : 'none');
+        
+        // Lazy loading triggers
+        if (subId === 'html' && this._get('html-dom-tree').innerHTML === '') {
+            this.buildDomTree();
+        }
+        if (subId === 'css' && this._get('css-stylesheet-select').children.length <= 1) {
+            this.populateStylesheets();
+        }
+        if (subId === 'rust' && this._get('rust-logs-container').textContent.includes('Click Refresh')) {
+            this.refreshRustLogs();
+        }
+    }
+
+    evalJSCommand(cmd) {
+        const watchers = this._get('js-watchers');
+        if (!watchers) return;
+        
+        const row = document.createElement('div');
+        row.className = 'js-watcher-row';
+        row.style.cssText = 'display:flex; justify-content:space-between; padding:4px 8px; border-bottom:1px solid rgba(255,255,255,0.05); font-family:"JetBrains Mono"; font-size:11px; align-items:center';
+        
+        try {
+            // Using eval in devtools context is expected
+            let result = eval(cmd);
+            if (result && typeof result === 'object' && !(result instanceof Element)) {
+                try { result = JSON.stringify(result, null, 2); } catch(e) { result = '[Object]'; }
+            }
+            row.innerHTML = `<span style="color:var(--text-muted)">${this.escapeHtml(cmd)}</span> <span style="color:var(--debug-success); max-width:60%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${this.escapeHtml(String(result))}">${this.escapeHtml(String(result))}</span>`;
+        } catch (e) {
+            row.innerHTML = `<span style="color:var(--text-muted)">${this.escapeHtml(cmd)}</span> <span style="color:var(--debug-error)">${this.escapeHtml(String(e))}</span>`;
+        }
+        watchers.prepend(row);
+    }
+
+    async refreshRustLogs() {
+        if (!window.__TAURI__) return;
+        const container = this._get('rust-logs-container');
+        container.innerHTML = '<div style="color:var(--text-muted)">Loading logs...</div>';
+        try {
+            const logs = await invoke('get_rust_logs', { maxLines: 500 });
+            if (!logs || logs.length === 0) {
+                container.innerHTML = '<div style="color:var(--text-muted)">No logs available.</div>';
+                return;
+            }
+            container.innerHTML = logs.map(l => {
+                let color = 'white';
+                if (l.includes('[PANIC') || l.includes('ERROR')) color = 'var(--debug-error)';
+                if (l.includes('[WARNING]') || l.includes('WARN')) color = 'var(--debug-warning)';
+                if (l.includes('[DEBUG]')) color = 'var(--debug-accent)';
+                return `<div style="color:${color}; white-space:pre-wrap; margin-bottom:2px">${this.escapeHtml(l)}</div>`;
+            }).join('');
+            container.scrollTop = container.scrollHeight;
+        } catch (e) {
+            container.innerHTML = `<div style="color:var(--debug-error)">Failed to load logs: ${e}</div>`;
+        }
+    }
+
+    buildDomTree(parentEl = document.body, containerEl = this._get('html-dom-tree'), level = 0) {
+        if (level === 0) {
+            containerEl.innerHTML = '';
+            containerEl.style.position = 'relative';
+        }
+        
+        // Skip debug UI container itself
+        if (parentEl.id === 'bmm-debug-overlay') return;
+
+        Array.from(parentEl.children).forEach(child => {
+            if (child.tagName === 'SCRIPT' || child.tagName === 'STYLE' || child.id === 'bmm-debug-overlay') return;
+
+            const row = document.createElement('div');
+            row.className = 'dom-tree-node';
+            row.style.cssText = `padding-left: ${level * 16}px; display:flex; align-items:center; gap:4px; padding-top:1px; padding-bottom:1px; border-radius:2px; transition: background 0.1s`;
+            
+            const hasChildren = child.children.length > 0;
+            const toggleWrapper = document.createElement('span');
+            toggleWrapper.style.cssText = 'width:16px; display:flex; align-items:center; justify-content:center; cursor:pointer';
+            toggleWrapper.innerHTML = hasChildren ? `<span class="dom-toggle" style="color:var(--text-muted); font-size:9px">▶</span>` : '';
+            
+            const inspectIcon = document.createElement('span');
+            inspectIcon.className = 'dom-inspect-icon';
+            inspectIcon.style.cssText = 'width:14px; height:14px; opacity:0.3; cursor:pointer; color:var(--debug-accent); margin-right:4px; display:flex; align-items:center; justify-content:center';
+            inspectIcon.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>`;
+            inspectIcon.title = "Inspect this element";
+
+            const tagContent = document.createElement('div');
+            tagContent.style.cssText = 'flex:1; display:flex; align-items:center; gap:6px; cursor:default; overflow:hidden';
+            
+            const tagStr = `<span style="color:var(--debug-accent); font-weight:600">&lt;${child.tagName.toLowerCase()}&gt;</span>`;
+            const idStr = child.id ? `<span style="color:#d7ba7d; font-size:10px">#${child.id}</span>` : '';
+            
+            // Limit classes shown to keep it readable
+            const classAttr = child.getAttribute('class');
+            let classStr = '';
+            if (typeof classAttr === 'string' && classAttr) {
+                const classes = classAttr.trim().split(/\s+/);
+                const displayClasses = classes.length > 2 ? classes.slice(0, 2).concat(['...']) : classes;
+                classStr = `<span style="color:#9cdcfe; font-size:10px">.${displayClasses.join('.')}</span>`;
+            }
+
+            tagContent.innerHTML = `${tagStr} ${idStr} ${classStr}`;
+            
+            row.appendChild(toggleWrapper);
+            row.appendChild(inspectIcon);
+            row.appendChild(tagContent);
+            
+            const childrenContainer = document.createElement('div');
+            childrenContainer.className = 'dom-children';
+            childrenContainer.style.cssText = 'display:none; border-left: 1px solid rgba(255,255,255,0.05); margin-left: 7px';
+
+            // Toggle expansion
+            const doToggle = (e) => {
+                if (!hasChildren) return;
+                e?.stopPropagation();
+                const isHidden = childrenContainer.style.display === 'none';
+                childrenContainer.style.display = isHidden ? 'block' : 'none';
+                const toggleBtn = toggleWrapper.querySelector('.dom-toggle');
+                if (toggleBtn) toggleBtn.textContent = isHidden ? '▼' : '▶';
+                if (isHidden && childrenContainer.innerHTML === '') {
+                    this.buildDomTree(child, childrenContainer, level + 1);
+                }
+            };
+
+            toggleWrapper.onclick = doToggle;
+            tagContent.onclick = doToggle; // Clicking tag also toggles if it has children
+
+            // Inspect icon click
+            inspectIcon.onclick = (e) => {
+                e.stopPropagation();
+                this.selectElement(child);
+                // Visual feedback
+                inspectIcon.style.opacity = '1';
+                setTimeout(() => inspectIcon.style.opacity = '0.3', 500);
+            };
+
+            // Highlight on hover
+            row.onmouseenter = () => {
+                row.style.background = 'rgba(255,255,255,0.05)';
+                inspectIcon.style.opacity = '0.8';
+                this.highlightElement(child);
+            };
+            row.onmouseleave = () => {
+                row.style.background = '';
+                inspectIcon.style.opacity = '0.3';
+                if (this.highlightEl) this.highlightEl.style.display = 'none';
+                if (this.tooltipEl) this.tooltipEl.style.display = 'none';
+            };
+
+            containerEl.appendChild(row);
+            containerEl.appendChild(childrenContainer);
+        });
+    }
+
+    populateStylesheets() {
+        const select = this._get('css-stylesheet-select');
+        select.innerHTML = '<option value="">Select Stylesheet...</option>';
+        Array.from(document.styleSheets).forEach((sheet, idx) => {
+            const name = sheet.href ? sheet.href.split('/').pop() : `Inline Stylesheet #${idx + 1}`;
+            const opt = document.createElement('option');
+            opt.value = idx;
+            opt.textContent = name;
+            select.appendChild(opt);
+        });
+    }
+
+    loadStylesheet(indexStr) {
+        if (!indexStr) {
+            this._get('css-rules-container').innerHTML = '<div style="color:var(--text-muted); font-size:10px">Select a stylesheet to view rules.</div>';
+            return;
+        }
+        
+        const idx = parseInt(indexStr);
+        const sheet = document.styleSheets[idx];
+        const container = this._get('css-rules-container');
+        
+        if (!sheet) return;
+
+        try {
+            let html = '';
+            Array.from(sheet.cssRules).forEach(rule => {
+                if (rule.selectorText) {
+                    // Extract styles safely
+                    const styles = rule.style.cssText.split(';').filter(s => s.trim()).map(s => {
+                        const [k, v] = s.split(':');
+                        if (!k || !v) return '';
+                        return `<div style="padding-left:16px"><span style="color:#9cdcfe">${k.trim()}</span>: <span style="color:#ce9178">${v.trim()}</span>;</div>`;
+                    }).join('');
+                    
+                    html += `
+                        <div class="css-rule-row" style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:4px; padding:8px; margin-bottom:8px; font-family:'JetBrains Mono'; font-size:11px">
+                            <div style="color:var(--debug-accent); font-weight:700; margin-bottom:4px">${rule.selectorText} {</div>
+                            ${styles}
+                            <div style="color:var(--debug-accent); font-weight:700; margin-top:4px">}</div>
+                        </div>
+                    `;
+                }
+            });
+            container.innerHTML = html || '<div style="color:var(--text-muted); font-size:10px">No readable rules in this stylesheet. (CORS limitation?)</div>';
+            
+            // Re-apply search if exists
+            const search = this._get('css-rule-search').value;
+            if (search) this.filterCSSRules(search);
+        } catch (e) {
+            container.innerHTML = `<div style="color:var(--debug-error); font-size:10px">Blocked by browser security (CORS) or error: ${e.message}</div>`;
+        }
+    }
+
+    filterCSSRules(query) {
+        const q = query.toLowerCase();
+        this.container.querySelectorAll('.css-rule-row').forEach(row => {
+            row.style.display = row.textContent.toLowerCase().includes(q) ? 'block' : 'none';
+        });
     }
 }
 

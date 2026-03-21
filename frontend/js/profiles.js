@@ -796,7 +796,7 @@ function openCropOverlay(sourcePath, profile) {
             <button class="btn btn-primary" id="crop-confirm" style="min-width:120px">${t('prof.bgCropConfirm')}</button>
         </div>
     `;
-    document.body.appendChild(overlay);
+    document.getElementById('app-window-outer').appendChild(overlay);
 
     const imageElement = document.getElementById('cropper-image');
     imageElement.src = convertFileSrc(sourcePath);

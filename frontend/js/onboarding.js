@@ -158,7 +158,8 @@ function renderOnboarding() {
         overlay = document.createElement('div');
         overlay.id = 'onboarding-overlay';
         overlay.className = 'onboarding-overlay';
-        document.body.appendChild(overlay);
+        document.getElementById('app-window-outer').appendChild(overlay);
+
     }
 
     // Block all interaction behind the overlay
@@ -281,6 +282,7 @@ function renderOnboarding() {
           ${currentStep > 0 ? `<button class="btn btn-secondary onboarding-prev" id="btn-onboarding-prev" style="padding:6px 12px">←</button>` : ''}
           <button class="btn btn-primary onboarding-next" id="btn-onboarding-next">${t('onboard.next')}</button>
           <button class="btn btn-ghost onboarding-skip" id="btn-onboarding-skip">${t('onboard.skip')}</button>
+          ${currentStep === totalSteps - 1 ? `<button class="btn btn-ghost" onclick="window.openDiagram('app-architecture')" style="padding:4px 8px; font-size:16px; margin-left:auto" title="Besoin d'aide technique ?">?</button>` : ''}
         </div>
       </div>
     </div>
@@ -289,14 +291,17 @@ function renderOnboarding() {
     // Visual help: draw a highlight box around the target element if exists
     if (step.selector) {
         const target = document.getElementById(step.selector) || document.querySelector(`.${step.selector}`);
-        if (target) {
+        const parent = document.getElementById('app-window-outer');
+        if (target && parent) {
             const rect = target.getBoundingClientRect();
+            const parentRect = parent.getBoundingClientRect();
+            
             const highlight = document.createElement('div');
             highlight.id = 'onboarding-highlight';
             highlight.style.cssText = `
-                position:fixed;
-                top:${rect.top - 8}px;
-                left:${rect.left - 8}px;
+                position:absolute;
+                top:${(rect.top - parentRect.top) - 8}px;
+                left:${(rect.left - parentRect.left) - 8}px;
                 width:${rect.width + 16}px;
                 height:${rect.height + 16}px;
                 border:2px solid var(--accent);
@@ -306,7 +311,7 @@ function renderOnboarding() {
                 pointer-events:none;
                 transition: all 0.3s ease;
             `;
-            document.body.appendChild(highlight);
+            parent.appendChild(highlight);
         }
     }
 

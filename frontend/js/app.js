@@ -11,6 +11,7 @@ import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
 import { initRepo } from './repo.js';
 import { appState } from './state.js';
 import { initInteractiveDocs, openDiagram } from './interactive-docs.js';
+import { debugUI } from './debug-ui.js';
 
 // ── Tauri bridge ──────────────────────────────────────────
 import { loadTauri, invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification } from './api.js';
@@ -119,18 +120,87 @@ function initModals() {
 }
 
 // ── Titlebar ──────────────────────────────────────────────
+let tauriWindow = null;
+
 async function initTitlebar() {
     try {
-        const { appWindow } = await import('https://unpkg.com/@tauri-apps/api@1/window.js');
-        document.getElementById('tb-min')?.addEventListener('click', () => appWindow.minimize());
-        document.getElementById('tb-max')?.addEventListener('click', () => appWindow.toggleMaximize());
+        // Fallback chain for Tauri Window API
+        if (window.__TAURI__?.window) {
+            const w = window.__TAURI__.window;
+            tauriWindow = w.appWindow || (typeof w.getCurrent === 'function' ? w.getCurrent() : null);
+        }
+        
+        if (!tauriWindow || typeof tauriWindow.startResizing !== 'function') {
+            try {
+                const { appWindow, getCurrent } = await import('https://unpkg.com/@tauri-apps/api@1/window.js');
+                tauriWindow = appWindow || getCurrent();
+            } catch (e) {}
+        }
+        
+        document.getElementById('tb-min')?.addEventListener('click', () => tauriWindow?.minimize());
+        
+        const toggleFullscreen = async () => {
+            if (tauriWindow) {
+                const isMax = await tauriWindow.isMaximized();
+                if (isMax) {
+                    await tauriWindow.unmaximize();
+                } else {
+                    await tauriWindow.maximize();
+                }
+            }
+        };
+        document.getElementById('tb-max')?.addEventListener('click', toggleFullscreen);
+
+        if (tauriWindow) {
+            const checkMaximized = async () => {
+                const isMax = await tauriWindow.isMaximized();
+                if (isMax) {
+                    document.body.classList.add('is-maximized');
+                } else {
+                    document.body.classList.remove('is-maximized');
+                }
+            };
+            tauriWindow.onResized(checkMaximized);
+            checkMaximized(); // Check initial state
+        }
         document.getElementById('tb-close')?.addEventListener('click', () => {
-            invoke('finalize_and_close_app');
+            if (tauriWindow) {
+                invoke('finalize_and_close_app').catch(() => tauriWindow.close());
+            } else {
+                window.close();
+            }
         });
-    } catch {
-        // Browser mode: just hide close button behavior
-        document.getElementById('tb-close')?.addEventListener('click', () => window.close());
+    } catch (err) {
+        console.error("[BMM] Window API initialization failed:", err);
     }
+    
+    // Initialize the new high-performance resizing strips
+    initResizing();
+}
+
+/**
+ * High-Performance Resizing Logic
+ * Uses dedicated invisible strips around the visible app box.
+ * Calls the native Rust command which uses ReleaseCapture + WM_NCLBUTTONDOWN.
+ */
+function initResizing() {
+    const strips = document.querySelectorAll('.rs-edge, .rs-corner');
+    
+    strips.forEach(strip => {
+        strip.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            
+            const dir = strip.dataset.direction;
+            if (!dir) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            invoke('start_resizing', { direction: dir }).catch(err => {
+                console.error("[BMM] Native resize failed:", err);
+            });
+        });
+    });
 }
 
 // ── Modlist view ──────────────────────────────────────────
@@ -480,8 +550,8 @@ function renderImportedModlist(modlist) {
         const isAlreadyPresent = currentMods.some(cm => cm.name === m.name);
 
         return `
-        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; flex-direction:column; gap:8px; position:relative; overflow:hidden">
-          <div style="position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--accent)"></div>
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; flex-direction:column; gap:8px; position:relative; overflow:hidden; ${isAlreadyPresent ? 'opacity: 0.7;' : ''}">
+          <div style="position:absolute; left:0; top:0; bottom:0; width:3px; background:${isAlreadyPresent ? 'var(--success)' : 'var(--accent)'}"></div>
           
           <div style="display:flex; align-items:center; justify-content:space-between">
             <div style="display:flex; align-items:center; gap:12px">
@@ -531,7 +601,7 @@ function renderImportedModlist(modlist) {
 
           <!-- Mod Selection Checkbox -->
           <div style="position:absolute; right:16px; top:50%; transform:translateY(-50%); display:flex; align-items:center; gap:10px">
-              <input type="checkbox" class="mm-mod-checkbox" data-index="${idx}" ${isAlreadyPresent ? '' : 'checked'} style="width:18px; height:18px; cursor:pointer">
+              <input type="checkbox" class="mm-mod-checkbox" data-index="${idx}" ${isAlreadyPresent ? '' : 'checked'} style="width:18px; height:18px; cursor:pointer" title="${isAlreadyPresent ? t('mm.alreadyPresent') || 'Déjà installé' : ''}">
           </div>
 
           ${fileCount > 0 ? `
@@ -840,6 +910,48 @@ function initInteractionLogging() {
             invoke('log_frontend_line', { line: `Click: Link [${text}]` });
         }
     }, true);
+
+    // Keyboard toggle
+    document.addEventListener('keydown', e => {
+        const key = e.key.toLowerCase();
+        
+        // Ctrl+Alt+D: Toggle DevTools (ONLY if unlocked via Ctrl+D in Settings)
+        if (e.ctrlKey && e.altKey && key === 'd') {
+            e.preventDefault();
+            if (appState.get('debugMode')) {
+                debugUI.toggle();
+            } else {
+                console.warn('[BMM-DEBUG] Access denied. Unlock Debug Mode in Settings (Ctrl+D) first.');
+                toast('DevTools locked. Unlock in Settings.', 'warning');
+            }
+        } 
+        // Ctrl+Shift+F: Toggle DevTools (Legacy FSDM)
+        else if (e.ctrlKey && e.shiftKey && key === 'f') {
+            if (window.bmmFSDMEnabled) {
+                debugUI.toggle();
+            }
+        }
+        // Ctrl+D: Unlock Debug Mode (ONLY in Settings)
+        else if (e.ctrlKey && !e.altKey && !e.shiftKey && key === 'd') {
+            const settingsView = document.getElementById('view-settings');
+            if (settingsView && settingsView.classList.contains('active')) {
+                e.preventDefault();
+                const card = document.getElementById('debug-menu-card') || document.getElementById('settings-debug-section');
+                if (card) {
+                    const isHidden = card.style.display === 'none';
+                    card.style.display = isHidden ? 'block' : 'none';
+                    if (isHidden) {
+                        appState.set('debugMode', true);
+                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        toast('Debug Mode Unlocked', 'success');
+                    } else {
+                        // We don't necessarily lock it back, but we hide the section
+                        toast('Debug Section Hidden', 'info');
+                    }
+                }
+            }
+        }
+    });
 
     // Log scrolls (debounced)
     let scrollTimeout;
@@ -1183,7 +1295,7 @@ function initUpdateNotes() {
             modal = document.createElement('div');
             modal.id = 'modal-update-notes';
             modal.className = 'modal-overlay';
-            document.body.appendChild(modal);
+            document.getElementById('app-window-outer').appendChild(modal);
         }
 
         modal.innerHTML = `
@@ -1385,7 +1497,7 @@ async function main() {
 
     // Initialize DevTools
     const { debugUI } = await import('./debug-ui.js');
-    debugUI.init();
+    // debugUI.init(); // Redundant, called in initDebugMenu()
 
     const initVersionDisplay = async () => {
         // Safety delay
@@ -1479,6 +1591,11 @@ async function main() {
     initNavbarLangDropdown();
     initNavbarVersion();
     initUpdateNotes();
+    
+    document.getElementById('btn-restart-onboarding')?.addEventListener('click', () => {
+        startOnboarding();
+    });
+
     applyTranslations();
 
     // Call this after translations to ensure it's not overwritten and elements are ready
@@ -1565,6 +1682,7 @@ async function main() {
             }
         });
     }
+
 
     // Show onboarding on first launch (language is step 0 inside onboarding)
     if (await shouldShowOnboarding()) {
@@ -2196,13 +2314,25 @@ async function renderSettingsTags() {
 // ── Debug Menu ──────────────────────────────────────────
 
 function initDebugMenu() {
-    // Show/Hide based on app.cfg (Prod=false)
-    invoke('is_debug_mode').then(isDebug => {
+    // Show/Hide based on app.cfg (Prod=false or FSDM=true)
+    Promise.all([invoke('is_debug_mode'), invoke('is_fsdm_mode')]).then(([isDebug, isFSDM]) => {
+        window.bmmDebugEnabled = isDebug || isFSDM;
+        window.bmmFSDMEnabled = isFSDM;
+        
+        // CRITICAL: Initialize the Debug UI if any debug mode is active
+        if (window.bmmDebugEnabled) {
+            debugUI.init();
+        }
+
         const card = document.getElementById('debug-menu-card');
-        if (card && isDebug) {
-            card.style.display = 'block';
+        if (card) {
+            // Manual hide by default (even if enabled) per user request
+            // Section is toggled via Alt+Shift+D
+            card.style.display = 'none';
         }
     });
+
+    // Logic moved to global listener near line 915
 
     const genCrashBtn = document.getElementById('btn-debug-gen-crash');
     if (genCrashBtn) {
@@ -2234,6 +2364,13 @@ function initDebugMenu() {
                     toast('Reset failed: ' + err, 'error');
                 }
             }
+        });
+    }
+
+    const openDebugBtn = document.getElementById('btn-open-debug') || document.getElementById('dbg-open-menu');
+    if (openDebugBtn) {
+        openDebugBtn.addEventListener('click', () => {
+            debugUI.toggle(true); // Force open
         });
     }
 }
@@ -2454,7 +2591,8 @@ function showUpdateAvailableModal(info) {
             </div>
         </div>
     `;
-    document.body.appendChild(modal);
+    document.getElementById('app-window-outer').appendChild(modal);
+
 
     const downloadBtn = modal.querySelector('#btn-download-install-update');
     if (downloadBtn) {
@@ -2591,7 +2729,8 @@ function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
         </div>
     `;
 
-    document.body.appendChild(modal);
+    document.getElementById('app-window-outer').appendChild(modal);
+
 
     // Event listeners
     modal.addEventListener('click', (e) => {

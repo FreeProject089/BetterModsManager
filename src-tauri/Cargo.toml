@@ -39,6 +39,7 @@ rand = "0.8"
 tempfile = "3"
 base64 = "0.21"
 winreg = "0.52"
+windows-sys = { version = "0.45", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_UI_Input_KeyboardAndMouse"] }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

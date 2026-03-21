@@ -47,6 +47,14 @@ pub fn set_shutting_down() {
     SHUTTING_DOWN.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
+pub fn get_log_lines() -> Vec<String> {
+    if let Ok(buf) = LOG_BUFFER.lock() {
+        buf.iter().cloned().collect()
+    } else {
+        Vec::new()
+    }
+}
+
 pub fn is_shutting_down() -> bool {
     SHUTTING_DOWN.load(std::sync::atomic::Ordering::SeqCst)
 }
@@ -170,7 +178,7 @@ pub fn init_session() {
 
 /// Helper to generate a report from already loaded log content (used for orphans)
 fn generate_report_from_content(is_crash: bool, reason: &str, app_state: Option<String>, log_content: String) -> Option<PathBuf> {
-    generate_report_internal(is_crash, reason, app_state, Some(log_content), None)
+    generate_report_internal(is_crash, reason, app_state, Some(log_content), None, None)
 }
 
 // ─── COLLECTE DES DONNÉES DIAGNOSTICS ────────────────────────────────────────
@@ -205,8 +213,9 @@ pub fn generate_report(
     reason: &str,
     app_state: Option<String>,
     override_log: Option<String>,
+    frontend_dump: Option<String>,
 ) -> Option<PathBuf> {
-    generate_report_internal(is_crash, reason, app_state, override_log, Some(get_realtime_log_path()))
+    generate_report_internal(is_crash, reason, app_state, override_log, Some(get_realtime_log_path()), frontend_dump)
 }
 
 fn generate_report_internal(
@@ -215,6 +224,7 @@ fn generate_report_internal(
     app_state: Option<String>,
     override_log: Option<String>,
     log_to_delete: Option<PathBuf>,
+    frontend_dump: Option<String>,
 ) -> Option<PathBuf> {
     let report_dir = get_report_dir(is_crash);
     let _ = fs::create_dir_all(&report_dir);
@@ -263,6 +273,12 @@ fn generate_report_internal(
         let _ = zip.write_all(state.as_bytes());
     }
 
+    // 5b. frontend_dump.json
+    if let Some(dump) = frontend_dump {
+        let _ = zip.start_file("frontend_dump.json", opts);
+        let _ = zip.write_all(dump.as_bytes());
+    }
+
     // 6. dxdiag.txt (Windows Only, only if crash to speed up normal closure)
     #[cfg(target_os = "windows")]
     if is_crash {
@@ -301,7 +317,7 @@ pub fn setup_panic_hook() {
     panic::set_hook(Box::new(|info| {
         let reason = format!("{}", info);
         log_line(format!("[PANIC DETECTED] {}", reason));
-        generate_report(true, &reason, None, None);
+        generate_report(true, &reason, None, None, None);
     }));
 }
 
@@ -345,9 +361,9 @@ pub fn open_crash_zip(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn trigger_manual_crash_report() -> Result<String, String> {
+pub fn trigger_manual_crash_report(frontend_dump: Option<String>) -> Result<String, String> {
     log_line("[DEBUG] Manual crash report triggered by user.");
-    if let Some(path) = generate_report(true, "Manual Debug Trigger", None, None) {
+    if let Some(path) = generate_report(true, "Manual Debug Trigger / Frontend Crash", None, None, frontend_dump) {
         Ok(path.to_string_lossy().to_string())
     } else {
         Err("Failed to generate manual report".into())
@@ -418,6 +434,7 @@ pub fn finalize_and_close_app(window: tauri::Window, state: tauri::State<crate::
             false, 
             "Clean Exit (UI Close Button)", 
             state_snapshot,
+            None,
             None
         );
         log_line("[SHUTDOWN] Thread: Done. Closing window.");

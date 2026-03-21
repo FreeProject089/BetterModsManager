@@ -16,3 +16,4 @@ pub mod repo_server;
 pub mod security;
 pub mod omm;
 pub mod debug;
+pub mod window;

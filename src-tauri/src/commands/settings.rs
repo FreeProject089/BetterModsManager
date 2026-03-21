@@ -68,6 +68,16 @@ pub fn is_debug_mode(app_handle: tauri::AppHandle) -> bool {
     println!("[DEBUG_SYSTEM] app.cfg could not be resolved.");
     false
 }
+#[tauri::command]
+pub fn is_fsdm_mode(app_handle: tauri::AppHandle) -> bool {
+    if let Some(path) = resolve_path(&app_handle, "app.cfg") {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let normalized = content.to_lowercase();
+            return normalized.contains("fsdm=true");
+        }
+    }
+    false
+}
 
 #[tauri::command]
 pub fn get_app_version(app_handle: tauri::AppHandle) -> String {

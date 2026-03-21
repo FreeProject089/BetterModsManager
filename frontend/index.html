@@ -12,14 +12,38 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet" />
     <link rel="stylesheet" href="css/main.css" />
+    <link rel="stylesheet" href="css/mascot.css" />
     <link rel="stylesheet" href="css/debug.css" />
     <link rel="stylesheet" href="assets/cropper/cropper.min.css">
     <script src="assets/cropper/cropper.min.js"></script>
 </head>
 
 <body>
-    <!-- App Loader -->
-    <div id="app-loader"
+    <div id="app-mascot-container" title="BETTER MOD MANAGER" data-tauri-drag-region>
+        <img src="assets/Tasky_Happy.png" id="app-mascot" alt="Mascot" data-tauri-drag-region>
+    </div>
+
+    <!-- Resize Strips (outside #app-window-outer to avoid overflow:hidden clipping) -->
+    <div class="resize-strips">
+        <div class="rs-edge rs-top" data-direction="Top"></div>
+        <div class="rs-edge rs-bottom" data-direction="Bottom"></div>
+        <div class="rs-edge rs-left" data-direction="Left"></div>
+        <div class="rs-edge rs-right" data-direction="Right"></div>
+        <div class="rs-corner rs-tl" data-direction="TopLeft"></div>
+        <div class="rs-corner rs-tr" data-direction="TopRight"></div>
+        <div class="rs-corner rs-bl" data-direction="BottomLeft"></div>
+        <div class="rs-corner rs-br" data-direction="BottomRight" id="resize-handle-br">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+                <line x1="22" y1="2" x2="2" y2="22"></line>
+                <line x1="22" y1="10" x2="10" y2="22"></line>
+                <line x1="22" y1="18" x2="18" y2="22"></line>
+            </svg>
+        </div>
+    </div>
+
+    <div id="app-window-outer">
+        <!-- App Loader -->
+        <div id="app-loader"
         style="position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg-primary);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.5s ease, visibility 0.5s ease">
         <img src="assets/Tasky.png" alt="Loading..." id="loader-img"
             style="width:120px;height:auto;animation:pulse-tasky 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;filter:drop-shadow(0 0 20px rgba(59,130,246,0.3))">
@@ -29,15 +53,10 @@
     </div> <!-- Custom Titlebar -->
     <div class="titlebar" data-tauri-drag-region>
         <div class="titlebar-left" data-tauri-drag-region>
-            <div class="titlebar-icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polygon points="12 2 2 7 12 12 22 7 12 2" />
-                    <polyline points="2 17 12 22 22 17" />
-                    <polyline points="2 12 12 17 22 12" />
-                </svg>
+            <div class="titlebar-text-logo" data-tauri-drag-region>
+                <span style="color:#f8fafc">Better</span> <span style="background:linear-gradient(135deg, #fbbf24, #f59e0b); background-clip:text; -webkit-background-clip:text; -webkit-text-fill-color:transparent;">Mod.Manager</span>
             </div>
-            <span class="titlebar-title">BETTER MOD MANAGER</span>
-            <button class="titlebar-version" onclick="checkPtbMode(true)">V0.9.7</button>
+            <button class="titlebar-version" onclick="checkPtbMode(true)">V0.9.8</button>
         </div>
         <div class="titlebar-controls">
             <button class="tb-btn" id="tb-min" title="Minimize">
@@ -172,7 +191,7 @@
 
             <!-- Sidebar footer -->
             <div class="sidebar-footer">
-                <button class="footer-nav-item" id="btn-open-mod-architecture" onclick="openDiagram('mod-architecture')">
+                <button class="footer-nav-item" id="btn-restart-onboarding">
                     <span class="nav-icon">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
@@ -2276,6 +2295,63 @@
                         </div>
                     </details>
 
+                    <!-- All Diagrams Gallery -->
+                    <details class="glass-card faq-accordion" style="border-top: 2px solid var(--accent); margin-top: 30px; padding: 0;">
+                        <summary class="faq-summary" style="padding: 24px;">
+                            <span style="display:flex;align-items:center;gap:12px">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span style="letter-spacing: 0.05em; font-weight: 600;" data-i18n="docs.gallery.title">GALERIE DES DIAGRAMMES</span>
+                            </span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </summary>
+                        <div style="padding: 0 24px 24px 24px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 20px;">
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('app-architecture')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.appArchitecture">Architecture Globale</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('mod-sync')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.modSync">Logique de Synchro</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('profile-system')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.profileSystem">Système de Profils</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('conflict-management')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.conflictManagement">Gestion des Conflits</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('app-update')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.appUpdate">Cycle de Mise à Jour</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('mod-import')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.modImport">Importation de Mods</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('backup-system')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.backupSystem">Système de Sauvegarde</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('resumable-downloads')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.resumableDownloads">Download Repris</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('dedicated-hosting')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.dedicatedHosting">Hébergement Dédié</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('server-mode')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.serverMode">Mode Serveur</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('disk-io-limiter')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.diskIoLimiter">Limiteur Disk E/S</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('crash-reporting')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.crashReporting">Rapports de Crash</span>
+                                </button>
+                            </div>
+                        </div>
+                    </details>
+                    
+
+
                 </div>
             </section>
 
@@ -2759,7 +2835,7 @@
                     </div>
 
                     <!-- ── NEW: Performance & Benchmark ── -->
-                    <div class="glass-card" id="settings-benchmark-section">
+                    <div class="glass-card" id="settings-benchmark-section" style="margin-bottom: 24px;">
                         <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
                                 stroke-width="2.2">
@@ -2902,6 +2978,16 @@
                             </h3>
                             <span
                                 style="font-size:10px; padding:2px 6px; background:rgba(239,68,68,0.2); color:#fca5a5; border-radius:4px; font-weight:700">ADVANCED</span>
+                        </div>
+
+                        <div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom: 12px;">
+                            <!-- Button: Open Debug Menu -->
+                            <button class="btn btn-secondary btn-sm" id="btn-open-debug" style="gap:8px; border-color: rgba(239, 68, 68, 0.3); color: #fca5a5;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                    <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                                </svg>
+                                <span data-i18n="settings.openDebug">Ouvrir le Menu Debug (Ctrl+Alt+D)</span>
+                            </button>
                         </div>
 
                         <div style="display:flex; flex-wrap:wrap; gap:12px">
@@ -3863,6 +3949,10 @@
         </div>
     </div>
 
+
+
+
+
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
     <!-- Modal: Conflict Warning with Tree -->
@@ -3971,6 +4061,8 @@
             <span data-i18n="conflict.openExplorer">Voir les fichiers en conflit</span>
         </div>
     </div>
+
+    </div> <!-- End #app-window-outer -->
 
     <script type="module" src="js/app.js"></script>
 </body>

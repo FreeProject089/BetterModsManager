@@ -142,6 +142,7 @@ fn main() {
                         false, // false = Session Zip
                         "Clean Exit (Window Close / Alt+F4)", 
                         state_snapshot,
+                        None,
                         None
                     );
                     commands::crash::log_line("[SHUTDOWN] Thread: Done. Closing window.");
@@ -193,6 +194,7 @@ fn main() {
             get_settings,
             update_settings,
             is_debug_mode,
+            is_fsdm_mode,
             is_ptb_mode,
             is_update_disabled,
             get_license_text,
@@ -260,6 +262,8 @@ fn main() {
             commands::debug::get_project_files,
             commands::debug::read_project_file,
             commands::debug::get_debug_stats,
+            commands::debug::get_rust_logs,
+            commands::window::start_resizing,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

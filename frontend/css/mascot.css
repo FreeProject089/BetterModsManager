@@ -1,0 +1,150 @@
+/* Tasky Mascot Pop-out Styles */
+
+html, body {
+    background: transparent !important;
+    pointer-events: none; /* Allow click-through on transparent areas */
+}
+
+/* Native-feel Resizing Strips (Inner Frame) */
+.resize-strips {
+    position: absolute;
+    /* Align with #app-window-outer boundaries */
+    top: 40px;
+    left: 40px;
+    right: 2px;
+    bottom: 2px;
+    pointer-events: none;
+    z-index: 10005;
+    box-shadow: none !important;
+}
+
+.rs-edge, .rs-corner {
+    position: absolute;
+    pointer-events: auto;
+    background: transparent;
+}
+
+/* Edges (Inner boundaries) */
+.rs-top { top: 0; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
+.rs-bottom { bottom: 0; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
+.rs-left { left: 0; top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+.rs-right { right: 0; top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+
+/* Corners */
+.rs-corner { width: 15px; height: 15px; z-index: 10006; }
+.rs-tl { top: 0; left: 0; cursor: nwse-resize; }
+.rs-tr { top: 0; right: 0; cursor: nesw-resize; }
+.rs-bl { bottom: 0; left: 0; cursor: nesw-resize; }
+.rs-br { bottom: 0; right: 0; cursor: nwse-resize; }
+
+/* Discrete Resize Handle Visual (Bottom Right) */
+#resize-handle-br {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 2px;
+    color: rgba(255, 255, 255, 0.2);
+    transition: color 0.2s;
+    background: transparent !important; /* Ensure it stays transparent */
+}
+
+#resize-handle-br:hover {
+    color: var(--accent);
+}
+
+#app-window-outer {
+    position: absolute;
+    top: 40px;
+    left: 40px;
+    right: 2px;
+    bottom: 2px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 5px 40px rgba(0, 0, 0, 0.6);
+    pointer-events: auto; /* Catch clicks on the app itself */
+    contain: paint; /* Strict clipping for onboarding highlights */
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.is-maximized #app-window-outer {
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 0;
+    border: none;
+    box-shadow: none !important;
+}
+
+body.is-maximized .resize-strips {
+    display: none;
+}
+
+#app-mascot-container {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    z-index: 10001;
+    pointer-events: none;
+    animation: mascot-bounce 4s ease-in-out infinite;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center;
+}
+
+body.is-maximized #app-mascot-container {
+    opacity: 0;
+    transform: scale(0.6) translateY(-20px);
+}
+
+#app-mascot {
+    width: 110px;
+    height: auto;
+    filter: drop-shadow(2px 4px 12px rgba(0,0,0,0.6));
+    transform: rotate(-3deg);
+}
+
+@keyframes mascot-bounce {
+    0%, 100% { transform: translateY(0) rotate(-5deg); }
+    50% { transform: translateY(-5px) rotate(-3deg); }
+}
+
+/* Adjustments for existing elements inside the wrapper */
+#app-window-outer .titlebar {
+    position: absolute; /* Relative to #app-window-outer */
+    top: 0;
+    left: 0;
+    right: 0;
+}
+
+#app-window-outer .app-shell {
+    height: 100%;
+    padding-top: var(--titlebar-h);
+}
+
+#app-window-outer #app-loader {
+    border-radius: 16px;
+}
+
+/* Fix for full-screen overlays to stay inside the visible UI */
+#app-window-outer .modal-overlay,
+#app-window-outer .update-modal-backdrop {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 16px; 
+    overflow: hidden;
+}
+
+#app-window-outer .custom-context-menu {
+    position: absolute !important;
+}

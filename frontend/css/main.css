@@ -42,7 +42,6 @@
 
     --sidebar-w: 240px;
     --titlebar-h: 38px;
-
     --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-fast: all 0.12s ease;
 }
@@ -60,7 +59,7 @@ html,
 body {
     height: 100%;
     overflow: hidden;
-    background: var(--bg-primary);
+    background: transparent !important;
     color: var(--text-primary);
     font-family: var(--font-sans);
     font-size: 14px;
@@ -118,6 +117,12 @@ img {
     display: flex;
     align-items: center;
     gap: 10px;
+    margin-left: 20px; /* Tasky spacing in windowed mode */
+    transition: margin-left 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.is-maximized .titlebar-left {
+    margin-left: 0;
 }
 
 .titlebar-icon {
@@ -135,6 +140,42 @@ img {
     text-transform: uppercase;
 }
 
+.titlebar-text-logo {
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    opacity: 0;
+    max-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transform: translateX(-15px);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: 33px;
+}
+
+body.is-maximized .titlebar-text-logo {
+    opacity: 1;
+    max-width: 200px;
+    transform: translateX(0);
+    margin-right: -4px;
+}
+
+body.is-maximized .titlebar-version {
+    margin-left: 0;
+}
+
+.titlebar-spacer {
+    width: 60px;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.is-maximized .titlebar-spacer {
+    width: 0;
+}
+
 .titlebar-version {
     font-family: var(--font-mono);
     font-size: 10px;
@@ -144,7 +185,7 @@ img {
     border: 1px solid var(--border-accent);
     padding: 2px 8px;
     border-radius: 4px;
-    margin-left: 12px;
+    margin-left: 0;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     outline: none;
@@ -164,6 +205,7 @@ img {
 .titlebar-controls {
     display: flex;
     gap: 4px;
+
 }
 
 .tb-btn {
@@ -1517,6 +1559,7 @@ img {
 .filter-buttons {
     display: flex;
     gap: 4px;
+
 }
 
 .filter-btn {
@@ -1588,14 +1631,25 @@ img {
 
 .mod-card.enabled {
     border-left: 3px solid var(--success);
+    transition: border-left-color 0.2s ease, var(--transition);
+}
+
+.mod-card.enabled:hover {
+    border-left-color: var(--accent);
 }
 
 .mod-card.disabled {
     border-left: 3px solid var(--border);
+    transition: border-left-color 0.2s ease, var(--transition);
+}
+
+.mod-card.disabled:hover {
+    border-left-color: var(--accent);
 }
 
 .mod-list.compact {
     gap: 4px;
+
 }
 
 .mod-list.compact .mod-card {
@@ -1677,9 +1731,14 @@ img {
     box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
 }
 
+.mod-card:hover .mod-toggle input:not(:checked)~.mod-toggle-track {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
 .mod-toggle:hover input:not(:checked)~.mod-toggle-track {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(59, 130, 246, 0.25);
+    border-color: rgba(59, 130, 246, 0.6);
 }
 
 .mod-toggle:hover input:checked~.mod-toggle-track {
@@ -1741,6 +1800,12 @@ img {
 
 .mod-status-dot.enabled {
     background: var(--success);
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mod-card:hover .mod-status-dot.enabled {
+    background: var(--accent);
+    box-shadow: 0 0 6px rgba(59, 130, 246, 0.6);
 }
 
 .mod-status-dot.disabled {
@@ -2552,7 +2617,7 @@ select.input-field option {
    ONBOARDING OVERLAY
 ═══════════════════════════════════ */
 .onboarding-overlay {
-    position: fixed;
+    position: absolute;
     inset: 0;
     z-index: 9999;
     display: flex;
@@ -2625,6 +2690,7 @@ select.input-field option {
 .onboarding-dots {
     display: flex;
     gap: 4px;
+
 }
 
 .onboarding-dot {

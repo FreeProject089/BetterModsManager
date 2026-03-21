@@ -125,23 +125,28 @@ pub async fn read_project_file(path: String) -> Result<String, String> {
         return Err(format!("File not found: {:?}", full_path));
     }
 
-    // Determine if it's an image
+    // Determine if it's an image or video
     let ext = full_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
     let is_image = matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "ico");
+    let is_video = matches!(ext.as_str(), "mp4" | "webm" | "ogg");
 
-    if is_image {
+    if is_image || is_video {
         let bytes = fs::read(&full_path).map_err(|e| e.to_string())?;
         let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+        let prefix = if is_image { "image" } else { "video" };
         let mime = match ext.as_str() {
-            "svg" => "image/svg+xml",
-            "jpg" | "jpeg" => "image/jpeg",
-            "png" => "image/png",
-            "gif" => "image/gif",
-            "webp" => "image/webp",
-            "ico" => "image/x-icon",
-            _ => "image/png",
+            "svg" => "svg+xml",
+            "jpg" | "jpeg" => "jpeg",
+            "png" => "png",
+            "gif" => "gif",
+            "webp" => "webp",
+            "ico" => "x-icon",
+            "mp4" => "mp4",
+            "webm" => "webm",
+            "ogg" => "ogg",
+            _ => if is_image { "png" } else { "mp4" },
         };
-        Ok(format!("data:{};base64,{}", mime, b64))
+        Ok(format!("data:{}/{};base64,{}", prefix, mime, b64))
     } else {
         fs::read_to_string(full_path).map_err(|e| e.to_string())
     }
@@ -166,4 +171,12 @@ pub async fn get_debug_stats() -> Result<DebugStats, String> {
         uptime_secs: START_TIME.elapsed().as_secs(),
         memory_mb,
     })
+}
+
+#[tauri::command]
+pub async fn get_rust_logs(max_lines: Option<usize>) -> Result<Vec<String>, String> {
+    let limit = max_lines.unwrap_or(200);
+    let logs = super::crash::get_log_lines();
+    let start = if logs.len() > limit { logs.len() - limit } else { 0 };
+    Ok(logs[start..].to_vec())
 }
