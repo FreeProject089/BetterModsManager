@@ -2,6 +2,8 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 use std::fs;
+use rayon::prelude::*;
+use std::collections::HashSet;
 
 fn ensure_removed(path: &Path) -> Result<()> {
     if !path.exists() { return Ok(()); }
@@ -63,7 +65,7 @@ pub fn backup_original_file(
     game_path: &Path, 
     rel: &Path, 
     profile_backup_root: &Path,
-    other_active_mods: &[(String, PathBuf)],
+    other_mods_files: &HashSet<PathBuf>,
     backup_path_limit: Option<u64>
 ) -> Result<()> {
     let src = game_path.join(rel);
@@ -74,12 +76,9 @@ pub fn backup_original_file(
     if !src.exists() { return Ok(()); }
 
     // CRITICAL: Check if the current file in game dir is actually from another mod
-    for (_, mod_folder) in other_active_mods {
-        let mod_file = mod_folder.join(rel);
-        if mod_file.exists() && mod_file.is_file() {
-            // This is a mod file, NOT a game original. Don't backup.
-            return Ok(());
-        }
+    if other_mods_files.contains(rel) {
+        // This is a mod file, NOT a game original. Don't backup.
+        return Ok(());
     }
 
     // It's a real game file! Secure it.
@@ -118,19 +117,28 @@ pub fn apply_mod_stacked(
     backup_path_limit: Option<u64>,
 ) -> Result<Vec<PathBuf>> {
     let files = list_mod_files(mod_folder)?;
-    let mut applied = Vec::new();
+    
+    // Pre-calculate other mods files into a HashSet for O(1) lookup during backup check
+    let mut other_mods_files = HashSet::new();
+    for (_, folder) in other_active_mods {
+        if let Ok(m_files) = list_mod_files(folder) {
+            for f in m_files {
+                other_mods_files.insert(f);
+            }
+        }
+    }
 
-    for rel in &files {
+    files.par_iter().try_for_each(|rel| {
         // Backup original if it's the first time BMM touches this file in this profile
-        let _ = backup_original_file(game_path, rel, profile_backup_root, other_active_mods, backup_path_limit);
+        let _ = backup_original_file(game_path, rel, profile_backup_root, &other_mods_files, backup_path_limit);
         
         // Copy mod file to game dir (force overwrite)
         let src = mod_folder.join(rel);
         let dst = game_path.join(rel);
-        copy_file_force_limited(&src, &dst, game_path_limit)?;
-        applied.push(rel.clone());
-    }
-    Ok(applied)
+        copy_file_force_limited(&src, &dst, game_path_limit)
+    })?;
+
+    Ok(files)
 }
 
 /// Strip Windows UNC prefix (\\?\) or (\??\) if present, and normalize to common format
@@ -159,12 +167,13 @@ pub fn unapply_mod_stacked(
     // Canonicalize to follow symlinks/junctions, then normalize to strip UNC prefixes
     let game_path_norm = normalize_path(game_path.canonicalize().unwrap_or_else(|_| game_path.to_path_buf()));
     
-    for rel_str in files_to_remove {
-        let rel = PathBuf::from(&rel_str);
+    // Parallelize restoration/removal
+    files_to_remove.par_iter().try_for_each(|rel_str| {
+        let rel = PathBuf::from(rel_str);
         let dst_path = game_path.join(&rel);
         
         let mut restored = false;
-        // 1. Try to find another mod that provides this file
+        // 1. Try to find another mod that provides this file (starting from most recent)
         for (_, mod_folder) in other_active_mods {
             let mod_src = mod_folder.join(&rel);
             if mod_src.exists() && mod_src.is_file() {
@@ -184,11 +193,16 @@ pub fn unapply_mod_stacked(
                 let _ = ensure_removed(&dst_path); 
             }
         }
+        Ok::<(), anyhow::Error>(())
+    })?;
 
-        // 3. Clean up empty parent directories
-        let mut current_p = dst_path.parent().map(|p| p.to_path_buf());
+    // Sequential cleanup of empty directories (safer to do sequentially after all files are handled)
+    for rel_str in files_to_remove {
+        let rel = PathBuf::from(&rel_str);
+        let dst_path = game_path.join(&rel);
+        let mut current_p = Some(dst_path.clone());
         while let Some(p) = current_p {
-            let p_norm = normalize_path(p.canonicalize().unwrap_or_else(|_| p.clone()));
+            let p_norm = if let Ok(can) = p.canonicalize() { normalize_path(can) } else { normalize_path(p) };
             
             // Safety: Don't go above or out of game_path
             if p_norm == game_path_norm || !p_norm.starts_with(&game_path_norm) { break; }

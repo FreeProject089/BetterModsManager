@@ -151,7 +151,7 @@ pub async fn export_server_repo(
         }));
         
         if !author_name.trim().is_empty() {
-            repo.author = author_name.clone();
+            repo.author = Some(author_name.clone());
         }
 
         let mut profiles_data = Vec::new();

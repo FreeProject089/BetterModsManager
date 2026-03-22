@@ -26,8 +26,8 @@ pub fn export_modlist(
     };
 
     let mut modlist = ModList::new(list_name, game_name, game_path_hint);
-    modlist.description = description;
-    modlist.author = author;
+    modlist.description = Some(description);
+    modlist.author = Some(author);
 
     for (i, m) in data.mods.iter().enumerate() {
         // Filter: Only mods from the active profile's path

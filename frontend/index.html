@@ -330,6 +330,7 @@
                                 <option value="name_asc" data-i18n="lib.sortNameAsc">Nom (A-Z)</option>
                                 <option value="name_desc" data-i18n="lib.sortNameDesc">Nom (Z-A)</option>
                                 <option value="status" data-i18n="lib.sortStatus">Statut (Actifs en 1er)</option>
+                                <option value="activation_order" data-i18n="lib.sortOrder">Ordre d'Activation</option>
                             </select>
                         </div>
                     </div>
@@ -943,8 +944,8 @@
                         <!-- Card: Mini-Server Standalone -->
                         <div class="glass-card" style="border-left:3px solid var(--accent-faded); background:rgba(255,255,255,0.02);">
                             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-                                <h3 class="card-title" style="margin:0; font-size:13px; opacity:0.9;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;vertical-align:middle">
+                                <h3 class="card-title" style="margin:0; font-size:13px; opacity:0.9; display:flex; align-items:center; gap:8px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle">
                                         <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
                                     </svg>
                                     <span data-i18n="repo.miniServerTitle">Serveur Autonome (Léger)</span>
@@ -970,35 +971,50 @@
                                 Générez un script <code>.bat</code> pour lancer un serveur ultra-léger sans l'interface BMM. Idéal pour économiser les performances sur une machine dédiée.
                             </p>
                             
-                            <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap;">
-                                <div style="display:flex; align-items:center; gap:6px;">
-                                    <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;" data-i18n="repo.portLabel">PORT</span>
-                                    <input type="number" id="repo-mini-server-port" class="form-input" value="8000" min="1" max="65535" 
-                                        style="width:60px; height:22px; font-size:11px; padding:0 6px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--cyan); font-weight:700;">
-                                </div>
-                                <div style="display:flex; align-items:center; gap:6px;">
-                                    <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;" data-i18n="repo.uploadLimit">LIMIT</span>
-                                    <input type="number" id="repo-mini-server-upload-limit" class="form-input" value="0" min="0" step="50"
-                                        style="width:70px; height:22px; font-size:11px; padding:0 6px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--accent); font-weight:700;">
-                                </div>
-                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
-                                    <input type="checkbox" id="repo-mini-server-autostart" style="margin:0;">
-                                    <span data-i18n="repo.autoStart">Lancer au démarrage</span>
-                                </label>
-                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
-                                    <input type="checkbox" id="repo-mini-server-cloudflare" style="margin:0;">
-                                    <span data-i18n="repo.miniServerUseCloudflare">Cloudflare Tunnel</span>
-                                </label>
-                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
-                                    <input type="checkbox" id="repo-mini-server-upnp" checked style="margin:0;">
-                                    <span data-i18n="repo.miniServerUseUPnP">UPnP Forwarding</span>
-                                </label>
-                            </div>
+                             <!-- Configuration Options Grid -->
+                             <div style="display:grid; grid-template-columns: 1fr 1.2fr; gap:20px; margin-bottom:15px; padding:12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+                                 <!-- Left Column: Numeric Settings -->
+                                 <div style="display:flex; flex-direction:column; gap:10px;">
+                                     <div style="display:flex; align-items:center; justify-content:space-between;">
+                                         <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;" data-i18n="repo.portLabel">PORT</span>
+                                         <input type="number" id="repo-mini-server-port" class="form-input" value="8000" min="1" max="65535" 
+                                             style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--cyan); font-weight:700;">
+                                     </div>
+                                     <div style="display:flex; align-items:center; justify-content:space-between;">
+                                         <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;" data-i18n="repo.uploadLimit">LIMIT (KB/S)</span>
+                                         <input type="number" id="repo-mini-server-upload-limit" class="form-input" value="0" min="0" step="50"
+                                             style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--accent); font-weight:700;">
+                                     </div>
+                                 </div>
 
-                            <button class="btn btn-ghost btn-sm" id="btn-generate-mini-server" style="width:100%; justify-content:center; border:1px dashed rgba(255,255,255,0.15); font-size:11px;">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px"><path d="M12 5v14M5 12h14"/></svg>
-                                <span data-i18n="repo.miniServerGenerate">Générer le Serveur</span>
-                            </button>
+                                 <!-- Right Column: Toggles -->
+                                 <div style="display:flex; flex-direction:column; gap:8px; border-left:1px solid rgba(255,255,255,0.05); padding-left:15px;">
+                                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
+                                         <input type="checkbox" id="repo-mini-server-autostart" style="margin:0;">
+                                         <span data-i18n="repo.autoStart">Lancer au démarrage</span>
+                                     </label>
+                                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
+                                         <input type="checkbox" id="repo-mini-server-cloudflare" style="margin:0;">
+                                         <span data-i18n="repo.miniServerUseCloudflare">Cloudflare Tunnel (Public)</span>
+                                     </label>
+                                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
+                                         <input type="checkbox" id="repo-mini-server-upnp" checked style="margin:0;">
+                                         <span data-i18n="repo.miniServerUseUPnP">UPnP (Port Forwarding)</span>
+                                     </label>
+                                 </div>
+                             </div>
+
+                             <div style="display:flex; gap:10px; align-items:center;">
+                                 <button class="btn btn-primary" id="btn-generate-mini-server" style="flex:1; height:38px; justify-content:center; font-size:12px; font-weight:700; border-radius:8px; box-shadow:0 4px 12px rgba(59,130,246,0.25);">
+                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><path d="M12 5v14M5 12h14"/></svg>
+                                     <span data-i18n="repo.miniServerGenerate">GÉNÉRER LE SERVEUR</span>
+                                 </button>
+                                 <button class="btn btn-ghost btn-sm" onclick="openDiagram('lightweight-architecture')" 
+                                     style="width:40px; height:38px; padding:0; justify-content:center; color:var(--text-muted); border:1px solid rgba(255,255,255,0.08); border-radius:8px;"
+                                     title="View Architecture Diagram">
+                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></svg>
+                                 </button>
+                             </div>
                         </div>
                     </div>
 
@@ -1540,6 +1556,16 @@
                                     <path d="M2 12l10 5 10-5" />
                                 </svg>
                                 <span data-i18n="docs.viewDeployment">VOIR LE DÉPLOIEMENT</span>
+                            </button>
+                            <button class="btn btn-xs btn-ghost" onclick="openDiagram('lightweight-architecture')"
+                                style="font-size:10px; color:#a78bfa; border:1px dashed rgba(167,139,250,0.4); padding: 2px 8px; margin-left:8px;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" style="margin-right:4px">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="docs.viewDiagram">VOIR LE DIAGRAMME</span>
                             </button>
                         </h3>
                         <div
@@ -2393,6 +2419,9 @@
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 20px;">
                                 <button class="btn btn-ghost btn-sm" onclick="openDiagram('app-architecture')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
                                     <span style="font-size: 11px;" data-i18n="docs.gallery.btn.appArchitecture">Architecture Globale</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('lightweight-architecture')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.lightweightArchitecture">Architecture Légère</span>
                                 </button>
                                 <button class="btn btn-ghost btn-sm" onclick="openDiagram('mod-sync')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
                                     <span style="font-size: 11px;" data-i18n="docs.gallery.btn.modSync">Logique de Synchro</span>
@@ -3287,6 +3316,17 @@
                             <option value="" data-i18n="prof.none">Aucun</option>
                             <!-- filled dynamically -->
                         </select>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-top: 10px;">
+                    <label class="form-label">Dépendances (Mods requis)</label>
+                    <div id="mod-dependencies-list" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px"></div>
+                    <div style="position:relative">
+                        <input type="text" id="mod-dependency-input" class="form-input"
+                            placeholder="Ajouter un mod requis..." />
+                        <div id="mod-dependency-suggestions" class="glass"
+                            style="display:none; position:absolute; z-index:100; max-height:150px; overflow-y:auto; width:100%; border:1px solid var(--border); border-radius:8px; margin-top:4px">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4198,7 +4238,7 @@
             </div>
             <div class="modal-footer" style="padding: 16px 24px; display: flex; justify-content: flex-end; gap: 12px; border-top: none;">
                 <button class="btn btn-ghost modal-close" id="btn-confirm-cancel" style="min-width: 100px;" data-i18n="common.cancel">Annuler</button>
-                <button class="btn btn-danger" id="btn-confirm-yes" style="min-width: 120px; font-weight: 800;">CONFIRMER</button>
+                <button class="btn btn-danger" id="btn-confirm-yes" style="min-width: 120px; font-weight: 800; text-transform: uppercase;" data-i18n="common.confirm">CONFIRMER</button>
             </div>
         </div>
     </div>

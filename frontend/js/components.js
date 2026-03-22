@@ -60,6 +60,7 @@ export function getModCardHTML(mod, ctx) {
         <div class="mod-info">
             <div style="display:flex;align-items:center;gap:8px">
                 <div class="mod-name">${escHtml(mod.name)}</div>
+                ${mod.enabled ? `<span class="badge badge-accent" style="font-size:9px;padding:1px 6px;border-radius:4px;font-family:var(--font-mono);font-weight:800;background:rgba(59,130,246,0.2);color:var(--accent);border:1px solid rgba(59,130,246,0.3)" title="Ordre d'activation">#${mod.activation_order}</span>` : ''}
                 ${conflictHtml}
             </div>
             <div class="mod-meta">
@@ -198,6 +199,19 @@ export function getModDetailHTML(mod, ctx) {
         <select id="detail-tag-select" class="input-field" style="width:100%;padding:6px;font-size:11px">
             <option value="">— ${t('detail.selectTag')} —</option>
         </select>
+      </div>
+
+      <!-- Dependencies Section -->
+      <div class="detail-section" style="margin-top:10px">
+        <label class="detail-label" style="display:flex;align-items:center;gap:4px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            Dépendances (Mods requis)
+        </label>
+        <div id="detail-deps-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <div style="position:relative">
+            <input type="text" id="detail-dep-input" class="input-field" style="width:100%;padding:6px;font-size:11px" placeholder="Ajouter un mod requis..." />
+            <div id="detail-dep-suggestions" class="glass" style="display:none; position:absolute; z-index:100; max-height:150px; overflow-y:auto; width:100%; border:1px solid var(--border); border-radius:8px; margin-top:4px"></div>
+        </div>
       </div>
   `;
 

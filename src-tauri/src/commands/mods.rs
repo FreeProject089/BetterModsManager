@@ -194,8 +194,9 @@ pub async fn add_mod(
     author: String,
     description: String,
     version: String,
-    tags: Option<Vec<String>>,
+    tags: Vec<String>,
     download_links: Option<Vec<crate::models::mod_entry::DownloadLink>>,
+    dependencies: Vec<String>,
 ) -> Result<ModEntry, String> {
     log_line(format!("[MOD] Adding mod '{}' from '{}'", name, mod_folder_path));
     let mods_path = {
@@ -227,46 +228,43 @@ pub async fn add_mod(
         if !is_same_dir {
             std::fs::create_dir_all(&target_dir_clone).map_err(|e| e.to_string())?;
 
-            // Check if it's a zip
-        if src.is_file() && src.extension().and_then(|e| e.to_str()).unwrap_or("").eq_ignore_ascii_case("zip") {
-            let file = std::fs::File::open(&src).map_err(|e| e.to_string())?;
-            let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Erreur Zip: {}", e))?;
-            for i in 0..archive.len() {
-                let mut f = archive.by_index(i).map_err(|e| e.to_string())?;
-                let outpath = target_dir_clone.join(f.name());
-                if f.name().ends_with('/') {
-                    std::fs::create_dir_all(&outpath).ok();
-                } else {
-                    if let Some(parent) = outpath.parent() {
-                        std::fs::create_dir_all(parent).ok();
+            if src.is_file() && src.extension().and_then(|e| e.to_str()).unwrap_or("").eq_ignore_ascii_case("zip") {
+                let file = std::fs::File::open(&src).map_err(|e| e.to_string())?;
+                let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Erreur Zip: {}", e))?;
+                for i in 0..archive.len() {
+                    let mut f = archive.by_index(i).map_err(|e| e.to_string())?;
+                    let outpath = target_dir_clone.join(f.name());
+                    if f.name().ends_with('/') {
+                        std::fs::create_dir_all(&outpath).ok();
+                    } else {
+                        if let Some(parent) = outpath.parent() {
+                            std::fs::create_dir_all(parent).ok();
+                        }
+                        let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
+                        std::io::copy(&mut f, &mut outfile).map_err(|e| e.to_string())?;
                     }
-                    let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
-                    std::io::copy(&mut f, &mut outfile).map_err(|e| e.to_string())?;
                 }
+            } else if src.is_dir() {
+                let mut options = fs_extra::dir::CopyOptions::new();
+                options.content_only = true;
+                options.overwrite = true;
+                fs_extra::dir::copy(&src, &target_dir_clone, &options).map_err(|e| e.to_string())?;
+            } else {
+                return Err("Le fichier sélectionné doit être un dossier ou un fichier .zip".to_string());
             }
-        } else if src.is_dir() {
-            let mut options = fs_extra::dir::CopyOptions::new();
-            options.content_only = true;
-            options.overwrite = true;
-            fs_extra::dir::copy(&src, &target_dir_clone, &options).map_err(|e| e.to_string())?;
-        } else {
-            return Err("Le fichier sélectionné doit être un dossier ou un fichier .zip".to_string());
         }
-        } // end of !is_same_dir block
         Ok(())
     }).await.map_err(|e| e.to_string())??;
 
-    let mut entry = ModEntry::new(safe_name.clone(), target_dir);
-    entry.name = name;
-    entry.author = author;
-    entry.description = description;
+    let mut entry = ModEntry::new(name, target_dir);
+    entry.author = Some(author);
+    entry.description = Some(description);
     entry.version = version;
-    if let Some(t) = tags {
-        entry.tags = t;
-    }
+    entry.tags = tags;
     if let Some(l) = download_links {
         entry.download_links = l;
     }
+    entry.dependencies = dependencies;
     
     let result = entry.clone();
     let mod_folder = entry.mod_folder_path.clone();
@@ -309,175 +307,183 @@ pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files
     Ok(())
 }
 
+
+fn resolve_dependencies(
+    target_id: &String,
+    all_mods: &[ModEntry],
+    resolved: &mut Vec<String>,
+    unresolved: &mut Vec<String>,
+) -> Result<(), String> {
+    if resolved.contains(target_id) {
+        return Ok(());
+    }
+    
+    unresolved.push(target_id.clone());
+    resolved.push(target_id.clone());
+    
+    let target_mod = all_mods.iter().find(|m| &m.id == target_id)
+        .ok_or_else(|| format!("Mod introuvable: {}", target_id))?;
+    
+    for dep_id in &target_mod.dependencies {
+        if unresolved.contains(dep_id) {
+            return Err(format!("Dépendance circulaire détectée: {} -> {}", target_id, dep_id));
+        }
+        resolve_dependencies(dep_id, all_mods, resolved, unresolved)?;
+    }
+    
+    let pos = unresolved.iter().position(|x| x == target_id).unwrap();
+    unresolved.remove(pos);
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: String) -> Result<Option<String>, String> {
-    log_line(format!("[MOD] Enabling mod '{}'", mod_id));
-    let (mod_folder, game_path, backup_path, active_id, mod_name, other_active_mods, warning_pct, critical_pct, alert_enabled) = {
+    log_line(format!("[MOD] Enabling mod '{}' (recursive if needed)", mod_id));
+    
+    // 1. Resolve full dependency chain
+    let (mod_ids_to_enable, profile_data, warning_settings) = {
         let data = state.data.lock().unwrap();
-        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?.clone();
-        if m.enabled { return Ok(None); }
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
         
-        let mut others = Vec::new();
-        for mid in &p.active_mods {
-            if let Some(other_m) = data.mods.iter().find(|om| &om.id == mid) {
-                others.push((other_m.id.clone(), other_m.mod_folder_path.clone()));
-            }
-        }
-
-        // --- NEW: Block activation if already active on the same root in ANOTHER profile ---
-        for op in &data.profiles {
-            if op.id == active_id { continue; } // Skip current profile
-            if op.game_path == p.game_path { // Same root
-                if op.active_mods.contains(&mod_id) {
-                    return Err(format!("Ce mod est déjà actif sur ce dossier de jeu dans le profil '{}'.", op.name));
-                }
-            }
-        }
-        // ---------------------------------------------------------------------------------
+        let mut resolved = Vec::new();
+        let mut unresolved = Vec::new();
+        resolve_dependencies(&mod_id, &data.mods, &mut resolved, &mut unresolved)?;
         
+        // Only enable those not already enabled in this profile
+        let to_enable: Vec<String> = resolved.into_iter()
+            .filter(|id| !p.active_mods.contains(id))
+            .collect();
+            
+        if to_enable.is_empty() { return Ok(None); }
+
         let warning_pct = data.settings.storage_warning_space_pct;
         let critical_pct = data.settings.storage_critical_space_pct;
         let alert_enabled = data.settings.storage_alert_enabled;
 
-        (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), active_id, m.name, others, warning_pct, critical_pct, alert_enabled)
+        (to_enable, p, (warning_pct, critical_pct, alert_enabled))
     };
 
-    let game_path_limit = crate::commands::disk::get_limit_for_path(&state, &game_path);
-    let backup_path_limit = crate::commands::disk::get_limit_for_path(&state, &backup_path);
+    let mut overall_warning: Option<String> = None;
 
-    let mut total_bytes = 0;
-    if let Ok(files) = crate::fs_utils::list_mod_files(&mod_folder) {
-        for rel in files {
-            if let Ok(meta) = std::fs::metadata(mod_folder.join(rel)) {
-                total_bytes += meta.len();
-            }
-        }
-    }
-
-    // ── Disk space check ──
-    let safety_margin: u64 = 500 * 1024 * 1024; // 500 MB minimal safety
-    let mut warning_msg: Option<String> = None;
-
-    let mut check_space = |path: &std::path::Path, label: &str| -> Result<(), String> {
-        let disks = sysinfo::Disks::new_with_refreshed_list();
-        let mut path_str = path.canonicalize().unwrap_or(path.to_path_buf())
-            .to_string_lossy().to_lowercase();
-        if path_str.starts_with(r"\\?\") { path_str = path_str[4..].to_string(); }
-
-        let mut best: Option<(u64, u64, String)> = None;
-        for disk in disks.iter() {
-            let mut mp = disk.mount_point().to_string_lossy().to_lowercase();
-            if mp.starts_with(r"\\?\") { mp = mp[4..].to_string(); }
-            if path_str.starts_with(&mp) {
-                let len = mp.len();
-                if best.as_ref().map_or(true, |(_, _, prev_mp)| len > prev_mp.len()) {
-                    best = Some((disk.available_space(), disk.total_space(), mp));
-                }
-            }
-        }
-
-        if let Some((available, total, _)) = best {
-            // First check the absolute hard limit
-            if available < total_bytes + safety_margin {
-                return Err(format!(
-                    "Espace insuffisant sur le disque {} ! {} MB nécessaires.",
-                    label, (total_bytes + safety_margin) / (1024 * 1024)
-                ));
-            }
-
-            // Then check the % thresholds (only if alerts are enabled)
-            if alert_enabled && total > 0 {
-                // Simulate space after mod activation
-                let simulated_available = available.saturating_sub(total_bytes);
-                let free_pct = (simulated_available as f64 / total as f64 * 100.0) as u32;
-
-                if free_pct <= critical_pct {
-                    return Err(format!(
-                        "CRITICAL_SPACE|{}|{}|{}",
-                        label, free_pct, critical_pct
-                    ));
-                } else if free_pct <= warning_pct {
-                    warning_msg = Some(format!(
-                        "WARNING_SPACE|{}|{}|{}",
-                        label, free_pct, warning_pct
-                    ));
-                }
-            }
-        }
-        Ok(())
-    };
-
-    check_space(&game_path, "Game")?;
-    check_space(&backup_path, "Backup")?;
-
-    let total_mb = total_bytes as f64 / 1_048_576.0;
-    let disk_name = game_path.to_string_lossy().chars().take(3).collect::<String>().to_uppercase();
-
-    let _ = window.emit("benchmark-event", BenchEventPayload {
-        text: format!("Activating mod: {}", mod_name),
-        disk_name,
-        total_mb,
-        limit_mb_s: game_path_limit,
-        finished: false,
-    });
-    
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let _lock = MOD_OP_LOCK.lock().unwrap();
-        fs_utils::apply_mod_stacked(&mod_folder, &game_path, &backup_path, &other_active_mods, game_path_limit, backup_path_limit)
-    }).await.map_err(|e| e.to_string())?;
-
-    let _ = window.emit("benchmark-event", BenchEventPayload {
-        text: match &result {
-            Ok(_) => format!("Mod activated: {}", mod_name),
-            Err(_) => format!("Error activating: {}", mod_name),
-        },
-        disk_name: "".to_string(),
-        total_mb: 0.0,
-        limit_mb_s: None,
-        finished: true,
-    });
-
-    let applied = result.map_err(|e| e.to_string())?;
-
-    {
-        let mut data = state.data.lock().unwrap();
-        
-        // Calculate next activation order
-        let next_order = data.mods.iter()
-            .map(|m| m.activation_order)
-            .max()
-            .unwrap_or(0) + 1;
-
-        if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
-            m.enabled = true;
-            m.status = ModStatus::Enabled;
-            m.installed_files = applied.iter().map(|p| p.to_string_lossy().to_string()).collect();
-            m.activation_order = next_order;
-        }
-        
-        // Sync with all profiles sharing the same root and mod folder
-        let active_profile_id = data.active_profile_id.clone().ok_or("Aucun profil actif")?;
-        let active_profile = data.profiles.iter().find(|p| p.id == active_profile_id).cloned().ok_or("Profil introuvable")?;
-        
-        for p in data.profiles.iter_mut() {
-            let same_root = p.game_path == active_profile.game_path;
-            let same_mods = p.mods_path == active_profile.mods_path;
+    for mid in mod_ids_to_enable {
+        let (mod_folder, game_path, backup_path, mod_name, other_active_mods) = {
+            let data = state.data.lock().unwrap();
+            let m = data.mods.iter().find(|m| m.id == mid).unwrap().clone();
             
-            if same_root && same_mods {
-                if !p.active_mods.contains(&mod_id) {
-                    p.active_mods.push(mod_id.clone());
+            let p = data.profiles.iter().find(|p| p.id == profile_data.id).unwrap();
+            let mut others = Vec::new();
+            for already_active in &p.active_mods {
+                if let Some(om) = data.mods.iter().find(|xm| &xm.id == already_active) {
+                    others.push((om.id.clone(), om.mod_folder_path.clone()));
+                }
+            }
+
+            // --- Block if already active in another profile on same root ---
+            for op in &data.profiles {
+                if op.id == profile_data.id { continue; }
+                if op.game_path == p.game_path && op.active_mods.contains(&mid) {
+                    return Err(format!("Le mod '{}' est déjà actif dans le profil '{}'.", m.name, op.name));
+                }
+            }
+
+            (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), m.name, others)
+        };
+
+        // --- Space check ---
+        let mut total_bytes = 0;
+        if let Ok(files) = crate::fs_utils::list_mod_files(&mod_folder) {
+            for rel in files {
+                if let Ok(meta) = std::fs::metadata(mod_folder.join(rel)) {
+                    total_bytes += meta.len();
                 }
             }
         }
+
+        let game_path_limit = crate::commands::disk::get_limit_for_path(&state, &game_path);
+        let backup_path_limit = crate::commands::disk::get_limit_for_path(&state, &backup_path);
+
+        // Perform space check (re-using logic but simplified for brevity in loop)
+        let mut check_space = |path: &std::path::Path, label: &str| -> Result<(), String> {
+            let disks = sysinfo::Disks::new_with_refreshed_list();
+            let mut path_str = path.canonicalize().unwrap_or(path.to_path_buf()).to_string_lossy().to_lowercase();
+            if path_str.starts_with(r"\\?\") { path_str = path_str[4..].to_string(); }
+            let mut best = None;
+            for disk in disks.iter() {
+                let mut mp = disk.mount_point().to_string_lossy().to_lowercase();
+                if mp.starts_with(r"\\?\") { mp = mp[4..].to_string(); }
+                if path_str.starts_with(&mp) {
+                    let len = mp.len();
+                    let best_ref: &Option<(u64,u64,String)> = &best;
+                    if best_ref.as_ref().map_or(true, |(_, _, prev_mp)| len > prev_mp.len()) {
+                        best = Some((disk.available_space(), disk.total_space(), mp));
+                    }
+                }
+            }
+            if let Some((available, total, _)) = best {
+                if available < total_bytes + (500 * 1024 * 1024) {
+                    return Err(format!("Espace insuffisant pour '{}' sur {}. {} MB requis.", mod_name, label, total_bytes / (1024 * 1024)));
+                }
+                if warning_settings.2 && total > 0 {
+                    let simulated = available.saturating_sub(total_bytes);
+                    let free_pct = (simulated as f64 / total as f64 * 100.0) as u32;
+                    if free_pct <= warning_settings.1 { return Err(format!("CRITICAL_SPACE|{}|{}|{}", label, free_pct, warning_settings.1)); }
+                    else if free_pct <= warning_settings.0 { overall_warning = Some(format!("WARNING_SPACE|{}|{}|{}", label, free_pct, warning_settings.0)); }
+                }
+            }
+            Ok(())
+        };
+
+        check_space(&game_path, "Game")?;
+        check_space(&backup_path, "Backup")?;
+
+        let disk_name = game_path.to_string_lossy().chars().take(3).collect::<String>().to_uppercase();
+        let _ = window.emit("benchmark-event", BenchEventPayload {
+            text: format!("Activating: {}", mod_name),
+            disk_name,
+            total_mb: total_bytes as f64 / 1_048_576.0,
+            limit_mb_s: game_path_limit,
+            finished: false,
+        });
+
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            let _lock = MOD_OP_LOCK.lock().unwrap();
+            fs_utils::apply_mod_stacked(&mod_folder, &game_path, &backup_path, &other_active_mods, game_path_limit, backup_path_limit)
+        }).await.map_err(|e| e.to_string())?;
+
+        let _ = window.emit("benchmark-event", BenchEventPayload {
+            text: format!("Activated: {}", mod_name), disk_name: "".to_string(), total_mb: 0.0, limit_mb_s: None, finished: true,
+        });
+
+        let applied = result.map_err(|e| e.to_string())?;
+
+        {
+            let mut data = state.data.lock().unwrap();
+            let next_order = data.mods.iter().map(|m| m.activation_order).max().unwrap_or(0) + 1;
+            if let Some(m) = data.mods.iter_mut().find(|m| m.id == mid) {
+                m.enabled = true;
+                m.status = ModStatus::Enabled;
+                m.installed_files = applied.iter().map(|p| p.to_string_lossy().to_string()).collect();
+                m.activation_order = next_order;
+            }
+            for p in data.profiles.iter_mut() {
+                if p.game_path == profile_data.game_path && p.mods_path == profile_data.mods_path {
+                    if !p.active_mods.contains(&mid) { p.active_mods.push(mid.clone()); }
+                }
+            }
+        }
+        log_line(format!("[MOD] Mod '{}' enabled", mod_name));
     }
+
     let _ = state.save();
+    invalidate_cache(&state);
     
-    // Log history
-    log_line(format!("[MOD] Mod '{}' enabled successfully ({} files installed)", mod_name, applied.len()));
-    crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Enabled");
-    Ok(warning_msg)
+    // Log history for the primary mod
+    if let Some(m) = { let data = state.data.lock().unwrap(); data.mods.iter().find(|m| m.id == mod_id).cloned() } {
+        crate::commands::history::log_activity(&state, &profile_data.id, &mod_id, &m.name, "Enabled (with dependencies)");
+    }
+
+    Ok(overall_warning)
 }
 
 #[tauri::command]
@@ -703,17 +709,19 @@ pub fn update_mod_meta(
     version: String,
     tags: Vec<String>,
     download_links: Vec<crate::models::mod_entry::DownloadLink>,
+    dependencies: Vec<String>,
 ) -> Result<(), String> {
     log_line(format!("[MOD] Updating metadata for '{}' ({})", name, mod_id));
     let mod_path = {
         let mut data = state.data.lock().unwrap();
         if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
             m.name = name;
-            m.author = author;
-            m.description = description;
+            m.author = Some(author);
+            m.description = Some(description);
             m.version = version;
             m.tags = tags;
             m.download_links = download_links;
+            m.dependencies = dependencies;
             Some((m.clone(), m.mod_folder_path.clone()))
         } else {
             None
@@ -1045,6 +1053,7 @@ pub async fn install_from_modlist(
                 new_mod.name = entry.name.clone();
                 new_mod.version = entry.version.clone();
                 new_mod.author = entry.author.clone();
+                new_mod.description = entry.description.clone();
                 new_mod.tags = entry.tags.clone();
                 new_mod.install_notes = entry.install_notes.clone();
                 let mid = new_mod.id.clone();

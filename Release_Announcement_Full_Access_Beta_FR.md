@@ -10,6 +10,9 @@ La fonctionnalité de **Dépôt Serveur** est désormais entièrement documenté
 
 ### Fonctionnalités Phares :
 - **Limiteur de Vitesse d'E/S Disque** pour prévenir les freezes de Windows sur les vieux disques.
+- **Gestion des Whitelists et Bans** intégrée au Server Repo pour un contrôle total des accès.
+- **Monitoring en Temps Réel** du serveur pour suivre les utilisateurs connectés et les débits.
+- **Nouveau Diagramme : Philosophie Lightweight** expliquant notre moteur de copie physique ultra-performant.
 - **Récupération des Téléchargements** lors d'une perte de connexion pour le Server Repo.
 - **Support International 100% Intégral** et détection automatique de la langue.
 - **Outils de Diagnostic de Stockage et Benchmark** intégrés à l'application.

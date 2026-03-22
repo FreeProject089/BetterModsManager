@@ -335,7 +335,7 @@ function restoreConflictCache() {
   } catch (e) { S.conflictCache = {}; }
 }
 
-export function refreshMods(autoScan = false, immediate = false) {
+export async function refreshMods(autoScan = false, immediate = false) {
   if (refreshTimeout) {
     clearTimeout(refreshTimeout);
     refreshTimeout = null;
@@ -374,7 +374,7 @@ export function refreshMods(autoScan = false, immediate = false) {
   };
 
   if (immediate) {
-    return doRefresh();
+    return await doRefresh();
   }
 
   return new Promise(resolve => {
@@ -433,6 +433,12 @@ function getFilteredMods() {
     if (S.currentSort === 'status') {
       if (a.enabled === b.enabled) return a.name.localeCompare(b.name);
       return a.enabled ? -1 : 1;
+    }
+    if (S.currentSort === 'activation_order') {
+      if (!a.enabled && !b.enabled) return a.name.localeCompare(b.name);
+      if (!a.enabled) return 1;
+      if (!b.enabled) return -1;
+      return a.activation_order - b.activation_order;
     }
     return 0;
   });
@@ -589,6 +595,30 @@ function updateCardState(card, mod) {
     dot.classList.toggle('enabled', mod.enabled);
     dot.classList.toggle('disabled', !mod.enabled);
   }
+
+  // Update Activation Order Badge (#N)
+  const nameRow = card.querySelector('.mod-name')?.parentElement;
+  if (nameRow) {
+    let badge = nameRow.querySelector('.badge-accent');
+    if (mod.enabled) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'badge badge-accent';
+        badge.style.cssText = 'font-size:9px;padding:1px 6px;border-radius:4px;font-family:var(--font-mono);font-weight:800;background:rgba(59,130,246,0.2);color:var(--accent);border:1px solid rgba(59,130,246,0.3)';
+        badge.title = 'Ordre d\'activation';
+        // Insert after name
+        const nameEl = nameRow.querySelector('.mod-name');
+        if (nameEl && nameEl.nextSibling) {
+          nameRow.insertBefore(badge, nameEl.nextSibling);
+        } else {
+          nameRow.appendChild(badge);
+        }
+      }
+      badge.textContent = `#${mod.activation_order}`;
+    } else if (badge) {
+      badge.remove();
+    }
+  }
 }
 
 export function updateModListDisplay() {
@@ -648,6 +678,25 @@ function createModCard(mod) {
           if (localStorage.getItem('bmm_sysNotif') === 'true') sendOsNotification('Better Mod Manager', t('mod.activated', { name: mod.name }));
         }
       } else {
+        // --- Dependency Check for deactivation ---
+        const dependents = S.allMods.filter(m => m.enabled && m.dependencies && m.dependencies.includes(mod.id));
+        const requirements = S.allMods.filter(m => m.enabled && mod.dependencies && mod.dependencies.includes(m.id));
+        const relatedMods = [...new Set([...dependents, ...requirements])];
+
+        if (relatedMods.length > 0) {
+          const names = relatedMods.map(m => m.name).join(', ');
+          const title = t('mod.disableDependentsTitle') || 'Désactiver les mods liés ?';
+          const desc = (t('mod.disableDependentsDesc') || 'Les mods suivants sont liés à celui-ci et pourraient être désactivés : {names}. Voulez-vous les désactiver aussi ?').replace('{names}', `<strong>${names}</strong>`);
+          
+          const ok = await window.confirmCustom(title, desc, 'danger', { noLabel: t('common.no') || 'Non' });
+          
+          if (ok) {
+            for (const rel of relatedMods) {
+               await invoke('disable_mod', { modId: rel.id });
+            }
+          }
+        }
+
         await invoke('disable_mod', { modId: mod.id });
         toast(t('mod.deactivated', { name: mod.name }), 'info');
         if (localStorage.getItem('bmm_sysNotif') === 'true') sendOsNotification('Better Mod Manager', t('mod.deactivated', { name: mod.name }));
@@ -831,6 +880,13 @@ async function renderModDetail(modId) {
     }
   })();
 
+  // Dependencies initialization
+  const depInput = panel.querySelector('#detail-dep-input');
+  if (depInput) {
+    depInput._currentModId = mod.id;
+    setupDependencyInput('detail-dep-input', 'detail-deps-list', 'detail-dep-suggestions', mod.dependencies || []);
+  }
+
   // Close button
   panel.querySelector('#btn-close-detail-inner').addEventListener('click', closeModDetail);
 
@@ -904,24 +960,27 @@ async function renderModDetail(modId) {
 
     try {
       const linkRows = panel.querySelectorAll('#detail-links-list > div');
-      const downloadLinks = [];
+      const download_links = [];
       for (const row of linkRows) {
         const url = row.querySelector('.detail-link-url').value.trim();
         const linkType = row.querySelector('.detail-link-type').value;
         const label = row.querySelector('.detail-link-label').value.trim();
         if (url) {
-          downloadLinks.push({ url, link_type: linkType, label });
+          download_links.push({ url, link_type: linkType, label });
         }
       }
 
+      const dependencies = panel.querySelector('#detail-dep-input')?._selectedDeps || [];
+
       await invoke('update_mod_meta', { 
-        modId: mod.id, 
+        mod_id: mod.id, 
         name, 
         author, 
         description, 
         version, 
         tags,
-        downloadLinks
+        download_links: download_links,
+        dependencies: dependencies
       });
 
       toast('Mod sauvegardé.', 'success');
@@ -978,6 +1037,80 @@ function openAddModModal() {
   }
 
   document.getElementById('modal-add-mod')?.classList.add('open');
+  setupDependencyInput('mod-dependency-input', 'mod-dependencies-list', 'mod-dependency-suggestions');
+}
+
+function setupDependencyInput(inputId, listId, suggestionsId, initialDeps = []) {
+  const input = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  const suggs = document.getElementById(suggestionsId);
+  if (!input || !list || !suggs) return;
+
+  let selectedIds = [...initialDeps];
+  input._selectedDeps = selectedIds;
+
+  const renderChips = () => {
+    list.innerHTML = '';
+    selectedIds.forEach(id => {
+      const mod = S.allMods.find(m => m.id === id);
+      if (!mod) return;
+      const chip = document.createElement('div');
+      chip.className = 'badge';
+      chip.style.cssText = 'display:flex; align-items:center; gap:4px; padding:2px 8px; border-radius:6px; background:rgba(255,255,255,0.1); font-size:11px';
+      chip.innerHTML = `<span>${escHtml(mod.name)}</span><button style="background:none; border:none; color:var(--danger); cursor:pointer; padding:0; margin-left:4px">&times;</button>`;
+      chip.querySelector('button').onclick = () => {
+        selectedIds = selectedIds.filter(sid => sid !== id);
+        input._selectedDeps = selectedIds;
+        renderChips();
+      };
+      list.appendChild(chip);
+    });
+  };
+
+  const updateSuggestions = () => {
+    const val = input.value.toLowerCase().trim();
+    
+    const matches = S.allMods.filter(m => 
+        (!val || m.name.toLowerCase().includes(val) || m.id.toLowerCase().includes(val)) && 
+        !selectedIds.includes(m.id) &&
+        (!input._currentModId || m.id !== input._currentModId) // Avoid self-dependency
+    );
+
+    if (matches.length === 0) {
+      suggs.style.display = 'none';
+      return;
+    }
+
+    suggs.innerHTML = matches.map(m => `
+        <div class="suggestion-item" data-id="${m.id}" style="padding:10px 14px; cursor:pointer; font-size:12px; border-bottom:1px solid rgba(255,255,255,0.05); transition: background 0.2s">
+            <div style="font-weight:600; color:var(--text-primary)">${escHtml(m.name)}</div>
+            <div style="font-size:10px; color:var(--text-muted)">${escHtml(m.id)}</div>
+        </div>
+    `).join('');
+    suggs.style.cssText += '; display:block; background:rgba(20,20,25,0.95); backdrop-filter:blur(10px); box-shadow:0 10px 25px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1)';
+    suggs.style.display = 'block';
+
+    suggs.querySelectorAll('.suggestion-item').forEach(item => {
+      item.onmouseover = () => { item.style.background = 'rgba(255,255,255,0.05)'; };
+      item.onmouseout = () => { item.style.background = 'transparent'; };
+      item.onclick = (e) => {
+        e.stopPropagation();
+        selectedIds.push(item.dataset.id);
+        input._selectedDeps = selectedIds;
+        input.value = '';
+        suggs.style.display = 'none';
+        renderChips();
+      };
+    });
+  };
+
+  input.oninput = updateSuggestions;
+  input.onfocus = updateSuggestions;
+
+  // Close suggestions on blur (with delay for clicks)
+  input.onblur = () => setTimeout(() => { suggs.style.display = 'none'; }, 200);
+
+  renderChips();
 }
 
 async function confirmAddMod() {
@@ -1005,20 +1138,25 @@ async function confirmAddMod() {
 
   // Get pending links if any
   const modal = document.getElementById('modal-add-mod');
-  const downloadLinks = modal ? modal._pendingLinks : null;
+  const download_links = modal ? modal._pendingLinks : null;
+  const dependencies = document.getElementById('mod-dependency-input')?._selectedDeps || [];
 
   try {
     await invoke('add_mod', {
       name,
-      modFolderPath: folder,
+      mod_folder_path: folder,
       author,
       description,
       version,
       tags: tagId ? [tagId] : [],
-      downloadLinks: downloadLinks
+      download_links: download_links,
+      dependencies: dependencies
     });
     
-    if (modal) modal._pendingLinks = null; // Clear after use
+    if (modal) {
+      modal._pendingLinks = null;
+      document.getElementById('mod-dependency-input')._selectedDeps = [];
+    }
     document.getElementById('modal-add-mod').classList.remove('open');
     toast(t('mod.added').replace('{name}', name), 'success');
     await refreshMods();

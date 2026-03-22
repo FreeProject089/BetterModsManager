@@ -46,8 +46,9 @@ pub struct ModEntry {
     pub id: String,
     pub name: String,
     pub version: String,
-    pub author: String,
-    pub description: String,
+    pub author: Option<String>,
+    pub description: Option<String>,
+    pub dependencies: Vec<String>,
     pub enabled: bool,
     #[serde(default)]
     pub conflicts: Vec<ConflictReport>,
@@ -84,10 +85,14 @@ pub struct DownloadLink {
 pub struct ModMetadata {
     pub name: String,
     pub version: String,
-    pub author: String,
-    pub description: String,
+    pub author: Option<String>,
+    pub description: Option<String>,
+    #[serde(default)]
+    pub dependencies: Vec<String>,
+    #[serde(default)]
     pub download_links: Vec<DownloadLink>,
-    pub tags: Vec<String>,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
 }
 
 impl From<&ModEntry> for ModMetadata {
@@ -97,8 +102,9 @@ impl From<&ModEntry> for ModMetadata {
             version: m.version.clone(),
             author: m.author.clone(),
             description: m.description.clone(),
+            dependencies: m.dependencies.clone(),
             download_links: m.download_links.clone(),
-            tags: m.tags.clone(),
+            tags: Some(m.tags.clone()),
         }
     }
 }
@@ -108,9 +114,10 @@ impl ModEntry {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             name,
-            version: "1.0.0".to_string(),
-            author: String::new(),
-            description: String::new(),
+            version: "0.0.1".to_string(),
+            author: None,
+            description: None,
+            dependencies: Vec::new(),
             enabled: false,
             conflicts: Vec::new(),
             mod_folder_path,
@@ -168,7 +175,10 @@ impl ModEntry {
         self.version = meta.version;
         self.author = meta.author;
         self.description = meta.description;
+        self.dependencies = meta.dependencies;
         self.download_links = meta.download_links;
-        self.tags = meta.tags;
+        if let Some(tags) = meta.tags {
+            self.tags = tags;
+        }
     }
 }

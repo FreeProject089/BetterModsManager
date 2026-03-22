@@ -20,6 +20,7 @@ import { dedicatedHosting } from './diagrams/dedicated-hosting.js';
 import { modArchitecture } from './diagrams/mod-architecture.js';
 import { diskIoLimiter } from './diagrams/disk-io-limiter.js';
 import { hostingFlow } from './diagrams/hosting-flow.js';
+import { lightweightArchitecture } from './diagrams/lightweight-architecture.js';
 
 // Diagram Registry
 const diagrams = {
@@ -43,7 +44,8 @@ const diagrams = {
     'dedicated-hosting': dedicatedHosting,
     'mod-architecture': modArchitecture,
     'disk-io-limiter': diskIoLimiter,
-    'hosting-flow': hostingFlow
+    'hosting-flow': hostingFlow,
+    'lightweight-architecture': lightweightArchitecture
 };
 
 // State

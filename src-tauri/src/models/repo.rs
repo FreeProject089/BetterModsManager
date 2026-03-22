@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ServerRepo {
     pub name: String,
-    pub description: String,
-    pub author: String,
+    pub description: Option<String>,
+    pub author: Option<String>,
     pub author_id: Option<String>,
     pub signature: Option<String>,
     pub version: String,
@@ -28,8 +28,8 @@ pub struct RepoMod {
     pub id: String,
     pub name: String,
     pub version: String,
-    pub author: String,
-    pub description: String,
+    pub author: Option<String>,
+    pub description: Option<String>,
     pub tags: Vec<RepoTag>,
     pub files: Vec<RepoFile>,
     pub download_links: Vec<crate::models::mod_entry::DownloadLink>,
@@ -61,8 +61,8 @@ impl ServerRepo {
     pub fn new(name: String, game_name: String) -> Self {
         Self {
             name,
-            description: String::new(),
-            author: String::new(),
+            description: None,
+            author: None,
             author_id: None,
             signature: None,
             version: "1.0.0".to_string(),

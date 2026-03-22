@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 pub struct ModList {
     pub format_version: String,
     pub name: String,
-    pub description: String,
+    pub description: Option<String>,
     pub game_name: String,
     pub game_path_hint: String,
-    pub author: String,
+    pub author: Option<String>,
     pub created_at: String,
     pub mods: Vec<ModListEntry>,
 }
@@ -37,8 +37,8 @@ pub struct ModFileEntry {
 pub struct ModListEntry {
     pub name: String,
     pub version: String,
-    pub author: String,
-    pub description: String,
+    pub author: Option<String>,
+    pub description: Option<String>,
     /// Multiple download URLs (GitHub, Google Drive, direct, etc.)
     pub download_links: Vec<DownloadLink>,
     /// Sort/load priority — lower number = applied first
@@ -58,10 +58,10 @@ impl ModList {
         Self {
             format_version: "1.0".to_string(),
             name,
-            description: String::new(),
+            description: None,
             game_name,
             game_path_hint,
-            author: String::new(),
+            author: None,
             created_at: chrono::Local::now().to_rfc3339(),
             mods: Vec::new(),
         }
