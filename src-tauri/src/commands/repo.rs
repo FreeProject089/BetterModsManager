@@ -5,8 +5,12 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{Read, Write, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use tauri::{Window, State, Manager};
+use tauri::{AppHandle, Window, State, Manager};
+use crate::commands::ban_manager;
+use crate::commands::whitelist_manager;
 use crate::models::repo::RepoTag;
+use futures::StreamExt;
+use tokio::time::{sleep, Duration};
 
 #[derive(serde::Serialize, Clone)]
 pub struct RepoProgress {
@@ -90,6 +94,7 @@ pub async fn export_server_repo(
     profile_ids: Vec<String>,
     output_dir: String,
     author_name: String,
+    seed: Option<String>,
 ) -> Result<(), String> {
     if author_name.trim().is_empty() {
         return Err("repo.errAuthorRequired".to_string());
@@ -109,6 +114,21 @@ pub async fn export_server_repo(
         return Err("repo.errOutputDirNotDir".to_string());
     }
 
+    // Determine the seed to use
+    let mut final_seed = seed;
+    
+    // If no seed provided by user, try to recover existing one or generate new
+    if final_seed.is_none() {
+        let manifest_path = output_path.join("repo.json");
+        if manifest_path.exists() {
+            if let Ok(content) = fs::read_to_string(&manifest_path) {
+                if let Ok(existing_repo) = serde_json::from_str::<ServerRepo>(&content) {
+                    final_seed = existing_repo.seed;
+                }
+            }
+        }
+    }
+
     let (mut repo, profiles_data, all_tags) = {
         let data = state.data.lock().unwrap();
         
@@ -119,6 +139,16 @@ pub async fn export_server_repo(
             format!("{} Repo", first_profile.name),
             first_profile.game_name.clone(),
         );
+
+        repo.seed = Some(final_seed.unwrap_or_else(|| {
+            use rand::{thread_rng, Rng};
+            use rand::distributions::Alphanumeric;
+            thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(32)
+                .map(char::from)
+                .collect()
+        }));
         
         if !author_name.trim().is_empty() {
             repo.author = author_name.clone();
@@ -258,87 +288,92 @@ pub async fn export_server_repo(
         current_file: String::new(),
     });
 
+    // 12. Copy Bans/Whitelist if they exist
+    if let Ok(wl_path) = whitelist_manager::get_whitelist_file_path(&handle) {
+        if wl_path.exists() {
+            let _ = fs::copy(wl_path, output_path.join("whitelist.json"));
+        }
+    }
+    if let Ok(ban_path) = ban_manager::get_ban_file_path(&handle) {
+        if ban_path.exists() {
+            let _ = fs::copy(ban_path, output_path.join("bans.json"));
+        }
+    }
+
     Ok(())
 }
-
 fn generate_mini_server_files(
-    handle: &tauri::AppHandle,
+    handle: &AppHandle,
     output_path: &Path,
     port: u16,
     auto_start: bool,
     use_cloudflare: bool,
     use_upnp: bool,
-    lang: &str,
+    _lang: &str,
+    upload_limit: u32,
 ) -> Result<(), String> {
-    // Load translations for the script
-    let lang_dir = crate::fs_utils::get_lang_dir(&handle);
-    let lang_path = lang_dir.join(format!("{}.json", lang));
-    let lang_data: serde_json::Value = if lang_path.exists() {
-        let content = fs::read_to_string(&lang_path).unwrap_or_default();
-        serde_json::from_str(&content).unwrap_or(serde_json::Value::Object(serde_json::Map::new()))
-    } else {
-        serde_json::Value::Object(serde_json::Map::new())
-    };
-
-    let t_script = |key: &str, default: &str| -> String {
-        lang_data.get(key).and_then(|v| v.as_str()).unwrap_or(default).to_string()
-    };
-
-    let ps1_template = include_str!("../templates/mini-server/server.ps1.template");
-
-    // 1. Create PowerShell Server Script
-    let mut ps1_content = ps1_template.replace("PORT_PLACEHOLDER", &port.to_string());
-    ps1_content = ps1_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "$true" } else { "$false" });
-    ps1_content = ps1_content.replace("USE_UPNP_PLACEHOLDER", if use_upnp { "$true" } else { "$false" });
-    
-    // Inject custom cloudflared path if set
+    // 1. Get custom cloudflared path or "AUTO"
     let state = handle.state::<crate::state::AppState>();
     let cf_path = {
         let data = state.data.lock().unwrap();
         data.settings.cloudflared_path.clone().unwrap_or_else(|| "AUTO".to_string())
     };
-    ps1_content = ps1_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path);
-    
-    // Inject Translations
-    ps1_content = ps1_content.replace("{{TITLE}}", &t_script("repo.miniServerScriptTitle", "BMM MINI-SERVER IS ONLINE"));
-    ps1_content = ps1_content.replace("{{FOLDER}}", &t_script("repo.miniServerScriptFolder", "Folder"));
-    ps1_content = ps1_content.replace("{{STOP}}", &t_script("repo.miniServerScriptStop", "Stop: Press Ctrl+C"));
-    ps1_content = ps1_content.replace("{{IP_LABEL}}", &t_script("repo.miniServerScriptIp", "Local IP URL"));
-    ps1_content = ps1_content.replace("{{PUBLIC_IP_LABEL}}", &t_script("repo.miniServerScriptPublicDirect", "Public IP (Direct)"));
-    ps1_content = ps1_content.replace("{{PUBLIC_LABEL}}", &t_script("repo.miniServerScriptPublic", "Public URL (Tunnel)"));
-    ps1_content = ps1_content.replace("{{ADMIN_WARN}}", &t_script("repo.miniServerScriptAdminWarn", "No Administrator rights detected."));
-    ps1_content = ps1_content.replace("{{NETWORK_WARN}}", &t_script("repo.miniServerScriptNetworkWarn", "Network accessibility might be limited."));
-    ps1_content = ps1_content.replace("{{FATAL_ACCESS}}", &t_script("repo.miniServerScriptFatalAccess", "Access Denied. Port might be in use or reserved."));
-    ps1_content = ps1_content.replace("{{ADMIN_REQUIRED}}", &t_script("repo.miniServerScriptAdminRequired", "Administrator privileges are required for this port."));
-    ps1_content = ps1_content.replace("{{RUN_AS_ADMIN}}", &t_script("repo.miniServerScriptRunAsAdmin", "Please run as Administrator."));
-    ps1_content = ps1_content.replace("{{CF_STARTING}}", &t_script("repo.miniServerScriptCloudflareStarting", "Starting Cloudflare Tunnel..."));
-    ps1_content = ps1_content.replace("{{UPNP_STARTING}}", &t_script("repo.miniServerScriptUPnPStarting", "Attempting UPnP port forwarding..."));
-    ps1_content = ps1_content.replace("{{UPNP_SUCCESS}}", &t_script("repo.miniServerScriptUPnPSuccess", "UPnP port mapping successful!"));
-    ps1_content = ps1_content.replace("{{UPNP_ERROR}}", &t_script("repo.miniServerScriptUPnPError", "UPnP mapping failed (Router may not support it)."));
 
-    // Add UTF-8 BOM for Windows PowerShell 5.1 compatibility
-    let mut ps1_bytes = vec![0xEF, 0xBB, 0xBF];
-    ps1_bytes.extend_from_slice(ps1_content.as_bytes());
+    // 2. Load and Prepare Hybrid Template (One-file solution)
+    let hybrid_template = include_str!("../templates/mini-server/server.hybrid.bat.template");
+    let mut hybrid_content = hybrid_template.replace("PORT_PLACEHOLDER", &port.to_string());
+    hybrid_content = hybrid_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "true" } else { "false" });
+    hybrid_content = hybrid_content.replace("USE_UPNP_PLACE_HOLDER", if use_upnp { "true" } else { "false" });
+    hybrid_content = hybrid_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
+    hybrid_content = hybrid_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
 
-    let ps1_path = output_path.join("bmm-mini-server.ps1");
-    fs::write(&ps1_path, ps1_bytes).map_err(|_| "repo.errWriteScript".to_string())?;
+    // 3. Write Single Executable Batch File
+    let main_bat_path = output_path.join("BMM-Standalone-Server.bat");
+    fs::write(&main_bat_path, hybrid_content).map_err(|_| "repo.errWriteScript".to_string())?;
 
-    // 2. Create Batch Launcher
-    let bat_content = include_str!("../templates/mini-server/launcher.bat.template");
-    let bat_path = output_path.join("Lancer-Serveur.bat");
-    fs::write(&bat_path, bat_content).map_err(|_| "repo.errWriteScript".to_string())?;
+    // 4. Copy Bans if exists
+    if let Ok(ban_path) = ban_manager::get_ban_file_path(handle) {
+        if ban_path.exists() {
+            let _ = fs::copy(ban_path, output_path.join("bans.json"));
+        }
+    }
 
-    // 3. Auto-start (Registry Key)
+    // 5. Copy Whitelist if exists
+    if let Ok(wl_path) = whitelist_manager::get_whitelist_file_path(handle) {
+        if wl_path.exists() {
+            let _ = fs::copy(wl_path, output_path.join("whitelist.json"));
+        }
+    }
+
+    // 6. Auto-start logic
     if auto_start {
         #[cfg(target_os = "windows")]
         {
             use winreg::enums::*;
             use winreg::RegKey;
+            println!("[STARTUP] Enabling autostart for standalone server...");
             let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-            let run_result: std::io::Result<RegKey> = hkcu.open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_WRITE);
-            if let Ok(run) = run_result {
-                let val = bat_path.to_string_lossy().to_string();
-                let _ = run.set_value("BMM-Mini-Server", &val);
+            match hkcu.open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_SET_VALUE) {
+                Ok(run) => {
+                    // Ensure absolute path and remove UNC prefix which can break registry commands
+                    let mut path_str = if let Ok(abs_path) = fs::canonicalize(&main_bat_path) {
+                        abs_path.to_string_lossy().to_string().replace("\\\\?\\", "").replace("/","\\")
+                    } else {
+                        main_bat_path.to_string_lossy().to_string()
+                    };
+
+                    // CRITICAL: Must be quoted if contains spaces
+                    if path_str.contains(' ') && !path_str.starts_with('"') {
+                        path_str = format!("\"{}\"", path_str);
+                    }
+
+                    println!("[STARTUP] Writing to registry: BMM-Mini-Server -> {}", path_str);
+                    match run.set_value("BMM-Mini-Server", &path_str) {
+                        Ok(_) => println!("[STARTUP] Registry key set successfully."),
+                        Err(e) => println!("[STARTUP] Failed to set registry value: {}", e),
+                    }
+                },
+                Err(e) => println!("[STARTUP] Failed to open registry key: {}", e),
             }
         }
     }
@@ -355,23 +390,50 @@ pub async fn generate_standalone_server(
     use_cloudflare: bool,
     use_upnp: bool,
     lang: String,
+    upload_limit: u32,
 ) -> Result<(), String> {
-    let repo_json = PathBuf::from(&repo_path);
+    let mut repo_json = PathBuf::from(&repo_path);
+    
+    // If user selected a directory, try to find repo.json inside it
+    if repo_json.is_dir() {
+        repo_json.push("repo.json");
+    }
+
     if !repo_json.exists() {
         return Err("repo.miniServerErrNoRepo".to_string());
     }
 
     let output_path = repo_json.parent().ok_or_else(|| "repo.miniServerErrNoDir".to_string())?;
 
-    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang)
+    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang, upload_limit)
 }
 
 #[tauri::command]
-pub async fn fetch_repo_info(url: String) -> Result<ServerRepo, String> {
-    let client = reqwest::Client::new();
-    let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
+pub async fn fetch_repo_info(url: String, creator_id: Option<String>) -> Result<ServerRepo, String> {
+    let mut target_url = url;
+    if !target_url.ends_with("repo.json") {
+        if target_url.ends_with('/') {
+            target_url.push_str("repo.json");
+        } else {
+            target_url.push_str("/repo.json");
+        }
+    }
+
+    let mut client_builder = reqwest::Client::builder();
+    if let Some(ref cid) = creator_id {
+        let mut headers = reqwest::header::HeaderMap::new();
+        if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) {
+            headers.insert("X-Creator-ID", hv);
+        }
+        client_builder = client_builder.default_headers(headers);
+    }
+    let client = client_builder.build().map_err(|e| e.to_string())?;
+    let res = client.get(&target_url).send().await.map_err(|e| e.to_string())?;
     
     if !res.status().is_success() {
+        if res.status() == 403 {
+            return Err("repo.errForbidden".to_string());
+        }
         return Err("repo.errInvalidRepo".to_string());
     }
 
@@ -380,18 +442,24 @@ pub async fn fetch_repo_info(url: String) -> Result<ServerRepo, String> {
 }
 
 #[derive(serde::Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncChoice {
     pub repo_profile_id: String,
     pub target_local_profile_id: Option<String>, // None = Create New
 }
 
 #[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncArgs {
     pub url: String,
+    pub creator_id: Option<String>,
     pub game_dir: String,
     pub mods_dir: String,
     pub backup_dir: String,
     pub choices: Vec<SyncChoice>,
+    pub overwrite_all: bool,
+    pub delete_extra: bool,
+    pub download_limit: u32,
 }
 
 #[tauri::command]
@@ -428,7 +496,7 @@ pub async fn sync_server_repo(
         current_file: url.clone(),
     });
     
-    let repo = fetch_repo_info(url.clone()).await?;
+    let repo = fetch_repo_info(url.clone(), args.creator_id.clone()).await?;
 
     // Determine the base URL for downloading files
     let base_url = if url.ends_with("repo.json") {
@@ -554,25 +622,14 @@ pub async fn sync_server_repo(
                 let local_path = target_mod_dir.join(&file.relative_path);
                 let mut needs_download = true;
 
-                if local_path.exists() {
-                    let local_size = fs::metadata(&local_path).map(|m| m.len()).unwrap_or(0);
-                    if local_size == file.size {
-                        let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
-                            step: format!(r#"{{"key":"repo.stepChecking","profile":"{}","mod":"{}","current":{},"total":{}}}"#, repo_profile.name, repo_mod.name, idx + 1, total_mods),
-                            progress: ((c_idx as f32 / total_tasks as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_tasks as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods as f32 * total_files as f32 * total_tasks as f32)))) * 100.0,
-                            current_file: file.relative_path.clone(),
-                        });
-                        
-                        if let Ok((local_hash, _)) = compute_file_hash_and_chunks(&local_path, false) {
-                            if local_hash == file.sha256_hash {
-                                println!("[Sync] File {} is up to date (hash matches)", file.relative_path);
-                                needs_download = false;
-                            } else {
-                                println!("[Sync] Hash mismatch for {}, checking chunks...", file.relative_path);
-                            }
+                if local_path.exists() && !args.overwrite_all {
+                    if let Ok((local_hash, _)) = compute_file_hash_and_chunks(&local_path, false) {
+                        if local_hash == file.sha256_hash {
+                            println!("[Sync] File {} is up to date (hash matches), skipping", file.relative_path);
+                            needs_download = false;
+                        } else {
+                            println!("[Sync] Hash mismatch for {}, checking chunks/re-downloading...", file.relative_path);
                         }
-                    } else {
-                        println!("[Sync] File size mismatch for {} (expected {}, got {}), checking chunks...", file.relative_path, file.size, local_size);
                     }
                 }
 
@@ -588,7 +645,15 @@ pub async fn sync_server_repo(
                     }
 
                     let file_url = format!("{}mods/{}/{}", base_url, repo_mod.id, file.relative_path.replace("\\", "/"));
-                    let client = reqwest::Client::new();
+                    let mut client_builder = reqwest::Client::builder();
+                    if let Some(ref cid) = args.creator_id {
+                        let mut headers = reqwest::header::HeaderMap::new();
+                        if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) {
+                            headers.insert("X-Creator-ID", hv);
+                        }
+                        client_builder = client_builder.default_headers(headers);
+                    }
+                    let client = client_builder.build().map_err(|e| e.to_string())?;
 
                     // Differential Sync Logic
                     let mut partial_success = false;
@@ -615,9 +680,23 @@ pub async fn sync_server_repo(
                                     let res = client.get(&file_url).header("Range", range_header).send().await.map_err(|e| format!("Erreur Range ({}): {}", file.relative_path, e))?;
                                     
                                     if res.status() == 206 || res.status() == 200 {
-                                        let bytes = res.bytes().await.map_err(|e| format!("Lecture chunk échouée: {}", e))?;
+                                        let mut stream = res.bytes_stream();
                                         file_to_patch.seek(SeekFrom::Start(current_offset)).map_err(|e| e.to_string())?;
-                                        file_to_patch.write_all(&bytes).map_err(|e| e.to_string())?;
+
+                                        while let Some(item) = stream.next().await {
+                                            let chunk: bytes::Bytes = item.map_err(|e| format!("Stream error: {}", e))?;
+                                            file_to_patch.write_all(&chunk).map_err(|e| e.to_string())?;
+                                            
+                                            // Throttling
+                                            if args.download_limit > 0 {
+                                                let sleep_ms = (chunk.len() as u64 * 1000) / (args.download_limit as u64 * 1024);
+                                                if sleep_ms > 0 {
+                                                    sleep(Duration::from_millis(sleep_ms)).await;
+                                                }
+                                            }
+                                        }
+                                    } else if res.status() == 403 {
+                                        return Err("repo.errForbidden".to_string());
                                     } else {
                                         return Err(format!("Le serveur ne supporte pas les Range requests ou erreur HTTP {}", res.status()));
                                     }
@@ -636,10 +715,27 @@ pub async fn sync_server_repo(
                     if !partial_success {
                         let res = client.get(&file_url).send().await.map_err(|e| format!("Erreur réseau ({}): {}", file.relative_path, e))?;
                         if !res.status().is_success() {
+                            if res.status() == 403 {
+                                return Err("repo.errForbidden".to_string());
+                            }
                             return Err(format!("Erreur HTTP {} pour le fichier: {}", res.status(), file.relative_path));
                         }
-                        let bytes = res.bytes().await.map_err(|e| format!("Lecture échouée: {}", e))?;
-                        fs::write(&local_path, &bytes).map_err(|e| format!("Ecriture échouée: {}", e))?;
+                        
+                        let mut stream = res.bytes_stream();
+                        let mut file_out = fs::File::create(&local_path).map_err(|e| format!("Création échouée: {}", e))?;
+                        
+                        while let Some(item) = stream.next().await {
+                            let chunk: bytes::Bytes = item.map_err(|e| format!("Stream error: {}", e))?;
+                            file_out.write_all(&chunk).map_err(|e| e.to_string())?;
+                            
+                            // Throttling
+                            if args.download_limit > 0 {
+                                let sleep_ms = (chunk.len() as u64 * 1000) / (args.download_limit as u64 * 1024);
+                                if sleep_ms > 0 {
+                                    sleep(Duration::from_millis(sleep_ms)).await;
+                                }
+                            }
+                        }
                     }
                     prof_summary.files_downloaded += 1;
                     prof_summary.bytes_downloaded += file.size;
@@ -666,17 +762,19 @@ pub async fn sync_server_repo(
             successfully_synced_mods.push(repo_mod);
         } // End of for (idx, repo_mod)
 
-        // Cleanup: remove mods no longer in the server profile
-        if let Ok(entries) = fs::read_dir(&mods_path) {
-            for entry in entries.flatten() {
-                if let Ok(file_type) = entry.file_type() {
-                    if file_type.is_dir() {
-                        let name = entry.file_name().to_string_lossy().to_string();
-                        // Only delete if it follows BMM repo pattern "ID_Name" 
-                        // and is NOT in current list
-                        if name.len() > 9 && name.chars().nth(8) == Some('_') && !server_mod_subfolders.contains(&name) {
-                            let _ = fs::remove_dir_all(entry.path());
-                            prof_summary.mods_removed += 1;
+        // Cleanup: remove mods no longer in the server profile (if requested)
+        if args.delete_extra {
+            if let Ok(entries) = fs::read_dir(&mods_path) {
+                for entry in entries.flatten() {
+                    if let Ok(file_type) = entry.file_type() {
+                        if file_type.is_dir() {
+                            let name = entry.file_name().to_string_lossy().to_string();
+                            // Only delete if it follows BMM repo pattern "ID_Name" 
+                            // and is NOT in current list
+                            if name.len() > 9 && name.chars().nth(8) == Some('_') && !server_mod_subfolders.contains(&name) {
+                                let _ = fs::remove_dir_all(entry.path());
+                                prof_summary.mods_removed += 1;
+                            }
                         }
                     }
                 }

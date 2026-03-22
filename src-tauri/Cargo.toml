@@ -20,7 +20,7 @@ chrono = { version = "0.4", features = ["serde"] }
 walkdir = "2"
 fs_extra = "1"
 anyhow = "1"
-reqwest = { version = "0.11", features = ["blocking", "json", "rustls-tls"] }
+reqwest = { version = "0.11", features = ["blocking", "json", "rustls-tls", "stream"] }
 zip = { version = "0.6", features = ["deflate"] }
 lazy_static = "1.4"
 backtrace = "0.3"
@@ -28,18 +28,22 @@ sysinfo = "0.30"
 tokio = { version = "1", features = ["full"] }
 discord-rich-presence = "0.2.4"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+futures = "0.3"
 sha2 = "0.10.9"
 warp = "0.3"
 local-ip-address = "0.6"
 igd = "0.12"
 regex = "1"
+bytes = "1"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 hex = "0.4"
 rand = "0.8"
+tokio-util = { version = "0.7", features = ["io"] }
+windows-sys = { version = "0.45", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_UI_Input_KeyboardAndMouse"] }
+percent-encoding = "2.3"
 tempfile = "3"
 base64 = "0.21"
 winreg = "0.52"
-windows-sys = { version = "0.45", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_UI_Input_KeyboardAndMouse"] }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

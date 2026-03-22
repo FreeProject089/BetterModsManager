@@ -10,6 +10,8 @@ pub struct ServerRepo {
     pub version: String,
     pub game_name: String,
     pub created_at: String,
+    pub seed: Option<String>,
+    pub upload_limit: Option<u32>, // KB/s
     pub profiles: Vec<RepoProfile>,
 }
 
@@ -66,6 +68,8 @@ impl ServerRepo {
             version: "1.0.0".to_string(),
             game_name,
             created_at: chrono::Utc::now().to_rfc3339(),
+            seed: None,
+            upload_limit: None,
             profiles: Vec::new(),
         }
     }

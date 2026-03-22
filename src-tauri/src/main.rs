@@ -9,6 +9,7 @@ use state::AppState;
 use std::path::PathBuf;
 use tauri::Manager;
 use commands::settings::*;
+use commands::ban_manager;
 
 fn main() {
     // 1. Initialise le gestionnaire de crash dès le démarrage (Expert Mode)
@@ -104,6 +105,16 @@ fn main() {
 
             app.manage(app_state);
             app.manage(crate::commands::repo_server::RepoServerState::default());
+            
+            // 3. Load Bans
+            if let Err(e) = ban_manager::load_bans(&app.handle()) {
+                commands::crash::log_line(format!("[WARNING] Failed to load bans: {}", e));
+            }
+
+            // 4. Load Whitelist
+            if let Err(e) = commands::whitelist_manager::load_whitelist(&app.handle()) {
+                commands::crash::log_line(format!("[WARNING] Failed to load whitelist: {}", e));
+            }
 
             Ok(())
         })
@@ -256,7 +267,9 @@ fn main() {
             commands::repo_server::start_repo_server,
             commands::repo_server::stop_repo_server,
             commands::repo_server::get_repo_server_status,
+            commands::repo_server::get_active_downloads,
             commands::security::get_creator_id,
+            commands::security::get_salted_creator_id,
             commands::security::verify_repo_signature,
             commands::crash::finalize_and_close_app,
             commands::debug::get_project_files,
@@ -264,6 +277,18 @@ fn main() {
             commands::debug::get_debug_stats,
             commands::debug::get_rust_logs,
             commands::window::start_resizing,
+            // Ban System
+            commands::ban_manager::ban_user,
+            commands::ban_manager::unban_user,
+            commands::ban_manager::unban_all,
+            commands::ban_manager::unban_bulk,
+            commands::ban_manager::get_ban_list,
+            // Whitelist System
+            commands::whitelist_manager::toggle_whitelist,
+            commands::whitelist_manager::add_to_whitelist,
+            commands::whitelist_manager::remove_from_whitelist,
+            commands::whitelist_manager::get_whitelist,
+            commands::whitelist_manager::clear_whitelist,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

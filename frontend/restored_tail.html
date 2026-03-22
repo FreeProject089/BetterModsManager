@@ -1,0 +1,85 @@
+    <!-- Combined Restored Section -->
+    <!-- Custom Context Menu for Conflicts -->
+    <div id="conflict-context-menu" class="custom-context-menu">
+        <div class="menu-item" id="ctx-open-explorer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span data-i18n="conflict.openExplorer">Voir les fichiers en conflit</span>
+        </div>
+    </div>
+
+    <!-- Monitoring Modal -->
+    <div class="modal-overlay" id="modal-monitoring" style="z-index: 1100;">
+        <div class="modal glass" style="max-width: 900px; width: 95%; max-height:85vh; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:36px; height:36px; background:rgba(6,182,212,0.15); border-radius:10px; display:flex; align-items:center; justify-content:center; color:var(--cyan);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+                    </div>
+                    <div>
+                        <h2 data-i18n="repo.monitoringTitle" style="margin:0; font-size:18px; font-weight:800; color:var(--text-primary);">MONITORING SERVEUR</h2>
+                        <p style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">UTILISATEURS CONNECTÉS EN TEMPS RÉEL</p>
+                    </div>
+                </div>
+                <button class="modal-close" data-close="modal-monitoring">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 0; overflow-x: auto; overflow-y: auto; flex: 1;">
+                <table class="monitoring-table" style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:rgba(255,255,255,0.02); border-bottom:1px solid rgba(255,255,255,0.05);">
+                            <th style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">IP</th>
+                            <th style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">Creator ID / HWID</th>
+                            <th style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">Protocol</th>
+                            <th style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">File</th>
+                            <th style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase; width:150px;">Progress</th>
+                            <th style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">Speed</th>
+                            <th style="padding:12px 10px; text-align:right; font-size:10px; color:var(--text-muted); text-transform:uppercase;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="monitoring-list-body">
+                        <!-- Dynamic content -->
+                    </tbody>
+                </table>
+                <div id="monitoring-empty-hint" style="text-align:center; padding:40px 20px; color:var(--text-muted); font-style:italic;" data-i18n="repo.monEmpty">Aucun téléchargement actif...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ban List Modal -->
+    <div id="modal-bans" class="modal-overlay" style="z-index: 1105;">
+        <div class="modal glass" style="max-width: 500px; width: 90%; max-height: 80vh; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:36px; height:36px; background:rgba(239, 68, 68, 0.1); border-radius:10px; display:flex; align-items:center; justify-content:center; color:var(--danger);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    </div>
+                    <div>
+                        <h2 data-i18n="repo.bansTitle" style="margin:0; font-size:18px; font-weight:800; color:var(--text-primary);">LISTE DES BANS</h2>
+                        <p style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">IPS ET CLÉS CRÉATEUR BLOQUÉES</p>
+                    </div>
+                </div>
+                <button class="modal-close" data-close="modal-bans">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 0; display:flex; flex-direction:column; flex:1; overflow:hidden;">
+                <!-- Manual Add Section -->
+                <div style="padding:15px; border-bottom:1px solid rgba(255,255,255,0.05); background:rgba(0,0,0,0.15);">
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="ban-input-value" class="form-input" placeholder="IP ou Clé Créateur..." style="font-size:12px; height:36px; background:rgba(0,0,0,0.3);" />
+                        <button id="btn-add-ban" class="btn btn-primary" style="height:36px; padding:0 15px; font-size:12px; font-weight:700; background:var(--danger); border-color:var(--danger);">
+                            ${t('repo.banBtn') || 'BANNIR'}
+                        </button>
+                    </div>
+                </div>
+                <div id="ban-list-container" style="flex:1; overflow-y:auto; padding:10px 0;">
+                    <!-- List items injected by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </div> <!-- End #app-window-outer -->
+
+    <script type="module" src="js/app.js"></script>

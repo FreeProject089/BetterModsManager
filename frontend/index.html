@@ -717,6 +717,19 @@
                                     data-i18n-placeholder="repo.authorPlaceholder" />
                             </div>
 
+                            <div class="form-group" style="margin-bottom:12px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <label class="form-label" style="margin-bottom:4px; font-size:11px; opacity:0.8;"
+                                        data-i18n="repo.serverSeed">Graine du serveur (Optionnel)</label>
+                                    <span style="font-size:9px; color:var(--text-muted); cursor:help;" title="Cette graine définit l'identité unique de votre serveur pour les bannissements et la whitelist.">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                    </span>
+                                </div>
+                                <input type="text" class="form-input" id="repo-export-seed" placeholder="Laissér vide pour auto-générer"
+                                    data-i18n-placeholder="repo.serverSeedPlaceholder"
+                                    style="font-size:11px; font-family:var(--font-mono); height:30px; background:rgba(0,0,0,0.15);" />
+                            </div>
+
                             <div style="display:flex; gap:10px;">
                                 <button class="btn btn-primary" id="btn-start-repo-export"
                                     style="flex:1;justify-content:center;">
@@ -800,6 +813,13 @@
                                         max="65535"
                                         style="font-size:12px; padding:6px; background:rgba(0,0,0,0.2); border:1px solid var(--border);" />
                                 </div>
+                                <div style="flex:1;">
+                                    <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;"
+                                        data-i18n="repo.uploadLimit">Limite Upload (Ko/s)</label>
+                                    <input type="number" id="repo-server-upload-limit" class="form-input" value="0" min="0" step="50"
+                                        data-i18n-placeholder="repo.limitNone"
+                                        style="font-size:12px; padding:6px; background:rgba(0,0,0,0.2); border:1px solid var(--border);" />
+                                </div>
                             </div>
 
                             <div
@@ -825,6 +845,21 @@
                                 <span id="repo-server-btn-text" data-i18n="repo.hostStart">...</span>
                             </button>
 
+                            <div id="repo-server-tools" style="display:none; margin-top:10px; display:flex; gap:8px;">
+                                <button class="btn btn-ghost btn-sm" id="btn-open-monitoring" style="flex:1; font-size:10px; border:1px solid rgba(255,255,255,0.1);">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h7"/><path d="M9 11v1"/><path d="M13 8v4"/><path d="M17 5v3"/><path d="M22 21l-2-2"/><path d="M18 17a3 3 0 1 0 5.66 0"/><path d="M18 17l4 4"/></svg>
+                                    <span data-i18n="repo.monitoring">SURVEILLANCE</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" id="btn-open-whitelist" style="flex:1; font-size:10px; border:1px solid rgba(255,255,255,0.1); color:var(--accent);">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+                                    <span data-i18n="repo.whitelist">WHITELIST</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" id="btn-open-bans" style="flex:1; font-size:10px; border:1px solid rgba(255,255,255,0.1); color:var(--danger);">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                                    <span data-i18n="repo.bans">BANNISSEMENTS</span>
+                                </button>
+                            </div>
+
                             <div id="repo-server-loading-bar"
                                 style="display:none;height:3px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;margin-top:8px;">
                                 <div
@@ -836,8 +871,13 @@
                             <div id="repo-creator-id-container" style="display:none;margin-top:8px;">
                                 <label class="form-label" style="font-size:10px;margin-bottom:2px;"
                                     data-i18n="repo.creatorId">...</label>
-                                <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted);background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:4px;word-break:break-all;"
-                                    id="repo-creator-id-value">...</div>
+                                <div style="display:flex; gap:6px;">
+                                    <div style="flex:1; font-family:var(--font-mono);font-size:9px;color:var(--text-muted);background:rgba(0,0,0,0.2);padding:6px 10px;border-radius:6px;word-break:break-all;border:1px solid rgba(255,255,255,0.03);"
+                                        id="repo-creator-id-value">...</div>
+                                    <button class="btn btn-ghost btn-sm" id="btn-copy-my-creator-id" style="padding:0 8px; border:1px solid rgba(255,255,255,0.05);">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                    </button>
+                                </div>
                             </div>
 
                             <div id="repo-server-url-container"
@@ -915,7 +955,8 @@
                             <div class="form-group" style="margin-bottom:12px;">
                                 <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;" data-i18n="repo.miniServerRepoPath">Chemin du repo.json :</label>
                                 <div class="path-picker" style="display:flex; gap:6px;">
-                                    <input type="text" class="form-input" id="repo-mini-server-json-path" placeholder="C:\...\repo.json" readonly style="font-size:11px; flex:1; min-width:0;" />
+                                    <input type="text" class="form-input" id="repo-mini-server-json-path" placeholder="C:\...\repo.json" 
+                                        data-i18n-placeholder="repo.miniServerRepoPlaceholder" readonly style="font-size:11px; flex:1; min-width:0;" />
                                     <button class="btn btn-secondary btn-sm" id="btn-pick-mini-server-repo" data-i18n-title="repo.miniServerSelectRepo" style="padding:0 10px; height:28px; display:flex; align-items:center; justify-content:center;">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                                     </button>
@@ -934,6 +975,11 @@
                                     <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;" data-i18n="repo.portLabel">PORT</span>
                                     <input type="number" id="repo-mini-server-port" class="form-input" value="8000" min="1" max="65535" 
                                         style="width:60px; height:22px; font-size:11px; padding:0 6px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--cyan); font-weight:700;">
+                                </div>
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;" data-i18n="repo.uploadLimit">LIMIT</span>
+                                    <input type="number" id="repo-mini-server-upload-limit" class="form-input" value="0" min="0" step="50"
+                                        style="width:70px; height:22px; font-size:11px; padding:0 6px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--accent); font-weight:700;">
                                 </div>
                                 <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
                                     <input type="checkbox" id="repo-mini-server-autostart" style="margin:0;">
@@ -975,6 +1021,7 @@
                                 <input type="text" class="form-input" id="repo-sync-url"
                                     data-i18n-placeholder="repo.urlPlaceholder" />
                                 <button class="btn btn-secondary btn-sm" id="btn-fetch-repo-info"
+                                    data-i18n="repo.fetchBtn"
                                     style="padding:0 12px; font-weight:700;">FETCH</button>
                             </div>
                         </div>
@@ -994,8 +1041,13 @@
                                 style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                                 <span id="repo-sync-author-badge"
                                     style="font-size:10px;padding:2px 8px;border-radius:100px;font-weight:700;"></span>
-                                <span id="repo-sync-game-badge"
-                                    style="font-size:10px;color:var(--text-muted);text-transform:uppercase;"></span>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <span id="repo-sync-game-badge"
+                                        style="font-size:10px;color:var(--text-muted);text-transform:uppercase;"></span>
+                                    <button id="btn-clear-fetched-repo" class="btn btn-xs btn-ghost" style="padding:2px; color:var(--text-muted); height:14px; width:14px; min-width:14px; display:flex; align-items:center; justify-content:center;">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    </button>
+                                </div>
                             </div>
                             <div style="font-size:14px;font-weight:700;margin-bottom:2px;" id="repo-sync-name-display">
                             </div>
@@ -1011,6 +1063,32 @@
                             <div id="repo-sync-total-size"
                                 style="font-size:11px; color:var(--text-muted); margin:10px 0; text-align:right; font-weight:600;">
                             </div>
+
+                            <div id="repo-sync-options" style="margin-top:15px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                                <label class="form-label" style="font-size:11px; margin-bottom:8px; display:block; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; font-weight:700;" data-i18n="repo.syncOptions">Options de Synchronisation</label>
+                                
+                                <div style="display:flex; gap:12px; margin-bottom:10px;">
+                                    <div style="flex:1;">
+                                        <label class="form-label" style="font-size:11px; margin-bottom:4px;" data-i18n="repo.syncMode">Mode de synchronisation</label>
+                                        <select class="form-input" id="repo-sync-mode" style="font-size:12px; padding:6px; background:rgba(255,255,255,0.05);">
+                                            <option value="missing" selected data-i18n="repo.syncModeMissing">Manquants ou Incorrects uniquement</option>
+                                            <option value="all" data-i18n="repo.syncModeAll">Tout réinstaller (Écraser)</option>
+                                        </select>
+                                    </div>
+                                    <div style="flex:1;">
+                                        <label class="form-label" style="font-size:11px; margin-bottom:4px;" data-i18n="repo.downloadLimit">Limite Download (Ko/s)</label>
+                                        <input type="number" id="repo-sync-download-limit" class="form-input" value="0" min="0" step="50"
+                                            data-i18n-placeholder="repo.limitNone"
+                                            style="font-size:12px; padding:6px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);" />
+                                    </div>
+                                </div>
+
+                                <label class="checkbox-container" style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">
+                                    <input type="checkbox" id="repo-sync-clean-extra" />
+                                    <span class="checkmark"></span>
+                                    <span data-i18n="repo.syncCleanExtra">Supprimer les mods locaux en trop (Cleanup)</span>
+                                </label>
+                            </div>
                         </div>
 
                         <div id="repo-sync-paths-section">
@@ -1023,6 +1101,7 @@
                                     data-i18n="repo.syncGameDir">...</label>
                                 <div class="path-picker">
                                     <input type="text" class="form-input" id="repo-sync-game-path"
+                                        data-i18n-placeholder="prof.gameDirPlaceholder"
                                         placeholder="C:\Jeux\DCS..." readonly />
                                     <button class="btn btn-secondary btn-sm" id="btn-pick-sync-game"
                                         data-i18n="prof.browse">Parcourir</button>
@@ -1033,6 +1112,7 @@
                                     data-i18n="repo.syncModsDir">...</label>
                                 <div class="path-picker">
                                     <input type="text" class="form-input" id="repo-sync-mods-path"
+                                        data-i18n-placeholder="prof.modsDirPlaceholder"
                                         placeholder="C:\Mods\..." readonly />
                                     <button class="btn btn-secondary btn-sm" id="btn-pick-sync-mods"
                                         data-i18n="prof.browse">Parcourir</button>
@@ -1043,6 +1123,7 @@
                                     data-i18n="repo.syncBackupDir">...</label>
                                 <div class="path-picker">
                                     <input type="text" class="form-input" id="repo-sync-backup-path"
+                                        data-i18n-placeholder="prof.backupDirPlaceholder"
                                         placeholder="C:\Backups\..." readonly />
                                     <button class="btn btn-secondary btn-sm" id="btn-pick-sync-backup"
                                         data-i18n="prof.browse">Parcourir</button>
@@ -2947,7 +3028,7 @@
                             </svg>
                             <span data-i18n="settings.notesTitle">Release Notes</span>
                         </h3>
-                        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
+                        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6" data-i18n="settings.notesDesc">
                             Consultez les dernières nouveautés et les changements de la version actuelle.
                         </p>
                         <button class="btn btn-secondary btn-sm" id="btn-show-notes">
@@ -2957,7 +3038,7 @@
                                 <line x1="12" y1="16" x2="12" y2="12" />
                                 <line x1="12" y1="8" x2="12.01" y2="8" />
                             </svg>
-                            <span>Afficher les notes</span>
+                            <span data-i18n="settings.showNotes">Afficher les notes</span>
                         </button>
                     </div>
                     <!-- ── END Crash Reports ── -->
@@ -4062,9 +4143,185 @@
         </div>
     </div>
 
+    <!-- Monitoring Modal -->
+    <div class="modal-overlay" id="modal-monitoring" style="z-index: 1100;">
+        <div class="modal glass" style="max-width: 1000px; width: 95%; max-height:85vh; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:36px; height:36px; background:rgba(6,182,212,0.15); border-radius:10px; display:flex; align-items:center; justify-content:center; color:var(--cyan);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+                    </div>
+                    <div>
+                        <h2 data-i18n="repo.monitoringTitle" style="margin:0; font-size:18px; font-weight:800; color:var(--text-primary);">SERVER MONITORING</h2>
+                        <p style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-weight:700;" data-i18n="repo.monitoringSubtitle">REAL-TIME CONNECTED USERS</p>
+                    </div>
+                </div>
+                <button class="modal-close" data-close="modal-monitoring">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 0; overflow-x: auto; overflow-y: auto; flex: 1;">
+                <table class="monitoring-table" style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:rgba(255,255,255,0.02); border-bottom:1px solid rgba(255,255,255,0.05);">
+                            <th style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">IP</th>
+                            <th style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">Creator ID / HWID</th>
+                            <th style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">Protocol</th>
+                            <th style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">File</th>
+                            <th style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase; width:150px;">Progress</th>
+                            <th style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">Speed</th>
+                            <th style="padding:12px 10px; text-align:right; font-size:10px; color:var(--text-muted); text-transform:uppercase;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="monitoring-list-body">
+                        <!-- Dynamic content -->
+                    </tbody>
+                </table>
+                <div id="monitoring-empty-hint" style="text-align:center; padding:40px 20px; color:var(--text-muted); font-style:italic;" data-i18n="repo.monEmpty">Aucun téléchargement actif...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Generic Premium Confirmation -->
+    <div class="modal-overlay" id="modal-confirm-generic" style="z-index: 1200;">
+        <div class="modal glass" style="max-width: 400px; width: 90%; border: 1px solid rgba(255,255,255,0.1);">
+            <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
+                <div style="display:flex; align-items:center; gap:12px; width: 100%;">
+                    <div id="confirm-icon-container" style="width:40px; height:40px; background:rgba(239, 68, 68, 0.1); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--danger);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    </div>
+                    <h3 id="confirm-title" style="margin:0; font-size:18px; font-weight:800; color:var(--text-primary);">Confirmation</h3>
+                </div>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <p id="confirm-message" style="margin:0; line-height:1.6; color:var(--text-muted); font-size:14px;">Êtes-vous sûr de vouloir continuer ?</p>
+            </div>
+            <div class="modal-footer" style="padding: 16px 24px; display: flex; justify-content: flex-end; gap: 12px; border-top: none;">
+                <button class="btn btn-ghost modal-close" id="btn-confirm-cancel" style="min-width: 100px;" data-i18n="common.cancel">Annuler</button>
+                <button class="btn btn-danger" id="btn-confirm-yes" style="min-width: 120px; font-weight: 800;">CONFIRMER</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ban List Modal -->
+    <div id="modal-bans" class="modal-overlay" style="z-index: 1105;">
+        <div class="modal glass" style="max-width: 800px; width: 90%; max-height: 85vh; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:36px; height:36px; background:rgba(239, 68, 68, 0.1); border-radius:10px; display:flex; align-items:center; justify-content:center; color:var(--danger);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    </div>
+                    <div>
+                        <h2 data-i18n="repo.bansTitle" style="margin:0; font-size:18px; font-weight:800; color:var(--text-primary);">BAN MANAGEMENT</h2>
+                        <p style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-weight:700;" data-i18n="repo.bansSubtitle">BANNED IPS AND CREATOR KEYS</p>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="btn btn-ghost btn-xs" id="btn-export-bans" style="font-size:10px; border:1px solid rgba(255,255,255,0.1); color:var(--cyan);">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        EXPORT
+                    </button>
+                    <button class="modal-close" data-close="modal-bans">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body" style="padding: 0; display:flex; flex-direction:column; flex:1; overflow:hidden;">
+                <!-- Manual Ban Form -->
+                <div style="padding:15px; background:rgba(255,255,255,0.03); border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <h3 style="margin:0 0 10px 0; font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;" data-i18n="repo.banManualTitle">AJOUTER UN BAN MANUEL</h3>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <input type="text" id="manual-ban-ip" class="form-input" style="flex:1; min-width:140px; font-size:12px; height:34px; background:rgba(0,0,0,0.2);" placeholder="IP Address..." data-i18n-placeholder="repo.banManualIP" />
+                        <input type="text" id="manual-ban-key" class="form-input" style="flex:1; min-width:140px; font-size:12px; height:34px; background:rgba(0,0,0,0.2);" placeholder="Creator Key..." data-i18n-placeholder="repo.banManualKey" />
+                        <button class="btn btn-danger btn-sm" id="btn-add-manual-ban" style="height:34px; padding: 0 15px; font-weight:700; font-size:11px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                            <span data-i18n="repo.banManualAdd">BANNIR</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search and Filters -->
+                <div style="padding:10px 15px; display:flex; gap:10px; align-items:center; background:rgba(0,0,0,0.1); border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <div style="position:relative; flex:1;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" style="position:absolute; left:10px; top:50%; transform:translateY(-50%);"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="ban-search" class="form-input" style="width:100%; height:32px; padding-left:32px; font-size:12px; border-radius:12px;" placeholder="Search ban..." data-i18n-placeholder="repo.banSearch" />
+                    </div>
+                    <select id="ban-filter-type" class="form-input" style="width:100px; height:32px; font-size:11px; padding:0 8px; border-radius:12px; cursor:pointer;">
+                        <option value="ALL" data-i18n="repo.banFilterAll">TOUT</option>
+                        <option value="IP">IP</option>
+                        <option value="KEY">KEY</option>
+                    </select>
+                    <button class="btn btn-outline-danger btn-xs" id="btn-unban-all" style="height:32px; border-radius:12px; font-weight:700; font-size:10px;">
+                        UNBAN ALL
+                    </button>
+                </div>
+
+                <!-- List items injected by JS -->
+                <div id="ban-list-container" style="flex:1; overflow-y:auto; padding:10px 0;">
+                    <!-- List items injected by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Whitelist Modal -->
+    <div id="modal-whitelist" class="modal-overlay" style="z-index: 1106;">
+        <div class="modal glass" style="max-width: 800px; width: 90%; max-height: 85vh; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:36px; height:36px; background:rgba(59, 130, 246, 0.1); border-radius:10px; display:flex; align-items:center; justify-content:center; color:var(--accent);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+                    </div>
+                    <div>
+                        <h2 data-i18n="repo.whitelistTitle" style="margin:0; font-size:18px; font-weight:800; color:var(--text-primary);">WHITELIST MANAGEMENT</h2>
+                        <p style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-weight:700;" data-i18n="repo.whitelistSubtitle">RESTRICTED ACCESS TO AUTHORIZED USERS</p>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.05); padding:4px 12px; border-radius:20px; border:1px solid rgba(255,255,255,0.1);">
+                        <span style="font-size:10px; font-weight:800; color:var(--text-muted);" data-i18n="repo.whitelistEnable">ACTIVER</span>
+                        <input type="checkbox" id="whitelist-toggle" class="toggle toggle-accent toggle-xs">
+                    </div>
+                    <button class="modal-close" data-close="modal-whitelist">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body" style="padding: 0; display:flex; flex-direction:column; flex:1; overflow:hidden;">
+                <!-- Manual Whitelist Form -->
+                <div style="padding:15px; background:rgba(255,255,255,0.03); border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <h3 style="margin:0 0 10px 0; font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;" data-i18n="repo.whitelistManualTitle">AJOUTER À LA WHITELIST</h3>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <input type="text" id="manual-whitelist-ip" class="form-input" style="flex:1; min-width:140px; font-size:12px; height:34px; background:rgba(0,0,0,0.2);" placeholder="IP Address..." data-i18n-placeholder="repo.whitelistManualIP" />
+                        <input type="text" id="manual-whitelist-key" class="form-input" style="flex:1; min-width:140px; font-size:12px; height:34px; background:rgba(0,0,0,0.2);" placeholder="Creator Key..." data-i18n-placeholder="repo.whitelistManualKey" />
+                        <button class="btn btn-primary btn-sm" id="btn-add-manual-whitelist" style="height:34px; padding: 0 15px; font-weight:700; font-size:11px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+                            <span data-i18n="repo.whitelistManualAdd">AUTORISER</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search and Filters -->
+                <div style="padding:10px 15px; display:flex; gap:10px; align-items:center; background:rgba(0,0,0,0.1); border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <div style="position:relative; flex:1;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" style="position:absolute; left:10px; top:50%; transform:translateY(-50%);"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="whitelist-search" class="form-input" style="width:100%; height:32px; padding-left:32px; font-size:12px; border-radius:12px;" placeholder="Search whitelist..." data-i18n-placeholder="repo.whitelistSearch" />
+                    </div>
+                    <button class="btn btn-outline-danger btn-xs" id="btn-clear-whitelist" style="height:32px; border-radius:12px; font-weight:700; font-size:10px;" data-i18n="repo.whitelistClearBtn">
+                        CLEAR ALL
+                    </button>
+                </div>
+
+                <!-- List items injected by JS -->
+                <div id="whitelist-list-container" style="flex:1; overflow-y:auto; padding:10px 0;">
+                    <!-- List items injected by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     </div> <!-- End #app-window-outer -->
 
     <script type="module" src="js/app.js"></script>
 </body>
-
 </html>

@@ -1,0 +1,413 @@
+0</* ::
+@echo off
+title BMM STANDALONE SERVER
+setlocal enabledelayedexpansion
+
+:init
+:: 1. Check/Install Portable Node.js if missing
+set NODE_EXE=
+where node >nul 2>nul
+if %errorlevel% equ 0 ( set NODE_EXE=node ) else (
+    if exist "node.exe" (
+        ".\node.exe" -v >nul 2>nul
+        if !errorlevel! equ 0 (
+            set NODE_EXE=".\node.exe"
+        ) else (
+            echo [BMM] node.exe incompatible ou corrompu. Suppression...
+            del /f /q "node.exe"
+        )
+    )
+    
+    if not defined NODE_EXE (
+        echo [BMM] Node.js absent. Telechargement...
+        set "NODE_ARCH=win-x64"
+        if "%PROCESSOR_ARCHITECTURE%"=="x86" (
+            if not defined PROCESSOR_ARCHITEW6432 set "NODE_ARCH=win-x86"
+        )
+        set "NODE_URL=https://nodejs.org/dist/v20.11.1/!NODE_ARCH!/node.exe"
+        powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('!NODE_URL!', 'node.exe')"
+        if exist "node.exe" (
+            set NODE_EXE=".\node.exe"
+        ) else (
+            echo [ERREUR] Impossible de telecharger Node.js. ; pause ; exit /b
+        )
+    )
+)
+
+:: 2. Launch this file with Node (Polyglot)
+%NODE_EXE% "%~f0" %*
+if %errorlevel% neq 0 pause
+exit /b
+*/0;
+
+// ────────────────────────────────────────────────────────────
+//  BMM LUXURY SERVER (Node.js Logic)
+// ────────────────────────────────────────────────────────────
+const http = require('http');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
+const { spawn, execSync } = require('child_process');
+
+// placeholders
+const PORT = PORT_PLACEHOLDER;
+const USE_CLOUDFLARE = USE_CLOUDFLARE_PLACEHOLDER;
+const USE_UPNP = USE_UPNP_PLACE_HOLDER;
+const CLOUDFLARE_PATH = 'CLOUDFLARE_BINARY_PLACEHOLDER';
+const UPLOAD_LIMIT = UPLOAD_LIMIT_PLACEHOLDER; // KB/s
+
+const logFile = path.join(__dirname, 'server.log');
+const bansFile = path.join(__dirname, 'bans.json');
+
+function getLocalIP() {
+    const interfaces = require('os').networkInterfaces();
+    let bestIp = '127.0.0.1';
+    for (const name of Object.keys(interfaces)) {
+        // Ignorer les adaptateurs virtuels connus (VirtualBox, VMware, etc.)
+        if (name.toLowerCase().includes('virtual') || name.toLowerCase().includes('vbox') || name.toLowerCase().includes('vmware') || name.toLowerCase().includes('host-only')) continue;
+
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                // Ignorer les IPs de VirtualBox par défaut (souvent 192.168.56.1)
+                if (iface.address.startsWith('192.168.56.')) continue;
+                
+                // Prioriser les adresses standard (192.168.x.x ou 10.x.x.x)
+                if (iface.address.startsWith('192.168.') || iface.address.startsWith('10.')) return iface.address;
+                bestIp = iface.address;
+            }
+        }
+    }
+    return bestIp;
+}
+
+const LOCAL_IP = getLocalIP();
+
+function log(msg, level = 'INFO', print = true) {
+    const ts = new Date().toISOString().replace('T', ' ').split('.')[0];
+    const line = `[${ts}][${level}] ${msg}`;
+    if (print) {
+        const colors = { INFO: '\x1b[36m', ERROR: '\x1b[31m', WARN: '\x1b[33m', BAN: '\x1b[35m', OK: '\x1b[32m' };
+        console.log(`${colors[level] || ''}${line}\x1b[0m`);
+    }
+    try { fs.appendFileSync(logFile, line + '\n', 'utf8'); } catch(e) {}
+}
+
+const activeDownloads = new Map();
+
+function saveMonitoring() {
+    const report = [];
+    const now = Date.now();
+    for (const [id, dl] of activeDownloads.entries()) {
+        const elapsed = (now - dl.startTime) / 1000;
+        const speed = elapsed > 0 ? dl.downloaded / elapsed : 0;
+        report.push({
+            ip: dl.ip,
+            creator_id: dl.creatorId,
+            file: dl.file,
+            progress: (dl.downloaded / dl.total) * 100,
+            speed: speed,
+            downloaded: dl.downloaded,
+            total: dl.total,
+            protocol: dl.protocol
+        });
+    }
+    try { fs.writeFileSync(path.join(__dirname, 'monitoring.json'), JSON.stringify(report)); } catch(e) {}
+}
+setInterval(saveMonitoring, 1000);
+
+function getBans() {
+    if (fs.existsSync(bansFile)) {
+        try { return JSON.parse(fs.readFileSync(bansFile, 'utf8')); } catch(e) {}
+    }
+    return { banned_ips: [], banned_keys: [] };
+}
+
+const server = http.createServer((req, res) => {
+    const xff = req.headers['x-forwarded-for'];
+    const cfIp = req.headers['cf-connecting-ip'];
+    const ip = (cfIp || (xff ? xff.split(',')[0].trim() : req.socket.remoteAddress || '127.0.0.1')).replace('::ffff:', '');
+    
+    const b = getBans();
+    const key = req.headers['x-creator-id'] || req.headers['x-creator-key'];
+
+    const isLocal = ip === '127.0.0.1' || ip === '::1';
+    log(`${req.method} ${req.url} from ${ip} ${isLocal ? '(Local Bypass) ' : ''}[Key: ${key || 'None'}]`, 'INFO');
+
+    // 0. Bypass security for local loopback
+    if (isLocal) {
+        // Continue to normal handling
+    } else {
+        // Find Whitelist/Bans files (AppData or local fallback)
+        const appData = process.env.APPDATA || (process.platform === 'darwin' ? process.env.HOME + '/Library/Application Support' : process.env.HOME + '/.local/share');
+        const appDir = path.join(appData, 'BetterModsManager');
+        
+        const effectiveBansFile = fs.existsSync(path.join(appDir, 'bans.json')) ? path.join(appDir, 'bans.json') : bansFile;
+        const effectiveWlFile = fs.existsSync(path.join(appDir, 'whitelist.json')) ? path.join(appDir, 'whitelist.json') : path.join(__dirname, 'whitelist.json');
+
+        // 1. Check Bans (Highest Priority)
+        let currentBans = b;
+        if (effectiveBansFile !== bansFile) {
+            try { currentBans = JSON.parse(fs.readFileSync(effectiveBansFile, 'utf8')); } catch(e) {}
+        }
+        
+        const isIpBanned = currentBans.banned_ips && currentBans.banned_ips.includes(ip);
+        const isKeyBanned = key && currentBans.banned_keys && currentBans.banned_keys.includes(key);
+        if (isIpBanned || isKeyBanned) {
+            log(`BLOCK (BANNED): ${ip} [Key: ${key || 'None'}] (Reason: ${isIpBanned ? 'IP' : 'Key'})`, 'BAN');
+            res.statusCode = 403; res.end('Forbidden (Banned)'); return;
+        }
+
+        // 2. Check Whitelist
+        try {
+            if (fs.existsSync(effectiveWlFile)) {
+                const wlData = JSON.parse(fs.readFileSync(effectiveWlFile, 'utf8'));
+                if (wlData.enabled) {
+                    const isIpOk = wlData.ips && wlData.ips.includes(ip);
+                    const isKeyOk = key && wlData.keys && wlData.keys.includes(key);
+                    if (!isIpOk && !isKeyOk) {
+                        log(`BLOCK (NOT WHITELISTED): ${ip} [Key: ${key || 'None'}]`, 'WARN');
+                        res.statusCode = 403; res.end('repo.errNotWhitelisted'); return;
+                    }
+                }
+            }
+        } catch(e) { log(`Security check error: ${e.message}`, 'ERROR'); }
+    }
+
+    let urlPath = decodeURIComponent(req.url.split('?')[0]);
+    if (urlPath === '/' || urlPath === '') urlPath = '/repo.json';
+
+    // Enforcement: Check for Creator ID when downloading mods
+    const isModFile = urlPath.toLowerCase().includes('/mods/');
+    if (isModFile && !key) {
+        log(`REJECT: No Creator ID from ${ip} for ${urlPath}`, 'WARN');
+        res.statusCode = 403; res.end('Forbidden: Creator ID Required'); return;
+    }
+
+    const safePath = path.normalize(path.join(__dirname, urlPath.replace(/\//g, path.sep))).replace(/^(\.\.(\/|\\|$))+/, '');
+    const absolutePath = path.resolve(__dirname, safePath.startsWith(path.sep) ? safePath.substring(1) : safePath);
+
+    if (!absolutePath.startsWith(__dirname) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+        res.statusCode = 404; res.end('Not Found'); return;
+    }
+
+    const total = fs.statSync(absolutePath).size;
+    const protocol = ip.startsWith('127.0.0.1') ? 'Local' : (ip.startsWith('192.168.') || ip.startsWith('10.') ? 'LAN' : 'WAN');
+    const dlId = `${ip}-${Date.now()}`;
+    const dlObj = { ip, creatorId: key || '-', file: urlPath, total, downloaded: 0, startTime: Date.now(), protocol };
+    
+    activeDownloads.set(dlId, dlObj);
+
+    const mime = { '.json': 'application/json', '.zip': 'application/zip', '.txt': 'text/plain', '.html': 'text/html', '.lua': 'text/plain' };
+    res.setHeader('Content-Type', mime[path.extname(absolutePath).toLowerCase()] || 'application/octet-stream');
+    res.setHeader('Content-Length', total);
+    res.statusCode = 200;
+
+    const stream = fs.createReadStream(absolutePath);
+    let bytesSentInInterval = 0;
+    let intervalStart = Date.now();
+
+    stream.on('data', (chunk) => {
+        // --- Active Ban Check ---
+        const b = getBans();
+        if (b.banned_ips.includes(ip) || (key && b.banned_keys.includes(key))) {
+            log(`KILLING CONNECTION: ${ip}`, 'BAN');
+            res.destroy(); stream.destroy();
+            activeDownloads.delete(dlId);
+            return;
+        }
+
+        dlObj.downloaded += chunk.length;
+
+        // --- Throttling Logic ---
+        if (UPLOAD_LIMIT > 0) {
+            bytesSentInInterval += chunk.length;
+            const now = Date.now();
+            const elapsed = now - intervalStart;
+            
+            if (elapsed >= 1000) {
+                bytesSentInInterval = 0;
+                intervalStart = now;
+            } else if (bytesSentInInterval > (UPLOAD_LIMIT * 1024)) {
+                stream.pause();
+                const delay = Math.max(10, 1000 - elapsed);
+                setTimeout(() => {
+                    bytesSentInInterval = 0;
+                    intervalStart = Date.now();
+                    stream.resume();
+                }, delay);
+            }
+        }
+    });
+    stream.on('end', () => activeDownloads.delete(dlId));
+    stream.on('error', () => activeDownloads.delete(dlId));
+    res.on('close', () => activeDownloads.delete(dlId));
+    
+    stream.pipe(res);
+});
+
+async function ensureCloudflared(cfPath) {
+    if (fs.existsSync(cfPath)) {
+        try {
+            const stats = fs.statSync(cfPath);
+            if (stats.size > 20 * 1024 * 1024) return true;
+            fs.unlinkSync(cfPath);
+        } catch(e) {}
+    }
+    // Use amd64 for x64 and arm64 (via emulation), 386 for ia32
+    const arch = (process.arch === 'x64' || process.arch === 'arm64') ? 'amd64' : '386';
+    const url = `https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-${arch}.exe`;
+    log(`Downloading cloudflared (${arch}) from ${url}...`, 'INFO');
+    
+    try {
+        const psCmd = `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('${url}', '${cfPath}')`;
+        execSync(`powershell -Command "${psCmd}"`, { stdio: 'ignore' });
+        if (fs.existsSync(cfPath) && fs.statSync(cfPath).size > 20 * 1024 * 1024) return true;
+        log(`Download failed or file too small after PowerShell attempt`, 'ERROR');
+    } catch (e) {
+        log(`PowerShell download error: ${e.message}`, 'ERROR');
+    }
+    return false;
+}
+
+function setupUPnP() {
+    if (!USE_UPNP) return;
+    // Utiliser un redirecteur PowerShell plus propre pour capturer les erreurs COM sans polluer la console
+    const psCmd = `$n=New-Object -Com HNetCfg.NATUPnP;$m=$n.StaticPortMappingCollection;if($m){try{$m.Remove(${PORT},'TCP')}catch{};$m.Add(${PORT},'TCP',${PORT},'${LOCAL_IP}',$true,'BMM');Write-Output 'OK'}else{Write-Output 'FAIL'}`;
+    try { 
+        // Lancer en silence total via shell:false ou redirections
+        execSync(`powershell -Command "${psCmd}"`, { stdio: 'ignore' }); 
+        log('UPnP: Port mapped successfully', 'OK'); 
+    } catch (e) { 
+        // On log seulement dans le fichier si ça échoue, pour garder la console clean
+        log('UPnP: Mapping failed or not supported by router', 'WARN', false); 
+    }
+}
+
+async function getPublicIP() {
+    return new Promise(r => https.get('https://api.ipify.org', res => { let d = ''; res.on('data', c => d+=c); res.on('end', () => r(d.trim())); }).on('error', () => r(null)));
+}
+
+async function testLocalReachability() {
+    return new Promise(r => {
+        const req = http.get(`http://127.0.0.1:${PORT}/repo.json`, res => r(res.statusCode === 200)).on('error', () => r(false));
+        req.setTimeout(1000, () => { req.destroy(); r(false); });
+    });
+}
+
+server.listen(PORT, '0.0.0.0', async () => {
+    console.clear();
+    console.log('\x1b[1m\x1b[36m    /\\_/\\  \x1b[35m╔══════════════════════════════════════════════════════╗\x1b[0m');
+    console.log('\x1b[1m\x1b[36m   ( o.o ) \x1b[35m║\x1b[37m             BMM STANDALONE SERVER v4.5               \x1b[35m║\x1b[0m');
+    console.log('\x1b[1m\x1b[36m    > ^ <  \x1b[35m╚══════════════════════════════════════════════════════╝\x1b[0m');
+    console.log('\x1b[34m    Tasky \x1b[0m  \x1b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m\n');
+
+    console.log(`  \x1b[1m\x1b[32m[STATUS]\x1b[0m  🟢 SERVEUR EN LIGNE (Port ${PORT})`);
+    console.log(`  \x1b[1m\x1b[36m[LOCAL]\x1b[0m   http://${LOCAL_IP}:${PORT}/`);
+    
+    const publicIp = await getPublicIP();
+    if (publicIp) console.log(`  \x1b[1m\x1b[33m[PUBLIC]\x1b[0m  http://${publicIp}:${PORT}/`);
+
+    setupUPnP();
+
+    const reachable = await testLocalReachability();
+    if (reachable) {
+        log('Local Port: Reachable via loopback', 'OK');
+    } else {
+        log('Local Port: Unreachable via 127.0.0.1 (Check Firewall)', 'ERROR');
+    }
+
+    if (USE_CLOUDFLARE) {
+        const cfExe = CLOUDFLARE_PATH === 'AUTO' ? path.join(__dirname, 'cloudflared.exe') : CLOUDFLARE_PATH;
+        if (CLOUDFLARE_PATH === 'AUTO' && !fs.existsSync(cfExe)) {
+            process.stdout.write('  \x1b[1m\x1b[35m[TUNNEL]\x1b[0m  ⏬ Downloading cloudflared...');
+            const success = await ensureCloudflared(cfExe);
+            if (!success) {
+                process.stdout.write('\r  \x1b[1m\x1b[31m[TUNNEL]\x1b[0m  ❌ Download failed. Check internet.   \n');
+                return;
+            }
+            process.stdout.write('\r  \x1b[1m\x1b[35m[TUNNEL]\x1b[0m  ✅ Cloudflared ready !               \n');
+        }
+
+        if (fs.existsSync(cfExe)) {
+            let dots = 0;
+            const spinner = setInterval(() => {
+                process.stdout.write(`\r  \x1b[1m\x1b[35m[TUNNEL]\x1b[0m  🌐 Creating public link${'.'.repeat(dots % 4)}   `);
+                dots++;
+            }, 300);
+
+            const logFile = path.join(__dirname, 'cloudflared.log');
+            if (fs.existsSync(logFile)) try { fs.unlinkSync(logFile); } catch(e) {}
+
+            const cfArgs = ['tunnel', '--no-autoupdate', '--protocol', 'http2', '--url', `http://127.0.0.1:${PORT}`, '--logfile', logFile];
+            
+            let cf;
+            let exited = false;
+            try {
+                cf = spawn(cfExe, cfArgs, { detached: true, stdio: 'ignore', windowsHide: true, cwd: __dirname });
+                cf.on('error', (err) => {
+                    log(`Failed to start Cloudflare Tunnel: ${err.message}`, 'ERROR');
+                    exited = true;
+                });
+                cf.on('exit', (code) => {
+                    log(`Cloudflare Tunnel exited with code ${code}`, 'WARN');
+                    exited = true;
+                });
+                cf.unref(); 
+            } catch (err) {
+                log(`Critical error spawning Cloudflare: ${err.message}`, 'ERROR');
+                clearInterval(spinner);
+                process.stdout.write(`\r  \x1b[1m\x1b[31m[TUNNEL]\x1b[0m  ❌ Critical error (spawn)\n`); 
+                return;
+            }
+
+            let found = false;
+            const checkLog = setInterval(async () => {
+                if (exited) {
+                    clearInterval(checkLog);
+                    clearInterval(spinner);
+                    process.stdout.write(`\r  \x1b[1m\x1b[31m[TUNNEL]\x1b[0m  ❌ Tunnel stopped prematurely.     \n`);
+                    if (fs.existsSync(logFile)) {
+                        const logs = fs.readFileSync(logFile, 'utf8').split('\n').slice(-3).join('\n');
+                        console.log(`  \x1b[90m[Final logs: ${logs.trim()}]\x1b[0m`);
+                    }
+                    return;
+                }
+
+                if (!fs.existsSync(logFile)) return;
+                try {
+                    const content = fs.readFileSync(logFile, 'utf8');
+                    const match = content.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+                    if (match) {
+                        const tunnelUrl = match[0];
+                        const originOk = await testLocalReachability();
+                        if (!originOk) log(`Tunnel URL found but local origin http://127.0.0.1:${PORT} is not responding!`, 'ERROR');
+
+                        clearInterval(checkLog);
+                        clearInterval(spinner);
+                        found = true;
+                        process.stdout.write(`\r  \x1b[1m\x1b[35m[TUNNEL]\x1b[0m  🚀 \x1b[4m${tunnelUrl}\x1b[0m  \x1b[90m(Wait 1 min if DNS error)\x1b[0m\n`);
+                        if (!originOk) console.log(`  \x1b[1m\x1b[31m[WARN]\x1b[0m    Local server is not responding to loopback! Tunnel might be empty.`);
+                        log(`Tunnel ready: ${tunnelUrl} (Origin OK: ${originOk})`, 'INFO');
+                        console.log(`\x1b[90m  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m\n`);
+                        
+                        setInterval(() => {
+                            try { if (process.kill(cf.pid, 0)) return; } catch(e) {}
+                            if (!exited) { exited = true; log(`Tunnel process ${cf.pid} is no longer running.`, 'ERROR'); }
+                        }, 5000).unref();
+                    }
+                } catch (err) {}
+            }, 1000);
+
+            setTimeout(() => { 
+                if (!found && !exited) { 
+                    clearInterval(checkLog); clearInterval(spinner); 
+                    process.stdout.write(`\r  \x1b[1m\x1b[31m[TUNNEL]\x1b[0m  ❌ Échec (Timeout 90s)\n`); 
+                    log(`Tunnel generation timed out after 90s`, 'ERROR');
+                } 
+            }, 90000);
+        }
+    } else { console.log(`\x1b[90m  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m\n`); }
+});
+
+process.on('SIGINT', () => { process.exit(); });
+process.on('exit', () => log('Shutdown cleanly', 'INFO'));
