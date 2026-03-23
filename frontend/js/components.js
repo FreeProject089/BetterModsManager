@@ -75,11 +75,33 @@ export function getModCardHTML(mod, ctx) {
         </div>
 
         <div class="mod-actions">
-            <button class="btn btn-sm btn-icon btn-open-folder" onmouseenter="window.showTaskyHelp('mod.openFolderTip', 'folder')" onmouseleave="window.hideTaskyHelp()" data-id="${mod.id}" style="background:rgba(255,255,255,0.05);color:var(--text-secondary);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                </svg>
-            </button>
+            <div class="mod-actions-dropdown">
+            <button class="btn btn-sm btn-icon btn-dropdown-toggle" 
+                onmouseenter="window.showTaskyHelp('mod.openFolderTip', 'folder'); window.cancelDropdownClose()" 
+                onmouseleave="window.hideTaskyHelp(); window.closeGlobalDropdown(false)" 
+                onclick="window.showGlobalDropdown(this, this.__menu || this.nextElementSibling)" 
+                style="background:rgba(255,255,255,0.05);color:var(--text-secondary);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        <path d="m6 9 6 6 6-6" stroke-width="2" style="transform: scale(0.6); transform-origin: center; opacity: 0.8; translate: 0 4px;"/>
+                    </svg>
+                </button>
+                <div class="mod-actions-dropdown-content" onmouseleave="window.closeGlobalDropdown()">
+                    <div class="dropdown-item btn-open-active-folder" data-id="${mod.id}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        <span data-i18n="mod.openActiveFolder">${t('mod.openActiveFolder')}</span>
+                    </div>
+                    <div class="dropdown-item btn-open-backup-folder" data-id="${mod.id}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                        <span data-i18n="mod.openBackupFolder">${t('mod.openBackupFolder')}</span>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item btn-open-folder" data-id="${mod.id}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        <span data-i18n="mod.openSourceFolder">${t('mod.openSourceFolder')}</span>
+                    </div>
+                </div>
+            </div>
             <button class="btn btn-sm btn-icon btn-edit-mod" onmouseenter="window.showTaskyHelp('mod.editTip', 'edit')" onmouseleave="window.hideTaskyHelp()" data-id="${mod.id}" style="background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                     <path d="M12 20h9"/>
@@ -263,7 +285,7 @@ export function getModDetailHTML(mod, ctx) {
           </span>
         </div>
       </div>
-      <button id="btn-close-detail-inner" class="btn btn-sm btn-icon" style="background:rgba(255,255,255,0.05);border:none;color:var(--text-muted);cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <button id="btn-close-detail-inner" class="btn btn-sm btn-icon" style="background:rgba(255,255,255,0.05);border:none;color:var(--text-muted);cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center;margin-left:auto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
 
     <div class="detail-body" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;padding:0 4px;overflow-y:auto;max-height:calc(100vh - 180px);scrollbar-width:thin">

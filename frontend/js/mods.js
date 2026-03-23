@@ -252,6 +252,15 @@ export async function initMods() {
 
   // Background check for conflicts (non-blocking, batched)
   checkAllConflicts();
+
+  // Close mod actions dropdowns on outside click
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.mod-actions-dropdown')) {
+      document.querySelectorAll('.mod-actions-dropdown.open').forEach(d => {
+        d.classList.remove('open');
+      });
+    }
+  });
 }
 
 async function checkAllConflicts() {
@@ -344,8 +353,11 @@ export async function refreshMods(autoScan = false, immediate = false) {
   const doRefresh = async () => {
     // Skip heavy scan on profile switch — only scan on explicit user action
     if (autoScan && S.processingMods.size === 0) {
-      // Fire and forget — don't block rendering
-      invoke('scan_mods_folder').catch(() => {});
+      // Only scan if a profile is actually active to avoid RPC errors
+      const activeId = S.cachedActiveProfileId || await invoke('get_active_profile_id').catch(() => null);
+      if (activeId) {
+        invoke('scan_mods_folder').catch(() => {});
+      }
     }
 
     try {
@@ -722,9 +734,36 @@ function createModCard(mod) {
   });
 
   // Action listeners
+  const dropdown = card.querySelector('.mod-actions-dropdown');
+  const toggleBtn = card.querySelector('.btn-dropdown-toggle');
+  
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Close all other dropdowns first
+      document.querySelectorAll('.mod-actions-dropdown.open').forEach(d => {
+        if (d !== dropdown) d.classList.remove('open');
+      });
+      dropdown.classList.toggle('open');
+    });
+  }
+
   card.querySelector('.btn-open-folder').addEventListener('click', async (e) => {
     e.stopPropagation();
+    window.closeGlobalDropdown();
     try { await invoke('open_folder', { path: mod.mod_folder_path }); } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
+  });
+
+  card.querySelector('.btn-open-active-folder').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    window.closeGlobalDropdown();
+    try { await invoke('open_mod_active_folder', { modId: mod.id }); } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
+  });
+
+  card.querySelector('.btn-open-backup-folder').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    window.closeGlobalDropdown();
+    try { await invoke('open_mod_backup_folder', { modId: mod.id }); } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
   });
 
   card.querySelector('.btn-edit-mod').addEventListener('click', (e) => {
@@ -905,6 +944,8 @@ async function renderModDetail(modId) {
     descTextarea.addEventListener('input', autoResize);
     setTimeout(autoResize, 0); // Initial resize
   }
+
+  // Dropdown/Action listeners for detail panel removed as per user request to avoid duplicates
 
   // Load Tags logic
   const tagSelect = panel.querySelector('#detail-tag-select');
@@ -1716,5 +1757,93 @@ function wireConflictButtons() {
 // Call it immediately and also on DOMContentLoaded just in case
 wireConflictButtons();
 document.addEventListener('DOMContentLoaded', wireConflictButtons);
+
+// ── Global Dropdown Portal Logic ────────────────────────
+
+let activeGlobalDropdown = null;
+let dropdownCloseTimer = null;
+
+window.closeGlobalDropdown = function(immediate = false) {
+  if (immediate) {
+    if (activeGlobalDropdown) {
+      activeGlobalDropdown.classList.remove('portal-active');
+      activeGlobalDropdown.style.display = 'none';
+      activeGlobalDropdown = null;
+    }
+    if (dropdownCloseTimer) {
+      clearTimeout(dropdownCloseTimer);
+      dropdownCloseTimer = null;
+    }
+  } else {
+    // Start timer to close
+    if (dropdownCloseTimer) clearTimeout(dropdownCloseTimer);
+    dropdownCloseTimer = setTimeout(() => {
+      window.closeGlobalDropdown(true);
+    }, 300);
+  }
+}
+
+window.cancelDropdownClose = function() {
+  if (dropdownCloseTimer) {
+    clearTimeout(dropdownCloseTimer);
+    dropdownCloseTimer = null;
+  }
+}
+
+/**
+ * Shows a dropdown menu in the global portal container.
+ * @param {HTMLElement} btn The toggle button
+ * @param {HTMLElement} menu The menu element (will be moved to the portal)
+ */
+window.showGlobalDropdown = function(btn, menu) {
+  const portal = document.getElementById('global-dropdown-portal');
+  if (!portal || !btn || !menu) return;
+
+  // Store reference on button so we can find it again after it moves to portal
+  if (!btn.__menu) btn.__menu = menu;
+
+  // If clicked again while open, close it (standard toggle behavior)
+  if (activeGlobalDropdown === menu) {
+    window.closeGlobalDropdown(true);
+    return;
+  }
+
+  // 1. Close any existing global dropdown
+  window.closeGlobalDropdown(true);
+
+  // 2. Position calculation
+  const rect = btn.getBoundingClientRect();
+  const menuWidth = 190; 
+  
+  // Align right edge of menu with right edge of button
+  const left = rect.right - menuWidth;
+  const top = rect.bottom + 8; // margin-top: 8px
+
+  // 3. Move/Prepare menu
+  portal.appendChild(menu);
+  menu.style.display = 'flex';
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+  
+  // Ensure menu stays open on hover
+  menu.onmouseenter = window.cancelDropdownClose;
+  menu.onmouseleave = () => window.closeGlobalDropdown(false);
+
+  // 4. Show with animation
+  setTimeout(() => {
+    menu.classList.add('portal-active');
+  }, 10);
+
+  activeGlobalDropdown = menu;
+}
+
+// Global listener to close dropdown when clicking outside
+document.addEventListener('mousedown', (e) => {
+  if (activeGlobalDropdown) {
+    if (!activeGlobalDropdown.contains(e.target) && !e.target.closest('.btn-dropdown-toggle')) {
+      window.closeGlobalDropdown(true);
+    }
+  }
+}, true);
 
 

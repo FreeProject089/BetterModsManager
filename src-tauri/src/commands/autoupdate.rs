@@ -22,7 +22,7 @@ pub async fn check_for_update(app_handle: tauri::AppHandle) -> Result<UpdateInfo
     log_line(format!("[UPDATE] Checking for updates (current: v{})", current_version));
 
     // GitHub API endpoint for latest release
-    let url = "https://api.github.com/repos/better-dcs/BetterModsManager/releases/latest";
+    let url = "https://api.github.com/repos/FreeProject089/BetterModsManager/releases/latest";
 
     let client = reqwest::Client::builder()
         .user_agent("BetterModManager")

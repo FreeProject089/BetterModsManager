@@ -166,9 +166,10 @@ BMM includes a high-reliability diagnostic system to ensure any issue can be ide
 
 | Feature | Description |
 | :--- | :--- |
-| **Automatic Check on Startup** | BMM queries the GitHub Releases API shortly after launch to check for newer versions. |
+| **Automatic Check on Startup** | BMM queries the GitHub Releases API (now pointing to `FreeProject089/BetterModsManager`) shortly after launch to check for newer versions. |
 | **Manual Check Button** | Available in the sidebar and Settings for on-demand checks. |
 | **Update Modal** | Displays version comparisons, markdown release notes, and direct installer download buttons. |
+| **Reactivation (v0.9.8)** | Auto-updates are now re-enabled by default in `app.cfg`. |
 
 ---
 
@@ -215,6 +216,32 @@ Server Mode is the premium synchronization system for large-scale mod sharing.
 | **Smart Synchronization** | Clients compare their local state with the server and only download missing or changed files. |
 | **Security Verification** | Every downloaded file is verified against its cryptographic hash before installation. |
 | **Tunneling Support** | Integrated support for local sharing (LAN) and public sharing via UPnP or manual port forwarding. |
+
+---
+
+## 17. Server Administration Suite (v0.9.8)
+
+Premium tools for server owners to manage their repository and users with a high-end glassmorphic interface.
+
+| Feature | Description |
+| :--- | :--- |
+| **Live Monitoring** | Real-time view of connected clients, active downloads, and IP tracking. |
+| **Whitelist Manager** | Control who can access your repository. Support for manual entry and status toggling. |
+| **Ban System** | Block specific Creator IDs or IP addresses from interacting with your server. |
+| **Search & Filter** | Integrated search bars in all admin modals (Monitoring, Whitelist, Bans) for managing large user bases. |
+| **Direct Copy Buttons** | One-click copy for IPs and Creator IDs to facilitate management. |
+| **Visual Feedback** | Progress bars for active transfers and localized status toasts. |
+
+---
+
+## 18. Technical Improvements (v0.9.8)
+
+| Feature | Description |
+| :--- | :--- |
+| **Library Stability** | Fixed critical "How it works" and "Create a profile" button issues in the Mod Library empty state. |
+| **RPC Safety Guards** | Backend commands now include safety checks (active profile detection) to prevent console errors and crashes. |
+| **i18n Audit** | 100% translation coverage for English and French, including all new server administration messages. |
+| **Credits Overhaul** | High-performance video background with automatic playback throttling when not visible. |
 
 ---
 

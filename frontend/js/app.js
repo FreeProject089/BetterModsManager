@@ -2252,6 +2252,7 @@ async function main() {
     window.showProfiles = () => {
         document.querySelector('.nav-item[data-view="profiles"]')?.click();
     };
+    window.openNewProfileModal = openNewProfileModal;
 
     // Version button and Release Notes buttons
     const verBtn = document.getElementById('nav-version-btn');
@@ -2452,6 +2453,42 @@ async function initAutoUpdate() {
         console.warn('[BMM] Failed to check update disabled status:', e);
     }
 
+    const updateCheckButtonsState = () => {
+        const isAuto = isAutoUpdateEnabled();
+        const sidebarBtn = document.getElementById('btn-check-updates');
+        const settingsBtn = document.getElementById('btn-settings-check-update');
+
+        [sidebarBtn, settingsBtn].forEach(btn => {
+            if (!btn) return;
+            if (isDisabled) {
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'not-allowed';
+                btn.onmouseenter = () => window.showTaskyHelp('update.disabledTip', 'icon-help');
+                btn.onmouseleave = () => window.hideTaskyHelp();
+                // Override click
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toast(t('update.disabled') || 'Updates are disabled.', 'warning');
+                };
+            } else {
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+                btn.onclick = null; // Reset
+                
+                if (isAuto) {
+                    // Task: Remove tooltip when auto-update is active
+                    btn.onmouseenter = null;
+                    btn.onmouseleave = null;
+                } else {
+                    // Restore tooltip
+                    btn.onmouseenter = () => window.showTaskyHelp('settings.checkUpdatesTip', 'icon-refresh');
+                    btn.onmouseleave = () => window.hideTaskyHelp();
+                }
+            }
+        });
+    };
+
     // Toggle checkbox
     const chk = document.getElementById('chk-auto-update');
     if (chk) {
@@ -2471,6 +2508,7 @@ async function initAutoUpdate() {
             chk.checked = isAutoUpdateEnabled();
             chk.addEventListener('change', () => {
                 setAutoUpdateEnabled(chk.checked);
+                updateCheckButtonsState();
                 toast(chk.checked
                     ? (t('settings.autoUpdateEnabled') || 'Auto-update enabled')
                     : (t('settings.autoUpdateDisabled') || 'Auto-update disabled'), 'info');
@@ -2478,37 +2516,20 @@ async function initAutoUpdate() {
         }
     }
 
-    // Sidebar button
+    // Sidebar button listener
     const sidebarBtn = document.getElementById('btn-check-updates');
-    if (sidebarBtn) {
-        if (isDisabled) {
-            sidebarBtn.style.opacity = '0.5';
-            sidebarBtn.style.cursor = 'not-allowed';
-            sidebarBtn.onmouseenter = () => window.showTaskyHelp('update.disabledTip', 'icon-help');
-            sidebarBtn.onmouseleave = () => window.hideTaskyHelp();
-            sidebarBtn.addEventListener('click', () => {
-                toast(t('update.disabled') || 'Updates are disabled.', 'warning');
-            });
-        } else {
-            sidebarBtn.addEventListener('click', () => performUpdateCheck(true));
-        }
+    if (sidebarBtn && !isDisabled) {
+        sidebarBtn.addEventListener('click', () => performUpdateCheck(true));
     }
 
-    // Settings button
+    // Settings button listener
     const settingsBtn = document.getElementById('btn-settings-check-update');
-    if (settingsBtn) {
-        if (isDisabled) {
-            settingsBtn.style.opacity = '0.5';
-            settingsBtn.style.cursor = 'not-allowed';
-            settingsBtn.onmouseenter = () => window.showTaskyHelp('update.disabledTip', 'icon-help');
-            settingsBtn.onmouseleave = () => window.hideTaskyHelp();
-            settingsBtn.addEventListener('click', () => {
-                toast(t('update.disabled') || 'Updates are disabled.', 'warning');
-            });
-        } else {
-            settingsBtn.addEventListener('click', () => performUpdateCheck(true));
-        }
+    if (settingsBtn && !isDisabled) {
+        settingsBtn.addEventListener('click', () => performUpdateCheck(true));
     }
+
+    // Apply initial state
+    updateCheckButtonsState();
 
     // Auto-check on startup
     if (!isDisabled && isAutoUpdateEnabled()) {

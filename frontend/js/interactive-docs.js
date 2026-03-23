@@ -264,10 +264,11 @@ function fixClusterLabels() {
 
 /**
  * Show Tasky explanation bubble globally
- * @param {string} key - The translation key for the text
+ * @param {string} key - The translation key for the text, or literal text if isLiteral is true
  * @param {string} iconClass - The CSS class for the eyes icon
+ * @param {boolean} isLiteral - If true, treats the key as literal text
  */
-export function showTaskyHelp(key, iconClass = 'info') {
+export function showTaskyHelp(key, iconClass = 'info', isLiteral = false) {
     const bubble = document.querySelector('.tasky-speech-bubble');
     const eyes = document.getElementById('tasky-bubble-eyes');
     const explanationEl = document.getElementById('tasky-explanation');
@@ -300,15 +301,19 @@ export function showTaskyHelp(key, iconClass = 'info') {
     if (finalIcon === 'trash' || finalIcon === 'delete') finalIcon = 'icon-trash';
     if (finalIcon === 'toggle') finalIcon = 'icon-toggle';
     if (finalIcon === 'alert') finalIcon = 'icon-alert';
+    if (finalIcon === 'package') finalIcon = 'icon-package';
 
-    // Fallback: Check if a dedicated .desc key exists for longer tooltips
-    const descKey = key + '.desc';
-    const descExp = t(descKey);
+    // Text content logic
+    let exp = key;
+    if (!isLiteral) {
+        const descKey = key + '.desc';
+        const descExp = t(descKey);
+        // Priority 1: Use .desc if available. Priority 2: Use regular key if it's translated
+        exp = (descExp && descExp !== descKey) ? descExp : t(key);
+    }
     
-    // Priority 1: Use .desc if available. Priority 2: Use regular key if it's translated
-    const exp = (descExp && descExp !== descKey) ? descExp : t(key);
-    
-    if (exp && exp !== key) {
+    // Show if we have valid content (or if literal is requested)
+    if (exp && (isLiteral || exp !== key)) {
         explanationEl.textContent = exp;
         bubble.classList.add('active');
         
@@ -593,6 +598,7 @@ function resetZoom() {
 
 // Auto-init on load if not module
 window.openDiagram = openDiagram;
+window.openDocs = openDiagram;
 window.initInteractiveDocs = initInteractiveDocs;
 window.showTaskyHelp = showTaskyHelp;
 window.hideTaskyHelp = hideTaskyHelp;

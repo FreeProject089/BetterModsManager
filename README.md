@@ -13,11 +13,12 @@ Better Mod Manager (BMM) simplifies the process of managing, installing, and sha
 - **Conflict Detection**: Real-time monitoring of file collisions between active mods.
 - **Mod Sharing (.MM)**: Export and import complete mod configurations, including download links and installation priorities.
 - **Local Mod Pooling**: Automatically detects and copies mods already present in other profiles to save bandwidth.
-- **Dynamic Internationalization**: Fully extensible translation system with auto-discovery and FlagCDN integration.
-- **Automated Versioning**: Build-time date capture and dynamic UI injection for synchronized versioning information.
+- **Server Administration Suite**: Integrated tools for live monitoring, IP whitelisting, and creator key ban management with a premium glassmorphic UI.
+- **Dynamic Internationalization**: Fully extensible translation system with auto-discovery, full FR/EN support, and FlagCDN integration.
+- **Automated Versioning & Updates**: Real-time update checks via GitHub API (v0.9.8 finalized) and automated build-time date capture.
 - **Integrity Reporting**: Diagnostic tool to verify if modded files have been corrupted or overwritten by game updates.
 - **Archive Explorer**: Built-in tree view for navigating .zip and .rar contents without extraction.
-- **Interactive Documentation**: Technical architecture visualized through dynamic Mermaid.js diagrams with live translation.
+- **Interactive Documentation**: Technical architecture visualized through dynamic Mermaid.js diagrams with Tasky mascot guidance.
 - **Mod Link Support**: Categorize links (GitHub, MEGA, etc.) with custom icons and behavior.
 
 ## Mod Link Types
@@ -66,6 +67,7 @@ In the **Mod Detail Panel** and **.MM Lists**, links can be set to different typ
 Detailed documentation is available in the `Update/` directory:
 - [User Guide & Features](Update/Old_Update/App_Features.md)
 - [Technical Architecture Analysis](Update/Old_Update/Technical_Analysis.md)
+- [Latest Changelog (EN)](Update/changelog_since_7e839e.md) | [Changelog (FR)](Update/changelog_since_7e839e_FR.md)
 
 ## License
 

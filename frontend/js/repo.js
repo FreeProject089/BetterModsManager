@@ -1317,49 +1317,50 @@ export function initRepo() {
 
             monitoringEmptyHint.style.display = 'none';
             monitoringListBody.innerHTML = downloads.map(d => {
-                const pct = Math.round(d.progress) || 0;
+                const pct = Math.min(Math.round(d.progress) || 0, 100);
                 const speed = d.speed || 0;
                 const creatorIdText = d.creator_id && d.creator_id !== '-' ? d.creator_id : '-';
                 const creatorIdHtml = d.creator_id && d.creator_id !== '-' ? 
-                    `<div style="display:flex; align-items:center; gap:4px;">
+                    `<div style="display:flex; align-items:center; gap:6px;">
                         <span style="overflow:hidden; text-overflow:ellipsis;">${escHtml(d.creator_id)}</span>
-                        <button class="btn btn-ghost btn-xs copy-mon-id" data-val="${escAttr(d.creator_id)}" style="padding:0; min-width:18px; height:18px; opacity:0.5;">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        <button class="btn btn-ghost btn-xs copy-mon-id" data-val="${escAttr(d.creator_id)}" style="padding:0; min-width:20px; height:20px; opacity:0.5; border:none; background:transparent;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                         </button>
-                    </div>` : '<span style="opacity:0.3;">-</span>';
+                    </div>` : '<span style="opacity:0.35; font-weight:800; font-size:14px;">-</span>';
                 const protocol = d.protocol || 'Unknown';
                 const protocolColor = protocol === 'LAN' ? 'var(--success)' : protocol === 'WAN' ? 'var(--accent)' : 'var(--cyan)';
+                const protocolBg = protocol === 'LAN' ? 'rgba(16, 185, 129, 0.1)' : protocol === 'WAN' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(6, 182, 212, 0.1)';
                 
                 return `
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
-                        <td style="padding:10px 8px; font-family:var(--font-mono); font-size:11px;">
-                            <div style="display:flex; align-items:center; gap:4px;">
-                                ${escHtml(d.ip)}
-                                <button class="btn btn-ghost btn-xs copy-mon-id" data-val="${escAttr(d.ip)}" style="padding:0; min-width:18px; height:18px; opacity:0.5;">
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <tr>
+                        <td>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <span style="font-weight:600;">${escHtml(d.ip)}</span>
+                                <button class="btn btn-ghost btn-xs copy-mon-id" data-val="${escAttr(d.ip)}" style="padding:0; min-width:20px; height:20px; opacity:0.5; border:none; background:transparent;">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                                 </button>
                             </div>
                         </td>
-                        <td style="padding:10px 8px; font-family:var(--font-mono); font-size:10px; color:var(--text-secondary); max-width:120px;">${creatorIdHtml}</td>
-                        <td style="padding:10px 8px;">
-                            <span style="font-size:9px; font-weight:800; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; color:${protocolColor};">${protocol}</span>
+                        <td style="color:var(--text-secondary); max-width:140px;">${creatorIdHtml}</td>
+                        <td>
+                            <span style="font-size:10px; font-weight:900; background:${protocolBg}; border:1px solid rgba(255,255,255,0.05); padding:3px 8px; border-radius:6px; color:${protocolColor}; letter-spacing:0.05em;">${protocol}</span>
                         </td>
-                        <td style="padding:10px 8px; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escAttr(d.file)}">${escHtml(d.file)}</td>
-                        <td style="padding:10px 8px;">
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <div style="flex:1; height:4px; background:rgba(255,255,255,0.1); border-radius:2px; overflow:hidden;">
-                                    <div style="height:100%; width:${pct}%; background:var(--accent);"></div>
+                        <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500;" title="${escAttr(d.file)}">${escHtml(d.file)}</td>
+                        <td>
+                            <div class="mon-progress-container">
+                                <div class="mon-progress-bar">
+                                    <div class="mon-progress-fill" style="width:${pct}%;"></div>
                                 </div>
-                                <span style="font-size:10px; min-width:30px;">${pct}%</span>
+                                <span style="font-weight:800; font-size:11px; min-width:35px; color:${pct === 100 ? 'var(--success)' : 'var(--text-primary)'}">${pct}%</span>
                             </div>
                         </td>
-                        <td style="padding:10px 8px; font-family:var(--font-mono); font-size:11px;">${formatBytes(speed)}/s</td>
-                        <td style="padding:10px 8px; text-align:right;">
-                            <div style="display:flex; justify-content:flex-end; gap:4px;">
-                                <button class="btn btn-ghost btn-xs whitelist-from-mon" data-ip="${escAttr(d.ip)}" data-key="${escAttr(d.creator_id || '')}" style="color:var(--accent); padding:2px 6px;">
+                        <td style="font-family:var(--font-mono); font-weight:600; color:var(--cyan);">${formatBytes(speed)}/s</td>
+                        <td style="text-align:right;">
+                            <div style="display:flex; justify-content:flex-end; gap:6px;">
+                                <button class="btn btn-ghost btn-xs whitelist-from-mon" data-ip="${escAttr(d.ip)}" data-key="${escAttr(d.creator_id || '')}" style="color:var(--accent); font-weight:800; padding:4px 10px; border-radius:8px; background:rgba(59, 130, 246, 0.08);">
                                     ${t('repo.whitelistBtn') || 'AUTORISER'}
                                 </button>
-                                <button class="btn btn-ghost btn-xs ban-from-mon" data-ip="${escAttr(d.ip)}" data-key="${escAttr(d.creator_id || '')}" style="color:var(--danger); padding:2px 6px;">
+                                <button class="btn btn-ghost btn-xs ban-from-mon" data-ip="${escAttr(d.ip)}" data-key="${escAttr(d.creator_id || '')}" style="color:var(--danger); font-weight:800; padding:4px 10px; border-radius:8px; background:rgba(239, 68, 68, 0.08);">
                                     ${t('repo.banBtn') || 'BANNIR'}
                                 </button>
                             </div>
@@ -1412,19 +1413,19 @@ export function initRepo() {
     const renderBanItem = (val, type) => {
         const dataAttr = type === 'IP' ? `data-ip="${escAttr(val)}"` : `data-key="${escAttr(val)}"`;
         return `
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.03);">
-                <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
-                    <div style="display:flex; flex-direction:column; gap:2px; flex:1; min-width:0;">
-                        <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-primary); word-break:break-all;">${escHtml(val)}</div>
-                        <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">${type}</div>
-                    </div>
-                    <button class="btn btn-ghost btn-xs copy-ban-val" data-val="${escAttr(val)}" style="padding:0; min-width:24px; height:24px; opacity:0.6;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <div class="server-mgmt-item">
+                <div class="item-info">
+                    <div class="item-val">${escHtml(val)}</div>
+                    <div class="item-type">${type}</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="btn btn-ghost btn-xs copy-ban-val" data-val="${escAttr(val)}" style="padding:0; min-width:32px; height:32px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05);">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
+                    <button class="btn btn-ghost btn-xs btn-unban" ${dataAttr} style="color:var(--danger); font-size:11px; font-weight:800; padding: 0 12px; height:32px; border-radius:10px; background:rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.1);">
+                        ${t('common.delete') || 'SUPPRIMER'}
                     </button>
                 </div>
-                <button class="btn btn-ghost btn-xs btn-unban" ${dataAttr} style="color:var(--danger); font-size:10px; font-weight:800; margin-left:15px;">
-                    ${t('common.delete') || 'SUPPRIMER'}
-                </button>
             </div>
         `;
     };
@@ -1547,19 +1548,19 @@ export function initRepo() {
     const renderWhitelistItem = (val, type) => {
         const dataAttr = type === 'IP' ? `data-ip="${escAttr(val)}"` : `data-key="${escAttr(val)}"`;
         return `
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.03);">
-                <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
-                    <div style="display:flex; flex-direction:column; gap:2px; flex:1; min-width:0;">
-                        <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-primary); word-break:break-all;">${escHtml(val)}</div>
-                        <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">${type}</div>
-                    </div>
-                    <button class="btn btn-ghost btn-xs copy-whitelist-val" data-val="${escAttr(val)}" style="padding:0; min-width:24px; height:24px; opacity:0.6;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <div class="server-mgmt-item">
+                <div class="item-info">
+                    <div class="item-val">${escHtml(val)}</div>
+                    <div class="item-type">${type}</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="btn btn-ghost btn-xs copy-whitelist-val" data-val="${escAttr(val)}" style="padding:0; min-width:32px; height:32px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05);">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
+                    <button class="btn btn-ghost btn-xs btn-remove-whitelist" ${dataAttr} style="color:var(--danger); font-size:11px; font-weight:800; padding: 0 12px; height:32px; border-radius:10px; background:rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.1);">
+                        ${t('common.delete') || 'SUPPRIMER'}
                     </button>
                 </div>
-                <button class="btn btn-ghost btn-xs btn-remove-whitelist" ${dataAttr} style="color:var(--danger); font-size:10px; font-weight:800; margin-left:15px;">
-                    ${t('common.delete') || 'SUPPRIMER'}
-                </button>
             </div>
         `;
     };

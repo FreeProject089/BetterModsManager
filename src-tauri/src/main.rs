@@ -227,6 +227,8 @@ fn main() {
             commands::mods::list_mod_files_recursive,
             commands::mods::path_join,
             commands::mods::check_mod_metadata,
+            commands::mods::open_mod_active_folder,
+            commands::mods::open_mod_backup_folder,
             // Crash Advanced
             commands::crash::open_crash_folder,
             // Image

@@ -439,7 +439,7 @@ export async function renderProfiles() {
 
             if (enabledCount > 0) {
                 activeModsHtml = `<div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; max-height:60px; overflow-y:auto; padding-right:4px;" class="active-mods-list">
-                    ${enabledMods.map(m => `<span style="font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px;" title="${escHtml(m.name)}">${escHtml(m.name)}</span>`).join('')}
+                    ${enabledMods.map(m => `<span style="font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px;" onmouseenter="window.showTaskyHelp('${escAttr(m.name)}', 'package', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(m.name)}</span>`).join('')}
                 </div>`;
             }
         } catch { }

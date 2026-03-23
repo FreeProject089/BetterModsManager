@@ -391,7 +391,7 @@
 
                             <div class="empty-actions"
                                 style="display:flex; gap:12px; justify-content:center; margin-top:30px">
-                                <button class="btn btn-primary btn-lg btn-new-profile" style="padding: 12px 24px;">
+                                <button id="btn-new-profile-lib" class="btn btn-primary btn-lg" onclick="window.showProfiles(); setTimeout(() => window.openNewProfileModal(), 50);" style="padding: 12px 24px;">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2.5" style="margin-right:8px">
                                         <line x1="12" y1="5" x2="12" y2="19" />
@@ -413,7 +413,7 @@
                             </div>
 
                             <button class="btn btn-ghost" style="margin-top:25px; opacity:0.7; font-size:12px"
-                                onclick="window.openDocs('how-it-works')">
+                                onclick="window.openDocs('mod-architecture')">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.5" style="margin-right:6px; vertical-align:middle">
                                     <circle cx="12" cy="12" r="10" />
@@ -2892,7 +2892,7 @@
                             </div>
 
                             <div class="credit-links-list credit-links-list-container">
-                                <a href="https://github.com/better-dcs/BetterModsManager" target="_blank"
+                                <a href="https://github.com/FreeProject089/BetterModsManager" target="_blank"
                                     rel="noopener noreferrer" class="credit-link-card credit-link-card-github">
                                     <div class="credit-icon-box credit-icon-box-github">
                                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
@@ -4614,12 +4614,12 @@
         <!-- Monitoring Modal -->
         <div class="modal-overlay" id="modal-monitoring" style="z-index: 1100;">
             <div class="modal glass"
-                style="max-width: 1000px; width: 95%; max-height:85vh; display:flex; flex-direction:column;">
-                <div class="modal-header">
+                style="max-width: 1000px; width: 95%; max-height:85vh; display:flex; flex-direction:column; border: 1px solid rgba(255,255,255,0.1);">
+                <div class="modal-header server-modal-header">
                     <div style="display:flex; align-items:center; gap:12px;">
                         <div
-                            style="width:36px; height:36px; background:rgba(6,182,212,0.15); border-radius:10px; display:flex; align-items:center; justify-content:center; color:var(--cyan);">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            style="width:40px; height:40px; background:rgba(6,182,212,0.15); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--cyan); border: 1px solid rgba(6,182,212,0.2);">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.5">
                                 <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
                                 <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
@@ -4628,55 +4628,52 @@
                         </div>
                         <div>
                             <h2 data-i18n="repo.monitoringTitle"
-                                style="margin:0; font-size:18px; font-weight:800; color:var(--text-primary);">SERVER
+                                style="margin:0; font-size:19px; font-weight:900; color:var(--text-primary); letter-spacing: -0.01em;">
+                                SERVER
                                 MONITORING</h2>
-                            <p style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-weight:700;"
+                            <p style="margin:2px 0 0 0; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; font-weight:800; opacity: 0.8;"
                                 data-i18n="repo.monitoringSubtitle">REAL-TIME CONNECTED USERS</p>
                         </div>
                     </div>
                     <button class="modal-close" data-close="modal-monitoring">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
+                            stroke-width="2.5">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
                 </div>
-                <div class="modal-body" style="padding: 0; overflow-x: auto; overflow-y: auto; flex: 1;">
-                    <table class="monitoring-table" style="width:100%; border-collapse:collapse;">
-                        <thead>
-                            <tr
-                                style="background:rgba(255,255,255,0.02); border-bottom:1px solid rgba(255,255,255,0.05);">
-                                <th
-                                    style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">
-                                    IP</th>
-                                <th
-                                    style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">
-                                    Creator ID / HWID</th>
-                                <th
-                                    style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">
-                                    Protocol</th>
-                                <th
-                                    style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">
-                                    File</th>
-                                <th
-                                    style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase; width:150px;">
-                                    Progress</th>
-                                <th
-                                    style="padding:12px 10px; text-align:left; font-size:10px; color:var(--text-muted); text-transform:uppercase;">
-                                    Speed</th>
-                                <th
-                                    style="padding:12px 10px; text-align:right; font-size:10px; color:var(--text-muted); text-transform:uppercase;">
-                                    Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="monitoring-list-body">
-                            <!-- Dynamic content -->
-                        </tbody>
-                    </table>
-                    <div id="monitoring-empty-hint"
-                        style="text-align:center; padding:40px 20px; color:var(--text-muted); font-style:italic;"
-                        data-i18n="repo.monEmpty">Aucun téléchargement actif...</div>
+                <div class="modal-body"
+                    style="padding: 0; display:flex; flex-direction:column; flex:1; overflow:hidden;">
+                    <div id="monitoring-table-container" style="flex:1; overflow-y:auto; overflow-x:auto;">
+                        <table class="monitoring-table">
+                            <thead>
+                                <tr>
+                                    <th>IP ADDRESS</th>
+                                    <th>CREATOR ID / HWID</th>
+                                    <th>PROTOCOL</th>
+                                    <th>FILE</th>
+                                    <th style="width:150px;">PROGRESS</th>
+                                    <th>SPEED</th>
+                                    <th style="text-align:right;">ACTION</th>
+                                </tr>
+                            </thead>
+                            <tbody id="monitoring-list-body">
+                                <!-- Dynamic content -->
+                            </tbody>
+                        </table>
+                        <div id="monitoring-empty-hint"
+                            style="text-align:center; padding:60px 20px; color:var(--text-muted); display:none;">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.5" style="margin-bottom:16px; opacity:0.3;">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="12" y1="8" x2="12" y2="12" />
+                                <line x1="12" y1="16" x2="12.01" y2="16" />
+                            </svg>
+                            <p style="margin:0; font-size:14px; font-weight:500; font-style:italic;"
+                                data-i18n="repo.monEmpty">Aucun téléchargement actif pour le moment...</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -4719,12 +4716,12 @@
         <!-- Ban List Modal -->
         <div id="modal-bans" class="modal-overlay" style="z-index: 1105;">
             <div class="modal glass"
-                style="max-width: 800px; width: 90%; max-height: 85vh; display:flex; flex-direction:column;">
-                <div class="modal-header">
+                style="max-width: 800px; width: 90%; max-height: 85vh; display:flex; flex-direction:column; border: 1px solid rgba(255,255,255,0.1);">
+                <div class="modal-header server-modal-header">
                     <div style="display:flex; align-items:center; gap:12px;">
                         <div
-                            style="width:36px; height:36px; background:rgba(239, 68, 68, 0.1); border-radius:10px; display:flex; align-items:center; justify-content:center; color:var(--danger);">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            style="width:40px; height:40px; background:rgba(239, 68, 68, 0.1); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--danger); border: 1px solid rgba(239, 68, 68, 0.2);">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.5">
                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                                 <line x1="12" y1="8" x2="12" y2="12"></line>
@@ -4733,17 +4730,18 @@
                         </div>
                         <div>
                             <h2 data-i18n="repo.bansTitle"
-                                style="margin:0; font-size:18px; font-weight:800; color:var(--text-primary);">BAN
+                                style="margin:0; font-size:19px; font-weight:900; color:var(--text-primary); letter-spacing: -0.01em;">
+                                BAN
                                 MANAGEMENT</h2>
-                            <p style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-weight:700;"
+                            <p style="margin:2px 0 0 0; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; font-weight:800; opacity: 0.8;"
                                 data-i18n="repo.bansSubtitle">BANNED IPS AND CREATOR KEYS</p>
                         </div>
                     </div>
-                    <div style="display:flex; align-items:center; gap:8px;">
+                    <div style="display:flex; align-items:center; gap:12px;">
                         <button class="btn btn-ghost btn-xs" id="btn-export-bans"
-                            style="font-size:10px; border:1px solid rgba(255,255,255,0.1); color:var(--cyan);">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2.5" style="margin-right:4px;">
+                            style="font-size:10px; height: 32px; padding: 0 12px; border:1px solid rgba(255,255,255,0.1); color:var(--cyan); border-radius: 10px; font-weight: 700;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2.5" style="margin-right:6px;">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                 <polyline points="7 10 12 15 17 10" />
                                 <line x1="12" y1="15" x2="12" y2="3" />
@@ -4752,7 +4750,7 @@
                         </button>
                         <button class="modal-close" data-close="modal-bans">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
+                                stroke-width="2.5">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
                             </svg>
@@ -4763,20 +4761,20 @@
                     style="padding: 0; display:flex; flex-direction:column; flex:1; overflow:hidden;">
                     <!-- Manual Ban Form -->
                     <div
-                        style="padding:15px; background:rgba(255,255,255,0.03); border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <h3 style="margin:0 0 10px 0; font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;"
+                        style="padding:20px 28px; background:rgba(255,255,255,0.02); border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <h3 style="margin:0 0 12px 0; font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.12em;"
                             data-i18n="repo.banManualTitle">AJOUTER UN BAN MANUEL</h3>
-                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
                             <input type="text" id="manual-ban-ip" class="form-input"
-                                style="flex:1; min-width:140px; font-size:12px; height:34px; background:rgba(0,0,0,0.2);"
+                                style="flex:1; min-width:140px; font-size:13px; height:38px; background:rgba(0,0,0,0.3); border-radius: 12px; border-color: rgba(255,255,255,0.08);"
                                 placeholder="IP Address..." data-i18n-placeholder="repo.banManualIP" />
                             <input type="text" id="manual-ban-key" class="form-input"
-                                style="flex:1; min-width:140px; font-size:12px; height:34px; background:rgba(0,0,0,0.2);"
+                                style="flex:1; min-width:140px; font-size:13px; height:38px; background:rgba(0,0,0,0.3); border-radius: 12px; border-color: rgba(255,255,255,0.08);"
                                 placeholder="Creator Key..." data-i18n-placeholder="repo.banManualKey" />
                             <button class="btn btn-danger btn-sm" id="btn-add-manual-ban"
-                                style="height:34px; padding: 0 15px; font-weight:700; font-size:11px;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2.5" style="margin-right:6px;">
+                                style="height:38px; padding: 0 20px; font-weight:800; font-size:12px; border-radius: 12px; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.5" style="margin-right:8px;">
                                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                                 </svg>
                                 <span data-i18n="repo.banManualAdd">BANNIR</span>
@@ -4785,33 +4783,32 @@
                     </div>
 
                     <!-- Search and Filters -->
-                    <div
-                        style="padding:10px 15px; display:flex; gap:10px; align-items:center; background:rgba(0,0,0,0.1); border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <div style="position:relative; flex:1;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
-                                stroke-width="2"
-                                style="position:absolute; left:10px; top:50%; transform:translateY(-50%);">
+                    <div class="modal-search-bar" style="margin: 15px 28px;">
+                        <div style="position:relative; flex:1; display: flex; align-items: center;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
+                                stroke-width="2.5" style="position:absolute; left:0; pointer-events: none;">
                                 <circle cx="11" cy="11" r="8" />
                                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
                             </svg>
                             <input type="text" id="ban-search" class="form-input"
-                                style="width:100%; height:32px; padding-left:32px; font-size:12px; border-radius:12px;"
+                                style="width:100%; height:32px; padding-left:28px; font-size:13px; border:none; background: transparent;"
                                 placeholder="Search ban..." data-i18n-placeholder="repo.banSearch" />
                         </div>
                         <select id="ban-filter-type" class="form-input"
-                            style="width:100px; height:32px; font-size:11px; padding:0 8px; border-radius:12px; cursor:pointer;">
+                            style="width:90px; height:28px; font-size:11px; padding:0 8px; border-radius:8px; cursor:pointer; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: var(--text-secondary); font-weight: 700;">
                             <option value="ALL" data-i18n="repo.banFilterAll">TOUT</option>
                             <option value="IP">IP</option>
                             <option value="KEY">KEY</option>
                         </select>
+                        <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.1);"></div>
                         <button class="btn btn-outline-danger btn-xs" id="btn-unban-all"
-                            style="height:32px; border-radius:12px; font-weight:700; font-size:10px;">
+                            style="height:28px; border-radius:8px; font-weight:800; font-size:10px; padding: 0 10px; border-color: rgba(239, 68, 68, 0.3);">
                             UNBAN ALL
                         </button>
                     </div>
 
                     <!-- List items injected by JS -->
-                    <div id="ban-list-container" style="flex:1; overflow-y:auto; padding:10px 0;">
+                    <div id="ban-list-container" style="flex:1; overflow-y:auto; padding-bottom:20px;">
                         <!-- List items injected by JS -->
                     </div>
                 </div>
@@ -4821,12 +4818,12 @@
         <!-- Whitelist Modal -->
         <div id="modal-whitelist" class="modal-overlay" style="z-index: 1106;">
             <div class="modal glass"
-                style="max-width: 800px; width: 90%; max-height: 85vh; display:flex; flex-direction:column;">
-                <div class="modal-header">
+                style="max-width: 800px; width: 90%; max-height: 85vh; display:flex; flex-direction:column; border: 1px solid rgba(255,255,255,0.1);">
+                <div class="modal-header server-modal-header">
                     <div style="display:flex; align-items:center; gap:12px;">
                         <div
-                            style="width:36px; height:36px; background:rgba(59, 130, 246, 0.1); border-radius:10px; display:flex; align-items:center; justify-content:center; color:var(--accent);">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            style="width:40px; height:40px; background:rgba(59, 130, 246, 0.1); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--accent); border:1px solid rgba(59, 130, 246, 0.2);">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.5">
                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                                 <path d="m9 12 2 2 4-4"></path>
@@ -4834,22 +4831,23 @@
                         </div>
                         <div>
                             <h2 data-i18n="repo.whitelistTitle"
-                                style="margin:0; font-size:18px; font-weight:800; color:var(--text-primary);">WHITELIST
+                                style="margin:0; font-size:19px; font-weight:900; color:var(--text-primary); letter-spacing: -0.01em;">
+                                WHITELIST
                                 MANAGEMENT</h2>
-                            <p style="margin:0; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-weight:700;"
+                            <p style="margin:2px 0 0 0; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; font-weight:800; opacity: 0.8;"
                                 data-i18n="repo.whitelistSubtitle">RESTRICTED ACCESS TO AUTHORIZED USERS</p>
                         </div>
                     </div>
-                    <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="display:flex; align-items:center; gap:15px;">
                         <div
-                            style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.05); padding:4px 12px; border-radius:20px; border:1px solid rgba(255,255,255,0.1);">
-                            <span style="font-size:10px; font-weight:800; color:var(--text-muted);"
+                            style="display:flex; align-items:center; gap:10px; background:rgba(59, 130, 246, 0.1); padding:6px 14px; border-radius:20px; border:1px solid rgba(59, 130, 246, 0.2);">
+                            <span style="font-size:10px; font-weight:900; color:var(--accent); letter-spacing: 0.05em;"
                                 data-i18n="repo.whitelistEnable">ACTIVER</span>
                             <input type="checkbox" id="whitelist-toggle" class="toggle toggle-accent toggle-xs">
                         </div>
                         <button class="modal-close" data-close="modal-whitelist">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
+                                stroke-width="2.5">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
                             </svg>
@@ -4860,20 +4858,20 @@
                     style="padding: 0; display:flex; flex-direction:column; flex:1; overflow:hidden;">
                     <!-- Manual Whitelist Form -->
                     <div
-                        style="padding:15px; background:rgba(255,255,255,0.03); border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <h3 style="margin:0 0 10px 0; font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;"
+                        style="padding:20px 28px; background:rgba(255,255,255,0.02); border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <h3 style="margin:0 0 12px 0; font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.12em;"
                             data-i18n="repo.whitelistManualTitle">AJOUTER À LA WHITELIST</h3>
-                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
                             <input type="text" id="manual-whitelist-ip" class="form-input"
-                                style="flex:1; min-width:140px; font-size:12px; height:34px; background:rgba(0,0,0,0.2);"
+                                style="flex:1; min-width:140px; font-size:13px; height:38px; background:rgba(0,0,0,0.3); border-radius: 12px; border-color: rgba(255,255,255,0.08);"
                                 placeholder="IP Address..." data-i18n-placeholder="repo.whitelistManualIP" />
                             <input type="text" id="manual-whitelist-key" class="form-input"
-                                style="flex:1; min-width:140px; font-size:12px; height:34px; background:rgba(0,0,0,0.2);"
+                                style="flex:1; min-width:140px; font-size:13px; height:38px; background:rgba(0,0,0,0.3); border-radius: 12px; border-color: rgba(255,255,255,0.08);"
                                 placeholder="Creator Key..." data-i18n-placeholder="repo.whitelistManualKey" />
                             <button class="btn btn-primary btn-sm" id="btn-add-manual-whitelist"
-                                style="height:34px; padding: 0 15px; font-weight:700; font-size:11px;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2.5" style="margin-right:6px">
+                                style="height:38px; padding: 0 20px; font-weight:800; font-size:12px; border-radius: 12px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.5" style="margin-right:8px">
                                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                                     <path d="m9 12 2 2 4-4"></path>
                                 </svg>
@@ -4883,28 +4881,27 @@
                     </div>
 
                     <!-- Search and Filters -->
-                    <div
-                        style="padding:10px 15px; display:flex; gap:10px; align-items:center; background:rgba(0,0,0,0.1); border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <div style="position:relative; flex:1;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
-                                stroke-width="2"
-                                style="position:absolute; left:10px; top:50%; transform:translateY(-50%);">
+                    <div class="modal-search-bar" style="margin: 15px 28px;">
+                        <div style="position:relative; flex:1; display: flex; align-items: center;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)"
+                                stroke-width="2.5" style="position:absolute; left:0; pointer-events: none;">
                                 <circle cx="11" cy="11" r="8" />
                                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
                             </svg>
                             <input type="text" id="whitelist-search" class="form-input"
-                                style="width:100%; height:32px; padding-left:32px; font-size:12px; border-radius:12px;"
+                                style="width:100%; height:32px; padding-left:28px; font-size:13px; border:none; background: transparent;"
                                 placeholder="Search whitelist..." data-i18n-placeholder="repo.whitelistSearch" />
                         </div>
+                        <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.1);"></div>
                         <button class="btn btn-outline-danger btn-xs" id="btn-clear-whitelist"
-                            style="height:32px; border-radius:12px; font-weight:700; font-size:10px;"
+                            style="height:28px; border-radius:8px; font-weight:800; font-size:10px; padding: 0 10px; border-color: rgba(239, 68, 68, 0.3);"
                             data-i18n="repo.whitelistClearBtn">
                             CLEAR ALL
                         </button>
                     </div>
 
                     <!-- List items injected by JS -->
-                    <div id="whitelist-list-container" style="flex:1; overflow-y:auto; padding:10px 0;">
+                    <div id="whitelist-list-container" style="flex:1; overflow-y:auto; padding-bottom:20px;">
                         <!-- List items injected by JS -->
                     </div>
                 </div>
@@ -4914,6 +4911,9 @@
     </div> <!-- End #app-window-outer -->
 
     <script type="module" src="js/app.js"></script>
+    <!-- Global Dropdown Portal (Bypasses all clipping/z-index issues) -->
+    <div id="global-dropdown-portal" style="position:fixed; top:0; left:0; pointer-events:none; z-index:999999;"></div>
+
 </body>
 
 </html>

@@ -1456,3 +1456,72 @@ pub fn get_conflict_file_tree(state: State<AppState>, mod_id: String, other_mod_
     }
     Ok(overlap)
 }
+
+#[tauri::command]
+pub async fn open_mod_active_folder(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
+    let (game_path, installed_files) = {
+        let data = state.data.lock().unwrap();
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
+        let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
+        (p.game_path.clone(), m.installed_files.clone())
+    };
+
+    if installed_files.is_empty() {
+        return open_folder(game_path.to_string_lossy().to_string());
+    }
+
+    // Calculate common parent directory of all installed files
+    let common_prefix = get_common_path(&installed_files);
+    let target_dir = game_path.join(common_prefix);
+    
+    if target_dir.exists() {
+        open_folder(target_dir.to_string_lossy().to_string())
+    } else {
+        open_folder(game_path.to_string_lossy().to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn open_mod_backup_folder(state: State<'_, AppState>, _mod_id: String) -> Result<(), String> {
+    let backup_path = {
+        let data = state.data.lock().unwrap();
+        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
+        let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
+        p.backup_path.clone()
+    };
+
+    if backup_path.exists() {
+        open_folder(backup_path.to_string_lossy().to_string())
+    } else {
+        Err("Dossier backup introuvable".to_string())
+    }
+}
+
+fn get_common_path(paths: &[String]) -> PathBuf {
+    if paths.is_empty() { return PathBuf::new(); }
+    
+    // Split the first path into components
+    let mut common: Vec<&str> = paths[0].split(|c| c == '/' || c == '\\').collect();
+    // Remove the filename (last component)
+    if !common.is_empty() { common.pop(); }
+
+    for path in paths.iter().skip(1) {
+        let parts: Vec<&str> = path.split(|c| c == '/' || c == '\\').collect();
+        let mut new_common = Vec::new();
+        for (i, part) in parts.iter().enumerate() {
+            if i < common.len() && part == &common[i] {
+                new_common.push(*part);
+            } else {
+                break;
+            }
+        }
+        common = new_common;
+    }
+    
+    let mut res = PathBuf::new();
+    for part in common {
+        res.push(part);
+    }
+    res
+}

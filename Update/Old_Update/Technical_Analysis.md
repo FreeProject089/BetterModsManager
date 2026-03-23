@@ -310,7 +310,7 @@ BMM includes a GitHub-based update checker implemented as an async Tauri command
 | Step | Implementation | Detail |
 | :--- | :--- | :--- |
 | 1 | `check_for_update` | Async Tauri command triggered by frontend on startup or manual button click |
-| 2 | HTTP Request | `reqwest::Client` with `User-Agent: BetterModManager` queries `https://api.github.com/repos/better-dcs/BetterModsManager/releases/latest` |
+| 2 | HTTP Request | `reqwest::Client` with `User-Agent: BetterModManager` queries `https://api.github.com/repos/FreeProject089/BetterModsManager/releases/latest` |
 | 3 | Version Parse | Strips `v` / `V` prefix from `tag_name`, splits into `MAJOR.MINOR.PATCH` segments |
 | 4 | SemVer Compare | `is_newer_version()` compares each segment left-to-right; returns `true` only if latest is strictly greater |
 | 5 | Asset Detection | Scans `assets[]` array for `.msi` (priority), then `.exe` / `.zip`, extracts `browser_download_url` |
@@ -409,17 +409,31 @@ BMM 0.9.8 introduces the **Server Repository** system, a robust alternative to d
 
 ---
 
-## 21. UI Consistency & State Normalization
+### 21. UI Consistency & State Normalization
 
 ### Unified Empty States
 BMM 0.9.8 implements a shared component strategy for empty states across views.
 - **State Hijacking**: The `renderModList` logic now detects the absence of an active profile and redirects to a dedicated `empty-library-no-profile` container, which is a structural clone of the primary `empty-profiles` component.
 - **Cognitive Clarity**: The system explicitly distinguishes between "No Profile Selected" (Global State) and "Empty Result Set" (Contextual State), reducing user confusion during onboarding.
+- **Improved Interaction**: The "How it works" button correctly invokes `window.openDocs` (aliased to `openDiagram`), and the Profile Creation button seamlessly navigates between tabs before opening modals.
 
-### Metadata System Refactoring
-To reduce frontend complexity and eliminate redundant I/O during mod ingestion, the `_InfoBetterMod.Manager_` auto-fill bridge was removed. Mod information is now exclusively user-managed, ensuring total database predictability without reliance on external configuration files.
+### 22. Server Administration Suite Backend
+
+The administration suite leverages dedicated Rust modules for high-speed IP and ID management.
+
+| Module | Responsibility |
+| :--- | :--- |
+| `ban_manager.rs` | Handles persistence of banned IPs and Creator IDs. Uses a thread-safe `HashSet` for O(1) lookups during connection attempts. |
+| `whitelist_manager.rs` | Manages the repository's whitelist state. Integrated with the HTTP server's request filtering layer. |
+| `security.rs` | Provides utilities for Creator ID generation and salted hashing to prevent spoofing. |
+
+### 23. Multimedia Rendering
+
+| Layer | Implementation |
+| :--- | :--- |
+| **Credits BG** | Custom video player component using the `asset://` protocol to bypass typical browser security restrictions for local video files. |
+| **Throttling** | The `on_view_changed` observer in `credits.js` ensures that video playback is strictly paused when the user navigates away, preserving resources for mod operations. |
 
 ---
-
 
 *Better Mod Manager is developed by FreeProject089 — Engineered for uncompromising performance, file safety, and modern mod management.*
