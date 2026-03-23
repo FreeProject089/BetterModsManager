@@ -92,16 +92,16 @@ class DebugUI {
                     BMM DEVTOOLS
                 </div>
                 <div class="debug-controls">
-                    <button class="debug-btn" id="debug-btn-inspect" title="Inspect Element">
+                    <button class="debug-btn" id="debug-btn-inspect" onmouseenter="window.showTaskyHelp('dev.tool.inspectTip', 'icon-help')" onmouseleave="window.hideTaskyHelp()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
                     </button>
-                    <button class="debug-btn" id="debug-btn-export" title="Export Session">
+                    <button class="debug-btn" id="debug-btn-export" onmouseenter="window.showTaskyHelp('dev.tool.exportTip', 'help')" onmouseleave="window.hideTaskyHelp()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                     </button>
-                    <button class="debug-btn" id="dbg-clear-all" title="Clear All">
+                    <button class="debug-btn" id="dbg-clear-all" onmouseenter="window.showTaskyHelp('dev.tool.clearAllTip', 'help')" onmouseleave="window.hideTaskyHelp()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                     </button>
-                    <button class="debug-btn" id="debug-btn-close" title="Close">
+                    <button class="debug-btn" id="debug-btn-close" onmouseenter="window.showTaskyHelp('dev.tool.closeTip', 'help')" onmouseleave="window.hideTaskyHelp()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                 </div>
@@ -119,7 +119,7 @@ class DebugUI {
                 <div class="debug-pane active" id="pane-console">
                     <div class="console-tools" style="padding:8px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; gap:8px">
                     <input type="text" id="console-search" data-i18n-placeholder="dev.placeholder.search" placeholder="Search..." style="flex:1; background:rgba(0,0,0,0.2); border:1px solid var(--debug-border); border-radius:4px; color:white; font-size:10px; padding:4px 8px; outline:none">
-                        <button class="debug-btn" id="console-clear-manual" data-i18n-title="dev.btn.clearConsole" title="Clear Console">
+                        <button class="debug-btn" id="console-clear-manual" data-i18n-title="dev.btn.clearConsole" onmouseenter="window.showTaskyHelp('dev.tool.clearConsoleTip', 'help')" onmouseleave="window.hideTaskyHelp()">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                         </button>
                     </div>
@@ -133,7 +133,7 @@ class DebugUI {
                         <button class="filter-btn" data-filter="tasks" data-i18n="dev.label.tasks">TASKS</button>
                         <button class="filter-btn" data-filter="error" data-i18n="dev.label.error">ERR</button>
                         <div style="flex:1"></div>
-                        <button class="debug-btn" id="timeline-clear-manual" data-i18n-title="dev.btn.clearHistory" title="Clear History">
+                        <button class="debug-btn" id="timeline-clear-manual" data-i18n-title="dev.btn.clearHistory" onmouseenter="window.showTaskyHelp('dev.tool.clearHistoryTip', 'help')" onmouseleave="window.hideTaskyHelp()">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                         </button>
                     </div>
@@ -321,7 +321,7 @@ class DebugUI {
                         <div class="sources-tree-container" style="display:flex; flex-direction:column; border-right:1px solid var(--debug-border); background:rgba(0,0,0,0.1)">
                             <div style="padding:8px; border-bottom:1px solid var(--debug-border); display:flex; justify-content:space-between; align-items:center">
                                 <span style="font-size:10px; font-weight:700; color:var(--text-muted)" data-i18n="dev.label.project">PROJECT</span>
-                                <button class="debug-btn" id="sources-refresh" data-i18n-title="dev.btn.refreshFiles" title="Refresh Files">
+                                <button class="debug-btn" id="sources-refresh" data-i18n-title="dev.btn.refreshFiles" onmouseenter="window.showTaskyHelp('dev.tool.refreshFilesTip', 'help')" onmouseleave="window.hideTaskyHelp()">
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                                 </button>
                             </div>

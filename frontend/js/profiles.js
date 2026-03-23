@@ -472,22 +472,22 @@ export async function renderProfiles() {
       <div class="profile-card-paths" style="margin-bottom:16px;background:rgba(255,255,255,0.015);padding:10px 12px;border-radius:8px;border:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
           <span class="clickable-label btn-open-path" data-path="${escAttr(p.game_path)}" style="font-size:11px;color:var(--text-secondary);width:110px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em">${t('prof.gameDirLabel')}</span>
-          <span class="btn-open-path" data-path="${escAttr(p.game_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" title="${escHtml(p.game_path)}">${escHtml(p.game_path)}</span>
-          <button class="btn-open-path" data-path="${escAttr(p.game_path)}" title="${t('prof.openDir')}" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
+          <span class="btn-open-path" data-path="${escAttr(p.game_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" onmouseenter="window.showTaskyHelp('prof.openDirTip', 'folder')" onmouseleave="window.hideTaskyHelp()">${escHtml(p.game_path)}</span>
+          <button class="btn-open-path" data-path="${escAttr(p.game_path)}" onmouseenter="window.showTaskyHelp('prof.openDirTip', 'folder')" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </button>
         </div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
           <span class="clickable-label btn-open-path" data-path="${escAttr(p.mods_path)}" style="font-size:11px;color:var(--text-secondary);width:110px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em">${t('prof.modsDirLabel')}</span>
-          <span class="btn-open-path" data-path="${escAttr(p.mods_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" title="${escHtml(p.mods_path)}">${escHtml(p.mods_path)}</span>
-          <button class="btn-open-path" data-path="${escAttr(p.mods_path)}" title="${t('prof.openDir')}" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
+          <span class="btn-open-path" data-path="${escAttr(p.mods_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" onmouseenter="window.showTaskyHelp('prof.openDirTip', 'folder')" onmouseleave="window.hideTaskyHelp()">${escHtml(p.mods_path)}</span>
+          <button class="btn-open-path" data-path="${escAttr(p.mods_path)}" onmouseenter="window.showTaskyHelp('prof.openDirTip', 'folder')" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </button>
         </div>
         <div style="display:flex;align-items:center;gap:12px">
           <span class="clickable-label btn-open-path" data-path="${escAttr(p.backup_path)}" style="font-size:11px;color:var(--text-secondary);width:110px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em">${t('prof.backupDirLabel')}</span>
-          <span class="btn-open-path" data-path="${escAttr(p.backup_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" title="${escHtml(p.backup_path)}">${escHtml(p.backup_path)}</span>
-          <button class="btn-open-path" data-path="${escAttr(p.backup_path)}" title="${t('prof.openDir')}" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
+          <span class="btn-open-path" data-path="${escAttr(p.backup_path)}" style="font-size:11px;color:var(--text-primary);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;cursor:pointer" onmouseenter="window.showTaskyHelp('prof.openDirTip', 'folder')" onmouseleave="window.hideTaskyHelp()">${escHtml(p.backup_path)}</span>
+          <button class="btn-open-path" data-path="${escAttr(p.backup_path)}" onmouseenter="window.showTaskyHelp('prof.openDirTip', 'folder')" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;display:flex">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </button>
         </div>
@@ -500,12 +500,12 @@ export async function renderProfiles() {
         <button class="btn btn-secondary btn-sm flex-1 btn-activate" style="flex:1" data-id="${p.id}">
           ${isActive ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="vertical-align:middle;margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg>' + t('prof.active') : t('mod.activate')}
         </button>
-        <button class="btn btn-secondary btn-sm btn-edit-profile" data-id="${p.id}" title="${t('prof.editTitle')}">
+        <button class="btn btn-secondary btn-sm btn-edit-profile" data-id="${p.id}" onmouseenter="window.showTaskyHelp('prof.editTip', 'edit')" onmouseleave="window.hideTaskyHelp()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
           </svg>
         </button>
-        <button class="btn btn-danger btn-sm btn-del-profile" data-id="${p.id}" title="${t('prof.confirmDelete')}">
+        <button class="btn btn-danger btn-sm btn-del-profile" data-id="${p.id}" onmouseenter="window.showTaskyHelp('prof.deleteTip', 'trash')" onmouseleave="window.hideTaskyHelp()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
             <path d="M10 11v6"/><path d="M14 11v6"/>

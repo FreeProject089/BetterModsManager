@@ -2260,12 +2260,6 @@ async function main() {
             checkPtbMode();
         });
     }
-    const showNotesBtn = document.getElementById('btn-show-notes');
-    if (showNotesBtn) {
-        showNotesBtn.addEventListener('click', () => {
-            checkPtbMode(true);
-        });
-    }
 }
 
 /** Run benchmarks for all disks currently in use by profiles */
@@ -2469,7 +2463,8 @@ async function initAutoUpdate() {
                 card.dataset.i18nContent = 'settings.disabledOverlay';
                 card.setAttribute('data-content', t('settings.disabledOverlay') || 'DÉSACTIVÉ');
                 card.dataset.i18nTitle = 'update.disabled';
-                card.title = t('update.disabled') || 'Updates disabled via configuration.';
+                card.onmouseenter = () => window.showTaskyHelp('update.disabledTip', 'icon-help');
+      card.onmouseleave = () => window.hideTaskyHelp();
             }
         } else {
             chk.checked = isAutoUpdateEnabled();
@@ -2488,7 +2483,8 @@ async function initAutoUpdate() {
         if (isDisabled) {
             sidebarBtn.style.opacity = '0.5';
             sidebarBtn.style.cursor = 'not-allowed';
-            sidebarBtn.title = t('update.disabled');
+            sidebarBtn.onmouseenter = () => window.showTaskyHelp('update.disabledTip', 'icon-help');
+      sidebarBtn.onmouseleave = () => window.hideTaskyHelp();
             sidebarBtn.addEventListener('click', () => {
                 toast(t('update.disabled') || 'Updates are disabled.', 'warning');
             });
@@ -2503,7 +2499,8 @@ async function initAutoUpdate() {
         if (isDisabled) {
             settingsBtn.style.opacity = '0.5';
             settingsBtn.style.cursor = 'not-allowed';
-            settingsBtn.title = t('update.disabled');
+            settingsBtn.onmouseenter = () => window.showTaskyHelp('update.disabledTip', 'icon-help');
+      settingsBtn.onmouseleave = () => window.hideTaskyHelp();
             settingsBtn.addEventListener('click', () => {
                 toast(t('update.disabled') || 'Updates are disabled.', 'warning');
             });

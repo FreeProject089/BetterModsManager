@@ -59,17 +59,17 @@
             <button class="titlebar-version" onclick="checkPtbMode(true)">V0.9.8</button>
         </div>
         <div class="titlebar-controls">
-            <button class="tb-btn" id="tb-min" title="Minimize">
+            <button class="tb-btn" id="tb-min" onmouseenter="window.showTaskyHelp('common.minimize', 'minimize')" onmouseleave="window.hideTaskyHelp()">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
             </button>
-            <button class="tb-btn" id="tb-max" title="Maximize">
+            <button class="tb-btn" id="tb-max" onmouseenter="window.showTaskyHelp('common.maximize', 'maximize')" onmouseleave="window.hideTaskyHelp()">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <rect x="3" y="3" width="18" height="18" rx="2" />
                 </svg>
             </button>
-            <button class="tb-btn tb-close" id="tb-close" title="Close">
+            <button class="tb-btn tb-close" id="tb-close" onmouseenter="window.showTaskyHelp('common.close', 'close')" onmouseleave="window.hideTaskyHelp()">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <line x1="18" y1="6" x2="6" y2="18" />
                     <line x1="6" y1="6" x2="18" y2="18" />
@@ -191,7 +191,9 @@
 
             <!-- Sidebar footer -->
             <div class="sidebar-footer">
-                <button class="footer-nav-item" id="btn-restart-onboarding">
+                <button class="footer-nav-item" id="btn-restart-onboarding"
+                    onmouseenter="window.showTaskyHelp('settings.restartTutorialTip', 'icon-play')" 
+                    onmouseleave="window.hideTaskyHelp()">
                     <span class="nav-icon">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
@@ -215,7 +217,9 @@
                 </div>
 
                 <!-- Check for Updates Button -->
-                <button class="btn-check-updates" id="btn-check-updates">
+                <button class="btn-check-updates" id="btn-check-updates"
+                    onmouseenter="window.showTaskyHelp('settings.checkUpdatesTip', 'icon-refresh')" 
+                    onmouseleave="window.hideTaskyHelp()">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                         stroke-width="2.2">
                         <path d="M23 4v6h-6M1 20v-6h6" />
@@ -237,8 +241,9 @@
                         <p class="view-subtitle" id="lib-subtitle">Sélectionnez un profil pour commencer</p>
                     </div>
                     <div class="view-actions">
-                        <button class="btn btn-ghost" id="btn-show-history" title="Historique d'activation"
-                            data-i18n-title="lib.historyTitle">
+                        <button class="btn btn-ghost" id="btn-show-history" 
+                            onmouseenter="window.showTaskyHelp('lib.historyTip', 'icon-history')" 
+                            onmouseleave="window.hideTaskyHelp()">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.2">
                                 <circle cx="12" cy="12" r="10" />
@@ -246,7 +251,9 @@
                             </svg>
                             <span data-i18n="lib.history">Historique</span>
                         </button>
-                        <button class="btn btn-ghost" id="btn-scan-mods" title="Scanner le dossier mods">
+                        <button class="btn btn-ghost" id="btn-scan-mods" 
+                            onmouseenter="window.showTaskyHelp('lib.scanTip', 'icon-search')" 
+                            onmouseleave="window.hideTaskyHelp()">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.2">
                                 <path d="M23 4v6h-6M1 20v-6h6" />
@@ -254,8 +261,9 @@
                             </svg>
                             <span data-i18n="lib.scan">Scanner</span>
                         </button>
-                        <button class="btn btn-ghost" id="btn-verify-integrity" title="Vérifier l'intégrité"
-                            data-i18n-title="lib.verifyTitle">
+                        <button class="btn btn-ghost" id="btn-verify-integrity" 
+                            onmouseenter="window.showTaskyHelp('lib.verifyTip', 'icon-verify')" 
+                            onmouseleave="window.hideTaskyHelp()">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2.2">
                                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -309,8 +317,9 @@
                                 data-i18n-placeholder="lib.search" />
                         </div>
                         <div class="filter-buttons">
-                            <button id="btn-view-mode" class="btn btn-icon btn-ghost" title="Changer la vue"
-                                data-i18n-title="lib.toggleView">
+                            <button id="btn-view-mode" class="btn btn-icon btn-ghost" 
+                                onmouseenter="window.showTaskyHelp('lib.toggleViewTip', 'icon-layers')" 
+                                onmouseleave="window.hideTaskyHelp()">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2">
                                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -680,7 +689,10 @@
                                     <line x1="12" y1="3" x2="12" y2="15" />
                                 </svg>
                                 <span style="color:var(--cyan);" data-i18n="repo.stepOneTitle">1. Générer le Dépôt</span>
-                                <button class="btn btn-ghost btn-xs" onclick="openDiagram('hosting-flow')" style="margin-left:auto; opacity:0.6; font-size:10px; border:1px solid rgba(0,194,255,0.2); padding:2px 8px; height:auto;">
+                                <button class="btn btn-ghost btn-xs" onclick="openDiagram('hosting-flow')" 
+                                    onmouseenter="window.showTaskyHelp('repo.howItWorksTip', 'icon-info')" 
+                                    onmouseleave="window.hideTaskyHelp()"
+                                    style="margin-left:auto; opacity:0.6; font-size:10px; border:1px solid rgba(0,194,255,0.2); padding:2px 8px; height:auto;">
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                                     <span data-i18n="repo.howItWorks">Comment ça marche ?</span>
                                 </button>
@@ -722,7 +734,9 @@
                                 <div style="display:flex; justify-content:space-between; align-items:center;">
                                     <label class="form-label" style="margin-bottom:4px; font-size:11px; opacity:0.8;"
                                         data-i18n="repo.serverSeed">Graine du serveur (Optionnel)</label>
-                                    <span style="font-size:9px; color:var(--text-muted); cursor:help;" title="Cette graine définit l'identité unique de votre serveur pour les bannissements et la whitelist.">
+                                    <span style="font-size:9px; color:var(--text-muted); cursor:help;" 
+                                        onmouseenter="window.showTaskyHelp('repo.serverSeedTip', 'icon-verify')" 
+                                        onmouseleave="window.hideTaskyHelp()">
                                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                                     </span>
                                 </div>
@@ -891,7 +905,9 @@
                                         <input type="text" class="form-input" id="repo-server-url" readonly
                                             style="color:var(--cyan);background:rgba(0,0,0,0.3);font-family:var(--font-mono);font-size:12px;" />
                                         <button class="btn btn-secondary btn-sm" id="btn-copy-repo-url"
-                                            data-i18n-title="common.copy" style="padding:0 10px;">
+                                            onmouseenter="window.showTaskyHelp('common.copyTip', 'icon-copy')" 
+                                            onmouseleave="window.hideTaskyHelp()"
+                                            style="padding:0 10px;">
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2">
                                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -910,7 +926,9 @@
                                         <input type="text" class="form-input" id="repo-server-public-url" readonly
                                             style="color:var(--accent);background:rgba(0,0,0,0.3);font-family:var(--font-mono);font-size:12px;" />
                                         <button class="btn btn-secondary btn-sm" id="btn-copy-repo-public-url"
-                                            data-i18n-title="common.copy" style="padding:0 10px;">
+                                            onmouseenter="window.showTaskyHelp('common.copyTip', 'icon-copy')" 
+                                            onmouseleave="window.hideTaskyHelp()"
+                                            style="padding:0 10px;">
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2">
                                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -929,7 +947,9 @@
                                         <input type="text" class="form-input" id="repo-server-tunnel-url" readonly
                                             style="color:var(--cyan);background:rgba(0,0,0,0.3);font-family:var(--font-mono);font-size:12px;" />
                                         <button class="btn btn-secondary btn-sm" id="btn-copy-repo-tunnel-url"
-                                            data-i18n-title="common.copy" style="padding:0 10px;">
+                                            onmouseenter="window.showTaskyHelp('common.copyTip', 'icon-copy')" 
+                                            onmouseleave="window.hideTaskyHelp()"
+                                            style="padding:0 10px;">
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                                 stroke="currentColor" stroke-width="2">
                                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -941,85 +961,12 @@
                             </div>
                         </div>
 
-                        <!-- Card: Mini-Server Standalone -->
-                        <div class="glass-card" style="border-left:3px solid var(--accent-faded); background:rgba(255,255,255,0.02);">
-                            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-                                <h3 class="card-title" style="margin:0; font-size:13px; opacity:0.9; display:flex; align-items:center; gap:8px;">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle">
-                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                                    </svg>
-                                    <span data-i18n="repo.miniServerTitle">Serveur Autonome (Léger)</span>
-                                </h3>
-                                <div style="font-size:10px; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; color:var(--text-muted); font-weight:700;">OPTIONAL</div>
-                            </div>
-
-                            <div class="form-group" style="margin-bottom:12px;">
-                                <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;" data-i18n="repo.miniServerRepoPath">Chemin du repo.json :</label>
-                                <div class="path-picker" style="display:flex; gap:6px;">
-                                    <input type="text" class="form-input" id="repo-mini-server-json-path" placeholder="C:\...\repo.json" 
-                                        data-i18n-placeholder="repo.miniServerRepoPlaceholder" readonly style="font-size:11px; flex:1; min-width:0;" />
-                                    <button class="btn btn-secondary btn-sm" id="btn-pick-mini-server-repo" data-i18n-title="repo.miniServerSelectRepo" style="padding:0 10px; height:28px; display:flex; align-items:center; justify-content:center;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                                    </button>
-                                    <button class="btn btn-secondary btn-sm" id="btn-pick-mini-folder" data-i18n-title="repo.miniServerSelectFolder" style="padding:0 10px; height:28px; display:flex; align-items:center; justify-content:center;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <p style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:12px;" data-i18n="repo.miniServerDesc">
-                                Générez un script <code>.bat</code> pour lancer un serveur ultra-léger sans l'interface BMM. Idéal pour économiser les performances sur une machine dédiée.
-                            </p>
-                            
-                             <!-- Configuration Options Grid -->
-                             <div style="display:grid; grid-template-columns: 1fr 1.2fr; gap:20px; margin-bottom:15px; padding:12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
-                                 <!-- Left Column: Numeric Settings -->
-                                 <div style="display:flex; flex-direction:column; gap:10px;">
-                                     <div style="display:flex; align-items:center; justify-content:space-between;">
-                                         <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;" data-i18n="repo.portLabel">PORT</span>
-                                         <input type="number" id="repo-mini-server-port" class="form-input" value="8000" min="1" max="65535" 
-                                             style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--cyan); font-weight:700;">
-                                     </div>
-                                     <div style="display:flex; align-items:center; justify-content:space-between;">
-                                         <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;" data-i18n="repo.uploadLimit">LIMIT (KB/S)</span>
-                                         <input type="number" id="repo-mini-server-upload-limit" class="form-input" value="0" min="0" step="50"
-                                             style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--accent); font-weight:700;">
-                                     </div>
-                                 </div>
-
-                                 <!-- Right Column: Toggles -->
-                                 <div style="display:flex; flex-direction:column; gap:8px; border-left:1px solid rgba(255,255,255,0.05); padding-left:15px;">
-                                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
-                                         <input type="checkbox" id="repo-mini-server-autostart" style="margin:0;">
-                                         <span data-i18n="repo.autoStart">Lancer au démarrage</span>
-                                     </label>
-                                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
-                                         <input type="checkbox" id="repo-mini-server-cloudflare" style="margin:0;">
-                                         <span data-i18n="repo.miniServerUseCloudflare">Cloudflare Tunnel (Public)</span>
-                                     </label>
-                                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
-                                         <input type="checkbox" id="repo-mini-server-upnp" checked style="margin:0;">
-                                         <span data-i18n="repo.miniServerUseUPnP">UPnP (Port Forwarding)</span>
-                                     </label>
-                                 </div>
-                             </div>
-
-                             <div style="display:flex; gap:10px; align-items:center;">
-                                 <button class="btn btn-primary" id="btn-generate-mini-server" style="flex:1; height:38px; justify-content:center; font-size:12px; font-weight:700; border-radius:8px; box-shadow:0 4px 12px rgba(59,130,246,0.25);">
-                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><path d="M12 5v14M5 12h14"/></svg>
-                                     <span data-i18n="repo.miniServerGenerate">GÉNÉRER LE SERVEUR</span>
-                                 </button>
-                                 <button class="btn btn-ghost btn-sm" onclick="openDiagram('lightweight-architecture')" 
-                                     style="width:40px; height:38px; padding:0; justify-content:center; color:var(--text-muted); border:1px solid rgba(255,255,255,0.08); border-radius:8px;"
-                                     title="View Architecture Diagram">
-                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></svg>
-                                 </button>
-                             </div>
-                        </div>
                     </div>
 
+
                     <!-- ══ DROITE : REJOINDRE ══ -->
-                    <div class="glass-card" style="border-left:3px solid var(--accent);">
+                    <div style="display:flex;flex-direction:column;gap:24px;">
+                        <div class="glass-card" style="border-left:3px solid var(--accent);">
                         <h3 class="card-title" style="margin-bottom:6px;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
                                 stroke-width="2" style="margin-right:8px;vertical-align:middle">
@@ -1211,6 +1158,89 @@
                                     <span data-i18n="common.cancel">Annuler</span>
                                 </button>
                             </div>
+                        </div>
+                    </div>
+
+                        <!-- Card: Mini-Server Standalone -->
+                        <div class="glass-card" style="border-left:3px solid #8A98AD; background:rgba(255,255,255,0.02); margin-top: 24px;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                                <h3 class="card-title" style="margin:0; font-size:13px; opacity:0.9; display:flex; align-items:center; gap:8px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle">
+                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                                    </svg>
+                                    <span data-i18n="repo.miniServerTitle">Serveur Autonome (Léger)</span>
+                                </h3>
+                                <div style="font-size:10px; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; color:var(--text-muted); font-weight:700;">OPTIONAL</div>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom:12px;">
+                                <label class="form-label" style="font-size:11px; margin-bottom:4px; display:block;" data-i18n="repo.miniServerRepoPath">Chemin du repo.json :</label>
+                                <div class="path-picker" style="display:flex; gap:6px;">
+                                    <input type="text" class="form-input" id="repo-mini-server-json-path" placeholder="C:\...\repo.json" 
+                                        data-i18n-placeholder="repo.miniServerRepoPlaceholder" readonly style="font-size:11px; flex:1; min-width:0;" />
+                                    <button class="btn btn-secondary btn-sm" id="btn-pick-mini-server-repo" 
+                                        onmouseenter="window.showTaskyHelp('repo.miniServerSelectRepoTip', 'icon-folder')" 
+                                        onmouseleave="window.hideTaskyHelp()"
+                                        style="padding:0 10px; height:28px; display:flex; align-items:center; justify-content:center;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                                    </button>
+                                    <button class="btn btn-secondary btn-sm" id="btn-pick-mini-folder" 
+                                        onmouseenter="window.showTaskyHelp('repo.miniServerSelectFolderTip', 'icon-folder')" 
+                                        onmouseleave="window.hideTaskyHelp()"
+                                        style="padding:0 10px; height:28px; display:flex; align-items:center; justify-content:center;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <p style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-bottom:12px;" data-i18n="repo.miniServerDesc">
+                                Générez un script <code>.bat</code> pour lancer un serveur ultra-léger sans l'interface BMM. Idéal pour économiser les performances sur une machine dédiée.
+                            </p>
+                            
+                             <!-- Configuration Options Grid -->
+                             <div style="display:grid; grid-template-columns: 1fr 1.2fr; gap:20px; margin-bottom:15px; padding:12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+                                 <!-- Left Column: Numeric Settings -->
+                                 <div style="display:flex; flex-direction:column; gap:10px;">
+                                     <div style="display:flex; align-items:center; justify-content:space-between;">
+                                         <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;" data-i18n="repo.portLabel">PORT</span>
+                                         <input type="number" id="repo-mini-server-port" class="form-input" value="8000" min="1" max="65535" 
+                                             style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--cyan); font-weight:700;">
+                                     </div>
+                                     <div style="display:flex; align-items:center; justify-content:space-between;">
+                                         <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;" data-i18n="repo.uploadLimit">LIMIT (KB/S)</span>
+                                         <input type="number" id="repo-mini-server-upload-limit" class="form-input" value="0" min="0" step="50"
+                                             style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--accent); font-weight:700;">
+                                     </div>
+                                 </div>
+
+                                 <!-- Right Column: Toggles -->
+                                 <div style="display:flex; flex-direction:column; gap:8px; border-left:1px solid rgba(255,255,255,0.05); padding-left:15px;">
+                                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
+                                         <input type="checkbox" id="repo-mini-server-autostart" style="margin:0;">
+                                         <span data-i18n="repo.autoStart">Lancer au démarrage</span>
+                                     </label>
+                                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
+                                         <input type="checkbox" id="repo-mini-server-cloudflare" style="margin:0;">
+                                         <span data-i18n="repo.miniServerUseCloudflare">Cloudflare Tunnel (Public)</span>
+                                     </label>
+                                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
+                                         <input type="checkbox" id="repo-mini-server-upnp" checked style="margin:0;">
+                                         <span data-i18n="repo.miniServerUseUPnP">UPnP (Port Forwarding)</span>
+                                     </label>
+                                 </div>
+                             </div>
+
+                             <div style="display:flex; gap:10px; align-items:center;">
+                                 <button class="btn btn-primary" id="btn-generate-mini-server" style="flex:1; height:38px; justify-content:center; font-size:12px; font-weight:700; border-radius:8px; box-shadow:0 4px 12px rgba(59,130,246,0.25);">
+                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><path d="M12 5v14M5 12h14"/></svg>
+                                     <span data-i18n="repo.miniServerGenerate">GÉNÉRER LE SERVEUR</span>
+                                 </button>
+                                 <button class="btn btn-ghost btn-sm" onclick="openDiagram('lightweight-architecture')" 
+                                     style="width:40px; height:38px; padding:0; justify-content:center; color:var(--text-muted); border:1px solid rgba(255,255,255,0.08); border-radius:8px;"
+                                     onmouseenter="window.showTaskyHelp('nav.docsViewDiagramTip', 'help')" onmouseleave="window.hideTaskyHelp()">
+                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></svg>
+                                 </button>
+                             </div>
                         </div>
                     </div>
 
@@ -2244,7 +2274,10 @@
                                     ?</span>
                             </span>
                             <div style="display:flex; align-items:center; gap:12px;">
-                                <div class="btn-docs-trigger" id="btn-faq-resumable" title="Voir le diagramme" role="button" tabindex="0">
+                                <div class="btn-docs-trigger" id="btn-faq-resumable" 
+                        onmouseenter="window.showTaskyHelp('nav.docsViewDiagramTip', 'help')" 
+                        onmouseleave="window.hideTaskyHelp()"
+                        role="button" tabindex="0">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
                                         <path d="M12 2L2 7l10 5 10-5-10-5z" />
@@ -2306,8 +2339,11 @@
                                 <span data-i18n="faq.qRepo">C'est quoi le Server Repo ?</span>
                             </span>
                             <div style="display:flex; align-items:center; gap:12px;">
-                                <div class="btn-docs-trigger" onclick="openDiagram('mod-sync'); event.stopPropagation();"
-                                    title="Voir le diagramme" role="button" tabindex="0">
+                                <div class="btn-docs-trigger" 
+                        onmouseenter="window.showTaskyHelp('nav.docsViewDiagramTip', 'help')" 
+                        onmouseleave="window.hideTaskyHelp()"
+                        onclick="openDiagram('mod-sync'); event.stopPropagation();" 
+                        role="button" tabindex="0">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
                                         <path d="M12 2L2 7l10 5 10-5-10-5z" />
@@ -2455,6 +2491,33 @@
                                 </button>
                                 <button class="btn btn-ghost btn-sm" onclick="openDiagram('crash-reporting')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
                                     <span style="font-size: 11px;" data-i18n="docs.gallery.btn.crashReporting">Rapports de Crash</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('best-practices')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.bestPractices">Bonnes Pratiques</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('cache-management')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.cacheManagement">Gestion du Cache</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('faq-deleted-mod')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.faqDeletedMod">FAQ : Mod Supprimé</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('faq-disk-full')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.faqDiskFull">FAQ : Disque Plein</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('hosting-flow')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.hostingFlow">Flux d'Hébergement</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('mod-architecture')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.modArchitecture">Architecture des Mods</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('modding-mechanics')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.moddingMechanics">Mécaniques de Modding</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('perf-monitoring')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.perfMonitoring">Monitoring Performance</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" onclick="openDiagram('profile-customization')" style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <span style="font-size: 11px;" data-i18n="docs.gallery.btn.profileCustomization">Personnalisation Profil</span>
                                 </button>
                             </div>
                         </div>
@@ -2800,7 +2863,8 @@
                                     data-i18n-placeholder="settings.githubPatPlaceholder"
                                     placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                                     style="width:100%;padding:9px 40px 9px 12px;border-radius:8px;background:rgba(0,0,0,0.25);color:white;border:1px solid var(--border);font-family:var(--font-mono);font-size:12px;box-sizing:border-box;transition:border 0.2s" />
-                                <button id="btn-toggle-pat-visibility" title="Show/Hide token"
+                                <button id="btn-toggle-pat-visibility" 
+                                    onmouseenter="window.showTaskyHelp('repo.togglePatTip', 'help')" onmouseleave="window.hideTaskyHelp()"
                                     aria-label="Toggle PAT visibility"
                                     style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);padding:2px;display:flex;align-items:center">
                                     <svg id="pat-eye-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
@@ -3004,6 +3068,8 @@
                                 <span data-i18n="storage.openManager">Ouvrir le Gestionnaire de Stockage</span>
                             </button>
                             <button class="btn btn-ghost btn-sm" id="btn-storage-faq"
+                                onmouseenter="window.showTaskyHelp('settings.githubPatHelp', 'icon-info')" 
+                                onmouseleave="window.hideTaskyHelp()"
                                 style="font-size:11px;color:var(--accent);gap:5px;padding:4px 8px">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.5">
@@ -3044,32 +3110,6 @@
                         </button>
                     </div>
 
-                    <!-- ── App Notes ── -->
-                    <div class="glass-card">
-                        <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
-                                stroke-width="2.2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                                <line x1="16" y1="13" x2="8" y2="13" />
-                                <line x1="16" y1="17" x2="8" y2="17" />
-                                <polyline points="10 9 9 9 8 9" />
-                            </svg>
-                            <span data-i18n="settings.notesTitle">Release Notes</span>
-                        </h3>
-                        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6" data-i18n="settings.notesDesc">
-                            Consultez les dernières nouveautés et les changements de la version actuelle.
-                        </p>
-                        <button class="btn btn-secondary btn-sm" id="btn-show-notes">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <circle cx="12" cy="12" r="10" />
-                                <line x1="12" y1="16" x2="12" y2="12" />
-                                <line x1="12" y1="8" x2="12.01" y2="8" />
-                            </svg>
-                            <span data-i18n="settings.showNotes">Afficher les notes</span>
-                        </button>
-                    </div>
                     <!-- ── END Crash Reports ── -->
 
                     <!-- ── Debug Menu ── -->
@@ -3126,7 +3166,9 @@
                         </div>
                         <p style="font-size:10px; color:var(--text-muted); margin-top:12px">
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" style="vertical-align:middle; margin-right:4px">
+                                stroke-width="2" style="vertical-align:middle; margin-right:4px; cursor:help;"
+                                onmouseenter="window.showTaskyHelp('settings.debugWarn', 'alert')" 
+                                onmouseleave="window.hideTaskyHelp()">
                                 <circle cx="12" cy="12" r="10" />
                                 <line x1="12" y1="8" x2="12" y2="12" />
                                 <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -3177,7 +3219,7 @@
                     style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:12px;cursor:pointer;transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1);margin:4px 0"
                     onmouseover="this.style.background='rgba(239,68,68,0.1)';this.style.borderColor='rgba(239,68,68,0.3)';"
                     onmouseout="this.style.background='rgba(239,68,68,0.06)';this.style.borderColor='rgba(239,68,68,0.15)';"
-                    title="Cliquer pour ouvrir le fichier">
+                    onmouseenter="window.showTaskyHelp('crash.openFileTip', 'info')" onmouseleave="window.hideTaskyHelp()">
                     <div
                         style="width:32px;height:32px;background:rgba(239,68,68,0.1);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.2">
@@ -3798,7 +3840,8 @@
                     </div>
                 </div>
                 <div style="display:flex;gap:8px">
-                    <button class="btn btn-ghost btn-sm" id="btn-toggle-pip" title="Picture in Picture Mode">
+                    <button class="btn btn-ghost btn-sm" id="btn-toggle-pip" 
+                        onmouseenter="window.showTaskyHelp('benchmark.pipTip', 'maximize')" onmouseleave="window.hideTaskyHelp()">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
                             class="lucide lucide-picture-in-picture-icon lucide-picture-in-picture">
@@ -3873,7 +3916,7 @@
                         <div class="timeline-meta" style="display:flex; align-items:center; gap:8px">
                             <button class="btn btn-icon" id="btn-replay-playpause"
                                 style="display:none; padding:4px; height:24px; width:24px; border-radius:6px; background:rgba(255,255,255,0.05)"
-                                title="Play/Pause Replay">
+                                onmouseenter="window.showTaskyHelp('benchmark.playPauseTip', 'play')" onmouseleave="window.hideTaskyHelp()">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                                     <polygon points="5 3 19 12 5 21 5 3"></polygon>
                                 </svg>
@@ -3906,7 +3949,7 @@
                     <span>Import CSV</span>
                 </button>
                 <div style="display:flex; align-items:center; gap:4px; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); padding:2px; margin-right:6px;"
-                    title="Auto-Stop Timer">
+                    onmouseenter="window.showTaskyHelp('benchmark.timerTip', 'history')" onmouseleave="window.hideTaskyHelp()">
                     <input type="number" id="benchmark-autostop-val" placeholder="Auto-stop"
                         data-i18n-placeholder="benchmark.autostop" min="1"
                         style="width:75px; padding:4px 8px; background:transparent; border:none; color:white; font-size:12px; outline:none;">
@@ -4032,7 +4075,9 @@
                     <div class="modal-docs-title" id="docs-diagram-title">Fonctionnement</div>
                 </div>
                 <div style="display:flex;align-items:center;gap:12px">
-                    <button class="btn-docs-util" id="btn-docs-reset-zoom" title="Reset Zoom">
+                    <button class="btn-docs-util" id="btn-docs-reset-zoom" 
+                    onmouseenter="window.showTaskyHelp('benchmark.resetZoomTip', 'refresh')" 
+                    onmouseleave="window.hideTaskyHelp()">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
                             <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />

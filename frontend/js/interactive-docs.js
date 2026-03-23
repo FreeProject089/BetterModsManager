@@ -258,18 +258,99 @@ function fixClusterLabels() {
 }
 
 /**
+ * Internal helper to find the SVG path associated with a label
+ */
+// findPathForLabel is now integrated into the loop logic above for better sync
+
+/**
+ * Show Tasky explanation bubble globally
+ * @param {string} key - The translation key for the text
+ * @param {string} iconClass - The CSS class for the eyes icon
+ */
+export function showTaskyHelp(key, iconClass = 'info') {
+    const bubble = document.querySelector('.tasky-speech-bubble');
+    const eyes = document.getElementById('tasky-bubble-eyes');
+    const explanationEl = document.getElementById('tasky-explanation');
+    const taskyContainer = document.getElementById('tasky-bubble-docs');
+    
+    if (!bubble || !explanationEl || !taskyContainer) return;
+
+    // Show Container if hidden (for non-modal use)
+    if (taskyContainer.style.display === 'none') {
+        taskyContainer.style.display = 'flex';
+        setTimeout(() => taskyContainer.style.opacity = '1', 10);
+    }
+
+    // Icon Normalization
+    let finalIcon = iconClass || 'icon-info';
+    if (finalIcon === 'help') finalIcon = 'icon-help';
+    if (finalIcon === 'info') finalIcon = 'icon-info';
+    if (finalIcon === 'warning' || finalIcon === 'alert') finalIcon = 'icon-warning';
+    if (finalIcon === 'verify') finalIcon = 'icon-verify';
+    if (finalIcon === 'search') finalIcon = 'icon-search';
+    if (finalIcon === 'layers') finalIcon = 'icon-layers';
+    if (finalIcon === 'history') finalIcon = 'icon-history';
+    if (finalIcon === 'play') finalIcon = 'icon-play';
+    if (finalIcon === 'refresh') finalIcon = 'icon-refresh';
+    if (finalIcon === 'minimize') finalIcon = 'icon-minimize';
+    if (finalIcon === 'maximize') finalIcon = 'icon-maximize';
+    if (finalIcon === 'close') finalIcon = 'icon-close';
+    if (finalIcon === 'folder') finalIcon = 'icon-folder';
+    if (finalIcon === 'edit') finalIcon = 'icon-edit';
+    if (finalIcon === 'trash' || finalIcon === 'delete') finalIcon = 'icon-trash';
+    if (finalIcon === 'toggle') finalIcon = 'icon-toggle';
+    if (finalIcon === 'alert') finalIcon = 'icon-alert';
+
+    // Fallback: Check if a dedicated .desc key exists for longer tooltips
+    const descKey = key + '.desc';
+    const descExp = t(descKey);
+    
+    // Priority 1: Use .desc if available. Priority 2: Use regular key if it's translated
+    const exp = (descExp && descExp !== descKey) ? descExp : t(key);
+    
+    if (exp && exp !== key) {
+        explanationEl.textContent = exp;
+        bubble.classList.add('active');
+        
+        if (eyes) {
+            eyes.className = finalIcon;
+            eyes.style.display = 'flex'; // Match CSS flex display
+        }
+        updateTaskyMascot('Tasky_Happy.png');
+    }
+}
+
+/**
+ * Hide Tasky explanation bubble globally
+ */
+export function hideTaskyHelp() {
+    const bubble = document.querySelector('.tasky-speech-bubble');
+    const taskyContainer = document.getElementById('tasky-bubble-docs');
+    const modal = document.getElementById('modal-docs-diagram');
+
+    if (bubble) bubble.classList.remove('active');
+    updateTaskyMascot('Tasky.png');
+
+    // If modal is NOT active, hide the whole container after a delay
+    if (taskyContainer && (!modal || !modal.classList.contains('active'))) {
+        taskyContainer.style.opacity = '0';
+        setTimeout(() => {
+            if (taskyContainer.style.opacity === '0') {
+                taskyContainer.style.display = 'none';
+            }
+        }, 200);
+    }
+}
+
+/**
  * Close the modal
  */
 function closeDiagram() {
     const modal = document.getElementById('modal-docs-diagram');
     modal.classList.remove('active');
     
-    // Hide Global Tasky (faster)
-    const taskyContainer = document.getElementById('tasky-bubble-docs');
-    if (taskyContainer) {
-        taskyContainer.style.opacity = '0';
-        setTimeout(() => taskyContainer.style.display = 'none', 200);
-    }
+    // Use the global helper to hide Tasky
+    hideTaskyHelp();
 
     if (panZoomInstance) {
         panZoomInstance.destroy();
@@ -327,8 +408,7 @@ function attachNodeListeners(diagramID) {
                     rect.style.filter = 'drop-shadow(0 0 8px var(--accent))';
                 }
             }
-            showExplanation(diagram.explanationPrefix + parts[1], node.querySelector('i')?.className);
-            updateTaskyMascot('Tasky_Happy.png');
+            showTaskyHelp(diagram.explanationPrefix + parts[1], node.querySelector('i')?.className);
         });
 
         node.addEventListener('mouseleave', () => {
@@ -338,7 +418,7 @@ function attachNodeListeners(diagramID) {
                 rect.style.strokeWidth = '1px';
                 rect.style.filter = 'none';
             }
-            hideExplanation();
+            hideTaskyHelp();
         });
 
         // Click to drill-down / jump
@@ -382,17 +462,17 @@ function attachNodeListeners(diagramID) {
             // Priority: Node-based key > data-key from span > Label-based key
             const exp = t(edgeKey);
             if (exp && exp !== edgeKey) {
-                showExplanation(edgeKey, 'icon-network');
+                showTaskyHelp(edgeKey, 'network');
             } else if (labelKeyFromData) {
-                showExplanation(`docs.diagram.edge.${labelKeyFromData}`, 'icon-network');
+                showTaskyHelp(`docs.diagram.edge.${labelKeyFromData}`, 'network');
             } else if (labelText) {
-                showExplanation(`docs.diagram.edge.${labelText}`, 'icon-network');
+                showTaskyHelp(`docs.diagram.edge.${labelText}`, 'network');
             } else {
                 updateTaskyMascot('Tasky_yeux1.png');
             }
         });
 
-        pathGroup.addEventListener('mouseleave', hideExplanation);
+        pathGroup.addEventListener('mouseleave', hideTaskyHelp);
     });
 
     edgeLabels.forEach((edge) => {
@@ -408,15 +488,15 @@ function attachNodeListeners(diagramID) {
             
             const exp = t(edgeKey);
             if (exp && exp !== edgeKey) {
-                showExplanation(edgeKey, 'icon-network');
+                showTaskyHelp(edgeKey, 'network');
             } else if (labelKeyFromData) {
-                showExplanation(`docs.diagram.edge.${labelKeyFromData}`, 'icon-network');
+                showTaskyHelp(`docs.diagram.edge.${labelKeyFromData}`, 'network');
             } else if (labelText) {
-                showExplanation(`docs.diagram.edge.${labelText}`, 'icon-network');
+                showTaskyHelp(`docs.diagram.edge.${labelText}`, 'network');
             }
             updateTaskyMascot('Tasky_yeux1.png');
         });
-        edge.addEventListener('mouseleave', hideExplanation);
+        edge.addEventListener('mouseleave', hideTaskyHelp);
     });
 
     /**
@@ -439,37 +519,12 @@ function attachNodeListeners(diagramID) {
             cluster.addEventListener('mouseenter', () => {
                 // Try to find an icon class from any nested element (optional enhancement)
                 const iconClass = cluster.querySelector('i')?.className;
-                showExplanation(`docs.diagram.cluster.${groupID}`, iconClass);
-                updateTaskyMascot('Tasky_Happy.png');
+                showTaskyHelp(`docs.diagram.cluster.${groupID}`, iconClass);
             });
-            cluster.addEventListener('mouseleave', hideExplanation);
+            cluster.addEventListener('mouseleave', hideTaskyHelp);
         }
     });
 
-
-    function showExplanation(key, iconClass) {
-        // Fallback: Check if a dedicated .desc key exists for longer tooltips
-        const descKey = key + '.desc';
-        const descExp = t(descKey);
-        
-        // Priority 1: Use .desc if available. Priority 2: Use regular key if it's translated
-        const exp = (descExp && descExp !== descKey) ? descExp : t(key);
-        
-        if (exp && exp !== key) {
-            explanationEl.textContent = exp;
-            bubble.classList.add('active');
-            
-            if (eyes) {
-                eyes.className = iconClass || 'icon-verify'; // Default to verify/eye icon
-                eyes.style.display = 'flex'; // Match CSS flex display
-            }
-        }
-    }
-
-    function hideExplanation() {
-        bubble.classList.remove('active');
-        updateTaskyMascot('Tasky.png');
-    }
 }
 
 /**
@@ -539,6 +594,8 @@ function resetZoom() {
 // Auto-init on load if not module
 window.openDiagram = openDiagram;
 window.initInteractiveDocs = initInteractiveDocs;
+window.showTaskyHelp = showTaskyHelp;
+window.hideTaskyHelp = hideTaskyHelp;
 
 // If imported as module, we need to export
-export default { initInteractiveDocs, openDiagram };
+export default { initInteractiveDocs, openDiagram, showTaskyHelp, hideTaskyHelp };
