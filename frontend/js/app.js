@@ -61,7 +61,7 @@ function initNavigation() {
                 const creditsVideo = document.getElementById('credits-bg-video');
                 if (creditsVideo) {
                     if (viewId === 'credits') {
-                        creditsVideo.play().catch(() => {});
+                        creditsVideo.play().catch(() => { });
                     } else {
                         creditsVideo.pause();
                     }
@@ -87,7 +87,7 @@ function initNavigation() {
             if (document.hidden) {
                 creditsVideo.pause();
             } else {
-                creditsVideo.play().catch(() => {});
+                creditsVideo.play().catch(() => { });
             }
         }
     });
@@ -129,16 +129,16 @@ async function initTitlebar() {
             const w = window.__TAURI__.window;
             tauriWindow = w.appWindow || (typeof w.getCurrent === 'function' ? w.getCurrent() : null);
         }
-        
+
         if (!tauriWindow || typeof tauriWindow.startResizing !== 'function') {
             try {
                 const { appWindow, getCurrent } = await import('https://unpkg.com/@tauri-apps/api@1/window.js');
                 tauriWindow = appWindow || getCurrent();
-            } catch (e) {}
+            } catch (e) { }
         }
-        
+
         document.getElementById('tb-min')?.addEventListener('click', () => tauriWindow?.minimize());
-        
+
         // --- Global Confirmation Utility ---
         window.confirmCustom = (title, message, type = 'danger', options = {}) => {
             return new Promise((resolve) => {
@@ -158,11 +158,11 @@ async function initTitlebar() {
 
                 titleEl.textContent = title;
                 msgEl.innerHTML = message;
-                
+
                 // Button Labels
                 const yesLabel = options.yesLabel || t('common.confirm') || 'CONFIRMER';
                 const noLabel = options.noLabel || t('common.cancel') || 'Annuler';
-                
+
                 yesBtn.textContent = yesLabel;
                 noBtn.textContent = noLabel;
 
@@ -234,7 +234,7 @@ async function initTitlebar() {
     } catch (err) {
         console.error("[BMM] Window API initialization failed:", err);
     }
-    
+
     // Initialize the new high-performance resizing strips
     initResizing();
 }
@@ -246,17 +246,17 @@ async function initTitlebar() {
  */
 function initResizing() {
     const strips = document.querySelectorAll('.rs-edge, .rs-corner');
-    
+
     strips.forEach(strip => {
         strip.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
-            
+
             const dir = strip.dataset.direction;
             if (!dir) return;
-            
+
             e.preventDefault();
             e.stopPropagation();
-            
+
             invoke('start_resizing', { direction: dir }).catch(err => {
                 console.error("[BMM] Native resize failed:", err);
             });
@@ -318,7 +318,7 @@ function initModlist() {
             // Auto-update path hint based on active profile if not creating a new profile
             const chkProfile = document.getElementById('chk-import-as-profile');
             const pathHintEl = document.getElementById('imported-path-hint');
-            
+
             if (chkProfile && pathHintEl) {
                 const updatePath = async () => {
                     if (!chkProfile.checked) {
@@ -337,7 +337,7 @@ function initModlist() {
                         pathHintEl.textContent = modList.game_path_hint || '—';
                     }
                 };
-                
+
                 chkProfile.addEventListener('change', updatePath);
                 updatePath(); // Initial call
             }
@@ -366,7 +366,7 @@ function initModlist() {
         const selectedIndices = Array.from(checkboxes)
             .filter(cb => cb.checked)
             .map(cb => parseInt(cb.dataset.index));
-        
+
         if (selectedIndices.length === 0) {
             toast(t('mm.installNone') || 'Veuillez sélectionner au moins un mod.', 'warning');
             return;
@@ -466,7 +466,7 @@ function initModlist() {
         const total = previewCard.querySelectorAll('.mm-mod-checkbox').length;
         const btn = document.getElementById('btn-install-from-mm');
         if (!btn) return;
-        
+
         if (count === total) {
             btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installAll')}`;
         } else {
@@ -606,7 +606,7 @@ function renderImportedModlist(modlist) {
     const modsHtml = modlist.mods.map((m, idx) => {
         const fileCount = m.file_tree ? m.file_tree.length : 0;
         const modSize = m.file_tree ? m.file_tree.reduce((acc, f) => acc + (f.size || 0), 0) : 0;
-        
+
         // Presence check
         const isAlreadyPresent = currentMods.some(cm => cm.name === m.name);
 
@@ -912,14 +912,14 @@ async function checkPreviousCrash() {
         const startupStatus = await invoke('get_startup_status');
         const { getSettings, updateSettings } = await import('./api.js');
         const settings = await getSettings();
-        
+
         const backendCrashed = startupStatus.backend_crashed;
         const reports = await invoke('get_crash_reports') || [];
         const newest = reports.length > 0 ? reports[0] : null;
         const lastSeen = settings.last_seen_crash;
 
         let shouldShow = false;
-        
+
         // ONLY show if:
         // 1. The backend explicitly detected a hard crash/orphan (backendCrashed).
         // 2. We have a NEW zip file that starts with "crash_".
@@ -975,7 +975,7 @@ function initInteractionLogging() {
     // Keyboard toggle
     document.addEventListener('keydown', e => {
         const key = e.key.toLowerCase();
-        
+
         // Ctrl+Alt+D: Toggle DevTools (ONLY if unlocked via Ctrl+D in Settings)
         if (e.ctrlKey && e.altKey && key === 'd') {
             e.preventDefault();
@@ -985,7 +985,7 @@ function initInteractionLogging() {
                 console.warn('[BMM-DEBUG] Access denied. Unlock Debug Mode in Settings (Ctrl+D) first.');
                 toast('DevTools locked. Unlock in Settings.', 'warning');
             }
-        } 
+        }
         // Ctrl+Shift+F: Toggle DevTools (Legacy FSDM)
         else if (e.ctrlKey && e.shiftKey && key === 'f') {
             if (window.bmmFSDMEnabled) {
@@ -1125,7 +1125,7 @@ async function initShortcuts() {
 async function renderSettingsShortcuts() {
     const sc = await getShortcuts();
     const { getSettings, updateSettings } = await import('./api.js');
-    
+
     const updateShortcut = (id, keyName) => {
         const input = document.getElementById(id);
         if (input) {
@@ -1541,7 +1541,7 @@ function initOfflineDetection() {
         banner.classList.add('active');
         setTimeout(() => banner.classList.add('visible'), 10);
     });
-    
+
     // Initial check
     if (!navigator.onLine) {
         banner.classList.add('active');
@@ -1552,7 +1552,7 @@ function initOfflineDetection() {
 // ── Boot ──────────────────────────────────────────────────
 async function main() {
     console.log('[BMM] App starting...');
-    
+
     // Initialize Offline Detection
     initOfflineDetection();
 
@@ -1586,7 +1586,8 @@ async function main() {
             }
 
             const suffix = isPtb ? "-FAB" : "";
-            const versionStr = `v${version}${suffix}`;
+            const PatchVersion = " {P U.4.LPU}";
+            const versionStr = `V${version}${suffix} ${PatchVersion}`;
 
             let buildDate = "Unknown";
             try {
@@ -1652,7 +1653,7 @@ async function main() {
     initNavbarLangDropdown();
     initNavbarVersion();
     initUpdateNotes();
-    
+
     document.getElementById('btn-restart-onboarding')?.addEventListener('click', () => {
         startOnboarding();
     });
@@ -2229,7 +2230,7 @@ async function main() {
     if (await shouldShowOnboarding()) {
         startOnboarding();
     }
-    
+
     const restartBtn = document.getElementById('btn-restart-tutorial');
     if (restartBtn) {
         restartBtn.addEventListener('click', () => {
@@ -2278,7 +2279,7 @@ async function runAutoBenchmarks(disksList, isBoot = false) {
             console.error(`Failed auto-bench for ${disk.mount_point}:`, e);
         }
     }
-    
+
     // Refresh modal UI if it's open
     const modal = document.getElementById('modal-storage');
     if (modal && modal.classList.contains('open')) {
@@ -2373,7 +2374,7 @@ function initDebugMenu() {
     Promise.all([invoke('is_debug_mode'), invoke('is_fsdm_mode')]).then(([isDebug, isFSDM]) => {
         window.bmmDebugEnabled = isDebug || isFSDM;
         window.bmmFSDMEnabled = isFSDM;
-        
+
         // CRITICAL: Initialize the Debug UI if any debug mode is active
         if (window.bmmDebugEnabled) {
             debugUI.init();
@@ -2464,7 +2465,7 @@ async function initAutoUpdate() {
                 card.setAttribute('data-content', t('settings.disabledOverlay') || 'DÉSACTIVÉ');
                 card.dataset.i18nTitle = 'update.disabled';
                 card.onmouseenter = () => window.showTaskyHelp('update.disabledTip', 'icon-help');
-      card.onmouseleave = () => window.hideTaskyHelp();
+                card.onmouseleave = () => window.hideTaskyHelp();
             }
         } else {
             chk.checked = isAutoUpdateEnabled();
@@ -2484,7 +2485,7 @@ async function initAutoUpdate() {
             sidebarBtn.style.opacity = '0.5';
             sidebarBtn.style.cursor = 'not-allowed';
             sidebarBtn.onmouseenter = () => window.showTaskyHelp('update.disabledTip', 'icon-help');
-      sidebarBtn.onmouseleave = () => window.hideTaskyHelp();
+            sidebarBtn.onmouseleave = () => window.hideTaskyHelp();
             sidebarBtn.addEventListener('click', () => {
                 toast(t('update.disabled') || 'Updates are disabled.', 'warning');
             });
@@ -2500,7 +2501,7 @@ async function initAutoUpdate() {
             settingsBtn.style.opacity = '0.5';
             settingsBtn.style.cursor = 'not-allowed';
             settingsBtn.onmouseenter = () => window.showTaskyHelp('update.disabledTip', 'icon-help');
-      settingsBtn.onmouseleave = () => window.hideTaskyHelp();
+            settingsBtn.onmouseleave = () => window.hideTaskyHelp();
             settingsBtn.addEventListener('click', () => {
                 toast(t('update.disabled') || 'Updates are disabled.', 'warning');
             });
@@ -2708,7 +2709,7 @@ function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
     const modal = document.createElement('div');
     modal.id = 'ptb-welcome-modal';
     modal.className = 'update-modal-backdrop';
-    
+
     // Default active is either the requested one or the first one
     let activeNote = allNotes[0];
     if (initialFileName) {
@@ -2730,7 +2731,7 @@ function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
 
     const renderSidebar = () => {
         let html = '<div class="ptb-sidebar">';
-        
+
         // Release Notes Section
         if (currentNotes.length > 0) {
             html += `
