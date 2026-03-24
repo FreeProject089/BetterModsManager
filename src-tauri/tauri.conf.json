@@ -8,7 +8,7 @@
     },
     "package": {
         "productName": "Better Mod Manager",
-        "version": "0.9.9"
+        "version": "0.9.8"
     },
     "tauri": {
         "allowlist": {
