@@ -101,5 +101,6 @@ pub fn delete_profile(state: State<AppState>, profile_id: String) -> Result<(), 
             data.active_profile_id = data.profiles.first().map(|p| p.id.clone());
         }
     }
+    crate::commands::mods::invalidate_cache(&state);
     state.save().map_err(|e| e.to_string())
 }

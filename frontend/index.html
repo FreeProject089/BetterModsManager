@@ -3197,6 +3197,9 @@
                                 <div id="pat-status-msg" style="font-size:11px;color:var(--text-muted);min-height:16px">
                                 </div>
                                 <button class="btn btn-ghost btn-sm" id="btn-pat-need-help"
+                                    onmouseenter="window.showTaskyHelp('settings.githubPatHelpTooltip', 'icon-info')"
+                                    onmouseleave="window.hideTaskyHelp()"
+                                    onclick="window.openHelpTo('faq.qPat')"
                                     style="font-size:11px;color:var(--accent);gap:5px;padding:4px 8px">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2.5">
@@ -3204,7 +3207,7 @@
                                         <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
                                         <line x1="12" y1="17" x2="12.01" y2="17" />
                                     </svg>
-                                    <span data-i18n="settings.githubPatHelp">Need Help?</span>
+                                    <span data-i18n="settings.patHelpBtn">PAT FAQ</span>
                                 </button>
                             </div>
                         </div>
@@ -3369,8 +3372,9 @@
                                     <span data-i18n="storage.openManager">Ouvrir le Gestionnaire de Stockage</span>
                                 </button>
                                 <button class="btn btn-ghost btn-sm" id="btn-storage-faq"
-                                    onmouseenter="window.showTaskyHelp('settings.githubPatHelp', 'icon-info')"
+                                    onmouseenter="window.showTaskyHelp('settings.storageHelpTooltip', 'icon-info')"
                                     onmouseleave="window.hideTaskyHelp()"
+                                    onclick="window.openHelpTo('faq.qIo')"
                                     style="font-size:11px;color:var(--accent);gap:5px;padding:4px 8px">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2.5">
@@ -3378,7 +3382,7 @@
                                         <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
                                         <line x1="12" y1="17" x2="12.01" y2="17" />
                                     </svg>
-                                    <span data-i18n="settings.githubPatHelp">Need Help?</span>
+                                    <span data-i18n="settings.storageHelpBtn">Storage FAQ</span>
                                 </button>
                             </div>
                         </div>
