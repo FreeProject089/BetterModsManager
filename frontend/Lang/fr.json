@@ -1259,6 +1259,8 @@
     "mod.profilLabel": "Profil de destination",
     "mod.scanFound": "{count} mod(s) découvert(s) !",
     "mod.scanNone": "Aucun nouveau mod détecté.",
+    "mod.scanAdded": "nouveau(x) mod(s) ajouté(s)",
+    "mod.scanRemoved": "mod(s) retiré(s)",
     "mod.tagLimit": "Maximum 3 tags par mod.",
     "mod.transferComplete": "Transfert terminé !",
     "mod.viewCompact": "Mode compact activé",

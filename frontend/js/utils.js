@@ -15,3 +15,10 @@ export function escHtml(str) {
 export function escAttr(str) {
     return escHtml(str);
 }
+
+export function escJs(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'");
+}

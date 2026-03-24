@@ -1259,6 +1259,8 @@
     "mod.profilLabel": "Profile: ",
     "mod.scanFound": "{count} mod(s) discovered!",
     "mod.scanNone": "No new mods detected.",
+    "mod.scanAdded": "new mod(s) added",
+    "mod.scanRemoved": "mod(s) removed",
     "mod.tagLimit": "Maximum 3 tags per mod.",
     "mod.transferComplete": "Transfer complete!",
     "mod.viewCompact": "Compact mode enabled",

@@ -4,7 +4,16 @@
  */
 
 import { t } from './i18n.js';
-import { escHtml, escAttr } from './utils.js';
+import { escHtml, escAttr, escJs } from './utils.js';
+
+/**
+ * Truncate a string to a maximum length and add ellipsis if needed.
+ */
+function truncate(str, maxLen) {
+  if (!str) return '';
+  if (str.length <= maxLen) return str;
+  return str.substring(0, maxLen) + '...';
+}
 
 export function getLoadingOverlayHTML() {
   return `<div class="mod-loading-overlay"><div style="display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div></div>`;
@@ -59,16 +68,16 @@ export function getModCardHTML(mod, ctx) {
 
         <div class="mod-info">
             <div style="display:flex;align-items:center;gap:8px">
-                <div class="mod-name">${escHtml(mod.name)}</div>
+                <div class="mod-name" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.name))}', 'package', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(truncate(mod.name, 100))}</div>
                 ${mod.enabled ? `<span class="badge badge-accent" style="font-size:9px;padding:1px 6px;border-radius:4px;font-family:var(--font-mono);font-weight:800;background:rgba(59,130,246,0.2);color:var(--accent);border:1px solid rgba(59,130,246,0.3)" onmouseenter="window.showTaskyHelp('mod.activationOrderTip', 'help')" onmouseleave="window.hideTaskyHelp()">#${mod.activation_order}</span>` : ''}
                 ${conflictHtml}
             </div>
             <div class="mod-meta">
                 <span class="mono" style="color: var(--cyan)">v${escHtml(mod.version)}</span>
-                ${mod.author ? `<span>· ${escHtml(mod.author)}</span>` : ''}
+                ${mod.author ? `<span>· ${escHtml(truncate(mod.author, 50))}</span>` : ''}
                 ${tagsHtml}
             </div>
-            <div class="mod-path-hint" style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);opacity:0.6;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;display:flex;align-items:center;gap:4px">
+            <div class="mod-path-hint" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.mod_folder_path || ''))}', 'folder', true)" onmouseleave="window.hideTaskyHelp()" style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);opacity:0.6;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;display:flex;align-items:center;gap:4px;cursor:help">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                 ${escHtml(mod.mod_folder_path || '')}
             </div>
@@ -173,7 +182,7 @@ export function getModDetailHTML(mod, ctx) {
   };
 
   const conflictsContent = (mod.conflicts && mod.conflicts.length > 0) ? `
-        <div id="detail-conflicts-list" style="display:flex;flex-direction:column;gap:8px">
+        <div id="detail-conflicts-list" style="display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto;padding-right:4px">
           ${mod.conflicts.map(c => `
             <div style="background:rgba(0,0,0,0.2);padding:8px 10px;border-radius:8px;border:1px solid ${c.status === 'Active' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -277,10 +286,10 @@ export function getModDetailHTML(mod, ctx) {
   return `
     <div class="detail-header">
       <div style="flex:1; min-width:0">
-        <h3 style="margin:0;font-size:16px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(mod.name)}</h3>
+        <h3 style="margin:0;font-size:16px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.name))}', 'package', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(truncate(mod.name, 100))}</h3>
         <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
           <span style="font-family:var(--font-mono);font-size:11px;color:var(--cyan)">v${escHtml(mod.version)}</span>
-          <span style="font-size:10px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px">
+          <span style="font-size:10px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;cursor:help" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.mod_folder_path || ''))}', 'folder', true)" onmouseleave="window.hideTaskyHelp()">
             ${mod.enabled ? '<svg width="8" height="8" viewBox="0 0 24 24" fill="var(--success)"><circle cx="12" cy="12" r="10"/></svg> ACTIF' : '<svg width="8" height="8" viewBox="0 0 24 24" fill="var(--text-muted)"><circle cx="12" cy="12" r="10"/></svg> INACTIF'}
           </span>
         </div>

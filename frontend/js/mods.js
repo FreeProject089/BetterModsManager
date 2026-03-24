@@ -97,11 +97,16 @@ export async function initMods() {
   if (scanBtn) {
     scanBtn.addEventListener('click', async () => {
       try {
-        const added = await invoke('scan_mods_folder');
-        if (added.length === 0) {
+        const result = await invoke('scan_mods_folder');
+        if (result.added === 0 && result.removed === 0) {
           toast(t('mod.scanNone'), 'info');
         } else {
-          toast(t('mod.scanFound').replace('{count}', added.length), 'success');
+          let msg = '';
+          if (result.added > 0) msg += `${result.added} ${t('mod.scanAdded') || 'nouveau(x) mod(s) ajouté(s)'}`;
+          if (result.added > 0 && result.removed > 0) msg += ' & ';
+          if (result.removed > 0) msg += `${result.removed} ${t('mod.scanRemoved') || 'mod(s) retiré(s)'}`;
+          
+          toast(msg, 'success');
           await refreshMods();
         }
       } catch (err) {
@@ -1015,13 +1020,13 @@ async function renderModDetail(modId) {
       const dependencies = panel.querySelector('#detail-dep-input')?._selectedDeps || [];
 
       await invoke('update_mod_meta', { 
-        mod_id: mod.id, 
+        modId: mod.id, 
         name, 
         author, 
         description, 
         version, 
         tags,
-        download_links: download_links,
+        downloadLinks: download_links,
         dependencies: dependencies
       });
 
@@ -1521,10 +1526,12 @@ window.openGlobalConflictModal = async function(preselectModId = null) {
     container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><br>'+(t('conflict.loading')||'Analyse des conflits...')+'</div>';
 
     let allConflicts = [];
+    const allModsGlobal = await invoke('get_all_mods').catch(() => []);
+    
     Object.keys(S.conflictCache).forEach(mid => {
        const reports = S.conflictCache[mid];
        if (reports && reports.length > 0) {
-          const mod = S.allMods.find(m => m.id === mid);
+          const mod = allModsGlobal.find(m => m.id === mid);
           const modName = mod?.name || mid;
           const activationOrder = mod?.activation_order ?? -1;
           allConflicts.push({ sourceModId: mid, sourceModName: modName, reports, activationOrder });
@@ -1610,8 +1617,8 @@ window.openGlobalConflictModal = async function(preselectModId = null) {
         }).join('');
 
         html += `
-          <div class="conflict-group-card" style="display:flex;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px;height:95px">
-             <div style="flex:1;padding:10px 12px;border-right:1px solid var(--border);background:rgba(255,255,255,0.02);display:flex;flex-direction:column;justify-content:center">
+          <div class="conflict-group-card" style="display:flex;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px;min-height:95px;height:auto">
+             <div style="flex:0 0 160px;padding:10px 12px;border-right:1px solid var(--border);background:rgba(255,255,255,0.02);display:flex;flex-direction:column;justify-content:center">
                <div style="font-weight:600;font-size:12px;color:var(--text-primary);margin-bottom:2px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(item.sourceModName)}</div>
                <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">${t('conflict.modSource') || 'Mod Source'}</div>
              </div>

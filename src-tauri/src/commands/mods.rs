@@ -267,12 +267,10 @@ pub async fn add_mod(
     entry.dependencies = dependencies;
     
     let result = entry.clone();
-    let mod_folder = entry.mod_folder_path.clone();
     {
         let mut data = state.data.lock().unwrap();
         data.mods.push(entry);
     }
-    let _ = save_mod_metadata_file(&mod_folder, &result);
     let _ = state.save();
     invalidate_cache(&state);
     Ok(result)
@@ -728,55 +726,33 @@ pub fn update_mod_meta(
         }
     };
 
-    if let Some((entry, path)) = mod_path {
-        let _ = save_mod_metadata_file(&path, &entry);
+    if let Some((_entry, _path)) = mod_path {
+        // Removed as per user request
     }
 
     let _ = state.save();
     Ok(())
 }
 
-fn save_mod_metadata_file(mod_folder_path: &std::path::Path, entry: &crate::models::mod_entry::ModEntry) -> Result<(), String> {
-    let metadata: crate::models::mod_entry::ModMetadata = entry.into();
-    let file_path = mod_folder_path.join("_InfoBetterMod.Manager_");
-    let json = serde_json::to_string_pretty(&metadata).map_err(|e| e.to_string())?;
-    std::fs::write(file_path, json).map_err(|e| e.to_string())?;
+fn save_mod_metadata_file(_mod_folder_path: &std::path::Path, _entry: &crate::models::mod_entry::ModEntry) -> Result<(), String> {
+    // Removed as per user request
     Ok(())
 }
 
 #[tauri::command]
-pub fn check_mod_metadata(folder_path: String) -> Result<Option<crate::models::mod_entry::ModMetadata>, String> {
-    let path = std::path::PathBuf::from(folder_path);
-    if !path.exists() { return Ok(None); }
-
-    if path.is_file() && path.extension().and_then(|s| s.to_str()).unwrap_or("").eq_ignore_ascii_case("zip") {
-        let file = std::fs::File::open(&path).map_err(|e| e.to_string())?;
-        let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-        let mut content = String::new();
-        let has_meta = if let Ok(mut f) = archive.by_name("_InfoBetterMod.Manager_") {
-            use std::io::Read;
-            f.read_to_string(&mut content).is_ok()
-        } else {
-            false
-        };
-        
-        if has_meta {
-            let metadata: crate::models::mod_entry::ModMetadata = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-            return Ok(Some(metadata));
-        }
-    } else if path.is_dir() {
-        let meta_file = path.join("_InfoBetterMod.Manager_");
-        if meta_file.exists() {
-            let content = std::fs::read_to_string(meta_file).map_err(|e| e.to_string())?;
-            let metadata: crate::models::mod_entry::ModMetadata = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-            return Ok(Some(metadata));
-        }
-    }
+pub fn check_mod_metadata(_folder_path: String) -> Result<Option<crate::models::mod_entry::ModMetadata>, String> {
+    // Removed as per user request
     Ok(None)
 }
 
+#[derive(serde::Serialize)]
+pub struct ScanResult {
+    pub added: usize,
+    pub removed: usize,
+}
+
 #[tauri::command]
-pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<Vec<ModEntry>, String> {
+pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, String> {
     log_line("[MOD] Scanning mods folder for new mods...");
     let (mods_path, profile_id) = {
         let data = state.data.lock().unwrap();
@@ -786,7 +762,7 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<Vec<ModEntry
     };
 
     // 1. Prune missing mods from the state for this profile
-    {
+    let removed_count = {
         let mut data = state.data.lock().unwrap();
         let mut to_remove_ids = Vec::new();
         
@@ -794,14 +770,13 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<Vec<ModEntry
             let mod_p = &m.mod_folder_path;
             
             // Check if this mod belongs to the current profile's mods folder
-            let belongs_to_profile = if mod_p.starts_with(&mods_path) { true } else {
-                match (mod_p.canonicalize(), mods_path.canonicalize()) {
-                    (Ok(a), Ok(b)) => a.starts_with(b),
-                    _ => false
-                }
-            };
+            // Use case-insensitive comparison on Windows for robustness
+            let m_path_s = mod_p.to_string_lossy().to_lowercase();
+            let mods_path_s = mods_path.to_string_lossy().to_lowercase();
+            let belongs_to_profile = m_path_s.starts_with(&mods_path_s);
             
             if belongs_to_profile && !mod_p.exists() {
+                log_line(format!("[MOD-SCAN] Pruning missing mod: {:?} (ID: {})", mod_p, m.id));
                 to_remove_ids.push(m.id.clone());
                 false // Remove from global mods list
             } else {
@@ -809,13 +784,15 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<Vec<ModEntry
             }
         });
 
+        let count = to_remove_ids.len();
         // Also remove from the profile's active_mods list
         if !to_remove_ids.is_empty() {
             if let Some(p) = data.profiles.iter_mut().find(|p| p.id == profile_id) {
                 p.active_mods.retain(|id| !to_remove_ids.contains(id));
             }
         }
-    }
+        count
+    };
 
     let existing_paths: Vec<PathBuf> = {
         let data = state.data.lock().unwrap();
@@ -832,6 +809,7 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<Vec<ModEntry
 
         for entry in entries.flatten() {
             let path = entry.path();
+            log_line(format!("[MOD-SCAN] Checking: {:?}", path));
             let is_dir = path.is_dir();
             let is_zip = path.is_file() && path.extension().and_then(|s| s.to_str()).unwrap_or("").eq_ignore_ascii_case("zip");
             
@@ -839,11 +817,9 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<Vec<ModEntry
 
             // Check if already in BMM list (global check)
             let is_already_added = existing_paths.iter().any(|ep| {
-                if ep == &path { return true; }
-                match (ep.canonicalize(), path.canonicalize()) {
-                    (Ok(a), Ok(b)) => a == b,
-                    _ => false
-                }
+                let ep_s = ep.to_string_lossy().to_lowercase();
+                let path_s = path.to_string_lossy().to_lowercase();
+                ep_s == path_s
             });
 
             if is_already_added { continue; }
@@ -859,29 +835,33 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<Vec<ModEntry
             }
 
             let mut entry = ModEntry::new(mod_name.clone(), path.clone());
-            let has_meta = entry.load_metadata();
+            let _has_meta = entry.load_metadata();
             
             // If no metadata file and it's a folder, create one with default info
-            if !has_meta && is_dir {
-                let _ = save_mod_metadata_file(&path, &entry);
-            }
+            // REMOVED: let _ = save_mod_metadata_file(&path, &entry);
 
             discovered.push(entry);
         }
         Ok(discovered)
     }).await.map_err(|e| e.to_string())??;
 
-    if !added.is_empty() {
-        log_line(format!("[MOD] Scan discovered {} new mod(s)", added.len()));
+    let added_count = added.len();
+    if added_count > 0 {
+        log_line(format!("[MOD] Scan discovered {} new mod(s)", added_count));
         let mut data = state.data.lock().unwrap();
-        data.mods.extend(added.clone());
+        data.mods.extend(added);
         drop(data);
         let _ = state.save();
         invalidate_cache(&state);
+    } else if removed_count > 0 {
+        log_line(format!("[MOD] Scan pruned {} missing mod(s)", removed_count));
+        let _ = state.save();
+        invalidate_cache(&state);
     } else {
-        log_line("[MOD] Scan complete, no new mods found");
+        log_line("[MOD] Scan complete, no changes found");
     }
-    Ok(added)
+    
+    Ok(ScanResult { added: added_count, removed: removed_count })
 }
 
 #[tauri::command]
@@ -1060,7 +1040,7 @@ pub async fn install_from_modlist(
                 let mod_folder = new_mod.mod_folder_path.clone();
                 data.mods.push(new_mod.clone());
                 newly_added_mod_ids.push(mid);
-                let _ = save_mod_metadata_file(&mod_folder, &new_mod);
+                // let _ = save_mod_metadata_file(&mod_folder, &new_mod);
             } else {
                 // If it already exists in the global list, we still want to track it for the profile
                 if let Some(m) = data.mods.iter().find(|m| m.mod_folder_path == target_dir) {
@@ -1229,7 +1209,7 @@ pub async fn install_from_modlist(
                     data.mods.push(new_mod.clone());
                     
                     newly_added_mod_ids.push(mid);
-                    let _ = save_mod_metadata_file(&mod_folder, &new_mod);
+                    // let _ = save_mod_metadata_file(&mod_folder, &new_mod);
                     results.push(format!("✅ {} — Téléchargé", entry.name));
                     
                     let _ = window.emit("bmm://mod-download-progress", crate::commands::mods::DownloadProgress {

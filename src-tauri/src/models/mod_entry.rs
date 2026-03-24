@@ -132,53 +132,7 @@ impl ModEntry {
     }
 
     pub fn load_metadata(&mut self) -> bool {
-        let path = &self.mod_folder_path;
-        if !path.exists() { return false; }
-
-        let is_zip = path.is_file() && path.extension().and_then(|s| s.to_str()).unwrap_or("").eq_ignore_ascii_case("zip");
-
-        if is_zip {
-            if let Ok(file) = std::fs::File::open(path) {
-                if let Ok(mut archive) = zip::ZipArchive::new(file) {
-                    let mut content = String::new();
-                    let has_meta = if let Ok(mut f) = archive.by_name("_InfoBetterMod.Manager_") {
-                        use std::io::Read;
-                        f.read_to_string(&mut content).is_ok()
-                    } else {
-                        false
-                    };
-                    
-                    if has_meta {
-                        if let Ok(meta) = serde_json::from_str::<ModMetadata>(&content) {
-                            self.apply_metadata(meta);
-                            return true;
-                        }
-                    }
-                }
-            }
-        } else if path.is_dir() {
-            let p = path.join("_InfoBetterMod.Manager_");
-            if p.exists() {
-                if let Ok(content) = std::fs::read_to_string(p) {
-                    if let Ok(meta) = serde_json::from_str::<ModMetadata>(&content) {
-                        self.apply_metadata(meta);
-                        return true;
-                    }
-                }
-            }
-        }
+        // Disabled: No longer reading _InfoBetterMod.Manager_ files as per user request
         false
-    }
-
-    fn apply_metadata(&mut self, meta: ModMetadata) {
-        self.name = meta.name;
-        self.version = meta.version;
-        self.author = meta.author;
-        self.description = meta.description;
-        self.dependencies = meta.dependencies;
-        self.download_links = meta.download_links;
-        if let Some(tags) = meta.tags {
-            self.tags = tags;
-        }
     }
 }
