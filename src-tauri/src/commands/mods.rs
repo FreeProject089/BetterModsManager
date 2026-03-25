@@ -102,6 +102,10 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), String> {
     let mut cache = state.mod_files_cache.lock().unwrap();
     let mut index = state.conflict_index.lock().unwrap();
 
+    // Clear existing cache and index to avoid stale data from deleted mods
+    cache.clear();
+    index.clear();
+
     for m in &data.mods {
         if let Ok(files) = crate::fs_utils::list_mod_files(&m.mod_folder_path) {
             let set: HashSet<PathBuf> = files.into_iter().collect();
@@ -159,7 +163,10 @@ fn calculate_conflicts_from_cache(
 
                 if !is_same_profile && !shares_root { continue; }
 
-                // Actually, if it overlaps, it's a conflict for this profile if it shares the root.
+                // Check if the other mod actually belongs to THIS profile's mods_path
+                // This prevents reporting conflicts for profiles that can't even "see" the mod.
+                let mod_belongs_to_profile = other_mod.mod_folder_path.starts_with(&profile.mods_path);
+                if !mod_belongs_to_profile { continue; }
                 
                 let is_active_in_prof = profile.active_mods.contains(&other_id);
                 let status = if target_is_active && is_active_in_prof { ConflictStatus::Active } else { ConflictStatus::Potential };
@@ -766,22 +773,32 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
         let mut data = state.data.lock().unwrap();
         let mut to_remove_ids = Vec::new();
         
+        // Collect all valid mods_paths from all profiles to detect orphaned mods
+        let valid_mods_paths: HashSet<PathBuf> = data.profiles.iter()
+            .map(|p| p.mods_path.canonicalize().unwrap_or(p.mods_path.clone()))
+            .collect();
+
         data.mods.retain(|m| {
             let mod_p = &m.mod_folder_path;
             
-            // Check if this mod belongs to the current profile's mods folder
-            // Use case-insensitive comparison on Windows for robustness
-            let m_path_s = mod_p.to_string_lossy().to_lowercase();
-            let mods_path_s = mods_path.to_string_lossy().to_lowercase();
-            let belongs_to_profile = m_path_s.starts_with(&mods_path_s);
-            
-            if belongs_to_profile && !mod_p.exists() {
-                log_line(format!("[MOD-SCAN] Pruning missing mod: {:?} (ID: {})", mod_p, m.id));
+            // 1. Prune if folder is gone from disk
+            if !mod_p.exists() {
+                log_line(format!("[MOD-SCAN] Pruning missing mod globally: {:?} (ID: {})", mod_p, m.id));
                 to_remove_ids.push(m.id.clone());
-                false // Remove from global mods list
-            } else {
-                true
+                return false;
             }
+
+            // 2. Prune if mod doesn't belong to any existing profile's mods_path (Orphan)
+            let mod_p_can = mod_p.canonicalize().unwrap_or(mod_p.clone());
+            let belongs_to_any_profile = valid_mods_paths.iter().any(|p_path| mod_p_can.starts_with(p_path));
+            
+            if !belongs_to_any_profile {
+                log_line(format!("[MOD-SCAN] Pruning orphan mod (no profile owns this path): {:?} (ID: {})", mod_p, m.id));
+                to_remove_ids.push(m.id.clone());
+                return false;
+            }
+
+            true
         });
 
         let count = to_remove_ids.len();
@@ -793,6 +810,11 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
         }
         count
     };
+
+    if removed_count > 0 {
+        let _ = state.save();
+        invalidate_cache(&state);
+    }
 
     let existing_paths: Vec<PathBuf> = {
         let data = state.data.lock().unwrap();
@@ -1037,7 +1059,7 @@ pub async fn install_from_modlist(
                 new_mod.tags = entry.tags.clone();
                 new_mod.install_notes = entry.install_notes.clone();
                 let mid = new_mod.id.clone();
-                let mod_folder = new_mod.mod_folder_path.clone();
+                let _mod_folder = new_mod.mod_folder_path.clone();
                 data.mods.push(new_mod.clone());
                 newly_added_mod_ids.push(mid);
                 // let _ = save_mod_metadata_file(&mod_folder, &new_mod);
@@ -1405,13 +1427,38 @@ pub fn get_mod_conflicts(state: State<AppState>, mod_id: String) -> Result<Vec<C
     ensure_cache_populated(&state)?;
     
     let data = state.data.lock().unwrap();
-    let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;
     let target_mod = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
     
-    Ok(calculate_conflicts_from_cache(target_mod, &data, active_id, &state))
+    // 1. Try active profile first
+    if let Some(active_id) = &data.active_profile_id {
+        if let Some(active_profile) = data.profiles.iter().find(|p| &p.id == active_id) {
+            let mod_p_can = target_mod.mod_folder_path.canonicalize().unwrap_or(target_mod.mod_folder_path.clone());
+            let prof_p_can = active_profile.mods_path.canonicalize().unwrap_or(active_profile.mods_path.clone());
+            
+            if mod_p_can.starts_with(&prof_p_can) {
+                return Ok(calculate_conflicts_from_cache(target_mod, &data, active_id, &state));
+            }
+        }
+    }
+
+    // 2. If not in active (or no active), find ANY profile that owns this mod
+    let mod_p_can = target_mod.mod_folder_path.canonicalize().unwrap_or(target_mod.mod_folder_path.clone());
+    for p in &data.profiles {
+        let prof_p_can = p.mods_path.canonicalize().unwrap_or(p.mods_path.clone());
+        if mod_p_can.starts_with(&prof_p_can) {
+            return Ok(calculate_conflicts_from_cache(target_mod, &data, &p.id, &state));
+        }
+    }
+
+    // 3. Last fallback: just use the active one for root reference even if it doesn't own the mod (dangerous but helps in some cases)
+    if let Some(active_id) = &data.active_profile_id {
+        return Ok(calculate_conflicts_from_cache(target_mod, &data, active_id, &state));
+    }
+
+    Ok(Vec::new())
 }
 
-fn invalidate_cache(state: &State<AppState>) {
+pub fn invalidate_cache(state: &State<AppState>) {
     let mut last_update = state.last_cache_update.lock().unwrap();
     *last_update = None; // Force re-population on next call
 }
