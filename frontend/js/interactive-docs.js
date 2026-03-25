@@ -21,6 +21,7 @@ import { modArchitecture } from './diagrams/mod-architecture.js';
 import { diskIoLimiter } from './diagrams/disk-io-limiter.js';
 import { hostingFlow } from './diagrams/hosting-flow.js';
 import { lightweightArchitecture } from './diagrams/lightweight-architecture.js';
+import { oneClickInstall } from './diagrams/one-click-install.js';
 
 // Diagram Registry
 const diagrams = {
@@ -45,7 +46,8 @@ const diagrams = {
     'mod-architecture': modArchitecture,
     'disk-io-limiter': diskIoLimiter,
     'hosting-flow': hostingFlow,
-    'lightweight-architecture': lightweightArchitecture
+    'lightweight-architecture': lightweightArchitecture,
+    'one-click-install': oneClickInstall
 };
 
 // State

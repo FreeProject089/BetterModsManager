@@ -1,4 +1,4 @@
-use std::path::{Path};
+use std::path::{Path, PathBuf};
 use base64::Engine;
 use serde::Serialize;
 use std::fs;
@@ -26,23 +26,29 @@ pub struct FileEntry {
 }
 
 #[tauri::command]
-pub async fn get_project_files() -> Result<Vec<FileEntry>, String> {
-    let root = std::env::current_dir().map_err(|e| e.to_string())?;
+pub async fn get_project_files(app_handle: tauri::AppHandle) -> Result<Vec<FileEntry>, String> {
+    let mut current = app_handle.path_resolver().resource_dir().unwrap_or_default();
     
-    // In dev mode, the CWD might be src-tauri. We need the project root.
-    let mut frontend_path = root.join("frontend");
-    if !frontend_path.exists() {
-        if let Some(parent) = root.parent() {
-            let parent_frontend = parent.join("frontend");
-            if parent_frontend.exists() {
-                frontend_path = parent_frontend;
-            }
+    // Normalize UNC prefix (\\?\) which can break .exists() in some environments
+    let mut s = current.to_string_lossy().to_string();
+    if s.starts_with(r"\\?\") {
+        s = s[4..].to_string();
+    }
+    current = PathBuf::from(s);
+
+    let mut frontend_path = None;
+    for _ in 0..4 {
+        let check = current.join("frontend");
+        if check.exists() && check.is_dir() {
+            frontend_path = Some(check);
+            break;
         }
+        if !current.pop() { break; }
     }
     
-    if !frontend_path.exists() {
-        return Err(format!("Frontend directory not found. Searched in: {:?}", frontend_path));
-    }
+    let frontend_path = frontend_path.ok_or_else(|| {
+        format!("Frontend directory not found. Root searched: {:?}", current)
+    })?;
 
     let mut tree = Vec::new();
     read_dir_recursive(&frontend_path, &frontend_path, &mut tree)?;
@@ -103,18 +109,26 @@ fn read_dir_recursive(path: &Path, base: &Path, results: &mut Vec<FileEntry>) ->
 }
 
 #[tauri::command]
-pub async fn read_project_file(path: String) -> Result<String, String> {
-    let root = std::env::current_dir().map_err(|e| e.to_string())?;
+pub async fn read_project_file(app_handle: tauri::AppHandle, path: String) -> Result<String, String> {
+    let mut current = app_handle.path_resolver().resource_dir().unwrap_or_default();
     
-    let mut frontend_path = root.join("frontend");
-    if !frontend_path.exists() {
-        if let Some(parent) = root.parent() {
-            let parent_frontend = parent.join("frontend");
-            if parent_frontend.exists() {
-                frontend_path = parent_frontend;
-            }
-        }
+    let mut s = current.to_string_lossy().to_string();
+    if s.starts_with(r"\\?\") {
+        s = s[4..].to_string();
     }
+    current = PathBuf::from(s);
+
+    let mut frontend_path = None;
+    for _ in 0..4 {
+        let check = current.join("frontend");
+        if check.exists() && check.is_dir() {
+            frontend_path = Some(check);
+            break;
+        }
+        if !current.pop() { break; }
+    }
+
+    let frontend_path = frontend_path.ok_or("Project root (frontend) not found")?;
 
     let full_path = frontend_path.join(path);
     if !full_path.starts_with(&frontend_path) {

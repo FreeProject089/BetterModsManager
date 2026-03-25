@@ -45,6 +45,7 @@ tempfile = "3"
 base64 = "0.21"
 winreg = "0.52"
 rayon = "1.8"
+tauri-plugin-single-instance = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

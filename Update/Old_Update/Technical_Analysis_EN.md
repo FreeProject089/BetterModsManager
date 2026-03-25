@@ -434,6 +434,40 @@ The administration suite leverages dedicated Rust modules for high-speed IP and 
 | **Credits BG** | Custom video player component using the `asset://` protocol to bypass typical browser security restrictions for local video files. |
 | **Throttling** | The `on_view_changed` observer in `credits.js` ensures that video playback is strictly paused when the user navigates away, preserving resources for mod operations. |
 
+## 24. Deep Link Manager (bmm://)
+
+BMM implements a custom protocol handler to facilitate one-click mod installations.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Registry Registration** | At startup, the backend ensures the `bmm://` protocol is registered in the Windows Registry, pointing to the BMM executable. |
+| **URL Parsing** | The `DeepLinkManager` class handles incoming `bmm://` URIs, parsing query parameters for mod metadata and download links. |
+| **Dynamic UI Expansion** | The One-Click modal dynamically expands its height (to 550px) if the user selects "Create new profile", triggering a reactive validation loop for the new paths. |
+
+---
+
+## 25. Discord RPC Engine
+
+The Discord Rich Presence system provides real-time activity synchronization.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Backend Integration** | Uses the `discord-rpc` Rust crate to communicate with the Discord desktop client via a local IPC socket. |
+| **State Synchronization** | The frontend emits `discord-update` events whenever a profile is switched or a mod is toggled, which the backend then translates into Discord activity updates (Large Image, Small Image, Details, State). |
+| **Privacy Control** | Controlled by a persistent flag in `app.cfg`. When disabled, the heartbeat loop is immediately terminated. |
+
+---
+
+## 26. Advanced Conflict Diagnostic Engine
+
+BMM 0.9.8 introduces a graph-based visualization for mod file collisions.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Collision Matrix** | The backend generates a collision matrix by comparing the `installed_files` of all active mods. |
+| **Mermaid Bridge** | The frontend converts this matrix into a Mermaid.js flowchart definition. |
+| **Interaction Layer** | Implements custom click handlers on Mermaid nodes. Clicking a mod node triggers a `dispatchNavigation` event to the Mod Library with the specific mod highlighted. |
+
 ---
 
 *Better Mod Manager is developed by FreeProject089 — Engineered for uncompromising performance, file safety, and modern mod management.*

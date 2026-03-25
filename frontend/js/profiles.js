@@ -145,6 +145,8 @@ export async function initProfiles() {
     renderIconPicker('prof-icon-grid', 'prof-icon');
     renderIconPicker('edit-prof-icon-grid', 'edit-prof-icon');
 
+    window._refreshProfilesFn = renderProfiles;
+
     await renderProfiles();
 }
 

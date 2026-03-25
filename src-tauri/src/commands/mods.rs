@@ -187,6 +187,26 @@ fn calculate_conflicts_from_cache(
     reports
 }
 
+fn get_unique_mod_info(mods_path: &std::path::Path, original_name: &str) -> (String, std::path::PathBuf) {
+    let mut display_name = original_name.to_string();
+    let safe_base = original_name
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' { c } else { '_' })
+        .collect::<String>();
+        
+    let mut target_dir = mods_path.join(&safe_base);
+    let mut counter = 1;
+
+    while target_dir.exists() {
+        display_name = format!("{} ({})", original_name, counter);
+        let new_safe_item = format!("{}_{}", safe_base, counter);
+        target_dir = mods_path.join(&new_safe_item);
+        counter += 1;
+    }
+    
+    (display_name, target_dir)
+}
+
 #[tauri::command]
 pub fn get_all_mods(state: State<AppState>) -> Result<Vec<ModEntry>, String> {
     let data = state.data.lock().unwrap();
@@ -213,12 +233,7 @@ pub async fn add_mod(
         p.mods_path.clone()
     };
 
-    let safe_name = name
-        .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' { c } else { '_' })
-        .collect::<String>();
-        
-    let target_dir = mods_path.join(&safe_name);
+    let (final_name, target_dir) = get_unique_mod_info(&mods_path, &name);
     let target_dir_clone = target_dir.clone();
     let src = PathBuf::from(&mod_folder_path);
 
@@ -263,7 +278,7 @@ pub async fn add_mod(
         Ok(())
     }).await.map_err(|e| e.to_string())??;
 
-    let mut entry = ModEntry::new(name, target_dir);
+    let mut entry = ModEntry::new(final_name, target_dir);
     entry.author = Some(author);
     entry.description = Some(description);
     entry.version = version;
@@ -891,24 +906,21 @@ pub async fn download_mod(
     state: State<'_, AppState>,
     url: String,
     mod_name: String,
+    profile_id: Option<String>,
 ) -> Result<ModEntry, String> {
     log_line(format!("[MOD] Downloading mod '{}' from '{}'", mod_name, url));
     let mods_path = {
         let data = state.data.lock().unwrap();
-        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
-        let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
+        let target_id = profile_id.or_else(|| data.active_profile_id.clone()).ok_or("Aucun profil actif")?;
+        let p = data.profiles.iter().find(|p| p.id == target_id).ok_or("Profil introuvable")?.clone();
         p.mods_path.clone()
     };
 
-    let safe_name = mod_name
-        .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' { c } else { '_' })
-        .collect::<String>();
-    
-    let target_dir = mods_path.join(&safe_name);
+    let (final_name, target_dir) = get_unique_mod_info(&mods_path, &mod_name);
+    let target_dir_for_thread = target_dir.clone();
 
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-        std::fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&target_dir_for_thread).map_err(|e| e.to_string())?;
 
         let response = reqwest::blocking::get(&url)
             .map_err(|e| format!("Download failed: {}", e))?;
@@ -927,7 +939,7 @@ pub async fn download_mod(
 
             for i in 0..archive.len() {
                 let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
-                let outpath = target_dir.join(file.name());
+                let outpath = target_dir_for_thread.join(file.name());
                 if file.name().ends_with('/') {
                     std::fs::create_dir_all(&outpath).ok();
                 } else {
@@ -940,21 +952,20 @@ pub async fn download_mod(
             }
         } else {
             let filename = url.split('/').last().unwrap_or("mod_file");
-            let filepath = target_dir.join(filename);
+            let filepath = target_dir_for_thread.join(filename);
             std::fs::write(&filepath, &bytes).map_err(|e| e.to_string())?;
         }
         Ok(())
     }).await.map_err(|e| e.to_string())??;
 
-    let target_dir_clone = mods_path.join(&safe_name);
-    let mut entry = ModEntry::new(safe_name.clone(), target_dir_clone);
-    entry.name = mod_name;
+    let entry = ModEntry::new(final_name, target_dir);
     let result = entry.clone();
     {
         let mut data = state.data.lock().unwrap();
         data.mods.push(entry);
     }
     let _ = state.save();
+    invalidate_cache(&state);
     Ok(result)
 }
 

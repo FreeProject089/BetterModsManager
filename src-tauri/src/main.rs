@@ -7,16 +7,61 @@ mod state;
 
 use state::AppState;
 use std::path::PathBuf;
+use winreg::enums::*;
+use winreg::RegKey;
 use tauri::Manager;
-use commands::settings::*;
-use commands::ban_manager;
+use std::sync::Mutex;
+
+lazy_static::lazy_static! {
+    static ref PENDING_DEEP_LINK: Mutex<Option<String>> = Mutex::new(None);
+}
+
+#[tauri::command]
+fn get_pending_deep_link() -> Option<String> {
+    PENDING_DEEP_LINK.lock().unwrap().take()
+}
+
+fn register_bmm_protocol() -> Result<(), Box<dyn std::error::Error>> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let path = "Software\\Classes\\bmm";
+    let (key, _) = hkcu.create_subkey(path)?;
+    key.set_value("", &"URL:bmm Protocol")?;
+    key.set_value("URL Protocol", &"")?;
+
+    let (shell_key, _) = key.create_subkey("shell\\open\\command")?;
+    let exe_path = std::env::current_exe()?;
+    let command = format!("\"{}\" \"%1\"", exe_path.to_str().unwrap());
+    shell_key.set_value("", &command)?;
+
+    Ok(())
+}
 
 fn main() {
     // 1. Initialise le gestionnaire de crash dès le démarrage (Expert Mode)
     commands::crash::setup_panic_hook();
     commands::crash::init_session();
 
+    // Register Protocol (Safe on every run)
+    let _ = register_bmm_protocol();
+
+    // Detect deep link argument
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(link) = args.iter().find(|arg| arg.starts_with("bmm://")).cloned() {
+        *PENDING_DEEP_LINK.lock().unwrap() = Some(link);
+    }
+
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            commands::crash::log_line(format!("[SINGLE-INSTANCE] Second instance launched with args: {:?}", args));
+            if let Some(link) = args.iter().find(|arg| arg.starts_with("bmm://")).cloned() {
+                commands::crash::log_line(format!("[SINGLE-INSTANCE] Emitting deep-link-received: {}", link));
+                let _ = app.emit_all("deep-link-received", link);
+            }
+            if let Some(window) = app.get_window("main") {
+                let _ = window.set_focus();
+                let _ = window.unminimize();
+            }
+        }))
         .setup(|app| {
             let app_dir = app
                 .path_resolver()
@@ -96,7 +141,7 @@ fn main() {
                     data.settings.current_filter, data.settings.current_sort_by, data.settings.language));
 
                 // Add resource diagnostic dump
-                let debug_info = get_resource_debug_info(app.handle());
+                let debug_info = commands::settings::get_resource_debug_info(app.handle());
                 commands::crash::log_line("[STARTUP-DIAGNOSTIC] Resource Resolution Report:");
                 for line in debug_info.lines() {
                     commands::crash::log_line(format!("  {}", line));
@@ -107,7 +152,7 @@ fn main() {
             app.manage(crate::commands::repo_server::RepoServerState::default());
             
             // 3. Load Bans
-            if let Err(e) = ban_manager::load_bans(&app.handle()) {
+            if let Err(e) = commands::ban_manager::load_bans(&app.handle()) {
                 commands::crash::log_line(format!("[WARNING] Failed to load bans: {}", e));
             }
 
@@ -120,6 +165,11 @@ fn main() {
             let handle = app.handle();
             let state = handle.state::<AppState>();
             let _ = commands::discord::init_discord_rpc(state);
+
+            // 6. Handle initial deep link (redundant with the command but good for existing instances)
+            if let Some(link) = PENDING_DEEP_LINK.lock().unwrap().clone() {
+                let _ = app.emit_all("deep-link-received", link);
+            }
 
             Ok(())
         })
@@ -204,22 +254,22 @@ fn main() {
             // History
             commands::history::get_activity_history,
             // Settings
-            export_app_data,
-            import_app_data,
-            reset_app_data,
-            get_settings,
-            update_settings,
-            is_debug_mode,
-            is_fsdm_mode,
-            is_ptb_mode,
-            is_update_disabled,
-            get_license_text,
-            get_app_version,
-            get_build_date,
-            get_available_languages,
-            get_language_content,
-            import_language,
-            get_resource_debug_info,
+            commands::settings::export_app_data,
+            commands::settings::import_app_data,
+            commands::settings::reset_app_data,
+            commands::settings::get_settings,
+            commands::settings::update_settings,
+            commands::settings::is_debug_mode,
+            commands::settings::is_fsdm_mode,
+            commands::settings::is_ptb_mode,
+            commands::settings::is_update_disabled,
+            commands::settings::get_license_text,
+            commands::settings::get_app_version,
+            commands::settings::get_build_date,
+            commands::settings::get_available_languages,
+            commands::settings::get_language_content,
+            commands::settings::import_language,
+            commands::settings::get_resource_debug_info,
             // ... (other commands)
             commands::mods::open_folder,
             commands::mods::open_file,
@@ -299,6 +349,7 @@ fn main() {
             // Discord RPC
             commands::discord::init_discord_rpc,
             commands::discord::set_discord_presence,
+            get_pending_deep_link,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

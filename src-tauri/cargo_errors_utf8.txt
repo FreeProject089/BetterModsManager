@@ -1,0 +1,63 @@
+﻿cargo :     Checking better-mods-manager v0.9.8 
+(E:\Travaille\CodageAutres\Better 
+Project\BetterModsManager\src-tauri)
+Au caractère Ligne:1 : 1
++ cargo check 2> cargo_errors.txt; Get-Content 
+cargo_errors.txt | Set-C ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checki 
+   ng be...ager\src-tauri):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+error[E0382]: borrow of moved value: `res`
+   --> src\commands\mods.rs:43:9
+    |
+ 19 |     let mut res = 
+client.get(url).send().map_err(|e| format!("Download 
+failed: {}", e))?;
+    |         ------- move occurs because `res` has 
+type `reqwest::blocking::Response`, which does not 
+implement the `Copy` trait
+...
+ 26 |             let body = res.text().map_err(|e| 
+e.to_string())?;
+    |                            ------ `res` moved due 
+to this method call
+...
+ 36 |                 res = 
+client.get(&confirmed_url).send().map_err(|e| 
+format!("Bypass failed: {}", e))?;
+    |                 --- this reinitialization might 
+get skipped
+...
+ 43 |     if !res.status().is_success() {
+    |         ^^^ value borrowed here after move
+    |
+note: `reqwest::blocking::Response::text` takes 
+ownership of the receiver `self`, which moves `res`
+   --> C:\Users\FreeProject\.cargo\registry\src\index.cr
+ates.io-1949cf8c6b5b557f\reqwest-0.11.27\src\blocking\re
+sponse.rs:282:17
+    |
+282 |     pub fn text(self) -> crate::Result<String> {
+    |                 ^^^^
+
+warning: unused variable: `mod_folder`
+    --> src\commands\mods.rs:1274:25
+     |
+1274 |                     let mod_folder = 
+new_mod.mod_folder_path.clone();
+     |                         ^^^^^^^^^^ help: if this 
+is intentional, prefix it with an underscore: 
+`_mod_folder`
+     |
+     = note: `#[warn(unused_variables)]` (part of 
+`#[warn(unused)]`) on by default
+
+For more information about this error, try `rustc 
+--explain E0382`.
+warning: `better-mods-manager` (bin 
+"better-mods-manager") generated 1 warning
+error: could not compile `better-mods-manager` (bin 
+"better-mods-manager") due to 1 previous error; 1 
+warning emitted

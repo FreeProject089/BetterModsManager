@@ -64,7 +64,12 @@
                 "../app.cfg",
                 "../LICENSE.md",
                 "../frontend/Lang"
-            ]
+            ],
+            "windows": {
+                "certificateThumbprint": null,
+                "digestAlgorithm": "sha256",
+                "timestampUrl": ""
+            }
         },
         "security": {
             "csp": null

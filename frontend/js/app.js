@@ -12,6 +12,7 @@ import { initRepo } from './repo.js';
 import { appState } from './state.js';
 import { initInteractiveDocs, openDiagram } from './interactive-docs.js';
 import { debugUI } from './debug-ui.js';
+import { initDeepLinks } from './deep_link_manager.js';
 
 // ── Tauri bridge ──────────────────────────────────────────
 import { loadTauri, invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification } from './api.js';
@@ -1700,6 +1701,7 @@ async function main() {
     initModlist();
     initRepo();
     initInteractiveDocs();
+    initDeepLinks();
 
 
     // Bind Docs Diagram buttons
