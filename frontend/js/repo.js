@@ -794,6 +794,8 @@ export function initRepo() {
                 const errMsg = String(err);
                 if (errMsg.includes('annul') || errMsg.includes('cancel')) {
                     exportStatus.textContent = t('repo.cancelExport') || "Génération annulée";
+                    exportPercent.textContent = "0%";
+                    exportFill.style.width = "0%";
                     toast(t('repo.cancelExport') || "Génération annulée", 'info');
                 } else {
                     exportStatus.textContent = t('repo.exportError') || "Erreur...";
@@ -921,6 +923,8 @@ export function initRepo() {
                 const errMsg = String(err);
                 if (errMsg.includes("Synchronisation annulée")) {
                     syncStatus.textContent = t('repo.syncCancelled') || "Synchronisation annulée";
+                    syncPercent.textContent = "0%";
+                    syncFill.style.width = "0%";
                     toast(t('repo.syncCancelled') || "Synchronisation annulée", 'info');
                 } else {
                     syncStatus.textContent = t('repo.syncError') || "Erreur de synchro";
