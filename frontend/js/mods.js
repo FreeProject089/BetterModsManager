@@ -1,10 +1,10 @@
 /**
  * mods.js — Mod library management with detail panel + scan + edit
  */
-import { invoke, pickFolder, listenFileDrop, toast, sendOsNotification } from './app.js';
+import { invoke, pickFolder, listenFileDrop, toast, sendOsNotification, updateDiscordStatus } from './app.js';
 import { renderProfiles } from './profiles.js';
 import { t, applyTranslations } from './i18n.js';
-import { escHtml, escAttr } from './utils.js';
+import { escHtml, escAttr, escJs } from './utils.js';
 import { getModCardHTML, getModDetailHTML, getLoadingOverlayHTML } from './components.js';
 import { appState } from './state.js';
 
@@ -270,12 +270,24 @@ export async function initMods() {
 
 async function checkAllConflicts() {
   const currentGen = ++conflictCheckGeneration;
-  const activeId = S.cachedActiveProfileId || await invoke('get_active_profile_id').catch(() => null);
-  if (!activeId) return;
 
-  // Process mods in small batches to avoid flooding the IPC bridge
+  // 1. Fetch ALL mods globally to ensure the cache represents the entire manager
+  const allModsGlobal = await invoke('get_all_mods').catch(() => []);
+  const existingModIds = new Set(allModsGlobal.map(m => m.id));
+
+  // 2. Purge cache of items that no longer exist globally
+  Object.keys(S.conflictCache).forEach(mid => {
+    if (!existingModIds.has(mid)) {
+      delete S.conflictCache[mid];
+    }
+  });
+
+  const activeId = S.cachedActiveProfileId || await invoke('get_active_profile_id').catch(() => null);
+  if (!activeId && allModsGlobal.length === 0) return; // Rare case
+
+  // Process ALL mods in small batches
   const BATCH_SIZE = 5;
-  const mods = [...S.allMods]; // snapshot
+  const mods = [...allModsGlobal]; // snapshot of everything
   for (let i = 0; i < mods.length; i += BATCH_SIZE) {
     const batch = mods.slice(i, i + BATCH_SIZE);
     
@@ -361,7 +373,7 @@ export async function refreshMods(autoScan = false, immediate = false) {
       // Only scan if a profile is actually active to avoid RPC errors
       const activeId = S.cachedActiveProfileId || await invoke('get_active_profile_id').catch(() => null);
       if (activeId) {
-        invoke('scan_mods_folder').catch(() => {});
+        await invoke('scan_mods_folder').catch(() => {});
       }
     }
 
@@ -735,6 +747,7 @@ function createModCard(mod) {
       S.processingMods.delete(mod.id);
       S.isGlobalProcessing = false;
       await refreshMods();
+      await updateDiscordStatus();
     }
   });
 
@@ -1255,6 +1268,7 @@ async function toggleAllMods(forcedEnable = null) {
     if (altBtn) altBtn.disabled = false;
     btn.innerHTML = originalHtml;
     await refreshMods();
+    await updateDiscordStatus();
   }
 }
 
@@ -1603,7 +1617,10 @@ window.openGlobalConflictModal = async function(preselectModId = null) {
                <div style="display:flex;flex-direction:column;gap:4px">
                  ${grps.map(r => `
                    <div style="display:flex;align-items:center;background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:6px;border-left:3px solid ${r.status === 'Active' ? 'var(--danger)' : 'var(--warning)'};justify-content:space-between">
-                     <span style="font-size:12px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px" title="${escAttr(r.other_mod_name)}">${escHtml(r.other_mod_name)}</span>
+                     <span style="font-size:12px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;cursor:help" 
+                           title="${escAttr(r.other_mod_name)}"
+                           onmouseenter="window.showTaskyHelp('${escAttr(escJs(r.other_mod_name))}', 'package', true)"
+                           onmouseleave="window.hideTaskyHelp()">${escHtml(r.other_mod_name)}</span>
                      <div style="display:flex;align-items:center;gap:10px">
                        ${r.status === 'Active' ? `<span style="font-size:9px;background:rgba(255,255,255,0.1);color:var(--text-primary);padding:2px 5px;border-radius:4px" title="Ordre d activation">#${r.activation_order}</span>` : ''}
                        <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);cursor:pointer;text-decoration:underline" onclick="window.showConflictContextMenu(event, '${item.sourceModId}', '${r.other_mod_id}')">${r.file_count} f.</span>
@@ -1619,7 +1636,9 @@ window.openGlobalConflictModal = async function(preselectModId = null) {
         html += `
           <div class="conflict-group-card" style="display:flex;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px;min-height:95px;height:auto">
              <div style="flex:0 0 160px;padding:10px 12px;border-right:1px solid var(--border);background:rgba(255,255,255,0.02);display:flex;flex-direction:column;justify-content:center">
-               <div style="font-weight:600;font-size:12px;color:var(--text-primary);margin-bottom:2px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(item.sourceModName)}</div>
+               <div style="font-weight:600;font-size:12px;color:var(--text-primary);margin-bottom:2px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;cursor:help"
+                    onmouseenter="window.showTaskyHelp('${escAttr(escJs(item.sourceModName))}', 'package', true)"
+                    onmouseleave="window.hideTaskyHelp()">${escHtml(item.sourceModName)}</div>
                <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">${t('conflict.modSource') || 'Mod Source'}</div>
              </div>
              <div style="flex:2;padding:8px 12px;overflow-y:auto;background:rgba(0,0,0,0.1)">

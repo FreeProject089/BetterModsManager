@@ -859,6 +859,67 @@ async function initGithubPatSettings() {
     }
 }
 
+// ── Discord RPC ───────────────────────────────────────────
+async function initDiscordRpcSettings() {
+    const chk = document.getElementById('chk-discord-rpc');
+    if (!chk) return;
+
+    const { getSettings, updateSettings } = await import('./api.js');
+    const { invoke } = window.__TAURI__.tauri;
+
+    try {
+        const settings = await getSettings();
+        chk.checked = settings.discord_rpc_enabled || false;
+    } catch (e) { console.error('Failed to load Discord RPC setting:', e); }
+
+    chk.addEventListener('change', async (e) => {
+        try {
+            const settings = await getSettings();
+            settings.discord_rpc_enabled = e.target.checked;
+            await updateSettings(settings);
+            
+            if (e.target.checked) {
+                await invoke('init_discord_rpc');
+                toast(t('settings.discordRpcEnabled') || 'Discord Rich Presence activé', 'success');
+                await updateDiscordStatus();
+            } else {
+                // Changing to false will be handled by the backend command checking settings
+                await invoke('init_discord_rpc'); 
+                toast(t('settings.discordRpcDisabled') || 'Discord Rich Presence désactivé', 'info');
+            }
+        } catch (err) {
+            toast(t('common.error') + ' : ' + err, 'error');
+        }
+    });
+}
+
+export async function updateDiscordStatus() {
+    const { getSettings } = await import('./api.js');
+    const { getProfiles, getActiveProfileId } = await import('./profiles.js');
+    const { invoke } = window.__TAURI__.tauri;
+
+    try {
+        const settings = await getSettings();
+        if (!settings.discord_rpc_enabled) return;
+
+        const profiles = await getProfiles();
+        const activeId = await getActiveProfileId();
+        const activeProfile = profiles.find(p => p.id === activeId);
+
+        if (activeProfile) {
+            const details = t('settings.discordRpcDetails', { name: activeProfile.name }) || `Profil: ${activeProfile.name}`;
+            const status = t('settings.discordRpcStatus', { count: activeProfile.active_mods.length }) || `${activeProfile.active_mods.length} mods activés`;
+            
+            await invoke('set_discord_presence', {
+                details,
+                status
+            });
+        }
+    } catch (e) {
+        console.error('Failed to update Discord status:', e);
+    }
+}
+
 // ── Crash Report UI ───────────────────────────────────────
 
 function initCrashReportUI() {
@@ -1711,6 +1772,7 @@ async function main() {
 
     renderSettingsShortcuts();
     await initGithubPatSettings();
+    await initDiscordRpcSettings();
 
     const exportBtn = document.getElementById('btn-export-data');
     if (exportBtn) {

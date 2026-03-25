@@ -36,6 +36,8 @@ pub struct AppSettings {
     pub auto_fill_metadata: bool,
     #[serde(default)]
     pub cloudflared_path: Option<String>,
+    #[serde(default)]
+    pub discord_rpc_enabled: bool,
 }
 
 fn default_true() -> bool { true }
@@ -72,6 +74,8 @@ pub struct AppState {
     pub mod_files_cache: Mutex<HashMap<String, HashSet<PathBuf>>>,
     pub conflict_index: Mutex<HashMap<PathBuf, Vec<String>>>,
     pub last_cache_update: Mutex<Option<Instant>>,
+    // Discord RPC
+    pub discord_client: Mutex<Option<Box<dyn discord_rich_presence::DiscordIpc + Send + Sync>>>,
 }
 
 impl AppState {
@@ -92,6 +96,7 @@ impl AppState {
             mod_files_cache: Mutex::new(HashMap::new()),
             conflict_index: Mutex::new(HashMap::new()),
             last_cache_update: Mutex::new(None),
+            discord_client: Mutex::new(None),
         }
     }
 
