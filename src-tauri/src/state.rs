@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Instant;
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppSettings {
     #[serde(default = "default_lang")]
     pub language: String,
@@ -36,8 +36,30 @@ pub struct AppSettings {
     pub auto_fill_metadata: bool,
     #[serde(default)]
     pub cloudflared_path: Option<String>,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub discord_rpc_enabled: bool,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            language: default_lang(),
+            github_token: String::new(),
+            shortcuts: std::collections::HashMap::new(),
+            onboarding_shown: false,
+            last_seen_crash: None,
+            auto_io_calibration: false,
+            storage_alert_enabled: false,
+            storage_warning_space_pct: default_storage_warning(),
+            storage_critical_space_pct: default_storage_critical(),
+            current_filter: default_filter(),
+            current_sort_by: default_sort(),
+            last_session_clean: default_true(),
+            auto_fill_metadata: false,
+            cloudflared_path: None,
+            discord_rpc_enabled: default_true(),
+        }
+    }
 }
 
 fn default_true() -> bool { true }
