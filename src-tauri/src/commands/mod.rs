@@ -19,3 +19,4 @@ pub mod omm;
 pub mod debug;
 pub mod window;
 pub mod whitelist_manager;
+pub mod discord;
