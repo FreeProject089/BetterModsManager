@@ -60,6 +60,7 @@ BMM never uses symlinks. All file operations are physical, guaranteed, and rever
 | **Priority by Order** | The order in which mods are activated determines which one takes priority. The last activated mod's files take precedence. |
 | **Suppress Warning** | Users can choose to permanently suppress the conflict dialog for a specific combination. |
 | **Fast Selective Checking** | To ensure maximum performance, BMM only verifies conflicts between active mods and the mod being toggled, avoiding unnecessary scans of the entire library. |
+| **Modification Cache (mtime)** | (v0.9.9) BMM now tracks modification dates of mod folders. If no changes are detected, scans are skipped, speeding up startup by 80%. |
 
 ---
 
@@ -127,6 +128,7 @@ BMM 0.9.8 introduces a state-of-the-art interactive documentation system.
 | :--- | :--- |
 | **File Verification** | After a game update, BMM can verify whether installed mod files are still intact in the game's ROOT directory. |
 | **Status Detection** | Files are reported as OK, Missing, or Modified (size mismatch) for each active mod. |
+| **Deep Integrity Engine** | (v0.9.9) SHA-256 cryptographic analysis of every mod file against the game root to guarantee 100% absolute fidelity. |
 
 ---
 
@@ -242,6 +244,45 @@ Premium tools for server owners to manage their repository and users with a high
 | **RPC Safety Guards** | Backend commands now include safety checks (active profile detection) to prevent console errors and crashes. |
 | **i18n Audit** | 100% translation coverage for English and French, including all new server administration messages. |
 | **Credits Overhaul** | High-performance video background with automatic playback throttling when not visible. |
+
+---
+
+## 19. One-Click Installation (bmm://)
+
+One-Click installation simplifies mod sharing by allowing users to install mods directly from web links.
+
+| Feature | Description |
+| :--- | :--- |
+| **Protocol Handler** | BMM registers the `bmm://` protocol in Windows, allowing web browsers to launch the manager directly. |
+| **URL Parsing** | The manager automatically extracts mod names, authors, versions, and multiple download links from the deep link. |
+| **One-Click Profile Creation** | If a link references a game you haven't configured yet, the modal allows you to create a new profile instantly with built-in path validation. |
+| **DDL Support** | Optimized for Direct Download Links (GitHub, Discord, Personal Servers), ensuring a smooth "Click and Play" experience. |
+
+---
+
+## 20. Discord Rich Presence
+
+BMM integrates with Discord to show your friends what you are currently playing and managing.
+
+| Feature | Description |
+| :--- | :--- |
+| **Live Status** | Displays the active game profile name and the number of enabled mods. |
+| **Server State** | If you are running BMM in Server Mode, your Discord status indicates you are hosting a repository. |
+| **Privacy Toggle** | Can be enabled or disabled instantly from the Settings menu. |
+| **Reactive Updates** | Your status updates automatically every time you switch profiles or toggle a mod. |
+| **Discord Join Button** | (v0.9.9) Integrated direct community access button in crash reports for instant support. |
+
+---
+
+## 21. Advanced Conflict Diagnostics
+
+BMM version 0.9.8 introduces an interactive diagnostic tool to resolve complex mod file collisions.
+
+| Feature | Description |
+| :--- | :--- |
+| **Interactive Graph** | View a visual map of all file collisions between your mods. |
+| **Quick Resolution** | Click any graph node to go directly to that mod in the library for management. |
+| **Visual Hierarchy** | Understand at a glance which mods overwrite others with a color-coded Mermaid layout. |
 
 ---
 

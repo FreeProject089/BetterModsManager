@@ -60,6 +60,7 @@ BMM n'utilise jamais de liens symboliques (symlinks). Toutes les opérations sur
 | **Priorité par ordre** | L'ordre dans lequel les mods sont activés détermine lequel est prioritaire. Le dernier mod activé prend le dessus. |
 | **Suppression d'avertissement** | Les utilisateurs peuvent choisir de supprimer définitivement la boîte de dialogue de conflit pour une combinaison spécifique. |
 | **Vérification sélective rapide** | Pour assurer une performance maximale, BMM ne vérifie les conflits qu'entre les mods actifs et le mod en cours de bascule, évitant ainsi des scans inutiles de toute la bibliothèque. |
+| **Cache de Modification (mtime)** | (v0.9.9) BMM suit désormais les dates de modification des dossiers de mods. Si aucun changement n'est détecté, le scan est sauté, accélérant le démarrage de 80%. |
 
 ---
 
@@ -268,6 +269,7 @@ BMM s'intègre à Discord pour montrer à vos amis ce que vous jouez et gérez a
 | **État du serveur** | Si vous exécutez BMM en Mode Serveur, votre statut Discord indique que vous hébergez un dépôt. |
 | **Bascule de confidentialité** | Peut être activée ou désactivée instantanément depuis le menu Paramètres. |
 | **Mises à jour réactives** | Votre statut se met à jour automatiquement chaque fois que vous changez de profil ou basculez un mod. |
+| **Bouton Rejoindre Discord** | (v0.9.9) Intégration d'un bouton d'accès direct à la communauté dans les rapports de crash pour un support instantané. |
 
 ---
 

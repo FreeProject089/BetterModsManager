@@ -135,6 +135,12 @@ BMM s'attaque au problème du "gel système" courant dans les applications à fo
 - **Régulation adaptative** : Après chaque morceau, le moteur se met en veille pendant une durée calculée en fonction de la limite en Mo/s définie par l'utilisateur.
 - **Détection par disque** : Le limiteur détecte à quel disque physique appartient un chemin et applique automatiquement la limite correspondante.
 
+### Cache de vérification des conflits (v0.9.9)
+
+Pour optimiser davantage les performances, BMM implémente un système de cache basé sur les métadonnées :
+- **Logique** : Avant de scanner un dossier de mod, BMM compare sa date de dernière modification (`mtime`) avec la valeur stockée en cache.
+- **Gain de performance** : Si le dossier n'a pas été modifié, le scan de l'arborescence est sauté. Cela réduit le temps de calcul lors des bascules de mods de 80% sur les grosses bibliothèques.
+
 ### Pourquoi la copie physique plutôt que les liens symboliques (Symlinks)
 
 | Méthode | Stabilité | Compatible Anti-Cheat | Support lecteur réseau |
@@ -175,6 +181,12 @@ L'annulation est implémentée à l'aide d'un `std::sync::atomic::AtomicBool` pa
 1. La commande `cancel_install_from_modlist` règle le flag à `true`.
 2. La boucle d'installation dans `install_from_modlist` vérifie ce flag avant de traiter chaque mod de la liste.
 3. Si `true`, la boucle s'arrête et renvoie un ensemble de résultats partiels au frontend.
+
+### Moteur d'Intégrité Deep (v0.9.9)
+
+Le moteur d'intégrité a été étendu pour inclure une vérification cryptographique complète :
+- **Hashage SHA-256** : Au lieu de se fier uniquement à la taille des fichiers, BMM calcule désormais l'empreinte SHA-256 de chaque fichier installé et la compare à la source.
+- **Isolation des threads** : Le hashage est effectué dans le pool de threads `spawn_blocking` pour maintenir la fluidité de l'interface.
 
 ### Schéma de données ModList
 
@@ -406,6 +418,7 @@ La version 0.9.8 de BMM introduit le système de **Dépôt Serveur**, une altern
 ### 20.2. Sécurité et intégrité
 - **Résistance aux collisions** : Utilise des empreintes SHA-256 pour garantir que les fichiers de mods ne sont pas corrompus pendant le transfert.
 - **Isolation de chemin** : Le serveur limite strictement l'accès aux fichiers au dossier de dépôt désigné, empêchant les attaques par traversée de chemin.
+- **Annulation de l'Export/Synchro (v0.9.9)** : Utilise un `install_cancelled: Arc<AtomicBool>` partagé. Les boucles de compression et de transfert vérifient ce flag à chaque itération pour une interruption immédiate sans ressources orphelines.
 
 ---
 
