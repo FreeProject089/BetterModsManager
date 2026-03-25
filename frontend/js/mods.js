@@ -649,6 +649,15 @@ function updateCardState(card, mod) {
       badge.remove();
     }
   }
+
+  const pill = card.querySelector('.mod-status-pill');
+  if (pill) {
+    pill.classList.toggle('enabled', mod.enabled);
+    pill.classList.toggle('disabled', !mod.enabled);
+    pill.style.background = mod.enabled ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)';
+    pill.style.color = mod.enabled ? 'var(--success)' : 'var(--text-muted)';
+    pill.textContent = mod.enabled ? 'ACTIF' : 'INACTIF';
+  }
 }
 
 export function updateModListDisplay() {
@@ -950,6 +959,17 @@ async function renderModDetail(modId) {
 
   // Archive Explorer button
   panel.querySelector('#btn-browse-archive').addEventListener('click', () => openArchiveExplorer(mod));
+
+  // Deep Integrity button
+  panel.querySelector('#btn-verify-mod-integrity')?.addEventListener('click', async () => {
+    try {
+      toast(t('integrity.checking'), 'info');
+      const report = await invoke('get_mod_integrity', { modId: mod.id });
+      showIntegrityReport(mod.name, report);
+    } catch (err) {
+      toast(t('common.error') + ' : ' + err, 'error');
+    }
+  });
 
   // Description auto-resize and explicit value set
   const descTextarea = panel.querySelector('#detail-desc');
@@ -1871,5 +1891,77 @@ document.addEventListener('mousedown', (e) => {
     }
   }
 }, true);
+
+/**
+ * Displays a deep integrity report for a specific mod.
+ * @param {string} modName 
+ * @param {Object} report { missing: [], modified: [], added: [] }
+ */
+function showIntegrityReport(modName, report) {
+  const modal = document.getElementById('modal-integrity');
+  const content = document.getElementById('integrity-report-content');
+  if (!modal || !content) return;
+
+  const hasIssues = report.missing.length > 0 || report.modified.length > 0 || report.added.length > 0;
+  
+  if (!hasIssues) {
+    content.innerHTML = `
+      <div style="color:var(--success);padding:20px;text-align:center;">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:16px;filter:drop-shadow(0 0 8px var(--success))">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+          <polyline points="22 4 12 14.01 9 11.01" />
+        </svg>
+        <h3 style="margin-bottom:8px">${t('integrity.ok')}</h3>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.5">${t('integrity.modClean')}</p>
+        <div style="margin-top:20px;font-size:11px;font-family:var(--font-mono);background:rgba(255,255,255,0.05);padding:8px;border-radius:6px;color:var(--text-muted)">
+          ${modName}
+        </div>
+      </div>
+    `;
+  } else {
+    let html = `
+      <div style="padding:10px 0;">
+        <h3 style="margin-bottom:4px;display:flex;align-items:center;gap:8px;color:var(--warning)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+          ${t('integrity.issues')}
+        </h3>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Mod: <strong>${escHtml(modName)}</strong></p>
+        
+        <div style="display:flex;flex-direction:column;gap:16px;max-height:400px;overflow-y:auto;padding-right:8px;scrollbar-width:thin">
+    `;
+
+    const renderList = (title, items, color) => {
+      if (!items || items.length === 0) return '';
+      return `
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:${color};margin-bottom:6px;display:flex;align-items:center;gap:6px">
+            <div style="width:6px;height:6px;border-radius:50%;background:${color}"></div>
+            ${title} (${items.length})
+          </div>
+          <ul style="background:rgba(0,0,0,0.25);padding:10px;border-radius:8px;list-style:none;margin:0;border:1px solid rgba(255,255,255,0.05)">
+            ${items.map(f => `<li style="font-size:11px;font-family:var(--font-mono);margin-bottom:4px;word-break:break-all;color:var(--text-primary);display:flex;gap:6px"><span style="color:${color}">></span> ${escHtml(f)}</li>`).join('')}
+          </ul>
+        </div>
+      `;
+    };
+
+    html += renderList(t('integrity.missing'), report.missing, 'var(--danger)');
+    html += renderList(t('integrity.modified'), report.modified, 'var(--warning)');
+    html += renderList(t('integrity.added'), report.added, 'var(--accent)');
+
+    html += `
+        </div>
+        <div style="margin-top:20px;padding:12px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);border-radius:8px;font-size:12px;color:var(--accent);line-height:1.4;display:flex;gap:10px;align-items:flex-start">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <div>${t('integrity.tip')}</div>
+        </div>
+      </div>
+    `;
+    content.innerHTML = html;
+  }
+
+  modal.classList.add('open');
+}
+
 
 

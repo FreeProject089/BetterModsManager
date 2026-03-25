@@ -98,27 +98,64 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), String> {
     if last_update.is_some() { return Ok(()); }
 
     log_line("[CACHE] Populating mod file cache for the first time...");
-    let data = state.data.lock().unwrap();
-    let mut cache = state.mod_files_cache.lock().unwrap();
-    let mut index = state.conflict_index.lock().unwrap();
+    let mut needs_save = false;
 
-    // Clear existing cache and index to avoid stale data from deleted mods
-    cache.clear();
-    index.clear();
+    {
+        let mut data = state.data.lock().unwrap();
+        let mut cache = state.mod_files_cache.lock().unwrap();
+        let mut index = state.conflict_index.lock().unwrap();
 
-    for m in &data.mods {
-        if let Ok(files) = crate::fs_utils::list_mod_files(&m.mod_folder_path) {
-            let set: HashSet<PathBuf> = files.into_iter().collect();
+        // Clear existing cache and index to avoid stale data from deleted mods
+        cache.clear();
+        index.clear();
+
+        for m in data.mods.iter_mut() {
+            let current_mtime = m.mod_folder_path.metadata().ok()
+                .and_then(|meta| meta.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+
+            let files = if m.last_scan_mtime == current_mtime && m.cached_files.is_some() {
+                m.cached_files.as_ref().unwrap().clone()
+            } else {
+                if let Ok(f_paths) = crate::fs_utils::list_mod_files(&m.mod_folder_path) {
+                    let f_strings: Vec<String> = f_paths.into_iter().map(|p| p.to_string_lossy().to_string()).collect();
+                    m.cached_files = Some(f_strings.clone());
+                    
+                    // If hashes were previously tracked, update them too
+                    if m.file_hashes.is_some() {
+                        let mut new_hashes = std::collections::HashMap::new();
+                        for rel in &f_strings {
+                            let full_path = m.mod_folder_path.join(rel);
+                            if let Ok(h) = crate::fs_utils::compute_file_sha256(&full_path) {
+                                new_hashes.insert(rel.clone(), h);
+                            }
+                        }
+                        m.file_hashes = Some(new_hashes);
+                    }
+                    
+                    m.last_scan_mtime = current_mtime;
+                    needs_save = true;
+                    f_strings
+                } else {
+                    Vec::new()
+                }
+            };
+
+            let set: HashSet<PathBuf> = files.into_iter().map(PathBuf::from).collect();
             for f in &set {
-                let f_path: PathBuf = f.clone();
-                index.entry(f_path).or_insert_with(Vec::new).push(m.id.clone());
+                index.entry(f.clone()).or_insert_with(Vec::new).push(m.id.clone());
             }
             cache.insert(m.id.clone(), set);
         }
     }
     
+    if needs_save {
+        let _ = state.save();
+    }
+    
     *last_update = Some(Instant::now());
-    log_line(format!("[CACHE] Cached {} mods and {} unique files.", cache.len(), index.len()));
     Ok(())
 }
 
@@ -756,11 +793,13 @@ pub fn update_mod_meta(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn save_mod_metadata_file(_mod_folder_path: &std::path::Path, _entry: &crate::models::mod_entry::ModEntry) -> Result<(), String> {
     // Removed as per user request
     Ok(())
 }
 
+#[allow(dead_code)]
 #[tauri::command]
 pub fn check_mod_metadata(_folder_path: String) -> Result<Option<crate::models::mod_entry::ModMetadata>, String> {
     // Removed as per user request
@@ -1238,7 +1277,7 @@ pub async fn install_from_modlist(
                         label: l.label.clone(),
                     }).collect();
                     let mid = new_mod.id.clone();
-                    let mod_folder = new_mod.mod_folder_path.clone();
+                    let _mod_folder = new_mod.mod_folder_path.clone();
                     data.mods.push(new_mod.clone());
                     
                     newly_added_mod_ids.push(mid);
@@ -1296,11 +1335,10 @@ pub async fn install_from_modlist(
 
 #[tauri::command]
 pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>, String> {
-    log_line("[INTEGRITY] Running integrity check on active mods...");
-    let enabled_mods = {
+    let enabled_info = {
         let data = state.data.lock().unwrap();
-        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
-        let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
+        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;
+        let p = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?.clone();
         
         let mut enabled = Vec::new();
         for m in &data.mods {
@@ -1315,33 +1353,71 @@ pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>,
             };
 
             if m.enabled && is_in_profile {
-                enabled.push((m.name.clone(), m.mod_folder_path.clone(), p.game_path.clone()));
+                enabled.push(m.clone());
             }
         }
-        enabled
+        (enabled, p.game_path.clone())
     };
+
+    let (mods, game_path) = enabled_info;
 
     let altered = tauri::async_runtime::spawn_blocking(move || -> Result<Vec<String>, String> {
         let mut altered = Vec::new();
-        for (mod_name, mod_folder, game_path) in enabled_mods {
-            let mod_dir = PathBuf::from(&mod_folder);
-            let game_dir = PathBuf::from(&game_path);
-            if let Ok(files) = crate::fs_utils::list_mod_files(&mod_dir) {
-                for rel in files {
+        for m in mods {
+            let mod_dir = &m.mod_folder_path;
+            let game_dir = std::path::PathBuf::from(&game_path);
+            
+            if let Some(hashes) = &m.file_hashes {
+                // SHA256 Deep Scan for this mod
+                
+                // 1. Check for missing or corrupted
+                for (rel_str, old_hash) in hashes {
+                    let rel = std::path::PathBuf::from(rel_str);
                     let src = mod_dir.join(&rel);
                     let dst = game_dir.join(&rel);
                     
-                    let src_meta = std::fs::metadata(&src).ok();
-                    let dst_meta = std::fs::metadata(&dst).ok();
-                    
-                    match (src_meta, dst_meta) {
-                        (Some(s), Some(d)) => {
-                            if s.len() != d.len() {
-                                altered.push(format!("[{}] {}", mod_name, rel.display()));
+                    if !src.exists() {
+                        altered.push(format!("[{}] {} (Manquant dans biblio)", m.name, rel.display()));
+                    } else if !dst.exists() {
+                        altered.push(format!("[{}] {} (Manquant dans jeu)", m.name, rel.display()));
+                    } else {
+                        // Check game file hash
+                        if let Ok(new_hash) = crate::fs_utils::compute_file_sha256(&dst) {
+                            if new_hash != *old_hash {
+                                altered.push(format!("[{}] {} (Modifié/Corrompu)", m.name, rel.display()));
                             }
-                        },
-                        _ => {
-                            altered.push(format!("[{}] {} (Manquant/Missing)", mod_name, rel.display()));
+                        }
+                    }
+                }
+                
+                // 2. Check for unexpected files in mod dir
+                if let Ok(current_files) = crate::fs_utils::list_mod_files(mod_dir) {
+                    for f in current_files {
+                        let rel_str = f.to_string_lossy().to_string();
+                        if !hashes.contains_key(&rel_str) {
+                             altered.push(format!("[{}] {} (Fichier inattendu)", m.name, rel_str));
+                        }
+                    }
+                }
+            } else {
+                // Compatibility Scan (Size + Existence)
+                if let Ok(files) = crate::fs_utils::list_mod_files(mod_dir) {
+                    for rel in files {
+                        let src = mod_dir.join(&rel);
+                        let dst = game_dir.join(&rel);
+                        
+                        let src_meta = std::fs::metadata(&src).ok();
+                        let dst_meta = std::fs::metadata(&dst).ok();
+                        
+                        match (src_meta, dst_meta) {
+                            (Some(s), Some(d)) => {
+                                if s.len() != d.len() {
+                                    altered.push(format!("[{}] {}", m.name, rel.display()));
+                                }
+                            },
+                            _ => {
+                                altered.push(format!("[{}] {} (Manquant)", m.name, rel.display()));
+                            }
                         }
                     }
                 }
@@ -1350,7 +1426,7 @@ pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>,
         Ok(altered)
     }).await.map_err(|e| e.to_string())??;
 
-    log_line(format!("[INTEGRITY] Check complete: {} issue(s) found", altered.len()));
+    log_line(format!("[INTEGRITY] Profile check complete: {} issue(s) found", altered.len()));
     Ok(altered)
 }
 #[tauri::command]
@@ -1511,9 +1587,17 @@ pub async fn open_mod_active_folder(state: State<'_, AppState>, mod_id: String) 
 
     // Calculate common parent directory of all installed files
     let common_prefix = get_common_path(&installed_files);
-    let target_dir = game_path.join(common_prefix);
     
-    if target_dir.exists() {
+    // Ensure we join safely (relative prefix)
+    let rel_prefix = if common_prefix.is_absolute() {
+        common_prefix.strip_prefix("/").unwrap_or(&common_prefix).to_path_buf()
+    } else {
+        common_prefix
+    };
+
+    let target_dir = game_path.join(rel_prefix);
+    
+    if target_dir.exists() && target_dir.is_dir() {
         open_folder(target_dir.to_string_lossy().to_string())
     } else {
         open_folder(game_path.to_string_lossy().to_string())
@@ -1539,13 +1623,17 @@ pub async fn open_mod_backup_folder(state: State<'_, AppState>, _mod_id: String)
 fn get_common_path(paths: &[String]) -> PathBuf {
     if paths.is_empty() { return PathBuf::new(); }
     
-    // Split the first path into components
-    let mut common: Vec<&str> = paths[0].split(|c| c == '/' || c == '\\').collect();
+    // Split the first path into components, filtering out empty ones (like leading slashes)
+    let mut common: Vec<&str> = paths[0]
+        .split(|c| c == '/' || c == '\\')
+        .filter(|s| !s.is_empty())
+        .collect();
+        
     // Remove the filename (last component)
     if !common.is_empty() { common.pop(); }
 
     for path in paths.iter().skip(1) {
-        let parts: Vec<&str> = path.split(|c| c == '/' || c == '\\').collect();
+        let parts: Vec<&str> = path.split(|c| c == '/' || c == '\\').filter(|s| !s.is_empty()).collect();
         let mut new_common = Vec::new();
         for (i, part) in parts.iter().enumerate() {
             if i < common.len() && part == &common[i] {
@@ -1562,4 +1650,122 @@ fn get_common_path(paths: &[String]) -> PathBuf {
         res.push(part);
     }
     res
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntegrityReport {
+    pub mod_id: String,
+    pub missing: Vec<String>,
+    pub modified: Vec<String>,
+    pub added: Vec<String>,
+    pub total: usize,
+    pub is_valid: bool,
+}
+
+#[tauri::command]
+pub async fn get_mod_integrity(state: State<'_, AppState>, mod_id: String) -> Result<IntegrityReport, String> {
+    let (mod_path, cached_hashes, needs_baseline) = {
+        let data = state.data.lock().unwrap();
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        (m.mod_folder_path.clone(), m.file_hashes.clone(), m.file_hashes.is_none())
+    };
+
+    if needs_baseline {
+        // Auto-initialize baseline hashes if missing
+        let current_files = fs_utils::list_mod_files(&mod_path).map_err(|e| e.to_string())?;
+        let mut new_hashes = std::collections::HashMap::new();
+        for f in &current_files {
+            let full_path = mod_path.join(f);
+            if let Ok(h) = fs_utils::compute_file_sha256(&full_path) {
+                new_hashes.insert(f.to_string_lossy().to_string(), h);
+            }
+        }
+        
+        {
+            let mut data = state.data.lock().unwrap();
+            if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+                m.file_hashes = Some(new_hashes.clone());
+            }
+        }
+        let _ = state.save();
+        
+        return Ok(IntegrityReport {
+            mod_id,
+            missing: Vec::new(),
+            modified: Vec::new(),
+            added: Vec::new(),
+            total: current_files.len(),
+            is_valid: true,
+        });
+    }
+
+    let current_files = fs_utils::list_mod_files(&mod_path).map_err(|e| e.to_string())?;
+    let mut missing = Vec::new();
+    let mut modified = Vec::new();
+    let mut added = Vec::new();
+    
+    let hashes = cached_hashes.unwrap_or_default();
+    
+    // Check for missing or modified
+    for (rel_path, old_hash) in &hashes {
+        let full_path = mod_path.join(rel_path);
+        if !full_path.exists() {
+            missing.push(rel_path.clone());
+        } else {
+            if let Ok(new_hash) = fs_utils::compute_file_sha256(&full_path) {
+                if new_hash != *old_hash {
+                    modified.push(rel_path.clone());
+                }
+            }
+        }
+    }
+
+    // Check for added
+    for f in &current_files {
+        let rel_str = f.to_string_lossy().to_string();
+        if !hashes.contains_key(&rel_str) {
+            added.push(rel_str);
+        }
+    }
+
+    let is_valid = missing.is_empty() && modified.is_empty() && added.is_empty();
+
+    Ok(IntegrityReport {
+        mod_id,
+        missing,
+        modified,
+        added,
+        total: current_files.len(),
+        is_valid,
+    })
+}
+
+#[tauri::command]
+pub async fn update_mod_hashes(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
+    let mod_path = {
+        let data = state.data.lock().unwrap();
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        m.mod_folder_path.clone()
+    };
+
+    let current_files = fs_utils::list_mod_files(&mod_path).map_err(|e| e.to_string())?;
+    let mut new_hashes = std::collections::HashMap::new();
+
+    for f in current_files {
+        let full_path = mod_path.join(&f);
+        if let Ok(hash) = fs_utils::compute_file_sha256(&full_path) {
+            new_hashes.insert(f.to_string_lossy().to_string(), hash);
+        }
+    }
+
+    {
+        let mut data = state.data.lock().unwrap();
+        if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+            m.file_hashes = Some(new_hashes);
+        }
+    }
+    
+    let _ = state.save();
+    Ok(())
 }

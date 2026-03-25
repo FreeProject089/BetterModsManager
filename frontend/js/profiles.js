@@ -686,6 +686,20 @@ export async function updateProfileChip() {
     nameEl.textContent = active ? active.name : '—';
 }
 
+/**
+ * Utility: Fetch all profiles
+ */
+export async function getProfiles() {
+    return await invoke('get_profiles');
+}
+
+/**
+ * Utility: Fetch active profile ID
+ */
+export async function getActiveProfileId() {
+    return await invoke('get_active_profile_id');
+}
+
 export function getProfileIconSvg(iconName, extraStyle = '') {
     if (!iconName) return '';
     const style = `vertical-align:middle;${extraStyle}`;

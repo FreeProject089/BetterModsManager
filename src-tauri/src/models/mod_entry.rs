@@ -71,6 +71,15 @@ pub struct ModEntry {
     /// Activation order (0 = first, higher = more recent)
     #[serde(default)]
     pub activation_order: u32,
+    /// Cached list of relative paths for conflict detection
+    #[serde(default)]
+    pub cached_files: Option<Vec<String>>,
+    /// Last modification time of the mod folder during the last scan
+    #[serde(default)]
+    pub last_scan_mtime: u64,
+    /// Optional map of file relative paths to their SHA256 hashes for integrity verification
+    #[serde(default)]
+    pub file_hashes: Option<std::collections::HashMap<String, String>>,
 }
 
 /// A download link for a mod
@@ -128,6 +137,9 @@ impl ModEntry {
             tags: Vec::new(),
             install_notes: String::new(),
             activation_order: 0,
+            cached_files: None,
+            last_scan_mtime: 0,
+            file_hashes: None,
         }
     }
 

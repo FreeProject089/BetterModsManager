@@ -4,6 +4,8 @@ use walkdir::WalkDir;
 use std::fs;
 use rayon::prelude::*;
 use std::collections::HashSet;
+use std::io::Read;
+use sha2::{Digest, Sha256};
 
 fn ensure_removed(path: &Path) -> Result<()> {
     if !path.exists() { return Ok(()); }
@@ -57,6 +59,18 @@ pub fn copy_file_force_limited(src: &Path, dst: &Path, limit_mb_s: Option<u64>) 
     std::fs::copy(src, dst)
         .with_context(|| format!("Failed to copy {:?} -> {:?}", src, dst))?;
     Ok(())
+}
+
+pub fn compute_file_sha256(path: &Path) -> Result<String> {
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = vec![0u8; 65536]; // 64KB
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 { break; }
+        hasher.update(&buffer[..n]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 /// Backup a file from `game_path/rel` to `backup_root/_original/rel`. 

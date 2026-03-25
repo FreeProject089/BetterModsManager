@@ -248,18 +248,22 @@ export function getModDetailHTML(mod, ctx) {
 
   const filesContent = `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">
-          <span style="font-size:11px; color:var(--text-muted)">${mod.installed_files ? mod.installed_files.length : 0} fichiers installés</span>
+          <span style="font-size:11px; color:var(--text-muted)">${t('mod.filesCount', { count: mod.installed_files ? mod.installed_files.length : 0 })}</span>
           <button id="btn-browse-archive" class="btn btn-sm" style="background:rgba(59,130,246,0.15); color:var(--accent); border:none; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:11px">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle; margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Explorer l'archive
+            ${t('mod.exploreArchive')}
+          </button>
+          <button id="btn-verify-mod-integrity" class="btn btn-sm" style="background:rgba(16,185,129,0.15); color:var(--success); border:none; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:11px; margin-left:8px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle; margin-right:4px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            ${t('mod.verifyIntegrityDeep')}
           </button>
         </div>
         ${mod.installed_files && mod.installed_files.length > 0 ? `
           <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);background:rgba(0,0,0,0.3);padding:10px;border-radius:8px;max-height:200px;overflow-y:auto">
             ${mod.installed_files.slice(0, 50).map(f => `<div style="padding:1px 0;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${escHtml(f)}</div>`).join('')}
-            ${mod.installed_files.length > 50 ? `<div style="padding:6px 0;color:var(--text-muted);font-style:italic">+ ${mod.installed_files.length - 50} autres fichiers non-affichés pour les performances (cliquez sur Explorer l'archive en haut).</div>` : ''}
+            ${mod.installed_files.length > 50 ? `<div style="padding:6px 0;color:var(--text-muted);font-style:italic">${t('mod.archiveMoreFiles', { count: mod.installed_files.length - 50 })}</div>` : ''}
           </div>
-        ` : '<div style="font-size:12px;color:var(--text-muted);font-style:italic">Aucun fichier listé.</div>'}
+        ` : `<div style="font-size:12px;color:var(--text-muted);font-style:italic">${t('detail.noFiles')}</div>`}
       `;
 
   const linksContent = `

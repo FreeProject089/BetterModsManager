@@ -107,6 +107,9 @@ pub async fn export_server_repo(
         return Err("repo.errOutputDirNotDir".to_string());
     }
 
+    state.install_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
+    let cancel_flag = state.install_cancelled.clone();
+
     let repo_mods_dir = output_path.join("mods");
     if !repo_mods_dir.exists() {
         fs::create_dir_all(&repo_mods_dir).map_err(|_| "repo.errCreateModDir".to_string())?;
@@ -178,6 +181,9 @@ pub async fn export_server_repo(
 
     // Loop over each profile
     for (p_idx, (profile, exported_mods)) in profiles_data.into_iter().enumerate() {
+        if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("Synchronisation annulée".to_string());
+        }
         let mut repo_profile = crate::models::repo::RepoProfile {
             id: profile.id.clone(),
             name: profile.name.clone(),
@@ -192,6 +198,10 @@ pub async fn export_server_repo(
                 progress: ((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32))) * 100.0,
                 current_file: String::new(),
             });
+
+            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err("Synchronisation annulée".to_string());
+            }
 
             let target_mod_dir = repo_mods_dir.join(&mod_entry.id);
             if !target_mod_dir.exists() {
@@ -233,6 +243,10 @@ pub async fn export_server_repo(
                     if !parent.exists() {
                         fs::create_dir_all(parent).map_err(|_| "repo.errCreateSubfolder".to_string())?;
                     }
+                }
+
+                if f_idx % 5 == 0 && cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Err("Synchronisation annulée".to_string());
                 }
 
                 // Copy file
@@ -300,6 +314,12 @@ pub async fn export_server_repo(
         }
     }
 
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cancel_repo_export(state: State<'_, AppState>) -> Result<(), String> {
+    state.install_cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
     Ok(())
 }
 fn generate_mini_server_files(

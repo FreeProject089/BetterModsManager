@@ -284,6 +284,8 @@ fn main() {
             commands::mods::check_mod_metadata,
             commands::mods::open_mod_active_folder,
             commands::mods::open_mod_backup_folder,
+            commands::mods::get_mod_integrity,
+            commands::mods::update_mod_hashes,
             // Crash Advanced
             commands::crash::open_crash_folder,
             // Image
@@ -311,6 +313,7 @@ fn main() {
             commands::disk::check_disk_space,
             // Server Repo
             commands::repo::export_server_repo,
+            commands::repo::cancel_repo_export,
             commands::repo::generate_standalone_server,
             commands::repo::fetch_repo_info,
             commands::repo::sync_server_repo,
