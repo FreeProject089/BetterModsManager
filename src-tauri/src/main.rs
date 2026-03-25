@@ -116,11 +116,6 @@ fn main() {
                 commands::crash::log_line(format!("[WARNING] Failed to load whitelist: {}", e));
             }
 
-            // 5. Initialize Discord RPC
-            let handle = app.handle();
-            let state = handle.state::<AppState>();
-            let _ = commands::discord::init_discord_rpc(state);
-
             Ok(())
         })
         // 2. Capture de la fermeture (Alt+F4 / Croix)
@@ -296,9 +291,6 @@ fn main() {
             commands::whitelist_manager::remove_from_whitelist,
             commands::whitelist_manager::get_whitelist,
             commands::whitelist_manager::clear_whitelist,
-            // Discord RPC
-            commands::discord::init_discord_rpc,
-            commands::discord::set_discord_presence,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

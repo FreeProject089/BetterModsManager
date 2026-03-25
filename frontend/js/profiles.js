@@ -273,10 +273,6 @@ async function confirmCreateProfile() {
         await renderProfiles();
         updateProfileChip();
         updateLibraryProfileSelector();
-
-        // Refresh mods and conflicts
-        const { refreshMods } = await import('./mods.js');
-        await refreshMods(true);
     } catch (err) {
         toast(t('common.error') + ' : ' + err, 'error');
     }
@@ -320,10 +316,6 @@ async function confirmEditProfile() {
         await renderProfiles();
         updateProfileChip();
         updateLibraryProfileSelector();
-
-        // Refresh mods and conflicts
-        const { refreshMods } = await import('./mods.js');
-        await refreshMods(true);
     } catch (err) {
         toast(t('common.error') + ' : ' + err, 'error');
     }
@@ -537,8 +529,6 @@ export async function renderProfiles() {
         // The import and call are already here, ensuring they are executed
         const { refreshMods } = await import('./mods.js');
         await refreshMods(true);
-        const { updateDiscordStatus } = await import('./app.js');
-        await updateDiscordStatus();
     }
 
     function openEditProfile(id) {
@@ -657,11 +647,6 @@ function openDeleteProfileModal(id, profile) {
             await renderProfiles();
             updateProfileChip();
             updateLibraryProfileSelector();
-
-            // Refresh mods and conflicts
-            const { refreshMods } = await import('./mods.js');
-            await refreshMods(true);
-            
             toast(t('prof.deleted') || 'Profil supprimé.', 'info');
         } catch (err) {
             toast(t('prof.deleteError') + err, 'error');
