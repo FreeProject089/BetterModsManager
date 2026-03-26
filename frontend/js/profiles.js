@@ -539,7 +539,7 @@ export async function renderProfiles() {
         // The import and call are already here, ensuring they are executed
         const { refreshMods } = await import('./mods.js');
         await refreshMods(true);
-        const { updateDiscordStatus } = await import('./app.js');
+        const { updateDiscordStatus } = await import('./settings.js');
         await updateDiscordStatus();
     }
 

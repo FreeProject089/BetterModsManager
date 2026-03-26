@@ -1,7 +1,8 @@
 /**
  * mods.js — Mod library management with detail panel + scan + edit
  */
-import { invoke, pickFolder, listenFileDrop, toast, sendOsNotification, updateDiscordStatus } from './app.js';
+import { invoke, pickFolder, listenFileDrop, toast, sendOsNotification } from './app.js';
+import { updateDiscordStatus } from './settings.js';
 import { renderProfiles } from './profiles.js';
 import { t, applyTranslations } from './i18n.js';
 import { escHtml, escAttr, escJs } from './utils.js';
