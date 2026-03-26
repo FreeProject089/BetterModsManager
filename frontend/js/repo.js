@@ -1,5 +1,6 @@
 import { invoke, pickFolder } from './api.js';
-import { toast, updateLibraryProfileSelector, formatBytes, escHtml, escAttr } from './app.js';
+import { toast, updateLibraryProfileSelector } from './app.js';
+import { escHtml, escAttr, formatBytes } from './utils.js';
 import { renderProfiles } from './profiles.js';
 import { t } from './i18n.js';
 

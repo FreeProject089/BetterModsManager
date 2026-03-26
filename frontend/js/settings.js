@@ -6,6 +6,7 @@ import { invoke, getSettings, updateSettings, pickFile, saveFile } from './api.j
 import { t } from './i18n.js';
 import { toast } from './app.js';
 import { getProfiles, getActiveProfileId } from './profiles.js';
+import { formatBytes } from './utils.js';
 
 // ── GitHub PAT helper ─────────────────────────────────────
 export async function getGithubPat() {
@@ -236,12 +237,6 @@ async function renderSettingsShortcuts() {
 }
 
 // ── Storage Performance Settings ──
-
-const formatBytes = (bytes) => {
-    if (bytes >= 1e12) return (bytes / 1e12).toFixed(1) + ' TB';
-    if (bytes >= 1e9) return (bytes / 1e9).toFixed(1) + ' GB';
-    return (bytes / 1e6).toFixed(0) + ' MB';
-};
 
 /** Run benchmarks for all disks currently in use by profiles */
 export async function runAutoBenchmarks(disksList, isBoot = false) {

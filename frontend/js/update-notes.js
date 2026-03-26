@@ -5,7 +5,8 @@
 
 import { invoke } from './api.js';
 import { t } from './i18n.js';
-import { escHtml, escAttr, toast } from './app.js';
+import { toast } from './app.js';
+import { escHtml, escAttr } from './utils.js';
 
 // ── Navbar Version Button ────────────────────────────────
 export function initNavbarVersion() {

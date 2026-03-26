@@ -1,7 +1,8 @@
 /**
  * profiles.js — Profile management
  */
-import { invoke, pickFolder, toast, updateLibraryProfileSelector } from './app.js';
+import { invoke, pickFolder } from './api.js';
+import { toast, updateLibraryProfileSelector } from './app.js';
 import { pickFile, convertFileSrc } from './api.js';
 import { refreshMods } from './mods.js';
 import { t, applyTranslations } from './i18n.js';

@@ -1,4 +1,4 @@
-import { invoke } from './app.js';
+import { invoke } from './api.js';
 import { t } from './i18n.js';
 import { toast } from './app.js';
 
