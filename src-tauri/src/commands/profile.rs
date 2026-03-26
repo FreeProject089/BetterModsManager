@@ -3,6 +3,19 @@ use crate::state::AppState;
 use crate::commands::crash::log_line;
 use std::path::PathBuf;
 use tauri::State;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfilePayload {
+    pub name: String,
+    pub game_name: String,
+    pub game_path: String,
+    pub mods_path: String,
+    pub backup_path: String,
+    pub color: Option<String>,
+    pub icon: Option<String>,
+}
 
 #[tauri::command]
 pub fn get_profiles(state: State<AppState>) -> Vec<Profile> {
@@ -31,23 +44,17 @@ pub fn set_active_profile(state: State<AppState>, profile_id: String) -> Result<
 #[tauri::command]
 pub fn create_profile(
     state: State<AppState>,
-    name: String,
-    game_name: String,
-    game_path: String,
-    mods_path: String,
-    backup_path: String,
-    color: Option<String>,
-    icon: Option<String>,
+    payload: ProfilePayload,
 ) -> Result<Profile, String> {
     let mut profile = Profile::new(
-        name,
-        game_name,
-        PathBuf::from(&game_path),
-        PathBuf::from(&mods_path),
-        PathBuf::from(&backup_path),
+        payload.name,
+        payload.game_name,
+        PathBuf::from(&payload.game_path),
+        PathBuf::from(&payload.mods_path),
+        PathBuf::from(&payload.backup_path),
     );
-    profile.color = color;
-    profile.icon = icon;
+    profile.color = payload.color;
+    profile.icon = payload.icon;
     let result = profile.clone();
     {
         let mut data = state.data.lock().unwrap();
@@ -65,25 +72,19 @@ pub fn create_profile(
 pub fn update_profile(
     state: State<AppState>,
     profile_id: String,
-    name: String,
-    game_name: String,
-    game_path: String,
-    mods_path: String,
-    backup_path: String,
-    color: Option<String>,
-    icon: Option<String>,
+    payload: ProfilePayload,
 ) -> Result<(), String> {
-    log_line(format!("[PROFILE] Updated profile '{}' ({})", name, profile_id));
+    log_line(format!("[PROFILE] Updated profile '{}' ({})", payload.name, profile_id));
     {
         let mut data = state.data.lock().unwrap();
-        if let Some(p) = data.profiles.iter_mut().find(|p| p.id == profile_id) {
-            p.name = name;
-            p.game_name = game_name;
-            p.game_path = PathBuf::from(&game_path);
-            p.mods_path = PathBuf::from(&mods_path);
-            p.backup_path = PathBuf::from(&backup_path);
-            p.color = color;
-            p.icon = icon;
+        if let Some(p) = data.profiles.iter_mut().find(|x| x.id == profile_id) {
+            p.name = payload.name;
+            p.game_name = payload.game_name;
+            p.game_path = PathBuf::from(&payload.game_path);
+            p.mods_path = PathBuf::from(&payload.mods_path);
+            p.backup_path = PathBuf::from(&payload.backup_path);
+            p.color = payload.color;
+            p.icon = payload.icon;
         } else {
             return Err("Profile not found".to_string());
         }

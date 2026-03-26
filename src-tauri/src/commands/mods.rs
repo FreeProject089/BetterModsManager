@@ -73,7 +73,7 @@ pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, String> {
             enriched.mod_entry.enabled = active_profile.active_mods.contains(&m.id);
             
             // Recalculate conflicts using MEMORY CACHE (O(1))
-            enriched.mod_entry.conflicts = calculate_conflicts_from_cache(&m, &data, active_id, &state);
+            enriched.mod_entry.conflicts = calculate_conflicts_from_cache(m, &data, active_id, &state);
 
             // Find shared activations...
             for p in &data.profiles {
@@ -116,10 +116,9 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), String> {
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
 
-            let files = if m.last_scan_mtime == current_mtime && m.cached_files.is_some() {
-                m.cached_files.as_ref().unwrap().clone()
-            } else {
-                if let Ok(f_paths) = crate::fs_utils::list_mod_files(&m.mod_folder_path) {
+            let files = match &m.cached_files {
+                Some(cached) if m.last_scan_mtime == current_mtime => cached.clone(),
+                _ => if let Ok(f_paths) = crate::fs_utils::list_mod_files(&m.mod_folder_path) {
                     let f_strings: Vec<String> = f_paths.into_iter().map(|p| p.to_string_lossy().to_string()).collect();
                     m.cached_files = Some(f_strings.clone());
                     
@@ -145,7 +144,7 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), String> {
 
             let set: HashSet<PathBuf> = files.into_iter().map(PathBuf::from).collect();
             for f in &set {
-                index.entry(f.clone()).or_insert_with(Vec::new).push(m.id.clone());
+                index.entry(f.clone()).or_default().push(m.id.clone());
             }
             cache.insert(m.id.clone(), set);
         }
@@ -250,18 +249,47 @@ pub fn get_all_mods(state: State<AppState>) -> Result<Vec<ModEntry>, String> {
     Ok(data.mods.clone())
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddModPayload {
+    pub name: String,
+    pub mod_folder_path: String,
+    pub author: String,
+    pub description: String,
+    pub version: String,
+    pub tags: Vec<String>,
+    pub download_links: Option<Vec<crate::models::mod_entry::DownloadLink>>,
+    pub dependencies: Vec<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateModPayload {
+    pub name: String,
+    pub author: String,
+    pub description: String,
+    pub version: String,
+    pub tags: Vec<String>,
+    pub download_links: Vec<crate::models::mod_entry::DownloadLink>,
+    pub dependencies: Vec<String>,
+}
+
 #[tauri::command]
 pub async fn add_mod(
     state: State<'_, AppState>,
-    name: String,
-    mod_folder_path: String,
-    author: String,
-    description: String,
-    version: String,
-    tags: Vec<String>,
-    download_links: Option<Vec<crate::models::mod_entry::DownloadLink>>,
-    dependencies: Vec<String>,
+    payload: AddModPayload,
 ) -> Result<ModEntry, String> {
+    let AddModPayload {
+        name,
+        mod_folder_path,
+        author,
+        description,
+        version,
+        tags,
+        download_links,
+        dependencies,
+    } = payload;
+    
     log_line(format!("[MOD] Adding mod '{}' from '{}'", name, mod_folder_path));
     let mods_path = {
         let data = state.data.lock().unwrap();
@@ -760,14 +788,18 @@ pub async fn open_mod_file_at(state: State<'_, AppState>, mod_id: String, relati
 pub fn update_mod_meta(
     state: State<AppState>,
     mod_id: String,
-    name: String,
-    author: String,
-    description: String,
-    version: String,
-    tags: Vec<String>,
-    download_links: Vec<crate::models::mod_entry::DownloadLink>,
-    dependencies: Vec<String>,
+    payload: UpdateModPayload,
 ) -> Result<(), String> {
+    let UpdateModPayload {
+        name,
+        author,
+        description,
+        version,
+        tags,
+        download_links,
+        dependencies,
+    } = payload;
+    
     log_line(format!("[MOD] Updating metadata for '{}' ({})", name, mod_id));
     let mod_path = {
         let mut data = state.data.lock().unwrap();

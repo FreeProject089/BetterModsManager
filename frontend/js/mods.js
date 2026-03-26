@@ -1054,13 +1054,15 @@ async function renderModDetail(modId) {
 
       await invoke('update_mod_meta', { 
         modId: mod.id, 
-        name, 
-        author, 
-        description, 
-        version, 
-        tags,
-        downloadLinks: download_links,
-        dependencies: dependencies
+        payload: {
+            name, 
+            author, 
+            description, 
+            version, 
+            tags,
+            downloadLinks: download_links,
+            dependencies: dependencies
+        }
       });
 
       toast('Mod sauvegardé.', 'success');
@@ -1223,14 +1225,16 @@ async function confirmAddMod() {
 
   try {
     await invoke('add_mod', {
-      name,
-      mod_folder_path: folder,
-      author,
-      description,
-      version,
-      tags: tagId ? [tagId] : [],
-      download_links: download_links,
-      dependencies: dependencies
+      payload: {
+          name,
+          modFolderPath: folder,
+          author,
+          description,
+          version,
+          tags: tagId ? [tagId] : [],
+          downloadLinks: download_links,
+          dependencies: dependencies
+      }
     });
     
     if (modal) {

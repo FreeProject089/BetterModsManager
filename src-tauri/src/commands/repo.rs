@@ -401,17 +401,32 @@ fn generate_mini_server_files(
     Ok(())
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StandaloneServerConfig {
+    pub repo_path: String,
+    pub port: u16,
+    pub auto_start: bool,
+    pub use_cloudflare: bool,
+    pub use_upnp: bool,
+    pub lang: String,
+    pub upload_limit: u32,
+}
+
 #[tauri::command]
 pub async fn generate_standalone_server(
     handle: tauri::AppHandle,
-    repo_path: String,
-    port: u16,
-    auto_start: bool,
-    use_cloudflare: bool,
-    use_upnp: bool,
-    lang: String,
-    upload_limit: u32,
+    payload: StandaloneServerConfig,
 ) -> Result<(), String> {
+    let StandaloneServerConfig {
+        repo_path,
+        port,
+        auto_start,
+        use_cloudflare,
+        use_upnp,
+        lang,
+        upload_limit,
+    } = payload;
     let mut repo_json = PathBuf::from(&repo_path);
     
     // If user selected a directory, try to find repo.json inside it
@@ -681,7 +696,7 @@ pub async fn sync_server_repo(
                         if let Ok(local_chunks) = compute_local_chunk_hashes(&local_path) {
                             let remote_chunks = file.chunks.as_ref().unwrap();
                             
-                            let mut file_to_patch = fs::OpenOptions::new().read(true).write(true).create(true).open(&local_path).map_err(|e| e.to_string())?;
+                            let mut file_to_patch = fs::OpenOptions::new().read(true).write(true).open(&local_path).map_err(|e| e.to_string())?;
                             
                             let mut current_offset: u64 = 0;
 

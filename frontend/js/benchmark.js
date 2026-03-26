@@ -313,11 +313,7 @@ function updateFloatingMonitorState(active) {
     else pip.classList.remove('is-tracking');
 }
 
-function checkOperationEnd() {
-    if (isBenchmarkActive) {
-        recentEvents = [];
-    }
-}
+
 
 function getElapsedString(customStartTime = null) {
     const start = customStartTime || benchmarkStartTime;

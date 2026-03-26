@@ -269,7 +269,7 @@ async function confirmCreateProfile() {
     }
 
     try {
-        const profile = await invoke('create_profile', { name, gameName, gamePath, modsPath, backupPath, color, icon });
+        const profile = await invoke('create_profile', { payload: { name, gameName, gamePath, modsPath, backupPath, color, icon } });
         document.getElementById('modal-new-profile').classList.remove('open');
         toast(t('prof.created').replace('{name}', profile.name), 'success');
         await renderProfiles();
@@ -307,7 +307,7 @@ async function confirmEditProfile() {
     }
 
     try {
-        await invoke('update_profile', { profileId, name, gameName, gamePath, modsPath, backupPath, color, icon });
+        await invoke('update_profile', { profileId, payload: { name, gameName, gamePath, modsPath, backupPath, color, icon } });
         
         // Handle pending background updates
         if (window.pendingBgState.action === 'apply') {

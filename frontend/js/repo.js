@@ -1268,13 +1268,15 @@ export function initRepo() {
                 const uploadLimit = parseInt(inputMiniServerUploadLimit ? inputMiniServerUploadLimit.value : "0") || 0;
 
                 await invoke('generate_standalone_server', { 
-                    repoPath: jsonPath, 
-                    port, 
-                    autoStart, 
-                    useCloudflare, 
-                    useUpnp, 
-                    lang,
-                    uploadLimit
+                    payload: {
+                        repoPath: jsonPath, 
+                        port, 
+                        autoStart, 
+                        useCloudflare, 
+                        useUpnp, 
+                        lang,
+                        uploadLimit
+                    }
                 });
 
                 toast(t('repo.miniServerSuccess') || "Scripts du serveur autonome générés ! (Lancer-Serveur.bat)", "success");
@@ -1323,8 +1325,7 @@ export function initRepo() {
             monitoringListBody.innerHTML = downloads.map(d => {
                 const pct = Math.min(Math.round(d.progress) || 0, 100);
                 const speed = d.speed || 0;
-                const creatorIdText = d.creator_id && d.creator_id !== '-' ? d.creator_id : '-';
-                const creatorIdHtml = d.creator_id && d.creator_id !== '-' ? 
+                const creatorIdHtml = d.creator_id && d.creator_id !== '-' ?  
                     `<div style="display:flex; align-items:center; gap:6px;">
                         <span style="overflow:hidden; text-overflow:ellipsis;">${escHtml(d.creator_id)}</span>
                         <button class="btn btn-ghost btn-xs copy-mon-id" data-val="${escAttr(d.creator_id)}" style="padding:0; min-width:20px; height:20px; opacity:0.5; border:none; background:transparent;">

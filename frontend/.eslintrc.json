@@ -1,0 +1,21 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "extends": "eslint:recommended",
+  "parserOptions": {
+    "ecmaVersion": 12,
+    "sourceType": "module"
+  },
+  "rules": {
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }]
+  },
+  "globals": {
+    "window": "readonly",
+    "document": "readonly",
+    "console": "readonly",
+    "tauri": "readonly",
+    "invoke": "readonly"
+  }
+}

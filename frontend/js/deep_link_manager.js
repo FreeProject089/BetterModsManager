@@ -210,7 +210,7 @@ async function handleDeepLink(urlStr) {
                     const newBackupPath = document.getElementById('new-prof-backup-path').value.trim();
                     
                     try {
-                        const profile = await invoke('create_profile', { 
+                        const profile = await invoke('create_profile', { payload: {
                             name: newName, 
                             gameName: '', 
                             gamePath: newGamePath, 
@@ -218,7 +218,7 @@ async function handleDeepLink(urlStr) {
                             backupPath: newBackupPath, 
                             color: '#3b82f6', 
                             icon: 'star' 
-                        });
+                        } });
                         finalProfileId = profile.id;
                         console.log('[BMM] New profile created from import:', finalProfileId);
                         
