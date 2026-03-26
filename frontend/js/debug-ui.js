@@ -171,7 +171,7 @@ class DebugUI {
                                     </div>
                                 </div>
                             </div>
-                            <div class="debug-subpane" id="subpane-rust" style="height:100%; display:flex; flex-direction:column; display:none">
+                            <div class="debug-subpane" id="subpane-css" style="height:100%; flex-direction:column; display:none">
                                 <div style="padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2)">
                                     <div>
                                         <div style="font-size:13px; font-weight:600; color:white; margin-bottom:2px" data-i18n="dev.title.rust">Rust Debugger (GDB/LLDB)</div>
@@ -382,7 +382,7 @@ class DebugUI {
             </div>
         `;
         this.modalOverlay = modalOverlay;
-        this.container.appendChild(modalOverlay); // Append to DevTools container instead of body!
+        document.body.appendChild(modalOverlay); // Append to body for full-app centering
 
         // Load persisted position/size
         this.loadPosition();
@@ -1077,6 +1077,12 @@ class DebugUI {
         if (subId === 'css') {
             this.loadStylesheetsList();
         }
+        if (subId === 'html' && this._get('html-dom-tree').innerHTML === '') {
+            this.buildDomTree();
+        }
+        if (subId === 'rust' && (this._get('rust-logs-container').textContent.includes('Click Refresh') || this._get('rust-logs-container').textContent.includes('Actualiser'))) {
+            this.refreshRustLogs();
+        }
     }
 
     loadStylesheetsList() {
@@ -1085,7 +1091,8 @@ class DebugUI {
         
         // Preserve current selection if possible
         const currentVal = select.value;
-        select.innerHTML = '<option value="">Sélectionner une feuille...</option>';
+        const selectPrompt = t('dev.msg.selectStylesheet') || 'Sélectionner une feuille...';
+        select.innerHTML = `<option value="">${selectPrompt}</option>`;
         
         let found = false;
         Array.from(document.styleSheets).forEach((sheet, i) => {
@@ -1944,223 +1951,6 @@ class DebugUI {
         }, 1000);
     }
 
-    // --- DEBUGGER TAB METHODS ---
-
-    switchDebuggerSubtab(subId) {
-        this.container.querySelectorAll('.debug-subtab').forEach(t => t.classList.toggle('active', t.dataset.sub === subId));
-        this.container.querySelectorAll('.debug-subpane').forEach(p => p.style.display = p.id === `subpane-${subId}` ? 'flex' : 'none');
-        
-        // Lazy loading triggers
-        if (subId === 'html' && this._get('html-dom-tree').innerHTML === '') {
-            this.buildDomTree();
-        }
-        if (subId === 'css' && this._get('css-stylesheet-select').children.length <= 1) {
-            this.populateStylesheets();
-        }
-        if (subId === 'rust' && this._get('rust-logs-container').textContent.includes('Click Refresh')) {
-            this.refreshRustLogs();
-        }
-    }
-
-    evalJSCommand(cmd) {
-        const watchers = this._get('js-watchers');
-        if (!watchers) return;
-        
-        const row = document.createElement('div');
-        row.className = 'js-watcher-row';
-        row.style.cssText = 'display:flex; justify-content:space-between; padding:4px 8px; border-bottom:1px solid rgba(255,255,255,0.05); font-family:"JetBrains Mono"; font-size:11px; align-items:center';
-        
-        try {
-            // Using eval in devtools context is expected
-            let result = eval(cmd);
-            if (result && typeof result === 'object' && !(result instanceof Element)) {
-                try { result = JSON.stringify(result, null, 2); } catch(e) { result = '[Object]'; }
-            }
-            row.innerHTML = `<span style="color:var(--text-muted)">${this.escapeHtml(cmd)}</span> <span style="color:var(--debug-success); max-width:60%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${this.escapeHtml(String(result))}">${this.escapeHtml(String(result))}</span>`;
-        } catch (e) {
-            row.innerHTML = `<span style="color:var(--text-muted)">${this.escapeHtml(cmd)}</span> <span style="color:var(--debug-error)">${this.escapeHtml(String(e))}</span>`;
-        }
-        watchers.prepend(row);
-    }
-
-    async refreshRustLogs() {
-        if (!window.__TAURI__) return;
-        const container = this._get('rust-logs-container');
-        container.innerHTML = '<div style="color:var(--text-muted)">Loading logs...</div>';
-        try {
-            const logs = await invoke('get_rust_logs', { maxLines: 500 });
-            if (!logs || logs.length === 0) {
-                container.innerHTML = '<div style="color:var(--text-muted)">No logs available.</div>';
-                return;
-            }
-            container.innerHTML = logs.map(l => {
-                let color = 'white';
-                if (l.includes('[PANIC') || l.includes('ERROR')) color = 'var(--debug-error)';
-                if (l.includes('[WARNING]') || l.includes('WARN')) color = 'var(--debug-warning)';
-                if (l.includes('[DEBUG]')) color = 'var(--debug-accent)';
-                return `<div style="color:${color}; white-space:pre-wrap; margin-bottom:2px">${this.escapeHtml(l)}</div>`;
-            }).join('');
-            container.scrollTop = container.scrollHeight;
-        } catch (e) {
-            container.innerHTML = `<div style="color:var(--debug-error)">Failed to load logs: ${e}</div>`;
-        }
-    }
-
-    buildDomTree(parentEl = document.body, containerEl = this._get('html-dom-tree'), level = 0) {
-        if (level === 0) {
-            containerEl.innerHTML = '';
-            containerEl.style.position = 'relative';
-        }
-        
-        // Skip debug UI container itself
-        if (parentEl.id === 'bmm-debug-overlay') return;
-
-        Array.from(parentEl.children).forEach(child => {
-            if (child.tagName === 'SCRIPT' || child.tagName === 'STYLE' || child.id === 'bmm-debug-overlay') return;
-
-            const row = document.createElement('div');
-            row.className = 'dom-tree-node';
-            row.style.cssText = `padding-left: ${level * 16}px; display:flex; align-items:center; gap:4px; padding-top:1px; padding-bottom:1px; border-radius:2px; transition: background 0.1s`;
-            
-            const hasChildren = child.children.length > 0;
-            const toggleWrapper = document.createElement('span');
-            toggleWrapper.style.cssText = 'width:16px; display:flex; align-items:center; justify-content:center; cursor:pointer';
-            toggleWrapper.innerHTML = hasChildren ? `<span class="dom-toggle" style="color:var(--text-muted); font-size:9px">▶</span>` : '';
-            
-            const inspectIcon = document.createElement('span');
-            inspectIcon.className = 'dom-inspect-icon';
-            inspectIcon.style.cssText = 'width:14px; height:14px; opacity:0.3; cursor:pointer; color:var(--debug-accent); margin-right:4px; display:flex; align-items:center; justify-content:center';
-            inspectIcon.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>`;
-            inspectIcon.title = "Inspect this element";
-
-            const tagContent = document.createElement('div');
-            tagContent.style.cssText = 'flex:1; display:flex; align-items:center; gap:6px; cursor:default; overflow:hidden';
-            
-            const tagStr = `<span style="color:var(--debug-accent); font-weight:600">&lt;${child.tagName.toLowerCase()}&gt;</span>`;
-            const idStr = child.id ? `<span style="color:#d7ba7d; font-size:10px">#${child.id}</span>` : '';
-            
-            // Limit classes shown to keep it readable
-            const classAttr = child.getAttribute('class');
-            let classStr = '';
-            if (typeof classAttr === 'string' && classAttr) {
-                const classes = classAttr.trim().split(/\s+/);
-                const displayClasses = classes.length > 2 ? classes.slice(0, 2).concat(['...']) : classes;
-                classStr = `<span style="color:#9cdcfe; font-size:10px">.${displayClasses.join('.')}</span>`;
-            }
-
-            tagContent.innerHTML = `${tagStr} ${idStr} ${classStr}`;
-            
-            row.appendChild(toggleWrapper);
-            row.appendChild(inspectIcon);
-            row.appendChild(tagContent);
-            
-            const childrenContainer = document.createElement('div');
-            childrenContainer.className = 'dom-children';
-            childrenContainer.style.cssText = 'display:none; border-left: 1px solid rgba(255,255,255,0.05); margin-left: 7px';
-
-            // Toggle expansion
-            const doToggle = (e) => {
-                if (!hasChildren) return;
-                e?.stopPropagation();
-                const isHidden = childrenContainer.style.display === 'none';
-                childrenContainer.style.display = isHidden ? 'block' : 'none';
-                const toggleBtn = toggleWrapper.querySelector('.dom-toggle');
-                if (toggleBtn) toggleBtn.textContent = isHidden ? '▼' : '▶';
-                if (isHidden && childrenContainer.innerHTML === '') {
-                    this.buildDomTree(child, childrenContainer, level + 1);
-                }
-            };
-
-            toggleWrapper.onclick = doToggle;
-            tagContent.onclick = doToggle; // Clicking tag also toggles if it has children
-
-            // Inspect icon click
-            inspectIcon.onclick = (e) => {
-                e.stopPropagation();
-                this.selectElement(child);
-                // Visual feedback
-                inspectIcon.style.opacity = '1';
-                setTimeout(() => inspectIcon.style.opacity = '0.3', 500);
-            };
-
-            // Highlight on hover
-            row.onmouseenter = () => {
-                row.style.background = 'rgba(255,255,255,0.05)';
-                inspectIcon.style.opacity = '0.8';
-                this.highlightElement(child);
-            };
-            row.onmouseleave = () => {
-                row.style.background = '';
-                inspectIcon.style.opacity = '0.3';
-                if (this.highlightEl) this.highlightEl.style.display = 'none';
-                if (this.tooltipEl) this.tooltipEl.style.display = 'none';
-            };
-
-            containerEl.appendChild(row);
-            containerEl.appendChild(childrenContainer);
-        });
-    }
-
-    populateStylesheets() {
-        const select = this._get('css-stylesheet-select');
-        select.innerHTML = '<option value="">Select Stylesheet...</option>';
-        Array.from(document.styleSheets).forEach((sheet, idx) => {
-            const name = sheet.href ? sheet.href.split('/').pop() : `Inline Stylesheet #${idx + 1}`;
-            const opt = document.createElement('option');
-            opt.value = idx;
-            opt.textContent = name;
-            select.appendChild(opt);
-        });
-    }
-
-    loadStylesheet(indexStr) {
-        if (!indexStr) {
-            this._get('css-rules-container').innerHTML = '<div style="color:var(--text-muted); font-size:10px">Select a stylesheet to view rules.</div>';
-            return;
-        }
-        
-        const idx = parseInt(indexStr);
-        const sheet = document.styleSheets[idx];
-        const container = this._get('css-rules-container');
-        
-        if (!sheet) return;
-
-        try {
-            let html = '';
-            Array.from(sheet.cssRules).forEach(rule => {
-                if (rule.selectorText) {
-                    // Extract styles safely
-                    const styles = rule.style.cssText.split(';').filter(s => s.trim()).map(s => {
-                        const [k, v] = s.split(':');
-                        if (!k || !v) return '';
-                        return `<div style="padding-left:16px"><span style="color:#9cdcfe">${k.trim()}</span>: <span style="color:#ce9178">${v.trim()}</span>;</div>`;
-                    }).join('');
-                    
-                    html += `
-                        <div class="css-rule-row" style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:4px; padding:8px; margin-bottom:8px; font-family:'JetBrains Mono'; font-size:11px">
-                            <div style="color:var(--debug-accent); font-weight:700; margin-bottom:4px">${rule.selectorText} {</div>
-                            ${styles}
-                            <div style="color:var(--debug-accent); font-weight:700; margin-top:4px">}</div>
-                        </div>
-                    `;
-                }
-            });
-            container.innerHTML = html || '<div style="color:var(--text-muted); font-size:10px">No readable rules in this stylesheet. (CORS limitation?)</div>';
-            
-            // Re-apply search if exists
-            const search = this._get('css-rule-search').value;
-            if (search) this.filterCSSRules(search);
-        } catch (e) {
-            container.innerHTML = `<div style="color:var(--debug-error); font-size:10px">Blocked by browser security (CORS) or error: ${e.message}</div>`;
-        }
-    }
-
-    filterCSSRules(query) {
-        const q = query.toLowerCase();
-        this.container.querySelectorAll('.css-rule-row').forEach(row => {
-            row.style.display = row.textContent.toLowerCase().includes(q) ? 'block' : 'none';
-        });
-    }
 }
 
 export const debugUI = new DebugUI();
