@@ -68,6 +68,8 @@
     "common.destUpdated": "Destination mise à jour",
     "common.crashFolderError": "Impossible d'ouvrir le dossier des rapports de plantage",
     "common.step": "ÉTAPE",
+    "common.saved": "Mod sauvegardé.",
+    "common.downloadFile": "Télécharger le fichier",
     "__SECTION_CONFLICT_V2__": "--- CONFLITS V2 ---",
     "__SECTION_CONFLICT__": "--- CONFLITS DE MODS ---",
     "conflict.activateAnyway": "Activer quand même",
