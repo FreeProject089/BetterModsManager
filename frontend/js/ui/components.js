@@ -3,8 +3,8 @@
  * Extracts large template literals and DOM manipulations from main controllers.
  */
 
-import { t } from './i18n.js';
-import { escHtml, escAttr, escJs } from './utils.js';
+import { t } from '../core/i18n.js';
+import { escHtml, escAttr, escJs } from '../core/utils.js';
 
 /**
  * Truncate a string to a maximum length and add ellipsis if needed.

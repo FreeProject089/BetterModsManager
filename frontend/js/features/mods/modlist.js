@@ -2,18 +2,18 @@
  * modlist.js — Mod List Import/Export/Install Logic
  */
 
-import { invoke, pickFolder, pickFile, saveFile } from './api.js';
-import { appState } from './state.js';
-import { t } from './i18n.js';
+import { invoke, pickFolder, pickFile, saveFile } from '../../core/api.js';
+import { appState } from '../../core/state.js';
+import { t } from '../../core/i18n.js';
 import { refreshMods } from './mods.js';
-import { renderProfiles } from './profiles.js';
-import { getGithubPat } from './settings.js';
-import { escHtml, escAttr, formatBytes } from './utils.js';
+import { renderProfiles } from '../profiles/profiles.js';
+import { getGithubPat } from '../settings/settings.js';
+import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
 
 let lastImportedModlistJson = null;
 
 // Re-exporting toast from app.js for now or until moved to a better place
-import { toast } from './app.js';
+import { toast } from '../../ui/app.js';
 
 
 export function initModlist() {

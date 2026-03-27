@@ -3,30 +3,30 @@
  * Entry point for Better Mod Manager frontend
  */
 
-import { initProfiles, renderProfiles, updateProfileChip, openNewProfileModal } from './profiles.js';
-import { initMods, refreshMods } from './mods.js';
-import { initI18n, applyTranslations, t } from './i18n.js';
-import { initBenchmark } from './benchmark.js';
+import { initProfiles, renderProfiles, updateProfileChip, openNewProfileModal } from '../features/profiles/profiles.js';
+import { initMods, refreshMods } from '../features/mods/mods.js';
+import { initI18n, applyTranslations, t } from '../core/i18n.js';
+import { initBenchmark } from '../features/bench/benchmark.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
-import { initRepo } from './repo.js';
-import { appState } from './state.js';
-import { initInteractiveDocs, openDiagram } from './interactive-docs.js';
-import { debugUI } from './debug-ui.js';
-import { initDeepLinks } from './deep_link_manager.js';
+import { initRepo } from '../features/repo/repo.js';
+import { appState } from '../core/state.js';
+import { initInteractiveDocs, openDiagram } from '../docs/interactive-docs.js';
+import { debugUI } from '../features/debug/debug-ui.js';
+import { initDeepLinks } from '../core/deep_link_manager.js';
 import { initTitlebar } from './titlebar.js';
-import { initSettings, runAutoBenchmarks } from './settings.js';
+import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
 import { initModals } from './modals.js';
 import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode } from './update-notes.js';
 
 // New Modularized Imports
-import { initModlist } from './modlist.js';
+import { initModlist } from '../features/mods/modlist.js';
 import { initCrashReportUI, checkPreviousCrash } from './crash-report.js';
 import { initInteractionLogging } from './user-logger.js';
-import { initDebugMenu } from './debug-menu.js';
-import { escHtml, escAttr, formatBytes } from './utils.js';
+import { initDebugMenu } from '../features/debug/debug-menu.js';
+import { escHtml, escAttr, formatBytes } from '../core/utils.js';
 
 // ── Tauri bridge ──────────────────────────────────────────
-import { loadTauri, invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification } from './api.js';
+import { loadTauri, invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification } from '../core/api.js';
 
 export { invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification };
 
@@ -110,7 +110,7 @@ export function initNavbarLangDropdown() {
     if (!container) return;
 
     // Importing i18n functions here as they are tightly coupled with the UI
-    import('./i18n.js').then(({ getLanguages, setLang }) => {
+    import('../core/i18n.js').then(({ getLanguages, setLang }) => {
         function render() {
             const langs = getLanguages();
             const current = langs.find(l => l.active) || langs[0];
@@ -395,7 +395,7 @@ async function main() {
 
     // ── Auto-Calibration trigger at startup ──
     try {
-        const { getSettings } = await import('./api.js');
+        const { getSettings } = await import('../core/api.js');
         const settings = await getSettings();
         if (settings.auto_io_calibration) {
             console.log("[BMM] Auto-Calibration enabled, running boot optimization...");

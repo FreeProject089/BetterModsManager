@@ -1,6 +1,6 @@
-import { invoke } from './api.js';
-import { t } from './i18n.js';
-import { toast } from './app.js';
+import { invoke } from '../../core/api.js';
+import { t } from '../../core/i18n.js';
+import { toast } from '../../ui/app.js';
 
 let benchmarkPoints = [];
 let fullBenchmarkHistory = [];

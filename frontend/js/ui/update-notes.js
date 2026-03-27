@@ -3,10 +3,10 @@
  * Extracted from app.js for modularity
  */
 
-import { invoke } from './api.js';
-import { t } from './i18n.js';
+import { invoke } from '../core/api.js';
+import { t } from '../core/i18n.js';
 import { toast } from './app.js';
-import { escHtml, escAttr } from './utils.js';
+import { escHtml, escAttr } from '../core/utils.js';
 
 // ── Navbar Version Button ────────────────────────────────
 export function initNavbarVersion() {

@@ -1,5 +1,5 @@
-import { invoke } from './api.js';
-import { appState } from './state.js';
+import { invoke } from '../../core/api.js';
+import { appState } from '../../core/state.js';
 
 // Hook into addEventListener early to track listeners for the DevTools A11y Event Inspector
 const originalAddEventListener = EventTarget.prototype.addEventListener;
@@ -35,7 +35,10 @@ class DebugHub {
 
         // Bridge appState changes to DebugHub
         appState.onChange = (key, value) => {
-            this.emit('state', { key, value });
+            // Only emit if someone is listening or if it's a critical error
+            if (this.listeners.size > 0 || key.includes('Error')) {
+                this.emit('state', { key, value });
+            }
         };
 
         this.setupGlobalHandlers();
@@ -205,10 +208,25 @@ class DebugHub {
             url: window.location.href
         };
 
-        console.error(`[BMM-DEBUG] ${reason} DUMP GENERATED`, dump);
-        
         // Auto-save to localStorage for persistence after reload
-        localStorage.setItem('bmm_last_crash_dump', JSON.stringify(dump));
+        // TRUNCATE heavily for localStorage to avoid QuotaExceededError
+        const storageDump = {
+            ...dump,
+            logs: dump.logs.slice(-20),
+            ipcCalls: dump.ipcCalls.slice(-20),
+            actions: dump.actions.slice(-20)
+        };
+        
+        try {
+            localStorage.setItem('bmm_last_crash_dump', JSON.stringify(storageDump));
+        } catch (e) {
+            console.warn('[BMM-DEBUG] Failed to save small dump to localStorage:', e);
+            // Fallback: clear and try one last time with minimal data
+            try {
+                localStorage.removeItem('bmm_last_crash_dump');
+                localStorage.setItem('bmm_last_crash_dump', JSON.stringify({ reason: dump.reason, timestamp: dump.timestamp }));
+            } catch (e2) {}
+        }
         
         const dumpStr = JSON.stringify(dump, null, 2);
 

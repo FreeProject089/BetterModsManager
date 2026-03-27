@@ -2,8 +2,8 @@
  * modals.js — Generic Modals Initialization & Global Confirms
  */
 
-import { invoke } from './api.js';
-import { t } from './i18n.js';
+import { invoke } from '../core/api.js';
+import { t } from '../core/i18n.js';
 
 export function initModals() {
     document.querySelectorAll('[data-close]').forEach(btn => {
@@ -89,4 +89,65 @@ window.confirmCustom = (title, message, type = 'danger', options = {}) => {
         // Also handle clicking overlay outside
         modal.onclick = (e) => { if (e.target === modal) cleanup(false); };
     });
+};
+
+// --- Global Dropdown System ---
+let dropTimer;
+window.showGlobalDropdown = (btn, menu) => {
+    if (!menu) return;
+    window.cancelDropdownClose();
+    
+    // Ensure we have a portal
+    let portal = document.getElementById('global-dropdown-portal');
+    if (!portal) {
+        portal = document.createElement('div');
+        portal.id = 'global-dropdown-portal';
+        portal.style.cssText = 'position:fixed; top:0; left:0; pointer-events:none; z-index:999999;';
+        document.body.appendChild(portal);
+    }
+
+    portal.innerHTML = '';
+    const clone = menu.cloneNode(true);
+    clone.classList.add('open');
+    portal.appendChild(clone);
+
+    const rect = btn.getBoundingClientRect();
+    clone.style.position = 'fixed';
+    clone.style.top = (rect.bottom + 5) + 'px';
+    clone.style.left = (rect.left) + 'px';
+    clone.style.pointerEvents = 'auto';
+
+    clone.onmouseenter = window.cancelDropdownClose;
+    clone.onmouseleave = () => window.closeGlobalDropdown();
+
+    // Re-bind actions for common button classes
+    clone.querySelectorAll('.dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod').forEach(item => {
+        item.onclick = (e) => {
+            e.stopPropagation();
+            // Find the original item by its text or class if data-id is not enough
+            const originalItems = Array.from(menu.querySelectorAll('*'));
+            const idx = Array.from(clone.querySelectorAll('*')).indexOf(item);
+            if (originalItems[idx]) {
+                originalItems[idx].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            }
+            window.closeGlobalDropdown(true);
+        };
+    });
+};
+
+window.closeGlobalDropdown = (immediate = false) => {
+    if (immediate) {
+        window.cancelDropdownClose();
+        const portal = document.getElementById('global-dropdown-portal');
+        if (portal) portal.innerHTML = '';
+        return;
+    }
+    dropTimer = setTimeout(() => {
+        const portal = document.getElementById('global-dropdown-portal');
+        if (portal) portal.innerHTML = '';
+    }, 300);
+};
+
+window.cancelDropdownClose = () => {
+    if (dropTimer) clearTimeout(dropTimer);
 };

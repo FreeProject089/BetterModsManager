@@ -2,11 +2,11 @@
  * settings.js — Settings UI (PAT, Discord, Shortcuts, Storage, Language, Tags)
  */
 
-import { invoke, getSettings, updateSettings, pickFile, saveFile } from './api.js';
-import { t } from './i18n.js';
-import { toast } from './app.js';
-import { getProfiles, getActiveProfileId } from './profiles.js';
-import { formatBytes } from './utils.js';
+import { invoke, getSettings, updateSettings, pickFile, saveFile } from '../../core/api.js';
+import { t } from '../../core/i18n.js';
+import { toast } from '../../ui/app.js';
+import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
+import { formatBytes } from '../../core/utils.js';
 
 // ── GitHub PAT helper ─────────────────────────────────────
 export async function getGithubPat() {
@@ -547,8 +547,8 @@ async function initLanguageSettings() {
     const langContainer = document.getElementById('settings-lang-container');
     if (!langContainer) return;
 
-    const { getLanguages, setLang } = await import('./i18n.js');
-    const { initNavbarLangDropdown } = await import('./app.js'); 
+    const { getLanguages, setLang } = await import('../../core/i18n.js');
+    const { initNavbarLangDropdown } = await import('../../ui/app.js'); 
 
     const getFlag = (l) => {
         if (!l || !l.flag) return '⚪';
@@ -641,7 +641,7 @@ async function initLanguageSettings() {
             const res = await invoke('import_language');
             if (res) {
                 toast(t('settings.langImportSuccess'), 'success');
-                const { refreshLanguages } = await import('./i18n.js');
+                const { refreshLanguages } = await import('../../core/i18n.js');
                 await refreshLanguages();
                 renderLangs();
             }

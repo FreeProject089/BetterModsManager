@@ -3,7 +3,7 @@
  * Extracted from app.js for modularity
  */
 
-import { invoke } from './api.js';
+import { invoke } from '../core/api.js';
 
 let tauriWindow = null;
 

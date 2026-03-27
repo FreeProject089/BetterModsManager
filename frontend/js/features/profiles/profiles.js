@@ -1,11 +1,11 @@
 /**
  * profiles.js — Profile management
  */
-import { invoke, pickFolder } from './api.js';
-import { toast, updateLibraryProfileSelector } from './app.js';
-import { pickFile, convertFileSrc } from './api.js';
-import { refreshMods } from './mods.js';
-import { t, applyTranslations } from './i18n.js';
+import { invoke, pickFolder } from '../../core/api.js';
+import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
+import { pickFile, convertFileSrc } from '../../core/api.js';
+import { refreshMods } from '../mods/mods.js';
+import { t, applyTranslations } from '../../core/i18n.js';
 
 window.pendingBgState = { action: null, tmpPath: null }; // Tracks 'apply', 'remove', or null
 
@@ -278,7 +278,7 @@ async function confirmCreateProfile() {
         updateLibraryProfileSelector();
 
         // Refresh mods and conflicts
-        const { refreshMods } = await import('./mods.js');
+        const { refreshMods } = await import('../mods/mods.js');
         await refreshMods(true);
     } catch (err) {
         toast(t('common.error') + ' : ' + err, 'error');
@@ -325,7 +325,7 @@ async function confirmEditProfile() {
         updateLibraryProfileSelector();
 
         // Refresh mods and conflicts
-        const { refreshMods } = await import('./mods.js');
+        const { refreshMods } = await import('../mods/mods.js');
         await refreshMods(true);
     } catch (err) {
         toast(t('common.error') + ' : ' + err, 'error');
@@ -532,15 +532,15 @@ export async function renderProfiles() {
     async function activateProfile(id) {
         await invoke('set_active_profile', { profileId: id });
         // Cache the new profile ID immediately so renderModList skips IPC
-        const { appState } = await import('./state.js');
+        const { appState } = await import('../../core/state.js');
         appState.set('cachedActiveProfileId', id);
         await renderProfiles();
         updateProfileChip();
         updateLibraryProfileSelector();
         // The import and call are already here, ensuring they are executed
-        const { refreshMods } = await import('./mods.js');
+        const { refreshMods } = await import('../mods/mods.js');
         await refreshMods(true);
-        const { updateDiscordStatus } = await import('./settings.js');
+        const { updateDiscordStatus } = await import('../settings/settings.js');
         await updateDiscordStatus();
     }
 
@@ -662,7 +662,7 @@ function openDeleteProfileModal(id, profile) {
             updateLibraryProfileSelector();
 
             // Refresh mods and conflicts
-            const { refreshMods } = await import('./mods.js');
+            const { refreshMods } = await import('../mods/mods.js');
             await refreshMods(true);
             
             toast(t('prof.deleted') || 'Profil supprimé.', 'info');

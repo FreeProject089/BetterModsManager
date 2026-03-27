@@ -1,7 +1,7 @@
 import { debugHub } from './debug.js';
-import { appState } from './state.js';
-import { invoke } from './api.js';
-import { t, applyTranslations } from './i18n.js';
+import { appState } from '../../core/state.js';
+import { invoke } from '../../core/api.js';
+import { t, applyTranslations } from '../../core/i18n.js';
 
 /**
  * debug-ui.js — UI Logic for BMM DevTools
@@ -64,17 +64,35 @@ class DebugUI {
         this.container.classList.toggle('open', this.isOpen);
         
         if (this.isOpen) {
-            this.updateStateView();
-            // Refresh sources only if needed
-            if (!this.currentSource) this.loadSources();
-            
+            this.refreshAllPanes();
             this.translateUI();
 
             // Adjust z-index to be on top when opened
             this.container.style.zIndex = '200000';
         } else {
             this.toggleInspector(false);
-            this.container.style.zIndex = '20000';
+            this.container.style.zIndex = '2000';
+        }
+    }
+
+    refreshAllPanes() {
+        this.updateStateView();
+        this.updatePatchTree();
+        this.updateMetrics(debugHub.metrics);
+        
+        // Re-populate logs from hub
+        const logsPane = this._get('console-logs');
+        if (logsPane) {
+            logsPane.innerHTML = '';
+            debugHub.logs.forEach(log => this.appendLog(log));
+        }
+
+        // Re-populate timeline from hub
+        const timelinePane = this._get('timeline-list');
+        if (timelinePane) {
+            timelinePane.innerHTML = '';
+            debugHub.ipcCalls.forEach(call => this.updateTimeline(call));
+            debugHub.actions.forEach(action => this.updateTimeline(action));
         }
     }
 
@@ -171,7 +189,7 @@ class DebugUI {
                                     </div>
                                 </div>
                             </div>
-                            <div class="debug-subpane" id="subpane-css" style="height:100%; flex-direction:column; display:none">
+                            <div class="debug-subpane" id="subpane-rust" style="height:100%; flex-direction:column; display:none">
                                 <div style="padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2)">
                                     <div>
                                         <div style="font-size:13px; font-weight:600; color:white; margin-bottom:2px" data-i18n="dev.title.rust">Rust Debugger (GDB/LLDB)</div>
@@ -186,7 +204,7 @@ class DebugUI {
                                     <div style="color:var(--text-muted)" data-i18n="dev.msg.clickRefresh">Click Refresh to load logs...</div>
                                 </div>
                             </div>
-                            <div class="debug-subpane" id="subpane-html" style="height:100%; overflow-y:auto; padding:8px; display:none">
+                            <div class="debug-subpane" id="subpane-html" style="height:100%; overflow-y:auto; padding:8px; display:none; flex-direction:column">
                                 <div style="margin-bottom:8px; display:flex; gap:8px">
                                     <button class="debug-btn" id="html-refresh-dom" style="font-size:10px; padding:2px 8px" data-i18n="dev.btn.refreshDom">Generate DOM Tree</button>
                                     <button class="debug-btn debug-btn-ghost" id="html-collapse-all" style="font-size:10px; padding:2px 8px" data-i18n="dev.btn.collapseAll">Collapse All</button>
@@ -929,25 +947,29 @@ class DebugUI {
 
         // Debug Hub events
         debugHub.subscribe(event => {
-            if (event.type === 'log') this.appendLog(event.data);
-            if (event.type === 'ipc' || event.type === 'action') this.updateTimeline(event.data);
-            if (event.type === 'clear') {
-                this._get('console-logs').innerHTML = '';
-                this._get('timeline-list').innerHTML = '';
-                debugHub.logs = [];
-                debugHub.ipcCalls = [];
-                debugHub.actions = [];
-            }
-            if (event.type === 'state') {
-                this.updateStateView();
-                this.translateUI();
-            }
-            if (event.type === 'metrics') this.updateMetrics(event.data);
-            if (event.type === 'patches') this.updatePatchTree();
             if (event.type === 'crash') {
                 this.crashOverlay.classList.add('active');
                 this._get('crash-details').textContent = event.data.msg || 'Unknown internal error';
+                return;
             }
+
+            // DO NOT update UI if closed (MAJOR LAG FIX)
+            if (!this.isOpen) return;
+
+            if (event.type === 'log') this.appendLog(event.data);
+            if (event.type === 'ipc' || event.type === 'action') this.updateTimeline(event.data);
+            if (event.type === 'clear') {
+                const logs = this._get('console-logs');
+                const timeline = this._get('timeline-list');
+                if (logs) logs.innerHTML = '';
+                if (timeline) timeline.innerHTML = '';
+                // hub data already cleared by debugHub.clear()
+            }
+            if (event.type === 'state') {
+                this.updateStateView();
+            }
+            if (event.type === 'metrics') this.updateMetrics(event.data);
+            if (event.type === 'patches') this.updatePatchTree();
         });
 
         // Inspector mouse move
@@ -1072,6 +1094,7 @@ class DebugUI {
         });
         this.container.querySelectorAll('.debug-subpane').forEach(p => {
             p.style.display = p.id === `subpane-${subId}` ? 'flex' : 'none';
+            if (p.id === `subpane-${subId}`) p.style.flexDirection = 'column';
         });
 
         if (subId === 'css') {
@@ -1942,6 +1965,119 @@ class DebugUI {
         a.download = name;
         a.click();
         URL.revokeObjectURL(url);
+    }
+
+    buildDomTree() {
+        const tree = this._get('html-dom-tree');
+        if (!tree) return;
+        tree.innerHTML = '';
+        const root = document.documentElement;
+        tree.appendChild(this._renderDomNode(root));
+    }
+
+    _renderDomNode(node) {
+        if (node.nodeType !== Node.ELEMENT_NODE) return null;
+        if (node.id === 'bmm-debug-overlay' || node.closest('#bmm-debug-overlay')) return null;
+
+        const container = document.createElement('div');
+        container.className = 'dom-node';
+        container.style.marginLeft = '12px';
+        container.style.padding = '2px 0';
+
+        const header = document.createElement('div');
+        header.style.cursor = 'pointer';
+        header.style.display = 'flex';
+        header.style.alignItems = 'center';
+        header.style.gap = '6px';
+        header.className = 'dom-tree-node'; // Use style from debug.css
+
+        const hasChildren = node.children.length > 0;
+        const toggle = document.createElement('span');
+        toggle.className = 'dom-toggle';
+        toggle.style.fontSize = '8px';
+        toggle.style.width = '10px';
+        toggle.style.color = 'var(--text-muted)';
+        toggle.textContent = hasChildren ? '▶' : ' ';
+        header.appendChild(toggle);
+
+        const tag = document.createElement('span');
+        tag.style.color = 'var(--debug-accent)';
+        tag.style.fontWeight = 'bold';
+        tag.textContent = `<${node.tagName.toLowerCase()}${node.id ? '#' + node.id : ''}>`;
+        header.appendChild(tag);
+
+        container.appendChild(header);
+
+        if (hasChildren) {
+            const children = document.createElement('div');
+            children.className = 'dom-children';
+            children.style.display = 'none';
+            children.style.borderLeft = '1px solid rgba(255,255,255,0.05)';
+            children.style.marginLeft = '4px';
+
+            header.onclick = (e) => {
+                e.stopPropagation();
+                const isHidden = children.style.display === 'none';
+                children.style.display = isHidden ? 'block' : 'none';
+                toggle.textContent = isHidden ? '▼' : '▶';
+                
+                // Lazy load children if needed
+                if (isHidden && children.innerHTML === '') {
+                    for (const child of node.children) {
+                        const childNode = this._renderDomNode(child);
+                        if (childNode) children.appendChild(childNode);
+                    }
+                }
+            };
+            container.appendChild(children);
+        }
+
+        tag.onclick = (e) => {
+            e.stopPropagation();
+            this.selectElement(node);
+        };
+
+        return container;
+    }
+
+    async refreshRustLogs() {
+        const container = this._get('rust-logs-container');
+        if (!container) return;
+        
+        container.innerHTML = `<div style="padding:10px; color:var(--text-muted)">Chargement...</div>`;
+        
+        try {
+            const { invoke } = window.__TAURI__.tauri;
+            const logs = await invoke('get_rust_logs');
+            container.innerHTML = logs.map(line => {
+                // simple parsing for highlighting strings like "[HH:MM:SS.mmm] [LEVEL] message"
+                let color = 'var(--text-primary)';
+                const lowerLine = line.toLowerCase();
+                if (lowerLine.includes('error') || lowerLine.includes('panic')) color = 'var(--debug-error)';
+                else if (lowerLine.includes('warn')) color = 'var(--debug-warn)';
+                else if (lowerLine.includes('info')) color = 'var(--debug-accent)';
+                else if (lowerLine.includes('success') || lowerLine.includes('done')) color = 'var(--debug-success)';
+
+                return `
+                    <div style="font-family:'JetBrains Mono'; font-size:10px; margin-bottom:2px; padding:2px 4px; border-bottom:1px solid rgba(255,255,255,0.01); white-space:pre-wrap; word-break:break-all; color:${color}">
+                        ${this.escapeHtml(line)}
+                    </div>
+                `;
+            }).join('') || '<div style="padding:10px; color:var(--text-muted)">Aucun log Rust trouvé.</div>';
+            
+            container.scrollTop = container.scrollHeight;
+        } catch (e) {
+            container.innerHTML = `<div style="padding:10px; color:var(--debug-error)">Erreur: ${e}</div>`;
+        }
+    }
+
+    _getLogColor(level) {
+        if (!level) return 'var(--text-primary)';
+        const l = level.toUpperCase();
+        if (l.includes('ERROR')) return 'var(--debug-error)';
+        if (l.includes('WARN')) return 'var(--debug-warn)';
+        if (l.includes('INFO')) return 'var(--debug-accent)';
+        return 'var(--debug-success)';
     }
 
     startUpdateLoop() {

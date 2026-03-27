@@ -2,15 +2,15 @@
  * crash-report.js — Crash Detection and Reporting UI
  */
 
-import { invoke } from './api.js';
-import { t } from './i18n.js';
+import { invoke } from '../core/api.js';
+import { t } from '../core/i18n.js';
 import { toast } from './app.js';
 
 /** Call on startup – shows crash modal if a recent zip was generated OR backend detected dirty session. */
 export async function checkPreviousCrash() {
     try {
         const startupStatus = await invoke('get_startup_status');
-        const { getSettings, updateSettings } = await import('./api.js');
+        const { getSettings, updateSettings } = await import('../core/api.js');
         const settings = await getSettings();
 
         const backendCrashed = startupStatus.backend_crashed;

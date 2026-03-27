@@ -4,9 +4,9 @@
  */
 
 import { invoke } from './api.js';
-import { toast } from './app.js';
+import { toast } from '../ui/app.js';
 import { t } from './i18n.js';
-import { refreshMods } from './mods.js';
+import { refreshMods } from '../features/mods/mods.js';
 import { escHtml } from './utils.js';
 
 /**

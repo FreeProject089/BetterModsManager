@@ -2,10 +2,10 @@
  * user-logger.js — Frontend Interaction Logging
  */
 
-import { invoke } from './api.js';
-import { appState } from './state.js';
+import { invoke } from '../core/api.js';
+import { appState } from '../core/state.js';
 import { toast } from './app.js';
-import { debugUI } from './debug-ui.js';
+import { debugUI } from '../features/debug/debug-ui.js';
 
 /** Global interaction logger */
 export function initInteractionLogging() {

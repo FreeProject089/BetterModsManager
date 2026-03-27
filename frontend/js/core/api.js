@@ -3,7 +3,7 @@
  * Handles communication between frontend and Rust backend
  */
 
-import { debugHub } from './debug.js';
+import { debugHub } from '../features/debug/debug.js';
 
 let _invoke;
 let _dialog;

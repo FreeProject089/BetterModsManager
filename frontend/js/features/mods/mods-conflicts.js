@@ -1,0 +1,328 @@
+import { appState } from '../../core/state.js';
+import { invoke } from '../../core/api.js';
+import { t } from '../../core/i18n.js';
+import { escHtml, escAttr, escJs } from '../../core/utils.js';
+import { toast } from '../../ui/app.js';
+
+const S = new Proxy(appState.state, {
+  get(target, prop) { return target[prop]; },
+  set(target, prop, value) { appState.set(prop, value); return true; }
+});
+
+let conflictCheckGeneration = 0;
+
+export async function checkAllConflicts() {
+  const currentGen = ++conflictCheckGeneration;
+
+  const allModsGlobal = await invoke('get_all_mods').catch(() => []);
+  const existingModIds = new Set(allModsGlobal.map(m => m.id));
+
+  Object.keys(S.conflictCache).forEach(mid => {
+    if (!existingModIds.has(mid)) delete S.conflictCache[mid];
+  });
+
+  const activeId = S.cachedActiveProfileId || await invoke('get_active_profile_id').catch(() => null);
+  if (!activeId && allModsGlobal.length === 0) return;
+
+  const BATCH_SIZE = 5;
+  const mods = [...allModsGlobal];
+  for (let i = 0; i < mods.length; i += BATCH_SIZE) {
+    const batch = mods.slice(i, i + BATCH_SIZE);
+    
+    if (currentGen !== conflictCheckGeneration) return;
+    
+    const results = await Promise.allSettled(batch.map(m => invoke('get_mod_conflicts', { modId: m.id })));
+
+    if (currentGen !== conflictCheckGeneration) return;
+
+    results.forEach((res, idx) => {
+      const mod = batch[idx];
+      if (mod && res.status === 'fulfilled' && res.value && res.value.length > 0) {
+        S.conflictCache[mod.id] = res.value;
+      } else if (mod) {
+        delete S.conflictCache[mod.id];
+      }
+    });
+
+    batch.forEach(mod => updateConflictBadgeOnCard(mod.id));
+  }
+
+  saveConflictCache();
+}
+
+export function updateConflictBadgeOnCard(modId) {
+  const card = document.querySelector(`.mod-card[data-id="${modId}"]`);
+  if (!card) return;
+
+  const reports = S.conflictCache[modId] || [];
+  const modInfo = card.querySelector('.mod-info');
+  const nameRow = modInfo ? modInfo.firstElementChild : null;
+  if (!nameRow) return;
+
+  nameRow.querySelectorAll('.tag-conflict, .conflict-badge').forEach(e => e.remove());
+
+  if (reports.length > 0) {
+    const hasIntraActive = reports.some(c => c.category === 'Intra' && c.status === 'Active');
+    const hasIntraPotential = reports.some(c => c.category === 'Intra' && c.status === 'Potential');
+    const hasInterActive = reports.some(c => c.category === 'Inter' && c.status === 'Active');
+    const hasInterPotential = reports.some(c => c.category === 'Inter' && c.status === 'Potential');
+
+    let conflictHtml = '';
+    const intraSvg = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
+    const interSvg = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+
+    if (hasIntraActive) conflictHtml += `<div class="tag-conflict tag-intra-conflict active" onmouseenter="window.showTaskyHelp('lib.conflictActiveTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${intraSvg}Intra</div>`;
+    else if (hasIntraPotential) conflictHtml += `<div class="tag-conflict tag-intra-conflict potential" onmouseenter="window.showTaskyHelp('lib.conflictPotentialTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${intraSvg}Intra</div>`;
+
+    if (hasInterActive) conflictHtml += `<div class="tag-conflict tag-inter-conflict active" onmouseenter="window.showTaskyHelp('lib.conflictInterActiveTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${interSvg}Inter</div>`;
+    else if (hasInterPotential) conflictHtml += `<div class="tag-conflict tag-inter-conflict potential" onmouseenter="window.showTaskyHelp('lib.conflictInterPotentialTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${modId}')" style="cursor:pointer">${interSvg}Inter</div>`;
+
+    if (conflictHtml) nameRow.insertAdjacentHTML('beforeend', conflictHtml);
+  }
+}
+
+export function saveConflictCache() {
+  try {
+    localStorage.setItem('bmm_conflict_cache', JSON.stringify(S.conflictCache));
+  } catch (e) {}
+}
+
+export function restoreConflictCache() {
+  try {
+    const cached = localStorage.getItem('bmm_conflict_cache');
+    if (cached) S.conflictCache = JSON.parse(cached);
+  } catch (e) { S.conflictCache = {}; }
+}
+
+export async function openGlobalConflictModal(preselectModId = null) {
+  const modal = document.getElementById('modal-global-conflicts');
+  const container = document.getElementById('global-conflicts-list');
+  const searchInput = document.getElementById('global-conflict-search');
+  const profileFilter = document.getElementById('global-conflict-profile-filter');
+  const typeFilter = document.getElementById('global-conflict-type-filter');
+  const sortSelect = document.getElementById('global-conflict-sort-order');
+  const closeBtn = document.getElementById('btn-close-global-conflicts');
+
+  if (!modal || !container) return;
+
+  try {
+    const activeId = await invoke('get_active_profile_id').catch(() => null);
+    if (!activeId) return toast(t('prof.noneActive'), 'error');
+
+    modal.classList.add('open');
+    container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><br>${t('conflict.loading') || 'Analyse des conflits...'}</div>`;
+
+    let allConflicts = [];
+    const allModsGlobal = await invoke('get_all_mods').catch(() => []);
+    
+    Object.keys(S.conflictCache).forEach(mid => {
+       const reports = S.conflictCache[mid];
+       if (reports && reports.length > 0) {
+          const mod = allModsGlobal.find(m => m.id === mid);
+          const modName = mod?.name || mid;
+          const activationOrder = mod?.activation_order ?? -1;
+          allConflicts.push({ sourceModId: mid, sourceModName: modName, reports, activationOrder });
+       }
+    });
+
+    if (preselectModId) {
+      const idx = allConflicts.findIndex(c => c.sourceModId === preselectModId);
+      if (idx > -1) {
+        const [target] = allConflicts.splice(idx, 1);
+        allConflicts.unshift(target);
+      }
+    }
+
+    const profiles = await invoke('get_profiles');
+    profileFilter.innerHTML = `<option value="all">${t('conflict.allProfiles') || 'Tous les profils'}</option>` + profiles.map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join('');
+
+    const renderList = (respectPrioritization = false) => {
+      const q = searchInput.value.toLowerCase();
+      const p = profileFilter.value;
+      const tFilter = typeFilter.value;
+      const sortBy = sortSelect.value;
+
+      if (!respectPrioritization || !preselectModId) {
+        allConflicts.sort((a, b) => {
+           if (sortBy === 'asc') return a.activationOrder - b.activationOrder;
+           return b.activationOrder - a.activationOrder;
+        });
+      }
+
+      let html = '';
+      allConflicts.forEach(item => {
+        let filteredReports = item.reports;
+        if (tFilter !== 'all') {
+           filteredReports = filteredReports.filter(r => r.category.toLowerCase() === tFilter.toLowerCase());
+        }
+        if (p !== 'all') {
+           const pName = profiles.find(pr => pr.id === p)?.name || '';
+           filteredReports = filteredReports.filter(r => r.other_profile_name === pName);
+        }
+        
+        if (q) {
+           const sourceMatch = item.sourceModName.toLowerCase().includes(q);
+           if (!sourceMatch) {
+              filteredReports = filteredReports.filter(r => r.other_mod_name.toLowerCase().includes(q));
+           }
+        }
+
+        if (filteredReports.length === 0) return;
+
+        const groups = {};
+        filteredReports.forEach(r => {
+           if (!groups[r.other_profile_name]) groups[r.other_profile_name] = [];
+           groups[r.other_profile_name].push(r);
+        });
+
+        const targetsHtml = Object.keys(groups).map(pName => {
+           const grps = groups[pName];
+           grps.sort((a,b) => a.activation_order - b.activation_order);
+           
+           return `
+             <div style="margin-top:6px">
+               <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:600">${escHtml(pName)}</div>
+               <div style="display:flex;flex-direction:column;gap:4px">
+                 ${grps.map(r => `
+                   <div style="display:flex;align-items:center;background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:6px;border-left:3px solid ${r.status === 'Active' ? 'var(--danger)' : 'var(--warning)'};justify-content:space-between">
+                     <span style="font-size:12px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;cursor:help" 
+                           title="${escAttr(r.other_mod_name)}"
+                           onmouseenter="window.showTaskyHelp('${escAttr(escJs(r.other_mod_name))}', 'package', true)"
+                           onmouseleave="window.hideTaskyHelp()">${escHtml(r.other_mod_name)}</span>
+                     <div style="display:flex;align-items:center;gap:10px">
+                       ${r.status === 'Active' ? `<span style="font-size:9px;background:rgba(255,255,255,0.1);color:var(--text-primary);padding:2px 5px;border-radius:4px" title="Ordre d activation">#${r.activation_order}</span>` : ''}
+                       <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);cursor:pointer;text-decoration:underline" onclick="window.showConflictContextMenu(event, '${item.sourceModId}', '${r.other_mod_id}')">${r.file_count} f.</span>
+                       <span style="font-size:9px;font-weight:900;padding:2px 6px;border-radius:12px;text-transform:uppercase;color:${r.status==='Active'?'var(--danger)':'var(--warning)'};border:1px solid ${r.status==='Active'?'var(--danger)':'var(--warning)'}">${r.status === 'Active' ? (t('conflict.active')||'ACTIF') : (t('conflict.potential')||'POTENTIEL')}</span>
+                     </div>
+                   </div>
+                 `).join('')}
+               </div>
+             </div>
+           `;
+        }).join('');
+
+        html += `
+          <div class="conflict-group-card" style="display:flex;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px;min-height:95px;height:auto">
+             <div style="flex:0 0 160px;padding:10px 12px;border-right:1px solid var(--border);background:rgba(255,255,255,0.02);display:flex;flex-direction:column;justify-content:center">
+               <div style="font-weight:600;font-size:12px;color:var(--text-primary);margin-bottom:2px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;cursor:help"
+                    onmouseenter="window.showTaskyHelp('${escAttr(escJs(item.sourceModName))}', 'package', true)"
+                    onmouseleave="window.hideTaskyHelp()">${escHtml(item.sourceModName)}</div>
+               <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">${t('conflict.modSource') || 'Mod Source'}</div>
+             </div>
+             <div style="flex:2;padding:8px 12px;overflow-y:auto;background:rgba(0,0,0,0.1)">
+               ${targetsHtml}
+             </div>
+          </div>
+        `;
+      });
+      container.innerHTML = html || `<div style="padding:40px;text-align:center;color:var(--text-muted)">${t('conflict.empty') || 'Aucun conflit.'}</div>`;
+    };
+
+    renderList(true);
+    searchInput.oninput = () => renderList(false);
+    profileFilter.onchange = () => renderList(false);
+    typeFilter.onchange = () => renderList(false);
+    sortSelect.onchange = () => renderList(false);
+    
+    if (closeBtn) closeBtn.onclick = () => modal.classList.remove('open');
+
+    if (preselectModId) {
+      setTimeout(() => {
+        searchInput.value = S.allMods.find(m => m.id === preselectModId)?.name || '';
+        renderList(true);
+      }, 100);
+    }
+  } catch (err) {
+    container.innerHTML = '<div style="color:var(--danger)">'+err+'</div>';
+  }
+}
+
+window.openGlobalConflictModal = openGlobalConflictModal;
+
+export function showConflictContextMenu(e, mod1Id, mod2Id) {
+  e.preventDefault();
+  const ctx = document.getElementById('conflict-context-menu');
+  if (!ctx) return;
+  
+  ctx.style.display = 'block';
+  ctx.style.left = e.pageX + 'px';
+  ctx.style.top = e.pageY + 'px';
+  
+  const btn = document.getElementById('ctx-open-explorer');
+  btn.onclick = async () => {
+    ctx.style.display = 'none';
+    const modal = document.getElementById('modal-conflict-tree');
+    const container = document.getElementById('conflict-tree-container');
+    const btnConfirm = document.getElementById('btn-confirm-conflict-tree');
+    if (btnConfirm) btnConfirm.style.display = 'none';
+    
+    modal.style.zIndex = '10005';
+    modal.classList.add('open');
+    container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted)">${t('conflict.loadingTree')||"Chargement de l'arbre..."}</div>`;
+    
+    try {
+      const files = await invoke('get_conflict_file_tree', { modId: mod1Id, otherModId: mod2Id });
+      if (files.length === 0) {
+        container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted)">${t('conflict.noTreeFiles')||"Aucun fichier conflictuel direct trouvé."}</div>`;
+        return;
+      }
+      container.innerHTML = files.map(f => `<div style="padding:4px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escAttr(f)}">${escHtml(f)}</div>`).join('');
+    } catch (err) {
+      container.innerHTML = `<span style="color:var(--danger)">${t('common.error')||"Erreur"}: ${err}</span>`;
+    }
+  };
+  
+  document.addEventListener('mousedown', function hideCtx(ev) {
+    if (!ctx.contains(ev.target)) {
+      ctx.style.display = 'none';
+      document.removeEventListener('mousedown', hideCtx);
+    }
+  });
+}
+window.showConflictContextMenu = showConflictContextMenu;
+
+export function showActivationWarning(modId, conflicts, onConfirm) {
+  const modal = document.getElementById('modal-activation-warning');
+  const list = document.getElementById('activation-warning-list');
+  const btn = document.getElementById('btn-confirm-activation-anyway');
+  const cancelBtn = document.getElementById('btn-cancel-activation-warning');
+  const orderPanel = document.getElementById('activation-order-panel');
+  const orderList = document.getElementById('activation-order-list');
+  
+  if (!modal) return;
+
+  list.innerHTML = conflicts.map(c => `
+    <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.3);padding:8px 12px;border-radius:6px;border-left:3px solid ${c.status === 'Active' ? 'var(--danger)' : 'var(--warning)'}">
+      <div style="flex:1;min-width:0;padding-right:10px">
+        <div style="font-size:12px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</div>
+        <div style="font-size:10px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.other_profile_name)}</div>
+      </div>
+      <div style="font-size:10px;font-weight:900;padding:2px 6px;border-radius:12px;color:${c.status==='Active'?'var(--danger)':'var(--warning)'};border:1px solid ${c.status==='Active'?'var(--danger)':'var(--warning)'};flex-shrink:0">
+        ${c.status === 'Active' ? (t('conflict.active')||'ACTIF') : (t('conflict.potential')||'POTENTIEL')}
+      </div>
+    </div>
+  `).join('');
+  
+  const activeConflicts = conflicts.filter(c => c.status === 'Active');
+  if (activeConflicts.length > 0) {
+    activeConflicts.sort((a, b) => a.activation_order - b.activation_order);
+    orderList.innerHTML = activeConflicts.map(c => `
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;background:rgba(255,255,255,0.04)">
+        <span style="font-size:10px;background:rgba(255,255,255,0.12);color:var(--text-primary);padding:1px 6px;border-radius:4px;font-weight:700;flex-shrink:0">#${c.activation_order}</span>
+        <span style="font-size:11px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</span>
+        <span style="font-size:9px;color:var(--text-muted);flex-shrink:0">${escHtml(c.other_profile_name)}</span>
+      </div>
+    `).join('');
+    orderPanel.style.display = '';
+  } else {
+    orderPanel.style.display = 'none';
+  }
+  
+  btn.onclick = () => {
+    modal.classList.remove('open');
+    onConfirm();
+  };
+  if (cancelBtn) cancelBtn.onclick = () => modal.classList.remove('open');
+  modal.classList.add('open');
+}
+window.showActivationWarning = showActivationWarning;

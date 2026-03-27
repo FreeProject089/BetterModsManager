@@ -1,4 +1,4 @@
-import { t } from './i18n.js';
+import { t } from '../core/i18n.js';
 import { resumableDownloads } from './diagrams/resumable-downloads.js';
 import { modSync } from './diagrams/mod-sync.js';
 import { profileSystem } from './diagrams/profile-system.js';

@@ -1,7 +1,7 @@
 /**
  * onboarding.js — Tasky onboarding tutorial with language selection
  */
-import { t, getLang, setLang, applyTranslations, getLanguages, refreshLanguages } from './i18n.js';
+import { t, getLang, setLang, applyTranslations, getLanguages, refreshLanguages } from '../core/i18n.js';
 
 function getSteps() {
     return [
@@ -122,7 +122,7 @@ function getSteps() {
 let currentStep = -1; // -1 = language step
 
 export async function shouldShowOnboarding() {
-    const { getSettings } = await import('./api.js');
+    const { getSettings } = await import('../core/api.js');
     try {
         const settings = await getSettings();
         return !settings.onboarding_shown;
@@ -132,7 +132,7 @@ export async function shouldShowOnboarding() {
 }
 
 export async function markOnboardingShown() {
-    const { getSettings, updateSettings } = await import('./api.js');
+    const { getSettings, updateSettings } = await import('../core/api.js');
     try {
         const settings = await getSettings();
         settings.onboarding_shown = true;
