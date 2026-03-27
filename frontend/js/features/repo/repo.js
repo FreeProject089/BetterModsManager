@@ -376,9 +376,9 @@ export function initRepo() {
                 item.onclick = (e) => { if (e.target !== cb) cb.checked = !cb.checked; };
 
                 const info = document.createElement('div');
-                info.style.cssText = 'margin-left:12px; display:flex; flexDirection:column;';
+                info.style.cssText = 'margin-left:12px; display:flex; flex-direction:column;';
                 info.innerHTML = `<span style="font-size:13.5px; font-weight:600; color:var(--text-color);">${escHtml(p.name)}</span>
-                                  <span style="font-size:11px; color:var(--text-muted); opacity:0.7;">${escHtml(p.game_name || t('repo.genericGame'))}</span>`;
+                                  <span style="font-size:11px; color:var(--text-muted); opacity:0.7;">${escHtml(t(p.game_name) || p.game_name || t('repo.genericGame'))}</span>`;
                 
                 item.appendChild(cb);
                 item.appendChild(info);

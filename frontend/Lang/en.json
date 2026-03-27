@@ -1434,6 +1434,7 @@
     "prof.openDirTip": "Open this directory in Windows Explorer.",
     "prof.ovgmeImported": "{count} OvGME profile(s) imported successfully.",
     "prof.ovgmeNone": "No new OvGME profiles found.",
+    "prof.importSourceOvgme": "Imported (OvGME)",
     "prof.saveBtn": "Save",
     "prof.subtitle": "Manage your configurations per game",
     "prof.title": "Profiles",

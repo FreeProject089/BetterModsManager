@@ -76,7 +76,7 @@ async fn parse_ovgme_path(ovgme_path: &PathBuf, state: State<'_, AppState>) -> R
         } else {
             let new_profile = Profile::new(
                 title.clone(),
-                "Imported (OvGME)".to_string(),
+                "prof.importSourceOvgme".to_string(),
                 game_path,
                 mods_path.clone(),
                 backup_path
