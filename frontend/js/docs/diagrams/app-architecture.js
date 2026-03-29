@@ -34,3 +34,4 @@ graph LR
 `,
     explanationPrefix: 'docs.diagram.arch.node.'
 };
+//# sourceMappingURL=app-architecture.js.map

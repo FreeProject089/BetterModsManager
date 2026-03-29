@@ -1,24 +1,17 @@
+// @ts-nocheck
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
 import { copyToClipboard } from './repo.js';
-
 export function initRepoMonitoring(elements) {
-    const {
-        modalMonitoring,
-        monitoringListBody,
-        monitoringEmptyHint,
-        btnOpenMonitoring
-    } = elements;
-
+    const { modalMonitoring, monitoringListBody, monitoringEmptyHint, btnOpenMonitoring } = elements;
     let monitoringInterval = null;
-
     const startMonitoring = () => {
-        if (monitoringInterval) clearInterval(monitoringInterval);
+        if (monitoringInterval)
+            clearInterval(monitoringInterval);
         updateMonitoring();
         monitoringInterval = setInterval(updateMonitoring, 1000);
     };
-
     const stopMonitoring = () => {
         if (monitoringInterval) {
             clearInterval(monitoringInterval);
@@ -26,22 +19,23 @@ export function initRepoMonitoring(elements) {
         }
         modalMonitoring?.classList.remove('open');
     };
-
     const updateMonitoring = async () => {
         try {
             const downloads = await invoke('get_active_downloads');
             if (!downloads || downloads.length === 0) {
-                if (monitoringListBody) monitoringListBody.innerHTML = '';
-                if (monitoringEmptyHint) monitoringEmptyHint.style.display = 'block';
+                if (monitoringListBody)
+                    monitoringListBody.innerHTML = '';
+                if (monitoringEmptyHint)
+                    monitoringEmptyHint.style.display = 'block';
                 return;
             }
-
-            if (monitoringEmptyHint) monitoringEmptyHint.style.display = 'none';
+            if (monitoringEmptyHint)
+                monitoringEmptyHint.style.display = 'none';
             if (monitoringListBody) {
                 monitoringListBody.innerHTML = downloads.map(d => {
                     const pct = Math.min(Math.round(d.progress) || 0, 100);
                     const speed = d.speed || 0;
-                    const creatorIdHtml = d.creator_id && d.creator_id !== '-' ?  
+                    const creatorIdHtml = d.creator_id && d.creator_id !== '-' ?
                         `<div style="display:flex; align-items:center; gap:6px;">
                             <span style="overflow:hidden; text-overflow:ellipsis;">${escHtml(d.creator_id)}</span>
                             <button class="btn btn-ghost btn-xs copy-mon-id" data-val="${escAttr(d.creator_id)}" style="padding:0; min-width:20px; height:20px; opacity:0.5; border:none; background:transparent;">
@@ -51,7 +45,6 @@ export function initRepoMonitoring(elements) {
                     const protocol = d.protocol || 'Unknown';
                     const protocolColor = protocol === 'LAN' ? 'var(--success)' : protocol === 'WAN' ? 'var(--accent)' : 'var(--cyan)';
                     const protocolBg = protocol === 'LAN' ? 'rgba(16, 185, 129, 0.1)' : protocol === 'WAN' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(6, 182, 212, 0.1)';
-                    
                     return `
                         <tr>
                             <td>
@@ -89,7 +82,6 @@ export function initRepoMonitoring(elements) {
                         </tr>
                     `;
                 }).join('');
-
                 // Attach listeners
                 monitoringListBody.querySelectorAll('.whitelist-from-mon').forEach(btn => {
                     btn.onclick = () => {
@@ -102,33 +94,34 @@ export function initRepoMonitoring(elements) {
                 });
                 monitoringListBody.querySelectorAll('.ban-from-mon').forEach(btn => {
                     btn.onclick = () => {
-                        if (window.banUser) window.banUser(btn.dataset.ip, btn.dataset.key);
+                        if (window.banUser)
+                            window.banUser(btn.dataset.ip, btn.dataset.key);
                     };
                 });
                 monitoringListBody.querySelectorAll('.copy-mon-id').forEach(btn => {
                     btn.onclick = () => copyToClipboard(btn.dataset.val);
                 });
             }
-        } catch (err) {
+        }
+        catch (err) {
             console.error("[BMM] Monitoring error:", err);
         }
     };
-
     if (btnOpenMonitoring) {
         btnOpenMonitoring.addEventListener('click', () => {
             modalMonitoring.classList.add('open');
             startMonitoring();
         });
     }
-
     document.querySelectorAll('[data-close="modal-monitoring"]').forEach(btn => {
         btn.addEventListener('click', stopMonitoring);
     });
     modalMonitoring?.addEventListener('click', (e) => {
-        if (e.target === modalMonitoring) stopMonitoring();
+        if (e.target === modalMonitoring)
+            stopMonitoring();
     });
-
     return {
         updateMonitoring
     };
 }
+//# sourceMappingURL=repo-monitoring.js.map

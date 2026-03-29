@@ -1,7 +1,7 @@
+// @ts-nocheck
 /**
  * modlist.js — Mod List Import/Export/Install Logic
  */
-
 import { invoke, pickFolder, pickFile, saveFile } from '../../core/api.js';
 import { appState } from '../../core/state.js';
 import { t } from '../../core/i18n.js';
@@ -9,13 +9,9 @@ import { refreshMods } from './mods.js';
 import { renderProfiles } from '../profiles/profiles.js';
 import { getGithubPat } from '../settings/settings.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
-
 let lastImportedModlistJson = null;
-
 // Re-exporting toast from app.js for now or until moved to a better place
 import { toast } from '../../ui/app.js';
-
-
 export function initModlist() {
     const exportBtn = document.getElementById('btn-export-mm');
     const importBtn = document.getElementById('btn-import-mm');
@@ -24,52 +20,46 @@ export function initModlist() {
     const confirmExportBtn = document.getElementById('btn-confirm-export');
     const previewCard = document.getElementById('imported-preview');
     const installBtn = document.getElementById('btn-install-from-mm');
-
-    if (!exportBtn || !importBtn) return;
-
+    if (!exportBtn || !importBtn)
+        return;
     exportBtn.addEventListener('click', () => {
         exportCard.style.display = exportCard.style.display === 'none' ? '' : 'none';
         previewCard.style.display = 'none';
     });
-
     cancelExport.addEventListener('click', () => { exportCard.style.display = 'none'; });
-
     confirmExportBtn.addEventListener('click', async () => {
         const listName = document.getElementById('mm-list-name').value.trim() || 'Ma liste';
         const description = document.getElementById('mm-description').value.trim();
         const author = document.getElementById('mm-author').value.trim();
-
         const path = await saveFile([{ name: 'Mod List', extensions: ['mm', 'json'] }]);
-        if (!path) return;
-
+        if (!path)
+            return;
         try {
             await invoke('export_modlist', { listName, description, author, outputPath: path });
             toast(t('mm.exportSuccess'), 'success');
             exportCard.style.display = 'none';
-        } catch (err) {
+        }
+        catch (err) {
             toast(t('mm.exportError').replace('{err}', err), 'error');
         }
     });
-
     importBtn.addEventListener('click', async () => {
         const path = await pickFile([{ name: 'Mod List', extensions: ['mm', 'json'] }]);
-        if (!path) return;
+        if (!path)
+            return;
         try {
             // Refresh local mods to ensure "Present" status is accurate
             const localMods = await invoke('get_mods');
             appState.set('allMods', localMods);
-
             const modList = await invoke('import_modlist', { path });
             lastImportedModlistJson = JSON.stringify(modList);
             exportCard.style.display = 'none';
             previewCard.style.display = '';
             renderImportedModlist(modList);
             updateInstallBtnText();
-
             // Auto-update path hint based on active profile if not creating a new profile
             const chkProfile = document.getElementById('chk-import-as-profile');
             const pathHintEl = document.getElementById('imported-path-hint');
-
             if (chkProfile && pathHintEl) {
                 const updatePath = async () => {
                     if (!chkProfile.checked) {
@@ -80,75 +70,68 @@ export function initModlist() {
                             if (activeP) {
                                 pathHintEl.textContent = activeP.mods_path;
                             }
-                        } catch (e) {
+                        }
+                        catch (e) {
                             console.error("Failed to get active profile mods path:", e);
                         }
-                    } else {
+                    }
+                    else {
                         // Use default game path hint from modList (the .MM creator's suggestion)
                         pathHintEl.textContent = modList.game_path_hint || '—';
                     }
                 };
-
                 chkProfile.addEventListener('change', updatePath);
                 updatePath(); // Initial call
             }
             toast(t('mm.importSuccess'), 'success');
-        } catch (err) {
+        }
+        catch (err) {
             toast(t('mm.importError').replace('{err}', err), 'error');
         }
     });
-
     // Install all mods from imported .MM list
     installBtn.addEventListener('click', async () => {
         if (!lastImportedModlistJson) {
             toast(t('mm.installNone'), 'warning');
             return;
         }
-
         // Sync the current path hint back into the JSON before sending to backend
         const pathHintEl = document.getElementById('imported-path-hint');
         let currentList = JSON.parse(lastImportedModlistJson);
         if (pathHintEl) {
             currentList.game_path_hint = pathHintEl.textContent;
         }
-
         // Filter: only install checked mods
         const checkboxes = previewCard.querySelectorAll('.mm-mod-checkbox');
         const selectedIndices = Array.from(checkboxes)
             .filter(cb => cb.checked)
             .map(cb => parseInt(cb.dataset.index));
-
         if (selectedIndices.length === 0) {
             toast(t('mm.installNone') || 'Veuillez sélectionner au moins un mod.', 'warning');
             return;
         }
-
         currentList.mods = currentList.mods.filter((_, idx) => selectedIndices.includes(idx));
         lastImportedModlistJson = JSON.stringify(currentList);
-
         const createProfile = document.getElementById('chk-import-as-profile')?.checked || false;
-
         installBtn.disabled = true;
         installBtn.classList.add('loading');
         installBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('common.installing')}`;
-
         // Show progress UI
         const progressOverlay = document.getElementById('imported-progress-overlay');
         const progressList = document.getElementById('imported-progress-list');
-        if (progressOverlay) progressOverlay.style.display = 'flex';
-        if (progressList) progressList.innerHTML = '';
-
+        if (progressOverlay)
+            progressOverlay.style.display = 'flex';
+        if (progressList)
+            progressList.innerHTML = '';
         // Reset Cancel button state
         const cancelBtn = document.getElementById('btn-cancel-import-dl');
         if (cancelBtn) {
             cancelBtn.disabled = false;
             cancelBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:6px"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg> ${t('prof.cancel').toUpperCase()}`;
         }
-
         // Clear previous results
         const existingResults = previewCard.querySelectorAll('.install-results-container');
         existingResults.forEach(r => r.remove());
-
         try {
             const githubToken = await getGithubPat();
             const results = await invoke('install_from_modlist', {
@@ -156,7 +139,6 @@ export function initModlist() {
                 createProfile: createProfile,
                 githubToken: githubToken
             });
-
             // Final results summary
             const resultHtml = results.map(r => {
                 const isOk = r.startsWith('[OK]') || r.includes('✅');
@@ -166,31 +148,33 @@ export function initModlist() {
                     ${escHtml(txt)}
                 </div>`;
             }).join('');
-
             const resultsDiv = document.createElement('div');
             resultsDiv.className = 'install-results-container';
             resultsDiv.style.cssText = 'margin-top:12px;padding:16px;background:rgba(0,0,0,0.4);border-radius:10px;border:1px solid var(--border);box-shadow:0 4px 12px rgba(0,0,0,0.2)';
             resultsDiv.innerHTML = `<div style="font-size:10px;color:var(--accent);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em;font-weight:800">${t('mm.installResults')}</div>${resultHtml}`;
             previewCard.appendChild(resultsDiv);
-
             const successCount = results.filter(r => r.includes('✅') || r.startsWith('[OK]')).length;
             toast(t('mm.installSuccess').replace('{success}', successCount).replace('{total}', results.length), 'success');
-
             if (createProfile) {
                 await renderProfiles();
                 // Profile selector in library might need update
                 const libraryTab = document.querySelector('.nav-item[data-view="library"]');
-                if (libraryTab) libraryTab.click();
-            } else {
+                if (libraryTab)
+                    libraryTab.click();
+            }
+            else {
                 await refreshMods();
             }
-        } catch (err) {
+        }
+        catch (err) {
             if (err.includes('annulée') || err.includes('cancelled')) {
                 toast(t('mm.installCancelled'), 'info');
-            } else {
+            }
+            else {
                 toast(t('mm.installError').replace('{err}', err), 'error');
             }
-        } finally {
+        }
+        finally {
             installBtn.disabled = false;
             installBtn.classList.remove('loading');
             installBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installSelection') || t('mm.installAll')}`;
@@ -199,7 +183,6 @@ export function initModlist() {
             }
         }
     });
-
     // Handle select/unselect all in imported list
     previewCard.addEventListener('change', (e) => {
         if (e.target.id === 'mm-select-all') {
@@ -207,11 +190,11 @@ export function initModlist() {
             const checkboxes = previewCard.querySelectorAll('.mm-mod-checkbox');
             checkboxes.forEach(cb => { cb.checked = checked; });
             updateInstallBtnText();
-        } else if (e.target.classList.contains('mm-mod-checkbox')) {
+        }
+        else if (e.target.classList.contains('mm-mod-checkbox')) {
             updateInstallBtnText();
         }
     });
-
     // Cancel installation
     previewCard.addEventListener('click', async (e) => {
         const btn = e.target.closest('#btn-cancel-import-dl');
@@ -221,19 +204,19 @@ export function initModlist() {
                 btn.disabled = true;
                 btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('prof.cancel')}...`;
                 toast(t('mm.cancelRequested'), 'info');
-            } catch (err) {
+            }
+            catch (err) {
                 toast(t('mm.cancelError').replace('{err}', err), 'error');
             }
         }
     });
-
     // Listen for progress events
     import('https://unpkg.com/@tauri-apps/api@1/event.js').then(({ listen }) => {
         listen('bmm://mod-download-progress', (e) => {
             const data = e.payload; // { mod_index, total_mods, mod_name, progress, status }
             const container = document.getElementById('imported-progress-list');
-            if (!container) return;
-
+            if (!container)
+                return;
             let row = document.getElementById(`dl-progress-${data.mod_index}`);
             if (!row) {
                 row = document.createElement('div');
@@ -241,7 +224,6 @@ export function initModlist() {
                 row.style.cssText = 'margin-bottom:10px; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05)';
                 container.appendChild(row);
             }
-
             row.innerHTML = `
                 <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px">
                     <span style="font-weight:600; color:var(--text-primary)">${escHtml(data.mod_name)}</span>
@@ -252,12 +234,10 @@ export function initModlist() {
                 </div>
                 <div style="font-size:9px; color:var(--text-muted); margin-top:4px; text-transform:uppercase">${escHtml(data.status)}</div>
             `;
-
             // Auto scroll progress list
             container.scrollTop = container.scrollHeight;
         });
     });
-
     // Handle path override button
     previewCard.addEventListener('click', async (e) => {
         const btn = e.target.closest('#btn-override-import-path');
@@ -265,32 +245,33 @@ export function initModlist() {
             const newPath = await pickFolder();
             if (newPath) {
                 const hintEl = document.getElementById('imported-path-hint');
-                if (hintEl) hintEl.textContent = newPath;
+                if (hintEl)
+                    hintEl.textContent = newPath;
                 toast(t('common.destUpdated'), 'info');
             }
         }
     });
 }
-
 function updateInstallBtnText() {
     const previewCard = document.getElementById('imported-preview');
-    if (!previewCard) return;
+    if (!previewCard)
+        return;
     const count = previewCard.querySelectorAll('.mm-mod-checkbox:checked').length;
     const total = previewCard.querySelectorAll('.mm-mod-checkbox').length;
     const btn = document.getElementById('btn-install-from-mm');
-    if (!btn) return;
-
+    if (!btn)
+        return;
     if (count === total) {
         btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installAll')}`;
-    } else {
+    }
+    else {
         btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> ${t('mm.installSelection')} (${count})`;
     }
 }
-
 export function renderImportedModlist(modlist) {
     const container = document.getElementById('imported-content');
-    if (!container) return;
-
+    if (!container)
+        return;
     // Calculate totals
     let totalFiles = 0;
     let totalBytes = 0;
@@ -300,7 +281,6 @@ export function renderImportedModlist(modlist) {
             m.file_tree.forEach(f => { totalBytes += (f.size || 0); });
         }
     });
-
     // Header section
     const headerHtml = `
       <div style="margin-bottom:20px; padding:20px; background:rgba(0,0,0,0.2); border-radius:12px; border:1px solid var(--border)">
@@ -354,16 +334,13 @@ export function renderImportedModlist(modlist) {
         ` : ''}
       </div>
     `;
-
     // Cards for each mod
     const currentMods = appState.state.allMods || [];
     const modsHtml = modlist.mods.map((m, idx) => {
         const fileCount = m.file_tree ? m.file_tree.length : 0;
         const modSize = m.file_tree ? m.file_tree.reduce((acc, f) => acc + (f.size || 0), 0) : 0;
-
         // Presence check
         const isAlreadyPresent = currentMods.some(cm => cm.name === m.name);
-
         return `
         <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; flex-direction:column; gap:8px; position:relative; overflow:hidden; ${isAlreadyPresent ? 'opacity: 0.7;' : ''}">
           <div style="position:absolute; left:0; top:0; bottom:0; width:3px; background:${isAlreadyPresent ? 'var(--success)' : 'var(--accent)'}"></div>
@@ -376,18 +353,20 @@ export function renderImportedModlist(modlist) {
                 ${isAlreadyPresent ? `<span style="font-size:9px; font-weight:800; color:#10b981; background:rgba(16,185,129,0.15); padding:2px 6px; border-radius:4px; border:1px solid rgba(16,185,129,0.3)">${t('mm.modPresent')}</span>` : `<span style="font-size:9px; font-weight:800; color:var(--accent); background:var(--accent-dim); padding:2px 6px; border-radius:4px; border:1px solid var(--border-accent)">${t('mm.modNew')}</span>`}
             </div>
             <div style="font-size:10px; font-weight:700; font-family:var(--font-mono); padding:2px 6px; border-radius:4px; ${(() => {
-                const p = m.sort_priority || 0;
-                if (p >= 1000) {
-                    const alpha = Math.min(0.8, 0.15 + (p - 1000) / 10000);
-                    return `background:rgba(239,68,68,${alpha}); color:${alpha > 0.4 ? 'white' : '#ef4444'}; border:1px solid rgba(239,68,68,${alpha + 0.1})`;
-                } else if (p >= 100) {
-                    const alpha = Math.min(0.6, 0.15 + (p - 100) / 1000);
-                    return `background:rgba(245,158,11,${alpha}); color:${alpha > 0.4 ? 'white' : '#f59e0b'}; border:1px solid rgba(245,158,11,${alpha + 0.1})`;
-                } else {
-                    const alpha = Math.min(0.4, 0.05 + p / 100);
-                    return `background:rgba(255,255,255,${alpha}); color:var(--text-muted); border:1px solid rgba(255,255,255,${alpha + 0.05})`;
-                }
-            })()}" title="PRIO: ${m.sort_priority}">
+            const p = m.sort_priority || 0;
+            if (p >= 1000) {
+                const alpha = Math.min(0.8, 0.15 + (p - 1000) / 10000);
+                return `background:rgba(239,68,68,${alpha}); color:${alpha > 0.4 ? 'white' : '#ef4444'}; border:1px solid rgba(239,68,68,${alpha + 0.1})`;
+            }
+            else if (p >= 100) {
+                const alpha = Math.min(0.6, 0.15 + (p - 100) / 1000);
+                return `background:rgba(245,158,11,${alpha}); color:${alpha > 0.4 ? 'white' : '#f59e0b'}; border:1px solid rgba(245,158,11,${alpha + 0.1})`;
+            }
+            else {
+                const alpha = Math.min(0.4, 0.05 + p / 100);
+                return `background:rgba(255,255,255,${alpha}); color:var(--text-muted); border:1px solid rgba(255,255,255,${alpha + 0.05})`;
+            }
+        })()}" title="PRIO: ${m.sort_priority}">
                 ${m.sort_priority >= 1000 ? 'MAX' : m.sort_priority >= 100 ? 'MED' : 'LOW'}
             </div>
           </div>
@@ -439,7 +418,6 @@ export function renderImportedModlist(modlist) {
         </div>
         `;
     }).join('');
-
     container.innerHTML = `
         <div style="display:flex; flex-direction:column; gap:4px; position:relative">
             ${headerHtml}
@@ -479,7 +457,6 @@ export function renderImportedModlist(modlist) {
         </div>
     `;
 }
-
 function getLinkIcon(type) {
     const style = 'width:14px;height:14px;vertical-align:middle;margin-right:6px;opacity:0.8';
     switch (type) {
@@ -495,3 +472,4 @@ function getLinkIcon(type) {
             return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
     }
 }
+//# sourceMappingURL=modlist.js.map

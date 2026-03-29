@@ -32,3 +32,4 @@ flowchart TD
 `,
     explanationPrefix: 'docs.diagram.mod_arch.node.'
 };
+//# sourceMappingURL=mod-architecture.js.map

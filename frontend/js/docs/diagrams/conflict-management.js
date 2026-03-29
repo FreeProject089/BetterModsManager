@@ -26,3 +26,4 @@ graph TD
 `,
     explanationPrefix: 'docs.diagram.conflict.node.'
 };
+//# sourceMappingURL=conflict-management.js.map

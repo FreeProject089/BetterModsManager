@@ -1,12 +1,11 @@
+// @ts-nocheck
 import { debugHub } from './debug.js';
 import { appState } from '../../core/state.js';
 import { invoke } from '../../core/api.js';
 import { t, applyTranslations } from '../../core/i18n.js';
-
 /**
  * debug-ui.js — UI Logic for BMM DevTools
  */
-
 class DebugUI {
     constructor() {
         this.isOpen = false;
@@ -19,7 +18,6 @@ class DebugUI {
         this.container = null;
         this.modalOverlay = null;
         this.crashOverlay = null;
-
         // Tool state
         this.a11yWarnings = false;
         this.a11yReader = false;
@@ -28,23 +26,22 @@ class DebugUI {
         this.mutationObserver = null;
         this.a11yInterval = null;
     }
-
     // Helper to find elements within devtools containers
     _get(id) {
-        if (!this.container) return document.getElementById(id);
-        return this.container.querySelector(`#${id}`) || 
-               (this.modalOverlay ? this.modalOverlay.querySelector(`#${id}`) : null) ||
-               (this.crashOverlay ? this.crashOverlay.querySelector(`#${id}`) : null) ||
-               document.getElementById(id);
+        if (!this.container)
+            return document.getElementById(id);
+        return this.container.querySelector(`#${id}`) ||
+            (this.modalOverlay ? this.modalOverlay.querySelector(`#${id}`) : null) ||
+            (this.crashOverlay ? this.crashOverlay.querySelector(`#${id}`) : null) ||
+            document.getElementById(id);
     }
-
     init() {
-        if (this.container) return; // Already initialized
-        
+        if (this.container)
+            return; // Already initialized
         // Ensure no leftover overlay from previous failed init or duplicate call
         const existing = document.getElementById('bmm-debug-overlay');
-        if (existing) existing.remove();
-
+        if (existing)
+            existing.remove();
         this.createContainer();
         this.createContextMenu();
         this.attachListeners();
@@ -53,40 +50,35 @@ class DebugUI {
         this.startUpdateLoop();
         console.info('[BMM-Debug] UI Initialized. Toggle with Ctrl+Alt+D');
     }
-
     toggle(force) {
         // Strict lock check
-        if (!appState.get('debugMode') && force !== true) return;
-
-        if (!this.container) this.init();
-        
+        if (!appState.get('debugMode') && force !== true)
+            return;
+        if (!this.container)
+            this.init();
         this.isOpen = force !== undefined ? force : !this.isOpen;
         this.container.classList.toggle('open', this.isOpen);
-        
         if (this.isOpen) {
             this.refreshAllPanes();
             this.translateUI();
-
             // Adjust z-index to be on top when opened
             this.container.style.zIndex = '200000';
-        } else {
+        }
+        else {
             this.toggleInspector(false);
             this.container.style.zIndex = '2000';
         }
     }
-
     refreshAllPanes() {
         this.updateStateView();
         this.updatePatchTree();
         this.updateMetrics(debugHub.metrics);
-        
         // Re-populate logs from hub
         const logsPane = this._get('console-logs');
         if (logsPane) {
             logsPane.innerHTML = '';
             debugHub.logs.forEach(log => this.appendLog(log));
         }
-
         // Re-populate timeline from hub
         const timelinePane = this._get('timeline-list');
         if (timelinePane) {
@@ -95,12 +87,11 @@ class DebugUI {
             debugHub.actions.forEach(action => this.updateTimeline(action));
         }
     }
-
     createContainer() {
         // Double check removal
         const old = document.getElementById('bmm-debug-overlay');
-        if (old) old.remove();
-
+        if (old)
+            old.remove();
         const div = document.createElement('div');
         div.id = 'bmm-debug-overlay';
         div.innerHTML = `
@@ -382,7 +373,6 @@ class DebugUI {
         `;
         document.body.appendChild(div);
         this.container = div;
-
         // Modal components
         const modalOverlay = document.createElement('div'); // Declare modalOverlay here
         modalOverlay.className = 'debug-modal-overlay';
@@ -401,10 +391,8 @@ class DebugUI {
         `;
         this.modalOverlay = modalOverlay;
         document.body.appendChild(modalOverlay); // Append to body for full-app centering
-
         // Load persisted position/size
         this.loadPosition();
-
         // Create Crash Overlay
         const crashDiv = document.createElement('div');
         crashDiv.className = 'debug-crash-overlay';
@@ -437,7 +425,6 @@ class DebugUI {
         `;
         this.container.appendChild(crashDiv); // Append to DevTools container
         this.crashOverlay = crashDiv;
-
         this.crashOverlay.querySelector('#crash-copy-dump').onclick = () => {
             const dump = localStorage.getItem('bmm_last_crash_dump');
             navigator.clipboard.writeText(dump);
@@ -452,63 +439,58 @@ class DebugUI {
                 btn.style.color = 'white';
             }, 2000);
         };
-
         this.crashOverlay.querySelector('#crash-dismiss').onclick = () => {
             if (confirm(t('dev.crash.dismissConfirm'))) {
                 this.crashOverlay.classList.remove('active');
             }
         };
-
         // Highlight & Tooltip for inspector
         this.highlightEl = document.createElement('div');
         this.highlightEl.className = 'debug-inspect-highlight';
         this.highlightEl.style.display = 'none';
         document.body.appendChild(this.highlightEl);
-
         this.tooltipEl = document.createElement('div');
         this.tooltipEl.className = 'debug-inspect-tooltip';
         this.tooltipEl.style.display = 'none';
         document.body.appendChild(this.tooltipEl);
-
         this.translateUI();
     }
-
     showConfirm(title, text, onConfirm) {
-        if (!this.container) this.init();
-        if (!this.isOpen) return; // Don't show DevTools modals if DevTools is closed
-
+        if (!this.container)
+            this.init();
+        if (!this.isOpen)
+            return; // Don't show DevTools modals if DevTools is closed
         const overlay = this.modalOverlay;
         const titleEl = this._get('debug-modal-title');
         const textEl = this._get('debug-modal-text');
         const confirmBtn = this._get('debug-modal-confirm');
         const cancelBtn = this._get('debug-modal-cancel');
         const inputContainer = this._get('debug-modal-input-container');
-
         titleEl.textContent = title || t('dev.modal.confirmTitle');
         textEl.textContent = text || t('dev.modal.confirmText');
         inputContainer.style.display = 'none';
         cancelBtn.style.display = 'block'; // Ensure cancel button is visible for confirm
-
         const close = () => {
             overlay.classList.remove('active');
-            setTimeout(() => { if (!overlay.classList.contains('active')) overlay.style.display = 'none'; }, 300);
+            setTimeout(() => { if (!overlay.classList.contains('active'))
+                overlay.style.display = 'none'; }, 300);
         };
-
         overlay.style.display = 'flex';
         setTimeout(() => overlay.classList.add('active'), 10);
-
         confirmBtn.onclick = () => {
-            if (onConfirm) onConfirm();
+            if (onConfirm)
+                onConfirm();
             close();
         };
         cancelBtn.onclick = close;
-        overlay.onclick = (e) => { if (e.target === overlay) close(); };
+        overlay.onclick = (e) => { if (e.target === overlay)
+            close(); };
     }
-
     showPrompt(title, text, defaultValue, onConfirm) {
-        if (!this.container) this.init();
-        if (!this.isOpen) return;
-
+        if (!this.container)
+            this.init();
+        if (!this.isOpen)
+            return;
         const overlay = this.modalOverlay;
         const titleEl = this._get('debug-modal-title');
         const textEl = this._get('debug-modal-text');
@@ -516,79 +498,72 @@ class DebugUI {
         const input = this._get('debug-modal-input');
         const confirmBtn = this._get('debug-modal-confirm');
         const cancelBtn = this._get('debug-modal-cancel');
-        
         titleEl.textContent = title || t('dev.modal.confirmTitle');
         textEl.textContent = text || t('dev.modal.confirmText');
         inputContainer.style.display = 'block';
         input.value = defaultValue || '';
         cancelBtn.style.display = 'block'; // Ensure cancel button is visible for prompt
-
         const close = () => {
             overlay.classList.remove('active');
-            setTimeout(() => { if (!overlay.classList.contains('active')) overlay.style.display = 'none'; }, 300);
+            setTimeout(() => { if (!overlay.classList.contains('active'))
+                overlay.style.display = 'none'; }, 300);
         };
-
         overlay.style.display = 'flex';
         setTimeout(() => {
             overlay.classList.add('active');
             input.focus();
         }, 10);
-
         cancelBtn.onclick = close;
         confirmBtn.onclick = () => {
-            if (onConfirm) onConfirm(input.value);
+            if (onConfirm)
+                onConfirm(input.value);
             close();
         };
-        overlay.onclick = (e) => { if (e.target === overlay) close(); };
+        overlay.onclick = (e) => { if (e.target === overlay)
+            close(); };
     }
-
     showAlert(title, text) {
-        if (!this.container) this.init();
+        if (!this.container)
+            this.init();
         // Allow alerts if explicitly triggered, but they will only be visible if DevTools is open
         // OR we can explicitly open DevTools for important alerts? 
         // User said they are visible when NOT activated, so we should probably not show them or open DevTools.
-        if (!this.isOpen) return; 
-
+        if (!this.isOpen)
+            return;
         const overlay = this.modalOverlay;
         const titleEl = this._get('debug-modal-title');
         const textEl = this._get('debug-modal-text');
         const confirmBtn = this._get('debug-modal-confirm');
         const cancelBtn = this._get('debug-modal-cancel');
         const inputContainer = this._get('debug-modal-input-container');
-
         titleEl.textContent = title || t('common.error');
         textEl.textContent = text;
         cancelBtn.style.display = 'none'; // Only OK for alert
         inputContainer.style.display = 'none';
-
         const close = () => {
             overlay.classList.remove('active');
-            setTimeout(() => { 
+            setTimeout(() => {
                 if (!overlay.classList.contains('active')) {
                     overlay.style.display = 'none';
                     cancelBtn.style.display = 'block'; // Restore for next calls
                 }
             }, 300);
         };
-
         overlay.style.display = 'flex';
         setTimeout(() => overlay.classList.add('active'), 10);
-
         confirmBtn.onclick = close;
-        overlay.onclick = (e) => { if (e.target === overlay) close(); };
+        overlay.onclick = (e) => { if (e.target === overlay)
+            close(); };
     }
-
     attachListeners() {
         // Tab switching
         this.container.querySelectorAll('.debug-tab').forEach(tab => {
             tab.addEventListener('click', () => this.switchTab(tab.dataset.tab));
         });
-
         // Live language update
         document.addEventListener('langChanged', () => {
             this.translateUI();
         });
-
         // Debugger Sub-tab switching
         this.container.querySelectorAll('.debug-subtab').forEach(t => {
             t.addEventListener('click', () => {
@@ -596,28 +571,27 @@ class DebugUI {
                 this.switchDebuggerSubtab(subId);
             });
         });
-
         // Debugger JS
         this._get('js-open-devtools')?.addEventListener('click', async () => {
             try {
                 if (window.__TAURI__ && window.__TAURI__.tauri) {
                     await window.__TAURI__.tauri.invoke('plugin:devtools|open');
                 }
-            } catch (e) {
+            }
+            catch (e) {
                 console.log("F12 is the standard fallback for opening DevTools.", e);
                 this.showAlert('Vanilla JS Debugger', "Tauri devtools API couldn't be invoked automatically. Please press F12 on your keyboard to open the Chrome DevTools inspector.");
             }
         });
-
         this._get('js-add-watcher')?.addEventListener('click', () => {
             const input = this._get('js-repl-input');
             const cmd = input?.value.trim();
             if (cmd) {
                 this.evalJSCommand(cmd);
-                if (input) input.value = '';
+                if (input)
+                    input.value = '';
             }
         });
-
         this._get('js-repl-input')?.addEventListener('keydown', e => {
             if (e.key === 'Enter') {
                 const val = e.target.value.trim();
@@ -627,7 +601,6 @@ class DebugUI {
                 }
             }
         });
-
         // Debugger Rust
         this._get('rust-copy-lldb')?.addEventListener('click', () => {
             const isWindows = navigator.userAgent.includes('Windows');
@@ -635,9 +608,7 @@ class DebugUI {
             this.copyToClipboard(cmd);
             this.showAlert('Rust Debugger Command Copied', `Copied: ${cmd}\n\nPaste this in your terminal to attach LLDB/GDB. You must run the app in debug mode.`);
         });
-
         this._get('rust-refresh-logs')?.addEventListener('click', () => this.refreshRustLogs());
-
         // Debugger HTML
         this._get('html-refresh-dom')?.addEventListener('click', () => this.buildDomTree());
         this._get('html-collapse-all')?.addEventListener('click', () => {
@@ -647,92 +618,81 @@ class DebugUI {
                 tree.querySelectorAll('.dom-toggle').forEach(el => el.textContent = '▶');
             }
         });
-
         // Debugger CSS
         this._get('css-stylesheet-select')?.addEventListener('change', e => this.loadStylesheet(e.target.value));
         this._get('css-rule-search')?.addEventListener('input', e => this.filterCSSRules(e.target.value));
-
         // Debugger CSS - A11y & Design Tools
         this._get('dbg-css-pink')?.addEventListener('change', e => {
             document.body.classList.toggle('bmm-debug-pink', e.target.checked);
         });
-
         this._get('dbg-css-color')?.addEventListener('input', e => {
             document.documentElement.style.setProperty('--bmm-dbg-color', e.target.value);
         });
-
         this._get('dbg-css-interactive')?.addEventListener('change', e => {
             document.body.classList.toggle('bmm-debug-interactive', e.target.checked);
         });
-
         this._get('dbg-css-zindex')?.addEventListener('change', e => {
             if (e.target.checked) {
                 document.querySelectorAll('*').forEach(el => {
-                    if(!el.style) return;
+                    if (!el.style)
+                        return;
                     const z = window.getComputedStyle(el).zIndex;
                     if (z !== 'auto' && z !== '0') {
                         el.dataset.bmmZIndex = z;
                         el.classList.add('bmm-show-zindex');
                     }
                 });
-            } else {
+            }
+            else {
                 document.querySelectorAll('.bmm-show-zindex').forEach(el => {
                     el.classList.remove('bmm-show-zindex');
                     delete el.dataset.bmmZIndex;
                 });
             }
         });
-
         this._get('dbg-css-events')?.addEventListener('change', e => {
             this.toggleJSEvents(e.target.checked);
         });
-
         this._get('dbg-a11y-hardcoded')?.addEventListener('change', e => {
             this.toggleHardcodedDetector(e.target.checked);
         });
-
         this._get('dbg-a11y-warnings')?.addEventListener('change', e => {
             this.toggleA11yWarnings(e.target.checked);
         });
-
         this._get('dbg-a11y-reader')?.addEventListener('change', e => {
             this.toggleA11yReader(e.target.checked);
         });
-
         this._get('dbg-js-events')?.addEventListener('change', e => {
             this.toggleJSEvents(e.target.checked);
         });
-
         const updateGrid = () => {
             const gridEl = document.getElementById('bmm-layout-grid');
-            if (!gridEl) return;
+            if (!gridEl)
+                return;
             const hInput = document.getElementById('dbg-grid-h');
             const vInput = document.getElementById('dbg-grid-v');
-            if (!hInput || !vInput) return;
-            
+            if (!hInput || !vInput)
+                return;
             const h = hInput.value;
             const v = vInput.value;
-            
             hInput.style.setProperty('--val', ((h / 64) * 100) + '%');
             vInput.style.setProperty('--val', ((v / 64) * 100) + '%');
-
             const hValSpan = document.getElementById('dbg-grid-h-val');
             const vValSpan = document.getElementById('dbg-grid-v-val');
-            if (hValSpan) hValSpan.textContent = h;
-            if (vValSpan) vValSpan.textContent = v;
-            
+            if (hValSpan)
+                hValSpan.textContent = h;
+            if (vValSpan)
+                vValSpan.textContent = v;
             const hBg = h > 0 ? `linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px)` : '';
             const vBg = v > 0 ? `linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px)` : '';
             const bgStr = [hBg, vBg].filter(Boolean).join(', ');
-            
             gridEl.style.backgroundImage = bgStr;
             gridEl.style.backgroundSize = `${v > 0 ? v : 10}px ${h > 0 ? h : 10}px`;
         };
-
         this._get('dbg-css-grid')?.addEventListener('change', e => {
             const config = document.getElementById('dbg-grid-config');
-            if (config) config.style.display = e.target.checked ? 'block' : 'none';
-            
+            if (config)
+                config.style.display = e.target.checked ? 'block' : 'none';
             let gridEl = document.getElementById('bmm-layout-grid');
             if (e.target.checked) {
                 if (!gridEl) {
@@ -741,14 +701,13 @@ class DebugUI {
                     document.body.appendChild(gridEl);
                 }
                 updateGrid();
-            } else if (gridEl) {
+            }
+            else if (gridEl) {
                 gridEl.remove();
             }
         });
-
         this._get('dbg-grid-h')?.addEventListener('input', updateGrid);
         this._get('dbg-grid-v')?.addEventListener('input', updateGrid);
-
         // Sources Tree Toggle
         // Controls
         this.container.querySelector('#debug-btn-close').addEventListener('click', () => this.toggle(false));
@@ -760,26 +719,24 @@ class DebugUI {
                 debugHub.actions = [];
                 const logs = this.container.querySelector('#console-logs');
                 const timeline = this.container.querySelector('#timeline-list');
-                if (logs) logs.innerHTML = '';
-                if (timeline) timeline.innerHTML = '';
+                if (logs)
+                    logs.innerHTML = '';
+                if (timeline)
+                    timeline.innerHTML = '';
             });
         });
         this.container.querySelector('#debug-btn-inspect').addEventListener('click', () => this.toggleInspector());
         this.container.querySelector('#debug-btn-export').addEventListener('click', () => this.exportSession());
-
         this._get('console-clear-manual').addEventListener('click', () => {
-             this._get('console-logs').innerHTML = '';
-             debugHub.logs = [];
+            this._get('console-logs').innerHTML = '';
+            debugHub.logs = [];
         });
-
         this._get('timeline-clear-manual').addEventListener('click', () => {
-             this._get('timeline-list').innerHTML = '';
-             debugHub.ipcCalls = [];
-             debugHub.actions = [];
+            this._get('timeline-list').innerHTML = '';
+            debugHub.ipcCalls = [];
+            debugHub.actions = [];
         });
-
         this._get('sources-refresh').addEventListener('click', () => this.loadSources());
-
         // Context Menu in Sources
         this.container.querySelector('.sources-editor').addEventListener('contextmenu', e => {
             if (this.currentSource) {
@@ -790,7 +747,6 @@ class DebugUI {
                 ]);
             }
         });
-
         // Keyboard shortcuts
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape' && this.isInspecting) {
@@ -804,39 +760,36 @@ class DebugUI {
                 entry.style.display = text.includes(query) ? 'flex' : 'none';
             });
         });
-
         document.addEventListener('click', e => {
-            if (this.isInspecting || e.target.closest('#bmm-debug-overlay')) return;
+            if (this.isInspecting || e.target.closest('#bmm-debug-overlay'))
+                return;
             const target = e.target.closest('button, .nav-item, input, select') || e.target;
             debugHub.recordAction('CLICK', target, target.innerText?.trim() || target.value || '');
         }, true);
-
         this._get('inspect-btn-clear').addEventListener('click', () => this.clearSelection());
-
         this._get('playground-apply-css').addEventListener('click', () => {
             try {
                 const code = this._get('playground-code').value;
                 debugHub.applyPatch('CSS', code);
-            } catch (err) {
+            }
+            catch (err) {
                 this.showAlert('CSS Error', err.message || 'Invalid CSS syntax.');
             }
         });
-
         this._get('playground-run-js').addEventListener('click', () => {
             try {
                 const code = this._get('playground-code').value;
                 debugHub.applyPatch('JS', code);
-            } catch (err) {
+            }
+            catch (err) {
                 this.showAlert('JS Error', err.message || 'Execution failed.');
             }
         });
-
         this._get('playground-reset').addEventListener('click', () => {
             this._get('playground-code').value = '';
             // Remove all CSS patches
             debugHub.patches.filter(p => p.type === 'CSS').forEach(p => debugHub.removePatch(p.id));
         });
-
         this._get('playground-export').addEventListener('click', () => {
             const content = debugHub.patches.map(p => `/* Patch ${p.id} (${p.type}) */\n${p.content}`).join('\n\n');
             const blob = new Blob([content], { type: 'text/plain' });
@@ -846,7 +799,6 @@ class DebugUI {
             a.download = `bmm-patches-${Date.now()}.txt`;
             a.click();
         });
-
         // Patch tree interaction
         this._get('patch-tree').addEventListener('click', e => {
             const btn = e.target.closest('.patch-remove');
@@ -855,7 +807,6 @@ class DebugUI {
                 debugHub.removePatch(id);
             }
         });
-
         // Timeline filters
         this.container.querySelectorAll('.filter-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -864,13 +815,12 @@ class DebugUI {
                 this.applyTimelineFilter(btn.dataset.filter);
             });
         });
-
         // Editable State logic
         const statePane = this.container.querySelector('#pane-state');
         statePane.addEventListener('click', e => {
             const el = e.target.closest('.state-row');
-            if (!el) return;
-            
+            if (!el)
+                return;
             const key = el.dataset.key;
             const currentValue = appState.get(key);
             this.showPrompt(`Edit state: ${key}`, `Enter new value for '${key}':`, JSON.stringify(currentValue), (newValue) => {
@@ -878,20 +828,20 @@ class DebugUI {
                     try {
                         appState.set(key, JSON.parse(newValue));
                         this.updateStateView();
-                    } catch (e) {
+                    }
+                    catch (e) {
                         this.showAlert('Error', 'Invalid JSON format.');
                     }
                 }
             });
         });
-
         // Drag logic
         const header = this.container.querySelector('.debug-header');
         let isDragging = false;
         let startX, startY, initialLeft, initialTop;
-
         header.addEventListener('mousedown', e => {
-            if (e.target.closest('.debug-btn')) return;
+            if (e.target.closest('.debug-btn'))
+                return;
             e.preventDefault();
             isDragging = true;
             startX = e.clientX;
@@ -905,12 +855,10 @@ class DebugUI {
             this.container.style.left = initialLeft + 'px';
             this.container.style.top = initialTop + 'px';
         });
-
         // Resize logic
         const resizer = this.container.querySelector('.debug-resizer');
         let isResizing = false;
         let initialWidth, initialHeight;
-
         resizer.addEventListener('mousedown', e => {
             e.preventDefault();
             isResizing = true;
@@ -920,7 +868,6 @@ class DebugUI {
             initialHeight = this.container.offsetHeight;
             this.container.style.transition = 'none';
         });
-
         document.addEventListener('mousemove', e => {
             if (isDragging) {
                 const dx = e.clientX - startX;
@@ -935,7 +882,6 @@ class DebugUI {
                 this.container.style.height = (initialHeight + dy) + 'px';
             }
         });
-
         document.addEventListener('mouseup', () => {
             if (isDragging || isResizing) {
                 isDragging = false;
@@ -944,7 +890,6 @@ class DebugUI {
                 this.savePosition();
             }
         });
-
         // Debug Hub events
         debugHub.subscribe(event => {
             if (event.type === 'crash') {
@@ -952,114 +897,111 @@ class DebugUI {
                 this._get('crash-details').textContent = event.data.msg || 'Unknown internal error';
                 return;
             }
-
             // DO NOT update UI if closed (MAJOR LAG FIX)
-            if (!this.isOpen) return;
-
-            if (event.type === 'log') this.appendLog(event.data);
-            if (event.type === 'ipc' || event.type === 'action') this.updateTimeline(event.data);
+            if (!this.isOpen)
+                return;
+            if (event.type === 'log')
+                this.appendLog(event.data);
+            if (event.type === 'ipc' || event.type === 'action')
+                this.updateTimeline(event.data);
             if (event.type === 'clear') {
                 const logs = this._get('console-logs');
                 const timeline = this._get('timeline-list');
-                if (logs) logs.innerHTML = '';
-                if (timeline) timeline.innerHTML = '';
+                if (logs)
+                    logs.innerHTML = '';
+                if (timeline)
+                    timeline.innerHTML = '';
                 // hub data already cleared by debugHub.clear()
             }
             if (event.type === 'state') {
                 this.updateStateView();
             }
-            if (event.type === 'metrics') this.updateMetrics(event.data);
-            if (event.type === 'patches') this.updatePatchTree();
+            if (event.type === 'metrics')
+                this.updateMetrics(event.data);
+            if (event.type === 'patches')
+                this.updatePatchTree();
         });
-
         // Inspector mouse move
         document.addEventListener('mousemove', e => {
-            if (!this.isInspecting) return;
-            
+            if (!this.isInspecting)
+                return;
             // Find element under cursor (excluding debug overlay)
             const el = document.elementFromPoint(e.clientX, e.clientY);
             if (el && !el.closest('#bmm-debug-overlay') && !el.classList.contains('debug-inspect-highlight')) {
                 this.highlightElement(el);
             }
         });
-
         document.addEventListener('click', e => {
-            if (!this.isInspecting) return;
+            if (!this.isInspecting)
+                return;
             e.preventDefault();
             e.stopPropagation();
             const target = this.hoveredEl;
-            if (!target) return; // FIX: Prevent crash if clicking empty space
-
+            if (!target)
+                return; // FIX: Prevent crash if clicking empty space
             this.selectElement(target);
-            
             console.debug('[Inspector] Selected:', target);
-
             // Auto-fill playground with current styles for quick editing
             const computed = window.getComputedStyle(target);
-            const styleSnippet = `/* Edit styles for ${target.tagName.toLowerCase()} */\n` + 
+            const styleSnippet = `/* Edit styles for ${target.tagName.toLowerCase()} */\n` +
                 `selector {\n  background: ${computed.backgroundColor};\n  color: ${computed.color};\n  border: ${computed.border};\n}`;
             const playground = this._get('playground-code');
-            if (playground) playground.value = styleSnippet;
+            if (playground)
+                playground.value = styleSnippet;
         }, true);
     }
-
     translateUI() {
-        if (!this.container) return;
+        if (!this.container)
+            return;
         applyTranslations(this.container);
     }
-
     toggleInspector(force) {
         this.isInspecting = force !== undefined ? force : !this.isInspecting;
         const btn = this._get('debug-btn-inspect');
         btn.classList.toggle('active', this.isInspecting);
         document.body.style.cursor = this.isInspecting ? 'crosshair' : '';
-        
         if (!this.isInspecting) {
-            if (this.highlightEl) this.highlightEl.style.display = 'none';
-            if (this.tooltipEl) this.tooltipEl.style.display = 'none';
+            if (this.highlightEl)
+                this.highlightEl.style.display = 'none';
+            if (this.tooltipEl)
+                this.tooltipEl.style.display = 'none';
             btn.classList.remove('active');
-        } else {
+        }
+        else {
             btn.classList.add('active');
         }
     }
-
     appendLog(item) {
         const logs = this._get('console-logs');
-        if (!logs) return;
-
+        if (!logs)
+            return;
         const entry = document.createElement('div');
         entry.className = `log-entry ${item.level}`;
         entry.innerHTML = `<span style="opacity:0.5; font-size:9px">[${new Date().toLocaleTimeString()}]</span> <span>${this.escapeHtml(item.message)}</span>`;
         logs.appendChild(entry);
-        
         // Auto-scroll if at bottom
         if (logs.scrollHeight - logs.scrollTop - logs.clientHeight < 50) {
             logs.scrollTop = logs.scrollHeight;
         }
     }
-
     highlightElement(el) {
         this.hoveredEl = el;
         const rect = el.getBoundingClientRect();
-        
         this.highlightEl.style.display = 'block';
         this.highlightEl.style.top = rect.top + 'px';
         this.highlightEl.style.left = rect.left + 'px';
         this.highlightEl.style.width = rect.width + 'px';
         this.highlightEl.style.height = rect.height + 'px';
-
         this.tooltipEl.style.display = 'block';
         this.tooltipEl.style.top = (rect.top - 24) + 'px';
         this.tooltipEl.style.left = rect.left + 'px';
-        
         // Fix: safely handle className (especially for SVG elements where it's an object)
         const classAttr = el.getAttribute('class');
-        const classStr = (typeof classAttr === 'string' && classAttr) 
-            ? '.' + classAttr.trim().split(/\s+/).join('.') 
+        const classStr = (typeof classAttr === 'string' && classAttr)
+            ? '.' + classAttr.trim().split(/\s+/).join('.')
             : '';
         this.tooltipEl.textContent = `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${classStr}`;
     }
-
     updatePatchTree() {
         const list = this._get('patch-tree');
         list.innerHTML = debugHub.patches.map(p => `
@@ -1069,7 +1011,6 @@ class DebugUI {
             </div>
         `).join('') || '<div style="color:var(--text-muted); font-size:10px">No active patches.</div>';
     }
-
     switchTab(tabId) {
         this.activeTab = tabId;
         this.container.querySelectorAll('.debug-tab').forEach(t => {
@@ -1084,19 +1025,19 @@ class DebugUI {
         }
         if (tabId === 'debugger') {
             const activeSub = this.container.querySelector('.debug-subtab.active');
-            if (activeSub) this.switchDebuggerSubtab(activeSub.dataset.sub);
+            if (activeSub)
+                this.switchDebuggerSubtab(activeSub.dataset.sub);
         }
     }
-
     switchDebuggerSubtab(subId) {
         this.container.querySelectorAll('.debug-subtab').forEach(t => {
             t.classList.toggle('active', t.dataset.sub === subId);
         });
         this.container.querySelectorAll('.debug-subpane').forEach(p => {
             p.style.display = p.id === `subpane-${subId}` ? 'flex' : 'none';
-            if (p.id === `subpane-${subId}`) p.style.flexDirection = 'column';
+            if (p.id === `subpane-${subId}`)
+                p.style.flexDirection = 'column';
         });
-
         if (subId === 'css') {
             this.loadStylesheetsList();
         }
@@ -1107,69 +1048,66 @@ class DebugUI {
             this.refreshRustLogs();
         }
     }
-
     loadStylesheetsList() {
         const select = this._get('css-stylesheet-select');
-        if (!select) return;
-        
+        if (!select)
+            return;
         // Preserve current selection if possible
         const currentVal = select.value;
         const selectPrompt = t('dev.msg.selectStylesheet') || 'Sélectionner une feuille...';
         select.innerHTML = `<option value="">${selectPrompt}</option>`;
-        
         let found = false;
         Array.from(document.styleSheets).forEach((sheet, i) => {
             try {
                 // Must access cssRules to trigger CORS error early
-                if (!sheet.cssRules) return;
+                if (!sheet.cssRules)
+                    return;
                 let name = sheet.href ? sheet.href.split('/').pop() : 'inline style';
-                if (name.includes('debug.css')) return; // Ignore debug styles
-                
+                if (name.includes('debug.css'))
+                    return; // Ignore debug styles
                 const opt = document.createElement('option');
                 opt.value = i;
                 opt.textContent = `[${i}] ${name} (${sheet.cssRules.length} règles)`;
                 select.appendChild(opt);
-                if (currentVal && currentVal == i) found = true;
-            } catch (e) {
+                if (currentVal && currentVal == i)
+                    found = true;
+            }
+            catch (e) {
                 // CORS or restricted
             }
         });
-        
-        if (found) select.value = currentVal;
+        if (found)
+            select.value = currentVal;
     }
-
     loadStylesheet(sheetIndex) {
         const container = this._get('css-rules-container');
-        if (!container) return;
-
+        if (!container)
+            return;
         if (sheetIndex === '') {
             container.innerHTML = '<div style="color:var(--text-muted); font-size:10px; text-align:center; margin-top:20px">Sélectionnez une feuille de style.</div>';
             return;
         }
-
         try {
             const sheet = document.styleSheets[sheetIndex];
             const rules = sheet.cssRules;
             let html = '';
-
             for (let r = 0; r < rules.length; r++) {
                 const rule = rules[r];
-                if (rule.type !== CSSRule.STYLE_RULE) continue;
-                
+                if (rule.type !== CSSRule.STYLE_RULE)
+                    continue;
                 // Format the cssText
                 const cssText = rule.cssText;
                 const match = cssText.match(/\{([\s\S]*)\}/);
                 let styles = match ? match[1].trim() : '';
-                
                 // Add minor syntax highlighting manually
                 styles = styles.split(';').map(s => s.trim()).filter(s => s).map(s => {
                     const parts = s.split(':');
-                    if (parts.length < 2) return s;
+                    if (parts.length < 2)
+                        return s;
                     return `<span style="color:#9cdcfe">${parts[0].trim()}</span>: <span style="color:#ce9178">${parts.slice(1).join(':').trim()}</span>;`;
                 }).join('<br>  ');
-
-                if (styles) styles = '  ' + styles;
-
+                if (styles)
+                    styles = '  ' + styles;
                 // Live Edit Structure
                 html += `
                     <div class="css-rule-block" style="margin-bottom:12px; font-family:'JetBrains Mono'; font-size:11px; padding:8px; border-radius:4px; background:rgba(255,255,255,0.02); border:1px solid var(--debug-border)">
@@ -1184,9 +1122,7 @@ class DebugUI {
                     </div>
                 `;
             }
-
             container.innerHTML = html || '<div style="color:var(--text-muted); font-size:10px; text-align:center">Aucune règle CSS standard trouvée.</div>';
-
             // Attach Live CSS Modifiers
             container.querySelectorAll('.live-css-editor').forEach(editor => {
                 editor.addEventListener('input', (e) => {
@@ -1194,7 +1130,6 @@ class DebugUI {
                     const ruleIdx = e.target.dataset.rule;
                     const selector = e.target.dataset.selector;
                     const liveStyles = e.target.innerText;
-                    
                     const overrideId = `live-override-${sheetIdx}-${ruleIdx}`;
                     let overrideNode = document.getElementById(overrideId);
                     if (!overrideNode) {
@@ -1205,91 +1140,88 @@ class DebugUI {
                     overrideNode.textContent = `${selector} { ${liveStyles} }`;
                 });
             });
-
             // Attach Rule Inspection
             container.querySelectorAll('.rule-inspect-btn').forEach(btn => {
                 btn.onclick = () => {
                     this.inspectSelector(btn.dataset.selector);
                 };
             });
-
             // Re-apply search filter if any
             const query = this._get('css-rule-search')?.value.toLowerCase() || '';
-            if (query) this.filterCSSRules(query);
-
-        } catch (e) {
+            if (query)
+                this.filterCSSRules(query);
+        }
+        catch (e) {
             container.innerHTML = `<div style="color:var(--debug-error); font-size:10px">Impossible de lire la feuille: ${e.message}</div>`;
         }
     }
-
     filterCSSRules(query) {
         const container = this._get('css-rules-container');
-        if (!container) return;
+        if (!container)
+            return;
         query = query.toLowerCase();
         container.querySelectorAll('.css-rule-block').forEach(block => {
             const text = block.textContent.toLowerCase();
             block.style.display = text.includes(query) ? 'block' : 'none';
         });
     }
-
     inspectSelector(selector) {
         try {
             const match = document.querySelector(selector);
             if (match) {
                 this.selectElement(match);
                 this.switchTab('inspect-view');
-            } else {
+            }
+            else {
                 console.warn('[BMM-Debug] No element matches selector:', selector);
             }
-        } catch (e) {
+        }
+        catch (e) {
             console.error('[BMM-Debug] Invalid selector or error during inspection:', e);
         }
     }
-
     guessSourceFile(el) {
         // Simple heuristic: look for parent section IDs or common BMM components
         const section = el.closest('section, div[id]');
         if (section && section.id) {
-            if (section.id.startsWith('doc-')) return 'frontend/index.html (Documentation)';
-            if (section.id === 'mod-list') return 'frontend/js/app.js (Mod Loading)';
-            if (section.id === 'settings-pane') return 'frontend/js/settings.js';
+            if (section.id.startsWith('doc-'))
+                return 'frontend/index.html (Documentation)';
+            if (section.id === 'mod-list')
+                return 'frontend/js/app.js (Mod Loading)';
+            if (section.id === 'settings-pane')
+                return 'frontend/js/settings.js';
             return `frontend/index.html #${section.id}`;
         }
-        
-        if (el.classList.contains('nav-item')) return 'frontend/js/navigation.js';
-        
+        if (el.classList.contains('nav-item'))
+            return 'frontend/js/navigation.js';
         return 'frontend/index.html';
     }
-
     applyTimelineFilter(filter) {
         this.container.querySelectorAll('#timeline-list .ipc-entry').forEach(entry => {
             const isRPC = entry.querySelector('.rpc');
             const isAction = entry.querySelector('.action');
             const isError = entry.querySelector('.error');
-
             let visible = true;
-            if (filter === 'rpc') visible = !!isRPC;
-            else if (filter === 'action') visible = !!isAction;
-            else if (filter === 'error') visible = !!isError;
-
+            if (filter === 'rpc')
+                visible = !!isRPC;
+            else if (filter === 'action')
+                visible = !!isAction;
+            else if (filter === 'error')
+                visible = !!isError;
             entry.style.display = visible ? 'flex' : 'none';
         });
     }
-
     updateTimeline(item) {
         const pane = this._get('timeline-list');
         let entry = this._get(`timeline-${item.id}`);
-        
         if (!entry) {
             entry = document.createElement('div');
             entry.id = `timeline-${item.id}`;
             entry.className = 'ipc-entry'; // Reuse styles
             pane.prepend(entry);
         }
-
         const isIPC = !!item.command;
         const time = item.duration ? item.duration + 'ms' : new Date(item.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
         entry.innerHTML = `
             <div class="ipc-cmd ${isIPC ? 'rpc' : 'action'}">
                 ${isIPC ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M15 18l-6-6 6-6"/></svg>'}
@@ -1299,30 +1231,28 @@ class DebugUI {
             <div class="ipc-time">${time}</div>
         `;
     }
-
     clearSelection() {
         this.selectedEl = null;
         this._get('inspect-header').style.display = 'none';
         this._get('inspect-content').innerHTML = '<div style="color:var(--text-muted); font-size:11px">Select an element to inspect...</div>';
-        if (this.highlightEl) this.highlightEl.style.display = 'none';
-        if (this.tooltipEl) this.tooltipEl.style.display = 'none';
+        if (this.highlightEl)
+            this.highlightEl.style.display = 'none';
+        if (this.tooltipEl)
+            this.tooltipEl.style.display = 'none';
     }
-
     selectElement(target) {
-        if (!target) return;
+        if (!target)
+            return;
         this.selectedEl = target;
         this.toggleInspector(false);
         this.switchTab('inspect-view');
-
         this._get('inspect-header').style.display = 'flex';
         const pane = this._get('inspect-content');
         pane.innerHTML = ''; // Clear previous content
         const sourceGuess = this.guessSourceFile(target);
         const computed = window.getComputedStyle(target);
-        
         // Commmon CSS properties for the editor
         const commonProps = ['background', 'color', 'border', 'display', 'margin', 'padding', 'width', 'height', 'font-size', 'font-weight', 'position', 'opacity', 'flex', 'grid'];
-
         pane.innerHTML = `
             <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:8px; margin-bottom:16px; border:1px solid rgba(255,255,255,0.05)">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px">
@@ -1346,15 +1276,13 @@ class DebugUI {
 
             <div id="style-editor-list" style="display:flex; flex-direction:column; gap:8px">
                 ${commonProps.map(prop => {
-                    const jsProp = prop.replace(/-([a-z])/g, g => g[1].toUpperCase());
-                    const value = computed[jsProp];
-                    const isColorOrBackground = prop.includes('color') || prop.includes('background');
-                    
-                    // Smarter color detection: if background has images/shorthands, use background-color for helper
-                    const helperProp = prop === 'background' ? 'background-color' : prop;
-                    const colorValue = computed[helperProp.replace(/-([a-z])/g, g => g[1].toUpperCase())];
-
-                    return `
+            const jsProp = prop.replace(/-([a-z])/g, g => g[1].toUpperCase());
+            const value = computed[jsProp];
+            const isColorOrBackground = prop.includes('color') || prop.includes('background');
+            // Smarter color detection: if background has images/shorthands, use background-color for helper
+            const helperProp = prop === 'background' ? 'background-color' : prop;
+            const colorValue = computed[helperProp.replace(/-([a-z])/g, g => g[1].toUpperCase())];
+            return `
                         <div style="display:grid; grid-template-columns:1fr 1fr ${isColorOrBackground ? '20px' : ''}; gap:8px; align-items:center">
                             <div style="color:var(--debug-accent); font-family:'JetBrains Mono'; font-size:10px; display:flex; align-items:center; gap:4px">
                                 ${prop}
@@ -1370,17 +1298,15 @@ class DebugUI {
                             ${isColorOrBackground ? `<input type="color" class="style-color-helper" data-prop="${prop}" data-helper-prop="${helperProp}" style="width:16px; height:20px; padding:0; border:none; background:none; cursor:pointer" value="${colorValue.startsWith('rgb') ? this.rgbToHex(colorValue) : colorValue}">` : ''}
                         </div>
                     `;
-                }).join('')}
+        }).join('')}
                 
                 <div style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px">
                     <button class="debug-btn" id="inspect-add-prop" style="width:100%; border-style:dashed; opacity:0.6; font-size:10px">+ ADD CUSTOM PROPERTY</button>
                 </div>
             </div>
         `;
-
         // Tooltip update
         this.highlightEl.style.display = 'block';
-
         // Listeners for live edit
         pane.querySelectorAll('.style-edit-input').forEach(input => {
             input.oninput = (e) => {
@@ -1388,12 +1314,10 @@ class DebugUI {
                 debugHub.recordAction('STYLE_EDIT', { target: target.tagName, prop: input.dataset.prop, value: e.target.value });
             };
         });
-
         pane.querySelectorAll('.style-color-helper').forEach(helper => {
             helper.oninput = (e) => {
                 const targetProp = helper.dataset.helperProp || helper.dataset.prop;
                 const input = pane.querySelector(`.style-edit-input[data-prop="${helper.dataset.prop}"]`);
-                
                 // If we are editing shorthand background, we update just the background-color part if possible,
                 // but usually simpler to just apply to the helperProp directly.
                 target.style[targetProp] = e.target.value;
@@ -1403,7 +1327,6 @@ class DebugUI {
                 debugHub.recordAction('STYLE_COLOR_EDIT', { target: target.tagName, prop: targetProp, value: e.target.value });
             };
         });
-
         this._get('inspect-add-prop').onclick = () => {
             this.showPrompt('Custom Property', 'Enter CSS property name (e.g. border-radius):', '', (prop) => {
                 if (prop) {
@@ -1417,31 +1340,27 @@ class DebugUI {
                 }
             });
         };
-
         this._get('inspect-copy-node').onclick = () => {
             navigator.clipboard.writeText(target.outerHTML);
             console.info('[Inspector] Copied HTML to clipboard');
         };
-        
         this._get('inspect-send-playground').onclick = () => {
             this.switchTab('playground');
-            const styleSnippet = `/* Edit styles for ${target.tagName.toLowerCase()} */\n` + 
+            const styleSnippet = `/* Edit styles for ${target.tagName.toLowerCase()} */\n` +
                 `selector {\n  background: ${computed.backgroundColor};\n  color: ${computed.color};\n  border: ${computed.border};\n}`;
             this._get('playground-code').value = styleSnippet;
         };
     }
-
     rgbToHex(rgb) {
-        if (!rgb || !rgb.startsWith('rgb')) return rgb;
+        if (!rgb || !rgb.startsWith('rgb'))
+            return rgb;
         const [r, g, b] = rgb.match(/\d+/g).map(Number);
         return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
     }
-
     updateStateView() {
         const pane = this._get('pane-state');
         const state = appState.state;
         let html = '<div style="padding:16px; font-family:inherit">';
-        
         for (const [key, value] of Object.entries(state)) {
             const displayValue = typeof value === 'object' ? JSON.stringify(value) : value;
             html += `
@@ -1451,59 +1370,54 @@ class DebugUI {
                 </div>
             `;
         }
-        
         html += '</div>';
         pane.innerHTML = html;
-
         // Add hover effect
         pane.querySelectorAll('.state-row').forEach(row => {
             row.addEventListener('mouseenter', () => row.style.background = 'rgba(255,255,255,0.05)');
             row.addEventListener('mouseleave', () => row.style.background = '');
         });
     }
-
-
     clearUI() {
         this._get('pane-console').innerHTML = '';
         this._get('pane-network').innerHTML = '';
         this.updateStateView();
     }
-
     escapeHtml(str) {
-        if (!str) return '';
+        if (!str)
+            return '';
         return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
-
     // --- ADVANCED A11Y & DEBUG TOOLS ---
-
     toggleA11yWarnings(enabled) {
         this.a11yWarnings = enabled;
         if (enabled) {
             this.auditA11y();
             this.a11yInterval = setInterval(() => this.auditA11y(), 2000);
             console.info('[BMM-Debug] Live A11y Warnings enabled.');
-        } else {
-            if (this.a11yInterval) clearInterval(this.a11yInterval);
+        }
+        else {
+            if (this.a11yInterval)
+                clearInterval(this.a11yInterval);
             document.querySelectorAll('.bmm-a11y-error-outline').forEach(el => {
                 el.classList.remove('bmm-a11y-error-outline');
                 el.removeAttribute('title');
             });
         }
     }
-
     auditA11y() {
-        if (!this.a11yWarnings) return;
-        
+        if (!this.a11yWarnings)
+            return;
         // 1. Missing ALT on images
         document.querySelectorAll('img').forEach(img => {
             if (!img.hasAttribute('alt') || img.alt.trim() === '') {
                 img.classList.add('bmm-a11y-error-outline');
                 img.title = "A11y Warning: Image missing alt attribute";
-            } else {
+            }
+            else {
                 img.classList.remove('bmm-a11y-error-outline');
             }
         });
-
         // 2. Buttons without labels/text
         document.querySelectorAll('button').forEach(btn => {
             const hasText = btn.innerText.trim().length > 0;
@@ -1511,11 +1425,11 @@ class DebugUI {
             if (!hasText && !hasLabel) {
                 btn.classList.add('bmm-a11y-error-outline');
                 btn.title = "A11y Warning: Button has no visible text and no aria-label";
-            } else {
+            }
+            else {
                 btn.classList.remove('bmm-a11y-error-outline');
             }
         });
-
         // 3. Inputs without labels
         document.querySelectorAll('input:not([type="hidden"]), select, textarea').forEach(input => {
             if (input.id) {
@@ -1523,25 +1437,27 @@ class DebugUI {
                 if (!label && !input.hasAttribute('aria-label') && !input.hasAttribute('placeholder')) {
                     input.classList.add('bmm-a11y-error-outline');
                     input.title = "A11y Warning: Form field has no associated label or aria-label";
-                } else {
+                }
+                else {
                     input.classList.remove('bmm-a11y-error-outline');
                 }
-            } else if (!input.hasAttribute('aria-label') && !input.hasAttribute('placeholder')) {
-                    input.classList.add('bmm-a11y-error-outline');
-                    input.title = "A11y Warning: Form field has no associated label or aria-label";
-            } else {
+            }
+            else if (!input.hasAttribute('aria-label') && !input.hasAttribute('placeholder')) {
+                input.classList.add('bmm-a11y-error-outline');
+                input.title = "A11y Warning: Form field has no associated label or aria-label";
+            }
+            else {
                 input.classList.remove('bmm-a11y-error-outline');
             }
         });
     }
-
     toggleA11yReader(enabled) {
         this.a11yReader = enabled;
         if (enabled) {
             this._a11yMouseOver = (e) => {
                 const target = e.target;
-                if (target.closest('#bmm-debug-overlay')) return;
-
+                if (target.closest('#bmm-debug-overlay'))
+                    return;
                 let readerOverlay = document.getElementById('bmm-a11y-reader-overlay');
                 if (!readerOverlay) {
                     readerOverlay = document.createElement('div');
@@ -1549,10 +1465,8 @@ class DebugUI {
                     readerOverlay.className = 'bmm-a11y-reader-label';
                     document.body.appendChild(readerOverlay);
                 }
-
                 const rect = target.getBoundingClientRect();
                 const accessibleName = target.getAttribute('aria-label') || target.getAttribute('alt') || (target.innerText || target.textContent || "").trim() || target.getAttribute('title') || target.tagName.toLowerCase();
-                
                 readerOverlay.textContent = `Accessible: "${accessibleName}"`;
                 readerOverlay.style.display = 'block';
                 readerOverlay.style.top = (rect.bottom + window.scrollY + 5) + 'px';
@@ -1560,19 +1474,21 @@ class DebugUI {
             };
             this._a11yMouseOut = () => {
                 const overlay = document.getElementById('bmm-a11y-reader-overlay');
-                if (overlay) overlay.style.display = 'none';
+                if (overlay)
+                    overlay.style.display = 'none';
             };
             document.addEventListener('mouseover', this._a11yMouseOver);
             document.addEventListener('mouseout', this._a11yMouseOut);
             console.info('[BMM-Debug] A11y Reader Simulation enabled.');
-        } else {
+        }
+        else {
             document.removeEventListener('mouseover', this._a11yMouseOver);
             document.removeEventListener('mouseout', this._a11yMouseOut);
             const overlay = document.getElementById('bmm-a11y-reader-overlay');
-            if (overlay) overlay.remove();
+            if (overlay)
+                overlay.remove();
         }
     }
-
     toggleJSEvents(enabled) {
         this.jsEvents = enabled;
         if (enabled) {
@@ -1584,52 +1500,54 @@ class DebugUI {
                 }
             });
             console.info('[BMM-Debug] Event Listener Overlay enabled.');
-        } else {
+        }
+        else {
             document.querySelectorAll('.bmm-js-event-node').forEach(el => {
                 el.classList.remove('bmm-js-event-node');
                 el.removeAttribute('title');
             });
         }
     }
-
-
     toggleHardcodedDetector(enabled) {
         this.hardcodedDetector = enabled;
         if (enabled) {
             this.auditHardcoded();
             this.hardcodedInterval = setInterval(() => this.auditHardcoded(), 3000);
             console.info('[BMM-Debug] Hardcoded Text Detector enabled.');
-        } else {
-            if (this.hardcodedInterval) clearInterval(this.hardcodedInterval);
+        }
+        else {
+            if (this.hardcodedInterval)
+                clearInterval(this.hardcodedInterval);
             document.querySelectorAll('.bmm-hardcoded-error').forEach(el => {
                 el.classList.remove('bmm-hardcoded-error');
                 el.removeAttribute('title');
             });
         }
     }
-
     auditHardcoded() {
-        if (!this.hardcodedDetector) return;
-
+        if (!this.hardcodedDetector)
+            return;
         const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
             acceptNode: (node) => {
                 // Skip if inside debug overlay
-                if (node.parentElement?.closest('#bmm-debug-overlay')) return NodeFilter.FILTER_REJECT;
+                if (node.parentElement?.closest('#bmm-debug-overlay'))
+                    return NodeFilter.FILTER_REJECT;
                 // Skip script/style
-                if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE'].includes(node.parentElement?.tagName)) return NodeFilter.FILTER_REJECT;
+                if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE'].includes(node.parentElement?.tagName))
+                    return NodeFilter.FILTER_REJECT;
                 // Skip icons, symbols, or very short strings (usually UI decor)
-                if (!node.textContent.trim()) return NodeFilter.FILTER_REJECT;
+                if (!node.textContent.trim())
+                    return NodeFilter.FILTER_REJECT;
                 // Skip if already has i18n
-                if (node.parentElement?.closest('[data-i18n], [data-i18n-placeholder], [data-i18n-title]')) return NodeFilter.FILTER_REJECT;
-                
+                if (node.parentElement?.closest('[data-i18n], [data-i18n-placeholder], [data-i18n-title]'))
+                    return NodeFilter.FILTER_REJECT;
                 return NodeFilter.FILTER_ACCEPT;
             }
         });
-
         const nodes = [];
         let curr;
-        while (curr = walk.nextNode()) nodes.push(curr);
-
+        while (curr = walk.nextNode())
+            nodes.push(curr);
         nodes.forEach(textNode => {
             const parent = textNode.parentElement;
             if (parent && !parent.classList.contains('bmm-hardcoded-error')) {
@@ -1638,7 +1556,6 @@ class DebugUI {
             }
         });
     }
-
     savePosition() {
         const rect = this.container.getBoundingClientRect();
         const data = {
@@ -1650,7 +1567,6 @@ class DebugUI {
         };
         localStorage.setItem('bmm-debug-ui', JSON.stringify(data));
     }
-
     loadPosition() {
         try {
             const data = JSON.parse(localStorage.getItem('bmm-debug-ui'));
@@ -1661,13 +1577,16 @@ class DebugUI {
                     this.container.style.top = data.top + 'px';
                     this.container.style.left = data.left + 'px';
                 }
-                if (data.width) this.container.style.width = data.width + 'px';
-                if (data.height) this.container.style.height = data.height + 'px';
-                if (data.activeTab) this.activeTab = data.activeTab;
+                if (data.width)
+                    this.container.style.width = data.width + 'px';
+                if (data.height)
+                    this.container.style.height = data.height + 'px';
+                if (data.activeTab)
+                    this.activeTab = data.activeTab;
             }
-        } catch (e) {}
+        }
+        catch (e) { }
     }
-
     exportSession() {
         const session = {
             timestamp: new Date().toISOString(),
@@ -1683,21 +1602,20 @@ class DebugUI {
         a.click();
         console.info('[BMM-Debug] Session exported successfully');
     }
-
     async loadSources() {
         try {
             const { invoke } = window.__TAURI__.tauri;
             const files = await invoke('get_project_files');
             this.renderFileTree(files);
-        } catch (e) {
+        }
+        catch (e) {
             console.error('[BMM-Debug] Failed to load sources:', e);
             document.querySelector('.sources-tree').innerHTML = `<div style="color:var(--debug-error); font-size:10px">Failed to load project files.</div>`;
         }
     }
-
     renderFileTree(files, container = document.querySelector('.sources-tree'), level = 0) {
-        if (level === 0) container.innerHTML = '';
-        
+        if (level === 0)
+            container.innerHTML = '';
         files.forEach(file => {
             const row = document.createElement('div');
             row.style.paddingLeft = (level * 12 + 4) + 'px';
@@ -1708,16 +1626,14 @@ class DebugUI {
             row.style.gap = '6px';
             row.style.paddingY = '2px';
             row.className = 'tree-row';
-            
-            const icon = file.is_dir 
+            const icon = file.is_dir
                 ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
                 : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>';
-            
             row.innerHTML = `<span style="color:var(--text-muted); opacity:0.7">${icon}</span> <span>${file.name}</span>`;
-            
             if (!file.is_dir) {
                 row.onclick = () => this.openSourceFile(file.path, row);
-            } else if (file.children) {
+            }
+            else if (file.children) {
                 const childContainer = document.createElement('div');
                 childContainer.style.display = 'block'; // Or 'none' for collapsed by default
                 row.onclick = () => {
@@ -1729,30 +1645,25 @@ class DebugUI {
                 this.renderFileTree(file.children, childContainer, level + 1);
                 return;
             }
-            
             container.appendChild(row);
         });
     }
-
     async openSourceFile(path, row) {
         document.querySelectorAll('.tree-row').forEach(r => r.classList.remove('active'));
-        if (row) row.classList.add('active');
-
+        if (row)
+            row.classList.add('active');
         this.currentSource = { path, name: path.split(/[\\/]/).pop(), data: null };
         const editorArea = document.querySelector('.sources-editor');
-        if (!window.__TAURI__) return;
+        if (!window.__TAURI__)
+            return;
         const { invoke } = window.__TAURI__.tauri;
-
         editorArea.innerHTML = `<div style="padding:20px; color:var(--text-muted)">${t('common.loading')}</div>`;
-
         try {
             const data = await invoke('read_project_file', { path });
             this.currentSource.data = data;
-            
             const ext = path.split('.').pop().toLowerCase();
             const isImage = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'].includes(ext);
             const isVideo = ['mp4', 'webm', 'ogg'].includes(ext);
-
             if (isImage) {
                 editorArea.innerHTML = `
                     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:20px; background:rgba(0,0,0,0.3)">
@@ -1760,50 +1671,50 @@ class DebugUI {
                         <div style="color:var(--text-muted); font-size:10px; font-family:'JetBrains Mono'">${path}<br>Clic droit pour télécharger</div>
                     </div>
                 `;
-            } else if (isVideo) {
+            }
+            else if (isVideo) {
                 editorArea.innerHTML = `
                     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:20px; background:rgba(0,0,0,0.3)">
                         <video src="${data}" controls style="max-width:90%; max-height:80%; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:4px; margin-bottom:12px"></video>
                         <div style="color:var(--text-muted); font-size:10px; font-family:'JetBrains Mono'">${path}</div>
                     </div>
                 `;
-            } else {
+            }
+            else {
                 const highlighted = this.highlightCode(data, ext);
                 editorArea.innerHTML = `<pre id="sources-code" style="margin:0; padding:16px; font-family:'JetBrains Mono'; font-size:11px; color:var(--text-primary); white-space:pre-wrap; line-height:1.5">${highlighted}</pre>`;
             }
-
             editorArea.oncontextmenu = (e) => {
                 e.preventDefault();
-                
                 this.showContextMenu(e.clientX, e.clientY, [
-                    { 
-                        label: t('common.copy'), 
+                    {
+                        label: t('common.copy'),
                         action: () => {
                             if (isImage || isVideo) {
                                 this.copyToClipboard(data);
-                            } else {
+                            }
+                            else {
                                 navigator.clipboard.writeText(data).then(() => {
                                     this.showAlert(t('common.success'), t('dev.msg.contentCopied'));
                                 });
                             }
                         }
                     },
-                    { 
-                        label: t('common.downloadFile'), 
+                    {
+                        label: t('common.downloadFile'),
                         action: () => this.downloadFile(path.split(/[\\/]/).pop(), data)
                     }
                 ]);
             };
-
-        } catch (e) {
+        }
+        catch (e) {
             console.error('[BMM-Debug] Failed to read source file:', e);
             editorArea.innerHTML = `<div style="padding:20px; color:var(--debug-error)">${t('common.error')}: ${e}</div>`;
         }
     }
-
     highlightCode(code, ext) {
-        if (!code) return '';
-        
+        if (!code)
+            return '';
         // Single-pass replacement using a special token mapping to avoid double-processing tags
         let h = this.escapeHtml(code);
         let tokens = [];
@@ -1812,75 +1723,69 @@ class DebugUI {
             tokens.push({ id, html: `<span style="color:${style}">${val}</span>` });
             return id;
         };
-
         // Order matters: match larger patterns first
         if (ext === 'css') {
             h = h.replace(/(\/\*[\s\S]*?\*\/)/g, m => pushToken('#6a9955', m))
-                 .replace(/(@[\w-]+)/g, m => pushToken('#c586c0', m)) // Media queries
-                 .replace(/([^{}\n;]+)\s*\{/g, (m, p1) => pushToken('#d7ba7d', p1) + ' {')
-                 .replace(/([\w-]+)\s*:/g, (m, p1) => pushToken('#9cdcfe', p1) + ':')
-                 .replace(/:\s*([^;\}]+)/g, (m, p1) => ': ' + pushToken('#ce9178', p1))
-                 .replace(/(#[0-9a-fA-F]{3,8})/g, m => pushToken('#b5cea8', m)) // Hex colors
-                 .replace(/(:hover|:active|:focus|:before|:after|:nth-child\([\w+n-]+\))/g, m => pushToken('#d7ba7d', m));
-        } 
+                .replace(/(@[\w-]+)/g, m => pushToken('#c586c0', m)) // Media queries
+                .replace(/([^{}\n;]+)\s*\{/g, (m, p1) => pushToken('#d7ba7d', p1) + ' {')
+                .replace(/([\w-]+)\s*:/g, (m, p1) => pushToken('#9cdcfe', p1) + ':')
+                .replace(/:\s*([^;\}]+)/g, (m, p1) => ': ' + pushToken('#ce9178', p1))
+                .replace(/(#[0-9a-fA-F]{3,8})/g, m => pushToken('#b5cea8', m)) // Hex colors
+                .replace(/(:hover|:active|:focus|:before|:after|:nth-child\([\w+n-]+\))/g, m => pushToken('#d7ba7d', m));
+        }
         else if (ext === 'js' || ext === 'ts' || ext === 'rust' || ext === 'rs') {
             const isRust = ext.startsWith('r');
-            const keywords = isRust 
+            const keywords = isRust
                 ? /\b(fn|let|mut|match|if|else|loop|while|for|return|pub|use|mod|struct|enum|impl|trait|type|where|async|await|dyn|static|crate)\b/g
                 : /\b(const|let|var|function|return|if|else|for|while|import|export|from|class|extends|new|async|await|try|catch|finally|this|super|case|switch|break|continue|default|typeof|instanceof|window|document|console)\b/g;
-
             h = h.replace(/(\/\/.*$)/gm, m => pushToken('#6a9955', m))
-                 .replace(/(\/\*[\s\S]*?\*\/)/g, m => pushToken('#6a9955', m))
-                 .replace(/('.*?'|".*?"|`[\s\S]*?`)/g, m => pushToken('#ce9178', m))
-                 .replace(keywords, m => pushToken('#569cd6', m))
-                 .replace(/\b(true|false|null|undefined|None|Some|Ok|Err|Self|self)\b/g, m => pushToken('#569cd6', m))
-                 .replace(/\b(\d+)\b/g, m => pushToken('#b5cea8', m));
-
+                .replace(/(\/\*[\s\S]*?\*\/)/g, m => pushToken('#6a9955', m))
+                .replace(/('.*?'|".*?"|`[\s\S]*?`)/g, m => pushToken('#ce9178', m))
+                .replace(keywords, m => pushToken('#569cd6', m))
+                .replace(/\b(true|false|null|undefined|None|Some|Ok|Err|Self|self)\b/g, m => pushToken('#569cd6', m))
+                .replace(/\b(\d+)\b/g, m => pushToken('#b5cea8', m));
             if (isRust) {
                 h = h.replace(/(\w+!)/g, m => pushToken('#dcdcaa', m)) // Macros
-                     .replace(/('[\w]+)/g, m => pushToken('#4ec9b0', m)); // Lifetimes
-            } else {
+                    .replace(/('[\w]+)/g, m => pushToken('#4ec9b0', m)); // Lifetimes
+            }
+            else {
                 h = h.replace(/(\w+)\(/g, (m, p1) => pushToken('#dcdcaa', p1) + '('); // Function calls
             }
         }
         else if (ext === 'html' || ext === 'svg' || ext === 'xml') {
             h = h.replace(/(&lt;!--[\s\S]*?--&gt;)/g, m => pushToken('#6a9955', m)) // Comments
-                 .replace(/(&lt;\/|&lt;)([\w-]+)/g, (m, p1, p2) => p1 + pushToken('#569cd6', p2)) // Tags
-                 .replace(/(&gt;)/g, m => pushToken('#569cd6', m))
-                 .replace(/(\w+)=/g, (m, p1) => pushToken('#9cdcfe', p1) + '=')
-                 .replace(/(".*?")/g, m => pushToken('#ce9178', m));
+                .replace(/(&lt;\/|&lt;)([\w-]+)/g, (m, p1, p2) => p1 + pushToken('#569cd6', p2)) // Tags
+                .replace(/(&gt;)/g, m => pushToken('#569cd6', m))
+                .replace(/(\w+)=/g, (m, p1) => pushToken('#9cdcfe', p1) + '=')
+                .replace(/(".*?")/g, m => pushToken('#ce9178', m));
         }
         else if (ext === 'json') {
             h = h.replace(/(".*?")\s*:/g, (m, p1) => pushToken('#9cdcfe', p1) + ':')
-                 .replace(/:\s*(".*?")/g, (m, p1) => ': ' + pushToken('#ce9178', p1))
-                 .replace(/\b(true|false|null)\b/g, m => pushToken('#569cd6', m))
-                 .replace(/\b(\d+)\b/g, m => pushToken('#b5cea8', m));
+                .replace(/:\s*(".*?")/g, (m, p1) => ': ' + pushToken('#ce9178', p1))
+                .replace(/\b(true|false|null)\b/g, m => pushToken('#569cd6', m))
+                .replace(/\b(\d+)\b/g, m => pushToken('#b5cea8', m));
         }
-
         // Parenthesis and Brackets (all files)
         h = h.replace(/([(){}\[\]])/g, m => pushToken('#ffd700', m));
-
         // Final replacement of tokens
         tokens.forEach(t => {
             h = h.replace(t.id, t.html);
         });
-
         return h;
     }
-
     async updateMetrics(metrics) {
         try {
             const fps = this._get('dbg-fps');
             const mem = this._get('dbg-mem');
             const pid = this._get('dbg-pid');
             const uptime = this._get('dbg-uptime');
-
             const stats = await invoke('get_debug_stats');
-            
-            if (fps) fps.textContent = Math.round(metrics?.fps || 0);
-            if (mem) mem.textContent = (stats.memory_mb || 0) + 'MB';
-            if (pid) pid.textContent = stats.pid || '-';
-            
+            if (fps)
+                fps.textContent = Math.round(metrics?.fps || 0);
+            if (mem)
+                mem.textContent = (stats.memory_mb || 0) + 'MB';
+            if (pid)
+                pid.textContent = stats.pid || '-';
             if (uptime) {
                 const s = stats.uptime_secs || 0;
                 const hrs = Math.floor(s / 3600);
@@ -1888,21 +1793,19 @@ class DebugUI {
                 const secs = s % 60;
                 uptime.textContent = `${hrs > 0 ? hrs + 'h ' : ''}${mins > 0 ? mins + 'm ' : ''}${secs}s`;
             }
-        } catch (e) {
+        }
+        catch (e) {
             console.error('[BMM-Debug] Metrics Update Failed:', e);
         }
     }
-
     createContextMenu() {
         const menu = document.createElement('div');
         menu.id = 'debug-context-menu';
         menu.style = 'position:fixed; display:none; background:rgba(30,30,30,0.95); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,0.5); z-index:200000; padding:4px; min-width:140px; transform: scale(0.9); opacity: 0; transition: transform 0.1s, opacity 0.1s';
         document.body.appendChild(menu);
         this.contextMenu = menu;
-
         document.addEventListener('click', () => this.hideContextMenu());
     }
-
     showContextMenu(x, y, items) {
         this.contextMenu.innerHTML = items.map(item => `
             <div class="ctx-item" style="padding:8px 12px; font-size:11px; color:rgba(255,255,255,0.8); cursor:pointer; border-radius:4px; transition:all 0.1s" 
@@ -1911,12 +1814,10 @@ class DebugUI {
                 ${item.label}
             </div>
         `).join('');
-
         // Attach actions
         this.contextMenu.querySelectorAll('.ctx-item').forEach((el, i) => {
             el.onclick = items[i].action;
         });
-
         this.contextMenu.style.left = x + 'px';
         this.contextMenu.style.top = y + 'px';
         this.contextMenu.style.display = 'block';
@@ -1925,25 +1826,24 @@ class DebugUI {
             this.contextMenu.style.opacity = '1';
         }, 10);
     }
-
     hideContextMenu() {
-        if (!this.contextMenu) return;
+        if (!this.contextMenu)
+            return;
         this.contextMenu.style.transform = 'scale(0.9)';
         this.contextMenu.style.opacity = '0';
         setTimeout(() => this.contextMenu.style.display = 'none', 100);
     }
-
     copyToClipboard(text) {
         if (text.startsWith('data:')) {
             // It's a base64 image, skip copy or copy base64
             navigator.clipboard.writeText(text);
             this.showAlert('Copied', 'Base64 image data copied to clipboard.');
-        } else {
+        }
+        else {
             navigator.clipboard.writeText(text);
             this.showAlert('Copied', 'Content copied to clipboard.');
         }
     }
-
     downloadFile(name, content) {
         let blob;
         if (content.startsWith('data:')) {
@@ -1956,7 +1856,8 @@ class DebugUI {
                 ia[i] = byteString.charCodeAt(i);
             }
             blob = new Blob([ab], { type: mime });
-        } else {
+        }
+        else {
             blob = new Blob([content], { type: 'text/plain' });
         }
         const url = URL.createObjectURL(blob);
@@ -1966,31 +1867,29 @@ class DebugUI {
         a.click();
         URL.revokeObjectURL(url);
     }
-
     buildDomTree() {
         const tree = this._get('html-dom-tree');
-        if (!tree) return;
+        if (!tree)
+            return;
         tree.innerHTML = '';
         const root = document.documentElement;
         tree.appendChild(this._renderDomNode(root));
     }
-
     _renderDomNode(node) {
-        if (node.nodeType !== Node.ELEMENT_NODE) return null;
-        if (node.id === 'bmm-debug-overlay' || node.closest('#bmm-debug-overlay')) return null;
-
+        if (node.nodeType !== Node.ELEMENT_NODE)
+            return null;
+        if (node.id === 'bmm-debug-overlay' || node.closest('#bmm-debug-overlay'))
+            return null;
         const container = document.createElement('div');
         container.className = 'dom-node';
         container.style.marginLeft = '12px';
         container.style.padding = '2px 0';
-
         const header = document.createElement('div');
         header.style.cursor = 'pointer';
         header.style.display = 'flex';
         header.style.alignItems = 'center';
         header.style.gap = '6px';
         header.className = 'dom-tree-node'; // Use style from debug.css
-
         const hasChildren = node.children.length > 0;
         const toggle = document.createElement('span');
         toggle.className = 'dom-toggle';
@@ -1999,53 +1898,45 @@ class DebugUI {
         toggle.style.color = 'var(--text-muted)';
         toggle.textContent = hasChildren ? '▶' : ' ';
         header.appendChild(toggle);
-
         const tag = document.createElement('span');
         tag.style.color = 'var(--debug-accent)';
         tag.style.fontWeight = 'bold';
         tag.textContent = `<${node.tagName.toLowerCase()}${node.id ? '#' + node.id : ''}>`;
         header.appendChild(tag);
-
         container.appendChild(header);
-
         if (hasChildren) {
             const children = document.createElement('div');
             children.className = 'dom-children';
             children.style.display = 'none';
             children.style.borderLeft = '1px solid rgba(255,255,255,0.05)';
             children.style.marginLeft = '4px';
-
             header.onclick = (e) => {
                 e.stopPropagation();
                 const isHidden = children.style.display === 'none';
                 children.style.display = isHidden ? 'block' : 'none';
                 toggle.textContent = isHidden ? '▼' : '▶';
-                
                 // Lazy load children if needed
                 if (isHidden && children.innerHTML === '') {
                     for (const child of node.children) {
                         const childNode = this._renderDomNode(child);
-                        if (childNode) children.appendChild(childNode);
+                        if (childNode)
+                            children.appendChild(childNode);
                     }
                 }
             };
             container.appendChild(children);
         }
-
         tag.onclick = (e) => {
             e.stopPropagation();
             this.selectElement(node);
         };
-
         return container;
     }
-
     async refreshRustLogs() {
         const container = this._get('rust-logs-container');
-        if (!container) return;
-        
+        if (!container)
+            return;
         container.innerHTML = `<div style="padding:10px; color:var(--text-muted)">Chargement...</div>`;
-        
         try {
             const { invoke } = window.__TAURI__.tauri;
             const logs = await invoke('get_rust_logs');
@@ -2053,40 +1944,45 @@ class DebugUI {
                 // simple parsing for highlighting strings like "[HH:MM:SS.mmm] [LEVEL] message"
                 let color = 'var(--text-primary)';
                 const lowerLine = line.toLowerCase();
-                if (lowerLine.includes('error') || lowerLine.includes('panic')) color = 'var(--debug-error)';
-                else if (lowerLine.includes('warn')) color = 'var(--debug-warn)';
-                else if (lowerLine.includes('info')) color = 'var(--debug-accent)';
-                else if (lowerLine.includes('success') || lowerLine.includes('done')) color = 'var(--debug-success)';
-
+                if (lowerLine.includes('error') || lowerLine.includes('panic'))
+                    color = 'var(--debug-error)';
+                else if (lowerLine.includes('warn'))
+                    color = 'var(--debug-warn)';
+                else if (lowerLine.includes('info'))
+                    color = 'var(--debug-accent)';
+                else if (lowerLine.includes('success') || lowerLine.includes('done'))
+                    color = 'var(--debug-success)';
                 return `
                     <div style="font-family:'JetBrains Mono'; font-size:10px; margin-bottom:2px; padding:2px 4px; border-bottom:1px solid rgba(255,255,255,0.01); white-space:pre-wrap; word-break:break-all; color:${color}">
                         ${this.escapeHtml(line)}
                     </div>
                 `;
             }).join('') || '<div style="padding:10px; color:var(--text-muted)">Aucun log Rust trouvé.</div>';
-            
             container.scrollTop = container.scrollHeight;
-        } catch (e) {
+        }
+        catch (e) {
             container.innerHTML = `<div style="padding:10px; color:var(--debug-error)">Erreur: ${e}</div>`;
         }
     }
-
     _getLogColor(level) {
-        if (!level) return 'var(--text-primary)';
+        if (!level)
+            return 'var(--text-primary)';
         const l = level.toUpperCase();
-        if (l.includes('ERROR')) return 'var(--debug-error)';
-        if (l.includes('WARN')) return 'var(--debug-warn)';
-        if (l.includes('INFO')) return 'var(--debug-accent)';
+        if (l.includes('ERROR'))
+            return 'var(--debug-error)';
+        if (l.includes('WARN'))
+            return 'var(--debug-warn)';
+        if (l.includes('INFO'))
+            return 'var(--debug-accent)';
         return 'var(--debug-success)';
     }
-
     startUpdateLoop() {
         // Refresh state view periodically when open if we aren't using deep Proxies for everything
         setInterval(() => {
-            if (this.isOpen && this.activeTab === 'state') this.updateStateView();
+            if (this.isOpen && this.activeTab === 'state')
+                this.updateStateView();
         }, 1000);
     }
-
 }
-
 export const debugUI = new DebugUI();
+//# sourceMappingURL=debug-ui.js.map

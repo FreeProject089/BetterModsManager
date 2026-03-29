@@ -32,3 +32,4 @@ graph TD
 `,
     explanationPrefix: 'docs.diagram.one_click.node.'
 };
+//# sourceMappingURL=one-click-install.js.map

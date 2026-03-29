@@ -1,40 +1,42 @@
+// @ts-nocheck
 /**
  * settings.js — Settings UI (PAT, Discord, Shortcuts, Storage, Language, Tags)
  */
-
 import { invoke, getSettings, updateSettings, pickFile, saveFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes } from '../../core/utils.js';
-
 // ── GitHub PAT helper ─────────────────────────────────────
 export async function getGithubPat() {
     try {
         const settings = await getSettings();
         return settings.github_token || '';
-    } catch {
+    }
+    catch {
         return '';
     }
 }
-
 async function initGithubPatSettings() {
     const input = document.getElementById('setting-github-pat');
     const saveBtn = document.getElementById('btn-save-github-pat');
     const clearBtn = document.getElementById('btn-clear-github-pat');
     const toggleBtn = document.getElementById('btn-toggle-pat-visibility');
     const statusMsg = document.getElementById('pat-status-msg');
-    if (!input) return;
-
+    if (!input)
+        return;
     try {
         const settings = await getSettings();
         const stored = settings.github_token || '';
         if (stored) {
             input.value = stored;
-            if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--success)">&#10003; Token saved (${stored.length} chars)</span>`;
+            if (statusMsg)
+                statusMsg.innerHTML = `<span style="color:var(--success)">&#10003; Token saved (${stored.length} chars)</span>`;
         }
-    } catch (e) { console.error('Failed to load PAT:', e); }
-
+    }
+    catch (e) {
+        console.error('Failed to load PAT:', e);
+    }
     if (toggleBtn) {
         toggleBtn.addEventListener('click', () => {
             const isPassword = input.type === 'password';
@@ -43,32 +45,34 @@ async function initGithubPatSettings() {
             if (icon) {
                 if (isPassword) {
                     icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>';
-                } else {
+                }
+                else {
                     icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
                 }
             }
         });
     }
-
     if (saveBtn) {
         saveBtn.addEventListener('click', async () => {
             const val = input.value.trim();
             if (!val) {
-                if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--warning)">⚠ No token entered. Use Clear to remove the stored token.</span>`;
+                if (statusMsg)
+                    statusMsg.innerHTML = `<span style="color:var(--warning)">⚠ No token entered. Use Clear to remove the stored token.</span>`;
                 return;
             }
             try {
                 const settings = await getSettings();
                 settings.github_token = val;
                 await updateSettings(settings);
-                if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--success)">&#10003; Token saved (${val.length} chars)</span>`;
+                if (statusMsg)
+                    statusMsg.innerHTML = `<span style="color:var(--success)">&#10003; Token saved (${val.length} chars)</span>`;
                 toast(t('settings.githubPatSaved') || 'GitHub PAT saved.', 'success');
-            } catch (e) {
+            }
+            catch (e) {
                 toast(t('common.error') + ' : ' + e, 'error');
             }
         });
     }
-
     if (clearBtn) {
         clearBtn.addEventListener('click', async () => {
             try {
@@ -78,20 +82,23 @@ async function initGithubPatSettings() {
                 input.value = '';
                 input.type = 'password';
                 const icon = document.getElementById('pat-eye-icon');
-                if (icon) icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
-                if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--text-muted)">Token cleared.</span>`;
+                if (icon)
+                    icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+                if (statusMsg)
+                    statusMsg.innerHTML = `<span style="color:var(--text-muted)">Token cleared.</span>`;
                 toast(t('settings.githubPatCleared') || 'GitHub PAT cleared.', 'info');
-            } catch (e) {
+            }
+            catch (e) {
                 toast(t('common.error') + ' : ' + e, 'error');
             }
         });
     }
-
     const helpBtn = document.getElementById('btn-pat-need-help');
     if (helpBtn) {
         helpBtn.addEventListener('click', () => {
             const docsNav = document.querySelector('.nav-item[data-view="docs"]');
-            if (docsNav) docsNav.click();
+            if (docsNav)
+                docsNav.click();
             setTimeout(() => {
                 const faqEl = document.getElementById('faq-github-pat');
                 if (faqEl) {
@@ -104,60 +111,59 @@ async function initGithubPatSettings() {
         });
     }
 }
-
 // ── Discord RPC ───────────────────────────────────────────
 async function initDiscordRpcSettings() {
     const chk = document.getElementById('chk-discord-rpc');
-    if (!chk) return;
-
+    if (!chk)
+        return;
     try {
         const settings = await getSettings();
         chk.checked = settings.discord_rpc_enabled || false;
-    } catch (e) { console.error('Failed to load Discord RPC setting:', e); }
-
+    }
+    catch (e) {
+        console.error('Failed to load Discord RPC setting:', e);
+    }
     chk.addEventListener('change', async (e) => {
         try {
             const settings = await getSettings();
             settings.discord_rpc_enabled = e.target.checked;
             await updateSettings(settings);
-            
             if (e.target.checked) {
                 await invoke('init_discord_rpc');
                 toast(t('settings.discordRpcEnabled') || 'Discord Rich Presence activé', 'success');
                 await updateDiscordStatus();
-            } else {
-                await invoke('init_discord_rpc'); 
+            }
+            else {
+                await invoke('init_discord_rpc');
                 toast(t('settings.discordRpcDisabled') || 'Discord Rich Presence désactivé', 'info');
             }
-        } catch (err) {
+        }
+        catch (err) {
             toast(t('common.error') + ' : ' + err, 'error');
         }
     });
 }
-
 export async function updateDiscordStatus() {
     try {
         const settings = await getSettings();
-        if (!settings.discord_rpc_enabled) return;
-
+        if (!settings.discord_rpc_enabled)
+            return;
         const profiles = await getProfiles();
         const activeId = await getActiveProfileId();
         const activeProfile = profiles.find(p => p.id === activeId);
-
         if (activeProfile) {
             const details = t('settings.discordRpcDetails', { name: activeProfile.name }) || `Profil: ${activeProfile.name}`;
             const status = t('settings.discordRpcStatus', { count: activeProfile.active_mods.length }) || `${activeProfile.active_mods.length} mods activés`;
-            
             await invoke('set_discord_presence', {
                 details,
                 status
             });
         }
-    } catch (e) {
+    }
+    catch (e) {
         console.error('Failed to update Discord status:', e);
     }
 }
-
 // ── Settings keyboard shortcuts ────────────────────────────
 export async function getShortcuts() {
     try {
@@ -168,7 +174,8 @@ export async function getShortcuts() {
             "exportModlist": "e",
             "importModlist": "i"
         };
-    } catch {
+    }
+    catch {
         return {
             "newProfile": "n",
             "addMod": "m",
@@ -177,26 +184,27 @@ export async function getShortcuts() {
         };
     }
 }
-
 async function initShortcuts() {
-    document.addEventListener('keydown', async e => {
+    document.addEventListener('keydown', async (e) => {
         if (e.ctrlKey) {
             const sc = await getShortcuts();
             const key = e.key.toLowerCase();
-
             if (key === sc.newProfile) {
                 e.preventDefault();
                 document.getElementById('nav-profiles').click();
                 setTimeout(() => document.getElementById('btn-new-profile')?.click(), 50);
-            } else if (key === sc.addMod) {
+            }
+            else if (key === sc.addMod) {
                 e.preventDefault();
                 document.getElementById('nav-library').click();
                 setTimeout(() => document.getElementById('btn-add-mod')?.click(), 50);
-            } else if (key === sc.exportModlist) {
+            }
+            else if (key === sc.exportModlist) {
                 e.preventDefault();
                 document.getElementById('nav-modlist').click();
                 setTimeout(() => document.getElementById('btn-export-mm')?.click(), 100);
-            } else if (key === sc.importModlist) {
+            }
+            else if (key === sc.importModlist) {
                 e.preventDefault();
                 document.getElementById('nav-modlist').click();
                 setTimeout(() => document.getElementById('btn-import-mm')?.click(), 100);
@@ -204,15 +212,13 @@ async function initShortcuts() {
         }
     });
 }
-
 async function renderSettingsShortcuts() {
     const sc = await getShortcuts();
-
     const updateShortcut = (id, keyName) => {
         const input = document.getElementById(id);
         if (input) {
             input.value = sc[keyName];
-            input.addEventListener('keydown', async e => {
+            input.addEventListener('keydown', async (e) => {
                 e.preventDefault();
                 const newKey = e.key.toLowerCase();
                 if (newKey !== 'control' && newKey !== 'shift' && newKey !== 'alt') {
@@ -223,7 +229,8 @@ async function renderSettingsShortcuts() {
                         await updateSettings(settings);
                         input.value = newKey;
                         toast('Raccourci mis à jour (' + newKey + ')', 'success');
-                    } catch (err) {
+                    }
+                    catch (err) {
                         toast('Erreur sauvegarde raccourci : ' + err, 'error');
                     }
                 }
@@ -235,57 +242,51 @@ async function renderSettingsShortcuts() {
     updateShortcut('sc-export-mm', 'exportModlist');
     updateShortcut('sc-import-mm', 'importModlist');
 }
-
 // ── Storage Performance Settings ──
-
 /** Run benchmarks for all disks currently in use by profiles */
 export async function runAutoBenchmarks(disksList, isBoot = false) {
     const inUseDisks = disksList.filter(d => d.profiles_using && d.profiles_using.length > 0);
-    if (inUseDisks.length === 0) return;
-
-    if (!isBoot) toast('Optimisation en cours...', 'info');
-
+    if (inUseDisks.length === 0)
+        return;
+    if (!isBoot)
+        toast('Optimisation en cours...', 'info');
     for (const disk of inUseDisks) {
         try {
             const result = await invoke('benchmark_disk', { mountPoint: disk.mount_point });
             await invoke('set_disk_limit', { mountPoint: disk.mount_point, limitMbS: result.suggested_limit });
-            if (!isBoot) toast(`Optimisation réussie pour ${disk.name}: ${result.suggested_limit} MB/s`, 'success');
-        } catch (e) {
+            if (!isBoot)
+                toast(`Optimisation réussie pour ${disk.name}: ${result.suggested_limit} MB/s`, 'success');
+        }
+        catch (e) {
             console.error(`Failed auto-bench for ${disk.mount_point}:`, e);
         }
     }
-
     // Refresh modal UI if it's open
     _renderStorageModal();
 }
-
 const _renderStorageModal = async () => {
     const container = document.getElementById('storage-disks-container');
-    if (!container) return;
-
+    if (!container)
+        return;
     container.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-bottom:8px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
         <div data-i18n="common.loading">Chargement...</div></div>`;
-
     try {
         const disks = await invoke('get_system_disks');
         if (!disks || disks.length === 0) {
             container.innerHTML = `<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:30px;">Aucun disque détecté.</div>`;
             return;
         }
-
         const usageTypeLabels = {
             game_directory: { label: t('storage.gameDir') || 'Game Dir', color: '#60a5fa' },
             mod_folder: { label: t('storage.modsDir') || 'Mods', color: '#a78bfa' },
             backup: { label: t('storage.backupDir') || 'Backup', color: '#fbbf24' },
         };
-
         const settings = await getSettings();
         const isAuto = settings.auto_io_calibration || false;
         const alertEnabled = settings.storage_alert_enabled || false;
         const warningPct = settings.storage_warning_space_pct !== undefined ? settings.storage_warning_space_pct : 40;
         const criticalPct = settings.storage_critical_space_pct !== undefined ? settings.storage_critical_space_pct : 30;
-
         // Storage alert thresholds block
         const thresholdsBlock = `
             <div style="position:relative; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:20px; overflow:hidden;" id="storage-alert-thresholds-block" class="${alertEnabled ? '' : 'config-disabled'}" data-i18n-content="settings.disabledOverlay" data-content="${alertEnabled ? '' : (t('settings.disabledOverlay') || 'DÉSACTIVÉ')}">
@@ -312,7 +313,6 @@ const _renderStorageModal = async () => {
                 </div>`}
             </div>
         `;
-
         // Global auto/dynamic control
         container.innerHTML = `
             <div style="background:rgba(59,130,246,0.05); border:1px solid rgba(59,130,246,0.2); border-radius:12px; padding:16px; margin-bottom:20px; display:flex; align-items:center; gap:16px">
@@ -333,7 +333,6 @@ const _renderStorageModal = async () => {
 
             <div id="disks-list-subcontainer" style="display:flex; flex-direction:column; gap:12px"></div>
         `;
-
         // Setup dynamic toggle listener
         document.getElementById('chk-auto-io').addEventListener('change', async (e) => {
             const checked = e.target.checked;
@@ -345,26 +344,26 @@ const _renderStorageModal = async () => {
                 runAutoBenchmarks(disks);
             }
         });
-
         // Alert enabled toggle
         document.getElementById('chk-alert-enabled')?.addEventListener('change', async (e) => {
             settings.storage_alert_enabled = e.target.checked;
             await updateSettings(settings);
             _renderStorageModal();
         });
-
         const updateThresholds = async () => {
             let w = parseInt(document.getElementById('input-warning-pct')?.value, 10);
             let c = parseInt(document.getElementById('input-critical-pct')?.value, 10);
-            if (isNaN(w) || w < 1) w = 40;
-            if (isNaN(c) || c < 0) c = 30;
-            if (w < c) w = c + 1;
+            if (isNaN(w) || w < 1)
+                w = 40;
+            if (isNaN(c) || c < 0)
+                c = 30;
+            if (w < c)
+                w = c + 1;
             settings.storage_warning_space_pct = w;
             settings.storage_critical_space_pct = c;
             await updateSettings(settings);
             _renderStorageModal();
         };
-
         let thTimer;
         document.getElementById('input-warning-pct')?.addEventListener('input', () => {
             clearTimeout(thTimer);
@@ -374,23 +373,23 @@ const _renderStorageModal = async () => {
             clearTimeout(thTimer);
             thTimer = setTimeout(updateThresholds, 800);
         });
-
         const getKindBadge = (disk) => {
             if (disk.is_cloud && disk.cloud_provider) {
-                if (disk.kind === 'Network') return `<span style="background:rgba(245,158,11,0.15);color:#fbbf24;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">🌐 ${disk.cloud_provider}</span>`;
+                if (disk.kind === 'Network')
+                    return `<span style="background:rgba(245,158,11,0.15);color:#fbbf24;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">🌐 ${disk.cloud_provider}</span>`;
                 return `<span style="background:rgba(168,85,247,0.15);color:#c084fc;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">☁️ ${disk.cloud_provider}</span>`;
             }
-            if (disk.kind === 'SSD') return '<span style="background:rgba(59,130,246,0.15);color:#60a5fa;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">SSD</span>';
-            if (disk.kind === 'HDD') return '<span style="background:rgba(245,158,11,0.15);color:#fbbf24;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">HDD</span>';
+            if (disk.kind === 'SSD')
+                return '<span style="background:rgba(59,130,246,0.15);color:#60a5fa;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">SSD</span>';
+            if (disk.kind === 'HDD')
+                return '<span style="background:rgba(245,158,11,0.15);color:#fbbf24;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">HDD</span>';
             return '<span style="background:rgba(156,163,175,0.15);color:#9ca3af;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">' + disk.kind + '</span>';
         };
-
         const subContainer = document.getElementById('disks-list-subcontainer');
         subContainer.innerHTML = disks.map(disk => {
             const limitVal = disk.current_limit_mb_s || 0;
             const usedPct = disk.total_space_bytes > 0 ? ((disk.total_space_bytes - disk.available_space_bytes) / disk.total_space_bytes * 100).toFixed(0) : 0;
             const usedColor = usedPct > 90 ? '#ef4444' : usedPct > 70 ? '#fbbf24' : '#60a5fa';
-
             let profilePills = '';
             if (disk.profiles_using && disk.profiles_using.length > 0) {
                 profilePills = disk.profiles_using.map(pu => {
@@ -401,7 +400,6 @@ const _renderStorageModal = async () => {
                     </span>`;
                 }).join('');
             }
-
             return `
             <div style="background:rgba(0,0,0,0.25);border:1px solid ${usedPct > 90 ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.06)'};border-radius:12px;padding:16px;transition:border-color 0.2s;" class="storage-disk-card">
                 <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;">
@@ -437,15 +435,16 @@ const _renderStorageModal = async () => {
                 </div>
 
                 ${(() => {
-                    const freePct = disk.total_space_bytes > 0 ? (disk.available_space_bytes / disk.total_space_bytes) * 100 : 0;
-                    const hasProfiles = disk.profiles_using && disk.profiles_using.length > 0;
-                    if (hasProfiles && freePct <= criticalPct) {
-                        return '<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:11px;color:#f87171;font-weight:600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Espace critique ! L&apos;activation de mods pourrait échouer.</div>';
-                    } else if (hasProfiles && freePct <= warningPct) {
-                        return '<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:8px;font-size:11px;color:#fbbf24;font-weight:500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Espace limité — pensez à libérer de la place.</div>';
-                    }
-                    return '';
-                })()}
+                const freePct = disk.total_space_bytes > 0 ? (disk.available_space_bytes / disk.total_space_bytes) * 100 : 0;
+                const hasProfiles = disk.profiles_using && disk.profiles_using.length > 0;
+                if (hasProfiles && freePct <= criticalPct) {
+                    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:11px;color:#f87171;font-weight:600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${t('storage.critical') || "Espace critique ! L'activation de mods pourrait échouer."}</div>`;
+                }
+                else if (hasProfiles && freePct <= warningPct) {
+                    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:8px;font-size:11px;color:#fbbf24;font-weight:500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>${t('storage.warning') || "Espace limité — pensez à libérer de la place."}</div>`;
+                }
+                return '';
+            })()}
 
                 ${profilePills ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">${profilePills}</div>` : ''}
 
@@ -458,7 +457,6 @@ const _renderStorageModal = async () => {
                 </div>
             </div>`;
         }).join('');
-
         // Listeners
         container.querySelectorAll('.disk-limit-input').forEach(input => {
             let timer;
@@ -466,17 +464,20 @@ const _renderStorageModal = async () => {
                 clearTimeout(timer);
                 timer = setTimeout(async () => {
                     let val = parseInt(e.target.value, 10);
-                    if (isNaN(val) || val < 0) val = 0;
+                    if (isNaN(val) || val < 0)
+                        val = 0;
                     const limitMbS = val === 0 ? null : val;
                     const mountPoint = e.target.getAttribute('data-mount');
                     try {
                         await invoke('set_disk_limit', { mountPoint, limitMbS });
                         toast(t('common.success') || 'Saved', 'success');
-                    } catch (err) { toast('Error: ' + err, 'error'); }
+                    }
+                    catch (err) {
+                        toast('Error: ' + err, 'error');
+                    }
                 }, 800);
             });
         });
-
         container.querySelectorAll('.disk-bench-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const mountPoint = btn.getAttribute('data-mount');
@@ -498,13 +499,18 @@ const _renderStorageModal = async () => {
                         const sugVal = parseInt(ev.target.getAttribute('data-value'), 10);
                         const mp = ev.target.getAttribute('data-mount');
                         const input = btn.closest('.storage-disk-card').querySelector('.disk-limit-input');
-                        if (input) input.value = sugVal;
+                        if (input)
+                            input.value = sugVal;
                         try {
                             await invoke('set_disk_limit', { mountPoint: mp, limitMbS: sugVal });
                             toast(t('common.success') || 'Saved', 'success');
-                        } catch (err) { toast('Error: ' + err, 'error'); }
+                        }
+                        catch (err) {
+                            toast('Error: ' + err, 'error');
+                        }
                     });
-                } catch (err) {
+                }
+                catch (err) {
                     resultSpan.textContent = t('common.error') + ': ' + err;
                     resultSpan.style.color = 'var(--error)';
                 }
@@ -512,18 +518,21 @@ const _renderStorageModal = async () => {
                 btn.innerHTML = original;
             });
         });
-    } catch (err) {
+    }
+    catch (err) {
         console.error(err);
         container.innerHTML = `<div style="font-size:12px;color:var(--error);text-align:center;padding:30px;">Erreur: ${err}</div>`;
     }
 };
-
 async function initStorageSettings() {
     const openBtn = document.getElementById('btn-open-storage');
     if (openBtn) {
         openBtn.addEventListener('click', () => {
             const modal = document.getElementById('modal-storage');
-            if (modal) { modal.classList.add('open'); _renderStorageModal(); }
+            if (modal) {
+                modal.classList.add('open');
+                _renderStorageModal();
+            }
         });
     }
     const faqBtn = document.getElementById('btn-storage-faq');
@@ -534,26 +543,29 @@ async function initStorageSettings() {
                 const ioFaq = document.querySelector('[data-i18n="faq.qIo"]');
                 if (ioFaq) {
                     const details = ioFaq.closest('details');
-                    if (details) { details.open = true; details.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+                    if (details) {
+                        details.open = true;
+                        details.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
                 }
             }, 200);
         });
     }
 }
 window._renderStorageModal = _renderStorageModal;
-
 // ── Language Settings ──
 async function initLanguageSettings() {
     const langContainer = document.getElementById('settings-lang-container');
-    if (!langContainer) return;
-
+    if (!langContainer)
+        return;
     const { getLanguages, setLang } = await import('../../core/i18n.js');
-    const { initNavbarLangDropdown } = await import('../../ui/app.js'); 
-
+    const { initNavbarLangDropdown } = await import('../../ui/app.js');
     const getFlag = (l) => {
-        if (!l || !l.flag) return '⚪';
+        if (!l || !l.flag)
+            return '⚪';
         const f = l.flag.trim();
-        if (f.length > 2) return f;
+        if (f.length > 2)
+            return f;
         if (f.length === 2) {
             const code = f.toLowerCase();
             return `<img src="https://flagcdn.com/w20/${code}.png" 
@@ -563,11 +575,9 @@ async function initLanguageSettings() {
         }
         return f;
     };
-
     const renderLangs = () => {
         const languages = getLanguages();
         const current = languages.find(l => l.active) || languages[0];
-
         langContainer.innerHTML = `
             <button class="nav-lang-btn" id="settings-lang-toggle" style="width: 240px; background: rgba(0,0,0,0.3);">
                 <span class="nav-lang-flag" style="margin-right:8px">${getFlag(current)}</span>
@@ -584,43 +594,44 @@ async function initLanguageSettings() {
                 `).join('')}
             </div>
         `;
-
         const toggle = document.getElementById('settings-lang-toggle');
         const menu = document.getElementById('settings-lang-menu');
-
         if (toggle && menu) {
             toggle.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const isOpen = menu.classList.contains('open');
                 document.querySelectorAll('.settings-lang-menu, .nav-lang-menu').forEach(m => m.classList.remove('open'));
                 document.querySelectorAll('.nav-lang-btn').forEach(b => b.classList.remove('open'));
-                if (!isOpen) { menu.classList.add('open'); toggle.classList.add('open'); }
+                if (!isOpen) {
+                    menu.classList.add('open');
+                    toggle.classList.add('open');
+                }
             });
-
             menu.querySelectorAll('.nav-lang-option').forEach(opt => {
                 opt.addEventListener('click', () => {
                     setLang(opt.dataset.lang);
                     menu.classList.remove('open');
                     toggle.classList.remove('open');
                     renderLangs();
-                    if (typeof initNavbarLangDropdown === 'function') initNavbarLangDropdown();
+                    if (typeof initNavbarLangDropdown === 'function')
+                        initNavbarLangDropdown();
                 });
             });
         }
     };
-
     document.addEventListener('click', () => {
         const menu = document.getElementById('settings-lang-menu');
         const toggle = document.getElementById('settings-lang-toggle');
-        if (menu && toggle) { menu.classList.remove('open'); toggle.classList.remove('open'); }
+        if (menu && toggle) {
+            menu.classList.remove('open');
+            toggle.classList.remove('open');
+        }
     });
-
     renderLangs();
-
     document.getElementById('btn-show-lang-guide')?.addEventListener('click', () => {
-        if (typeof window.checkPtbMode === 'function') window.checkPtbMode(true, "TranslationGuide");
+        if (typeof window.checkPtbMode === 'function')
+            window.checkPtbMode(true, "TranslationGuide");
     });
-
     document.getElementById('btn-download-lang-template')?.addEventListener('click', async () => {
         try {
             const resp = await fetch('Lang/template.json');
@@ -633,9 +644,11 @@ async function initLanguageSettings() {
             a.click();
             URL.revokeObjectURL(url);
             toast(t('common.success') || 'OK', 'success');
-        } catch (e) { toast('Erreur download : ' + e, 'error'); }
+        }
+        catch (e) {
+            toast('Erreur download : ' + e, 'error');
+        }
     });
-
     document.getElementById('btn-import-lang')?.addEventListener('click', async () => {
         try {
             const res = await invoke('import_language');
@@ -645,14 +658,18 @@ async function initLanguageSettings() {
                 await refreshLanguages();
                 renderLangs();
             }
-        } catch (e) { if (e !== 'Canceled') toast(t('settings.langImportError', { err: e }), 'error'); }
+        }
+        catch (e) {
+            if (e !== 'Canceled')
+                toast(t('settings.langImportError', { err: e }), 'error');
+        }
     });
 }
-
 // ── Tags Settings ──
 export async function renderSettingsTags() {
     const list = document.getElementById('settings-tags-list');
-    if (!list) return;
+    if (!list)
+        return;
     try {
         const tags = await invoke('get_tags');
         list.innerHTML = '';
@@ -666,7 +683,6 @@ export async function renderSettingsTags() {
             chip.innerHTML = `<span>${String(t.name).replace(/</g, '&lt;')}</span><button data-id="${t.id}" class="btn-del-tag" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:6px;font-size:14px" title="Supprimer">&times;</button>`;
             list.appendChild(chip);
         });
-
         list.querySelectorAll('.btn-del-tag').forEach(btn => {
             btn.addEventListener('click', async () => {
                 if (confirm('Voulez-vous vraiment supprimer ce tag ? Il sera retiré de tous les mods.')) {
@@ -674,15 +690,21 @@ export async function renderSettingsTags() {
                         await invoke('delete_tag', { tagId: btn.dataset.id });
                         toast('Tag supprimé.', 'success');
                         renderSettingsTags();
-                        if (window._refreshModsFn) window._refreshModsFn();
-                    } catch (err) { toast('Erreur suppression tag : ' + err, 'error'); }
+                        if (window._refreshModsFn)
+                            window._refreshModsFn();
+                    }
+                    catch (err) {
+                        toast('Erreur suppression tag : ' + err, 'error');
+                    }
                 }
             });
         });
-    } catch (err) { console.error("Tags error", err); }
+    }
+    catch (err) {
+        console.error("Tags error", err);
+    }
 }
 window.renderSettingsTags = renderSettingsTags;
-
 // ── Settings Initializer ──────────────────────────────────
 export async function initSettings() {
     await initGithubPatSettings();
@@ -691,7 +713,6 @@ export async function initSettings() {
     renderSettingsShortcuts();
     await initStorageSettings();
     await initLanguageSettings();
-    
     // Tags Settings
     const btnCreateTag = document.getElementById('btn-create-tag');
     if (btnCreateTag) {
@@ -700,18 +721,22 @@ export async function initSettings() {
             const colorInput = document.getElementById('setting-tag-color');
             const name = nameInput.value.trim();
             const color = colorInput.value;
-            if (!name) return toast('Le nom du tag est requis.', 'error');
+            if (!name)
+                return toast('Le nom du tag est requis.', 'error');
             try {
                 await invoke('create_tag', { name, color, icon: '' });
                 nameInput.value = '';
                 toast('Tag créé.', 'success');
                 renderSettingsTags();
-                if (window._refreshModsFn) window._refreshModsFn();
-            } catch (err) { toast('Erreur création tag : ' + err, 'error'); }
+                if (window._refreshModsFn)
+                    window._refreshModsFn();
+            }
+            catch (err) {
+                toast('Erreur création tag : ' + err, 'error');
+            }
         });
         renderSettingsTags();
     }
-
     // Export/Import App Data
     const exportBtn = document.getElementById('btn-export-data');
     if (exportBtn) {
@@ -721,11 +746,13 @@ export async function initSettings() {
                 try {
                     await invoke('export_app_data', { destPath });
                     toast('Configuration exportée.', 'success');
-                } catch (e) { toast('Erreur export : ' + e, 'error'); }
+                }
+                catch (e) {
+                    toast('Erreur export : ' + e, 'error');
+                }
             }
         });
     }
-
     const importBtn = document.getElementById('btn-import-data');
     if (importBtn) {
         importBtn.addEventListener('click', async () => {
@@ -736,9 +763,13 @@ export async function initSettings() {
                         await invoke('import_app_data', { srcPath });
                         toast('Configuration importée avec succès. Redémarrage...', 'success');
                         setTimeout(() => window.location.reload(), 2000);
-                    } catch (e) { toast('Erreur import : ' + e, 'error'); }
+                    }
+                    catch (e) {
+                        toast('Erreur import : ' + e, 'error');
+                    }
                 }
             }
         });
     }
 }
+//# sourceMappingURL=settings.js.map

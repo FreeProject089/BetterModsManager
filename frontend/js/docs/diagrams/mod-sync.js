@@ -28,3 +28,4 @@ graph TD
 `,
     explanationPrefix: 'docs.diagram.sync.node.'
 };
+//# sourceMappingURL=mod-sync.js.map

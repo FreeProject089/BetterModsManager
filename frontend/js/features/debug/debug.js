@@ -1,9 +1,7 @@
-import { invoke } from '../../core/api.js';
 import { appState } from '../../core/state.js';
-
 // Hook into addEventListener early to track listeners for the DevTools A11y Event Inspector
 const originalAddEventListener = EventTarget.prototype.addEventListener;
-EventTarget.prototype.addEventListener = function(type, listener, options) {
+EventTarget.prototype.addEventListener = function (type, listener, options) {
     try {
         if (this instanceof Element && !this.classList.contains('debug-btn') && !this.closest?.('#bmm-debug-overlay')) {
             const events = this.getAttribute('data-bmm-events') || '';
@@ -11,19 +9,24 @@ EventTarget.prototype.addEventListener = function(type, listener, options) {
                 this.setAttribute('data-bmm-events', events ? events + ', ' + type : type);
             }
         }
-    } catch (e) {}
+    }
+    catch (_e) { /* ignore */ }
     return originalAddEventListener.call(this, type, listener, options);
 };
-
-/**
- * debug.js — Core logic for BMM DevTools Backend
- */
 class DebugHub {
+    logs;
+    ipcCalls;
+    actions;
+    patches;
+    metrics;
+    listeners;
+    maxItems;
+    isEnabled;
     constructor() {
         this.logs = [];
         this.ipcCalls = [];
         this.actions = [];
-        this.patches = []; // { id, type, content, timestamp }
+        this.patches = [];
         this.metrics = {
             fps: 0,
             memory: null,
@@ -32,168 +35,127 @@ class DebugHub {
         this.listeners = new Set();
         this.maxItems = 500;
         this.isEnabled = true;
-
         // Bridge appState changes to DebugHub
         appState.onChange = (key, value) => {
-            // Only emit if someone is listening or if it's a critical error
             if (this.listeners.size > 0 || key.includes('Error')) {
                 this.emit('state', { key, value });
             }
         };
-
         this.setupGlobalHandlers();
     }
-
-    /**
-     * Subscribe to debug events
-     */
     subscribe(callback) {
         this.listeners.add(callback);
     }
-
-    /**
-     * Unsubscribe from debug events
-     */
     unsubscribe(callback) {
         this.listeners.delete(callback);
     }
-
-    /**
-     * Emit an event to all listeners
-     */
     emit(type, data) {
-        if (!this.isEnabled) return;
+        if (!this.isEnabled)
+            return;
         const event = { type, data, timestamp: Date.now() };
         this.listeners.forEach(cb => cb(event));
     }
-
-    /**
-     * Record a console log
-     */
     recordLog(level, args) {
-        const message = args.map(arg => 
-            typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-        ).join(' ');
-
+        const message = args.map((arg) => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' ');
         const item = { level, message, id: Math.random().toString(36).substr(2, 9) };
         this.logs.push(item);
-        if (this.logs.length > this.maxItems) this.logs.shift();
-        
+        if (this.logs.length > this.maxItems)
+            this.logs.shift();
         this.emit('log', item);
     }
-
-    /**
-     * Record an IPC (Invoke) call
-     */
     recordIPC(command, args, status = 'pending', result = null, duration = 0) {
         let call = this.ipcCalls.find(c => c.command === command && c.args === args && c.status === 'pending');
-        
         if (!call) {
-            call = { 
+            call = {
                 id: Math.random().toString(36).substr(2, 9),
-                command, 
-                args, 
-                status, 
-                result, 
+                command,
+                args,
+                status,
+                result,
                 duration,
                 timestamp: Date.now()
             };
             this.ipcCalls.push(call);
-            if (this.ipcCalls.length > this.maxItems) this.ipcCalls.shift();
-        } else {
+            if (this.ipcCalls.length > this.maxItems)
+                this.ipcCalls.shift();
+        }
+        else {
             call.status = status;
             call.result = result;
             call.duration = duration;
         }
-
         this.emit('ipc', call);
         return call;
     }
-
-    /**
-     * Patch Management
-     */
     applyPatch(type, content) {
         const id = 'patch-' + Math.random().toString(36).substr(2, 9);
         const patch = { id, type, content, timestamp: Date.now() };
-        
         if (type === 'CSS') {
             const style = document.createElement('style');
             style.id = id;
             style.textContent = content;
             document.head.appendChild(style);
-        } else if (type === 'JS') {
+        }
+        else if (type === 'JS') {
             try {
-                // We wrap it to track it if needed, but eval is fine for playground
                 eval(content);
-            } catch (e) {
+            }
+            catch (e) {
                 this.recordLog('error', [`[Patch-JS] ${e.message}`]);
                 throw e;
             }
         }
-        
         this.patches.push(patch);
         this.emit('patches', this.patches);
         this.recordAction('PATCH_APPLY', { tagName: 'PATCH', id: id }, type);
         return id;
     }
-
     removePatch(id) {
         const index = this.patches.findIndex(p => p.id === id);
-        if (index === -1) return;
-        
+        if (index === -1)
+            return;
         const patch = this.patches[index];
         if (patch.type === 'CSS') {
             const el = document.getElementById(id);
-            if (el) el.remove();
+            if (el)
+                el.remove();
         }
-        
         this.patches.splice(index, 1);
         this.emit('patches', this.patches);
         this.recordAction('PATCH_REMOVE', { tagName: 'PATCH', id: id }, patch.type);
     }
-
-    /**
-     * Record a UI Action
-     */
     recordAction(type, target, details = '') {
-        const item = { 
-            type, 
+        const item = {
+            type,
             status: type.includes('ERR') ? 'error' : (type.includes('PATCH') ? 'success' : 'info'),
-            target: target.tagName + (target.id ? '#' + target.id : ''), 
+            target: target.tagName + (target.id ? '#' + target.id : ''),
             details,
             timestamp: Date.now(),
             id: Math.random().toString(36).substr(2, 9)
         };
         this.actions.push(item);
-        if (this.actions.length > this.maxItems) this.actions.shift();
+        if (this.actions.length > this.maxItems)
+            this.actions.shift();
         this.emit('action', item);
     }
-
-    /**
-     * Clear all debug data
-     */
     clear() {
         this.logs = [];
         this.ipcCalls = [];
         this.actions = [];
         this.emit('clear', null);
     }
-
     setupGlobalHandlers() {
         window.onerror = (msg, url, line, col, error) => {
             this.recordAction('CRASH_ERR', { tagName: 'WINDOW', id: 'global' }, `${msg} at ${line}:${col}`);
             this.exportCrashDump('CRASH');
             this.emit('crash', { msg, url, line, col, error });
         };
-
         window.onunhandledrejection = (event) => {
             this.recordAction('CRASH_REJ', { tagName: 'PROMISE', id: 'global' }, event.reason?.message || 'Unhandled Rejection');
             this.exportCrashDump('REJECTION');
             this.emit('crash', { msg: event.reason?.message || 'Promise Rejection', error: event.reason });
         };
     }
-
     exportCrashDump(reason = 'MANUAL') {
         const dump = {
             reason,
@@ -207,60 +169,49 @@ class DebugHub {
             userAgent: navigator.userAgent,
             url: window.location.href
         };
-
-        // Auto-save to localStorage for persistence after reload
-        // TRUNCATE heavily for localStorage to avoid QuotaExceededError
         const storageDump = {
             ...dump,
             logs: dump.logs.slice(-20),
             ipcCalls: dump.ipcCalls.slice(-20),
             actions: dump.actions.slice(-20)
         };
-        
         try {
             localStorage.setItem('bmm_last_crash_dump', JSON.stringify(storageDump));
-        } catch (e) {
-            console.warn('[BMM-DEBUG] Failed to save small dump to localStorage:', e);
-            // Fallback: clear and try one last time with minimal data
+        }
+        catch (_e) {
             try {
                 localStorage.removeItem('bmm_last_crash_dump');
                 localStorage.setItem('bmm_last_crash_dump', JSON.stringify({ reason: dump.reason, timestamp: dump.timestamp }));
-            } catch (e2) {}
+            }
+            catch (_e2) { /* ignore */ }
         }
-        
         const dumpStr = JSON.stringify(dump, null, 2);
-
-        // Send to backend to include in the Rust Crash Zip
         if (window.__TAURI__ && window.__TAURI__.tauri) {
             window.__TAURI__.tauri.invoke('trigger_manual_crash_report', { frontendDump: dumpStr })
                 .then(path => console.log('[BMM-DEBUG] Crash report generated at:', path))
                 .catch(err => {
-                    console.error('[BMM-DEBUG] Failed to send crash dump to backend:', err);
-                    this._fallbackDownload(dumpStr, reason);
-                });
-        } else {
+                console.error('[BMM-DEBUG] Failed to send crash dump to backend:', err);
+                this._fallbackDownload(dumpStr, reason);
+            });
+        }
+        else {
             this._fallbackDownload(dumpStr, reason);
         }
     }
-
     _fallbackDownload(dumpStr, reason) {
         if (reason !== 'MANUAL') {
-            const blob = new Blob([dumpStr], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `bmm-crash-dump-${Date.now()}.json`;
-            // a.click();
+            const _blob = new Blob([dumpStr], { type: 'application/json' });
+            const _url = URL.createObjectURL(_blob);
+            const _a = document.createElement('a');
+            _a.href = _url;
+            _a.download = `bmm-crash-dump-${Date.now()}.json`;
         }
     }
 }
-
 export const debugHub = new DebugHub();
-
 // --- Performance Tracking ---
 let frameCount = 0;
 let lastTime = performance.now();
-
 function updatePerformance() {
     frameCount++;
     const now = performance.now();
@@ -268,22 +219,18 @@ function updatePerformance() {
         debugHub.metrics.fps = Math.round((frameCount * 1000) / (now - lastTime));
         frameCount = 0;
         lastTime = now;
-
-        // Try to get memory info (Chrome/Tauri specific)
-        if (window.performance && window.performance.memory) {
+        if (window.performance?.memory) {
             debugHub.metrics.memory = {
                 used: window.performance.memory.usedJSHeapSize,
                 total: window.performance.memory.totalJSHeapSize,
                 limit: window.performance.memory.jsHeapSizeLimit
             };
         }
-        
         debugHub.emit('metrics', debugHub.metrics);
     }
     requestAnimationFrame(updatePerformance);
 }
-
-// Start tracking if not in a head-less environment
 if (typeof window !== 'undefined') {
     requestAnimationFrame(updatePerformance);
 }
+//# sourceMappingURL=debug.js.map

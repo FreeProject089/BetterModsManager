@@ -26,3 +26,4 @@ graph TD
 `,
     explanationPrefix: 'docs.diagram.tips.node.'
 };
+//# sourceMappingURL=best-practices.js.map

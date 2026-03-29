@@ -1,10 +1,8 @@
 /**
- * modals.js — Generic Modals Initialization & Global Confirms
+ * modals.ts — Generic Modals Initialization & Global Confirms
  */
-
 import { invoke } from '../core/api.js';
 import { t } from '../core/i18n.js';
-
 export function initModals() {
     document.querySelectorAll('[data-close]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -13,23 +11,21 @@ export function initModals() {
             document.getElementById(id)?.classList.remove('open');
         });
     });
-
-    // Support for .modal-close class anywhere inside a modal
-    document.addEventListener('click', e => {
+    document.addEventListener('click', (e) => {
         const btn = e.target.closest('.modal-close');
         if (btn) {
             const modal = btn.closest('.modal-overlay');
-            if (modal) modal.classList.remove('open');
+            if (modal)
+                modal.classList.remove('open');
         }
     });
-
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
-        overlay.addEventListener('click', e => {
-            if (e.target === overlay) overlay.classList.remove('open');
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay)
+                overlay.classList.remove('open');
         });
     });
 }
-
 // --- Global Confirmation Utility ---
 window.confirmCustom = (title, message, type = 'danger', options = {}) => {
     return new Promise((resolve) => {
@@ -39,65 +35,54 @@ window.confirmCustom = (title, message, type = 'danger', options = {}) => {
         const yesBtn = document.getElementById('btn-confirm-yes');
         const noBtn = document.getElementById('btn-confirm-cancel');
         const iconContainer = document.getElementById('confirm-icon-container');
-
         if (!modal || !titleEl || !msgEl || !yesBtn) {
-            // Fallback if modal is missing from DOM
             const ok = window.confirm(`${title}\n\n${message}`);
             resolve(ok);
             return;
         }
-
         titleEl.textContent = title;
         msgEl.innerHTML = message;
-
-        // Button Labels
         const yesLabel = options.yesLabel || t('common.confirm') || 'CONFIRMER';
         const noLabel = options.noLabel || t('common.cancel') || 'Annuler';
-
         yesBtn.textContent = yesLabel;
         noBtn.textContent = noLabel;
-
-        // Handle i18n attributes
-        if (options.yesLabel) yesBtn.removeAttribute('data-i18n');
-        else yesBtn.setAttribute('data-i18n', 'common.confirm');
-
-        if (options.noLabel) noBtn.removeAttribute('data-i18n');
-        else noBtn.setAttribute('data-i18n', 'common.cancel');
-
-        // Styling based on type
+        if (options.yesLabel)
+            yesBtn.removeAttribute('data-i18n');
+        else
+            yesBtn.setAttribute('data-i18n', 'common.confirm');
+        if (options.noLabel)
+            noBtn.removeAttribute('data-i18n');
+        else
+            noBtn.setAttribute('data-i18n', 'common.cancel');
         if (type === 'danger') {
             yesBtn.className = 'btn btn-danger';
             iconContainer.style.background = 'rgba(239, 68, 68, 0.1)';
             iconContainer.style.color = 'var(--danger)';
-        } else {
+        }
+        else {
             yesBtn.className = 'btn btn-primary';
             iconContainer.style.background = 'rgba(59, 130, 246, 0.1)';
             iconContainer.style.color = 'var(--accent)';
         }
-
         modal.classList.add('open');
-
         const cleanup = (result) => {
             modal.classList.remove('open');
             yesBtn.onclick = null;
             noBtn.onclick = null;
             resolve(result);
         };
-
         yesBtn.onclick = () => cleanup(true);
         noBtn.onclick = () => cleanup(false);
-        // Also handle clicking overlay outside
-        modal.onclick = (e) => { if (e.target === modal) cleanup(false); };
+        modal.onclick = (e) => { if (e.target === modal)
+            cleanup(false); };
     });
 };
-
 // --- Global Dropdown System ---
 let dropTimer;
 window.showGlobalDropdown = (btn, menu) => {
-    if (!menu) return;
+    if (!menu)
+        return;
     window.cancelDropdownClose();
-    
-    // Ensure we have a portal
     let portal = document.getElementById('global-dropdown-portal');
     if (!portal) {
         portal = document.createElement('div');
@@ -105,26 +90,20 @@ window.showGlobalDropdown = (btn, menu) => {
         portal.style.cssText = 'position:fixed; top:0; left:0; pointer-events:none; z-index:999999;';
         document.body.appendChild(portal);
     }
-
     portal.innerHTML = '';
     const clone = menu.cloneNode(true);
     clone.classList.add('open');
     portal.appendChild(clone);
-
     const rect = btn.getBoundingClientRect();
     clone.style.position = 'fixed';
     clone.style.top = (rect.bottom + 5) + 'px';
     clone.style.left = (rect.left) + 'px';
     clone.style.pointerEvents = 'auto';
-
     clone.onmouseenter = window.cancelDropdownClose;
     clone.onmouseleave = () => window.closeGlobalDropdown();
-
-    // Re-bind actions for common button classes
     clone.querySelectorAll('.dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod').forEach(item => {
         item.onclick = (e) => {
             e.stopPropagation();
-            // Find the original item by its text or class if data-id is not enough
             const originalItems = Array.from(menu.querySelectorAll('*'));
             const idx = Array.from(clone.querySelectorAll('*')).indexOf(item);
             if (originalItems[idx]) {
@@ -134,20 +113,22 @@ window.showGlobalDropdown = (btn, menu) => {
         };
     });
 };
-
 window.closeGlobalDropdown = (immediate = false) => {
     if (immediate) {
         window.cancelDropdownClose();
         const portal = document.getElementById('global-dropdown-portal');
-        if (portal) portal.innerHTML = '';
+        if (portal)
+            portal.innerHTML = '';
         return;
     }
     dropTimer = setTimeout(() => {
         const portal = document.getElementById('global-dropdown-portal');
-        if (portal) portal.innerHTML = '';
+        if (portal)
+            portal.innerHTML = '';
     }, 300);
 };
-
 window.cancelDropdownClose = () => {
-    if (dropTimer) clearTimeout(dropTimer);
+    if (dropTimer)
+        clearTimeout(dropTimer);
 };
+//# sourceMappingURL=modals.js.map

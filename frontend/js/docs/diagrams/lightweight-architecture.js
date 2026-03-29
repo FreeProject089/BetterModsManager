@@ -35,3 +35,4 @@ graph TD
 `,
     explanationPrefix: 'docs.diagram.lightweight.node.'
 };
+//# sourceMappingURL=lightweight-architecture.js.map

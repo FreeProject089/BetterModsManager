@@ -1,8 +1,8 @@
+// @ts-nocheck
 /**
  * onboarding.js — Tasky onboarding tutorial with language selection
  */
-import { t, getLang, setLang, applyTranslations, getLanguages, refreshLanguages } from '../core/i18n.js';
-
+import { t, getLang, setLang, getLanguages } from '../core/i18n.js';
 function getSteps() {
     return [
         {
@@ -115,35 +115,33 @@ function getSteps() {
             img: 'assets/Tasky_Happy.png',
             navTarget: 'credits'
         },
-
     ];
 }
-
 let currentStep = -1; // -1 = language step
-
 export async function shouldShowOnboarding() {
     const { getSettings } = await import('../core/api.js');
     try {
         const settings = await getSettings();
         return !settings.onboarding_shown;
-    } catch {
+    }
+    catch {
         return false;
     }
 }
-
 export async function markOnboardingShown() {
     const { getSettings, updateSettings } = await import('../core/api.js');
     try {
         const settings = await getSettings();
         settings.onboarding_shown = true;
         await updateSettings(settings);
-    } catch (e) { console.error('Failed to save onboarding state:', e); }
+    }
+    catch (e) {
+        console.error('Failed to save onboarding state:', e);
+    }
 }
-
 export function startOnboarding() {
     currentStep = -1;
     renderOnboarding();
-
     // Reactive re-render on language change
     document.addEventListener('langChanged', () => {
         if (document.getElementById('onboarding-overlay')) {
@@ -151,7 +149,6 @@ export function startOnboarding() {
         }
     });
 }
-
 function renderOnboarding() {
     let overlay = document.getElementById('onboarding-overlay');
     if (!overlay) {
@@ -159,21 +156,19 @@ function renderOnboarding() {
         overlay.id = 'onboarding-overlay';
         overlay.className = 'onboarding-overlay';
         document.getElementById('app-window-outer').appendChild(overlay);
-
     }
-
     // Block all interaction behind the overlay
     const appShell = document.querySelector('.app-shell');
-    if (appShell) appShell.style.pointerEvents = 'none';
-
+    if (appShell)
+        appShell.style.pointerEvents = 'none';
     // Step -1: Language selection
     if (currentStep === -1) {
         const languages = getLanguages();
         const appLang = getLang();
         const current = languages.find(l => l.code === appLang) || languages.find(l => l.active) || languages[0];
-
         const getFlag = (l) => {
-            if (!l || !l.flag) return '⚪';
+            if (!l || !l.flag)
+                return '⚪';
             const f = l.flag.trim();
             if (f.length === 2) {
                 const code = f.toLowerCase();
@@ -181,7 +176,6 @@ function renderOnboarding() {
             }
             return `<span style="margin-right:8px">${f}</span>`;
         };
-
         overlay.innerHTML = `
         <div class="onboarding-card">
           <div class="onboarding-mascot">
@@ -216,17 +210,14 @@ function renderOnboarding() {
           </div>
         </div>
         `;
-
         const toggle = document.getElementById('onboarding-lang-toggle');
         const menu = document.getElementById('onboarding-lang-menu');
         const confirmBtn = document.getElementById('btn-lang-confirm');
-
         toggle.addEventListener('click', (e) => {
             e.stopPropagation();
             menu.classList.toggle('open');
             toggle.classList.toggle('open');
         });
-
         menu.querySelectorAll('.nav-lang-option').forEach(opt => {
             opt.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -235,31 +226,25 @@ function renderOnboarding() {
                 // renderOnboarding() will be triggered by the 'langChanged' event
             });
         });
-
         confirmBtn.addEventListener('click', () => {
             currentStep = 0;
             renderOnboarding();
         });
-
         // Close menu on click outside
         document.addEventListener('click', () => {
             menu.classList.remove('open');
             toggle.classList.remove('open');
         }, { once: true });
-
         return;
     }
-
     // Normal steps
     const steps = getSteps();
     const step = steps[currentStep];
     const totalSteps = steps.length;
-
     // Switch view in background
     if (step.navTarget) {
         document.getElementById(`nav-${step.navTarget}`)?.click();
     }
-
     overlay.innerHTML = `
     <div class="onboarding-card">
       <div class="onboarding-mascot">
@@ -287,7 +272,6 @@ function renderOnboarding() {
       </div>
     </div>
   `;
-
     // Visual help: draw a highlight box around the target element if exists
     if (step.selector) {
         const target = document.getElementById(step.selector) || document.querySelector(`.${step.selector}`);
@@ -295,7 +279,6 @@ function renderOnboarding() {
         if (target && parent) {
             const rect = target.getBoundingClientRect();
             const parentRect = parent.getBoundingClientRect();
-            
             const highlight = document.createElement('div');
             highlight.id = 'onboarding-highlight';
             highlight.style.cssText = `
@@ -314,7 +297,6 @@ function renderOnboarding() {
             parent.appendChild(highlight);
         }
     }
-
     // Typewriter effect
     const textEl = document.getElementById('onboarding-typewriter');
     let charIndex = 0;
@@ -322,11 +304,11 @@ function renderOnboarding() {
         if (charIndex < step.text.length) {
             textEl.textContent += step.text[charIndex];
             charIndex++;
-        } else {
+        }
+        else {
             clearInterval(typeInterval);
         }
     }, 18);
-
     // Button listeners
     document.getElementById('btn-onboarding-next').addEventListener('click', () => {
         clearInterval(typeInterval);
@@ -334,11 +316,11 @@ function renderOnboarding() {
         if (currentStep < totalSteps - 1) {
             currentStep++;
             renderOnboarding();
-        } else {
+        }
+        else {
             closeOnboarding();
         }
     });
-
     const prevBtn = document.getElementById('btn-onboarding-prev');
     if (prevBtn) {
         prevBtn.addEventListener('click', () => {
@@ -350,24 +332,22 @@ function renderOnboarding() {
             }
         });
     }
-
     document.getElementById('btn-onboarding-skip').addEventListener('click', () => {
         clearInterval(typeInterval);
         document.getElementById('onboarding-highlight')?.remove();
         closeOnboarding();
     });
 }
-
 function closeOnboarding() {
     markOnboardingShown();
-
     // Restore interaction with the app
     const appShell = document.querySelector('.app-shell');
-    if (appShell) appShell.style.pointerEvents = '';
-
+    if (appShell)
+        appShell.style.pointerEvents = '';
     const overlay = document.getElementById('onboarding-overlay');
     if (overlay) {
         overlay.classList.add('closing');
         overlay.addEventListener('animationend', () => overlay.remove(), { once: true });
     }
 }
+//# sourceMappingURL=onboarding.js.map

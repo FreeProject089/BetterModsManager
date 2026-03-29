@@ -1,24 +1,23 @@
+// @ts-nocheck
 /**
  * components.js — Reusable UI Components and DOM generators
  * Extracts large template literals and DOM manipulations from main controllers.
  */
-
 import { t } from '../core/i18n.js';
 import { escHtml, escAttr, escJs } from '../core/utils.js';
-
 /**
  * Truncate a string to a maximum length and add ellipsis if needed.
  */
 function truncate(str, maxLen) {
-  if (!str) return '';
-  if (str.length <= maxLen) return str;
-  return str.substring(0, maxLen) + '...';
+    if (!str)
+        return '';
+    if (str.length <= maxLen)
+        return str;
+    return str.substring(0, maxLen) + '...';
 }
-
 export function getLoadingOverlayHTML() {
-  return `<div class="mod-loading-overlay"><div style="display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div></div>`;
+    return `<div class="mod-loading-overlay"><div style="display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div></div>`;
 }
-
 /**
  * Returns the innerHTML for a Mod Card.
  * @param {Object} mod - The mod object
@@ -26,37 +25,36 @@ export function getLoadingOverlayHTML() {
  * @returns {string} HTML string
  */
 export function getModCardHTML(mod, ctx) {
-  const isProcessing = ctx.processingMods.has(mod.id);
-
-  let tagsHtml = '';
-  if (mod.tags && mod.tags.length > 0) {
-    const visibleTags = mod.tags.slice(0, 3).map(tid => {
-      const tDef = ctx.userTags.find(t => t.id === tid);
-      if (!tDef) return '';
-      return `<span style="background:${tDef.color}15;color:${tDef.color};border:1px solid ${tDef.color}30;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600">${escHtml(tDef.name)}</span>`;
-    }).join('');
-
-    const extraTagsCount = mod.tags.length > 3 ? `<span style="color:var(--text-muted);font-size:9px;align-self:center">+${mod.tags.length - 3}</span>` : '';
-    tagsHtml = `<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${visibleTags}${extraTagsCount}</div>`;
-  }
-  let conflictHtml = '';
-  const conflicts = ctx && ctx.conflictCache ? ctx.conflictCache[mod.id] : (mod.conflicts || []);
-  if (conflicts && conflicts.length > 0) {
-    const hasIntraActive = conflicts.some(c => c.category === 'Intra' && c.status === 'Active');
-    const hasIntraPotential = conflicts.some(c => c.category === 'Intra' && c.status === 'Potential');
-    const hasInterActive = conflicts.some(c => c.category === 'Inter' && c.status === 'Active');
-    const hasInterPotential = conflicts.some(c => c.category === 'Inter' && c.status === 'Potential');
-
-    if (hasIntraActive) conflictHtml += `<div class="tag-conflict tag-intra-conflict active" onmouseenter="window.showTaskyHelp('lib.conflictActiveTip', 'alert')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
-    else if (hasIntraPotential) conflictHtml += `<div class="tag-conflict tag-intra-conflict potential" onmouseenter="window.showTaskyHelp('lib.conflictPotentialTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
-
-    if (hasInterActive) conflictHtml += `<div class="tag-conflict tag-inter-conflict active" onmouseenter="window.showTaskyHelp('lib.conflictInterActiveTip', 'alert')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
-    else if (hasInterPotential) conflictHtml += `<div class="tag-conflict tag-inter-conflict potential" onmouseenter="window.showTaskyHelp('lib.conflictInterPotentialTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
-  }
-
-  const processingHtml = isProcessing ? getLoadingOverlayHTML() : '';
-
-  return `
+    const isProcessing = ctx.processingMods.has(mod.id);
+    let tagsHtml = '';
+    if (mod.tags && mod.tags.length > 0) {
+        const visibleTags = mod.tags.slice(0, 3).map(tid => {
+            const tDef = ctx.userTags.find(t => t.id === tid);
+            if (!tDef)
+                return '';
+            return `<span style="background:${tDef.color}15;color:${tDef.color};border:1px solid ${tDef.color}30;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600">${escHtml(tDef.name)}</span>`;
+        }).join('');
+        const extraTagsCount = mod.tags.length > 3 ? `<span style="color:var(--text-muted);font-size:9px;align-self:center">+${mod.tags.length - 3}</span>` : '';
+        tagsHtml = `<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${visibleTags}${extraTagsCount}</div>`;
+    }
+    let conflictHtml = '';
+    const conflicts = ctx && ctx.conflictCache ? ctx.conflictCache[mod.id] : (mod.conflicts || []);
+    if (conflicts && conflicts.length > 0) {
+        const hasIntraActive = conflicts.some(c => c.category === 'Intra' && c.status === 'Active');
+        const hasIntraPotential = conflicts.some(c => c.category === 'Intra' && c.status === 'Potential');
+        const hasInterActive = conflicts.some(c => c.category === 'Inter' && c.status === 'Active');
+        const hasInterPotential = conflicts.some(c => c.category === 'Inter' && c.status === 'Potential');
+        if (hasIntraActive)
+            conflictHtml += `<div class="tag-conflict tag-intra-conflict active" onmouseenter="window.showTaskyHelp('lib.conflictActiveTip', 'alert')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
+        else if (hasIntraPotential)
+            conflictHtml += `<div class="tag-conflict tag-intra-conflict potential" onmouseenter="window.showTaskyHelp('lib.conflictPotentialTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
+        if (hasInterActive)
+            conflictHtml += `<div class="tag-conflict tag-inter-conflict active" onmouseenter="window.showTaskyHelp('lib.conflictInterActiveTip', 'alert')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
+        else if (hasInterPotential)
+            conflictHtml += `<div class="tag-conflict tag-inter-conflict potential" onmouseenter="window.showTaskyHelp('lib.conflictInterPotentialTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
+    }
+    const processingHtml = isProcessing ? getLoadingOverlayHTML() : '';
+    return `
         <label class="mod-toggle" onmouseenter="window.showTaskyHelp('mod.toggleTip', 'toggle')" onmouseleave="window.hideTaskyHelp()">
             <input type="checkbox" class="mod-toggle-input" ${mod.enabled ? 'checked' : ''} />
             <div class="mod-toggle-track">
@@ -155,7 +153,6 @@ export function getModCardHTML(mod, ctx) {
         ${processingHtml}
     `;
 }
-
 /**
  * Returns the innerHTML for the Mod Detail panel.
  * @param {Object} mod - The mod object
@@ -163,12 +160,11 @@ export function getModCardHTML(mod, ctx) {
  * @returns {string} HTML string
  */
 export function getModDetailHTML(mod, ctx) {
-  // Helper for collapsible sections
-  const renderSection = (id, title, icon, content, defaultExpanded = false) => {
-    const storageKey = `bmm_section_${id}_expanded`;
-    const isExpanded = localStorage.getItem(storageKey) === null ? defaultExpanded : localStorage.getItem(storageKey) === 'true';
-    
-    return `
+    // Helper for collapsible sections
+    const renderSection = (id, title, icon, content, defaultExpanded = false) => {
+        const storageKey = `bmm_section_${id}_expanded`;
+        const isExpanded = localStorage.getItem(storageKey) === null ? defaultExpanded : localStorage.getItem(storageKey) === 'true';
+        return `
       <div class="collapsible-section ${isExpanded ? '' : 'collapsed'}" id="section-${id}">
         <div class="collapsible-header" onclick="window.toggleDetailSection('${id}')">
           <h4>${icon} ${title}</h4>
@@ -179,9 +175,8 @@ export function getModDetailHTML(mod, ctx) {
         </div>
       </div>
     `;
-  };
-
-  const conflictsContent = (mod.conflicts && mod.conflicts.length > 0) ? `
+    };
+    const conflictsContent = (mod.conflicts && mod.conflicts.length > 0) ? `
         <div id="detail-conflicts-list" style="display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto;padding-right:4px">
           ${mod.conflicts.map(c => `
             <div style="background:rgba(0,0,0,0.2);padding:8px 10px;border-radius:8px;border:1px solid ${c.status === 'Active' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}">
@@ -199,8 +194,7 @@ export function getModDetailHTML(mod, ctx) {
             </div>
           `).join('')}
         </div>` : '<div id="detail-conflicts-list" style="font-size:12px;color:var(--text-muted);font-style:italic">Aucun conflit détecté.</div>';
-
-  const infoContent = `
+    const infoContent = `
       <!-- Editable Fields -->
       <div class="detail-section">
         <label class="detail-label">
@@ -245,8 +239,7 @@ export function getModDetailHTML(mod, ctx) {
         </div>
       </div>
   `;
-
-  const filesContent = `
+    const filesContent = `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">
           <span style="font-size:11px; color:var(--text-muted)">${t('mod.filesCount', { count: mod.installed_files ? mod.installed_files.length : 0 })}</span>
           <button id="btn-browse-archive" class="btn btn-sm" style="background:rgba(59,130,246,0.15); color:var(--accent); border:none; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:11px">
@@ -265,8 +258,7 @@ export function getModDetailHTML(mod, ctx) {
           </div>
         ` : `<div style="font-size:12px;color:var(--text-muted);font-style:italic">${t('detail.noFiles')}</div>`}
       `;
-
-  const linksContent = `
+    const linksContent = `
         <div style="font-size:10px;background:rgba(59,130,246,0.1);color:var(--accent);padding:6px 8px;border-radius:6px;margin-bottom:8px;line-height:1.4;border:1px solid rgba(59,130,246,0.2)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:2px;margin-top:-2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
           <span data-i18n="detail.linksInfo">${t('detail.linksInfo') || 'Pour les listes .MM, seuls les liens directs fonctionnent.'}</span>
@@ -286,8 +278,7 @@ export function getModDetailHTML(mod, ctx) {
         </div>
         <button id="btn-add-link" class="btn btn-sm" style="margin-top:8px;background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px">+ ${t('detail.addLink')}</button>
   `;
-
-  return `
+    return `
     <div class="detail-header">
       <div style="flex:1; min-width:0">
         <h3 style="margin:0;font-size:16px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.name))}', 'package', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(truncate(mod.name, 100))}</h3>
@@ -314,19 +305,21 @@ export function getModDetailHTML(mod, ctx) {
     </div>
   `;
 }
-
 // Add global toggle function for collapsible sections
 if (typeof window !== 'undefined') {
-  window.toggleDetailSection = (id) => {
-    const el = document.getElementById(`section-${id}`);
-    if (!el) return;
-    const isCollapsed = el.classList.contains('collapsed');
-    if (isCollapsed) {
-      el.classList.remove('collapsed');
-      localStorage.setItem(`bmm_section_${id}_expanded`, 'true');
-    } else {
-      el.classList.add('collapsed');
-      localStorage.setItem(`bmm_section_${id}_expanded`, 'false');
-    }
-  };
+    window.toggleDetailSection = (id) => {
+        const el = document.getElementById(`section-${id}`);
+        if (!el)
+            return;
+        const isCollapsed = el.classList.contains('collapsed');
+        if (isCollapsed) {
+            el.classList.remove('collapsed');
+            localStorage.setItem(`bmm_section_${id}_expanded`, 'true');
+        }
+        else {
+            el.classList.add('collapsed');
+            localStorage.setItem(`bmm_section_${id}_expanded`, 'false');
+        }
+    };
 }
+//# sourceMappingURL=components.js.map

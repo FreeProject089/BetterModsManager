@@ -31,3 +31,4 @@ graph TD
 `,
     explanationPrefix: 'docs.diagram.update.node.'
 };
+//# sourceMappingURL=app-update.js.map

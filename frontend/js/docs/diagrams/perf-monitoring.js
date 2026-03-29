@@ -28,3 +28,4 @@ graph TD
 `,
     explanationPrefix: 'docs.diagram.perf.node.'
 };
+//# sourceMappingURL=perf-monitoring.js.map

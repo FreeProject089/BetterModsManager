@@ -1,23 +1,20 @@
+// @ts-nocheck
 /**
  * debug-menu.js — Debug Menu Logic
  */
-
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { debugUI } from './debug-ui.js';
-
 export function initDebugMenu() {
     // Show/Hide based on app.cfg (Prod=false or FSDM=true)
     Promise.all([invoke('is_debug_mode'), invoke('is_fsdm_mode')]).then(([isDebug, isFSDM]) => {
         window.bmmDebugEnabled = isDebug || isFSDM;
         window.bmmFSDMEnabled = isFSDM;
-
         // CRITICAL: Initialize the Debug UI if any debug mode is active
         if (window.bmmDebugEnabled) {
             debugUI.init();
         }
-
         const card = document.getElementById('debug-menu-card');
         if (card) {
             // Manual hide by default (even if enabled) per user request
@@ -25,7 +22,6 @@ export function initDebugMenu() {
             card.style.display = 'none';
         }
     });
-
     const genCrashBtn = document.getElementById('btn-debug-gen-crash');
     if (genCrashBtn) {
         genCrashBtn.addEventListener('click', async () => {
@@ -33,12 +29,12 @@ export function initDebugMenu() {
                 toast(t('common.loading'), 'info');
                 const path = await invoke('trigger_manual_crash_report');
                 toast(`Report generated: ${path}`, 'success', 5000);
-            } catch (err) {
+            }
+            catch (err) {
                 toast('Failed: ' + err, 'error');
             }
         });
     }
-
     const resetAppBtn = document.getElementById('btn-debug-reset-app');
     if (resetAppBtn) {
         resetAppBtn.addEventListener('click', async () => {
@@ -52,13 +48,13 @@ export function initDebugMenu() {
                     // 3. Restart app
                     toast("System Reset. Restarting...", "warning");
                     setTimeout(() => window.location.reload(), 1500);
-                } catch (err) {
+                }
+                catch (err) {
                     toast('Reset failed: ' + err, 'error');
                 }
             }
         });
     }
-
     const openDebugBtn = document.getElementById('btn-open-debug') || document.getElementById('dbg-open-menu');
     if (openDebugBtn) {
         openDebugBtn.addEventListener('click', () => {
@@ -66,3 +62,4 @@ export function initDebugMenu() {
         });
     }
 }
+//# sourceMappingURL=debug-menu.js.map

@@ -47,3 +47,4 @@ graph TD
 `,
     explanationPrefix: 'docs.diagram.hosting.node.'
 };
+//# sourceMappingURL=dedicated-hosting.js.map

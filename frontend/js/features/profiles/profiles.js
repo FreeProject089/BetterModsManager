@@ -1,18 +1,15 @@
+// @ts-nocheck
 /**
  * profiles.js — Profile management
  */
 import { invoke, pickFolder } from '../../core/api.js';
 import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
 import { pickFile, convertFileSrc } from '../../core/api.js';
-import { refreshMods } from '../mods/mods.js';
 import { t, applyTranslations } from '../../core/i18n.js';
-
 window.pendingBgState = { action: null, tmpPath: null }; // Tracks 'apply', 'remove', or null
-
 export async function initProfiles() {
     document.getElementById('btn-new-profile').addEventListener('click', openNewProfileModal);
     document.getElementById('btn-confirm-profile').addEventListener('click', confirmCreateProfile);
-
     // Generic dropdown logic
     const importMenuBtn = document.getElementById('btn-import-menu');
     const importDropdown = document.getElementById('import-dropdown-container');
@@ -25,7 +22,6 @@ export async function initProfiles() {
             importDropdown.classList.remove('active');
         });
     }
-
     // OvGME Import
     const btnImportOvgme = document.getElementById('btn-import-ovgme');
     if (btnImportOvgme) {
@@ -34,7 +30,6 @@ export async function initProfiles() {
             importDropdown.classList.remove('active');
             const originalText = btnImportOvgme.innerHTML;
             btnImportOvgme.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>...';
-
             try {
                 const count = await invoke('import_ovgme_profiles');
                 if (count > 0) {
@@ -42,27 +37,27 @@ export async function initProfiles() {
                     await renderProfiles();
                     updateProfileChip();
                     updateLibraryProfileSelector();
-                } else {
+                }
+                else {
                     toast(t('prof.importNone'), 'info');
                 }
-            } catch (err) {
+            }
+            catch (err) {
                 toast(t('prof.importError', { type: 'OvGME', err }), 'error');
-            } finally {
+            }
+            finally {
                 btnImportOvgme.innerHTML = originalText;
             }
         });
     }
-
     // OMM Auto Import
     const btnImportOmmAuto = document.getElementById('btn-import-omm-auto');
     if (btnImportOmmAuto) {
         btnImportOmmAuto.addEventListener('click', async (e) => {
             e.preventDefault();
             importDropdown.classList.remove('active');
-            
             const originalText = btnImportOmmAuto.innerHTML;
             btnImportOmmAuto.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>...';
-
             try {
                 const count = await invoke('auto_import_omm');
                 if (count > 0) {
@@ -70,30 +65,30 @@ export async function initProfiles() {
                     await renderProfiles();
                     updateProfileChip();
                     updateLibraryProfileSelector();
-                } else {
+                }
+                else {
                     toast(t('prof.importNone'), 'info');
                 }
-            } catch (err) {
+            }
+            catch (err) {
                 toast(t('prof.importError', { type: 'OMM Auto', err }), 'error');
-            } finally {
+            }
+            finally {
                 btnImportOmmAuto.innerHTML = originalText;
             }
         });
     }
-
     // OMM Manual Import
     const btnImportOmm = document.getElementById('btn-import-omm');
     if (btnImportOmm) {
         btnImportOmm.addEventListener('click', async (e) => {
             e.preventDefault();
             importDropdown.classList.remove('active');
-            
             const path = await pickFile(['omx', 'omc']);
-            if (!path) return;
-
+            if (!path)
+                return;
             const originalText = btnImportOmm.innerHTML;
             btnImportOmm.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>...';
-
             try {
                 const count = await invoke('import_omm_profile', { path });
                 if (count > 0) {
@@ -101,92 +96,93 @@ export async function initProfiles() {
                     await renderProfiles();
                     updateProfileChip();
                     updateLibraryProfileSelector();
-                } else {
+                }
+                else {
                     toast(t('prof.importNone'), 'info');
                 }
-            } catch (err) {
+            }
+            catch (err) {
                 toast(t('prof.importError', { type: 'OMM', err }), 'error');
-            } finally {
+            }
+            finally {
                 btnImportOmm.innerHTML = originalText;
             }
         });
     }
-
     document.getElementById('btn-pick-game-path').addEventListener('click', async () => {
         const path = await pickFolder();
-        if (path) document.getElementById('prof-game-path').value = path;
+        if (path)
+            document.getElementById('prof-game-path').value = path;
     });
-
     document.getElementById('btn-pick-mods-path').addEventListener('click', async () => {
         const path = await pickFolder();
-        if (path) document.getElementById('prof-mods-path').value = path;
+        if (path)
+            document.getElementById('prof-mods-path').value = path;
     });
-
     document.getElementById('btn-pick-backup-path').addEventListener('click', async () => {
         const path = await pickFolder();
-        if (path) document.getElementById('prof-backup-path').value = path;
+        if (path)
+            document.getElementById('prof-backup-path').value = path;
     });
-
     // Edit profile specific buttons
     document.getElementById('btn-edit-pick-game-path').addEventListener('click', async () => {
         const path = await pickFolder();
-        if (path) document.getElementById('edit-prof-game-path').value = path;
+        if (path)
+            document.getElementById('edit-prof-game-path').value = path;
     });
     document.getElementById('btn-edit-pick-mods-path').addEventListener('click', async () => {
         const path = await pickFolder();
-        if (path) document.getElementById('edit-prof-mods-path').value = path;
+        if (path)
+            document.getElementById('edit-prof-mods-path').value = path;
     });
     document.getElementById('btn-edit-pick-backup-path').addEventListener('click', async () => {
         const path = await pickFolder();
-        if (path) document.getElementById('edit-prof-backup-path').value = path;
+        if (path)
+            document.getElementById('edit-prof-backup-path').value = path;
     });
     document.getElementById('btn-confirm-edit-profile').addEventListener('click', confirmEditProfile);
-
     // Initialize Icon Pickers
     renderIconPicker('prof-icon-grid', 'prof-icon');
     renderIconPicker('edit-prof-icon-grid', 'edit-prof-icon');
-
     window._refreshProfilesFn = renderProfiles;
-
     await renderProfiles();
 }
-
 const AVAILABLE_ICONS = [
     'star', 'flame', 'key', 'headphones', 'toggle', 'megaphone', 'radio', 'target',
     'gear', 'snowflake', 'sun', 'shield', 'wind', 'plane', 'wifi', 'bomb',
     'hammer', 'user', 'globe', 'cursor', 'volume', 'music', 'bell', 'anchor',
     'zap', 'cpu', 'map', 'mountain', 'rocket', 'gamepad', 'sword', 'car'
 ];
-
 function renderIconPicker(gridId, hiddenInputId) {
     const grid = document.getElementById(gridId);
-    if (!grid) return;
+    if (!grid)
+        return;
     grid.innerHTML = '';
     const input = document.getElementById(hiddenInputId);
-
     AVAILABLE_ICONS.forEach(iconName => {
         const item = document.createElement('div');
         item.className = 'icon-option';
-        if (input && input.value === iconName) item.classList.add('selected');
+        if (input && input.value === iconName)
+            item.classList.add('selected');
         item.dataset.icon = iconName;
         item.innerHTML = getProfileIconSvg(iconName, 'width:18px;height:18px');
         item.addEventListener('click', () => {
             grid.querySelectorAll('.icon-option').forEach(el => el.classList.remove('selected'));
             item.classList.add('selected');
-            if (input) input.value = iconName;
+            if (input)
+                input.value = iconName;
         });
         grid.appendChild(item);
     });
 }
-
 function updateIconPickerSelection(gridId, iconName) {
     const grid = document.getElementById(gridId);
-    if (!grid) return;
+    if (!grid)
+        return;
     grid.querySelectorAll('.icon-option').forEach(el => {
         el.classList.toggle('selected', el.dataset.icon === iconName);
     });
 }
-
 export function openNewProfileModal() {
     // Clear fields
     ['prof-name', 'prof-game', 'prof-game-path', 'prof-mods-path', 'prof-backup-path']
@@ -196,16 +192,18 @@ export function openNewProfileModal() {
     updateIconPickerSelection('prof-icon-grid', '');
     document.getElementById('modal-new-profile').classList.add('open');
 }
-
 async function checkDuplicateModsFolder(targetPath, currentProfileId = null) {
-    if (localStorage.getItem('bmm_ignore_duplicate_folder') === 'true') return null;
+    if (localStorage.getItem('bmm_ignore_duplicate_folder') === 'true')
+        return null;
     try {
         const profiles = await invoke('get_profiles');
         const duplicate = profiles.find(p => p.id !== currentProfileId && p.mods_path.toLowerCase().replace(/[\\/]$/, '') === targetPath.toLowerCase().replace(/[\\/]$/, ''));
         return duplicate ? duplicate.name : null;
-    } catch { return null; }
+    }
+    catch {
+        return null;
+    }
 }
-
 function showDuplicateFolderModal(conflictingProfileName) {
     return new Promise((resolve) => {
         const modal = document.getElementById('modal-duplicate-folder-warning');
@@ -213,22 +211,21 @@ function showDuplicateFolderModal(conflictingProfileName) {
         const btnCancel = modal.querySelector('[data-close="modal-duplicate-folder-warning"]');
         const checkbox = document.getElementById('duplicate-folder-ignore-forever');
         const msgText = document.getElementById('duplicate-folder-msg-text') || modal.querySelector('[data-i18n="prof.duplicateFolderMsg"]');
-
-        if (!modal || !btnConfirm) { resolve(true); return; }
-
+        if (!modal || !btnConfirm) {
+            resolve(true);
+            return;
+        }
         if (msgText) {
             msgText.innerHTML = t('prof.duplicateFolderMsg', { profile: `<strong style="color:var(--text-primary)">${escHtml(conflictingProfileName)}</strong>` });
         }
-        
         applyTranslations(modal);
-        
         // Re-inject the profile name even after applyTranslations if it was overwritten
         if (msgText) {
             msgText.innerHTML = t('prof.duplicateFolderMsg', { profile: `<strong style="color:var(--text-primary)">${escHtml(conflictingProfileName)}</strong>` });
         }
-
         const onConfirm = () => {
-            if (checkbox.checked) localStorage.setItem('bmm_ignore_duplicate_folder', 'true');
+            if (checkbox.checked)
+                localStorage.setItem('bmm_ignore_duplicate_folder', 'true');
             cleanup();
             resolve(true);
         };
@@ -238,16 +235,16 @@ function showDuplicateFolderModal(conflictingProfileName) {
         };
         const cleanup = () => {
             btnConfirm.removeEventListener('click', onConfirm);
-            if (btnCancel) btnCancel.removeEventListener('click', onCancel);
+            if (btnCancel)
+                btnCancel.removeEventListener('click', onCancel);
             modal.classList.remove('open');
         };
-
         btnConfirm.addEventListener('click', onConfirm);
-        if (btnCancel) btnCancel.addEventListener('click', onCancel);
+        if (btnCancel)
+            btnCancel.addEventListener('click', onCancel);
         modal.classList.add('open');
     });
 }
-
 async function confirmCreateProfile() {
     const name = document.getElementById('prof-name').value.trim();
     const gameName = document.getElementById('prof-game').value.trim();
@@ -256,19 +253,17 @@ async function confirmCreateProfile() {
     const backupPath = document.getElementById('prof-backup-path').value.trim();
     const color = document.getElementById('prof-color').value || '#3b82f6';
     const icon = document.getElementById('prof-icon').value || null;
-
     if (!name || !gamePath || !modsPath || !backupPath) {
         toast(t('prof.missingFields'), 'error');
         return;
     }
-
     // Duplicate Check
     const conflictingName = await checkDuplicateModsFolder(modsPath);
     if (conflictingName) {
         const confirmed = await showDuplicateFolderModal(conflictingName);
-        if (!confirmed) return;
+        if (!confirmed)
+            return;
     }
-
     try {
         const profile = await invoke('create_profile', { payload: { name, gameName, gamePath, modsPath, backupPath, color, icon } });
         document.getElementById('modal-new-profile').classList.remove('open');
@@ -276,15 +271,14 @@ async function confirmCreateProfile() {
         await renderProfiles();
         updateProfileChip();
         updateLibraryProfileSelector();
-
         // Refresh mods and conflicts
         const { refreshMods } = await import('../mods/mods.js');
         await refreshMods(true);
-    } catch (err) {
+    }
+    catch (err) {
         toast(t('common.error') + ' : ' + err, 'error');
     }
 }
-
 async function confirmEditProfile() {
     const profileId = document.getElementById('edit-prof-id').value;
     const name = document.getElementById('edit-prof-name').value.trim();
@@ -294,66 +288,61 @@ async function confirmEditProfile() {
     const backupPath = document.getElementById('edit-prof-backup-path').value.trim();
     const color = document.getElementById('edit-prof-color').value || '#3b82f6';
     const icon = document.getElementById('edit-prof-icon').value || null;
-
     if (!name || !gamePath || !modsPath || !backupPath) {
         toast(t('prof.missingFields'), 'error');
         return;
     }
-
     // Duplicate Check
     const conflictingName = await checkDuplicateModsFolder(modsPath, profileId);
     if (conflictingName) {
         const confirmed = await showDuplicateFolderModal(conflictingName);
-        if (!confirmed) return;
+        if (!confirmed)
+            return;
     }
-
     try {
         await invoke('update_profile', { profileId, payload: { name, gameName, gamePath, modsPath, backupPath, color, icon } });
-        
         // Handle pending background updates
         if (window.pendingBgState.action === 'apply') {
             await invoke('apply_profile_background', { profileId });
-        } else if (window.pendingBgState.action === 'remove') {
+        }
+        else if (window.pendingBgState.action === 'remove') {
             await invoke('remove_profile_background', { profileId });
         }
         window.pendingBgState = { action: null, tmpPath: null };
-
         document.getElementById('modal-edit-profile').classList.remove('open');
         toast(t('prof.updated').replace('{name}', name), 'success');
         await renderProfiles();
         updateProfileChip();
         updateLibraryProfileSelector();
-
         // Refresh mods and conflicts
         const { refreshMods } = await import('../mods/mods.js');
         await refreshMods(true);
-    } catch (err) {
+    }
+    catch (err) {
         toast(t('common.error') + ' : ' + err, 'error');
     }
 }
-
 export async function renderProfiles() {
     const grid = document.getElementById('profile-grid');
     const emptyEl = document.getElementById('empty-profiles');
     const badgeEl = document.getElementById('badge-profiles');
-
     const [profiles, activeId] = await Promise.all([
         invoke('get_profiles'),
         invoke('get_active_profile_id'),
     ]);
-
     // Fetch all mods for count display
     let allModsCache = [];
-    try { allModsCache = await invoke('get_all_mods'); } catch { }
-
+    try {
+        allModsCache = await invoke('get_all_mods');
+    }
+    catch { }
     // Badge
     const count = profiles.length;
     badgeEl.textContent = count;
     badgeEl.classList.toggle('show', count > 0);
-
     // Clear old cards (keep empty-state)
-    Array.from(grid.children).forEach(c => { if (!c.id.startsWith('empty')) grid.removeChild(c); });
-
+    Array.from(grid.children).forEach(c => { if (!c.id.startsWith('empty'))
+        grid.removeChild(c); });
     if (count === 0) {
         emptyEl.style.display = 'flex';
         emptyEl.style.width = '100%';
@@ -412,20 +401,19 @@ export async function renderProfiles() {
         applyTranslations(emptyEl);
         return;
     }
-
     emptyEl.style.display = 'none';
-
     // Prefetch background paths for all profiles
     const bgPaths = {};
-    await Promise.all(profiles.map(async p => {
+    await Promise.all(profiles.map(async (p) => {
         if (p.background_image) {
             try {
                 const path = await invoke('get_profile_background_path', { profileId: p.id });
-                if (path) bgPaths[p.id] = path;
-            } catch { }
+                if (path)
+                    bgPaths[p.id] = path;
+            }
+            catch { }
         }
     }));
-
     profiles.forEach(p => {
         const isActive = p.id === activeId;
         const card = document.createElement('div');
@@ -434,7 +422,6 @@ export async function renderProfiles() {
         card.style.position = 'relative';
         card.style.overflow = 'hidden';
         const brandColor = p.color || '#3b82f6';
-
         // Count mods for this profile
         let modCountLabel = t('prof.noMods');
         let activeModsHtml = '';
@@ -443,18 +430,16 @@ export async function renderProfiles() {
             const activeIds = Array.isArray(p.active_mods) ? p.active_mods : [];
             const enabledMods = profileMods.filter(m => activeIds.includes(m.id));
             const enabledCount = enabledMods.length;
-
             if (profileMods.length > 0) {
                 modCountLabel = t('prof.modsActive', { count: enabledCount }) + ' / ' + profileMods.length;
             }
-
             if (enabledCount > 0) {
                 activeModsHtml = `<div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; max-height:60px; overflow-y:auto; padding-right:4px;" class="active-mods-list">
                     ${enabledMods.map(m => `<span style="font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px;" onmouseenter="window.showTaskyHelp('${escAttr(m.name)}', 'package', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(m.name)}</span>`).join('')}
                 </div>`;
             }
-        } catch { }
-
+        }
+        catch { }
         // Background image layer
         const bgPath = bgPaths[p.id];
         const cb = Date.now();
@@ -464,7 +449,6 @@ export async function renderProfiles() {
                 <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0.1) 0%,rgba(0,0,0,0.6) 100%)"></div>
               </div>`
             : '';
-
         card.style.display = 'flex';
         card.style.flexDirection = 'column';
         card.innerHTML = `
@@ -527,7 +511,6 @@ export async function renderProfiles() {
     `;
         grid.appendChild(card);
     });
-
     // Functions for card actions
     async function activateProfile(id) {
         await invoke('set_active_profile', { profileId: id });
@@ -543,7 +526,6 @@ export async function renderProfiles() {
         const { updateDiscordStatus } = await import('../settings/settings.js');
         await updateDiscordStatus();
     }
-
     function openEditProfile(id) {
         const profile = profiles.find(p => p.id === id);
         if (profile) {
@@ -556,127 +538,109 @@ export async function renderProfiles() {
             document.getElementById('edit-prof-color').value = profile.color || '#3b82f6';
             document.getElementById('edit-prof-icon').value = profile.icon || '';
             updateIconPickerSelection('edit-prof-icon-grid', profile.icon || '');
-
             window.pendingBgState = { action: null, tmpPath: null };
             // Background image section
             initEditBackgroundSection(profile);
-
             document.getElementById('modal-edit-profile').classList.add('open');
         }
     }
-
     // Individual Card Events
     grid.querySelectorAll('.profile-card').forEach(card => {
         const id = card.dataset.id;
-
         // Double click -> Activate
         card.addEventListener('dblclick', (e) => {
             // Don't trigger if clicking a button or a path
-            if (e.target.closest('button') || e.target.closest('.btn-open-path')) return;
+            if (e.target.closest('button') || e.target.closest('.btn-open-path'))
+                return;
             activateProfile(id);
         });
     });
-
     // Button Events
     grid.querySelectorAll('.btn-activate').forEach(btn => {
-        btn.addEventListener('click', async e => {
+        btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             activateProfile(e.currentTarget.dataset.id);
         });
     });
-
     grid.querySelectorAll('.btn-edit-profile').forEach(btn => {
-        btn.addEventListener('click', async e => {
+        btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             openEditProfile(e.currentTarget.dataset.id);
         });
     });
-
     grid.querySelectorAll('.btn-del-profile').forEach(btn => {
-        btn.addEventListener('click', async e => {
+        btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const id = e.currentTarget.dataset.id;
             const profile = profiles.find(p => p.id === id);
-
             // Check for enabled mods in this profile
             const profileMods = allModsCache.filter(m => m.mod_folder_path && m.mod_folder_path.startsWith(profile.mods_path));
             const activeIds = Array.isArray(profile.active_mods) ? profile.active_mods : [];
             const enabledMods = profileMods.filter(m => activeIds.includes(m.id));
-
             if (enabledMods.length > 0 && id === activeId) {
                 // ... (existing logic for disabling mods)
                 openDeleteProfileModal(id, profile);
-            } else {
+            }
+            else {
                 openDeleteProfileModal(id, profile);
             }
         });
     });
-
     grid.querySelectorAll('.btn-open-path').forEach(btn => {
-        btn.addEventListener('click', async e => {
+        btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const path = e.currentTarget.dataset.path;
             if (path) {
                 try {
                     await invoke('open_folder', { path });
-                } catch (err) {
+                }
+                catch (err) {
                     toast(t('prof.folderError') + err, 'error');
                 }
             }
         });
     });
 }
-
 function openDeleteProfileModal(id, profile) {
     const modal = document.getElementById('modal-delete-profile');
-    if (!modal) return;
-
+    if (!modal)
+        return;
     const btnFinal = document.getElementById('btn-final-delete-profile');
     const warningText = document.getElementById('delete-profile-warning-text');
-    
     // Ensure button is reset before cloning or using (in case it was disabled from a previous attempt)
     btnFinal.disabled = false;
     btnFinal.innerHTML = `<span>${t('lib.delete') || 'Supprimer définitivement'}</span>`;
-
     // Ensure all data-i18n in the modal are translated
     applyTranslations(modal);
-    
     warningText.innerHTML = (t('prof.deleteConfirmLabel') || 'Voulez-vous vraiment supprimer le profil "{name}" ? Cette action est irréversible.')
         .replace('{name}', `<strong style="color:var(--text-primary)">${profile.name}</strong>`);
-
     // Clone button to remove old listeners
     const btnContainer = btnFinal.parentElement;
     const newBtnFinal = btnFinal.cloneNode(true);
     btnFinal.remove();
     btnContainer.appendChild(newBtnFinal);
-
     newBtnFinal.addEventListener('click', async () => {
         newBtnFinal.disabled = true;
         newBtnFinal.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> <span>${t('common.loading') || 'Chargement...'}</span>`;
-        
         try {
             await invoke('delete_profile', { profileId: id });
             modal.classList.remove('open');
             await renderProfiles();
             updateProfileChip();
             updateLibraryProfileSelector();
-
             // Refresh mods and conflicts
             const { refreshMods } = await import('../mods/mods.js');
             await refreshMods(true);
-            
             toast(t('prof.deleted') || 'Profil supprimé.', 'info');
-        } catch (err) {
+        }
+        catch (err) {
             toast(t('prof.deleteError') + err, 'error');
             newBtnFinal.disabled = false;
             newBtnFinal.innerHTML = `<span>${t('lib.delete') || 'Supprimer définitivement'}</span>`;
         }
     });
-
     modal.classList.add('open');
 }
-
-
 export async function updateProfileChip() {
     const [profiles, activeId] = await Promise.all([
         invoke('get_profiles'),
@@ -686,23 +650,21 @@ export async function updateProfileChip() {
     const nameEl = document.getElementById('chip-profile-name');
     nameEl.textContent = active ? active.name : '—';
 }
-
 /**
  * Utility: Fetch all profiles
  */
 export async function getProfiles() {
     return await invoke('get_profiles');
 }
-
 /**
  * Utility: Fetch active profile ID
  */
 export async function getActiveProfileId() {
     return await invoke('get_active_profile_id');
 }
-
 export function getProfileIconSvg(iconName, extraStyle = '') {
-    if (!iconName) return '';
+    if (!iconName)
+        return '';
     const style = `vertical-align:middle;${extraStyle}`;
     switch (iconName) {
         case 'gamepad': return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}"><line x1="6" y1="12" x2="10" y2="12"></line><line x1="8" y1="10" x2="8" y2="14"></line><line x1="15" y1="13" x2="15.01" y2="13"></line><line x1="18" y1="11" x2="18.01" y2="11"></line><rect x="2" y="6" width="20" height="12" rx="2"></rect></svg>`;
@@ -741,40 +703,38 @@ export function getProfileIconSvg(iconName, extraStyle = '') {
         default: return '';
     }
 }
-
 // ── Background Image Section in Edit Modal ──
 function initEditBackgroundSection(profile) {
     let container = document.getElementById('edit-prof-bg-section');
     if (!container) {
         // Find the modal-body and append there, before the modal-footer
         const modalBody = document.querySelector('#modal-edit-profile .modal-body');
-        if (!modalBody) return;
+        if (!modalBody)
+            return;
         container = document.createElement('div');
         container.id = 'edit-prof-bg-section';
         container.style.cssText = 'margin-top:16px;padding-top:16px;border-top:1px solid var(--border);';
         modalBody.appendChild(container);
     }
-
     // Determine current visual state (includes pending changes)
     let hasBg = !!profile.background_image;
     let previewPath = null;
-    
     if (window.pendingBgState.action === 'apply') {
         hasBg = true;
         previewPath = window.pendingBgState.tmpPath;
-    } else if (window.pendingBgState.action === 'remove') {
+    }
+    else if (window.pendingBgState.action === 'remove') {
         hasBg = false;
         previewPath = null;
     }
-
     container.innerHTML = `
         <label style="font-size:12px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-secondary);display:block;margin-bottom:12px">${t('prof.bgImage')}</label>
         <div style="display:flex;align-items:center;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:8px 12px;gap:12px">
             <div style="width:40px;height:40px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
-                ${hasBg ? 
-                    (previewPath ? `<img src="${convertFileSrc(previewPath)}?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover">` 
-                    : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`)
-                : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>'}
+                ${hasBg ?
+        (previewPath ? `<img src="${convertFileSrc(previewPath)}?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover">`
+            : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`)
+        : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>'}
             </div>
             <div style="flex:1">
                 <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:2px">
@@ -792,13 +752,12 @@ function initEditBackgroundSection(profile) {
             </div>
         </div>
     `;
-
     document.getElementById('btn-edit-pick-bg').addEventListener('click', async () => {
         const filePath = await pickFile([{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] }]);
-        if (!filePath) return;
+        if (!filePath)
+            return;
         openCropOverlay(filePath, profile);
     });
-
     if (hasBg) {
         document.getElementById('btn-edit-remove-bg').addEventListener('click', () => {
             window.pendingBgState = { action: 'remove', tmpPath: null };
@@ -807,16 +766,14 @@ function initEditBackgroundSection(profile) {
         });
     }
 }
-
 function openCropOverlay(sourcePath, profile) {
     // Remove existing overlay
     const existing = document.getElementById('crop-overlay');
-    if (existing) existing.remove();
-
+    if (existing)
+        existing.remove();
     const overlay = document.createElement('div');
     overlay.id = 'crop-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:16px;';
-
     overlay.innerHTML = `
         <div style="font-size:16px;font-weight:700;color:white;margin-bottom:8px">${t('prof.bgCropTitle')}</div>
         <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:4px">${t('prof.bgCropDesc')}</div>
@@ -829,12 +786,9 @@ function openCropOverlay(sourcePath, profile) {
         </div>
     `;
     document.getElementById('app-window-outer').appendChild(overlay);
-
     const imageElement = document.getElementById('cropper-image');
     imageElement.src = convertFileSrc(sourcePath);
-
     let cropper;
-
     imageElement.onload = () => {
         cropper = new Cropper(imageElement, {
             aspectRatio: 3.5 / 4.5,
@@ -850,28 +804,24 @@ function openCropOverlay(sourcePath, profile) {
             toggleDragModeOnDblclick: false,
         });
     };
-
     imageElement.onerror = () => {
         toast('Impossible de charger l\'image.', 'error');
         overlay.remove();
     };
-
     document.getElementById('crop-cancel').addEventListener('click', () => {
-        if (cropper) cropper.destroy();
+        if (cropper)
+            cropper.destroy();
         overlay.remove();
     });
-
     document.getElementById('crop-confirm').addEventListener('click', async () => {
-        if (!cropper) return;
-        
+        if (!cropper)
+            return;
         const btn = document.getElementById('crop-confirm');
         btn.disabled = true;
         btn.textContent = t('prof.bgCropSaving') || 'Enregistrement...';
-
         try {
             // Get crop box data rounded to nearest integers
             const cropData = cropper.getData(true);
-            
             const tmpPath = await invoke('crop_and_save_webp', {
                 profileId: profile.id,
                 sourcePath,
@@ -881,35 +831,36 @@ function openCropOverlay(sourcePath, profile) {
                 height: cropData.height,
                 isTemp: true
             });
-            
             window.pendingBgState = { action: 'apply', tmpPath };
             initEditBackgroundSection(profile);
             toast('L\'image sera appliquée lors de la sauvegarde.', 'success');
-            
-            if (cropper) cropper.destroy();
+            if (cropper)
+                cropper.destroy();
             overlay.remove();
-        } catch (e) {
+        }
+        catch (e) {
             toast('Erreur recadrage: ' + e, 'error');
             btn.disabled = false;
             btn.textContent = t('prof.bgCropConfirm');
         }
     });
 }
-
 function escHtml(str) {
-    if (!str) return '';
+    if (!str)
+        return '';
     return String(str)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
 }
-
 function escAttr(str) {
-    if (!str) return '';
+    if (!str)
+        return '';
     return String(str)
         .replace(/&/g, '&amp;')
         .replace(/"/g, '&quot;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 }
+//# sourceMappingURL=profiles.js.map

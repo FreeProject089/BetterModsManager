@@ -1,37 +1,39 @@
+// @ts-nocheck
 /**
  * update-notes.js — Update notes, PTB modal, auto-update, licenses, markdown rendering
  * Extracted from app.js for modularity
  */
-
 import { invoke } from '../core/api.js';
 import { t } from '../core/i18n.js';
 import { toast } from './app.js';
 import { escHtml, escAttr } from '../core/utils.js';
-
 // ── Navbar Version Button ────────────────────────────────
 export function initNavbarVersion() {
     const btn = document.getElementById('nav-version-btn');
-    if (!btn) return;
+    if (!btn)
+        return;
     btn.addEventListener('click', () => {
         const showUpdatesBtn = document.getElementById('btn-show-updates');
-        if (showUpdatesBtn) showUpdatesBtn.click();
+        if (showUpdatesBtn)
+            showUpdatesBtn.click();
     });
 }
-
 // ── Update notes modal ───────────────────────────────────
 export function initUpdateNotes() {
     const btn = document.getElementById('btn-show-updates');
-    if (!btn) return;
+    if (!btn)
+        return;
     btn.addEventListener('click', async () => {
         let notes = [];
         let oldNotes = [];
         try {
             notes = await invoke('get_update_notes', { subDir: null });
             oldNotes = await invoke('get_update_notes', { subDir: 'Old_Update' });
-        } catch (e) { console.error(e); }
-
+        }
+        catch (e) {
+            console.error(e);
+        }
         const allNotes = [...notes, ...oldNotes];
-
         let modal = document.getElementById('modal-update-notes');
         if (!modal) {
             modal = document.createElement('div');
@@ -39,7 +41,6 @@ export function initUpdateNotes() {
             modal.className = 'modal-overlay';
             document.getElementById('app-window-outer').appendChild(modal);
         }
-
         modal.innerHTML = `
             <div class="modal glass" style="max-width:900px; width:95%; height:80vh; display:flex; flex-direction:column;">
                 <div class="modal-header" style="flex-shrink:0">
@@ -89,12 +90,11 @@ export function initUpdateNotes() {
         `;
         modal.classList.add('open');
         modal.querySelector('#close-update-notes').addEventListener('click', () => modal.classList.remove('open'));
-        modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
-
+        modal.addEventListener('click', e => { if (e.target === modal)
+            modal.classList.remove('open'); });
         // Sidebar selection logic
         const sidebarItems = modal.querySelectorAll('.archive-sidebar-item');
         const contentArea = modal.querySelector('#archive-content');
-
         sidebarItems.forEach(item => {
             item.addEventListener('click', () => {
                 sidebarItems.forEach(i => i.classList.remove('active'));
@@ -106,7 +106,6 @@ export function initUpdateNotes() {
         });
     });
 }
-
 /**
  * Copies text to clipboard with a toast notification
  */
@@ -123,23 +122,24 @@ window.copyCodeToClipboard = (text, btn) => {
         console.error('Failed to copy text: ', err);
     });
 };
-
 // Simple Markdown renderer
 export function renderMarkdown(md) {
-    if (!md) return '';
+    if (!md)
+        return '';
     let html = '';
     if (typeof marked !== 'undefined') {
         marked.setOptions({ renderer: new marked.Renderer() });
         html = marked.parse(md);
-    } else {
+    }
+    else {
         html = md.replace(/\n/g, '<br>');
     }
     return `<div class="md-body">${html}</div>`;
 }
-
 // Inject markdown body styles once
 (function injectMarkdownStyles() {
-    if (document.getElementById('md-body-styles')) return;
+    if (document.getElementById('md-body-styles'))
+        return;
     const style = document.createElement('style');
     style.id = 'md-body-styles';
     style.textContent = `
@@ -197,36 +197,30 @@ export function renderMarkdown(md) {
     `;
     document.head.appendChild(style);
 })();
-
-
 // ── Auto Update System ──────────────────────────────────
-
 const AUTO_UPDATE_KEY = 'bmm_auto_update_enabled';
-
 function isAutoUpdateEnabled() {
     const val = localStorage.getItem(AUTO_UPDATE_KEY);
     return val !== 'false'; // Default to enabled
 }
-
 function setAutoUpdateEnabled(enabled) {
     localStorage.setItem(AUTO_UPDATE_KEY, enabled ? 'true' : 'false');
 }
-
 export async function initAutoUpdate() {
     let isDisabled = false;
     try {
         isDisabled = await invoke('is_update_disabled');
-    } catch (e) {
+    }
+    catch (e) {
         console.warn('[BMM] Failed to check update disabled status:', e);
     }
-
     const updateCheckButtonsState = () => {
         const isAuto = isAutoUpdateEnabled();
         const sidebarBtn = document.getElementById('btn-check-updates');
         const settingsBtn = document.getElementById('btn-settings-check-update');
-
         [sidebarBtn, settingsBtn].forEach(btn => {
-            if (!btn) return;
+            if (!btn)
+                return;
             if (isDisabled) {
                 btn.style.opacity = '0.5';
                 btn.style.cursor = 'not-allowed';
@@ -240,7 +234,6 @@ export async function initAutoUpdate() {
             }
         });
     };
-
     const chk = document.getElementById('chk-auto-update');
     if (chk) {
         if (isDisabled) {
@@ -253,7 +246,8 @@ export async function initAutoUpdate() {
                 card.onmouseenter = () => window.showTaskyHelp('update.disabledTip', 'icon-help');
                 card.onmouseleave = () => window.hideTaskyHelp();
             }
-        } else {
+        }
+        else {
             chk.checked = isAutoUpdateEnabled();
             chk.addEventListener('change', () => {
                 setAutoUpdateEnabled(chk.checked);
@@ -264,32 +258,30 @@ export async function initAutoUpdate() {
             });
         }
     }
-
     // Sidebar button listener
     const sidebarBtn = document.getElementById('btn-check-updates');
     if (sidebarBtn && !isDisabled) {
-        sidebarBtn.addEventListener('click', () => performUpdateCheck(true));
+        sidebarBtn.addEventListener('click', () => {
+            const showUpdatesBtn = document.getElementById('btn-show-updates');
+            if (showUpdatesBtn)
+                showUpdatesBtn.click();
+        });
     }
-
     // Settings button listener
     const settingsBtn = document.getElementById('btn-settings-check-update');
     if (settingsBtn && !isDisabled) {
         settingsBtn.addEventListener('click', () => performUpdateCheck(true));
     }
-
     // Apply initial state
     updateCheckButtonsState();
-
     // Auto-check on startup
     if (!isDisabled && isAutoUpdateEnabled()) {
         setTimeout(() => performUpdateCheck(false), 3000);
     }
 }
-
 async function performUpdateCheck(showNoUpdateToast = false) {
     const sidebarBtn = document.getElementById('btn-check-updates');
     const statusMsg = document.getElementById('update-status-msg');
-
     if (sidebarBtn) {
         sidebarBtn.classList.add('checking');
         sidebarBtn.querySelector('span').textContent = t('settings.checking') || 'Checking...';
@@ -297,16 +289,15 @@ async function performUpdateCheck(showNoUpdateToast = false) {
     if (statusMsg) {
         statusMsg.innerHTML = `<span style="color:var(--accent)">${t('settings.checking') || 'Checking...'}</span>`;
     }
-
     try {
         const info = await invoke('check_for_update');
-
         if (info.has_update) {
             showUpdateAvailableModal(info);
             if (statusMsg) {
                 statusMsg.innerHTML = `<span style="color:var(--success)">✓ ${t('settings.updateAvailable') || 'Update available'}: v${escHtml(info.latest_version)}</span>`;
             }
-        } else {
+        }
+        else {
             if (showNoUpdateToast) {
                 toast(t('settings.upToDate') || 'You are running the latest version!', 'success');
             }
@@ -314,7 +305,8 @@ async function performUpdateCheck(showNoUpdateToast = false) {
                 statusMsg.innerHTML = `<span style="color:var(--success)">✓ ${t('settings.upToDate') || 'Up to date'} (v${escHtml(info.current_version)})</span>`;
             }
         }
-    } catch (err) {
+    }
+    catch (err) {
         console.warn('[BMM] Update check failed:', err);
         const errStr = String(err);
         if (errStr.includes('NO_RELEASE')) {
@@ -324,7 +316,8 @@ async function performUpdateCheck(showNoUpdateToast = false) {
             if (statusMsg) {
                 statusMsg.innerHTML = `<span style="color:var(--warning)">⚠ ${t('settings.noRelease') || 'No releases yet'}</span>`;
             }
-        } else {
+        }
+        else {
             if (showNoUpdateToast) {
                 toast((t('settings.updateCheckFailed') || 'Update check failed') + ': ' + err, 'error');
             }
@@ -332,22 +325,21 @@ async function performUpdateCheck(showNoUpdateToast = false) {
                 statusMsg.innerHTML = `<span style="color:var(--danger)">✗ ${t('settings.updateCheckFailed') || 'Check failed'}</span>`;
             }
         }
-    } finally {
+    }
+    finally {
         if (sidebarBtn) {
             sidebarBtn.classList.remove('checking');
             sidebarBtn.querySelector('span').textContent = t('settings.checkUpdates') || 'Check for Updates';
         }
     }
 }
-
 function showUpdateAvailableModal(info) {
     const existing = document.getElementById('update-available-modal');
-    if (existing) existing.remove();
-
+    if (existing)
+        existing.remove();
     const releaseNotes = info.release_notes
         ? (typeof marked !== 'undefined' ? marked.parse(info.release_notes) : info.release_notes.replace(/\n/g, '<br>'))
         : '';
-
     const modal = document.createElement('div');
     modal.id = 'update-available-modal';
     modal.className = 'update-modal-backdrop';
@@ -417,7 +409,6 @@ function showUpdateAvailableModal(info) {
         </div>
     `;
     document.getElementById('app-window-outer').appendChild(modal);
-
     const downloadBtn = modal.querySelector('#btn-download-install-update');
     if (downloadBtn) {
         downloadBtn.addEventListener('click', async () => {
@@ -426,59 +417,56 @@ function showUpdateAvailableModal(info) {
             downloadBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Downloading...';
             try {
                 let filename = info.download_url.split('/').pop() || 'setup.exe';
-                if (!filename.includes('.')) filename += '.exe';
+                if (!filename.includes('.'))
+                    filename += '.exe';
                 await invoke('download_and_install_update', { url: info.download_url, filename });
                 downloadBtn.innerHTML = t('common.installing');
-            } catch (err) {
+            }
+            catch (err) {
                 toast(`Failed to download update: ${err}`, 'error');
                 downloadBtn.disabled = false;
                 downloadBtn.innerHTML = originalContent;
             }
         });
     }
-
     modal.querySelector('#close-update-modal').addEventListener('click', () => modal.remove());
     modal.querySelector('#btn-update-later').addEventListener('click', () => modal.remove());
-    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    modal.addEventListener('click', (e) => { if (e.target === modal)
+        modal.remove(); });
 }
-
 // ── PTB (Public Test Build) Modal ───────────────────────
-
 const PTB_DISMISSED_KEY = 'bmm_ptb_dismissed';
-
 export async function checkPtbMode(force = false, initialFileName = null) {
-    if (!force && sessionStorage.getItem(PTB_DISMISSED_KEY)) return;
-
+    if (!force && sessionStorage.getItem(PTB_DISMISSED_KEY))
+        return;
     try {
         const isPtb = await invoke('is_ptb_mode');
-        if (!isPtb && !force) return;
-
+        if (!isPtb && !force)
+            return;
         const currentNotes = await invoke('get_update_notes', { subDir: null });
         const oldNotes = await invoke('get_update_notes', { subDir: "Old_Update" });
-
         showPtbModal(currentNotes, oldNotes, initialFileName);
-    } catch (e) {
+    }
+    catch (e) {
         console.warn('[BMM] PTB check failed:', e);
     }
 }
-
 function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
     const existing = document.getElementById('ptb-welcome-modal');
-    if (existing) existing.remove();
-
+    if (existing)
+        existing.remove();
     const allNotes = [...currentNotes, ...oldNotes];
-    if (allNotes.length === 0) return;
-
+    if (allNotes.length === 0)
+        return;
     const modal = document.createElement('div');
     modal.id = 'ptb-welcome-modal';
     modal.className = 'update-modal-backdrop';
-
     let activeNote = allNotes[0];
     if (initialFileName) {
         const found = allNotes.find(n => n.filename.includes(initialFileName));
-        if (found) activeNote = found;
+        if (found)
+            activeNote = found;
     }
-
     const renderHeader = () => `
         <div class="ptb-header-title">
             <div class="ptb-header-icon">
@@ -490,10 +478,8 @@ function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
     `;
-
     const renderSidebar = () => {
         let html = '<div class="ptb-sidebar">';
-
         if (currentNotes.length > 0) {
             html += `
                 <div class="ptb-sidebar-section">
@@ -510,7 +496,6 @@ function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
                 </div>
             `;
         }
-
         if (oldNotes.length > 0) {
             html += `
                 <div class="ptb-sidebar-section">
@@ -527,15 +512,12 @@ function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
                 </div>
             `;
         }
-
         html += '</div>';
         return html;
     };
-
     const renderContent = (note) => {
         return `<div class="ptb-modal-body" style="overflow-y:auto; flex:1; padding:32px;">${renderMarkdown(note.content)}</div>`;
     };
-
     modal.innerHTML = `
         <div class="ptb-modal-card">
             <div class="ptb-modal-header">${renderHeader()}</div>
@@ -547,9 +529,7 @@ function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
             </div>
         </div>
     `;
-
     document.getElementById('app-window-outer').appendChild(modal);
-
     modal.addEventListener('click', (e) => {
         const item = e.target.closest('.ptb-sidebar-item');
         if (item) {
@@ -564,32 +544,31 @@ function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
             }
         }
     });
-
     const close = () => {
         sessionStorage.setItem(PTB_DISMISSED_KEY, 'true');
         modal.remove();
     };
     modal.querySelector('#close-ptb-modal').addEventListener('click', close);
-    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    modal.addEventListener('click', (e) => { if (e.target === modal)
+        close(); });
 }
-
 // ── Licenses ──────────────────────────────────────────────
 export async function openLicenseModal() {
     const modal = document.getElementById('modal-license');
     const contentEl = document.getElementById('license-content');
-    if (!modal || !contentEl) return;
-
+    if (!modal || !contentEl)
+        return;
     modal.classList.add('open');
     contentEl.textContent = t('common.loading');
-
     try {
         const text = await invoke('get_license_text');
         contentEl.textContent = text;
-    } catch (err) {
+    }
+    catch (err) {
         contentEl.textContent = t('common.error') + " (License): " + err;
     }
 }
-
 // Global expose for onclick
 window.openLicenseModal = openLicenseModal;
 window.checkPtbMode = checkPtbMode;
+//# sourceMappingURL=update-notes.js.map

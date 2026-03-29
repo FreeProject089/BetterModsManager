@@ -53,3 +53,4 @@ graph TD
 `,
     explanationPrefix: 'docs.diagram.resumable.node.'
 };
+//# sourceMappingURL=resumable-downloads.js.map

@@ -2,15 +2,20 @@
     "name": "better-mods-manager",
     "version": "0.9.8",
     "private": true,
+    "type": "module",
     "scripts": {
         "tauri": "tauri",
-        "dev": "npx tauri dev",
-        "build": "npx tauri build",
+        "dev": "concurrently \"npm run watch\" \"npx tauri dev\"",
+        "build": "tsc --project frontend && npx tauri build",
+        "typecheck": "tsc --project frontend --noEmit",
+        "watch": "tsc --project frontend --watch",
+        "compile": "tsc --project frontend",
         "test:i18n": "python tests/i18n_parity.test.py"
     },
     "devDependencies": {
         "@tauri-apps/cli": "^1",
-        "vite": "^8.0.1"
+        "concurrently": "^9.2.1",
+        "typescript": "^5.7"
     },
     "dependencies": {
         "@tanstack/query-core": "^5.91.2",

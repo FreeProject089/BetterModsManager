@@ -1,34 +1,23 @@
 /**
- * api.js — Tauri Bridge
+ * api.ts — Tauri Bridge
  * Handles communication between frontend and Rust backend
  */
-
 import { debugHub } from '../features/debug/debug.js';
-
-let _invoke;
-let _dialog;
-let _notifModule;
-let _convertFileSrc;
-
+let _invoke = null;
+let _dialog = null;
+let _notifModule = null;
+let _convertFileSrc = null;
 // --- Console Interceptor ---
 const originalLog = console.log;
 const originalWarn = console.warn;
 const originalError = console.error;
-
 function bridgeLog(level, args) {
-    // Record in debugHub
     debugHub.recordLog(level, args);
-
-    const message = args.map(arg => 
-        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-    ).join(' ');
-    
-    // Send to backend if bridge is available
+    const message = args.map((arg) => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
     if (_invoke) {
-        _invoke('log_frontend_line', { line: `[${level}] ${message}` }).catch(() => {});
+        _invoke('log_frontend_line', { line: `[${level}] ${message}` }).catch(() => { });
     }
 }
-
 console.log = (...args) => {
     originalLog.apply(console, args);
     bridgeLog('INFO', args);
@@ -41,9 +30,7 @@ console.error = (...args) => {
     originalError.apply(console, args);
     bridgeLog('ERROR', args);
 };
-
 export async function loadTauri() {
-    // 1. Prioritize window.__TAURI__ (injected locally by Tauri when withGlobalTauri is true)
     if (window.__TAURI__) {
         _invoke = window.__TAURI__.invoke;
         _dialog = window.__TAURI__.dialog;
@@ -52,8 +39,6 @@ export async function loadTauri() {
         console.log('[BMM] Using local Tauri bridge');
         return;
     }
-
-    // 2. Fallback to unpkg (requires internet)
     try {
         const tauriModule = await import('https://unpkg.com/@tauri-apps/api@1/tauri.js');
         const dialogModule = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
@@ -61,8 +46,8 @@ export async function loadTauri() {
         _invoke = tauriModule.invoke;
         _dialog = dialogModule;
         _convertFileSrc = tauriModule.convertFileSrc;
-    } catch {
-        // 3. Last fallback: mock for browser testing
+    }
+    catch {
         console.warn('[BMM] Running in browser mock mode');
         _invoke = mockInvoke;
         _dialog = { open: async () => 'C:\\mock\\folder', save: async () => null };
@@ -70,76 +55,75 @@ export async function loadTauri() {
         _convertFileSrc = (path) => `file://${path}`;
     }
 }
-
 export async function invoke(command, args = {}) {
     const startTime = performance.now();
-    const call = debugHub.recordIPC(command, args, 'pending');
-
+    const _call = debugHub.recordIPC(command, args, 'pending');
     try {
         const res = await _invoke(command, args);
         const duration = Math.round(performance.now() - startTime);
         debugHub.recordIPC(command, args, 'success', res, duration);
         return res;
-    } catch (err) {
+    }
+    catch (err) {
         const duration = Math.round(performance.now() - startTime);
         debugHub.recordIPC(command, args, 'error', err, duration);
         console.error(`[RPC ERROR] ${command}:`, err);
         throw err;
     }
 }
-
 export async function pickFolder() {
     try {
         return await _dialog.open({ directory: true, multiple: false });
-    } catch {
+    }
+    catch {
         return null;
     }
 }
-
 export async function pickFile(filters = []) {
     try {
-        // If filters is a flat array like ['omx', 'omc'], convert to Tauri format
         let normalizedFilters = filters;
         if (filters.length > 0 && typeof filters[0] === 'string') {
             normalizedFilters = [{ name: filters.join(', ').toUpperCase(), extensions: filters }];
         }
         return await _dialog.open({ multiple: false, filters: normalizedFilters });
-    } catch {
+    }
+    catch {
         return null;
     }
 }
-
 export async function saveFile(filters = []) {
     try {
         const saveDialog = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
         return await saveDialog.save({ filters });
-    } catch {
+    }
+    catch {
         return null;
     }
 }
-
-export async function getSettings() { return await invoke('get_settings'); }
-export async function updateSettings(settings) { return await invoke('update_settings', { settings }); }
-
+export async function getSettings() {
+    return await invoke('get_settings');
+}
+export async function updateSettings(settings) {
+    return await invoke('update_settings', { settings });
+}
 export async function listenFileDrop(callback) {
     try {
         const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
-        return await listen('tauri://file-drop', e => {
+        return await listen('tauri://file-drop', (e) => {
             if (e.payload && e.payload.length > 0) {
                 callback(e.payload);
             }
         });
-    } catch {
+    }
+    catch {
         console.warn('[BMM] File drop not supported in browser mockup');
         return () => { };
     }
 }
-
-export async function sendOsNotification(title, body) {
+export async function sendOsNotification(_title, _body) {
     // Deprecated per user request. OS notifications and settings removed.
     return;
 }
-
 // Mock invoke for browser testing
 async function mockInvoke(command, args) {
     console.log(`[Mock] ${command}`, args);
@@ -150,8 +134,9 @@ async function mockInvoke(command, args) {
         default: return null;
     }
 }
-
 export function convertFileSrc(path) {
-    if (_convertFileSrc) return _convertFileSrc(path);
+    if (_convertFileSrc)
+        return _convertFileSrc(path);
     return `asset.localhost/${path}`;
 }
+//# sourceMappingURL=api.js.map

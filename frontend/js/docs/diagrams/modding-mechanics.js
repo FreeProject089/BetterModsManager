@@ -23,3 +23,4 @@ graph TD
 `,
     explanationPrefix: 'docs.diagram.modding.node.'
 };
+//# sourceMappingURL=modding-mechanics.js.map

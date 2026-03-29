@@ -34,3 +34,4 @@ graph TD
 `,
     explanationPrefix: 'docs.diagram.profile.node.'
 };
+//# sourceMappingURL=profile-system.js.map

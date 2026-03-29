@@ -1,0 +1,333 @@
+// @ts-nocheck
+/**
+ * components.js — Reusable UI Components and DOM generators
+ * Extracts large template literals and DOM manipulations from main controllers.
+ */
+
+import { t } from '../core/i18n.js';
+import { escHtml, escAttr, escJs } from '../core/utils.js';
+
+/**
+ * Truncate a string to a maximum length and add ellipsis if needed.
+ */
+function truncate(str, maxLen) {
+  if (!str) return '';
+  if (str.length <= maxLen) return str;
+  return str.substring(0, maxLen) + '...';
+}
+
+export function getLoadingOverlayHTML() {
+  return `<div class="mod-loading-overlay"><div style="display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div></div>`;
+}
+
+/**
+ * Returns the innerHTML for a Mod Card.
+ * @param {Object} mod - The mod object
+ * @param {Object} ctx - Context { selectedModId, conflictCache, processingMods, userTags }
+ * @returns {string} HTML string
+ */
+export function getModCardHTML(mod, ctx) {
+  const isProcessing = ctx.processingMods.has(mod.id);
+
+  let tagsHtml = '';
+  if (mod.tags && mod.tags.length > 0) {
+    const visibleTags = mod.tags.slice(0, 3).map(tid => {
+      const tDef = ctx.userTags.find(t => t.id === tid);
+      if (!tDef) return '';
+      return `<span style="background:${tDef.color}15;color:${tDef.color};border:1px solid ${tDef.color}30;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600">${escHtml(tDef.name)}</span>`;
+    }).join('');
+
+    const extraTagsCount = mod.tags.length > 3 ? `<span style="color:var(--text-muted);font-size:9px;align-self:center">+${mod.tags.length - 3}</span>` : '';
+    tagsHtml = `<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${visibleTags}${extraTagsCount}</div>`;
+  }
+  let conflictHtml = '';
+  const conflicts = ctx && ctx.conflictCache ? ctx.conflictCache[mod.id] : (mod.conflicts || []);
+  if (conflicts && conflicts.length > 0) {
+    const hasIntraActive = conflicts.some(c => c.category === 'Intra' && c.status === 'Active');
+    const hasIntraPotential = conflicts.some(c => c.category === 'Intra' && c.status === 'Potential');
+    const hasInterActive = conflicts.some(c => c.category === 'Inter' && c.status === 'Active');
+    const hasInterPotential = conflicts.some(c => c.category === 'Inter' && c.status === 'Potential');
+
+    if (hasIntraActive) conflictHtml += `<div class="tag-conflict tag-intra-conflict active" onmouseenter="window.showTaskyHelp('lib.conflictActiveTip', 'alert')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
+    else if (hasIntraPotential) conflictHtml += `<div class="tag-conflict tag-intra-conflict potential" onmouseenter="window.showTaskyHelp('lib.conflictPotentialTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Intra</div>`;
+
+    if (hasInterActive) conflictHtml += `<div class="tag-conflict tag-inter-conflict active" onmouseenter="window.showTaskyHelp('lib.conflictInterActiveTip', 'alert')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
+    else if (hasInterPotential) conflictHtml += `<div class="tag-conflict tag-inter-conflict potential" onmouseenter="window.showTaskyHelp('lib.conflictInterPotentialTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
+  }
+
+  const processingHtml = isProcessing ? getLoadingOverlayHTML() : '';
+
+  return `
+        <label class="mod-toggle" onmouseenter="window.showTaskyHelp('mod.toggleTip', 'toggle')" onmouseleave="window.hideTaskyHelp()">
+            <input type="checkbox" class="mod-toggle-input" ${mod.enabled ? 'checked' : ''} />
+            <div class="mod-toggle-track">
+                <div class="mod-toggle-thumb"></div>
+            </div>
+        </label>
+
+        <div class="mod-status-dot ${mod.enabled ? 'enabled' : 'disabled'}"></div>
+
+        <div class="mod-info">
+            <div style="display:flex;align-items:center;gap:8px">
+                <div class="mod-name" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.name))}', 'package', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(truncate(mod.name, 100))}</div>
+                ${mod.enabled ? `<span class="badge badge-accent" style="font-size:9px;padding:1px 6px;border-radius:4px;font-family:var(--font-mono);font-weight:800;background:rgba(59,130,246,0.2);color:var(--accent);border:1px solid rgba(59,130,246,0.3)" onmouseenter="window.showTaskyHelp('mod.activationOrderTip', 'help')" onmouseleave="window.hideTaskyHelp()">#${mod.activation_order}</span>` : ''}
+                ${conflictHtml}
+            </div>
+            <div class="mod-meta">
+                <span class="mono" style="color: var(--cyan)">v${escHtml(mod.version)}</span>
+                ${mod.author ? `<span>· ${escHtml(truncate(mod.author, 50))}</span>` : ''}
+                ${tagsHtml}
+            </div>
+            <div class="mod-path-hint" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.mod_folder_path || ''))}', 'folder', true)" onmouseleave="window.hideTaskyHelp()" style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);opacity:0.6;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;display:flex;align-items:center;gap:4px;cursor:help">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                ${escHtml(mod.mod_folder_path || '')}
+            </div>
+        </div>
+
+        <div class="mod-actions">
+            <div class="mod-actions-dropdown">
+            <button class="btn btn-sm btn-icon btn-dropdown-toggle" 
+                onmouseenter="window.showTaskyHelp('mod.openFolderTip', 'folder'); window.cancelDropdownClose()" 
+                onmouseleave="window.hideTaskyHelp(); window.closeGlobalDropdown(false)" 
+                onclick="window.showGlobalDropdown(this, this.__menu || this.nextElementSibling)" 
+                style="background:rgba(255,255,255,0.05);color:var(--text-secondary);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        <path d="m6 9 6 6 6-6" stroke-width="2" style="transform: scale(0.6); transform-origin: center; opacity: 0.8; translate: 0 4px;"/>
+                    </svg>
+                </button>
+                <div class="mod-actions-dropdown-content" onmouseleave="window.closeGlobalDropdown()">
+                    <div class="dropdown-item btn-open-active-folder" data-id="${mod.id}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        <span data-i18n="mod.openActiveFolder">${t('mod.openActiveFolder')}</span>
+                    </div>
+                    <div class="dropdown-item btn-open-backup-folder" data-id="${mod.id}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                        <span data-i18n="mod.openBackupFolder">${t('mod.openBackupFolder')}</span>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item btn-open-folder" data-id="${mod.id}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        <span data-i18n="mod.openSourceFolder">${t('mod.openSourceFolder')}</span>
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-sm btn-icon btn-edit-mod" onmouseenter="window.showTaskyHelp('mod.editTip', 'edit')" onmouseleave="window.hideTaskyHelp()" data-id="${mod.id}" style="background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M12 20h9"/>
+                    <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3l-12 12L3 20l1.5-4.5z"/>
+                </svg>
+            </button>
+            <button class="btn btn-danger btn-sm btn-icon btn-remove-mod" onmouseenter="window.showTaskyHelp('mod.removeTip', 'trash')" onmouseleave="window.hideTaskyHelp()" data-id="${mod.id}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="mod-status-pill ${mod.enabled ? 'enabled' : 'disabled'}" style="
+            font-size: 10px;
+            font-family: var(--font-mono);
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: ${mod.enabled ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)'};
+            color: ${mod.enabled ? 'var(--success)' : 'var(--text-muted)'};
+            flex-shrink: 0;
+            width: 70px;
+            text-align: center;
+        ">
+            ${mod.enabled ? 'ACTIF' : 'INACTIF'}
+        </div>
+
+        ${mod.shared_activations && mod.shared_activations.length > 1 ? `
+        <div class="mod-shared-info" style="border-left:1px solid var(--border); padding-left:14px; margin-left:8px; align-self:stretch; display:flex; flex-direction:column; justify-content:center; gap:4px; max-width:240px; overflow-y:auto; max-height:80px; scrollbar-width: none;">
+            ${mod.shared_activations.map(sa => `
+                <div class="shared-activation-item" style="display:flex; align-items:center; gap:8px; font-size:10.5px; opacity:${sa.active ? '1' : '0.4'}" title="${escAttr(sa.profile_name)}\n${escAttr(sa.game_path)}">
+                    <div style="width:8px; height:8px; border-radius:50%; background:${sa.active ? 'var(--success)' : 'var(--text-muted)'}; flex-shrink:0; box-shadow:${sa.active ? '0 0 6px var(--success)' : 'none'}"></div>
+                    <div style="display:flex; flex-direction:column; min-width:0; flex:1">
+                        <span style="font-weight:600; color:${sa.active ? 'var(--text-primary)' : 'var(--text-muted)'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${escHtml(sa.profile_name)}</span>
+                        <span style="font-size:9px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:var(--font-mono)">${escHtml(sa.game_path)}</span>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+        ` : ''}
+        ${processingHtml}
+    `;
+}
+
+/**
+ * Returns the innerHTML for the Mod Detail panel.
+ * @param {Object} mod - The mod object
+ * @param {Object} ctx - Context { conflicts, links }
+ * @returns {string} HTML string
+ */
+export function getModDetailHTML(mod, ctx) {
+  // Helper for collapsible sections
+  const renderSection = (id, title, icon, content, defaultExpanded = false) => {
+    const storageKey = `bmm_section_${id}_expanded`;
+    const isExpanded = localStorage.getItem(storageKey) === null ? defaultExpanded : localStorage.getItem(storageKey) === 'true';
+    
+    return `
+      <div class="collapsible-section ${isExpanded ? '' : 'collapsed'}" id="section-${id}">
+        <div class="collapsible-header" onclick="window.toggleDetailSection('${id}')">
+          <h4>${icon} ${title}</h4>
+          <svg class="collapsible-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="collapsible-content">
+          ${content}
+        </div>
+      </div>
+    `;
+  };
+
+  const conflictsContent = (mod.conflicts && mod.conflicts.length > 0) ? `
+        <div id="detail-conflicts-list" style="display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto;padding-right:4px">
+          ${mod.conflicts.map(c => `
+            <div style="background:rgba(0,0,0,0.2);padding:8px 10px;border-radius:8px;border:1px solid ${c.status === 'Active' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <span class="tag-conflict tag-${c.category.toLowerCase()}-conflict ${c.status.toLowerCase()}" 
+                      style="cursor:pointer" 
+                      onclick="window.openGlobalConflictModal('${mod.id}')">
+                   ${c.category === 'Intra' ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'}
+                   ${c.category}
+                </span>
+                <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted)">${c.file_count} f.</span>
+              </div>
+              <div style="font-size:11px;color:var(--text-primary);font-weight:600">${escHtml(c.other_mod_name)}</div>
+              <div style="font-size:10px;color:var(--text-muted)">Profil: ${escHtml(c.other_profile_name)}</div>
+            </div>
+          `).join('')}
+        </div>` : '<div id="detail-conflicts-list" style="font-size:12px;color:var(--text-muted);font-style:italic">Aucun conflit détecté.</div>';
+
+  const infoContent = `
+      <!-- Editable Fields -->
+      <div class="detail-section">
+        <label class="detail-label">
+          <span>${t('detail.name')}</span>
+        </label>
+        <input type="text" id="detail-name" class="input-field" value="${escAttr(mod.name)}" />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+        <div class="detail-section">
+          <label class="detail-label">${t('detail.version')}</label>
+          <input type="text" id="detail-version" class="input-field" value="${escAttr(mod.version)}" />
+        </div>
+        <div class="detail-section">
+          <label class="detail-label">${t('detail.author')}</label>
+          <input type="text" id="detail-author" class="input-field" value="${escAttr(mod.author || '')}" />
+        </div>
+      </div>
+      <div class="detail-section" style="margin-top:10px">
+        <label class="detail-label">${t('detail.description')}</label>
+        <textarea id="detail-desc" class="input-field" rows="4" style="resize:vertical;min-height:80px;line-height:1.5;padding:10px">${escHtml(mod.description || '')}</textarea>
+      </div>
+
+      <!-- Tags Selection -->
+      <div class="detail-section" id="detail-tags-container" style="margin-top:10px">
+        <label class="detail-label" data-i18n="detail.tags" style="display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Tags</label>
+        <div id="detail-tags-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <select id="detail-tag-select" class="input-field" style="width:100%;padding:6px;font-size:11px">
+            <option value="">— ${t('detail.selectTag')} —</option>
+        </select>
+      </div>
+
+      <!-- Dependencies Section -->
+      <div class="detail-section" style="margin-top:10px">
+        <label class="detail-label" style="display:flex;align-items:center;gap:4px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            ${t('mod.dependencies')}
+        </label>
+        <div id="detail-deps-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <div style="position:relative">
+            <input type="text" id="detail-dep-input" class="input-field" style="width:100%;padding:6px;font-size:11px" placeholder="Ajouter un mod requis..." />
+            <div id="detail-dep-suggestions" class="glass" style="display:none; position:absolute; z-index:100; max-height:150px; overflow-y:auto; width:100%; border:1px solid var(--border); border-radius:8px; margin-top:4px"></div>
+        </div>
+      </div>
+  `;
+
+  const filesContent = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">
+          <span style="font-size:11px; color:var(--text-muted)">${t('mod.filesCount', { count: mod.installed_files ? mod.installed_files.length : 0 })}</span>
+          <button id="btn-browse-archive" class="btn btn-sm" style="background:rgba(59,130,246,0.15); color:var(--accent); border:none; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:11px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle; margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            ${t('mod.exploreArchive')}
+          </button>
+          <button id="btn-verify-mod-integrity" class="btn btn-sm" style="background:rgba(16,185,129,0.15); color:var(--success); border:none; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:11px; margin-left:8px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle; margin-right:4px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            ${t('mod.verifyIntegrityDeep')}
+          </button>
+        </div>
+        ${mod.installed_files && mod.installed_files.length > 0 ? `
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);background:rgba(0,0,0,0.3);padding:10px;border-radius:8px;max-height:200px;overflow-y:auto">
+            ${mod.installed_files.slice(0, 50).map(f => `<div style="padding:1px 0;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>${escHtml(f)}</div>`).join('')}
+            ${mod.installed_files.length > 50 ? `<div style="padding:6px 0;color:var(--text-muted);font-style:italic">${t('mod.archiveMoreFiles', { count: mod.installed_files.length - 50 })}</div>` : ''}
+          </div>
+        ` : `<div style="font-size:12px;color:var(--text-muted);font-style:italic">${t('detail.noFiles')}</div>`}
+      `;
+
+  const linksContent = `
+        <div style="font-size:10px;background:rgba(59,130,246,0.1);color:var(--accent);padding:6px 8px;border-radius:6px;margin-bottom:8px;line-height:1.4;border:1px solid rgba(59,130,246,0.2)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:2px;margin-top:-2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span data-i18n="detail.linksInfo">${t('detail.linksInfo') || 'Pour les listes .MM, seuls les liens directs fonctionnent.'}</span>
+        </div>
+        <div id="detail-links-list" style="display:flex;flex-direction:column;gap:6px">
+          ${ctx.links.map((dl, i) => `
+            <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.2);padding:6px 8px;border-radius:8px">
+              <select class="detail-link-type input-field" style="width:90px;padding:3px;font-size:10px" data-index="${i}">
+                <option value="github" ${dl.link_type === 'github' ? 'selected' : ''}>GitHub</option>
+                <option value="direct" ${dl.link_type === 'direct' ? 'selected' : ''}>Direct</option>
+                <option value="other" ${dl.link_type === 'other' ? 'selected' : ''}>Autre</option>
+              </select>
+              <input type="text" class="detail-link-url input-field" style="flex:1;padding:3px 6px;font-size:10px" value="${escAttr(dl.url)}" placeholder="URL" data-index="${i}" />
+              <button class="btn-remove-link" data-index="${i}" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;display:flex;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+          `).join('')}
+        </div>
+        <button id="btn-add-link" class="btn btn-sm" style="margin-top:8px;background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px">+ ${t('detail.addLink')}</button>
+  `;
+
+  return `
+    <div class="detail-header">
+      <div style="flex:1; min-width:0">
+        <h3 style="margin:0;font-size:16px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.name))}', 'package', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(truncate(mod.name, 100))}</h3>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+          <span style="font-family:var(--font-mono);font-size:11px;color:var(--cyan)">v${escHtml(mod.version)}</span>
+          <span style="font-size:10px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;cursor:help" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.mod_folder_path || ''))}', 'folder', true)" onmouseleave="window.hideTaskyHelp()">
+            ${mod.enabled ? '<svg width="8" height="8" viewBox="0 0 24 24" fill="var(--success)"><circle cx="12" cy="12" r="10"/></svg> ACTIF' : '<svg width="8" height="8" viewBox="0 0 24 24" fill="var(--text-muted)"><circle cx="12" cy="12" r="10"/></svg> INACTIF'}
+          </span>
+        </div>
+      </div>
+      <button id="btn-close-detail-inner" class="btn btn-sm btn-icon" style="background:rgba(255,255,255,0.05);border:none;color:var(--text-muted);cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center;margin-left:auto"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+
+    <div class="detail-body" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;padding:0 4px;overflow-y:auto;max-height:calc(100vh - 180px);scrollbar-width:thin">
+      ${renderSection('info', t('detail.sectionGeneral') || 'Général', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>', infoContent, true)}
+      ${renderSection('conflicts', t('detail.sectionConflicts') || 'Conflits', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>', conflictsContent, false)}
+      ${renderSection('links', t('detail.sectionLinks') || 'Liens', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>', linksContent, false)}
+      ${renderSection('files', t('detail.sectionFiles') || 'Fichiers', '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>', filesContent, false)}
+
+      <button id="btn-save-detail" class="btn btn-primary" style="margin-top:12px;width:100%;height:38px;font-weight:700;flex-shrink:0">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> 
+        ${t('detail.save') || 'SAUVEGARDER'}
+      </button>
+    </div>
+  `;
+}
+
+// Add global toggle function for collapsible sections
+if (typeof window !== 'undefined') {
+  window.toggleDetailSection = (id) => {
+    const el = document.getElementById(`section-${id}`);
+    if (!el) return;
+    const isCollapsed = el.classList.contains('collapsed');
+    if (isCollapsed) {
+      el.classList.remove('collapsed');
+      localStorage.setItem(`bmm_section_${id}_expanded`, 'true');
+    } else {
+      el.classList.add('collapsed');
+      localStorage.setItem(`bmm_section_${id}_expanded`, 'false');
+    }
+  };
+}
