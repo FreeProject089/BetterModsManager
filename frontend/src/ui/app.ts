@@ -260,9 +260,6 @@ export async function updateLibraryProfileSelector() {
 // ── Boot ──────────────────────────────────────────────────
 async function main() {
     console.log('[BMM] App starting from generated TypeScript!');
-    try {
-        await invoke('log_frontend_line', { line: '[BMM] App started from generated TypeScript!' });
-    } catch(e) {}
 
     // Initialize Offline Detection
     initOfflineDetection();
@@ -337,6 +334,9 @@ async function main() {
         }
     };
     await loadTauri();
+    try {
+        await invoke('log_frontend_line', { line: '[BMM] App started from generated TypeScript!' });
+    } catch(e) {}
     await initI18n();
 
     initNavigation();
@@ -455,14 +455,7 @@ async function main() {
     };
     window.openNewProfileModal = openNewProfileModal;
 
-    // Version button and Release Notes buttons
-    const verBtn = document.getElementById('nav-version-btn');
-    if (verBtn) {
-        verBtn.addEventListener('click', () => {
-            // Force PTB check
-            checkPtbMode();
-        });
-    }
+    // Version button uses inline onclick
 }
 
 main().catch(console.error);

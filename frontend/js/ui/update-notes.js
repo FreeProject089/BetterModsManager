@@ -9,39 +9,28 @@ import { toast } from './app.js';
 import { escHtml, escAttr } from '../core/utils.js';
 // ── Navbar Version Button ────────────────────────────────
 export function initNavbarVersion() {
-    const btn = document.getElementById('nav-version-btn');
-    if (!btn)
-        return;
-    btn.addEventListener('click', () => {
-        const showUpdatesBtn = document.getElementById('btn-show-updates');
-        if (showUpdatesBtn)
-            showUpdatesBtn.click();
-    });
+    // Relying on inline onclick in index.html for nav-version-btn
 }
 // ── Update notes modal ───────────────────────────────────
-export function initUpdateNotes() {
-    const btn = document.getElementById('btn-show-updates');
-    if (!btn)
-        return;
-    btn.addEventListener('click', async () => {
-        let notes = [];
-        let oldNotes = [];
-        try {
-            notes = await invoke('get_update_notes', { subDir: null });
-            oldNotes = await invoke('get_update_notes', { subDir: 'Old_Update' });
-        }
-        catch (e) {
-            console.error(e);
-        }
-        const allNotes = [...notes, ...oldNotes];
-        let modal = document.getElementById('modal-update-notes');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'modal-update-notes';
-            modal.className = 'modal-overlay';
-            document.getElementById('app-window-outer').appendChild(modal);
-        }
-        modal.innerHTML = `
+export async function openUpdateNotesModal() {
+    let notes = [];
+    let oldNotes = [];
+    try {
+        notes = await invoke('get_update_notes', { subDir: null });
+        oldNotes = await invoke('get_update_notes', { subDir: 'Old_Update' });
+    }
+    catch (e) {
+        console.error(e);
+    }
+    const allNotes = [...notes, ...oldNotes];
+    let modal = document.getElementById('modal-update-notes');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-update-notes';
+        modal.className = 'modal-overlay';
+        document.getElementById('app-window-outer').appendChild(modal);
+    }
+    modal.innerHTML = `
             <div class="modal glass" style="max-width:900px; width:95%; height:80vh; display:flex; flex-direction:column;">
                 <div class="modal-header" style="flex-shrink:0">
                     <h2 class="modal-title" style="display:flex; align-items:center; gap:10px;">
@@ -88,23 +77,28 @@ export function initUpdateNotes() {
                 </div>
             </div>
         `;
-        modal.classList.add('open');
-        modal.querySelector('#close-update-notes').addEventListener('click', () => modal.classList.remove('open'));
-        modal.addEventListener('click', e => { if (e.target === modal)
-            modal.classList.remove('open'); });
-        // Sidebar selection logic
-        const sidebarItems = modal.querySelectorAll('.archive-sidebar-item');
-        const contentArea = modal.querySelector('#archive-content');
-        sidebarItems.forEach(item => {
-            item.addEventListener('click', () => {
-                sidebarItems.forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-                const note = allNotes[item.dataset.index];
-                contentArea.innerHTML = renderMarkdown(note.content);
-                contentArea.scrollTop = 0;
-            });
+    modal.classList.add('open');
+    modal.querySelector('#close-update-notes').addEventListener('click', () => modal.classList.remove('open'));
+    modal.addEventListener('click', e => { if (e.target === modal)
+        modal.classList.remove('open'); });
+    // Sidebar selection logic
+    const sidebarItems = modal.querySelectorAll('.archive-sidebar-item');
+    const contentArea = modal.querySelector('#archive-content');
+    sidebarItems.forEach(item => {
+        item.addEventListener('click', () => {
+            sidebarItems.forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
+            const note = allNotes[item.dataset.index];
+            contentArea.innerHTML = renderMarkdown(note.content);
+            contentArea.scrollTop = 0;
         });
     });
+}
+export function initUpdateNotes() {
+    const btn = document.getElementById('btn-show-updates');
+    if (!btn)
+        return;
+    btn.addEventListener('click', openUpdateNotesModal);
 }
 /**
  * Copies text to clipboard with a toast notification
@@ -262,9 +256,7 @@ export async function initAutoUpdate() {
     const sidebarBtn = document.getElementById('btn-check-updates');
     if (sidebarBtn && !isDisabled) {
         sidebarBtn.addEventListener('click', () => {
-            const showUpdatesBtn = document.getElementById('btn-show-updates');
-            if (showUpdatesBtn)
-                showUpdatesBtn.click();
+            openUpdateNotesModal();
         });
     }
     // Settings button listener

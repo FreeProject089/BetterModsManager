@@ -11,20 +11,12 @@ import { escHtml, escAttr } from '../core/utils.js';
 
 // ── Navbar Version Button ────────────────────────────────
 export function initNavbarVersion() {
-    const btn = document.getElementById('nav-version-btn');
-    if (!btn) return;
-    btn.addEventListener('click', () => {
-        const showUpdatesBtn = document.getElementById('btn-show-updates');
-        if (showUpdatesBtn) showUpdatesBtn.click();
-    });
+    // Relying on inline onclick in index.html for nav-version-btn
 }
 
 // ── Update notes modal ───────────────────────────────────
-export function initUpdateNotes() {
-    const btn = document.getElementById('btn-show-updates');
-    if (!btn) return;
-    btn.addEventListener('click', async () => {
-        let notes = [];
+export async function openUpdateNotesModal() {
+    let notes = [];
         let oldNotes = [];
         try {
             notes = await invoke('get_update_notes', { subDir: null });
@@ -105,7 +97,12 @@ export function initUpdateNotes() {
                 contentArea.scrollTop = 0;
             });
         });
-    });
+    }
+
+export function initUpdateNotes() {
+    const btn = document.getElementById('btn-show-updates');
+    if (!btn) return;
+    btn.addEventListener('click', openUpdateNotesModal);
 }
 
 /**
@@ -270,8 +267,7 @@ export async function initAutoUpdate() {
     const sidebarBtn = document.getElementById('btn-check-updates');
     if (sidebarBtn && !isDisabled) {
         sidebarBtn.addEventListener('click', () => {
-            const showUpdatesBtn = document.getElementById('btn-show-updates');
-            if (showUpdatesBtn) showUpdatesBtn.click();
+            openUpdateNotesModal();
         });
     }
 
