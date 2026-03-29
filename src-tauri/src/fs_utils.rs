@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
+use jwalk::WalkDir;
 use std::fs;
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -111,10 +111,10 @@ pub fn list_mod_files(mod_folder: &Path) -> Result<Vec<PathBuf>> {
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
     {
-        let rel = entry
-            .path()
+        let path = entry.path();
+        let rel = path
             .strip_prefix(mod_folder)
-            .unwrap_or(entry.path())
+            .unwrap_or(&path)
             .to_path_buf();
         files.push(rel);
     }

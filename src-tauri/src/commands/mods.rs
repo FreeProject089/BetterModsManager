@@ -318,19 +318,31 @@ pub async fn add_mod(
             if src.is_file() && src.extension().and_then(|e| e.to_str()).unwrap_or("").eq_ignore_ascii_case("zip") {
                 let file = std::fs::File::open(&src).map_err(|e| e.to_string())?;
                 let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Erreur Zip: {}", e))?;
-                for i in 0..archive.len() {
-                    let mut f = archive.by_index(i).map_err(|e| e.to_string())?;
-                    let outpath = target_dir_clone.join(f.name());
-                    if f.name().ends_with('/') {
-                        std::fs::create_dir_all(&outpath).ok();
-                    } else {
-                        if let Some(parent) = outpath.parent() {
-                            std::fs::create_dir_all(parent).ok();
+                let len = archive.len();
+                let num_threads = rayon::current_num_threads().max(1);
+                let chunk_size = (len + num_threads - 1) / num_threads;
+                let chunks: Vec<Vec<usize>> = (0..len).collect::<Vec<_>>().chunks(chunk_size).map(|c| c.to_vec()).collect();
+
+                use rayon::prelude::*;
+                chunks.into_par_iter().try_for_each(|chunk| -> Result<(), String> {
+                    let file = std::fs::File::open(&src).map_err(|e| e.to_string())?;
+                    let mut local_archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+                    
+                    for i in chunk {
+                        let mut f = local_archive.by_index(i).map_err(|e| e.to_string())?;
+                        let outpath = target_dir_clone.join(f.name());
+                        if f.name().ends_with('/') {
+                            std::fs::create_dir_all(&outpath).ok();
+                        } else {
+                            if let Some(parent) = outpath.parent() {
+                                std::fs::create_dir_all(parent).ok();
+                            }
+                            let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
+                            std::io::copy(&mut f, &mut outfile).map_err(|e| e.to_string())?;
                         }
-                        let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
-                        std::io::copy(&mut f, &mut outfile).map_err(|e| e.to_string())?;
                     }
-                }
+                    Ok(())
+                })?;
             } else if src.is_dir() {
                 let mut options = fs_extra::dir::CopyOptions::new();
                 options.content_only = true;
