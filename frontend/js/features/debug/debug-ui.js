@@ -1733,11 +1733,11 @@ class DebugUI {
                 .replace(/(#[0-9a-fA-F]{3,8})/g, m => pushToken('#b5cea8', m)) // Hex colors
                 .replace(/(:hover|:active|:focus|:before|:after|:nth-child\([\w+n-]+\))/g, m => pushToken('#d7ba7d', m));
         }
-        else if (ext === 'js' || ext === 'ts' || ext === 'rust' || ext === 'rs') {
+        else if (ext === 'js' || ext === 'ts' || ext === 'tsx' || ext === 'rust' || ext === 'rs') {
             const isRust = ext.startsWith('r');
             const keywords = isRust
                 ? /\b(fn|let|mut|match|if|else|loop|while|for|return|pub|use|mod|struct|enum|impl|trait|type|where|async|await|dyn|static|crate)\b/g
-                : /\b(const|let|var|function|return|if|else|for|while|import|export|from|class|extends|new|async|await|try|catch|finally|this|super|case|switch|break|continue|default|typeof|instanceof|window|document|console)\b/g;
+                : /\b(const|let|var|function|return|if|else|for|while|import|export|from|class|extends|new|async|await|try|catch|finally|this|super|case|switch|break|continue|default|typeof|instanceof|window|document|console|interface|type|readonly|public|private|protected|implements|static|abstract|keyof|as|any|boolean|number|string|void|never|unknown|enum|declare|module|namespace|infer|intrinsic)\b/g;
             h = h.replace(/(\/\/.*$)/gm, m => pushToken('#6a9955', m))
                 .replace(/(\/\*[\s\S]*?\*\/)/g, m => pushToken('#6a9955', m))
                 .replace(/('.*?'|".*?"|`[\s\S]*?`)/g, m => pushToken('#ce9178', m))
@@ -1750,6 +1750,10 @@ class DebugUI {
             }
             else {
                 h = h.replace(/(\w+)\(/g, (m, p1) => pushToken('#dcdcaa', p1) + '('); // Function calls
+                if (ext.startsWith('ts')) {
+                    h = h.replace(/(:\s*)([A-Z]\w+)/g, (m, p1, p2) => p1 + pushToken('#4ec9b0', p2)) // Types
+                        .replace(/\b(extends|implements)\s+([A-Z]\w+)/g, (m, p1, p2) => pushToken('#569cd6', p1) + ' ' + pushToken('#4ec9b0', p2));
+                }
             }
         }
         else if (ext === 'html' || ext === 'svg' || ext === 'xml') {
