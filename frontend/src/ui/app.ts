@@ -230,7 +230,7 @@ export async function updateLibraryProfileSelector() {
         profiles.forEach(p => {
             const opt = document.createElement('option');
             opt.value = p.id;
-            opt.textContent = p.name + (p.game_name ? ` — ${p.game_name}` : '');
+            opt.textContent = p.name + (p.game_name ? ` — ${t(p.game_name) || p.game_name}` : '');
             if (p.id === activeId) opt.selected = true;
             select.appendChild(opt);
         });

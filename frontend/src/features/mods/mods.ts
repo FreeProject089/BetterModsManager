@@ -101,13 +101,20 @@ export async function initMods() {
   // Sort
   const sortSelect = document.getElementById('mod-sort');
   sortSelect?.addEventListener('change', async e => {
-    S.currentSort = e.target.value;
+    S.currentSort = (e.target as HTMLSelectElement).value;
     renderModList(true);
     try {
-      const settings = await invoke('get_settings');
+      const settings = await invoke('get_settings') as any;
       settings.current_sort_by = S.currentSort;
       await invoke('update_settings', { settings });
     } catch (e) {}
+  });
+
+  // Tag Filter
+  const tagFilterSelect = document.getElementById('mod-tag-filter');
+  tagFilterSelect?.addEventListener('change', e => {
+    S.currentTagFilter = (e.target as HTMLSelectElement).value;
+    renderModList(true);
   });
 
   // History
@@ -141,13 +148,15 @@ export async function initMods() {
   try {
     const settings = await invoke('get_settings').catch(() => null);
     if (settings) {
-      S.currentFilter = settings.current_filter || 'all';
-      S.currentSort = settings.current_sort_by || 'name_asc';
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === S.currentFilter));
+      S.currentFilter = (settings as any).current_filter || 'all';
+      S.currentSort = (settings as any).current_sort_by || 'name_asc';
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', (b as HTMLElement).dataset.filter === S.currentFilter));
+      const sortSelect = document.getElementById('mod-sort') as HTMLSelectElement;
       if (sortSelect) sortSelect.value = S.currentSort;
     }
     S.userTags = await invoke('get_tags').catch(() => []);
     S.allMods = await invoke('get_mods');
+    updateTagFilterUI();
     renderModList();
   } catch (err) { S.allMods = []; }
 
@@ -182,6 +191,7 @@ export async function refreshMods(autoScan = false, immediate = false) {
     updateSubtitle();
     updateToggleAllBtn();
     try { renderProfiles(); } catch (e) {}
+    updateTagFilterUI();
     renderModList(true); 
 
     if (S.selectedModId) renderModDetail(S.selectedModId);
@@ -222,6 +232,20 @@ function renderHistoryModal(history) {
     });
   }
   document.getElementById('modal-history')?.classList.add('open');
+}
+function updateTagFilterUI() {
+  const select = document.getElementById('mod-tag-filter') as HTMLSelectElement | null;
+  if (!select) return;
+  const currentVal = S.currentTagFilter || 'all';
+  let html = `<option value="all" data-i18n="lib.tagFilterAll">${t('lib.tagFilterAll') || 'Tous les tags'}</option>`;
+  if (S.userTags && S.userTags.length > 0) {
+    const sortedTags = [...S.userTags].sort((a:any, b:any) => a.name.localeCompare(b.name));
+    sortedTags.forEach((tag:any) => {
+      html += `<option value="${tag.id}">${escHtml(tag.name)}</option>`;
+    });
+  }
+  select.innerHTML = html;
+  select.value = currentVal;
 }
 
 export { selectMod, closeModDetail, renderModDetail };

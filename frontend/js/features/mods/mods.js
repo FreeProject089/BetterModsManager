@@ -81,6 +81,12 @@ export async function initMods() {
         }
         catch (e) { }
     });
+    // Tag Filter
+    const tagFilterSelect = document.getElementById('mod-tag-filter');
+    tagFilterSelect?.addEventListener('change', e => {
+        S.currentTagFilter = e.target.value;
+        renderModList(true);
+    });
     // History
     document.getElementById('btn-show-history')?.addEventListener('click', async () => {
         const activeId = await invoke('get_active_profile_id').catch(() => null);
@@ -120,11 +126,13 @@ export async function initMods() {
             S.currentFilter = settings.current_filter || 'all';
             S.currentSort = settings.current_sort_by || 'name_asc';
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === S.currentFilter));
+            const sortSelect = document.getElementById('mod-sort');
             if (sortSelect)
                 sortSelect.value = S.currentSort;
         }
         S.userTags = await invoke('get_tags').catch(() => []);
         S.allMods = await invoke('get_mods');
+        updateTagFilterUI();
         renderModList();
     }
     catch (err) {
@@ -168,6 +176,7 @@ export async function refreshMods(autoScan = false, immediate = false) {
             renderProfiles();
         }
         catch (e) { }
+        updateTagFilterUI();
         renderModList(true);
         if (S.selectedModId)
             renderModDetail(S.selectedModId);
@@ -209,6 +218,21 @@ function renderHistoryModal(history) {
         });
     }
     document.getElementById('modal-history')?.classList.add('open');
+}
+function updateTagFilterUI() {
+    const select = document.getElementById('mod-tag-filter');
+    if (!select)
+        return;
+    const currentVal = S.currentTagFilter || 'all';
+    let html = `<option value="all" data-i18n="lib.tagFilterAll">${t('lib.tagFilterAll') || 'Tous les tags'}</option>`;
+    if (S.userTags && S.userTags.length > 0) {
+        const sortedTags = [...S.userTags].sort((a, b) => a.name.localeCompare(b.name));
+        sortedTags.forEach((tag) => {
+            html += `<option value="${tag.id}">${escHtml(tag.name)}</option>`;
+        });
+    }
+    select.innerHTML = html;
+    select.value = currentVal;
 }
 export { selectMod, closeModDetail, renderModDetail };
 //# sourceMappingURL=mods.js.map

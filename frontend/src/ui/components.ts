@@ -37,8 +37,8 @@ export function getModCardHTML(mod, ctx) {
       return `<span style="background:${tDef.color}15;color:${tDef.color};border:1px solid ${tDef.color}30;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600">${escHtml(tDef.name)}</span>`;
     }).join('');
 
-    const extraTagsCount = mod.tags.length > 3 ? `<span style="color:var(--text-muted);font-size:9px;align-self:center">+${mod.tags.length - 3}</span>` : '';
-    tagsHtml = `<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${visibleTags}${extraTagsCount}</div>`;
+    const extraTagsCount = mod.tags.length > 3 ? `<button class="btn btn-ghost" onclick="window.showModTagsModal('${mod.id}'); event.stopPropagation();" style="color:var(--text-muted);font-size:9px;padding:0;height:auto;min-height:0;margin:0;background:rgba(255,255,255,0.05);border-radius:4px;padding:1px 4px;border:1px solid rgba(255,255,255,0.1)">+${mod.tags.length - 3}</button>` : '';
+    tagsHtml = `<div style="display:inline-flex;gap:4px;align-items:center;margin-left:6px">${visibleTags}${extraTagsCount}</div>`;
   }
   let conflictHtml = '';
   const conflicts = ctx && ctx.conflictCache ? ctx.conflictCache[mod.id] : (mod.conflicts || []);
@@ -74,12 +74,17 @@ export function getModCardHTML(mod, ctx) {
                 ${conflictHtml}
             </div>
             <div class="mod-meta">
-                <span class="mono" style="color: var(--cyan)">v${escHtml(mod.version)}</span>
-                ${mod.author ? `<span>· ${escHtml(truncate(mod.author, 50))}</span>` : ''}
-                ${tagsHtml}
+                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+                    <span class="mono" style="color: var(--cyan); font-weight:600">v${escHtml(mod.version)}</span>
+                    ${tagsHtml}
+                </div>
+                ${mod.author ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;opacity:0.8;display:flex;align-items:center;gap:4px">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.7"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <span>${escHtml(truncate(mod.author, 60))}</span>
+                </div>` : ''}
             </div>
-            <div class="mod-path-hint" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.mod_folder_path || ''))}', 'folder', true)" onmouseleave="window.hideTaskyHelp()" style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);opacity:0.6;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;display:flex;align-items:center;gap:4px;cursor:help">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <div class="mod-path-hint" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.mod_folder_path || ''))}', 'folder', true)" onmouseleave="window.hideTaskyHelp()" style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);opacity:0.5;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;display:flex;align-items:center;gap:4px;cursor:help">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                 ${escHtml(mod.mod_folder_path || '')}
             </div>
         </div>
@@ -87,9 +92,8 @@ export function getModCardHTML(mod, ctx) {
         <div class="mod-actions">
             <div class="mod-actions-dropdown">
             <button class="btn btn-sm btn-icon btn-dropdown-toggle" 
-                onmouseenter="window.showTaskyHelp('mod.openFolderTip', 'folder'); window.cancelDropdownClose()" 
-                onmouseleave="window.hideTaskyHelp(); window.closeGlobalDropdown(false)" 
-                onclick="window.showGlobalDropdown(this, this.__menu || this.nextElementSibling)" 
+                onmouseenter="window.showTaskyHelp('mod.openFolderTip', 'folder'); window.cancelDropdownClose();" 
+                onmouseleave="window.hideTaskyHelp(); window.closeGlobalDropdown(false);" 
                 style="background:rgba(255,255,255,0.05);color:var(--text-secondary);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>

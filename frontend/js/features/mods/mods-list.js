@@ -40,18 +40,19 @@ export function updateSubtitle() {
     }
 }
 export function getFilteredMods() {
-    let filtered = S.allMods.filter(m => {
+    let filtered = S.allMods.filter((m) => {
         const matchFilter = S.currentFilter === 'all' ||
             (S.currentFilter === 'enabled' && m.enabled) ||
             (S.currentFilter === 'disabled' && !m.enabled);
+        const matchTag = !S.currentTagFilter || S.currentTagFilter === 'all' || (m.tags && m.tags.includes(S.currentTagFilter));
         let matchSearch = !S.searchQuery || m.name.toLowerCase().includes(S.searchQuery);
         if (!matchSearch && S.searchQuery && m.tags && m.tags.length > 0) {
-            matchSearch = m.tags.some(tid => {
-                const tDef = S.userTags.find(t => t.id === tid);
+            matchSearch = m.tags.some((tid) => {
+                const tDef = S.userTags.find((t) => t.id === tid);
                 return tDef && tDef.name.toLowerCase().includes(S.searchQuery);
             });
         }
-        return matchFilter && matchSearch;
+        return matchFilter && matchSearch && matchTag;
     });
     filtered.sort((a, b) => {
         if (S.currentSort === 'name_asc')
@@ -423,4 +424,23 @@ export function updateToggleAllBtn() {
             container.classList.remove('all-enabled');
     }
 }
+window.showModTagsModal = function (modId) {
+    const mod = S.allMods.find((m) => m.id === modId);
+    if (!mod || !mod.tags || mod.tags.length === 0)
+        return;
+    const container = document.getElementById('mod-tags-list-container');
+    const title = document.getElementById('mod-tags-modal-title');
+    if (!container || !title)
+        return;
+    title.innerText = (t('mod.tagsTitle') || 'Tags du Mod') + ' - ' + mod.name;
+    container.innerHTML = mod.tags.map((tid) => {
+        const tDef = S.userTags.find((t) => t.id === tid);
+        if (!tDef)
+            return '';
+        return `<span style="background:${tDef.color}15;color:${tDef.color};border:1px solid ${tDef.color}30;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600">${escHtml(tDef.name)}</span>`;
+    }).join('');
+    const modal = document.getElementById('modal-mod-tags');
+    if (modal)
+        modal.classList.add('open');
+};
 //# sourceMappingURL=mods-list.js.map

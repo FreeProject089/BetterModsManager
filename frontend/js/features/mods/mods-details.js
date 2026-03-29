@@ -11,6 +11,60 @@ const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
     set(target, prop, value) { appState.set(prop, value); return true; }
 });
+let archiveCtxInit = false;
+function initArchiveContextMenu() {
+    if (archiveCtxInit)
+        return;
+    const ctxMenu = document.getElementById('archive-context-menu');
+    if (!ctxMenu)
+        return;
+    archiveCtxInit = true;
+    const hideCtx = () => { ctxMenu.style.display = 'none'; };
+    document.addEventListener('click', hideCtx);
+    document.addEventListener('contextmenu', (e) => {
+        if (!e.target.closest('#archive-context-menu') && !e.target.closest('.tree-node'))
+            hideCtx();
+    });
+    const modalOverlay = document.getElementById('modal-archive-explorer');
+    if (modalOverlay) {
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay)
+                hideCtx();
+        });
+    }
+    document.querySelectorAll('[data-close="modal-archive-explorer"]').forEach(btn => {
+        btn.addEventListener('click', hideCtx);
+    });
+    document.getElementById('ctx-open-file')?.addEventListener('click', () => {
+        if (!window._currentArchiveNode)
+            return;
+        const fullPath = window._currentArchiveNode.dataset.full;
+        const tType = window._currentArchiveNode.dataset.type;
+        if (fullPath) {
+            if (tType === 'folder')
+                invoke('open_folder', { path: fullPath }).catch((e) => toast(String(e), 'error'));
+            else
+                invoke('open_file', { path: fullPath }).catch((e) => toast(String(e), 'error'));
+        }
+        hideCtx();
+    });
+    document.getElementById('ctx-open-folder')?.addEventListener('click', () => {
+        if (!window._currentArchiveNode)
+            return;
+        const fullPath = window._currentArchiveNode.dataset.full;
+        if (fullPath)
+            invoke('open_folder', { path: fullPath }).catch((e) => toast(String(e), 'error'));
+        hideCtx();
+    });
+    document.getElementById('ctx-copy-path')?.addEventListener('click', () => {
+        if (!window._currentArchiveNode)
+            return;
+        const relPath = window._currentArchiveNode.dataset.path;
+        if (relPath)
+            navigator.clipboard.writeText(relPath).then(() => toast(t('common.copied') || 'Copié !', 'success'));
+        hideCtx();
+    });
+}
 export function selectMod(modId) {
     if (S.selectedModId === modId) {
         closeModDetail();
@@ -194,6 +248,7 @@ export async function openArchiveExplorer(mod) {
     const container = document.getElementById('archive-explorer-content');
     if (!modal || !container)
         return;
+    initArchiveContextMenu();
     container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-bottom:12px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><br>Scan en cours...</div>`;
     modal.classList.add('open');
     try {
@@ -260,6 +315,7 @@ function setupTreeInteractions(mod) {
             const ctxMenu = document.getElementById('archive-context-menu');
             container.querySelectorAll('.tree-node').forEach(n => n.classList.remove('selected'));
             node.classList.add('selected');
+            window._currentArchiveNode = node;
             ctxMenu.style.top = e.pageY + 'px';
             ctxMenu.style.left = e.pageX + 'px';
             ctxMenu.style.display = 'block';

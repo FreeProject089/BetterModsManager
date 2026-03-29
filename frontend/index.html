@@ -313,7 +313,7 @@
 
                     <!-- Filter and Profile bar -->
                     <div class="filter-bar"
-                        style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px;margin-bottom:20px;">
+                        style="display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap;gap:12px;margin-bottom:20px;overflow:visible;">
                         <div style="display:flex;align-items:center;gap:15px;flex:1">
                             <div class="search-box">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -322,7 +322,7 @@
                                     <line x1="21" y1="21" x2="16.65" y2="16.65" />
                                 </svg>
                                 <input type="text" id="mod-search" placeholder="Rechercher un mod..."
-                                    data-i18n-placeholder="lib.search" />
+                                    style="width:100%;min-width:140px;" data-i18n-placeholder="lib.search" />
                             </div>
                             <div class="filter-buttons">
                                 <button id="btn-view-mode" class="btn btn-icon btn-ghost"
@@ -343,8 +343,12 @@
                                 <button class="filter-btn" data-filter="disabled"
                                     data-i18n="lib.filterDisabled">Inactifs</button>
 
+                                <select id="mod-tag-filter" class="profile-select" style="margin-left: 8px; padding: 4.5px 12px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-primary); border: 1px solid var(--border); font-size: 12px; cursor: pointer; transition: var(--transition); max-width: 150px; text-overflow: ellipsis;">
+                                    <option value="all" data-i18n="lib.tagFilterAll">Tous les tags</option>
+                                </select>
+
                                 <select id="mod-sort" class="profile-select"
-                                    style="margin-left: 8px; padding: 4.5px 12px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-primary); border: 1px solid var(--border); font-size: 12px; cursor: pointer; transition: var(--transition);">
+                                    style="margin-left: 4px; padding: 4.5px 8px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-primary); border: 1px solid var(--border); font-size: 11px; cursor: pointer; transition: var(--transition); max-width: 130px;">
                                     <option value="name_asc" data-i18n="lib.sortNameAsc">Nom (A-Z)</option>
                                     <option value="name_desc" data-i18n="lib.sortNameDesc">Nom (Z-A)</option>
                                     <option value="status" data-i18n="lib.sortStatus">Statut (Actifs en 1er)</option>
@@ -362,7 +366,7 @@
                                 <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
                             </svg>
                             <select id="lib-profile-select" class="profile-select"
-                                style="width:250px;max-width:320px;padding:8px 12px;border-radius:8px;background:var(--card-bg);color:var(--text-primary);border:1px solid var(--border);font-size:13px;cursor:pointer">
+                                style="width:200px;max-width:240px;padding:6px 10px;border-radius:8px;background:var(--card-bg);color:var(--text-primary);border:1px solid var(--border);font-size:12px;cursor:pointer">
                                 <option value="" data-i18n="lib.selectProfile">— Sélectionnez un profil —</option>
                             </select>
                         </div>
@@ -4222,6 +4226,21 @@
                 <span data-i18n="ctx.copyPath">Copier le chemin</span>
             </div>
         </div>
+        <!-- Mod Tags Modal -->
+        <div class="modal-overlay" id="modal-mod-tags">
+            <div class="modal glass" style="max-width: 400px; width: 90%;">
+                <div class="modal-header">
+                    <h2 class="modal-title" data-i18n="mod.tagsTitle" id="mod-tags-modal-title">Tags du Mod</h2>
+                    <button class="modal-close" data-close="modal-mod-tags">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div id="mod-tags-list-container" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Benchmark Modal -->
         <div class="modal-overlay" id="modal-benchmark">
             <div class="modal glass"
