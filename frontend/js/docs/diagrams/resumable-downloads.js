@@ -1,56 +1,37 @@
 export const resumableDownloads = {
-    titleKey: 'docs.diagram.resumable.title',
+    titleKey: 'docs.diagram.resumableDownloads.title',
     definition: `
-graph TD
-    subgraph STORAGE ["<div class='group-label' data-cluster-id='STORAGE'><i class='icon-disk'></i> {{docs.diagram.cluster.STORAGE}}</div>"]
-        A["<div class='node-content'><i class='icon-start'></i> {{docs.diagram.resumable.node.START}}</div>"]
-        B{"<div class='node-content'><i class='icon-search'></i> {{docs.diagram.resumable.node.EXISTS}}</div>"}
-        E["<div class='node-content'><i class='icon-verify'></i> {{docs.diagram.resumable.node.VERIFY}}</div>"]
+flowchart TD
+    START["<div class='node-content'><i class='icon-download'></i> {{docs.diagram.resumableDownloads.node.START}}</div>"]
+    CHECK["<div class='node-content'><i class='icon-search'></i> {{docs.diagram.resumableDownloads.node.CHECK}}</div>"]
+    
+    subgraph RESUME ["<div class='group-label' data-cluster-id='RESUME'><i class='icon-refresh'></i> {{docs.diagram.resumableDownloads.cluster.RESUME}}</div>"]
+        PARTIAL["<div class='node-content'><i class='icon-file-text'></i> {{docs.diagram.resumableDownloads.node.PARTIAL}}</div>"]
+        RANGE["<div class='node-content'><i class='icon-arrow-right'></i> {{docs.diagram.resumableDownloads.node.RANGE}}</div>"]
     end
-    subgraph DATA ["<div class='group-label' data-cluster-id='DATA'><i class='icon-network'></i> {{docs.diagram.cluster.DATA}}</div>"]
-        C["<div class='node-content'><i class='icon-download'></i> {{docs.diagram.resumable.node.FULL}}</div>"]
-        D{"<div class='node-content'><i class='icon-layers'></i> {{docs.diagram.resumable.node.CHUNKED}}</div>"}
-        G["<div class='node-content'><i class='icon-blocks'></i> {{docs.diagram.resumable.node.CHECK_CHUNKS}}</div>"]
-        I["<div class='node-content'><i class='icon-cloud'></i> {{docs.diagram.resumable.node.RANGE}}</div>"]
-    end
-    subgraph FINALIZING ["<div class='group-label' data-cluster-id='FINALIZING'><i class='icon-build'></i> {{docs.diagram.cluster.FINALIZING}}</div>"]
-        J["<div class='node-content'><i class='icon-patch'></i> {{docs.diagram.resumable.node.PATCH}}</div>"]
-        K["<div class='node-content'><i class='icon-check'></i> {{docs.diagram.resumable.node.FINAL}}</div>"]
-        F["<div class='node-content'><i class='icon-done'></i> {{docs.diagram.resumable.node.DONE}}</div>"]
-    end
-    A["<div class='node-content'><i class='icon-start'></i> {{docs.diagram.resumable.node.START}}</div>"] -- "<span class='label-info' data-key='init'>{{docs.diagram.label.init}}</span>" --> B{"<div class='node-content'><i class='icon-search'></i> {{docs.diagram.resumable.node.EXISTS}}</div>"}
-    B -- "<span class='label-error' data-key='no'>{{docs.diagram.label.no}}</span>" --> C["<div class='node-content'><i class='icon-download'></i> {{docs.diagram.resumable.node.FULL}}</div>"]
-    B -- "<span class='label-success' data-key='yes'>{{docs.diagram.label.yes}}</span>" --> D{"<div class='node-content'><i class='icon-layers'></i> {{docs.diagram.resumable.node.CHUNKED}}</div>"}
-    D -- "<span class='label-error' data-key='no'>{{docs.diagram.label.no}}</span>" --> E["<div class='node-content'><i class='icon-verify'></i> {{docs.diagram.resumable.node.VERIFY}}</div>"]
-    E -- "<span class='label-success' data-key='match'>{{docs.diagram.label.match}}</span>" --> F["<div class='node-content'><i class='icon-done'></i> {{docs.diagram.resumable.node.DONE}}</div>"]
-    E -- "<span class='label-error' data-key='fail'>{{docs.diagram.label.fail}}</span>" --> C
-    D -- "<span class='label-success' data-key='yes'>{{docs.diagram.label.yes}}</span>" --> G["<div class='node-content'><i class='icon-blocks'></i> {{docs.diagram.resumable.node.CHECK_CHUNKS}}</div>"]
-    G -- "<span class='label-info' data-key='audit'>{{docs.diagram.label.audit}}</span>" --> H{"<div class='node-content'><i class='icon-alert'></i> {{docs.diagram.resumable.node.MISSING}}</div>"}
-    H -- "<span class='label-error' data-key='no'>{{docs.diagram.label.no}}</span>" --> F
-    H -- "<span class='label-success' data-key='yes'>{{docs.diagram.label.yes}}</span>" --> I["<div class='node-content'><i class='icon-cloud'></i> {{docs.diagram.resumable.node.RANGE}}</div>"]
-    I -- "<span class='label-info' data-key='stream'>{{docs.diagram.label.stream}}</span>" --> J["<div class='node-content'><i class='icon-patch'></i> {{docs.diagram.resumable.node.PATCH}}</div>"]
-    I -- "<span class='label-error' data-key='fail'>{{docs.diagram.label.fail}}</span>" --> C
-    J -- "<span class='label-info' data-key='assemble'>{{docs.diagram.label.assemble}}</span>" --> K["<div class='node-content'><i class='icon-check'></i> {{docs.diagram.resumable.node.FINAL}}</div>"]
-    K -- "<span class='label-success' data-key='match'>{{docs.diagram.label.match}}</span>" --> F
-    K -- "<span class='label-error' data-key='fail'>{{docs.diagram.label.fail}}</span>" --> C
-
-    %% Edge Styles
-    linkStyle 0 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 1 stroke:#ef4444,stroke-width:2px;
-    linkStyle 2 stroke:#10b981,stroke-width:2px;
-    linkStyle 3 stroke:#ef4444,stroke-width:2px;
-    linkStyle 4 stroke:#10b981,stroke-width:2px;
-    linkStyle 5 stroke:#ef4444,stroke-width:2px;
-    linkStyle 6 stroke:#10b981,stroke-width:2px;
-    linkStyle 7 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 8 stroke:#ef4444,stroke-width:2px;
-    linkStyle 9 stroke:#10b981,stroke-width:2px;
-    linkStyle 10 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 11 stroke:#ef4444,stroke-width:2px;
-    linkStyle 12 stroke:#3b82f6,stroke-width:2px;
-    linkStyle 13 stroke:#10b981,stroke-width:2px;
-    linkStyle 14 stroke:#ef4444,stroke-width:2px;
+    
+    STREAM["<div class='node-content'><i class='icon-refresh'></i> {{docs.diagram.resumableDownloads.node.STREAM}}</div>"]
+    VERIFY["<div class='node-content'><i class='icon-check'></i> {{docs.diagram.resumableDownloads.node.VERIFY}}</div>"]
+    DONE["<div class='node-content'><i class='icon-heart'></i> {{docs.diagram.resumableDownloads.node.DONE}}</div>"]
+    
+    START --> CHECK
+    CHECK -- "<span class='label-info'>{{docs.diagram.edge.Existing}}</span>" --> PARTIAL
+    CHECK -- "<span class='label-warning'>{{docs.diagram.edge.New}}</span>" --> STREAM
+    PARTIAL --> RANGE
+    RANGE --> STREAM
+    STREAM --> VERIFY
+    VERIFY -- "<span class='label-success'>{{docs.diagram.edge.OK}}</span>" --> DONE
+    VERIFY -- "<span class='label-error'>{{docs.diagram.edge.Fail}}</span>" --> START
+    
+    %% Styles
+    classDef main fill:#3b82f61A,stroke:#3b82f6,color:#3b82f6;
+    classDef logic fill:#22c55e1A,stroke:#22c55e,color:#22c55e;
+    classDef warn fill:#ef44441A,stroke:#ef4444,color:#ef4444;
+    
+    class START,STREAM,DONE main;
+    class CHECK,PARTIAL,RANGE logic;
+    class VERIFY warn;
 `,
-    explanationPrefix: 'docs.diagram.resumable.node.'
+    explanationPrefix: 'docs.diagram.resumableDownloads.node.'
 };
 //# sourceMappingURL=resumable-downloads.js.map

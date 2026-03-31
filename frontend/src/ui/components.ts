@@ -92,7 +92,7 @@ export function getModCardHTML(mod, ctx) {
         <div class="mod-actions">
             <div class="mod-actions-dropdown">
             <button class="btn btn-sm btn-icon btn-dropdown-toggle" 
-                onmouseenter="window.showTaskyHelp('mod.openFolderTip', 'folder'); window.cancelDropdownClose();" 
+                onmouseenter="window.showTaskyHelp('mod.openFolderTip', 'folder'); window.cancelDropdownClose(); window.showGlobalDropdown(this, this.nextElementSibling);" 
                 onmouseleave="window.hideTaskyHelp(); window.closeGlobalDropdown(false);" 
                 style="background:rgba(255,255,255,0.05);color:var(--text-secondary);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">

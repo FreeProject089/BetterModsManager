@@ -23,9 +23,14 @@ import { diskIoLimiter } from './diagrams/disk-io-limiter.js';
 import { hostingFlow } from './diagrams/hosting-flow.js';
 import { lightweightArchitecture } from './diagrams/lightweight-architecture.js';
 import { oneClickInstall } from './diagrams/one-click-install.js';
+import { docsLogic } from './diagrams/docs-logic.js';
+import { discordRpc } from './diagrams/discord-rpc.js';
+import { engineThreads } from './diagrams/engine-threads.js';
+import { codeStack } from './diagrams/code-stack.js';
+import { semanticSearch } from './diagrams/semantic-search.js';
 
 // Diagram Registry
-const diagrams = {
+export const diagrams = {
     'resumable-downloads': resumableDownloads,
     'mod-sync': modSync,
     'profile-system': profileSystem,
@@ -48,7 +53,11 @@ const diagrams = {
     'disk-io-limiter': diskIoLimiter,
     'hosting-flow': hostingFlow,
     'lightweight-architecture': lightweightArchitecture,
-    'one-click-install': oneClickInstall
+    'one-click-install': oneClickInstall,
+    'docs-logic': docsLogic,
+    'discord-rpc': discordRpc,
+    'engine-threads': engineThreads,
+    'code-stack': codeStack
 };
 
 // State
@@ -125,7 +134,7 @@ export function initInteractiveDocs() {
  * Open a specific diagram
  * @param {string} id - The diagram ID from the registry
  */
-export async function openDiagram(id) {
+export async function openDiagram(id, highlightNodeId = null) {
     const diagram = diagrams[id];
     if (!diagram) {
         console.error(`[Docs] Diagram "${id}" not found.`);
@@ -178,6 +187,11 @@ export async function openDiagram(id) {
 
         // Attach interactions
         attachNodeListeners(id);
+
+        if (highlightNodeId) {
+            // Give Mermaid enough time to finish all layout calculation stages
+            setTimeout(() => applyNodeHighlight(highlightNodeId), 500);
+        }
     } catch (err) {
         console.error('[Docs] Mermaid render error:', err);
         container.innerHTML = `<p style="color:var(--danger)">${t('common.error')}: Mermaid render error</p>`;
@@ -598,6 +612,117 @@ function resetZoom() {
         panZoomInstance.center();
     }
 }
+
+/**
+ * Apply a glow effect to a specific node with retry logic for async rendering
+ */
+function applyNodeHighlight(nodeId: string, retryCount = 0) {
+    const container = document.getElementById('mermaid-diagram-container');
+    if (!container) return;
+
+    // 1. Try to find by specific node class (to avoid matching links/arrows)
+    // We check for exact IDs, data-ids, and prefixed/suffixed Mermaid node patterns
+    let svgNode: HTMLElement | null = 
+                  container.querySelector(`.node[id="${nodeId}"]`) ||
+                  container.querySelector(`.node[data-id="${nodeId}"]`) ||
+                  container.querySelector(`.node[id*="-${nodeId}-"]`) || 
+                  container.querySelector(`.node[id$="-${nodeId}"]`) ||
+                  container.querySelector(`.mermaid-node[id*="${nodeId}"]`) ||
+                  container.querySelector(`#${nodeId}`); // Generic ID fallback if no node class found
+    
+    // 1b. Last resort: any ID that looks like it belongs to our node
+    if (!svgNode) {
+        svgNode = container.querySelector(`[id*="-${nodeId}-"]:not(.edgePath):not(.link)`) || 
+                  container.querySelector(`[id$="-${nodeId}"]:not(.edgePath):not(.link)`);
+    }
+    
+    // 2. Fallback: Search by text content inside node labels
+    if (!svgNode) {
+        const allNodes = Array.from(container.querySelectorAll('.node, .mermaid-node'));
+        for (const node of allNodes) {
+             // Look for node-content div which we use in our definitions
+            const contentDiv = node.querySelector('.node-content');
+            if (contentDiv && contentDiv.textContent?.toLowerCase().includes(nodeId.toLowerCase())) {
+                svgNode = node as HTMLElement;
+                break;
+            }
+            
+            // Generic label search
+            const label = node.querySelector('.nodeLabel, .label');
+            if (label && label.textContent?.toLowerCase().includes(nodeId.toLowerCase())) {
+                svgNode = node as HTMLElement;
+                break;
+            }
+        }
+    }
+
+    if (svgNode) {
+        console.log(`[Docs] Highlighting node: ${nodeId}`);
+        // Remove existing highlights
+        container.querySelectorAll('.node-highlight-glow').forEach(el => el.classList.remove('node-highlight-glow'));
+        
+        // Apply highlight classes
+        svgNode.classList.add('node-highlight-glow');
+        
+        // Ensure parent groups don't clip the filter (critical for SVG filters)
+        let pNode = svgNode.parentElement;
+        while (pNode && pNode.tagName !== 'svg') {
+            (pNode as any).style.overflow = 'visible';
+            pNode = pNode.parentElement;
+        }
+
+
+        // Show Tasky help
+        const diagram = diagrams[currentDiagramID];
+        if (diagram) {
+            // Try to extract clean nodeId from the actual element ID if possible
+            const parts = svgNode.id.split('-');
+            const actualId = parts.length > 2 ? parts[parts.length-2] : nodeId;
+            showTaskyHelp(diagram.explanationPrefix + actualId, svgNode.querySelector('i')?.className);
+        }
+    } else if (retryCount < 3) {
+        // Retry logic: Mermaid rendering can be slow or multi-stage
+        const delays = [200, 600, 1200];
+        console.log(`[Docs] Highlighting node ${nodeId} retry ${retryCount + 1}...`);
+        setTimeout(() => applyNodeHighlight(nodeId, retryCount + 1), delays[retryCount]);
+    } else {
+        console.warn(`[Docs] Node highlight failed after retries: ${nodeId}`);
+    }
+}
+
+// Inject Enhanced Glow CSS
+const dgStyle = document.createElement('style');
+dgStyle.textContent = `
+    .node-highlight-glow rect, 
+    .node-highlight-glow polygon, 
+    .node-highlight-glow circle, 
+    .node-highlight-glow ellipse,
+    .node-highlight-glow path {
+        stroke: var(--accent) !important;
+        stroke-width: 4px !important;
+        filter: drop-shadow(0 0 6px var(--accent)) !important;
+        animation: node-glow-pulse 1.5s infinite alternate ease-in-out !important;
+        paint-order: markers stroke fill !important;
+    }
+    
+    @keyframes node-glow-pulse {
+        0% { 
+            filter: drop-shadow(0 0 4px var(--accent)); 
+            stroke-width: 3px;
+            opacity: 0.85;
+        }
+        100% { 
+            filter: drop-shadow(0 0 12px var(--accent)); 
+            stroke-width: 5px;
+            opacity: 1;
+        }
+    }
+    
+    /* Ensure the highlight isn't clipped by the SVG container */
+    #mermaid-diagram-container svg { overflow: visible !important; }
+`;
+document.head.appendChild(dgStyle);
+
 
 // Auto-init on load if not module
 window.openDiagram = openDiagram;

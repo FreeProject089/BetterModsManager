@@ -1654,8 +1654,7 @@ body.is-maximized .titlebar-spacer {
     flex-wrap: wrap;
     transition: var(--transition);
     animation: slideIn 0.18s ease;
-    content-visibility: auto;
-    contain-intrinsic-size: 80px;
+    overflow: visible !important;
 }
 
 @keyframes slideIn {
@@ -2231,29 +2230,39 @@ body.is-maximized .titlebar-spacer {
     position: absolute;
     top: 100%;
     right: 0;
-    margin-top: 8px;
-    min-width: 190px;
-    background: rgba(17, 24, 39, 0.85);
+    margin-top: 6px;
+    min-width: 140px;
+    width: max-content;
+    background: rgba(17, 24, 39, 0.95);
     backdrop-filter: blur(20px);
     border: 1px solid var(--border-accent);
     border-radius: 12px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
     opacity: 0;
     visibility: hidden;
-    transform: translateY(-10px) scale(0.95);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 1100;
     padding: 6px;
     display: flex;
     flex-direction: column;
     gap: 2px;
+    pointer-events: none;
 }
 
-.mod-actions-dropdown.open .mod-actions-dropdown-content,
-.mod-actions-dropdown-content.portal-active {
+/* Invisible bridge to prevent hover loss during mouse movement */
+.mod-actions-dropdown-content::before {
+    content: "";
+    position: absolute;
+    top: -12px;
+    left: 0;
+    right: 0;
+    height: 12px;
+    background: transparent;
+}
+
+.mod-actions-dropdown-content.portal-active,
+#global-dropdown-portal .mod-actions-dropdown-content {
     opacity: 1;
     visibility: visible;
-    transform: translateY(0) scale(1);
     pointer-events: auto;
 }
 
@@ -5698,4 +5707,26 @@ select:focus {
     padding: 0 !important;
     font-size: 13px !important;
     box-shadow: none !important;
+}
+
+/* ── Mermaid Node Highlighting ── */
+.node-highlight-glow {
+    filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.4)) !important;
+    stroke: var(--accent) !important;
+    stroke-width: 1.2px !important;
+    animation: nodePulse 3s infinite alternate ease-in-out;
+    z-index: 1000 !important;
+}
+
+@keyframes nodePulse {
+    from { filter: drop-shadow(0 0 1px rgba(59, 130, 246, 0.2)); }
+    to { filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.5)); }
+}
+
+.node-highlight-glow rect, 
+.node-highlight-glow circle, 
+.node-highlight-glow polygon, 
+.node-highlight-glow path {
+    stroke: var(--accent) !important;
+    stroke-width: 3px !important;
 }

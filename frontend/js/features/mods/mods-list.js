@@ -252,14 +252,11 @@ export function createModCard(mod) {
         }
     });
     // Action listeners
+    // Action listeners
     const toggleBtn = card.querySelector('.btn-dropdown-toggle');
     if (toggleBtn) {
-        toggleBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const menu = card.querySelector('.mod-actions-dropdown');
-            if (window.showGlobalDropdown)
-                window.showGlobalDropdown(toggleBtn, menu);
-        });
+        // Dropdown is now handled via CSS :hover for better stability and to prevent ghosting.
+        // We only keep JS for specific click actions if needed, but for now we follow the "hover to open" request via CSS.
     }
     card.querySelector('.btn-open-folder').addEventListener('click', async (e) => {
         e.stopPropagation();

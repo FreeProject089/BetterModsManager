@@ -12,6 +12,7 @@ import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
 import { initRepo } from '../features/repo/repo.js';
 import { appState } from '../core/state.js';
 import { initInteractiveDocs, openDiagram } from '../docs/interactive-docs.js';
+import { initDocsUI } from '../docs/docs-ui.js';
 import { debugUI } from '../features/debug/debug-ui.js';
 import { initDeepLinks } from '../core/deep_link_manager.js';
 import { initTitlebar } from './titlebar.js';
@@ -346,6 +347,7 @@ async function main() {
     initModlist();
     initRepo();
     initInteractiveDocs();
+    initDocsUI();
     initDeepLinks();
 
     // Bind Docs Diagram buttons

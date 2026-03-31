@@ -415,7 +415,7 @@ La version 0.9.8 de BMM introduit le système de **Dépôt Serveur**, une altern
 - **Manifeste (repo.json)** : Un fichier JSON signé cryptographiquement (SHA-256) contenant l'état complet du dépôt.
 - **Moteur Smart Sync** : Le client récupère le manifeste, effectue une comparaison locale par rapport à ses profils actifs et ne télécharge que le delta (fichiers manquants ou modifiés).
 
-### 20.2. Sécurité et intégrité
+### 20.2. Securité et intégrité
 - **Résistance aux collisions** : Utilise des empreintes SHA-256 pour garantir que les fichiers de mods ne sont pas corrompus pendant le transfert.
 - **Isolation de chemin** : Le serveur limite strictement l'accès aux fichiers au dossier de dépôt désigné, empêchant les attaques par traversée de chemin.
 - **Annulation de l'Export/Synchro (v0.9.9)** : Utilise un `install_cancelled: Arc<AtomicBool>` partagé. Les boucles de compression et de transfert vérifient ce flag à chaque itération pour une interruption immédiate sans ressources orphelines.
@@ -440,46 +440,41 @@ La suite d'administration exploite des modules Rust dédiés pour une gestion ha
 | `whitelist_manager.rs` | Gère l'état de la liste blanche du dépôt. Intégré à la couche de filtrage des requêtes du serveur HTTP. |
 | `security.rs` | Fournit des utilitaires pour la génération d'ID de Créateur et le hachage avec sel (salted hashing) pour prévenir l'usurpation d'identité. |
 
-### 23. Rendu Multimédia
+---
 
-| Couche | Implémentation |
-| :--- | :--- |
-| **Crédits BG** | Composant de lecteur vidéo personnalisé utilisant le protocole `asset://` pour contourner les restrictions de sécurité habituelles des navigateurs pour les fichiers vidéo locaux. |
-| **Régulation** | L'observateur `on_view_changed` dans `credits.js` garantit que la lecture vidéo est strictement suspendue quand l'utilisateur navigue ailleurs, préservant les ressources pour les opérations sur les mods. |
+## 23. Migration de Javascript vers TypeScript (v0.9.9)
 
-## 24. Gestionnaire de liens profonds (Deep Link Manager - bmm://)
+BMM v0.9.9 marque une étape majeure avec la transition de la base de code frontend vers **TypeScript (TS)**. Cette évolution garantit la stabilité structurelle et la sécurité du typage sur toute la logique applicative.
 
-BMM implémente un gestionnaire de protocole personnalisé pour faciliter les installations de mods en un clic.
+### 23.1. Sécurité du Typage et Stabilité
+- **Définitions d'Interfaces** : Chaque structure de données de base (Profil, Mod, Tag, UpdateInfo) est désormais strictement typée, évitant les erreurs d'exécution de type "undefined" lors d'opérations complexes sur les mods.
+- **Sécurité IPC** : Les invocations de commandes (`invoke`) et les écouteurs d'événements (`listen`) sont désormais canalisés via des wrappers typés, garantissant que les arguments et les valeurs de retour correspondent toujours au schéma attendu côté Rust.
 
-| Composant | Implémentation |
-| :--- | :--- |
-| **Enregistrement Registre** | Au démarrage, le backend s'assure que le protocole `bmm://` est enregistré dans le Registre Windows, pointant vers l'exécutable BMM. |
-| **Analyse d'URL** | La classe `DeepLinkManager` gère les URIs `bmm://` entrants, analysant les paramètres de requête pour les métadonnées de mod et les liens de téléchargement. |
-| **Extension dynamique de l'UI** | La modale One-Click étend dynamiquement sa hauteur (à 550px) si l'utilisateur sélectionne "Créer un nouveau profil", déclenchant une boucle de validation réactive pour les nouveaux chemins. |
+### 23.2. ESM Moderne et l'Exigence de l'Extension ".js"
+En raison de la norme **Modern ESM (ES Modules)** et de la manière dont les navigateurs/Tauri gèrent le code compilé, tous les imports internes dans les fichiers sources `.ts` doivent utiliser l'extension `.js` (ex: `import { api } from './api.js'`).
+- **Logique** : Le compilateur TypeScript (TSC) ne réécrit pas les extensions d'import. Comme le navigateur exécute les fichiers `.js` finaux compilés, le code source doit référencer l'extension cible pour maintenir la compatibilité avec la résolution native du navigateur.
 
 ---
 
-## 25. Moteur Discord RPC
+## 24. Algorithme de Recherche Sémantique et Score Pondéré
 
-Le système Discord Rich Presence permet une synchronisation de l'activité en temps réel.
+BMM 0.9.9 dispose d'un moteur de recherche avancé qui va au-delà de la simple correspondance de chaînes.
 
-| Composant | Implémentation |
-| :--- | :--- |
-| **Intégration Backend** | Utilise la crate Rust `discord-rpc` pour communiquer avec le client Discord desktop via un socket IPC local. |
-| **Synchronisation d'état** | Le frontend émet des événements `discord-update` chaque fois qu'un profil est changé ou qu'un mod est basculé, que le backend traduit ensuite en mises à jour d'activité Discord (Grande Image, Petite Image, Détails, État). |
-| **Contrôle de confidentialité** | Contrôlé par un flag persistant dans `app.cfg`. Lorsqu'il est désactivé, la boucle de pulsation (heartbeat) est immédiatement interrompue. |
+### 24.1. Pipeline de Traitement
+1. **Normalisation** : La requête et l'index de documentation sont convertis en minuscules et les accents sont supprimés (suppression des diacritiques).
+2. **Extraction de Mots-Clés** : La requête est divisée en mots-clés individuels significatifs.
+3. **Indexation Multi-Source** : Le moteur parcourt la documentation Markdown standard ET le registre des diagrammes interactifs (Nœuds + explications Tasky).
+    - Les résultats sont triés par score, avec un badge visuel de **"% de correspondance"** affiché pour les résultats partiels.
 
 ---
 
-## 26. Moteur de Diagnostic de Conflits Avancé
+## 25. Threading de base et isolation des E/S
 
-La version 0.9.8 de BMM introduit une visualisation par graphique pour les collisions de fichiers de mods.
+Pour éviter les micro-saccades de l'interface graphique pendant les opérations de mods lourdes, BMM impose un modèle de threading strict.
 
-| Composant | Implémentation |
-| :--- | :--- |
-| **Matrice de collision** | Le backend génère une matrice de collision en comparant les `installed_files` de tous les mods actifs. |
-| **Pont Mermaid** | Le frontend convertit cette matrice en une définition de diagramme de flux Mermaid.js. |
-| **Couche d'interaction** | Implémente des gestionnaires de clics personnalisés sur les nœuds Mermaid. Cliquer sur un nœde de mod déclenche un événement `dispatchNavigation` vers la Bibliothèque de Mods avec le mod spécifique mis en évidence. |
+### 25.1. Workers d'arrière-plan
+- **Worker d'E/S Disque** : Toutes les copies de fichiers, suppressions et vérifications d'intégrité SHA-256 sont isolées dans le pool `spawn_blocking`.
+- **Worker Réseau** : Les téléchargements et les requêtes API s'exécutent en parallèle, permettant à l'utilisateur de naviguer dans la bibliothèque pendant l'importation d'une liste de mods.
 
 ---
 

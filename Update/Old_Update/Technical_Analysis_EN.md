@@ -440,46 +440,56 @@ The administration suite leverages dedicated Rust modules for high-speed IP and 
 | `whitelist_manager.rs` | Manages the repository's whitelist state. Integrated with the HTTP server's request filtering layer. |
 | `security.rs` | Provides utilities for Creator ID generation and salted hashing to prevent spoofing. |
 
-### 23. Multimedia Rendering
+---
 
-| Layer | Implementation |
-| :--- | :--- |
-| **Credits BG** | Custom video player component using the `asset://` protocol to bypass typical browser security restrictions for local video files. |
-| **Throttling** | The `on_view_changed` observer in `credits.js` ensures that video playback is strictly paused when the user navigates away, preserving resources for mod operations. |
+## 23. Javascript to TypeScript Migration (v0.9.9)
 
-## 24. Deep Link Manager (bmm://)
+BMM v0.9.9 marks a significant milestone with the transition of the frontend codebase to **TypeScript (TS)**. This move ensures structural stability and type safety across the entire application logic.
 
-BMM implements a custom protocol handler to facilitate one-click mod installations.
+### 23.1. Type Safety & Stability
+- **Interface Definitions**: Every core data structure (Profile, Mod, Tag, UpdateInfo) is now strictly typed, preventing "undefined" runtime errors during complex mod operations.
+- **IPC Safety**: Command invocations (`invoke`) and event listeners (`listen`) are now channeled through type-safe wrappers, ensuring that arguments and return values always match the expected Rust-side schema.
 
-| Component | Implementation |
-| :--- | :--- |
-| **Registry Registration** | At startup, the backend ensures the `bmm://` protocol is registered in the Windows Registry, pointing to the BMM executable. |
-| **URL Parsing** | The `DeepLinkManager` class handles incoming `bmm://` URIs, parsing query parameters for mod metadata and download links. |
-| **Dynamic UI Expansion** | The One-Click modal dynamically expands its height (to 550px) if the user selects "Create new profile", triggering a reactive validation loop for the new paths. |
+### 23.2. Modern ESM & The ".js" Extension Requirement
+Due to the **Modern ESM (ECMAScript Modules)** standard and the way browsers/Tauri handle compiled code, all internal imports in the `.ts` source files must use the `.js` extension (e.g., `import { api } from './api.js'`).
+- **Logic**: The TypeScript compiler (TSC) does not rewrite the import extension. Since the browser executes the final compiled `.js` files, the source code must reference the target extension to maintain compatibility with native browser resolution.
 
 ---
 
-## 25. Discord RPC Engine
+## 24. Semantic Search Algorithm & Weighted Scoring
 
-The Discord Rich Presence system provides real-time activity synchronization.
+BMM 0.9.9 features an advanced search engine that goes beyond simple string matching.
 
-| Component | Implementation |
-| :--- | :--- |
-| **Backend Integration** | Uses the `discord-rpc` Rust crate to communicate with the Discord desktop client via a local IPC socket. |
-| **State Synchronization** | The frontend emits `discord-update` events whenever a profile is switched or a mod is toggled, which the backend then translates into Discord activity updates (Large Image, Small Image, Details, State). |
-| **Privacy Control** | Controlled by a persistent flag in `app.cfg`. When disabled, the heartbeat loop is immediately terminated. |
+### 24.1. The Processing Pipeline
+1. **Normalization**: Both the query and the documentation index are converted to lowercase and stripped of accents (Diacritics removal).
+2. **Keyword Extraction**: The search query is split into individual significant keywords.
+3. **Multi-Source Indexing**: The engine crawls standard Markdown documentation AND the interactive diagram registry (Nodes + Tasky explanations).
+4. **Weighted Intersection (v0.9.9 Refinement)**:
+    - **Non-Binary Scoring**: Replaced the original 100% match system with a nuanced weighted algorithm.
+    - **Perfect Match (1.0)**: Exact string equality.
+    - **Anchored Match (0.95)**: String starts with the query.
+    - **Keyword Ratio**: Partial matches are scored based on the percentage of matching keywords vs. total query length, with a "Match %" badge displayed in the UI.
 
 ---
 
-## 26. Advanced Conflict Diagnostic Engine
+## 25. Advanced SVG Manipulation & Highlighting (v0.9.9)
 
-BMM 0.9.8 introduces a graph-based visualization for mod file collisions.
+To provide premium visual feedback during documentation search, BMM implements a specialized highlighting engine for Mermaid.js diagrams.
 
-| Component | Implementation |
-| :--- | :--- |
-| **Collision Matrix** | The backend generates a collision matrix by comparing the `installed_files` of all active mods. |
-| **Mermaid Bridge** | The frontend converts this matrix into a Mermaid.js flowchart definition. |
-| **Interaction Layer** | Implements custom click handlers on Mermaid nodes. Clicking a mod node triggers a `dispatchNavigation` event to the Mod Library with the specific mod highlighted. |
+### 25.1. Filter Clipping Prevention
+When applying a `drop-shadow` filter to an SVG node, parent groups (like clusters or the main diagram container) can often clip the effect due to default `overflow: hidden` rules.
+- **Recursive Traversal**: The highlighting logic now recursively traverses the DOM from the target node up to the SVG root, forcing `overflow: visible` on all parent elements.
+- **Pulsing Glow**: Uses CSS `@keyframes` and `drop-shadow` to create a non-intrusive blue halo that indicates the search result without displacing the node or breaking the diagram layout.
+
+---
+
+## 26. Core Threading & I/O Isolation
+
+To prevent UI "micro-stutters" during heavy mod operations, BMM enforces a strict threading model.
+
+### 26.1. Background Workers
+- **Disk I/O Worker**: All file copies, deletions, and SHA-256 integrity checks are isolated in the `spawn_blocking` pool.
+- **Network Worker**: Downloads and API requests run in parallel background threads, allowing the user to browse the library while a mod list is being imported.
 
 ---
 

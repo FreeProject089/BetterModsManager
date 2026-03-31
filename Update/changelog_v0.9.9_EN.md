@@ -25,19 +25,23 @@ This version introduces significant performance optimizations, a brand-new integ
 - **Atomic Reliability**: Implemented `Arc<AtomicBool>` guards to ensure immediate termination without leaving orphaned file handles or temporary archives.
 - **UI Feedback**: Progress bars now correctly reset to 0% upon cancellation or error.
 
-## UI & UX Polish
-### [REFINED] Crash Reporting Modal
-- Highly refined Discord button with fixed-size branding and forced centering (`justify-content: center`).
-- Fixed visual bugs where the Discord logo would appear squashed or incorrectly colored.
+## Documentation & Interactive Diagrams
+### [NEW] Nuanced Search Scoring (v0.9.9)
+- **Weighted Algorithm**: Replaced binary 100% matches with keyword-ratio scoring (Perfect, Anchored, and Partial matches).
+- **Visual Feedback**: Added a "Match %" badge to each search result for granular relevance identification.
 
-### [IMPROVED] Archive Explorer
-- Added real-time search functionality within large zip files.
-- Localized "More files..." and directory counts for a fully bilingual experience.
+### [NEW] Premium Interaction & Polish
+- **Pulsing Node Highlight**: Implemented a subtle, professional blue pulse for diagram nodes found via search.
+- **Filter Clipping Fix**: Enhanced SVG DOM traversal to prevent `drop-shadow` clipping by forcing `overflow: visible` on all parent groups.
+- **Diagram Indicators**: FAQ entries now feature a "Layers" stack icon if they contain an interactive diagram.
+- **i18n Audit**: Fully translated the "Found in Diagrams" search header for English and French users.
 
 ## Bug Fixes & Stability
+### [FIXED] Critical Syntax Errors
+- **Lexical Collision**: Renamed internal `parent` variable to `pNode` in `interactive-docs.ts` to resolve a shadowing `SyntaxError`.
+### [FIXED] RPC & Logic Stability
 - **RPC Stability**: Resolved critical `TypeError: getProfiles is not a function` crash in the Discord status update loop.
 - **Command Security**: Fixed `cancel_repo_export` RPC error where the command was not correctly registered in the backend.
-- **Localization Audit**: 100% coverage for new features in both English and French, including deep-level toasts and status messages.
 
 ---
-*Generated on: 2026-03-25*
+*Generated on: 2026-03-30*

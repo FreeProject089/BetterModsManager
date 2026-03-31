@@ -10,6 +10,7 @@ import { initBenchmark } from '../features/bench/benchmark.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
 import { initRepo } from '../features/repo/repo.js';
 import { initInteractiveDocs, openDiagram } from '../docs/interactive-docs.js';
+import { initDocsUI } from '../docs/docs-ui.js';
 import { initDeepLinks } from '../core/deep_link_manager.js';
 import { initTitlebar } from './titlebar.js';
 import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
@@ -313,6 +314,7 @@ async function main() {
     initModlist();
     initRepo();
     initInteractiveDocs();
+    initDocsUI();
     initDeepLinks();
     // Bind Docs Diagram buttons
     document.getElementById('btn-docs-resumable')?.addEventListener('click', () => openDiagram('resumable-downloads'));

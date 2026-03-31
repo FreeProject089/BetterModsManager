@@ -106,8 +106,6 @@ BMM ensures that version information is always accurate and synchronized.
 
 ---
 
----
-
 ## 8. Interactive Documentation & Diagrams
 
 BMM 0.9.8 introduces a state-of-the-art interactive documentation system.
@@ -132,7 +130,7 @@ BMM 0.9.8 introduces a state-of-the-art interactive documentation system.
 
 ---
 
-## 9. Archive Explorer
+## 10. Archive Explorer
 
 | Feature | Description |
 | :--- | :--- |
@@ -142,7 +140,7 @@ BMM 0.9.8 introduces a state-of-the-art interactive documentation system.
 
 ---
 
-## 10. Update Notes
+## 11. Update Notes
 
 | Feature | Description |
 | :--- | :--- |
@@ -152,7 +150,7 @@ BMM 0.9.8 introduces a state-of-the-art interactive documentation system.
 
 ---
 
-## 11. Crash Reporting & Troubleshooting
+## 12. Crash Reporting & Troubleshooting
 
 BMM includes a high-reliability diagnostic system to ensure any issue can be identified and fixed quickly.
 
@@ -164,7 +162,7 @@ BMM includes a high-reliability diagnostic system to ensure any issue can be ide
 
 ---
 
-## 12. Auto-Update System
+## 13. Auto-Update System
 
 | Feature | Description |
 | :--- | :--- |
@@ -175,7 +173,7 @@ BMM includes a high-reliability diagnostic system to ensure any issue can be ide
 
 ---
 
-## 13. PTB Mode (Public Test Build)
+## 14. PTB Mode (Public Test Build)
 
 | Feature | Description |
 | :--- | :--- |
@@ -184,7 +182,7 @@ BMM includes a high-reliability diagnostic system to ensure any issue can be ide
 
 ---
 
-## 14. Performance & Storage Management
+## 15. Performance & Storage Management
 
 BMM features a suite of high-end diagnostic and optimization tools to ensure maximum stability.
 
@@ -195,15 +193,6 @@ BMM features a suite of high-end diagnostic and optimization tools to ensure max
 | **Storage Manager** | Detects SSD/HDD types, filesystems, and auto-identifies cloud (Google Drive, MEGA, etc.) or network drives. |
 | **Benchmark Tool** | Test your disk's real-world performance directly within BMM to find the optimal speed limit. |
 | **Interactive Performance Guide** | Integrated diagrams explain exactly how the I/O limiter and chunked transfer engine work together. |
-
----
-
-## 15. UI Guidance & Empty States
-
-| Feature | Description |
-| :--- | :--- |
-| **"How it Works" Buttons** | Context-sensitive help buttons appear on empty views (Library, Profiles) to guide new users. |
-| **Instructional Modals** | Direct access to relevant documentation and diagrams from the main interface. |
 
 ---
 
@@ -286,4 +275,39 @@ BMM version 0.9.8 introduces an interactive diagnostic tool to resolve complex m
 
 ---
 
-*Better Mod Manager is developed by FreeProject089.*
+## 22. Interactive Documentation & Semantic Search (v0.9.9)
+
+BMM v0.9.9 introduces a revolutionary documentation system that combines traditional guides with real-time interactive diagrams and AI-powered semantic search.
+
+| Feature | Description |
+| :--- | :--- |
+| **Interactive Diagrams** | Powered by Mermaid.js, these diagrams visualize complex logic (sync, search, architecture). Nodes are clickable and provide deep explanations. |
+| **Semantic Search** | Switch between "Classic" (keyword) and "Semantic" (deep indexing) modes. Semantic search analyzes diagram labels and hidden metadata to find exact answers. |
+| **Node Highlighting** | Clicking a search result from a diagram instantly opens the relevant schema and highlights the target node with a premium, pulsing glow effect. |
+| **Visual Indicators** | FAQ entries with associated diagrams now feature a "Layers" icon, making it easy to identify interactive content at a glance. |
+| **Dual-Tab Interface** | Distinguishes between "Basic" (video tutorials and quick FAQ) and "Advanced" (technical diagrams and deep-dive documentation). |
+| **Smart Video Fallback** | Video tutorials detect your connection. They stream from YouTube if online (saving space) or play local MP4 files if offline. |
+| **Tasky Mascot Integration** | Tasky explains each step of a diagram. Hovering or clicking nodes triggers contextual help bubbles with localized content. |
+
+---
+
+## 23. Javascript to TypeScript Migration (v0.9.9)
+
+BMM v0.9.9 marks a significant milestone with the transition of the frontend codebase to **TypeScript (TS)**. This move ensures structural stability and type safety across the entire application logic, making for a much smoother and bug-free user experience.
+
+---
+
+## 24. High-Performance Multi-threaded Engine
+
+BMM's backend is powered by a multi-threaded Rust core, ensuring that heavy file operations never freeze the user interface.
+
+| Feature | Description |
+| :--- | :--- |
+| **UI Responsiveness** | The JavaScript frontend remains 100% interactive (60 FPS) even during massive copies or hashing. |
+| **Tokio Async Runtime** | Powered by the world-class Tokio runtime for efficient background task management. |
+| **Dedicated IO Workers** | Disk-intensive tasks (copy, delete, scan) are isolated in a background worker pool. |
+| **Zero-Lag UI Bridge** | Uses an asynchronous IPC bridge to communicate state changes back to the interface safely. |
+
+---
+
+*Better Mod Manager is developed by FreeProject089.*    
