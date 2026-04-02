@@ -134,8 +134,8 @@ Permet une réduction de 80% des appels IPC en ne traitant que les mods actifs e
 
 ### Cache de vérification des conflits (v0.9.9)
 
-- **Logique** : Comparaison de la date de modification (`mtime`) avant scan.
-- **Gain** : Réduction du temps de calcul de 80% sur les grosses bibliothèques.
+- **Logique** : Avant de scanner un dossier de mod, BMM compare sa date de dernière modification (`mtime`) avec un cache de métadonnées stocké via `std::fs::metadata().modified()`.
+- **Gain de performance** : Si le timestamp est inchangé, le parcours récursif de l'arborescence est sauté, réduisant l'activité disque et le temps de calcul jusqu'à 80% sur les grosses bibliothèques.
 
 ### Pourquoi la copie physique plutôt que les liens symboliques (Symlinks)
 
@@ -171,8 +171,8 @@ Permet une réduction de 80% des appels IPC en ne traitant que les mods actifs e
 
 ### Moteur d'Intégrité Deep (v0.9.9)
 
-- **Hashage SHA-256** : Vérification cryptographique contre la source.
-- **Isolation des threads** : Exécuté via `spawn_blocking`.
+- **Hashage SHA-256** : Vérification cryptographique complète de chaque fichier installé par rapport à sa source. Permet de détecter la corruption ou les modifications non autorisées qu'un simple test de taille de fichier ignorerait.
+- **Isolation des threads** : Le calcul intensif des hashes est déchargé vers le pool de workers asynchrones `spawn_blocking` pour maintenir une interface fluide à 60 FPS.
 
 ---
 

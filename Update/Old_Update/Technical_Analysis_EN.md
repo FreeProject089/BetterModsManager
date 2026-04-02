@@ -138,8 +138,8 @@ BMM addresses the "system freeze" problem common in heavy I/O applications:
 ### Conflict Check Cache (v0.9.9)
 
 To further optimize performance, BMM implements a metadata-based caching system:
-- **Logic**: Before scanning a mod folder, BMM compares its last modification date (`mtime`) with the stored cache value.
-- **Performance Gain**: If unchanged, scans are skipped, reducing computation time by 80% on large libraries.
+- **Logic**: Before scanning a mod folder, BMM compares its last modification date (`mtime`) with a stored metadata cache using `std::fs::metadata().modified()`.
+- **Performance Gain**: If the timestamp is unchanged, the entire file tree traversal is skipped, reducing disk activity and computation time by up to 80% on large collections.
 
 ### Why Physical Copy Instead of Symlinks
 
@@ -177,8 +177,8 @@ To further optimize performance, BMM implements a metadata-based caching system:
 
 ### Deep Integrity Engine (v0.9.9)
 
-- **SHA-256 Hashing**: Full cryptographic verification of every installed file against source.
-- **Thread Isolation**: Hashing performed in `spawn_blocking` pool.
+- **SHA-256 Hashing**: Full cryptographic verification of every installed file against its source. This identifies corruption, partial overwrites, or unauthorized modifications that simple file-size checks would miss.
+- **Thread Isolation**: The CPU-intensive hashing logic is offloaded to the asynchronous `spawn_blocking` worker pool to maintain a 60 FPS UI experience.
 
 ---
 

@@ -190,9 +190,9 @@ BMM features a suite of high-end diagnostic and optimization tools to ensure max
 | :--- | :--- |
 | **Disk I/O Limiter** | Prevents system freezes by capping the transfer speed during mod activation/deactivation. Custom limits can be set per disk. |
 | **Performance Dashboard** | A real-time monitoring overlay (PiP) tracking CPU, RAM, and Disk activity. Supports timeline scrubbing and historical data export (CSV). |
-| **Storage Manager** | Detects SSD/HDD types, filesystems, and auto-identifies cloud or network drives. |
+| **Storage Manager** | Detects SSD/HDD types, filesystems, and auto-identifies cloud or network drives. Fully localized "Critical" and "Warning" alerts for v0.9.9. |
 | **Benchmark Tool** | Test your disk's real-world performance directly within BMM to find the optimal speed limit. |
-| **Interactive Performance Guide** | Integrated diagrams explain exactly how the I/O limiter and chunked transfer engine work together. |
+| **Interactive Performance Guide** | Integrated diagrams explain exactly how the I/O limiter and chunked transfer engine work together. Includes the new **Conflict Cache (mtime)** and **Deep Integrity Engine** diagrams. |
 
 ---
 
@@ -281,9 +281,9 @@ BMM v0.9.9 introduces a revolutionary documentation system that combines traditi
 
 | Feature | Description |
 | :--- | :--- |
-| **Interactive Diagrams** | Powered by Mermaid.js, these diagrams visualize complex logic (sync, search, architecture). Nodes are clickable and provide deep explanations. |
+| **Interactive Diagrams** | Powered by Mermaid.js, these diagrams visualize complex logic. v0.9.9 adds the **Deep Integrity Engine**, **Conflict Cache**, and **Premium Interaction** schemas. |
 | **Semantic Search** | Switch between "Classic" (keyword) and "Semantic" (deep indexing) modes. Semantic search analyzes diagram labels and hidden metadata to find exact answers. |
-| **Node Highlighting** | Clicking a search result from a diagram instantly opens the relevant schema and highlights the target node with a premium, pulsing glow effect. |
+| **Node Highlighting** | Clicking a search result from a diagram instantly opens the relevant schema and highlights the target node with a premium, pulsing blue halo. |
 | **Visual Indicators** | FAQ entries with associated diagrams now feature a "Layers" icon, making it easy to identify interactive content at a glance. |
 | **Dual-Tab Interface** | Distinguishes between "Basic" (video tutorials and quick FAQ) and "Advanced" (technical diagrams and deep-dive documentation). |
 | **Smart Video Fallback** | Video tutorials detect your connection. They stream from YouTube if online (saving space) or play local MP4 files if offline. |

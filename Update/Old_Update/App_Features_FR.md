@@ -153,7 +153,9 @@ Mode de distribution spécial pour tester les nouveautés avant la sortie offici
 | :--- | :--- |
 | **Limiteur d'E/S disque** | Plafonnement de la vitesse de copie pour éviter les gels système. |
 | **Dashboard de performance** | Monitoring CPU/RAM/Disque en temps réel avec mode PiP. |
+| **Storage Manager** | Détecte les types SSD/HDD, les systèmes de fichiers et auto-identifie les lecteurs cloud ou réseau. Alertes "Critique" et "Attention" entièrement localisées en v0.9.9. |
 | **Benchmark Tool** | Test de vitesse réelle du disque pour calibrage. |
+| **Guide de Performance Interactif** | Diagrammes expliquant le fonctionnement du limiteur d'E/S et du transfert par morceaux. Inclut désormais les schémas **Cache de Conflits (mtime)** et **Moteur d'Intégrité Deep**. |
 
 ---
 
@@ -198,6 +200,7 @@ Graphique interactif Mermaid coloré pour visualiser et résoudre les collisions
 | Fonctionnalité | Description |
 | :--- | :--- |
 | **Recherche Profonde** | Mode sémantique analysant les labels de diagrammes et métadonnées Tasky. |
+| **Schémas Interactifs** | V0.9.9 ajoute les diagrammes **Moteur d'Intégrité Deep**, **Cache de Conflits**, et **Interactions Premium**. |
 | **Surlignage Pulsé** | Mise en évidence visuelle (halo bleu) des nœuds de diagrammes trouvés via la recherche. |
 | **Indicateurs de Couches** | FAQ enrichie d'icônes identifiant le contenu interactif. |
 | **Secours Vidéo** | Basculement auto entre YouTube (online) et local MP4 (offline). |

@@ -30,16 +30,25 @@ This version introduces significant performance optimizations, a brand-new integ
 - **Weighted Algorithm**: Replaced binary 100% matches with keyword-ratio scoring (Perfect, Anchored, and Partial matches).
 - **Visual Feedback**: Added a "Match %" badge to each search result for granular relevance identification.
 
+### [NEW] Diagrams Gallery Expansion
+- **New Technical Schemas**: Added 3 high-fidelity interactive diagrams to the gallery:
+    - **Deep Integrity Engine**: Visualizes the cryptographic SHA-256 verification process.
+    - **Conflict Cache (mtime)**: Details our timestamp-based optimization logic.
+    - **Premium UI Interactions**: Documents the menu grace period and "catching" system.
+- **Improved Accessibility**: FAQ entries now feature a "Layers" stack icon if they contain an interactive diagram.
+- **Gallery Link Resolution**: Fixed the broken `semanticSearch` link in the documentation gallery.
+- **Visual Feedback**: Added a "Pulsing Blue" glow for diagram nodes found via search.
+
 ### [NEW] Premium Interaction & Polish
-- **Pulsing Node Highlight**: Implemented a subtle, professional blue pulse for diagram nodes found via search.
-- **Filter Clipping Fix**: Enhanced SVG DOM traversal to prevent `drop-shadow` clipping by forcing `overflow: visible` on all parent groups.
-- **Diagram Indicators**: FAQ entries now feature a "Layers" stack icon if they contain an interactive diagram.
-- **Premium UI Polish & Usability**:
-    - **Smooth Dropdown Animations**: Implemented entry (fade/scale/slide) and exit animations for the mod actions menu.
-    - **Usability Grace Period**: Added a 100ms delay to prevent accidental menu closing.
-    - **Menu "Catching"**: Dropdowns can now be "caught" and instantly re-opened while closing.
-    - **Icon Harmonization**: Standardized all dropdown chevrons for a consistent "Vanguard" look.
-- **i18n Audit**: Fully translated the "Found in Diagrams" search header for English and French users.
+- **Smooth Dropdown Animations**: Implemented entry (fade/scale/slide) and exit animations for the mod actions menu.
+- **Usability Grace Period**: Added a 100ms delay to prevent accidental menu closing.
+- **Menu "Catching"**: Dropdowns can now be "caught" and instantly re-opened while closing.
+- **Icon Harmonization**: Standardized all dropdown chevrons for a consistent "Vanguard" look.
+
+## Localization & i18n
+- **Storage Manager**: Fully localized "Critical" and "Warning" alerts for English and French.
+- **Diagram Clusters**: Standardized technical labels across all interactive schemas.
+- **i18n Audit**: Fully translated the "Found in Diagrams" search header.
 
 ## Bug Fixes & Stability
 ### [FIXED] Critical Syntax Errors
