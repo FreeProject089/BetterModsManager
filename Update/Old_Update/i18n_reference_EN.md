@@ -65,6 +65,15 @@ Language files are located in `frontend/Lang/`.
 - `settings.crashTitle`: Error report management.
 - `settings.benchmarkTitle`: Performance monitoring activation.
 
+###  docs (v0.9.9)
+*Interactive Documentation & Gallery.*
+- `docs.title`: Documentation page title.
+- `docs.gallery.title`: Header for the Diagram Gallery.
+- `docs.gallery.btn.*`: Labels for individual diagram buttons (e.g., `appArchitecture`, `modSync`).
+- `docs.videos.tuto*.online`: YouTube embed URL for a tutorial.
+- `docs.videos.tuto*.offline`: Local MP4 path for a tutorial.
+- `docs.search.placeholder`: Search bar text in documentation.
+
 ###  onboard
 *Tasky's tutorial messages.*
 - `onboard.s1` to `onboard.s8`: Welcome tutorial steps.

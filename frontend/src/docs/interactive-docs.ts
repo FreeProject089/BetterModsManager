@@ -28,6 +28,9 @@ import { discordRpc } from './diagrams/discord-rpc.js';
 import { engineThreads } from './diagrams/engine-threads.js';
 import { codeStack } from './diagrams/code-stack.js';
 import { semanticSearch } from './diagrams/semantic-search.js';
+import { integrityEngine } from './diagrams/integrity-engine.js';
+import { mtimeCache } from './diagrams/mtime-cache.js';
+import { premiumInteractions } from './diagrams/premium-interactions.js';
 
 // Diagram Registry
 export const diagrams = {
@@ -57,7 +60,11 @@ export const diagrams = {
     'docs-logic': docsLogic,
     'discord-rpc': discordRpc,
     'engine-threads': engineThreads,
-    'code-stack': codeStack
+    'code-stack': codeStack,
+    'semantic-search': semanticSearch,
+    'integrity-engine': integrityEngine,
+    'mtime-cache': mtimeCache,
+    'premium-interactions': premiumInteractions
 };
 
 // State

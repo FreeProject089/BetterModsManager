@@ -65,6 +65,15 @@ Les fichiers de langue se trouvent dans `frontend/Lang/`.
 - `settings.crashTitle` : Gestion des rapports d'erreurs.
 - `settings.benchmarkTitle` : Activation du monitoring de performance.
 
+###  docs (v0.9.9)
+*Documentation interactive et Galerie.*
+- `docs.title` : Titre de la page de documentation.
+- `docs.gallery.title` : Entête pour la galerie de diagrammes.
+- `docs.gallery.btn.*` : Libellés pour les boutons de diagrammes individuels (ex: `appArchitecture`, `modSync`).
+- `docs.videos.tuto*.online` : URL YouTube pour un tutoriel.
+- `docs.videos.tuto*.offline` : Chemin local MP4 pour un tutoriel.
+- `docs.search.placeholder` : Zone de recherche dans la documentation.
+
 ###  onboard
 *Tasky's tutorial messages.*
 - `onboard.s1` à `onboard.s8` : Étapes du tutoriel de bienvenue.

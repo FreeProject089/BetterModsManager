@@ -108,7 +108,7 @@ BMM ensures that version information is always accurate and synchronized.
 
 ## 8. Interactive Documentation & Diagrams
 
-BMM 0.9.8 introduces a state-of-the-art interactive documentation system.
+BMM introduces a state-of-the-art interactive documentation system.
 
 | Feature | Description |
 | :--- | :--- |
@@ -190,7 +190,7 @@ BMM features a suite of high-end diagnostic and optimization tools to ensure max
 | :--- | :--- |
 | **Disk I/O Limiter** | Prevents system freezes by capping the transfer speed during mod activation/deactivation. Custom limits can be set per disk. |
 | **Performance Dashboard** | A real-time monitoring overlay (PiP) tracking CPU, RAM, and Disk activity. Supports timeline scrubbing and historical data export (CSV). |
-| **Storage Manager** | Detects SSD/HDD types, filesystems, and auto-identifies cloud (Google Drive, MEGA, etc.) or network drives. |
+| **Storage Manager** | Detects SSD/HDD types, filesystems, and auto-identifies cloud or network drives. |
 | **Benchmark Tool** | Test your disk's real-world performance directly within BMM to find the optimal speed limit. |
 | **Interactive Performance Guide** | Integrated diagrams explain exactly how the I/O limiter and chunked transfer engine work together. |
 
@@ -310,4 +310,17 @@ BMM's backend is powered by a multi-threaded Rust core, ensuring that heavy file
 
 ---
 
-*Better Mod Manager is developed by FreeProject089.*    
+## 25. Premium Interaction & Usability (v0.9.9)
+
+BMM v0.9.9 introduces a significant polish to micro-interactions and interface fluidity.
+
+| Feature | Description |
+| :--- | :--- |
+| **Smooth Animations** | Animated entry and exit transitions (fade + slide) for the Mod Actions dropdown menu. |
+| **Interaction Grace Period** | A 100ms grace period prevents accidental menu closure when moving the mouse between the toggle and the list. |
+| **Catchable Menus** | Menus currently in their closing phase can be instantly "caught" on hover, restoring their open state without flicker. |
+| **Standardized Icons** | Visual harmonization of chevrons and indicators for a consistent "Vanguard" premium look and feel. |
+
+---
+
+*Better Mod Manager is developed by FreeProject089.*

@@ -34,6 +34,11 @@ This version introduces significant performance optimizations, a brand-new integ
 - **Pulsing Node Highlight**: Implemented a subtle, professional blue pulse for diagram nodes found via search.
 - **Filter Clipping Fix**: Enhanced SVG DOM traversal to prevent `drop-shadow` clipping by forcing `overflow: visible` on all parent groups.
 - **Diagram Indicators**: FAQ entries now feature a "Layers" stack icon if they contain an interactive diagram.
+- **Premium UI Polish & Usability**:
+    - **Smooth Dropdown Animations**: Implemented entry (fade/scale/slide) and exit animations for the mod actions menu.
+    - **Usability Grace Period**: Added a 100ms delay to prevent accidental menu closing.
+    - **Menu "Catching"**: Dropdowns can now be "caught" and instantly re-opened while closing.
+    - **Icon Harmonization**: Standardized all dropdown chevrons for a consistent "Vanguard" look.
 - **i18n Audit**: Fully translated the "Found in Diagrams" search header for English and French users.
 
 ## Bug Fixes & Stability
@@ -44,4 +49,4 @@ This version introduces significant performance optimizations, a brand-new integ
 - **Command Security**: Fixed `cancel_repo_export` RPC error where the command was not correctly registered in the backend.
 
 ---
-*Generated on: 2026-03-30*
+*Generated on: 2026-04-02*
