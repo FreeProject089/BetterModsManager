@@ -2239,8 +2239,10 @@ body.is-maximized .titlebar-spacer {
     border-radius: 12px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
     opacity: 0;
+    transform: translateY(-8px) scale(0.95);
     visibility: hidden;
     z-index: 1100;
+    transition: visibility 0.2s; /* Ensure visibility waits for animation */
     padding: 6px;
     display: flex;
     flex-direction: column;
@@ -2259,17 +2261,46 @@ body.is-maximized .titlebar-spacer {
     background: transparent;
 }
 
-.mod-actions-dropdown-content.portal-active,
-#global-dropdown-portal .mod-actions-dropdown-content {
+.mod-actions-dropdown-content.open,
+#global-dropdown-portal .mod-actions-dropdown-content.open {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
+    transform: translateY(0) scale(1);
+    animation: dropdown-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+#global-dropdown-portal .mod-actions-dropdown-content.closing {
+    pointer-events: none;
+    animation: dropdown-exit 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 #global-dropdown-portal .mod-actions-dropdown-content {
     position: absolute;
     margin: 0;
     z-index: 1000000;
+}
+
+@keyframes dropdown-enter {
+    from {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes dropdown-exit {
+    from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.95);
+    }
 }
 
 .dropdown-item {

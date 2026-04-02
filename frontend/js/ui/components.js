@@ -94,7 +94,7 @@ export function getModCardHTML(mod, ctx) {
                 style="background:rgba(255,255,255,0.05);color:var(--text-secondary);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                        <path d="m6 9 6 6 6-6" stroke-width="2" style="transform: scale(0.6); transform-origin: center; opacity: 0.8; translate: 0 4px;"/>
+                        <polyline points="6 9 12 15 18 9" stroke-width="2.5" style="opacity: 0.8; transform: scale(0.6); transform-origin: center; translate: 0 4px;"/>
                     </svg>
                 </button>
                 <div class="mod-actions-dropdown-content" onmouseleave="window.closeGlobalDropdown()">

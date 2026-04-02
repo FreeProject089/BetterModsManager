@@ -122,7 +122,7 @@ window.showGlobalDropdown = (btn: HTMLElement, menu: HTMLElement): void => {
 
     const rect = btn.getBoundingClientRect();
     clone.style.position = 'fixed';
-    clone.style.top = (rect.bottom + 5) + 'px';
+    clone.style.top = (rect.bottom + 2) + 'px';
     clone.style.left = (rect.left) + 'px';
     clone.style.pointerEvents = 'auto';
 
@@ -143,18 +143,42 @@ window.showGlobalDropdown = (btn: HTMLElement, menu: HTMLElement): void => {
 };
 
 window.closeGlobalDropdown = (immediate: boolean = false): void => {
+    const portal = document.getElementById('global-dropdown-portal');
+    const menu = portal?.querySelector('.mod-actions-dropdown-content') as HTMLElement | null;
+
     if (immediate) {
         window.cancelDropdownClose();
-        const portal = document.getElementById('global-dropdown-portal');
         if (portal) portal.innerHTML = '';
         return;
     }
+
+    // Clear any existing timer to prevent race conditions
+    window.cancelDropdownClose();
+
+    // 100ms grace period before starting the closing animation
     dropTimer = setTimeout(() => {
-        const portal = document.getElementById('global-dropdown-portal');
-        if (portal) portal.innerHTML = '';
-    }, 300);
+        if (menu) {
+            menu.classList.remove('open');
+            menu.classList.add('closing');
+        }
+
+        // Final removal timer (matches animation duration)
+        dropTimer = setTimeout(() => {
+            if (portal) portal.innerHTML = '';
+        }, 200);
+    }, 100);
 };
 
 window.cancelDropdownClose = (): void => {
-    if (dropTimer) clearTimeout(dropTimer);
+    if (dropTimer) {
+        clearTimeout(dropTimer);
+        dropTimer = undefined;
+    }
+
+    // Restore open state if it was in 'closing' phase
+    const menu = document.querySelector('#global-dropdown-portal .mod-actions-dropdown-content') as HTMLElement | null;
+    if (menu && menu.classList.contains('closing')) {
+        menu.classList.remove('closing');
+        menu.classList.add('open');
+    }
 };
