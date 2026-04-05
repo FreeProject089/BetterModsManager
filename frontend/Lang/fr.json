@@ -2052,5 +2052,21 @@
     "faq.qJsTs": "Pourquoi y a-t-il des fichiers .js et .ts dans le code ?",
     "faq.aJsTs": "BMM v0.9+ a migré vers TypeScript (TS) pour une meilleure stabilité. Cependant, le système ESM Moderne exige que les imports utilisent l'extension .js car ils font référence aux fichiers finaux qui restent dans le navigateur/Tauri après compilation.",
     "prof.bgLoadError": "Impossible de charger l'image.",
-    "prof.bgCropError": "Erreur recadrage: {err}"
+    "prof.bgCropError": "Erreur recadrage: {err}",
+    "docs.search.placeholder": "Search the documentation...",
+    "__SECTION_DIAGRAMS__": "--- DIAGRAMS ---",
+    "repo.errSyncForbidden": "Banned by server or identification missing (Creator ID).",
+    "repo.errSyncNotFound": "Server could not find some files.",
+    "repo.errSyncUnauthorized": "Server access denied.",
+    "repo.syncHistoryLabel": "Recent Servers",
+    "repo.syncModsDir": "Mods folder (installation destination)",
+    "repo.errNoProfile": "No active profile.",
+    "repo.whitelistEnable": "ENABLE",
+    "repo.whitelistToggle": "Enable Whitelist Protection",
+    "repo.whitelistEmpty": "The whitelist is empty.",
+    "repo.whitelistAdd": "Approve User",
+    "repo.whitelistSuccess": "User successfully approved.",
+    "repo.whitelistRemoved": "User removed from whitelist.",
+    "repo.whitelistClear": "Clear Whitelist.",
+    "repo.whitelistConfirmClear": "Are you sure you want to clear the whitelist?"
 }
