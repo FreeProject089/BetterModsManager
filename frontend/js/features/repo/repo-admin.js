@@ -22,20 +22,20 @@ export function initRepoAdmin(elements) {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>
                     <button class="btn btn-ghost btn-xs btn-unban" ${dataAttr} style="color:var(--danger); font-size:11px; font-weight:800; padding: 0 12px; height:32px; border-radius:10px; background:rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.1);">
-                        ${t('common.delete') || 'SUPPRIMER'}
+                        ${t('common.delete')}
                     </button>
                 </div>
             </div>
         `;
     };
     const updateBanListUI = () => {
-        const search = inputBanSearch?.value.toLowerCase() || '';
-        const filter = selectBanFilter?.value || 'ALL';
+        const search = inputBanSearch?.value.toLowerCase();
+        const filter = selectBanFilter?.value;
         let filteredIps = (filter === 'ALL' || filter === 'IP') ? (currentBans.banned_ips || []).filter(ip => ip.toLowerCase().includes(search)) : [];
         let filteredKeys = (filter === 'ALL' || filter === 'KEY') ? (currentBans.banned_keys || []).filter(key => key.toLowerCase().includes(search)) : [];
         if (filteredIps.length === 0 && filteredKeys.length === 0) {
             if (banListContainer)
-                banListContainer.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:12px;">${t('repo.noBansFound') || 'Aucun résultat...'}</div>`;
+                banListContainer.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:12px;">${t('repo.noBansFound')}</div>`;
             return;
         }
         let html = '';
@@ -47,7 +47,7 @@ export function initRepoAdmin(elements) {
                 btn.onclick = async () => {
                     const { ip, key } = btn.dataset;
                     const val = ip || key;
-                    const confirmed = await showConfirm(t('common.confirm') || "Confirmation", `${t('common.delete') || 'Supprimer'} : ${val} ?`);
+                    const confirmed = await showConfirm(t('common.confirm'), `${t('common.delete')} : ${val} ?`);
                     if (!confirmed)
                         return;
                     await invoke('unban_user', { ip: ip || null, key: key || null });
@@ -71,7 +71,7 @@ export function initRepoAdmin(elements) {
     const banUser = async (ip, key) => {
         try {
             await invoke('ban_user', { ip: ip || null, key: key || null });
-            toast(t('repo.banSuccess') || 'Utilisateur banni !', 'success');
+            toast(t('repo.banSuccess'), 'success');
             loadBanList();
         }
         catch (err) {
@@ -85,12 +85,12 @@ export function initRepoAdmin(elements) {
         selectBanFilter.onchange = updateBanListUI;
     if (btnUnbanAll) {
         btnUnbanAll.addEventListener('click', async () => {
-            const confirmed = await showConfirm(t('repo.bansTitle') || "BANS", t('repo.confirmUnbanAll') || "Voulez-vous vraiment débannir TOUT LE MONDE ?");
+            const confirmed = await showConfirm(t('repo.bansTitle'), t('repo.confirmUnbanAll'));
             if (!confirmed)
                 return;
             try {
                 await invoke('unban_all');
-                toast(t('repo.unbanAllSuccess') || "Liste des bans vidée.", 'success');
+                toast(t('repo.unbanAllSuccess'), 'success');
                 loadBanList();
             }
             catch (e) {
@@ -105,7 +105,7 @@ export function initRepoAdmin(elements) {
             dlAnchorElem.setAttribute("href", dataStr);
             dlAnchorElem.setAttribute("download", "bmm_bans_export.json");
             dlAnchorElem.click();
-            toast(t('repo.exportSuccess') || "Export terminé !", 'success');
+            toast(t('repo.exportSuccess'), 'success');
         });
     }
     if (btnOpenBans) {
@@ -149,21 +149,21 @@ export function initRepoAdmin(elements) {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>
                     <button class="btn btn-ghost btn-xs btn-remove-whitelist" ${dataAttr} style="color:var(--danger); font-size:11px; font-weight:800; padding: 0 12px; height:32px; border-radius:10px; background:rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.1);">
-                        ${t('common.delete') || 'SUPPRIMER'}
+                        ${t('common.delete')}
                     </button>
                 </div>
             </div>
         `;
     };
     const updateWhitelistUI = () => {
-        const search = whitelistSearch?.value.toLowerCase() || '';
+        const search = whitelistSearch?.value.toLowerCase();
         let filteredIps = (currentWhitelist.ips || []).filter(ip => ip.toLowerCase().includes(search));
         let filteredKeys = (currentWhitelist.keys || []).filter(key => key.toLowerCase().includes(search));
         if (whitelistToggle)
             whitelistToggle.checked = currentWhitelist.enabled;
         if (filteredIps.length === 0 && filteredKeys.length === 0) {
             if (whitelistListContainer)
-                whitelistListContainer.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:12px;">${t('repo.noWhitelistFound') || 'Aucun résultat...'}</div>`;
+                whitelistListContainer.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:12px;">${t('repo.noWhitelistFound')}</div>`;
             return;
         }
         let html = '';
@@ -175,7 +175,7 @@ export function initRepoAdmin(elements) {
                 btn.onclick = async () => {
                     const { ip, key } = btn.dataset;
                     const val = ip || key;
-                    const confirmed = await showConfirm(t('common.confirm') || "Confirmation", `${t('common.delete') || 'Retirer'} : ${val} ?`);
+                    const confirmed = await showConfirm(t('common.confirm'), `${t('common.delete')} : ${val} ?`);
                     if (!confirmed)
                         return;
                     await invoke('remove_from_whitelist', { ip: ip || null, key: key || null });
@@ -203,7 +203,7 @@ export function initRepoAdmin(elements) {
             try {
                 await invoke('toggle_whitelist', { enabled: whitelistToggle.checked });
                 currentWhitelist.enabled = whitelistToggle.checked;
-                toast(t('repo.whitelistUpdated') || "Paramètre whitelist mis à jour.", 'success');
+                toast(t('repo.whitelistUpdated'), 'success');
             }
             catch (e) {
                 toast(String(e), 'error');
@@ -218,7 +218,7 @@ export function initRepoAdmin(elements) {
             if (ip || key) {
                 try {
                     await invoke('add_to_whitelist', { ip: ip || null, key: key || null });
-                    toast(t('repo.whitelistAddSuccess') || "Ajouté à la whitelist !", 'success');
+                    toast(t('repo.whitelistAddSuccess'), 'success');
                     if (manualWhitelistIp)
                         manualWhitelistIp.value = '';
                     if (manualWhitelistKey)
@@ -233,12 +233,12 @@ export function initRepoAdmin(elements) {
     }
     if (btnClearWhitelist) {
         btnClearWhitelist.addEventListener('click', async () => {
-            const confirmed = await showConfirm(t('repo.whitelistTitle') || "WHITELIST", t('repo.confirmClearWhitelist') || "Voulez-vous vraiment vider la whitelist ?");
+            const confirmed = await showConfirm(t('repo.whitelistTitle'), t('repo.confirmClearWhitelist'));
             if (!confirmed)
                 return;
             try {
                 await invoke('clear_whitelist');
-                toast(t('repo.whitelistClearSuccess') || "Whitelist vidée.", 'success');
+                toast(t('repo.whitelistClearSuccess'), 'success');
                 loadWhitelist();
             }
             catch (e) {

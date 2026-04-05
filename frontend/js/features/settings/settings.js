@@ -66,7 +66,7 @@ async function initGithubPatSettings() {
                 await updateSettings(settings);
                 if (statusMsg)
                     statusMsg.innerHTML = `<span style="color:var(--success)">&#10003; Token saved (${val.length} chars)</span>`;
-                toast(t('settings.githubPatSaved') || 'GitHub PAT saved.', 'success');
+                toast(t('settings.githubPatSaved'), 'success');
             }
             catch (e) {
                 toast(t('common.error') + ' : ' + e, 'error');
@@ -86,7 +86,7 @@ async function initGithubPatSettings() {
                     icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
                 if (statusMsg)
                     statusMsg.innerHTML = `<span style="color:var(--text-muted)">Token cleared.</span>`;
-                toast(t('settings.githubPatCleared') || 'GitHub PAT cleared.', 'info');
+                toast(t('settings.githubPatCleared'), 'info');
             }
             catch (e) {
                 toast(t('common.error') + ' : ' + e, 'error');
@@ -130,12 +130,12 @@ async function initDiscordRpcSettings() {
             await updateSettings(settings);
             if (e.target.checked) {
                 await invoke('init_discord_rpc');
-                toast(t('settings.discordRpcEnabled') || 'Discord Rich Presence activé', 'success');
+                toast(t('settings.discordRpcEnabled'), 'success');
                 await updateDiscordStatus();
             }
             else {
                 await invoke('init_discord_rpc');
-                toast(t('settings.discordRpcDisabled') || 'Discord Rich Presence désactivé', 'info');
+                toast(t('settings.discordRpcDisabled'), 'info');
             }
         }
         catch (err) {
@@ -152,8 +152,8 @@ export async function updateDiscordStatus() {
         const activeId = await getActiveProfileId();
         const activeProfile = profiles.find(p => p.id === activeId);
         if (activeProfile) {
-            const details = t('settings.discordRpcDetails', { name: activeProfile.name }) || `Profil: ${activeProfile.name}`;
-            const status = t('settings.discordRpcStatus', { count: activeProfile.active_mods.length }) || `${activeProfile.active_mods.length} mods activés`;
+            const details = t('settings.discordRpcDetails', { name: activeProfile.name });
+            const status = t('settings.discordRpcStatus', { count: activeProfile.active_mods.length });
             await invoke('set_discord_presence', {
                 details,
                 status
@@ -228,10 +228,10 @@ async function renderSettingsShortcuts() {
                         settings.shortcuts = sc;
                         await updateSettings(settings);
                         input.value = newKey;
-                        toast('Raccourci mis à jour (' + newKey + ')', 'success');
+                        toast(t('settings.shortcutUpdated', { key: newKey }), 'success');
                     }
                     catch (err) {
-                        toast('Erreur sauvegarde raccourci : ' + err, 'error');
+                        toast(t('settings.shortcutError', { err: String(err) }), 'error');
                     }
                 }
             });
@@ -249,13 +249,13 @@ export async function runAutoBenchmarks(disksList, isBoot = false) {
     if (inUseDisks.length === 0)
         return;
     if (!isBoot)
-        toast('Optimisation en cours...', 'info');
+        toast(t('storage.optimizing'), 'info');
     for (const disk of inUseDisks) {
         try {
             const result = await invoke('benchmark_disk', { mountPoint: disk.mount_point });
             await invoke('set_disk_limit', { mountPoint: disk.mount_point, limitMbS: result.suggested_limit });
             if (!isBoot)
-                toast(`Optimisation réussie pour ${disk.name}: ${result.suggested_limit} MB/s`, 'success');
+                toast(t('storage.optimized', { name: disk.name, limit: String(result.suggested_limit) }), 'success');
         }
         catch (e) {
             console.error(`Failed auto-bench for ${disk.mount_point}:`, e);
@@ -270,11 +270,11 @@ const _renderStorageModal = async () => {
         return;
     container.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-bottom:8px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-        <div data-i18n="common.loading">Chargement...</div></div>`;
+        <div data-i18n="common.loading">${t('storage.loading')}</div></div>`;
     try {
         const disks = await invoke('get_system_disks');
         if (!disks || disks.length === 0) {
-            container.innerHTML = `<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:30px;">Aucun disque détecté.</div>`;
+            container.innerHTML = `<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:30px;">${t('storage.noDisks')}</div>`;
             return;
         }
         const usageTypeLabels = {
@@ -289,10 +289,10 @@ const _renderStorageModal = async () => {
         const criticalPct = settings.storage_critical_space_pct !== undefined ? settings.storage_critical_space_pct : 30;
         // Storage alert thresholds block
         const thresholdsBlock = `
-            <div style="position:relative; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:20px; overflow:hidden;" id="storage-alert-thresholds-block" class="${alertEnabled ? '' : 'config-disabled'}" data-i18n-content="settings.disabledOverlay" data-content="${alertEnabled ? '' : (t('settings.disabledOverlay') || 'DÉSACTIVÉ')}">
+            <div style="position:relative; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:20px; overflow:hidden;" id="storage-alert-thresholds-block" class="${alertEnabled ? '' : 'config-disabled'}" data-i18n-content="settings.disabledOverlay" data-content="${alertEnabled ? '' : t('settings.disabledOverlay')}">
                 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:${alertEnabled ? '12px' : '0px'}">
-                    <div style="font-size:14px; font-weight:700; color:var(--text-primary); position:relative; z-index:60; pointer-events:auto;">${t('storage.alertThresholds') || "Seuils d'Alerte de Stockage"}</div>
-                    <label class="bmm-switch" title="${alertEnabled ? 'Désactiver' : 'Activer'}" style="position:relative; z-index:60; pointer-events:auto;">
+                    <div style="font-size:14px; font-weight:700; color:var(--text-primary); position:relative; z-index:60; pointer-events:auto;">${t('storage.alertThresholds')}</div>
+                    <label class="bmm-switch" title="${alertEnabled ? t('settings.disabledOverlay') : t('settings.disabledOverlay')}" style="position:relative; z-index:60; pointer-events:auto;">
                         <input type="checkbox" id="chk-alert-enabled" ${alertEnabled ? 'checked' : ''}>
                         <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
                     </label>
@@ -300,16 +300,16 @@ const _renderStorageModal = async () => {
                 ${alertEnabled ? `
                 <div style="display:flex; gap:16px; flex-wrap:wrap;">
                     <div style="flex:1; min-width:200px;">
-                        <label style="font-size:11px; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">${t('storage.alertLimit') || 'Alerte Espace Limité (%)'}</label>
+                        <label style="font-size:11px; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">${t('storage.alertLimit')}</label>
                         <input type="number" id="input-warning-pct" class="form-input" value="${warningPct}" min="1" max="99" style="width:100%; font-size:13px; padding:8px 10px;">
                     </div>
                     <div style="flex:1; min-width:200px;">
-                        <label style="font-size:11px; font-weight:600; color:#ef4444; display:block; margin-bottom:4px;">${t('storage.alertCritical') || 'Alerte Espace Critique (%)'}</label>
+                        <label style="font-size:11px; font-weight:600; color:#ef4444; display:block; margin-bottom:4px;">${t('storage.alertCritical')}</label>
                         <input type="number" id="input-critical-pct" class="form-input" value="${criticalPct}" min="0" max="99" style="width:100%; font-size:13px; padding:8px 10px; border-color:rgba(239,68,68,0.3);">
                     </div>
                 </div>` : `
                 <div style="padding-top:6px;">
-                    <span style="font-size:12px;color:var(--text-muted)">${t('storage.alertDisabledHint') || 'Activez pour définir des seuils d\'alerte de stockage.'}</span>
+                    <span style="font-size:12px;color:var(--text-muted)">${t('storage.alertDisabledHint')}</span>
                 </div>`}
             </div>
         `;
@@ -320,8 +320,8 @@ const _renderStorageModal = async () => {
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2.5" style="${isAuto ? 'animation:pulse 2s infinite' : ''}"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
                 </div>
                 <div style="flex:1">
-                    <div style="font-size:14px; font-weight:800; color:var(--text-bright)">${t('storage.autoCalibTitle') || 'Auto-Calibration Performance'}</div>
-                    <div style="font-size:11px; color:var(--text-muted); line-height:1.4">${t('storage.autoCalibDesc') || 'Optimise automatiquement vos vitesses d\'écriture au démarrage et à l\'activation.'}</div>
+                    <div style="font-size:14px; font-weight:800; color:var(--text-bright)">${t('storage.autoCalibTitle')}</div>
+                    <div style="font-size:11px; color:var(--text-muted); line-height:1.4">${t('storage.autoCalibDesc')}</div>
                 </div>
                 <label class="bmm-switch">
                     <input type="checkbox" id="chk-auto-io" ${isAuto ? 'checked' : ''}>
@@ -340,7 +340,7 @@ const _renderStorageModal = async () => {
             await updateSettings(settings);
             _renderStorageModal();
             if (checked) {
-                toast(t('storage.autoCalibToast') || 'Auto-Calibration activée. Optimisation en cours...', 'info');
+                toast(t('storage.autoCalibToast'), 'info');
                 runAutoBenchmarks(disks);
             }
         });
@@ -438,10 +438,10 @@ const _renderStorageModal = async () => {
                 const freePct = disk.total_space_bytes > 0 ? (disk.available_space_bytes / disk.total_space_bytes) * 100 : 0;
                 const hasProfiles = disk.profiles_using && disk.profiles_using.length > 0;
                 if (hasProfiles && freePct <= criticalPct) {
-                    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:11px;color:#f87171;font-weight:600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${t('storage.critical') || "Espace critique ! L'activation de mods pourrait échouer."}</div>`;
+                    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:11px;color:#f87171;font-weight:600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${t('storage.critical')}</div>`;
                 }
                 else if (hasProfiles && freePct <= warningPct) {
-                    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:8px;font-size:11px;color:#fbbf24;font-weight:500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>${t('storage.warning') || "Espace limité — pensez à libérer de la place."}</div>`;
+                    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:8px;font-size:11px;color:#fbbf24;font-weight:500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>${t('storage.warning')}</div>`;
                 }
                 return '';
             })()}
@@ -451,7 +451,7 @@ const _renderStorageModal = async () => {
                 <div style="display:flex;align-items:center;gap:8px;">
                     <button class="btn btn-add disk-bench-btn" data-mount="${disk.mount_point}" style="font-size:12px;gap:6px;padding:6px 14px;">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                        <span data-i18n="storage.benchmark">${t('storage.benchmark') || 'Tester la vitesse'}</span>
+                        <span data-i18n="storage.benchmark">${t('storage.benchmark')}</span>
                     </button>
                     <span class="disk-bench-result" style="font-size:11px;color:var(--text-muted);"></span>
                 </div>
@@ -470,7 +470,7 @@ const _renderStorageModal = async () => {
                     const mountPoint = e.target.getAttribute('data-mount');
                     try {
                         await invoke('set_disk_limit', { mountPoint, limitMbS });
-                        toast(t('common.success') || 'Saved', 'success');
+                        toast(t('common.success'), 'success');
                     }
                     catch (err) {
                         toast('Error: ' + err, 'error');
@@ -484,7 +484,7 @@ const _renderStorageModal = async () => {
                 const resultSpan = btn.closest('div').querySelector('.disk-bench-result');
                 const original = btn.innerHTML;
                 btn.disabled = true;
-                btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> <span>${t('storage.benchmarking') || 'Test en cours...'}</span>`;
+                btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> <span>${t('storage.benchmarking')}</span>`;
                 try {
                     const res = await invoke('benchmark_disk', { mountPoint });
                     resultSpan.innerHTML = `
@@ -492,8 +492,8 @@ const _renderStorageModal = async () => {
                         <span style="margin:0 4px;">·</span>
                         <span style="color:#a78bfa;">↑ ${res.write_mb_s} MB/s</span>
                         <span style="margin:0 4px;">·</span>
-                        <span style="color:#34d399;">${t('storage.suggestedLimit') || 'Suggestion'}: ${res.suggested_limit} MB/s</span>
-                        <button class="btn btn-ghost btn-sm disk-apply-suggestion" data-mount="${mountPoint}" data-value="${res.suggested_limit}" style="font-size:10px;padding:2px 8px;margin-left:4px;">${t('storage.applySuggested') || 'Appliquer'}</button>
+                        <span style="color:#34d399;">${t('storage.suggestedLimit')}: ${res.suggested_limit} MB/s</span>
+                        <button class="btn btn-ghost btn-sm disk-apply-suggestion" data-mount="${mountPoint}" data-value="${res.suggested_limit}" style="font-size:10px;padding:2px 8px;margin-left:4px;">${t('storage.applySuggested')}</button>
                     `;
                     resultSpan.querySelector('.disk-apply-suggestion')?.addEventListener('click', async (ev) => {
                         const sugVal = parseInt(ev.target.getAttribute('data-value'), 10);
@@ -503,7 +503,7 @@ const _renderStorageModal = async () => {
                             input.value = sugVal;
                         try {
                             await invoke('set_disk_limit', { mountPoint: mp, limitMbS: sugVal });
-                            toast(t('common.success') || 'Saved', 'success');
+                            toast(t('common.success'), 'success');
                         }
                         catch (err) {
                             toast('Error: ' + err, 'error');
@@ -521,7 +521,7 @@ const _renderStorageModal = async () => {
     }
     catch (err) {
         console.error(err);
-        container.innerHTML = `<div style="font-size:12px;color:var(--error);text-align:center;padding:30px;">Erreur: ${err}</div>`;
+        container.innerHTML = `<div style="font-size:12px;color:var(--error);text-align:center;padding:30px;">${t('storage.error', { err: String(err) })}</div>`;
     }
 };
 async function initStorageSettings() {
@@ -643,10 +643,10 @@ async function initLanguageSettings() {
             a.download = 'template.json';
             a.click();
             URL.revokeObjectURL(url);
-            toast(t('common.success') || 'OK', 'success');
+            toast(t('common.success'), 'success');
         }
         catch (e) {
-            toast('Erreur download : ' + e, 'error');
+            toast(t('settings.langDownloadError', { err: String(e) }), 'error');
         }
     });
     document.getElementById('btn-import-lang')?.addEventListener('click', async () => {
@@ -674,27 +674,27 @@ export async function renderSettingsTags() {
         const tags = await invoke('get_tags');
         list.innerHTML = '';
         if (tags.length === 0) {
-            list.innerHTML = '<span style="color:var(--text-muted);font-size:12px;font-style:italic">Aucun tag personnalisé pour le moment.</span>';
+            list.innerHTML = `<span style="color:var(--text-muted);font-size:12px;font-style:italic">${t('settings.tagNoneYet')}</span>`;
             return;
         }
-        tags.forEach(t => {
+        tags.forEach(tag => {
             const chip = document.createElement('div');
-            chip.style.cssText = `display:flex;align-items:center;gap:4px;background:${t.color}20;color:${t.color};border:1px solid ${t.color}40;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600`;
-            chip.innerHTML = `<span>${String(t.name).replace(/</g, '&lt;')}</span><button data-id="${t.id}" class="btn-del-tag" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:6px;font-size:14px" title="Supprimer">&times;</button>`;
+            chip.style.cssText = `display:flex;align-items:center;gap:4px;background:${tag.color}20;color:${tag.color};border:1px solid ${tag.color}40;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600`;
+            chip.innerHTML = `<span>${String(tag.name).replace(/</g, '&lt;')}</span><button data-id="${tag.id}" class="btn-del-tag" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:6px;font-size:14px" title="${t('common.delete')}">&times;</button>`;
             list.appendChild(chip);
         });
         list.querySelectorAll('.btn-del-tag').forEach(btn => {
             btn.addEventListener('click', async () => {
-                if (confirm('Voulez-vous vraiment supprimer ce tag ? Il sera retiré de tous les mods.')) {
+                if (confirm(t('settings.tagDeleteConfirm'))) {
                     try {
                         await invoke('delete_tag', { tagId: btn.dataset.id });
-                        toast('Tag supprimé.', 'success');
+                        toast(t('settings.tagDeleted'), 'success');
                         renderSettingsTags();
                         if (window._refreshModsFn)
                             window._refreshModsFn();
                     }
                     catch (err) {
-                        toast('Erreur suppression tag : ' + err, 'error');
+                        toast(t('settings.tagDeleteError', { err: String(err) }), 'error');
                     }
                 }
             });
@@ -722,17 +722,17 @@ export async function initSettings() {
             const name = nameInput.value.trim();
             const color = colorInput.value;
             if (!name)
-                return toast('Le nom du tag est requis.', 'error');
+                return toast(t('settings.tagNameRequired'), 'error');
             try {
                 await invoke('create_tag', { name, color, icon: '' });
                 nameInput.value = '';
-                toast('Tag créé.', 'success');
+                toast(t('settings.tagCreated'), 'success');
                 renderSettingsTags();
                 if (window._refreshModsFn)
                     window._refreshModsFn();
             }
             catch (err) {
-                toast('Erreur création tag : ' + err, 'error');
+                toast(t('settings.tagCreateError', { err: String(err) }), 'error');
             }
         });
         renderSettingsTags();
@@ -745,10 +745,10 @@ export async function initSettings() {
             if (destPath) {
                 try {
                     await invoke('export_app_data', { destPath });
-                    toast('Configuration exportée.', 'success');
+                    toast(t('settings.dataExported'), 'success');
                 }
                 catch (e) {
-                    toast('Erreur export : ' + e, 'error');
+                    toast(t('settings.dataExportError', { err: String(e) }), 'error');
                 }
             }
         });
@@ -758,14 +758,14 @@ export async function initSettings() {
         importBtn.addEventListener('click', async () => {
             const srcPath = await pickFile([{ name: 'App Data Backup', extensions: ['json'] }]);
             if (srcPath) {
-                if (confirm('Voulez-vous vraiment écraser votre configuration actuelle ?')) {
+                if (confirm(t('settings.dataImportConfirm'))) {
                     try {
                         await invoke('import_app_data', { srcPath });
-                        toast('Configuration importée avec succès. Redémarrage...', 'success');
+                        toast(t('settings.dataImported'), 'success');
                         setTimeout(() => window.location.reload(), 2000);
                     }
                     catch (e) {
-                        toast('Erreur import : ' + e, 'error');
+                        toast(t('settings.dataImportError', { err: String(e) }), 'error');
                     }
                 }
             }

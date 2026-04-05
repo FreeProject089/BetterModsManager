@@ -107,7 +107,7 @@ export function initModlist() {
             .filter(cb => cb.checked)
             .map(cb => parseInt(cb.dataset.index));
         if (selectedIndices.length === 0) {
-            toast(t('mm.installNone') || 'Veuillez sélectionner au moins un mod.', 'warning');
+            toast(t('mm.installNone'), 'warning');
             return;
         }
         currentList.mods = currentList.mods.filter((_, idx) => selectedIndices.includes(idx));
@@ -395,7 +395,7 @@ export function renderImportedModlist(modlist) {
 
           <!-- Mod Selection Checkbox -->
           <div style="position:absolute; right:16px; top:50%; transform:translateY(-50%); display:flex; align-items:center; gap:10px">
-              <input type="checkbox" class="mm-mod-checkbox" data-index="${idx}" ${isAlreadyPresent ? '' : 'checked'} style="width:18px; height:18px; cursor:pointer" title="${isAlreadyPresent ? t('mm.alreadyPresent') || 'Déjà installé' : ''}">
+              <input type="checkbox" class="mm-mod-checkbox" data-index="${idx}" ${isAlreadyPresent ? '' : 'checked'} style="width:18px; height:18px; cursor:pointer" title="${isAlreadyPresent ? t('mm.alreadyPresent') : ''}">
           </div>
 
           ${fileCount > 0 ? `
@@ -449,7 +449,7 @@ export function renderImportedModlist(modlist) {
                     
                     <div style="margin-left:auto; display:flex; align-items:center; gap:8px; font-size:10px; color:var(--text-secondary); cursor:pointer; user-select:none">
                         <input type="checkbox" id="mm-select-all" checked style="cursor:pointer">
-                        <label for="mm-select-all" style="cursor:pointer">${t('common.selectAll') || 'Tout sélectionner'}</label>
+                        <label for="mm-select-all" style="cursor:pointer">${t('common.selectAll')}</label>
                     </div>
                 </div>
                 ${modsHtml}

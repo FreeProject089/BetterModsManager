@@ -384,7 +384,7 @@ export function updateCardState(card, mod) {
     pill.classList.toggle('disabled', !mod.enabled);
     pill.style.background = mod.enabled ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)';
     pill.style.color = mod.enabled ? 'var(--success)' : 'var(--text-muted)';
-    pill.textContent = mod.enabled ? 'ACTIF' : 'INACTIF';
+    pill.textContent = mod.enabled ? (t('mod.statusActive') || 'ACTIVE') : (t('mod.statusInactive') || 'INACTIVE');
   }
 }
 

@@ -99,17 +99,17 @@ export function initRepoSync(elements) {
                 syncGameBadge.textContent = repo.game_name;
 
                 if (isVerified) {
-                    syncBadge.textContent = t('repo.verified') || "Vérifié ✅";
+                    syncBadge.textContent = t('repo.verified');
                     syncBadge.style.background = 'rgba(46, 204, 113, 0.2)';
                     syncBadge.style.color = '#2ecc71';
                 } else {
-                    syncBadge.textContent = t('repo.unverified') || "Non vérifié ⚠️";
+                    syncBadge.textContent = t('repo.unverified');
                     syncBadge.style.background = 'rgba(231, 76, 60, 0.2)';
                     syncBadge.style.color = '#e74c3c';
                 }
 
                 if (profilesSelectionEl && repo.profiles) {
-                    profilesSelectionEl.innerHTML = `<div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:10px; opacity:0.8;">${t('repo.selectSyncTasks') || 'SÉLECTION DES PROFILS À SYNCHRONISER :'}</div>`;
+                    profilesSelectionEl.innerHTML = `<div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:10px; opacity:0.8;">${t('repo.selectSyncTasks')}</div>`;
                     
                     const localProfiles = await invoke('get_profiles');
 
@@ -163,11 +163,11 @@ export function initRepoSync(elements) {
                             optionsContainer.appendChild(row);
                         };
 
-                        addOption(t('repo.syncNew') || "+ Créer un nouveau profil", "NEW", !localProfiles.some(lp => lp.origin_repo_profile_id === rp.id));
+                        addOption(t('repo.syncNew'), "NEW", !localProfiles.some(lp => lp.origin_repo_profile_id === rp.id));
 
                         const matches = localProfiles.filter(lp => lp.origin_repo_profile_id === rp.id);
                         matches.forEach(m => {
-                            addOption(`${t('repo.syncUpdate') || 'Mettre à jour :'} ${m.name}`, m.id, true);
+                            addOption(`${t('repo.syncUpdate')} ${m.name}`, m.id, true);
                         });
 
                         if (localProfiles.length > matches.length) {
@@ -265,7 +265,7 @@ export function initRepoSync(elements) {
                 syncStatus.textContent = t('repo.syncing') || "Synchronisation...";
                 syncPercent.textContent = "0%";
                 syncFill.style.width = "0%";
-                syncDetails.textContent = t('repo.syncStarting') || "Démarrage...";
+                syncDetails.textContent = t('repo.syncStarting');
                 if (btnPauseSync) btnPauseSync.style.display = 'flex';
                 if (btnCancelSync) {
                     btnCancelSync.style.display = 'flex';
@@ -311,12 +311,12 @@ export function initRepoSync(elements) {
 
                 showSyncSummary(summary);
 
-                syncStatus.textContent = t('repo.syncDone') || "Synchronisation terminée !";
+                syncStatus.textContent = t('repo.syncDone');
                 syncPercent.textContent = "100%";
                 syncFill.style.width = "100%";
-                syncDetails.textContent = t('repo.syncComplete') || "Opération terminée.";
+                syncDetails.textContent = t('repo.syncComplete');
                 
-                toast(t('repo.syncSuccess') || "Profil synchronisé avec succès.", 'success');
+                toast(t('repo.syncSuccess'), 'success');
                 
                 if (window._refreshModsFn) window._refreshModsFn(true);
                 await renderProfiles();
@@ -324,10 +324,10 @@ export function initRepoSync(elements) {
             } catch (err) {
                 const errMsg = String(err);
                 if (errMsg.includes("Synchronisation annulée")) {
-                    syncStatus.textContent = t('repo.syncCancelled') || "Synchronisation annulée";
+                    syncStatus.textContent = t('repo.syncCancelled');
                     syncPercent.textContent = "0%";
                     syncFill.style.width = "0%";
-                    toast(t('repo.syncCancelled') || "Synchronisation annulée", 'info');
+                    toast(t('repo.syncCancelled'), 'info');
                 } else {
                     syncStatus.textContent = t('repo.syncError') || "Erreur de synchro";
                     toast(t(errMsg) || errMsg, 'error');
@@ -361,7 +361,7 @@ export function initRepoSync(elements) {
                     btnPauseSync.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>${t('repo.resumeSync')}</span>`;
                 }
             } catch (err) {
-                toast("Erreur Pause/Reprise : " + err, 'error');
+                toast(t('repo.syncError') + err, 'error');
             }
         });
     }
@@ -390,7 +390,7 @@ export function showSyncSummary(summary) {
     if (!body || !modal) return;
 
     if (!summary || !summary.profiles || summary.profiles.length === 0) {
-        body.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted);">${t('repo.noChanges') || "Aucun changement détecté."}</div>`;
+        body.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted);">${t('repo.noChanges')}</div>`;
     } else {
         body.innerHTML = summary.profiles.map(p => `
             <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:15px; margin-bottom:12px;">
@@ -402,9 +402,9 @@ export function showSyncSummary(summary) {
                     <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
                         <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">MODS</div>
                         <div style="display:flex; flex-direction:column; gap:4px;">
-                            <div style="font-size:12px; color:var(--success); font-weight:600;">+ ${p.mods_added} ${t('repo.summaryAdded') || 'ajoutés'}</div>
-                            <div style="font-size:12px; color:var(--accent); font-weight:600;">~ ${p.mods_updated} ${t('repo.summaryUpdated') || 'mis à jour'}</div>
-                            <div style="font-size:12px; color:var(--danger); font-weight:600;">- ${p.mods_removed} ${t('repo.summaryRemoved') || 'supprimés'}</div>
+                            <div style="font-size:12px; color:var(--success); font-weight:600;">+ ${p.mods_added} ${t('repo.summaryAdded')}</div>
+                            <div style="font-size:12px; color:var(--accent); font-weight:600;">~ ${p.mods_updated} ${t('repo.summaryUpdated')}</div>
+                            <div style="font-size:12px; color:var(--danger); font-weight:600;">- ${p.mods_removed} ${t('repo.summaryRemoved')}</div>
                         </div>
                     </div>
                     <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">

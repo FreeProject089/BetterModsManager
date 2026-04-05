@@ -61,7 +61,7 @@ function initArchiveContextMenu() {
             return;
         const relPath = window._currentArchiveNode.dataset.path;
         if (relPath)
-            navigator.clipboard.writeText(relPath).then(() => toast(t('common.copied') || 'Copié !', 'success'));
+            navigator.clipboard.writeText(relPath).then(() => toast(t('common.copied'), 'success'));
         hideCtx();
     });
 }
@@ -217,11 +217,11 @@ export async function renderModDetail(modId) {
             await invoke('update_mod_meta', {
                 modId: mod.id, payload: { name, author, description, version, tags, downloadLinks: download_links, dependencies }
             });
-            toast(t('common.saved') || 'Mod sauvegardé.', 'success');
+            toast(t('common.saved'), 'success');
             await refreshMods(false, true);
         }
         catch (err) {
-            toast('Erreur : ' + err, 'error');
+            toast(t('common.error') + ' : ' + String(err), 'error');
         }
     };
     panel.querySelector('#btn-add-link').onclick = () => {

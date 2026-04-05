@@ -49,6 +49,8 @@ This version introduces significant performance optimizations, a brand-new integ
 - **Storage Manager**: Fully localized "Critical" and "Warning" alerts for English and French.
 - **Diagram Clusters**: Standardized technical labels across all interactive schemas.
 - **i18n Audit**: Fully translated the "Found in Diagrams" search header.
+- **Fallback Purge**: Systematically removed all hardcoded fallback strings across `mods-details.ts`, `repo.ts`, `profiles.ts` and others to enforce strict i18n parity.
+- **Profile Backgrounds**: Added completely missing translation keys (and wiped duplicates) for custom profile background states (`prof.bgPendingNotice`, etc.) in `en.json`, `fr.json`, and `template.json`.
 
 ## Bug Fixes & Stability
 ### [FIXED] Critical Syntax Errors
@@ -56,6 +58,10 @@ This version introduces significant performance optimizations, a brand-new integ
 ### [FIXED] RPC & Logic Stability
 - **RPC Stability**: Resolved critical `TypeError: getProfiles is not a function` crash in the Discord status update loop.
 - **Command Security**: Fixed `cancel_repo_export` RPC error where the command was not correctly registered in the backend.
+
+### [FIXED] Security & Anti-XSS
+- **Toast Notifications**: Refactored the global `toast()` function in `app.ts` to use sterile DOM structures (`.textContent`), plugging a potential XSS vulnerability.
+- **Profile Deletion**: Secured the irreversible profile deletion modal in `profiles.ts` by strictly enforcing `escHtml` checks on user-defined profile names.
 
 ---
 *Generated on: 2026-04-02*

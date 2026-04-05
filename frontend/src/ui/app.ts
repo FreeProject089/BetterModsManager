@@ -37,7 +37,14 @@ export function toast(message, type = 'info', duration = 3000) {
     const container = document.getElementById('toast-container');
     const el = document.createElement('div');
     el.className = `toast ${type}`;
-    el.innerHTML = `<div class="toast-dot"></div><span>${message}</span>`;
+    
+    const dot = document.createElement('div');
+    dot.className = 'toast-dot';
+    const textSpan = document.createElement('span');
+    textSpan.textContent = message;
+    
+    el.appendChild(dot);
+    el.appendChild(textSpan);
     container.appendChild(el);
 
     const remove = () => {
@@ -291,8 +298,7 @@ async function main() {
             }
 
             const suffix = isPtb ? "-FAB" : "";
-            const PatchVersion = " {P U.4.LPU}";
-            const versionStr = `V${version}${suffix} ${PatchVersion}`;
+            const versionStr = `V${version}${suffix}`;
 
             let buildDate = "Unknown";
             try {
@@ -429,10 +435,6 @@ async function main() {
     // PTB Mode check
     checkPtbMode();
 
-    // Onboarding check
-    if (await shouldShowOnboarding()) {
-        startOnboarding();
-    }
 
     const restartBtn = document.getElementById('btn-restart-tutorial');
     if (restartBtn) {

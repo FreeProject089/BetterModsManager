@@ -138,7 +138,7 @@ export function getModCardHTML(mod, ctx) {
             width: 70px;
             text-align: center;
         ">
-            ${mod.enabled ? 'ACTIF' : 'INACTIF'}
+            ${mod.enabled ? (t('mod.statusActive') || 'ACTIVE') : (t('mod.statusInactive') || 'INACTIVE')}
         </div>
 
         ${mod.shared_activations && mod.shared_activations.length > 1 ? `
@@ -197,7 +197,7 @@ export function getModDetailHTML(mod, ctx) {
               <div style="font-size:10px;color:var(--text-muted)">Profil: ${escHtml(c.other_profile_name)}</div>
             </div>
           `).join('')}
-        </div>` : '<div id="detail-conflicts-list" style="font-size:12px;color:var(--text-muted);font-style:italic">Aucun conflit détecté.</div>';
+        </div>` : `<div id="detail-conflicts-list" style="font-size:12px;color:var(--text-muted);font-style:italic">${t('conflict.empty') || 'No conflicts detected.'}</div>`;
     const infoContent = `
       <!-- Editable Fields -->
       <div class="detail-section">
@@ -238,7 +238,7 @@ export function getModDetailHTML(mod, ctx) {
         </label>
         <div id="detail-deps-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
         <div style="position:relative">
-            <input type="text" id="detail-dep-input" class="input-field" style="width:100%;padding:6px;font-size:11px" placeholder="Ajouter un mod requis..." />
+            <input type="text" id="detail-dep-input" class="input-field" style="width:100%;padding:6px;font-size:11px" placeholder="${t('mod.addDepPlaceholder') || 'Add a required mod...'}" />
             <div id="detail-dep-suggestions" class="glass" style="display:none; position:absolute; z-index:100; max-height:150px; overflow-y:auto; width:100%; border:1px solid var(--border); border-radius:8px; margin-top:4px"></div>
         </div>
       </div>
@@ -289,7 +289,7 @@ export function getModDetailHTML(mod, ctx) {
         <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
           <span style="font-family:var(--font-mono);font-size:11px;color:var(--cyan)">v${escHtml(mod.version)}</span>
           <span style="font-size:10px;color:var(--text-muted);display:inline-flex;align-items:center;gap:4px;cursor:help" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.mod_folder_path || ''))}', 'folder', true)" onmouseleave="window.hideTaskyHelp()">
-            ${mod.enabled ? '<svg width="8" height="8" viewBox="0 0 24 24" fill="var(--success)"><circle cx="12" cy="12" r="10"/></svg> ACTIF' : '<svg width="8" height="8" viewBox="0 0 24 24" fill="var(--text-muted)"><circle cx="12" cy="12" r="10"/></svg> INACTIF'}
+            ${mod.enabled ? `<svg width="8" height="8" viewBox="0 0 24 24" fill="var(--success)"><circle cx="12" cy="12" r="10"/></svg> ${t('mod.statusActive') || 'ACTIVE'}` : `<svg width="8" height="8" viewBox="0 0 24 24" fill="var(--text-muted)"><circle cx="12" cy="12" r="10"/></svg> ${t('mod.statusInactive') || 'INACTIVE'}`}
           </span>
         </div>
       </div>

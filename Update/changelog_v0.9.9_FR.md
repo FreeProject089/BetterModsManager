@@ -49,6 +49,8 @@ Cette version introduit des optimisations de performance significatives, un tout
 - **Gestionnaire de stockage** : Alertes "Critique" et "Attention" entièrement localisées pour l'anglais et le français.
 - **Clusters de diagramme** : Standardisation des étiquettes techniques sur tous les schémas interactifs.
 - **Audit i18n** : Traduction intégrale de l'en-tête de recherche "Trouvé dans les diagrammes".
+- **Purge des Fallbacks** : Suppression systématique de toutes les chaînes de textes écrites en dur dans `mods-details.ts`, `repo.ts`, `profiles.ts` et bien d'autres pour forcer une parité i18n stricte.
+- **Fonds de Profil** : Ajout de clés de traduction totalement manquantes (et suppression de doublons) concernant les états des images de profil (`prof.bgPendingNotice`, etc.) dans `en.json`, `fr.json` et `template.json`.
 
 ## Corrections de bugs & Stabilité
 ### [FIXED] Erreurs de syntaxe critiques
@@ -56,6 +58,10 @@ Cette version introduit des optimisations de performance significatives, un tout
 ### [FIXED] Stabilité RPC & Logique
 - **Stabilité RPC** : Résolution du crash critique `TypeError: getProfiles is not a function` dans la boucle de mise à jour du statut Discord.
 - **Sécurité des commandes** : Correction de l'erreur RPC `cancel_repo_export` où la commande n'était pas correctement enregistrée dans le backend.
+
+### [FIXED] Sécurité Anti-XSS
+- **Notifications Toast** : Refactorisation de la fonction globale `toast()` dans `app.ts` via HTML stérile (DOM `textContent`), colmatant une faille XSS potentielle.
+- **Suppression de Profil** : Sécurisation de la modale de validation dans `profiles.ts` en appliquant rigoureusement l'encodage `escHtml` sur les noms personnalisés.
 
 ---
 *Généré le : 2026-04-02*

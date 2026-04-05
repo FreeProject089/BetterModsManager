@@ -14,7 +14,7 @@ import { initRepoAdmin } from './repo-admin.js';
 export const copyToClipboard = async (text, successMsg) => {
     try {
         await navigator.clipboard.writeText(text);
-        toast(successMsg || t('repo.urlCopied') || "Copié !", "success");
+        toast(successMsg || t('repo.urlCopied'), "success");
     } catch (err) {
         toast(t('repo.urlCopyError') || "Erreur de copie", "error");
     }
@@ -219,7 +219,7 @@ export function initRepo() {
                     const settings = await invoke('get_settings');
                     settings.cloudflared_path = path;
                     await invoke('update_settings', { settings });
-                    toast(t('repo.cloudflaredPathUpdated') || "Chemin cloudflared mis à jour.", 'success');
+                    toast(t('repo.cloudflaredPathUpdated'), 'success');
                 } catch (e) { toast(String(e), 'error'); }
             }
         });
@@ -401,7 +401,7 @@ export function initRepo() {
                         const repo = JSON.parse(content);
                         if (repo.seed && elements.inputExportSeed) {
                             elements.inputExportSeed.value = repo.seed;
-                            toast(t('repo.seedDetected') || "Graine serveur détectée.", 'info');
+                            toast(t('repo.seedDetected'), 'info');
                         }
                     }
                 } catch (e) { if (elements.inputExportSeed) elements.inputExportSeed.value = ''; }

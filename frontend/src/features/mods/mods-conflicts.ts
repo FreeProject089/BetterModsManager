@@ -264,7 +264,7 @@ export function showConflictContextMenu(e, mod1Id, mod2Id) {
     try {
       const files = await invoke('get_conflict_file_tree', { modId: mod1Id, otherModId: mod2Id });
       if (files.length === 0) {
-        container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted)">${t('conflict.noTreeFiles')||"Aucun fichier conflictuel direct trouvé."}</div>`;
+        container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted)">${t('conflict.noTreeFiles')}</div>`;
         return;
       }
       container.innerHTML = files.map(f => `<div style="padding:4px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escAttr(f)}">${escHtml(f)}</div>`).join('');

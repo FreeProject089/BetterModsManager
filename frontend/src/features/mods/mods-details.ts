@@ -58,7 +58,7 @@ function initArchiveContextMenu() {
   document.getElementById('ctx-copy-path')?.addEventListener('click', () => {
       if (!(window as any)._currentArchiveNode) return;
       const relPath = (window as any)._currentArchiveNode.dataset.path;
-      if (relPath) navigator.clipboard.writeText(relPath).then(() => toast(t('common.copied') || 'Copié !', 'success'));
+      if (relPath) navigator.clipboard.writeText(relPath).then(() => toast(t('common.copied'), 'success'));
       hideCtx();
   });
 }
@@ -119,16 +119,16 @@ export async function renderModDetail(modId) {
         const listContainer = panel.querySelector('#detail-conflicts-list');
         if (listContainer) {
           listContainer.innerHTML = conflicts.map(c => `
-            <div style="background:rgba(0,0,0,0.2);padding:8px 10px;border-radius:8px;border:1px solid ${c.status === 'Active' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div class="conflict-card ${c.status === 'Active' ? 'active-conflict' : ''}">
+              <div class="conflict-card-header">
                 <span class="tag-conflict tag-${c.category.toLowerCase()}-conflict ${c.status.toLowerCase()}" style="cursor:pointer" onclick="window.openGlobalConflictModal('${mod.id}')">
                    ${c.category === 'Intra' ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:4px"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'}
-                   ${c.category}
+                   ${c.category.toUpperCase()}
                 </span>
-                <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted)">${c.file_count} f.</span>
+                <span class="conflict-card-count">${c.file_count} f.</span>
               </div>
-              <div style="font-size:11px;color:var(--text-primary);font-weight:600" title="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</div>
-              <div style="font-size:10px;color:var(--text-muted)">${t('mod.profilLabel')}${escHtml(c.other_profile_name)}</div>
+              <div class="conflict-card-title" title="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</div>
+              <div class="conflict-card-profile">${t('mod.profilLabel')}${escHtml(c.other_profile_name)}</div>
             </div>
           `).join('');
         }
@@ -214,9 +214,9 @@ export async function renderModDetail(modId) {
       await invoke('update_mod_meta', { 
         modId: mod.id, payload: { name, author, description, version, tags, downloadLinks: download_links, dependencies }
       });
-      toast(t('common.saved') || 'Mod sauvegardé.', 'success');
+      toast(t('common.saved'), 'success');
       await refreshMods(false, true);
-    } catch (err) { toast('Erreur : ' + err, 'error'); }
+    } catch (err) { toast(t('common.error') + ' : ' + String(err), 'error'); }
   };
 
   panel.querySelector('#btn-add-link').onclick = () => {

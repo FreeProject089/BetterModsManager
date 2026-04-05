@@ -356,14 +356,14 @@ export async function renderProfiles() {
                     <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
                 </svg>
             </div>
-            <h3 data-i18n="prof.emptyTitle" style="font-size:22px; margin-bottom:12px; font-weight:700">Aucun profil configuré</h3>
+            <h3 data-i18n="prof.emptyTitle" style="font-size:22px; margin-bottom:12px; font-weight:700">${t('prof.emptyTitle') || 'Aucun profil configuré'}</h3>
             <p data-i18n="prof.emptyDesc" style="color:var(--text-secondary); max-width:440px; text-align:center; margin-bottom:32px; line-height:1.6">
-                Organisez vos mods par jeu ou par configuration. Créez votre premier profil pour commencer à modder en toute sécurité.
+                ${t('prof.emptyDesc') || 'Organisez vos mods par jeu ou par configuration...'}
             </p>
             <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:16px; width:100%; margin-bottom: 24px;">
                 <button class="btn btn-primary btn-lg" id="empty-create-profile" style="padding:12px 24px; font-size:14px; font-weight:600; min-width:180px">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                    <span data-i18n="prof.create">Créer un profil</span>
+                    <span data-i18n="prof.create">${t('prof.create') || 'Créer un profil'}</span>
                 </button>
                 <div class="dropdown dropdown-center">
                     <button class="btn btn-secondary btn-lg" style="padding:12px 24px; font-size:14px; font-weight:600; min-width:180px; display:flex; align-items:center; justify-content:center; gap:8px;">
@@ -397,7 +397,7 @@ export async function renderProfiles() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                     <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                 </svg>
-                <span data-i18n="prof.howItWorks">Comment ça marche ?</span>
+                <span data-i18n="prof.howItWorks">${t('prof.howItWorks') || 'Comment ça marche ?'}</span>
             </button>
         `;
         document.getElementById('empty-create-profile').onclick = () => document.getElementById('btn-new-profile').click();
@@ -613,10 +613,10 @@ function openDeleteProfileModal(id, profile) {
     const warningText = document.getElementById('delete-profile-warning-text');
     // Ensure button is reset before cloning or using (in case it was disabled from a previous attempt)
     btnFinal.disabled = false;
-    btnFinal.innerHTML = `<span>${t('lib.delete') || 'Supprimer définitivement'}</span>`;
+    btnFinal.innerHTML = `<span>${t('lib.delete')}</span>`;
     // Ensure all data-i18n in the modal are translated
     applyTranslations(modal);
-    warningText.innerHTML = (t('prof.deleteConfirmLabel') || 'Voulez-vous vraiment supprimer le profil "{name}" ? Cette action est irréversible.')
+    warningText.innerHTML = t('prof.deleteConfirmLabel')
         .replace('{name}', `<strong style="color:var(--text-primary)">${profile.name}</strong>`);
     // Clone button to remove old listeners
     const btnContainer = btnFinal.parentElement;
@@ -635,12 +635,12 @@ function openDeleteProfileModal(id, profile) {
             // Refresh mods and conflicts
             const { refreshMods } = await import('../mods/mods.js');
             await refreshMods(true);
-            toast(t('prof.deleted') || 'Profil supprimé.', 'info');
+            toast(t('prof.deleted'), 'info');
         }
         catch (err) {
             toast(t('prof.deleteError') + err, 'error');
             newBtnFinal.disabled = false;
-            newBtnFinal.innerHTML = `<span>${t('lib.delete') || 'Supprimer définitivement'}</span>`;
+            newBtnFinal.innerHTML = `<span>${t('lib.delete')}</span>`;
         }
     });
     modal.classList.add('open');
@@ -759,7 +759,7 @@ function initEditBackgroundSection(profile) {
                     ${hasBg ? t('prof.bgDefined') : t('prof.bgNone')}
                 </div>
                 <div style="font-size:11px;color:var(--text-muted)">
-                    ${hasBg ? 'L\'image sera appliquée après sauvegarde.' : 'Ajoutez une touche personnelle à votre profil.'}
+                    ${hasBg ? t('prof.bgPending') : t('prof.bgAddTouch')}
                 </div>
             </div>
             <div style="display:flex;gap:8px">
@@ -780,7 +780,7 @@ function initEditBackgroundSection(profile) {
         document.getElementById('btn-edit-remove-bg').addEventListener('click', () => {
             window.pendingBgState = { action: 'remove', tmpPath: null };
             initEditBackgroundSection(profile);
-            toast(t('prof.bgRemovePending') || 'La suppression sera appliquée lors de la sauvegarde.', 'info');
+            toast(t('prof.bgRemovePending'), 'info');
         });
     }
 }
@@ -823,7 +823,7 @@ function openCropOverlay(sourcePath, profile) {
         });
     };
     imageElement.onerror = () => {
-        toast('Impossible de charger l\'image.', 'error');
+        toast(t('prof.bgLoadError'), 'error');
         overlay.remove();
     };
     document.getElementById('crop-cancel').addEventListener('click', () => {
@@ -851,13 +851,13 @@ function openCropOverlay(sourcePath, profile) {
             });
             window.pendingBgState = { action: 'apply', tmpPath };
             initEditBackgroundSection(profile);
-            toast('L\'image sera appliquée lors de la sauvegarde.', 'success');
+            toast(t('prof.bgPending'), 'success');
             if (cropper)
                 cropper.destroy();
             overlay.remove();
         }
         catch (e) {
-            toast('Erreur recadrage: ' + e, 'error');
+            toast(t('prof.bgCropError', { err: String(e) }), 'error');
             btn.disabled = false;
             btn.textContent = t('prof.bgCropConfirm');
         }

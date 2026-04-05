@@ -262,8 +262,7 @@ async function main() {
                 console.warn("[BMM] Failed to fetch PTB mode:", err);
             }
             const suffix = isPtb ? "-FAB" : "";
-            const PatchVersion = " {P U.4.LPU}";
-            const versionStr = `V${version}${suffix} ${PatchVersion}`;
+            const versionStr = `V${version}${suffix}`;
             let buildDate = "Unknown";
             try {
                 buildDate = await invoke('get_build_date');
@@ -383,10 +382,6 @@ async function main() {
     initAutoUpdate();
     // PTB Mode check
     checkPtbMode();
-    // Onboarding check
-    if (await shouldShowOnboarding()) {
-        startOnboarding();
-    }
     const restartBtn = document.getElementById('btn-restart-tutorial');
     if (restartBtn) {
         restartBtn.addEventListener('click', () => {

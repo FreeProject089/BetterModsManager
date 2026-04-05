@@ -15,7 +15,7 @@ export function initRepoServer(elements) {
                     isServerRunning = false;
                     btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
                     const txt = btnToggleServer.querySelector('#repo-server-btn-text');
-                    txt.textContent = t('repo.hostStart') || "▶ Démarrer le serveur";
+                    txt.textContent = t('repo.hostStart');
                     btnToggleServer.style.background = "rgba(46, 204, 113, 0.1)";
                     btnToggleServer.style.color = "#2ecc71";
                     btnToggleServer.style.borderColor = "rgba(46, 204, 113, 0.2)";
@@ -32,7 +32,7 @@ export function initRepoServer(elements) {
                         serverTools.style.display = 'none';
                     if (repoCreatorIdContainer)
                         repoCreatorIdContainer.style.display = 'none';
-                    toast(t('repo.hostServerStopped') || "Serveur arrêté", "success");
+                    toast(t('repo.hostServerStopped'), "success");
                 }
                 catch (err) {
                     toast(String(err), "error");
@@ -44,7 +44,7 @@ export function initRepoServer(elements) {
                 if (!path && inputExportPath)
                     path = inputExportPath.value.trim();
                 if (!path) {
-                    toast(t('repo.hostServerStartReq') || "Veuillez d'abord sélectionner un dossier de dépôt à héberger.", "warning");
+                    toast(t('repo.hostServerStartReq'), "warning");
                     return;
                 }
                 try {
@@ -61,7 +61,7 @@ export function initRepoServer(elements) {
                     isServerRunning = true;
                     btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
                     const newTextEl = btnToggleServer.querySelector('#repo-server-btn-text');
-                    newTextEl.textContent = t('repo.hostStop') || "⏹ Arrêter le serveur";
+                    newTextEl.textContent = t('repo.hostStop');
                     btnToggleServer.style.background = "rgba(231, 76, 60, 0.1)";
                     btnToggleServer.style.color = "#e74c3c";
                     btnToggleServer.style.borderColor = "rgba(231, 76, 60, 0.2)";
@@ -120,7 +120,7 @@ export function initRepoServer(elements) {
                     urlContainerServer.style.display = "flex";
                     if (serverTools)
                         serverTools.style.display = 'flex';
-                    toast(t('repo.hostServerStarted') || "Serveur démarré !", "success");
+                    toast(t('repo.hostServerStarted'), "success");
                 }
                 catch (err) {
                     const errMsg = String(err);
@@ -129,7 +129,7 @@ export function initRepoServer(elements) {
                         inputServerPort.disabled = false;
                     btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
                     const txt = btnToggleServer.querySelector('#repo-server-btn-text');
-                    txt.textContent = t('repo.hostStart') || "▶ Démarrer le serveur";
+                    txt.textContent = t('repo.hostStart');
                 }
                 finally {
                     btnToggleServer.disabled = false;
@@ -144,7 +144,7 @@ export function initRepoServer(elements) {
         btnCopyUrlServer.addEventListener('click', async () => {
             try {
                 await navigator.clipboard.writeText(urlInputServer.value);
-                toast(t('repo.urlCopied') || "URL copiée dans le presse-papier", "success");
+                toast(t('repo.urlCopied'), "success");
             }
             catch (e) {
                 toast(t('repo.urlCopyError') || "Erreur lors de la copie", "error");
@@ -155,7 +155,7 @@ export function initRepoServer(elements) {
         btnCopyPublicUrl.addEventListener('click', async () => {
             try {
                 await navigator.clipboard.writeText(publicUrlInput.value);
-                toast(t('repo.urlCopied') || "URL copiée dans le presse-papier", "success");
+                toast(t('repo.urlCopied'), "success");
             }
             catch (e) {
                 toast(t('repo.urlCopyError') || "Erreur lors de la copie", "error");
@@ -173,7 +173,7 @@ export function initRepoServer(elements) {
                 isServerRunning = true;
                 const btnTxt = btnToggleServer.querySelector('#repo-server-btn-text');
                 if (btnTxt)
-                    btnTxt.textContent = t('repo.hostStop') || "⏹ Arrêter le serveur";
+                    btnTxt.textContent = t('repo.hostStop');
                 btnToggleServer.style.background = "rgba(231, 76, 60, 0.1)";
                 btnToggleServer.style.color = "#e74c3c";
                 btnToggleServer.style.borderColor = "rgba(231, 76, 60, 0.2)";
@@ -263,7 +263,7 @@ export function initRepoServer(elements) {
                         repoPath: jsonPath, port, autoStart, useCloudflare, useUpnp, lang, uploadLimit
                     }
                 });
-                toast(t('repo.miniServerSuccess') || "Scripts du serveur autonome générés ! (Lancer-Serveur.bat)", "success");
+                toast(t('repo.miniServerSuccess'), "success");
             }
             catch (err) {
                 const errMsg = String(err);
@@ -271,7 +271,7 @@ export function initRepoServer(elements) {
             }
             finally {
                 btnGenMiniServer.disabled = false;
-                btnGenMiniServer.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px"><path d="M12 5v14M5 12h14"/></svg> <span data-i18n="repo.miniServerGenerate">${t('repo.miniServerGenerate') || 'Générer le Serveur'}</span>`;
+                btnGenMiniServer.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px"><path d="M12 5v14M5 12h14"/></svg> <span data-i18n="repo.miniServerGenerate">${t('repo.miniServerGenerate')}</span>`;
             }
         });
     }

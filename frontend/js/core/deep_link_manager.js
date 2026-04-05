@@ -57,7 +57,7 @@ async function handleDeepLink(urlStr) {
                 console.error('[BMM] Failed to fetch profiles for deep link:', err);
             }
             const title = t('mod.importTitle') || 'Installation en 1 clic';
-            const descTemplate = t('mod.importConfirmDesc') || 'Voulez-vous télécharger et installer <strong>{name}</strong> ?';
+            const descTemplate = t('mod.importConfirmDesc');
             const desc = descTemplate.replace('{name}', modNameFromUrl);
             const customContent = `
                 <div class="confirm-import-container" style="display:flex; flex-direction:column; gap:12px; margin-top:12px; text-align:left;">
@@ -72,7 +72,7 @@ async function handleDeepLink(urlStr) {
                         <select id="import-mod-profile" class="select" 
                             style="width:100%; padding:10px; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:6px; color:var(--text-primary); font-size:13px; font-family:inherit; cursor:pointer;">
                             ${profiles.map(p => `<option value="${p.id}" ${p.id === activeId ? 'selected' : ''}>${escHtml(p.name)}</option>`).join('')}
-                            <option value="NEW" style="color:var(--accent); font-weight:700;">+ ${t('mod.importProfileNew') || 'Créer un nouveau profil...'}</option>
+                            <option value="NEW" style="color:var(--accent); font-weight:700;">+ ${t('mod.importProfileNew')}</option>
                         </select>
                     </div>
 
@@ -83,7 +83,7 @@ async function handleDeepLink(urlStr) {
                         </div>
                         
                         <div style="display:flex; flex-direction:column; gap:4px;">
-                            <label style="font-size:9px; font-weight:800; text-transform:uppercase; color:var(--text-secondary);">${t('prof.gameDirLabel') || 'Répertoire du jeu'}</label>
+                            <label style="font-size:9px; font-weight:800; text-transform:uppercase; color:var(--text-secondary);">${t('prof.gameDirLabel')}</label>
                             <div style="display:flex; gap:6px;">
                                 <input type="text" id="new-prof-game-path" class="input" readonly style="flex:1; padding:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:4px; font-size:11px; color:var(--text-muted);">
                                 <button class="btn btn-sm btn-secondary" id="btn-pick-import-game" style="padding:0 10px; height:32px; font-size:11px;">${t('common.browse') || '...'}</button>
@@ -195,14 +195,14 @@ async function handleDeepLink(urlStr) {
                             await window._refreshProfilesFn();
                     }
                     catch (err) {
-                        toast(t('prof.createError') || 'Erreur lors de la création du profil : ' + err, 'error');
+                        toast(t('prof.createError', { err: String(err) }), 'error');
                         return;
                     }
                 }
-                toast(t('mod.downloading', { name: finalName }) || `Téléchargement de ${finalName}...`, 'info');
+                toast(t('mod.downloading', { name: finalName }), 'info');
                 try {
                     await invoke('download_mod', { url: modUrl, modName: finalName, profileId: finalProfileId });
-                    toast(t('mod.installed', { name: finalName }) || `${finalName} installé avec succès !`, 'success');
+                    toast(t('mod.installed', { name: finalName }), 'success');
                     if (window._refreshModsFn) {
                         await window._refreshModsFn(true);
                     }

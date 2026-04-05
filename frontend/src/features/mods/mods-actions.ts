@@ -77,7 +77,7 @@ export async function confirmAddMod() {
       document.getElementById('mod-dependency-input')._selectedDeps = [];
     }
     document.getElementById('modal-add-mod').classList.remove('open');
-    toast(t('mod.added', { name }) || `Mod ${name} ajouté !`, 'success');
+    toast(t('mod.added', { name }), 'success');
     await refreshMods();
   } catch (err) {
     toast(t('common.error') + ' : ' + err, 'error');
@@ -107,13 +107,13 @@ export async function toggleAllMods(forcedEnable = null) {
   btn.disabled = true;
   if (altBtn) altBtn.disabled = true;
 
-  btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${enable ? (t('common.enabling')||'Activation...') : (t('common.disabling')||'Désactivation...')}`;
+  btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${enable ? t('common.enabling') : t('common.disabling')}`;
 
   try {
     await invoke('toggle_all_mods', { enable });
     await refreshMods();
     const key = enable ? 'mod.enabledCount' : 'mod.disabledCount';
-    toast(t(key, { count: targetMods.length }) || (enable ? `${targetMods.length} mods activés` : `${targetMods.length} mods désactivés`), 'success');
+    toast(t(key, { count: String(targetMods.length) }), 'success');
   } catch (err) {
     toast(t('common.error') + ' : ' + err, 'error');
   } finally {
@@ -202,12 +202,12 @@ export async function scanModsFolder() {
   try {
     const result = await invoke('scan_mods_folder');
     if (result.added === 0 && result.removed === 0) {
-      toast(t('mod.scanNone') || "Aucun changement détecté.", 'info');
+      toast(t('mod.scanNone'), 'info');
     } else {
       let msg = '';
-      if (result.added > 0) msg += `${result.added} ${t('mod.scanAdded') || 'nouveau(x) mod(s) ajouté(s)'}`;
+      if (result.added > 0) msg += `${result.added} ${t('mod.scanAdded')}`;
       if (result.added > 0 && result.removed > 0) msg += ' & ';
-      if (result.removed > 0) msg += `${result.removed} ${t('mod.scanRemoved') || 'mod(s) retiré(s)'}`;
+      if (result.removed > 0) msg += `${result.removed} ${t('mod.scanRemoved')}`;
       toast(msg, 'success');
       await refreshMods();
     }
@@ -216,7 +216,7 @@ export async function scanModsFolder() {
 
 export async function verifyIntegrity() {
   try {
-    toast(t('integrity.checking') || "Vérification de l'intégrité...", 'info');
+    toast(t('integrity.checking'), 'info');
     const alteredFiles = await invoke('verify_integrity');
     const modal = document.getElementById('modal-integrity');
     const content = document.getElementById('integrity-report-content');
