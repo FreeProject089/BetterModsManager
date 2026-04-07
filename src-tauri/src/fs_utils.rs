@@ -126,21 +126,11 @@ pub fn apply_mod_stacked(
     mod_folder: &Path,
     game_path: &Path,
     profile_backup_root: &Path,
-    other_active_mods: &[(String, PathBuf)],
+    other_mods_files: &HashSet<PathBuf>,
     game_path_limit: Option<u64>,
     backup_path_limit: Option<u64>,
 ) -> Result<Vec<PathBuf>> {
     let files = list_mod_files(mod_folder)?;
-    
-    // Pre-calculate other mods files into a HashSet for O(1) lookup during backup check
-    let mut other_mods_files = HashSet::new();
-    for (_, folder) in other_active_mods {
-        if let Ok(m_files) = list_mod_files(folder) {
-            for f in m_files {
-                other_mods_files.insert(f);
-            }
-        }
-    }
 
     files.par_iter().try_for_each(|rel| {
         // Backup original if it's the first time BMM touches this file in this profile

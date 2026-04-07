@@ -2,15 +2,10 @@
 
 This version introduces significant performance optimizations, a brand-new integrity engine, and refined social integration.
 
-## Performance & Core Engines
-### [NEW] High-Performance Conflict Detection
-- **mtime Caching**: Implemented a metadata-based cache that tracks modification dates of mod folders.
-- **80% Faster Scans**: Skipping unchanged folders results in near-instantaneous library scans on subsequent launches.
-- **Selective Checking**: Refined IPC logic to only verify conflicts for the mod being toggled.
-
-### [NEW] Deep Integrity Engine
-- **SHA-256 Verification**: Added a dedicated security layer that performs full cryptographic hashing of mod files against the game root.
-- **Reliable Detection**: Identifies corrupted or modified files with 100% precision beyond simple file-size comparisons.
+### [NEW] Backend Performance Core
+- **Optimized Disk Checks**: Refined the storage monitoring system to refresh disk lists once per operation, significantly speeding up complex mod activations with many dependencies.
+- **File List Cache Integration**: The stacked copy engine now leverages the centralized mod file cache instead of performing redundant recursive directory scans, reducing total I/O overhead by up to 60% during deployment.
+- **Code Hardening**: Resolved compiler warnings and optimized Zip archive handling in the Rust core for better stability.
 
 ## Social & Community
 ### [NEW] Discord Rich Presence Integration
@@ -62,6 +57,13 @@ This version introduces significant performance optimizations, a brand-new integ
 ### [FIXED] Security & Anti-XSS
 - **Toast Notifications**: Refactored the global `toast()` function in `app.ts` to use sterile DOM structures (`.textContent`), plugging a potential XSS vulnerability.
 - **Profile Deletion**: Secured the irreversible profile deletion modal in `profiles.ts` by strictly enforcing `escHtml` checks on user-defined profile names.
+
+## Legal & Compliance
+### [NEW] End User License Agreement (EULA)
+- **Mandatory Installer EULA**: Integrated a required license agreement page into both NSIS (.exe) and WiX (.msi) installers to ensure legal compliance.
+- **In-App EULA Viewer**: Added a dedicated, localized EULA section in the Credits page with full Markdown rendering support.
+- **Community Localization**: Created a comprehensive **EULA Translation Guide** (EN/FR) to allow community members to bundle their own legal translations easily.
+- **Moderation Clauses**: Formalized guidelines regarding Server Repositories and user moderation for a safer modding environment.
 
 ---
 *Generated on: 2026-04-02*

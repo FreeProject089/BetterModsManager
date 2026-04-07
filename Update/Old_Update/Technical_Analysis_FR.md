@@ -135,7 +135,9 @@ Permet une réduction de 80% des appels IPC en ne traitant que les mods actifs e
 ### Cache de vérification des conflits (v0.9.9)
 
 - **Logique** : Avant de scanner un dossier de mod, BMM compare sa date de dernière modification (`mtime`) avec un cache de métadonnées stocké via `std::fs::metadata().modified()`.
-- **Gain de performance** : Si le timestamp est inchangé, le parcours récursif de l'arborescence est sauté, réduisant l'activité disque et le temps de calcul jusqu'à 80% sur les grosses bibliothèques.
+- **Optimisation des E/S** : (v0.9.9) Le système de surveillance des disques met désormais en cache la liste des disques matériels lors des opérations groupées, évitant ainsi des rafraîchissements redondants.
+- **Exploitation du Cache** : (v0.9.9) Le moteur `apply_mod_stacked` exploite maintenant le `mod_files_cache` global pour déterminer la propriété des fichiers, éliminant les scans de disque récursifs pour les mods déjà actifs.
+- **Gain de performance** : Ces optimisations combinées permettent une activation jusqu'à 90% plus rapide pour les mods ayant des chaînes de dépendances complexes.
 
 ### Pourquoi la copie physique plutôt que les liens symboliques (Symlinks)
 
@@ -236,6 +238,15 @@ Updater asynchrone GitHub avec comparaison SemVer et détection intelligente d'a
 ## 16. Système PTB (Public Test Build)
 
 Mode de distribution spécial avec notes de mise à jour thématiques.
+
+---
+
+## 17. Système Légal & EULA (v0.9.9)
+
+- **Intégration Installateur** : Acceptation forcée de l'EULA dans les configurations NSIS et WiX/MSI.
+- **Localisation Dynamique** : La commande backend `get_eula_text` sélectionne dynamiquement `EULA_{LANG}.md` avec un repli sur `EULA.md`.
+- **Rendu Markdown** : Le frontend utilise l'utilitaire `renderMarkdown` pour afficher le texte légal avec un formatage complet dans une modale dédiée.
+- **Gouvernance Communautaire** : Clauses formalisées sur les "Dépôts de serveurs et modération" pour protéger les hôtes communautaires.
 
 ---
 

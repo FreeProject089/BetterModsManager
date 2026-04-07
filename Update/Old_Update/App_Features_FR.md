@@ -149,13 +149,17 @@ Mode de distribution spécial pour tester les nouveautés avant la sortie offici
 
 ## 15. Gestion de la performance et du stockage
 
+BMM propose une suite d'outils de diagnostic et d'optimisation haut de gamme pour garantir une stabilité et une réactivité maximales.
+
 | Fonctionnalité | Description |
 | :--- | :--- |
-| **Limiteur d'E/S disque** | Plafonnement de la vitesse de copie pour éviter les gels système. |
-| **Dashboard de performance** | Monitoring CPU/RAM/Disque en temps réel avec mode PiP. |
-| **Storage Manager** | Détecte les types SSD/HDD, les systèmes de fichiers et auto-identifie les lecteurs cloud ou réseau. Alertes "Critique" et "Attention" entièrement localisées en v0.9.9. |
-| **Benchmark Tool** | Test de vitesse réelle du disque pour calibrage. |
-| **Guide de Performance Interactif** | Diagrammes expliquant le fonctionnement du limiteur d'E/S et du transfert par morceaux. Inclut désormais les schémas **Cache de Conflits (mtime)** et **Moteur d'Intégrité Deep**. |
+| **Limiteur d'E/S disque** | Empêche les gels système en plafonnant la vitesse de transfert lors de l'activation/désactivation des mods. Des limites personnalisées peuvent être définies par disque. |
+| **Tableau de bord de performance** | Une superposition de surveillance en temps réel (PiP) suivant l'activité du CPU, de la RAM et du disque. Supporte le défilement de la chronologie et l'exportation des données historiques (CSV). |
+| **Storage Manager** | Détecte les types de SSD/HDD, les systèmes de fichiers et auto-identifie les lecteurs cloud ou réseau. Alertes "Critique" et "Attention" entièrement localisées pour la v0.9.9. |
+| **Rafraîchissement Disque Optimisé** | (v0.9.9) Les listes de disques sont rafraîchies une seule fois par opération groupée au lieu de par mod, garantissant une résolution ultra-rapide des dépendances. |
+| **Intégration du Cache IO** | (v0.9.9) Le moteur de copie utilise le cache de fichiers global pour éviter les scans de disque redondants lors du déploiement des mods. |
+| **Outil de Benchmark** | Testez les performances réelles de votre disque directement dans BMM pour trouver la limite de vitesse optimale. |
+| **Guide de Performance Interactif** | Des diagrammes intégrés expliquent exactement comment le limiteur d'E/S et le moteur de transfert par morceaux fonctionnent ensemble. Inclut les nouveaux diagrammes **Cache de Conflits (mtime)** et **Moteur d'Intégrité Deep**. |
 
 ---
 
@@ -229,6 +233,20 @@ BMM v0.9.9 apporte un soin particulier aux micro-interactions et à la fluidité
 | **Période de Grâce** | Délai de 100 ms avant fermeture des menus pour éviter les clics/survols ratés lors de mouvements rapides. |
 | **Menus "Rattrapables"** | Les menus en cours de fermeture peuvent être "rattrapés" au survol sans disparaître. |
 | **Icônes Standardisées** : Harmonisation visuelle des chevrons et indicateurs pour un look "Vanguard" cohérent. |
+
+---
+
+## 26. Légal & Conformité (v0.9.9)
+
+BMM assure une transparence légale et fournit des directives claires pour la sécurité de la communauté.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **EULA Obligatoire** | Les utilisateurs doivent accepter le Contrat de Licence Utilisateur Final (EULA) lors du processus d'installation (NSIS et MSI). |
+| **Lecteur EULA Intégré** | Accédez au document légal complet à tout moment depuis la page Crédits. Rendu Markdown de haute qualité. |
+| **Contrat Localisé** | L'EULA s'adapte automatiquement à la langue de votre système (support EN/FR) pour une meilleure accessibilité. |
+| **Clauses de Modération** | Définitions légales explicites pour la modération des dépôts de serveurs et la conduite des utilisateurs. |
+| **Guide de Traduction** | Documentation complète pour permettre aux membres de la communauté de créer et de regrouper leurs propres versions localisées de l'EULA. |
 
 ---
 

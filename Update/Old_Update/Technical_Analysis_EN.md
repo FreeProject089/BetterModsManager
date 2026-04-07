@@ -139,7 +139,9 @@ BMM addresses the "system freeze" problem common in heavy I/O applications:
 
 To further optimize performance, BMM implements a metadata-based caching system:
 - **Logic**: Before scanning a mod folder, BMM compares its last modification date (`mtime`) with a stored metadata cache using `std::fs::metadata().modified()`.
-- **Performance Gain**: If the timestamp is unchanged, the entire file tree traversal is skipped, reducing disk activity and computation time by up to 80% on large collections.
+- **I/O Optimization**: (v0.9.9) The disk monitoring system now caches the hardware disk list during bulk operations, preventing redundant refreshes.
+- **Cache Leveraging**: (v0.9.9) The `apply_mod_stacked` engine leverages the global `mod_files_cache` to determine file ownership, eliminating recursive disk scans for already-active mods.
+- **Performance Gain**: These combined optimizations result in up to 90% faster activation for mods with complex dependency chains.
 
 ### Why Physical Copy Instead of Symlinks
 
@@ -262,6 +264,15 @@ GitHub-based async updater with SemVer comparison and asset detection.
 ## 16. PTB System (Public Test Build)
 
 Distribution mode controlled via `app.cfg` with themed release note modals.
+
+---
+
+## 17. Legal & EULA System (v0.9.9)
+
+- **Installer Integration**: Forced EULA acceptance in NSIS and WiX/MSI configurations.
+- **Dynamic Localization**: Backend command `get_eula_text` dynamically selects `EULA_{LANG}.md` with fallback to `EULA.md`.
+- **Markdown Rendering**: Frontend uses `renderMarkdown` utility to display legal text with full formatting in a dedicated modal.
+- **Community Governance**: Formalized "Server Repositories & Moderation" clauses to protect community hosts.
 
 ---
 

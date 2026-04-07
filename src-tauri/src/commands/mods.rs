@@ -317,7 +317,7 @@ pub async fn add_mod(
 
             if src.is_file() && src.extension().and_then(|e| e.to_str()).unwrap_or("").eq_ignore_ascii_case("zip") {
                 let file = std::fs::File::open(&src).map_err(|e| e.to_string())?;
-                let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Erreur Zip: {}", e))?;
+                let archive = zip::ZipArchive::new(file).map_err(|e| format!("Erreur Zip: {}", e))?;
                 let len = archive.len();
                 let num_threads = rayon::current_num_threads().max(1);
                 let chunk_size = (len + num_threads - 1) / num_threads;
@@ -461,20 +461,29 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
         (to_enable, p, (warning_pct, critical_pct, alert_enabled))
     };
 
+    ensure_cache_populated(&state)?;
+    let mut active_files_set = HashSet::<PathBuf>::new();
+    {
+        let data = state.data.lock().unwrap();
+        let cache = state.mod_files_cache.lock().unwrap();
+        if let Some(p) = data.profiles.iter().find(|p| p.id == profile_data.id) {
+            for mid in &p.active_mods {
+                if let Some(files) = cache.get(mid) {
+                    for f in files { active_files_set.insert(f.clone()); }
+                }
+            }
+        }
+    }
+
     let mut overall_warning: Option<String> = None;
+    let disks = sysinfo::Disks::new_with_refreshed_list();
 
     for mid in mod_ids_to_enable {
-        let (mod_folder, game_path, backup_path, mod_name, other_active_mods) = {
+        let (mod_folder, game_path, backup_path, mod_name) = {
             let data = state.data.lock().unwrap();
             let m = data.mods.iter().find(|m| m.id == mid).unwrap().clone();
             
             let p = data.profiles.iter().find(|p| p.id == profile_data.id).unwrap();
-            let mut others = Vec::new();
-            for already_active in &p.active_mods {
-                if let Some(om) = data.mods.iter().find(|xm| &xm.id == already_active) {
-                    others.push((om.id.clone(), om.mod_folder_path.clone()));
-                }
-            }
 
             // --- Block if already active in another profile on same root ---
             for op in &data.profiles {
@@ -484,7 +493,7 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
                 }
             }
 
-            (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), m.name, others)
+            (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), m.name)
         };
 
         // --- Space check ---
@@ -502,7 +511,6 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
 
         // Perform space check (re-using logic but simplified for brevity in loop)
         let mut check_space = |path: &std::path::Path, label: &str| -> Result<(), String> {
-            let disks = sysinfo::Disks::new_with_refreshed_list();
             let mut path_str = path.canonicalize().unwrap_or(path.to_path_buf()).to_string_lossy().to_lowercase();
             if path_str.starts_with(r"\\?\") { path_str = path_str[4..].to_string(); }
             let mut best = None;
@@ -543,9 +551,10 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
             finished: false,
         });
 
+        let active_files_set_clone = active_files_set.clone();
         let result = tauri::async_runtime::spawn_blocking(move || {
             let _lock = MOD_OP_LOCK.lock().unwrap();
-            fs_utils::apply_mod_stacked(&mod_folder, &game_path, &backup_path, &other_active_mods, game_path_limit, backup_path_limit)
+            fs_utils::apply_mod_stacked(&mod_folder, &game_path, &backup_path, &active_files_set_clone, game_path_limit, backup_path_limit)
         }).await.map_err(|e| e.to_string())?;
 
         let _ = window.emit("benchmark-event", BenchEventPayload {
@@ -569,6 +578,12 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
                 }
             }
         }
+
+        // Update active_files_set for NEXT dependency in the chain
+        if let Some(files) = state.mod_files_cache.lock().unwrap().get(&mid) {
+            for f in files { active_files_set.insert(f.clone()); }
+        }
+
         log_line(format!("[MOD] Mod '{}' enabled", mod_name));
     }
 

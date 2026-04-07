@@ -182,15 +182,17 @@ BMM includes a high-reliability diagnostic system to ensure any issue can be ide
 
 ---
 
-## 15. Performance & Storage Management
+### 15. Performance & Storage Management
 
-BMM features a suite of high-end diagnostic and optimization tools to ensure maximum stability.
+BMM features a suite of high-end diagnostic and optimization tools to ensure maximum stability and responsiveness.
 
 | Feature | Description |
 | :--- | :--- |
 | **Disk I/O Limiter** | Prevents system freezes by capping the transfer speed during mod activation/deactivation. Custom limits can be set per disk. |
 | **Performance Dashboard** | A real-time monitoring overlay (PiP) tracking CPU, RAM, and Disk activity. Supports timeline scrubbing and historical data export (CSV). |
 | **Storage Manager** | Detects SSD/HDD types, filesystems, and auto-identifies cloud or network drives. Fully localized "Critical" and "Warning" alerts for v0.9.9. |
+| **Optimized Disk Refresh** | (v0.9.9) Disk lists are refreshed once per batch operation instead of per-mod, ensuring lightning-fast dependency resolution. |
+| **IO Cache Integration** | (v0.9.9) The copy engine utilizes the global file cache to avoid redundant disk scans during mod deployment. |
 | **Benchmark Tool** | Test your disk's real-world performance directly within BMM to find the optimal speed limit. |
 | **Interactive Performance Guide** | Integrated diagrams explain exactly how the I/O limiter and chunked transfer engine work together. Includes the new **Conflict Cache (mtime)** and **Deep Integrity Engine** diagrams. |
 
@@ -320,6 +322,20 @@ BMM v0.9.9 introduces a significant polish to micro-interactions and interface f
 | **Interaction Grace Period** | A 100ms grace period prevents accidental menu closure when moving the mouse between the toggle and the list. |
 | **Catchable Menus** | Menus currently in their closing phase can be instantly "caught" on hover, restoring their open state without flicker. |
 | **Standardized Icons** | Visual harmonization of chevrons and indicators for a consistent "Vanguard" premium look and feel. |
+
+---
+
+## 26. Legal & Compliance (v0.9.9)
+
+BMM ensures legal transparency and provides clear guidelines for community safety.
+
+| Feature | Description |
+| :--- | :--- |
+| **Mandatory EULA** | Users must accept the End User License Agreement during the installation process (NSIS and MSI). |
+| **Integrated EULA Viewer** | Access the full legal document anytime from the Credits page. Features high-quality Markdown rendering. |
+| **Localized Legal Agreement** | The EULA automatically adapts to your system language (EN/FR support) for better accessibility. |
+| **Moderation Clauses** | Explicit legal definitions for server repository moderation and user conduct. |
+| **Translation Guide** | Comprehensive documentation for community members to create and bundle their own localized EULA versions. |
 
 ---
 

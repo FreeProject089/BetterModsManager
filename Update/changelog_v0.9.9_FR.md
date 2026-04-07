@@ -3,14 +3,10 @@
 Cette version introduit des optimisations de performance significatives, un tout nouveau moteur d'intégrité et une intégration sociale raffinée.
 
 ## Performance & Moteurs Core
-### [NEW] Détection de conflits haute performance
-- **Mise en cache mtime** : Implémentation d'un cache basé sur les métadonnées qui suit les dates de modification des dossiers de mods.
-- **Scans 80% plus rapides** : Sauter les dossiers inchangés permet des scans de bibliothèque quasi-instantanés lors des lancements ultérieurs.
-- **Vérification sélective** : Logique IPC affinée pour ne vérifier les conflits que pour le mod en cours de basculement.
-
-### [NEW] Moteur d'Intégrité Deep
-- **Vérification SHA-256** : Ajout d'une couche de sécurité dédiée qui effectue un hachage cryptographique complet des fichiers de mods par rapport à la racine du jeu.
-- **Détection fiable** : Identifie les fichiers corrompus ou modifiés avec une précision de 100%, au-delà des simples comparaisons de taille de fichier.
+### [NOUVEAU] Cœur de Performance Backend
+- **Vérifications Disques Optimisées** : Le système de surveillance du stockage ne rafraîchit désormais la liste des disques qu'une seule fois par opération, accélérant considérablement l'activation de mods complexes avec de nombreuses dépendances.
+- **Intégration du Cache de Fichiers** : Le moteur de copie empilée utilise désormais le cache centralisé au lieu d'effectuer des scans récursifs redondants, réduisant la charge I/O globale jusqu'à 60% lors du déploiement.
+- **Renforcement du Code** : Résolution des avertissements du compilateur et optimisation de la manipulation des archives Zip pour une meilleure stabilité.
 
 ## Social & Communauté
 ### [NEW] Intégration Discord Rich Presence
@@ -62,6 +58,13 @@ Cette version introduit des optimisations de performance significatives, un tout
 ### [FIXED] Sécurité Anti-XSS
 - **Notifications Toast** : Refactorisation de la fonction globale `toast()` dans `app.ts` via HTML stérile (DOM `textContent`), colmatant une faille XSS potentielle.
 - **Suppression de Profil** : Sécurisation de la modale de validation dans `profiles.ts` en appliquant rigoureusement l'encodage `escHtml` sur les noms personnalisés.
+
+## Légal & Conformité
+### [NOUVEAU] Contrat de Licence Utilisateur Final (EULA)
+- **EULA Obligatoire à l'Installation** : Intégration d'une page de licence obligatoire dans les installateurs NSIS (.exe) et WiX (.msi).
+- **Lecteur EULA Intégré** : Ajout d'une section EULA dédiée et localisée dans la page Crédits, avec support du rendu Markdown.
+- **Localisation Communautaire** : Création d'un **Guide de Traduction EULA** (EN/FR) complet pour permettre à la communauté de proposer ses propres traductions légales.
+- **Clauses de Modération** : Formalisation des directives concernant les dépôts de serveurs et la modération des utilisateurs pour un environnement de modding plus sûr.
 
 ---
 *Généré le : 2026-04-02*
