@@ -1,0 +1,70 @@
+﻿--- ENGLISH IN fr.json (67) ---
+FR_MISSING: common.pause | VAL: Pause
+FR_MISSING: common.version | VAL: V{version}
+FR_MISSING: conflict.inter | VAL: Inter
+FR_MISSING: conflict.intra | VAL: Intra
+FR_MISSING: credits.heroBuild | VAL: Version {v} ò {d}
+FR_MISSING: detail.description | VAL: Description
+FR_MISSING: detail.tags | VAL: Tags
+FR_MISSING: detail.version | VAL: Version
+FR_MISSING: dev.label.logs | VAL: LOGS
+FR_MISSING: dev.tab.console | VAL: Console
+FR_MISSING: dev.tab.sources | VAL: Sources
+FR_MISSING: docs.basic.links.q1 | VAL: GitHub
+FR_MISSING: docs.basic.links.q2 | VAL: Direct (Zip / Rar)
+FR_MISSING: docs.diagram.btn.architecture | VAL: ARCHITECTURE
+FR_MISSING: docs.diagram.btn.image_meta | VAL: IMAGE & META
+FR_MISSING: docs.diagram.cache.node.REMOTE | VAL: Acquisition
+FR_MISSING: docs.diagram.cluster.SENSORS | VAL: MONITORING
+FR_MISSING: docs.diagram.conflict.node.DUPES | VAL: Intersection
+FR_MISSING: docs.diagram.crash.node.DUMP | VAL: Minidump
+FR_MISSING: docs.diagram.discordRpc.node.STATUS | VAL: Rich Presence
+FR_MISSING: docs.diagram.discordRpc.title | VAL: Discord Rich Presence
+FR_MISSING: docs.diagram.hosting.node.SFTP | VAL: SFTP / RSYNC / SCP
+FR_MISSING: docs.diagram.hosting.node.TUNNEL | VAL: Tunnel (Cloudflare/Tailscale)
+FR_MISSING: docs.diagram.io.node.CONFIG | VAL: Configuration
+FR_MISSING: docs.diagram.label.audit | VAL: Audit
+FR_MISSING: docs.diagram.label.dispatch | VAL: Dispatch
+FR_MISSING: docs.diagram.label.local | VAL: Local
+FR_MISSING: docs.diagram.label.rollback | VAL: Rollback
+FR_MISSING: docs.diagram.label.structure | VAL: Structure
+FR_MISSING: docs.diagram.label.sync | VAL: Sync
+FR_MISSING: docs.diagram.label.trace | VAL: Trace
+FR_MISSING: docs.diagram.mech.node.REDIRECT | VAL: Redirection
+FR_MISSING: docs.diagram.mod_arch.edge.DETECT | VAL: Mapping
+FR_MISSING: docs.diagram.mod_arch.node.Mod2 | VAL: Mod B (Base)
+FR_MISSING: docs.diagram.premium.node.CATCH | VAL: Menu Catching
+FR_MISSING: docs.diagram.sync.node.APPLY | VAL: Application
+FR_MISSING: docs.exploreArch | VAL: ARCHITECTURE
+FR_MISSING: docs.exploreImageMeta | VAL: IMAGE & META
+FR_MISSING: docs.gallery.btn.discordRpc | VAL: Discord Rich Presence
+FR_MISSING: docs.ioLimiter.benchmark | VAL: Benchmark
+FR_MISSING: docs.ioLimiter.cloud | VAL: Cloud / NAS
+FR_MISSING: docs.modArchitecture | VAL: Architecture
+FR_MISSING: docs.techStack | VAL: Technologies & Architecture
+FR_MISSING: docs.techStack.core | VAL: Tauri & Rust
+FR_MISSING: docs.techStack.mermaid | VAL: Mermaid.js
+FR_MISSING: docs.techStack.tauri | VAL: Tauri & Rust
+FR_MISSING: docs.techStack.visual | VAL: Mermaid.js
+FR_MISSING: docs.title | VAL: Documentation
+FR_MISSING: docs.videos.tuto1.online | VAL: https://www.youtube.com/embed/dQw4w9WgXcQ
+FR_MISSING: docs.videos.tuto2.online | VAL: https://www.youtube.com/embed/dQw4w9WgXcQ
+FR_MISSING: nav.docs | VAL: Documentation
+FR_MISSING: onboard.tasky | VAL: Tasky
+FR_MISSING: onboarding.lang_desc | VAL: Choisissez votre langue / Choose your language
+FR_MISSING: onboarding.tasky | VAL: TASKY
+FR_MISSING: prof.backupDirPlaceholder | VAL: C:\Backups\DCS...
+FR_MISSING: prof.gamePlaceholder | VAL: DCS World...
+FR_MISSING: prof.importOmm | VAL: Open Mod Manager (.omx)
+FR_MISSING: prof.modsDirPlaceholder | VAL: C:\Mods\DCS...
+FR_MISSING: repo.miniServerRepoPlaceholder | VAL: C:\...\repo.json
+FR_MISSING: repo.monAction | VAL: Action
+FR_MISSING: repo.syncArrow | VAL:  -> 
+FR_MISSING: repo.upnpOk | VAL: UPnP OK
+FR_MISSING: settings.benchmarkTitle | VAL: Performance & Benchmark
+FR_MISSING: settings.discordRpcTitle | VAL: Discord Rich Presence
+FR_MISSING: settings.githubPatPlaceholder | VAL: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+FR_MISSING: settings.langGuide | VAL: Guide
+FR_MISSING: settings.notifications | VAL: Notifications
+
+--- FRENCH IN en.json (0) ---
