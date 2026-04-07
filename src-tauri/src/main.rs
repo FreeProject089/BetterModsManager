@@ -264,6 +264,7 @@ fn main() {
             commands::settings::is_ptb_mode,
             commands::settings::is_update_disabled,
             commands::settings::get_license_text,
+            commands::settings::get_eula_text,
             commands::settings::get_app_version,
             commands::settings::get_build_date,
             commands::settings::get_available_languages,

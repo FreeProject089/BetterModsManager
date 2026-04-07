@@ -617,7 +617,7 @@ function openDeleteProfileModal(id, profile) {
     // Ensure all data-i18n in the modal are translated
     applyTranslations(modal);
     warningText.innerHTML = t('prof.deleteConfirmLabel')
-        .replace('{name}', `<strong style="color:var(--text-primary)">${profile.name}</strong>`);
+        .replace('{name}', `<strong style="color:var(--text-primary)">${escHtml(profile.name)}</strong>`);
     // Clone button to remove old listeners
     const btnContainer = btnFinal.parentElement;
     const newBtnFinal = btnFinal.cloneNode(true);

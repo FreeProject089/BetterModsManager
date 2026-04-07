@@ -3240,6 +3240,24 @@
                                             View GPL-3.0 License</div>
                                     </div>
                                 </a>
+
+                                <a href="#" onclick="openEulaModal()"
+                                    class="credit-link-card credit-link-card-eula">
+                                    <div class="credit-icon-box credit-icon-box-eula">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                        </svg>
+                                    </div>
+                                    <div class="credit-info">
+                                        <div class="credit-title credit-title-eula" data-i18n="credits.eula">
+                                            Terms of Use (EULA)
+                                        </div>
+                                        <div class="credit-subtitle credit-subtitle-muted"
+                                            data-i18n="credits.eulaSub">
+                                            Legal terms — Click to read</div>
+                                    </div>
+                                </a>
                             </div>
                         </div>
 
@@ -3919,6 +3937,27 @@
                     style="max-height: 500px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 20px; margin-top:10px; border: 1px solid var(--border);">
                     <pre id="license-content" data-i18n="license.loading"
                         style="white-space: pre-wrap; word-wrap: break-word; font-family: var(--font-mono); font-size: 11px; line-height: 1.6; color: rgba(255,255,255,0.7); margin: 0; text-align: left;">Chargement de la licence...</pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- EULA Modal -->
+        <div class="modal-overlay" id="modal-eula">
+            <div class="modal glass" style="max-width: 600px; width: 90%;">
+                <div class="modal-header">
+                    <h2 class="modal-title" data-i18n="credits.eula">Terms of Use (EULA)</h2>
+                    <button class="modal-close" data-close="modal-eula">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body"
+                    style="max-height: 500px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 20px; margin-top:10px; border: 1px solid var(--border);">
+                    <div id="eula-content"
+                        style="text-align: left;">Loading EULA...</div>
                 </div>
             </div>
         </div>

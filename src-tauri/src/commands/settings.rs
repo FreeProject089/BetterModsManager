@@ -99,6 +99,25 @@ pub fn get_license_text(app_handle: tauri::AppHandle) -> Result<String, String> 
 }
 
 #[tauri::command]
+pub fn get_eula_text(app_handle: tauri::AppHandle, lang: String) -> Result<String, String> {
+    // 1. Try exact match: EULA_{LANG}.md (e.g. EULA_FR.md, EULA_DE.md, EULA_ES.md)
+    let specific = format!("EULA_{}.md", lang.to_uppercase());
+    if let Some(path) = resolve_path(&app_handle, &specific) {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            return Ok(text);
+        }
+    }
+
+    // 2. Fallback: default EULA.md (English)
+    if let Some(path) = resolve_path(&app_handle, "EULA.md") {
+        return std::fs::read_to_string(path).map_err(|e| e.to_string());
+    }
+
+    Err("EULA.md not found".to_string())
+}
+
+
+#[tauri::command]
 pub fn is_ptb_mode(app_handle: tauri::AppHandle) -> bool {
     if let Some(path) = resolve_path(&app_handle, "app.cfg") {
         if let Ok(content) = std::fs::read_to_string(&path) {

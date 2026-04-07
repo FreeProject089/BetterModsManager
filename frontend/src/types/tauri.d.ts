@@ -61,8 +61,13 @@ declare interface Window {
   showProfiles?: () => void;
   openNewProfileModal?: () => void;
   openDocs?: (diagramId: string) => void;
+  openLicenseModal?: () => Promise<void>;
+  openEulaModal?: () => Promise<void>;
+  checkPtbMode?: (force?: boolean, initialFileName?: string | null) => Promise<void>;
+  copyCodeToClipboard?: (text: string, btn: HTMLElement) => void;
   Cropper?: any;
 }
+
 
 // For dynamic ESM imports from CDN
 declare module 'https://unpkg.com/@tauri-apps/api@1/tauri.js' {

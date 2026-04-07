@@ -63,12 +63,20 @@
             "resources": [
                 "../app.cfg",
                 "../LICENSE.md",
+                "../EULA.md",
+                "../EULA_FR.md",
                 "../frontend/Lang"
             ],
             "windows": {
                 "certificateThumbprint": null,
                 "digestAlgorithm": "sha256",
-                "timestampUrl": ""
+                "timestampUrl": "",
+                "nsis": {
+                    "license": "nsis/license.txt"
+                },
+                "wix": {
+                    "license": "nsis/license.txt"
+                }
             }
         },
         "security": {

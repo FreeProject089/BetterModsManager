@@ -29,7 +29,12 @@ export function toast(message, type = 'info', duration = 3000) {
     const container = document.getElementById('toast-container');
     const el = document.createElement('div');
     el.className = `toast ${type}`;
-    el.innerHTML = `<div class="toast-dot"></div><span>${message}</span>`;
+    const dot = document.createElement('div');
+    dot.className = 'toast-dot';
+    const textSpan = document.createElement('span');
+    textSpan.textContent = message;
+    el.appendChild(dot);
+    el.appendChild(textSpan);
     container.appendChild(el);
     const remove = () => {
         el.classList.add('removing');

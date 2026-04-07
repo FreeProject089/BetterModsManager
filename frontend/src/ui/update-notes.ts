@@ -590,6 +590,26 @@ export async function openLicenseModal() {
     }
 }
 
+// ── EULA ──────────────────────────────────────────────────
+export async function openEulaModal() {
+    const modal = document.getElementById('modal-eula');
+    const contentEl = document.getElementById('eula-content');
+    if (!modal || !contentEl) return;
+
+    modal.classList.add('open');
+    contentEl.textContent = t('common.loading');
+
+    try {
+        const { getLang } = await import('../core/i18n.js');
+        const lang = getLang();
+        const text = await invoke('get_eula_text', { lang });
+        contentEl.innerHTML = renderMarkdown(text);
+    } catch (err) {
+        contentEl.textContent = t('common.error') + " (EULA): " + err;
+    }
+}
+
 // Global expose for onclick
 window.openLicenseModal = openLicenseModal;
+window.openEulaModal = openEulaModal;
 window.checkPtbMode = checkPtbMode;

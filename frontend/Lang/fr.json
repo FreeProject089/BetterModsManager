@@ -140,6 +140,8 @@
     "credits.license": "Licence",
     "credits.licenseDesc": "Ce logiciel est distribué sous licence GPL 3.0.",
     "credits.licenseSub": "GPL 3.0 — Cliquez pour lire",
+    "credits.eula": "Conditions d'Utilisation (CLUF)",
+    "credits.eulaSub": "Termes légaux — Cliquez pour lire",
     "credits.linksTitle": "Liens & Communauté",
     "credits.checkUpdates": "Vérifier les mises à jour",
     "__SECTION_CTX__": "--- MENUS CONTEXTUELS ---",
