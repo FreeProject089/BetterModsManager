@@ -555,6 +555,48 @@ function attachNodeListeners(diagramID) {
     });
 
 }
+/**
+ * Navigation helper to jump to a specific FAQ or documentation section from outside the docs view
+ * @param {string} targetKey - The translation key of the question/section (e.g. 'faq.qPat')
+ */
+export function openHelpTo(targetKey) {
+    console.log(`[Docs] Navigating to help topic: ${targetKey}`);
+    // 1. Switch to Documentation View
+    const docsNavItem = document.querySelector('.nav-item[data-view="docs"]');
+    if (docsNavItem)
+        (docsNavItem as HTMLElement).click();
+    // 2. Small delay to allow view switch and ensure DOM is ready
+    setTimeout(() => {
+        // 3. Switch to Advanced Tab (where FAQs are)
+        const advancedTabBtn = document.querySelector('.btn-docs-tab[data-tab="advanced"]');
+        if (advancedTabBtn)
+            (advancedTabBtn as HTMLElement).click();
+        // 4. Find the element with the target translation key
+        const targetEl = document.querySelector(`[data-i18n="${targetKey}"]`);
+        if (targetEl) {
+            // 5. If it's inside an accordion (details), open it
+            const accordion = targetEl.closest('.faq-accordion') || targetEl.closest('details');
+            if (accordion)
+                (accordion as HTMLDetailsElement).open = true;
+            // 6. Scroll into view
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // 7. Brief highlight effect
+            const container = (accordion || targetEl) as HTMLElement;
+            container.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+            const originalShadow = container.style.boxShadow;
+            const originalBorder = container.style.borderColor;
+            container.style.boxShadow = '0 0 30px rgba(59, 130, 246, 0.3)';
+            container.style.borderColor = 'var(--accent)';
+            setTimeout(() => {
+                container.style.boxShadow = originalShadow;
+                container.style.borderColor = originalBorder;
+            }, 2500);
+        }
+        else {
+            console.warn(`[Docs] Target help key not found in DOM: ${targetKey}`);
+        }
+    }, 150);
+}
 
 /**
  * Change Tasky appearance
@@ -737,6 +779,7 @@ window.openDocs = openDiagram;
 window.initInteractiveDocs = initInteractiveDocs;
 window.showTaskyHelp = showTaskyHelp;
 window.hideTaskyHelp = hideTaskyHelp;
+window.openHelpTo = openHelpTo;
 
 // If imported as module, we need to export
-export default { initInteractiveDocs, openDiagram, showTaskyHelp, hideTaskyHelp };
+export default { initInteractiveDocs, openDiagram, showTaskyHelp, hideTaskyHelp, openHelpTo };
