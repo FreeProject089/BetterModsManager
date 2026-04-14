@@ -441,4 +441,97 @@ pub fn finalize_and_close_app(window: tauri::Window, state: tauri::State<crate::
         let _ = window.close();
     });
 }
+#[tauri::command]
+pub async fn get_dxdiag_report() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let tmp_file = std::env::temp_dir().join(format!("bmm_dxdiag_req_{}.txt", std::process::id()));
+        let _ = std::process::Command::new("dxdiag")
+            .args(["/t", &tmp_file.to_string_lossy().to_string()])
+            .spawn()
+            .map_err(|e| format!("Failed to spawn dxdiag: {}", e))?;
 
+        // Wait up to 45 seconds for the file to be generated
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(45);
+        while !tmp_file.exists() && std::time::Instant::now() < deadline {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+
+        if tmp_file.exists() {
+            // DxDiag on Windows outputs UTF-16 LE with BOM — read raw bytes and decode
+            let raw = fs::read(&tmp_file).map_err(|e| format!("Failed to read dxdiag file: {}", e))?;
+            let _ = fs::remove_file(&tmp_file);
+
+            // Check for UTF-16 LE BOM (FF FE)
+            let content = if raw.len() >= 2 && raw[0] == 0xFF && raw[1] == 0xFE {
+                // UTF-16 LE: skip BOM and decode pairs
+                let u16_data: Vec<u16> = raw[2..]
+                    .chunks_exact(2)
+                    .map(|b| u16::from_le_bytes([b[0], b[1]]))
+                    .collect();
+                String::from_utf16(&u16_data).unwrap_or_else(|_| String::from_utf8_lossy(&raw).to_string())
+            } else {
+                // Already UTF-8 or ASCII
+                String::from_utf8_lossy(&raw).to_string()
+            };
+
+            Ok(content)
+        } else {
+            Err("DxDiag timeout or generation failed".into())
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("DxDiag is only available on Windows".into())
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct CrashReportEntry {
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+    pub date: String,
+    pub category: String, // "Crash", "Session", "Archive/Crash", "Archive/Session"
+}
+
+#[tauri::command]
+pub async fn list_crash_reports() -> Result<Vec<CrashReportEntry>, String> {
+    let mut reports = Vec::new();
+    let base_dir = get_crash_dir(None);
+    
+    let folders = [
+        ("Reports/Crash", "Crash"),
+        ("Reports/Session", "Session"),
+        ("Archive/Crash", "Archive/Crash"),
+        ("Archive/Session", "Archive/Session"),
+    ];
+
+    for (sub_path, cat) in folders {
+        let dir = base_dir.join(sub_path);
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("zip") {
+                    if let Ok(meta) = entry.metadata() {
+                        reports.push(CrashReportEntry {
+                            name: entry.file_name().to_string_lossy().to_string(),
+                            path: path.to_string_lossy().to_string(),
+                            size: meta.len(),
+                            date: meta.modified().ok()
+                                .and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok())
+                                .map(|d| d.as_secs().to_string())
+                                .unwrap_or_default(),
+                            category: cat.to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort by date descending
+    reports.sort_by(|a, b| b.date.cmp(&a.date));
+    
+    Ok(reports)
+}

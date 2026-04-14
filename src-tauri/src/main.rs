@@ -333,6 +333,7 @@ fn main() {
             commands::security::get_salted_creator_id,
             commands::security::verify_repo_signature,
             commands::crash::finalize_and_close_app,
+            commands::disk::read_file_base64,
             commands::debug::get_project_files,
             commands::debug::read_project_file,
             commands::debug::get_debug_stats,
@@ -354,6 +355,8 @@ fn main() {
             commands::discord::init_discord_rpc,
             commands::discord::set_discord_presence,
             get_pending_deep_link,
+            commands::crash::get_dxdiag_report,
+            commands::crash::list_crash_reports,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

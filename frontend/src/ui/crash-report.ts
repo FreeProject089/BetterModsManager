@@ -5,6 +5,7 @@
 import { invoke } from '../core/api.js';
 import { t } from '../core/i18n.js';
 import { toast } from './app.js';
+import { openBugReportModal } from '../features/betahub/betahub-modals.js';
 
 interface StartupStatus {
     backend_crashed: boolean;
@@ -91,4 +92,19 @@ export function initCrashReportUI(): void {
     if (openZipBtn) {
         openZipBtn.addEventListener('click', openZip);
     }
+
+    // ── BetaHub: Report this crash ────────────────────────────
+    const betahubBtn = document.getElementById('btn-crash-report-betahub');
+    if (betahubBtn) {
+        betahubBtn.addEventListener('click', () => {
+            const zipPathEl = document.getElementById('crash-zip-path');
+            const zipPath = zipPathEl?.textContent?.trim();
+            // Close crash modal first
+            const crashModal = document.getElementById('modal-crash-report');
+            if (crashModal) crashModal.classList.remove('open');
+            // Open BetaHub bug report modal with crash zip pre-attached
+            openBugReportModal(zipPath && zipPath !== '—' ? zipPath : undefined);
+        });
+    }
 }
+

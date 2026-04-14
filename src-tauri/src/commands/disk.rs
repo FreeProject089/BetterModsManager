@@ -334,3 +334,9 @@ pub fn check_disk_space(path: String) -> Result<DiskSpaceInfo, String> {
         Err(format!("Impossible de trouver le disque pour: {}", path))
     }
 }
+#[tauri::command]
+pub fn read_file_base64(path: String) -> Result<String, String> {
+    use base64::{Engine as _, engine::general_purpose};
+    let data = std::fs::read(&path).map_err(|e| e.to_string())?;
+    Ok(general_purpose::STANDARD.encode(data))
+}

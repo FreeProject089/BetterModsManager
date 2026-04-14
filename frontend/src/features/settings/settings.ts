@@ -8,6 +8,8 @@ import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes } from '../../core/utils.js';
+import { initBetaHub, openBugReportModal, openFeedbackModal } from '../betahub/betahub-modals.js';
+
 
 // ── GitHub PAT helper ─────────────────────────────────────
 export async function getGithubPat() {
@@ -742,4 +744,13 @@ export async function initSettings() {
             }
         });
     }
+
+    // ── BetaHub ──────────────────────────────────────────────
+    initBetaHub();
+
+    document.getElementById('btn-settings-betahub-bugreport')
+        ?.addEventListener('click', () => openBugReportModal());
+
+    document.getElementById('btn-settings-betahub-feedback')
+        ?.addEventListener('click', () => openFeedbackModal());
 }
