@@ -6,3 +6,6 @@ src-tauri/target
 frontend/js/**/*.js
 frontend/js/**/*.js.map
 !frontend/js/lib/**/*.js
+
+# BetaHub Secrets
+frontend/src/features/betahub/betahub-config.local.ts

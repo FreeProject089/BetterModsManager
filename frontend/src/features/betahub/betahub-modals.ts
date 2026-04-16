@@ -282,7 +282,8 @@ async function handleFeedbackSubmit(): Promise<void> {
             emailEl?.value?.trim() || undefined,
             discordEl?.value?.trim() || undefined,
             titleEl?.value?.trim() || undefined,
-            dueDate
+            dueDate,
+            selectedFeedbackScreenshots.length > 0 ? selectedFeedbackScreenshots : undefined
         );
 
         closeFeedbackModal();
@@ -448,7 +449,8 @@ async function renderCrashReports(): Promise<void> {
 
         list.innerHTML = '';
         reports.forEach((report, index) => {
-            const isSelected = selectedCrashZipPaths.includes(report.path);
+            const normalizedReportPath = report.path.replace(/\\/g, '/');
+            const isSelected = selectedCrashZipPaths.some(p => p.replace(/\\/g, '/') === normalizedReportPath);
             const item = document.createElement('div');
             item.className = `bh-report-item ${isSelected ? 'selected' : ''}`;
             item.style.animationDelay = `${index * 0.05}s`;
@@ -519,14 +521,40 @@ function wireCharCounter(inputId: string, counterId: string, max: number): void 
     });
 }
 
-function handleScreenshotSelection(input: HTMLInputElement, modal: 'bug' | 'feedback'): void {
+async function convertToPng(file: File): Promise<File> {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return resolve(file);
+            ctx.drawImage(img, 0, 0);
+            canvas.toBlob(blob => {
+                if (!blob) return resolve(file);
+                const name = file.name.replace(/\.[^/.]+$/, ".png");
+                resolve(new File([blob], name, { type: 'image/png' }));
+            }, 'image/png');
+        };
+        img.onerror = () => resolve(file);
+        img.src = URL.createObjectURL(file);
+    });
+}
+
+async function handleScreenshotSelection(input: HTMLInputElement, modal: 'bug' | 'feedback'): Promise<void> {
     const files = Array.from(input.files || []);
     // BetaHub only accepts: image/png, image/jpeg, image/jpg
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg'];
     const maxSize = 5 * 1024 * 1024; // 5MB
     const targetList = modal === 'bug' ? selectedScreenshots : selectedFeedbackScreenshots;
 
-    for (const file of files) {
+    for (let file of files) {
+        const isWebp = file.type === 'image/webp' || file.name.toLowerCase().endsWith('.webp');
+        if (isWebp) {
+            file = await convertToPng(file);
+        }
+
         // Also check by extension for files without proper MIME type
         const ext = file.name.split('.').pop()?.toLowerCase() || '';
         const validByExt = ['png', 'jpg', 'jpeg'].includes(ext);
@@ -625,13 +653,17 @@ function renderScreenshotList(modal: 'bug' | 'feedback'): void {
         const item = document.createElement('div');
         item.className = 'bh-file-item';
         item.innerHTML = `
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-                <polyline points="21 15 16 10 5 21"/>
-            </svg>
-            <span class="bh-file-name bh-file-item-name">${file.name}</span>
-            <span style="font-size:10px;opacity:0.6">${formatFileSize(file.size)}</span>
-            <button type="button" class="bh-remove-file-btn" data-remove-ss="${i}" data-modal="${modal}" title="${t('betahub.removeFile')}">✕</button>
+            <div style="display:flex;align-items:center;gap:8px;overflow:hidden">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                </svg>
+                <span class="bh-file-name bh-file-item-name">${file.name}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+                <span style="font-size:10px;opacity:0.6">${formatFileSize(file.size)}</span>
+                <button type="button" class="bh-remove-file-btn" data-remove-ss="${i}" data-modal="${modal}" title="${t('betahub.removeFile')}">✕</button>
+            </div>
         `;
         list.appendChild(item);
     });
@@ -668,12 +700,16 @@ function renderVideoPreview(): void {
     if (selectedVideo) {
         preview.innerHTML = `
             <div class="bh-file-item">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-                </svg>
-                <span class="bh-file-name bh-file-item-name">${selectedVideo.name}</span>
-                <span style="font-size:10px;opacity:0.6">${formatFileSize(selectedVideo.size)}</span>
-                <button type="button" class="bh-remove-file-btn" id="bh-bug-video-remove" title="${t('betahub.removeFile')}">✕</button>
+                <div style="display:flex;align-items:center;gap:8px;overflow:hidden">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0">
+                        <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                    <span class="bh-file-name bh-file-item-name">${selectedVideo.name}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+                    <span style="font-size:10px;opacity:0.6">${formatFileSize(selectedVideo.size)}</span>
+                    <button type="button" class="bh-remove-file-btn" id="bh-bug-video-remove" title="${t('betahub.removeFile')}">✕</button>
+                </div>
             </div>
         `;
         document.getElementById('bh-bug-video-remove')?.addEventListener('click', () => {

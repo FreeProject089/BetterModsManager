@@ -11,9 +11,11 @@
  * Step 3: POST /confirm_upload   → finalize attachment
  */
 
+import { BETAHUB_PROJECT_ID, BETAHUB_TOKEN } from './betahub-config.local.js';
+
 const BASE_URL = 'https://app.betahub.io';
-const PROJECT_ID = 'pr-7482453116';
-const TOKEN = 'tkn-5246b26ec2dd19b45d3f26af307282c8192e5bf9fd7b1fd465097fe8ebd01258';
+const PROJECT_ID = BETAHUB_PROJECT_ID;
+const TOKEN = BETAHUB_TOKEN;
 
 // =============================================================================
 // Auth header builder
@@ -140,7 +142,8 @@ interface PresignedUploadResponse {
 }
 
 async function getPresignedUrl(
-    issueId: string,
+    resourceType: 'issues' | 'feature_requests',
+    id: string,
     jwtToken: string,
     endpoint: string,
     file: File,
@@ -157,8 +160,11 @@ async function getPresignedUrl(
     };
     if (name) body['name'] = name;
 
+    // Use g- prefix for issues as per BetaHub docs, standard ID for others unless specified
+    const urlId = resourceType === 'issues' ? `g-${id}` : id;
+
     const res = await fetch(
-        `${BASE_URL}/projects/${PROJECT_ID}/issues/g-${issueId}/${endpoint}/presigned_upload`,
+        `${BASE_URL}/projects/${PROJECT_ID}/${resourceType}/${urlId}/${endpoint}/presigned_upload`,
         {
             method: 'POST',
             headers: {
@@ -203,7 +209,8 @@ async function directUpload(
 }
 
 async function confirmUpload(
-    issueId: string,
+    resourceType: 'issues' | 'feature_requests',
+    id: string,
     jwtToken: string,
     endpoint: string,
     blobSignedId: string,
@@ -212,8 +219,10 @@ async function confirmUpload(
     const body: Record<string, string> = { blob_signed_id: blobSignedId };
     if (name) body['name'] = name;
 
+    const urlId = resourceType === 'issues' ? `g-${id}` : id;
+
     const res = await fetch(
-        `${BASE_URL}/projects/${PROJECT_ID}/issues/g-${issueId}/${endpoint}/confirm_upload`,
+        `${BASE_URL}/projects/${PROJECT_ID}/${resourceType}/${urlId}/${endpoint}/confirm_upload`,
         {
             method: 'POST',
             headers: {
@@ -231,8 +240,9 @@ async function confirmUpload(
     }
 }
 
-async function uploadViaPresignedUrl(
-    issueId: string,
+export async function uploadViaPresignedUrl(
+    resourceType: 'issues' | 'feature_requests',
+    id: string,
     jwtToken: string,
     endpoint: string,
     file: File,
@@ -240,10 +250,10 @@ async function uploadViaPresignedUrl(
     name?: string
 ): Promise<void> {
     const { blob_signed_id, direct_upload_url, headers } = await getPresignedUrl(
-        issueId, jwtToken, endpoint, file, contentType, name
+        resourceType, id, jwtToken, endpoint, file, contentType, name
     );
     await directUpload(direct_upload_url, headers, file, contentType);
-    await confirmUpload(issueId, jwtToken, endpoint, blob_signed_id, name);
+    await confirmUpload(resourceType, id, jwtToken, endpoint, blob_signed_id, name);
 }
 
 // =============================================================================
@@ -304,7 +314,7 @@ export async function uploadScreenshot(
     const contentType = normalizeScreenshotType(file);
     // Re-create the file with the normalized MIME type so headers match
     const safeFile = new File([file], safeName, { type: contentType });
-    await uploadViaPresignedUrl(issueId, jwtToken, 'screenshots', safeFile, contentType, safeName);
+    await uploadViaPresignedUrl('issues', issueId, jwtToken, 'screenshots', safeFile, contentType, safeName);
 }
 
 /**
@@ -321,7 +331,7 @@ export async function uploadVideoClip(
         throw new Error(`Unsupported video format: ${contentType}. Use MP4, WebM, or MOV.`);
     }
     const safeFile = new File([file], safeName, { type: contentType });
-    await uploadViaPresignedUrl(issueId, jwtToken, 'video_clips', safeFile, contentType, safeName);
+    await uploadViaPresignedUrl('issues', issueId, jwtToken, 'video_clips', safeFile, contentType, safeName);
 }
 
 /**
@@ -364,7 +374,7 @@ export async function uploadBinaryFile(
     file: File
 ): Promise<void> {
     const contentType = getMimeType(file);
-    await uploadViaPresignedUrl(issueId, jwtToken, 'binary_files', file, contentType, file.name);
+    await uploadViaPresignedUrl('issues', issueId, jwtToken, 'binary_files', file, contentType, file.name);
 }
 
 /**
@@ -441,15 +451,10 @@ export async function createFeatureRequest(
     email?: string,
     discordId?: string,
     title?: string,
-    dueDate?: string
+    dueDate?: string,
+    screenshots?: File[]
 ): Promise<FeatureRequestResult> {
-    const form = new FormData();
-    form.append('feature_request[description]', description);
-    if (dueDate) form.append('feature_request[due_date]', dueDate);
-    if (title && title.trim()) {
-        form.append('feature_request[title]', title.trim());
-    }
-
+    // Stage 1: Create Draft
     const res = await fetch(
         `${BASE_URL}/projects/${PROJECT_ID}/feature_requests.json`,
         {
@@ -457,8 +462,14 @@ export async function createFeatureRequest(
             headers: {
                 'Authorization': getAuthHeader(email, discordId),
                 'BetaHub-Project-ID': PROJECT_ID,
+                'Content-Type': 'application/json',
             },
-            body: form,
+            body: JSON.stringify({
+                'feature_request[description]': description,
+                'feature_request[title]': title?.trim() || undefined,
+                'feature_request[due_date]': dueDate,
+                'draft': true,
+            }),
         }
     );
 
@@ -468,5 +479,75 @@ export async function createFeatureRequest(
     }
 
     const data = await res.json();
-    return { id: data.id, url: data.url || '' };
+    const frId = data.id;
+    const jwtToken = data.token; // Critical: BetaHub returns its temporary JWT token as 'token'
+
+    // Stage 2: Upload Screenshots (Optional)
+    if (screenshots && screenshots.length > 0) {
+        for (const file of screenshots) {
+            await uploadViaPresignedUrl('feature_requests', frId, jwtToken, 'screenshots', file, 'image/png', file.name);
+        }
+    }
+
+    // Stage 3: Set Contact Information
+    // This links the virtual user if they provided an email/discord
+    if (email?.trim() || discordId?.trim()) {
+        await setFeatureRequestContactInfo(frId, jwtToken, email, discordId);
+    }
+
+    // Stage 4: Publish
+    const publishRes = await publishFeatureRequest(frId, jwtToken);
+    
+    return { id: frId, url: data.url || '' };
+}
+
+export async function setFeatureRequestContactInfo(
+    frId: string,
+    jwtToken: string,
+    email?: string,
+    discordId?: string
+): Promise<void> {
+    const res = await fetch(
+        `${BASE_URL}/projects/${PROJECT_ID}/feature_requests/${frId}/set_contact_info`,
+        {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${jwtToken}`,
+                'BetaHub-Project-ID': PROJECT_ID,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email: email?.trim() || undefined,
+                discord_id: discordId?.trim() || undefined,
+            }),
+        }
+    );
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(`Set contact info failed: ${err.error || res.statusText}`);
+    }
+}
+
+export async function publishFeatureRequest(
+    frId: string,
+    jwtToken: string
+): Promise<boolean> {
+    const res = await fetch(
+        `${BASE_URL}/projects/${PROJECT_ID}/feature_requests/${frId}/publish`,
+        {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${jwtToken}`,
+                'BetaHub-Project-ID': PROJECT_ID,
+            },
+        }
+    );
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(`Publish failed: ${err.error || res.statusText}`);
+    }
+
+    return true;
 }
