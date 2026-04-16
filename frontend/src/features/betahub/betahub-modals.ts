@@ -233,7 +233,7 @@ function wirePowInteractivity(modal: 'feedback' | 'bug'): void {
             console.error('[BetaHub] PoW Error:', err);
             check.checked = false;
             setPowState(modal, 'idle');
-            toast(`Verification failed: ${err.message || err}`, 'error');
+            toast(`${t('betahub.errorPowFailed')}: ${err.message || err}`, 'error');
         } finally {
             powAbortController = null;
         }
@@ -263,14 +263,14 @@ async function handleFeedbackSubmit(): Promise<void> {
 
     try {
         if (!powFeedbackResult) {
-            toast('Please verify the report first.', 'warning');
+            toast(t('betahub.errorVerifyFirst'), 'warning');
             setSubmitState('feedback', false);
             return;
         }
 
-        const creatorId = await invoke('get_creator_id').catch(() => 'unknown');
-        const discordId = discordEl?.value?.trim() || 'N/A';
-        description += `\n\n--- Context ---\nCreator ID: ${creatorId}\nDiscord: ${discordId}`;
+        const creatorId = await invoke('get_creator_id').catch(() => t('common.unknown'));
+        const discordId = discordEl?.value?.trim() || t('common.na');
+        description += `\n\n${t('betahub.contextHeader')}\nCreator ID: ${creatorId}\nDiscord: ${discordId}`;
 
         const dueDate = getEffectiveDueDate(dateEl?.value);
 
@@ -443,7 +443,7 @@ async function renderCrashReports(): Promise<void> {
         });
 
         if (reports.length === 0) {
-            list.innerHTML = `<div class="bh-report-empty" data-i18n="betahub.noReports">${t('betahub.noReports') || 'No reports found for this category.'}</div>`;
+            list.innerHTML = `<div class="bh-report-empty" data-i18n="betahub.noReports">${t('betahub.noReports')}</div>`;
             return;
         }
 
@@ -471,7 +471,7 @@ async function renderCrashReports(): Promise<void> {
                 </div>
                 <div class="bh-report-info">
                     <div class="bh-report-name">${report.name}</div>
-                    <div class="bh-report-meta">${dateStr} • ${formatFileSize(report.size)}${isArchived ? ' <span style="opacity:0.6;font-style:italic"> (Archived)</span>' : ''}</div>
+                    <div class="bh-report-meta">${dateStr} • ${formatFileSize(report.size)}${isArchived ? ` <span style="opacity:0.6;font-style:italic"> (${t('betahub.archived')})</span>` : ''}</div>
                 </div>
                 ${isSelected ? `
                     <div class="bh-report-check">
@@ -497,7 +497,7 @@ async function renderCrashReports(): Promise<void> {
             list.appendChild(item);
         });
     } catch (err) {
-        list.innerHTML = `<div class="bh-report-error" style="color:#ef4444;padding:10px;font-size:11px">Failed to list reports: ${err}</div>`;
+        list.innerHTML = `<div class="bh-report-error" style="color:#ef4444;padding:10px;font-size:11px">${t('betahub.errorListReports')}: ${err}</div>`;
     }
 }
 
@@ -559,7 +559,7 @@ async function handleScreenshotSelection(input: HTMLInputElement, modal: 'bug' |
         const ext = file.name.split('.').pop()?.toLowerCase() || '';
         const validByExt = ['png', 'jpg', 'jpeg'].includes(ext);
         if (!validTypes.includes(file.type) && !validByExt) {
-            toast(`${file.name}: Only PNG and JPEG images are supported.`, 'warning');
+            toast(`${file.name}: ${t('betahub.errorUnsupportedImage')}`, 'warning');
             continue;
         }
         if (file.size > maxSize) {
@@ -610,7 +610,7 @@ function renderSteps(): void {
                 <span class="bh-step-index">${String(i + 1).padStart(2, '0')}</span>
             </div>
             <div class="bh-step-content">
-                <textarea class="bh-step-input" placeholder="${t('betahub.stepPlaceholder', { n: String(i + 1) }) || `Step ${i+1} details...`}" data-step-idx="${i}">${step}</textarea>
+                <textarea class="bh-step-input" placeholder="${t('betahub.stepPlaceholder', { n: String(i + 1) })}" data-step-idx="${i}">${step}</textarea>
             </div>
             ${dynamicSteps.length > 1 ? `
                 <button type="button" class="bh-step-remove" title="${t('common.remove')}" data-remove-step="${i}">
@@ -745,7 +745,7 @@ function updateCrashZipDisplay(): void {
     if (selectedCrashZipPaths.length > 0) {
         const count = selectedCrashZipPaths.length;
         const lastFile = selectedCrashZipPaths[count - 1].split(/[\\/]/).pop();
-        const displayText = count > 1 ? `${count} Files Selected (${lastFile})` : lastFile;
+        const displayText = count > 1 ? `${t('betahub.filesSelected', { count: String(count) })} (${lastFile})` : lastFile;
 
         if (manualDisplay) {
             manualDisplay.style.display = 'flex';
@@ -825,18 +825,18 @@ async function handleBugReportSubmit(): Promise<void> {
 
     try {
         if (!powBugResult) {
-            toast('Please verify the report first.', 'warning');
+            toast(t('betahub.errorVerifyFirst'), 'warning');
             setSubmitState('bug', false);
             return;
         }
 
         // IDs for description
-        const creatorId = await invoke('get_creator_id').catch(() => 'unknown');
-        const appVersion = await invoke('get_app_version').catch(() => '0.0.0');
-        const buildDate = await invoke('get_build_date').catch(() => 'Unknown Date');
-        const discordId = discordEl?.value?.trim() || 'N/A';
+        const creatorId = await invoke('get_creator_id').catch(() => t('common.unknown'));
+        const appVersion = await invoke('get_app_version').catch(() => t('common.na'));
+        const buildDate = await invoke('get_build_date').catch(() => t('common.unknown'));
+        const discordId = discordEl?.value?.trim() || t('common.na');
         
-        description += `\n\n--- Context ---\nCreator ID: ${creatorId}\nDiscord: ${discordId}\nBMM Version: ${appVersion} (Build: ${buildDate})`;
+        description += `\n\n${t('betahub.contextHeader')}\nCreator ID: ${creatorId}\nDiscord: ${discordId}\nBMM Version: ${appVersion} (Build: ${buildDate})`;
 
         // Format Steps
         const stepsToReproduce = dynamicSteps
@@ -857,7 +857,7 @@ async function handleBugReportSubmit(): Promise<void> {
             titleEl?.value?.trim() || undefined,
             stepsToReproduce || undefined,
             contactEmail,
-            discordId === 'N/A' ? undefined : discordId,
+            discordId === t('common.na') ? undefined : discordId,
             dueDate
         );
 
@@ -893,7 +893,7 @@ async function handleBugReportSubmit(): Promise<void> {
         await Promise.all(uploadTasks);
 
         // Step 3: Set contact info
-        await setContactInfo(issueId, jwtToken, contactEmail, discordId === 'N/A' ? undefined : discordId);
+        await setContactInfo(issueId, jwtToken, contactEmail, discordId === t('common.na') ? undefined : discordId);
 
         // Step 4: Publish
         await publishIssue(issueId, jwtToken, !!contactEmail);
@@ -929,12 +929,12 @@ async function fetchAndUploadLogs(issueId: string, jwtToken: string): Promise<vo
         const { debugHub } = await import('../debug/debug.js');
         const logs = debugHub?.logs?.length > 0 
             ? debugHub.logs.map(l => `[${l.level.toUpperCase()}] ${l.message}`).join('\n')
-            : 'No realtime logs captured in buffer.';
+            : t('betahub.errorNoLogs');
         
         await uploadLogContents(issueId, jwtToken, logs, 'bmm_frontend.log');
     } catch (e) {
         console.warn('Log capture failed, uploading fallback:', e);
-        await uploadLogContents(issueId, jwtToken, 'Frontend log collection failed or module unavailable.', 'bmm_error.log');
+        await uploadLogContents(issueId, jwtToken, `${t('betahub.errorSubmit')} (Log capture failed)`, 'bmm_error.log');
     }
 }
 
@@ -1134,13 +1134,13 @@ function updateStrengthGauge(modal: 'feedback' | 'bug', score: number): void {
     // 3. Score & Labels (Optional but keep for info)
     scoreText.textContent = String(score);
     if (score < 40) {
-        labelText.textContent = t('betahub.strengthLow') || 'Weak';
+        labelText.textContent = t('betahub.strengthLow');
         labelText.className = 'bh-strength-label bh-label-low';
     } else if (score < 80) {
-        labelText.textContent = t('betahub.strengthGood') || 'Good';
+        labelText.textContent = t('betahub.strengthGood');
         labelText.className = 'bh-strength-label bh-label-good';
     } else {
-        labelText.textContent = t('betahub.strengthExpert') || 'Expert';
+        labelText.textContent = t('betahub.strengthExpert');
         labelText.className = 'bh-strength-label bh-label-expert';
     }
 
@@ -1150,18 +1150,18 @@ function updateStrengthGauge(modal: 'feedback' | 'bug', score: number): void {
         const desc = (document.getElementById(`bh-${prefix}-desc`) as HTMLTextAreaElement)?.value || '';
         const title = (document.getElementById(`bh-${prefix}-title`) as HTMLInputElement)?.value || '';
 
-        if (title.length < 5) suggestions.push('Add a descriptive title');
-        if (desc.length < 100) suggestions.push('Expand your description');
+        if (title.length < 5) suggestions.push(t('betahub.suggestTitle'));
+        if (desc.length < 100) suggestions.push(t('betahub.suggestDesc'));
         
         const ssCount = modal === 'feedback' ? selectedFeedbackScreenshots.length : selectedScreenshots.length;
-        if (ssCount === 0) suggestions.push('Attach a screenshot if possible');
+        if (ssCount === 0) suggestions.push(t('betahub.suggestScreenshot'));
 
         if (modal === 'bug') {
             const validSteps = dynamicSteps.filter(s => s.trim().length > 3).length;
-            if (validSteps < 2) suggestions.push('Add more reproduction steps');
-            if (selectedCrashZipPaths.length === 0) suggestions.push('Select a relevant crash report');
+            if (validSteps < 2) suggestions.push(t('betahub.suggestSteps'));
+            if (selectedCrashZipPaths.length === 0) suggestions.push(t('betahub.suggestCrash'));
         }
 
-        suggestionsList.innerHTML = suggestions.slice(0, 2).map(s => `<li>+ ${s}</li>`).join('');
+        suggestionsList.innerHTML = suggestions.slice(0, 2).map((s: string) => `<li>+ ${s}</li>`).join('');
     }
 }
