@@ -2287,6 +2287,44 @@
                             </div>
                         </div>
 
+                        <!-- BetaHub Privacy & Security Documentation -->
+                        <div class="glass-card" style="border-left: 3px solid #a855f7;">
+                            <h3 class="card-title">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                </svg>
+                                <span style="color:#a855f7" data-i18n="docs.betahub.title">BetaHub: Privacy & Security</span>
+                                <button class="btn btn-xs btn-ghost" onclick="openDiagram('betahub-reporting')"
+                                    style="margin-left:auto; font-size:10px; color:#a855f7; border:1px dashed rgba(168,85,247,0.3); padding: 2px 8px;">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" style="margin-right:4px">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                        <path d="M2 17l10 5 10-5" />
+                                        <path d="M2 12l10 5 10-5" />
+                                    </svg>
+                                    <span data-i18n="docs.exploreBetaHub">EXPLORE FLOW</span>
+                                </button>
+                            </h3>
+                            <div style="margin-top:8px; display:flex; flex-direction:column; gap:12px;">
+                                <p style="font-size:12px; color:var(--text-secondary); line-height:1.5; margin:0" data-i18n="docs.betahub.desc">...</p>
+                                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px;">
+                                    <div style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.15); border-radius:10px; padding:12px">
+                                        <div style="font-size:12px; font-weight:700; color:#d8b4fe; margin-bottom:4px" data-i18n="docs.betahub.benefit1">Spam protection (PoW)</div>
+                                        <div style="font-size:12px; color:var(--text-secondary); line-height:1.5" data-i18n="docs.betahub.benefit1.desc">Uses cryptographic challenges to verify genuine requests without intrusive captchas.</div>
+                                    </div>
+                                    <div style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.15); border-radius:10px; padding:12px">
+                                        <div style="font-size:12px; font-weight:700; color:#d8b4fe; margin-bottom:4px" data-i18n="docs.betahub.benefit2">Privacy-First Data Segregation</div>
+                                        <div style="font-size:12px; color:var(--text-secondary); line-height:1.5" data-i18n="docs.betahub.benefit2.desc">Strictly separates public report details from your private system logs and contact info.</div>
+                                    </div>
+                                    <div style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.15); border-radius:10px; padding:12px">
+                                        <div style="font-size:12px; font-weight:700; color:#d8b4fe; margin-bottom:4px" data-i18n="docs.betahub.benefit3">High-Priority Dev Channel</div>
+                                        <div style="font-size:12px; color:var(--text-secondary); line-height:1.5" data-i18n="docs.betahub.benefit3.desc">Direct link to the development team, ensuring your feedback is tracked efficiently.</div>
+                                    </div>
+                                </div>
+                                
+                            </div>
+                        </div>
+
                         <!-- FAQ -->
                         <!-- Technical Stack & Architecture -->
                         <div class="glass-card" id="tech-stack-card"
@@ -2886,6 +2924,56 @@
                                 </button>
                             </div>
                         </details>
+                        
+                        <!-- BetaHub Specific FAQ -->
+                        <div style="margin-top:20px; border-top:1px solid rgba(168,85,247,0.1); padding-top:20px;">
+                            <h4 style="font-size:11px; font-weight:800; color:#a855f7; letter-spacing:0.1em; margin-bottom:12px; text-transform:uppercase">BetaHub & Reporting</h4>
+                            
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2.2">
+                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                        </svg>
+                                        <span data-i18n="faq.betahub.q1">Quelles données sont envoyées lors d'un rapport BetaHub ?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.betahub.a1">...</div>
+                            </details>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2.2">
+                                            <path d="M3 12h3L9 3l6 18 3-9h3" />
+                                        </svg>
+                                        <span data-i18n="faq.betahub.q2">Pourquoi l'envoi utilise-t-il le CPU en arrière-plan ?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.betahub.a2">...</div>
+                            </details>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2.2">
+                                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                        </svg>
+                                        <span data-i18n="faq.betahub.q3">Comment puis-je suivre l'état de mon rapport ?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.betahub.a3">...</div>
+                            </details>
+                        </div>
 
                         <!-- All Diagrams Gallery -->
                         <details class="glass-card faq-accordion"
@@ -3066,6 +3154,11 @@
                                         style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
                                         <span style="font-size: 11px;"
                                             data-i18n="docs.gallery.btn.premiumInteractions">Interactions UI Premium</span>
+                                    </button>
+                                    <button class="btn btn-ghost btn-sm" onclick="openDiagram('betahub-reporting')"
+                                        style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                        <span style="font-size: 11px;"
+                                            data-i18n="docs.gallery.btn.betahub">Flux BetaHub</span>
                                     </button>
                                 </div>
                             </div>
@@ -3750,11 +3843,8 @@
                             <div style="display:flex; flex-wrap:wrap; gap:10px">
                                 <!-- Bug Report -->
                                 <button class="btn btn-secondary btn-sm" id="btn-settings-betahub-bugreport"
-                                    style="gap:8px; border-color:rgba(99,102,241,0.35); color:#a5b4fc">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                                        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                                    </svg>
+                                    style="border-color:rgba(239,68,68,0.2); color:#f87171; background:rgba(239,68,68,0.05); gap:8px">
+                                    <img src="https://betahub.io/assets/img/chat/betahub.webp" style="width:16px;height:16px;border-radius:3px" alt="BetaHub">
                                     <span data-i18n="betahub.btnBugReport">Report a Bug</span>
                                 </button>
                                 <!-- Feedback -->
@@ -3767,6 +3857,20 @@
                                     </svg>
                                     <span data-i18n="betahub.btnFeedback">Suggestion / Feedback</span>
                                 </button>
+                            </div>
+
+                            <!-- My Reports History -->
+                            <div id="bh-history-section" style="margin-top:20px; border-top:1px solid rgba(99,102,241,0.15); padding-top:16px; display:none;">
+                                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                                    <div style="font-size:11px; font-weight:800; color:#818cf8; letter-spacing:0.1em; text-transform:uppercase" data-i18n="docs.betahub.history">MY RECENT REPORTS</div>
+                                    <button id="bh-history-refresh" class="btn btn-xs btn-ghost" style="font-size:9px; height:20px; color:#a5b4fc">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                        <span data-i18n="common.refresh">REFRESH</span>
+                                    </button>
+                                </div>
+                                <div id="bh-history-list" style="display:flex; flex-direction:column; gap:8px;">
+                                    <!-- Populated via script -->
+                                </div>
                             </div>
                         </div>
 
@@ -3851,98 +3955,72 @@
         <!-- ══ MODALS ══ -->
 
         <!-- Crash Report Modal -->
-        <div class="modal-overlay" id="modal-crash-report"
-            style="z-index:9998;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px)">
-            <div class="modal glass"
-                style="max-width:560px;width:92%;border:1px solid rgba(239,68,68,0.35);box-shadow:0 0 60px rgba(239,68,68,0.15)">
-                <div class="modal-header" style="border-color:rgba(239,68,68,0.2)">
-                    <div style="display:flex;align-items:center;gap:12px">
-                        <div
-                            style="width:36px;height:36px;background:rgba(239,68,68,0.12);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f87171"
-                                stroke-width="2.2">
-                                <path
-                                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                <line x1="12" y1="9" x2="12" y2="13" />
-                                <line x1="12" y1="17" x2="12.01" y2="17" />
+        <div class="modal-overlay bh-modal-overlay" id="modal-crash-report">
+            <div class="modal-container">
+            <div class="modal-content glass" style="max-width:580px;padding:0;border:1px solid rgba(239,68,68,0.25)">
+                <!-- Header -->
+                <div class="bh-crash-header">
+                    <div style="display:flex;align-items:center;gap:16px">
+                        <div class="bh-crash-icon-box">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                             </svg>
                         </div>
                         <div>
-                            <h2 class="modal-title" style="color:#f87171" data-i18n="crash.title">BMM Crashed</h2>
-                            <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0" data-i18n="crash.subtitle">
-                                A
-                                crash report has been generated</p>
+                            <h2 class="bh-crash-title" data-i18n="crash.title">BMM Crashed</h2>
+                            <p style="font-size:12px;color:rgba(248,113,113,0.7);margin:2px 0 0" data-i18n="crash.subtitle">Something went wrong, but we've got you covered.</p>
                         </div>
                     </div>
                 </div>
-                <div class="modal-body">
-                    <p style="font-size:13px;line-height:1.65;color:var(--text-secondary)" data-i18n="crash.desc">
-                        Something
-                        unexpected happened and BMM stopped working. A .zip file with diagnostic information (logs,
-                        DXDiag,
-                        app state) has been saved automatically.</p>
-                    <div id="crash-path-container"
-                        style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:12px;cursor:pointer;transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1);margin:4px 0"
-                        onmouseover="this.style.background='rgba(239,68,68,0.1)';this.style.borderColor='rgba(239,68,68,0.3)';"
-                        onmouseout="this.style.background='rgba(239,68,68,0.06)';this.style.borderColor='rgba(239,68,68,0.15)';"
-                        onmouseenter="window.showTaskyHelp('crash.openFileTip', 'info')"
-                        onmouseleave="window.hideTaskyHelp()">
-                        <div
-                            style="width:32px;height:32px;background:rgba(239,68,68,0.1);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171"
-                                stroke-width="2.2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                            </svg>
-                        </div>
-                        <div style="display:flex;flex-direction:column;gap:2px;overflow:hidden">
-                            <span
-                                style="font-size:9px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:0.05em;opacity:0.8"
-                                data-i18n="crash.pathLabel">Fichier du rapport</span>
-                            <code id="crash-zip-path"
-                                style="font-size:11px;font-family:var(--font-mono);color:var(--text-secondary);word-break:break-all;white-space:normal;line-height:1.4">—</code>
-                        </div>
-                    </div>
-                    <p style="font-size:12px;color:var(--text-muted);margin-top:8px" data-i18n="crash.helpText">Please
-                        share
-                        this file on our Discord so we can investigate.</p>
-                </div>
-                <div class="modal-footer"
-                    style="border-color:rgba(239,68,68,0.15); gap:12px; flex-wrap:nowrap; align-items:center; justify-content:flex-end; padding: 20px 24px;">
-                    <button class="btn btn-ghost" data-close="modal-crash-report"
-                        style="height:40px; padding:0 20px; border-radius:12px; font-weight:600; font-size:13px"
-                        data-i18n="prof.cancel">Fermer</button>
+                <!-- Body -->
+                <div class="modal-body" style="padding:28px">
+                    <p style="font-size:14px;line-height:1.6;color:var(--text-secondary);margin-bottom:20px" data-i18n="crash.desc">
+                        Better Mod Manager encountered an unexpected error. A diagnostic report containing logs and system info has been generated automatically to help us fix it.
+                    </p>
                     
-                    <button class="btn btn-secondary" id="btn-crash-open-zip"
-                        style="height:40px; padding:0 20px; border-radius:12px; font-weight:600; font-size:13px; display:flex; align-items:center; gap:8px; white-space:nowrap">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.2">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                        </svg>
-                        <span data-i18n="crash.openZip">Ouvrir dans l'Explorateur</span>
-                    </button>
-
-                    <!-- BetaHub: Report this crash -->
-                    <button class="btn btn-ghost" id="btn-crash-report-betahub"
-                        style="height:40px; padding:0 16px; border-radius:12px; font-weight:600; font-size:13px; display:flex; align-items:center; gap:7px; white-space:nowrap; border:1px solid rgba(99,102,241,0.35); color:#a5b4fc;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-                        </svg>
-                        <span data-i18n="betahub.btnCrashReport">Signaler sur BetaHub</span>
-                    </button>
-
-                    <a href="https://discord.com/invite/CTaaEF9R75" target="_blank" class="btn btn-primary"
-                        style="background:#5865F2; color:#ffffff; border:none; height:40px; padding:0 20px; border-radius:12px; font-weight:700; font-size:13px; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:8px; white-space:nowrap; box-shadow:0 4px 15px rgba(88,101,242,0.3)">
-                        <div style="width:18px; height:18px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="#ffffff" style="display:block;">
-                                <path
-                                    d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 11.756 11.756 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.078.078 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.332c-1.183 0-2.157-1.085-2.157-2.42s.955-2.42 2.157-2.42c1.21 0 2.176 1.085 2.156 2.42 0 1.335-.956 2.42-2.156 2.42zm7.974 0c-1.183 0-2.157-1.085-2.157-2.42s.955-2.42 2.157-2.42c1.21 0 2.176 1.085 2.156 2.42 0 1.335-.946 2.42-2.156 2.42z" />
+                    <div id="crash-path-container" class="bh-crash-card" 
+                         onmouseenter="window.showTaskyHelp('crash.openFileTip', 'info')" 
+                         onmouseleave="window.hideTaskyHelp()">
+                        <div class="bh-crash-icon-box" style="width:32px;height:32px;background:rgba(255,255,255,0.05);color:var(--text-secondary)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/>
                             </svg>
                         </div>
-                        <span data-i18n="crash.discord">Rejoindre le Discord</span>
+                        <div style="display:flex;flex-direction:column;gap:4px;overflow:hidden">
+                            <span style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em" data-i18n="crash.pathLabel">Report File</span>
+                            <code id="crash-zip-path" style="font-size:11px;font-family:var(--font-mono);color:var(--text-primary);word-break:break-all;white-space:normal;line-height:1.4">—</code>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;align-items:center;gap:10px;margin-top:24px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid rgba(255,255,255,0.05)">
+                        <img src="./assets/Tasky.png" style="width:24px;height:24px;opacity:0.8" alt="Tasky">
+                        <p style="font-size:12px;color:var(--text-muted);margin:0" data-i18n="crash.helpText">Sharing this report on our Discord is the fastest way to get help.</p>
+                    </div>
+                </div>
+                <!-- Footer -->
+                <div class="bh-crash-footer">
+                    <button class="bh-btn-premium bh-btn-ghost" data-close="modal-crash-report" data-i18n="prof.cancel">Close</button>
+                    
+                    <button class="bh-btn-premium bh-btn-glass" id="btn-crash-open-zip">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <span data-i18n="crash.openZip">Open in Explorer</span>
+                    </button>
+
+                    <button class="bh-btn-premium bh-btn-indigo" id="btn-crash-report-betahub">
+                        <img src="https://betahub.io/assets/img/chat/betahub.webp" style="width:20px;height:20px;border-radius:4px" alt="BetaHub">
+                        <span data-i18n="betahub.btnCrashReport">Report to BetaHub</span>
+                    </button>
+
+                    <a href="https://discord.com/invite/CTaaEF9R75" target="_blank" class="bh-btn-premium bh-btn-discord" style="text-decoration:none">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                           <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 11.756 11.756 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.078.078 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.332c-1.183 0-2.157-1.085-2.157-2.42s.955-2.42 2.157-2.42c1.21 0 2.176 1.085 2.156 2.42 0 1.335-.956 2.42-2.156 2.42zm7.974 0c-1.183 0-2.157-1.085-2.157-2.42s.955-2.42 2.157-2.42c1.21 0 2.176 1.085 2.156 2.42 0 1.335-.946 2.42-2.156 2.42z"></path>
+                        </svg>
+                        <span data-i18n="crash.discord">Join Discord</span>
                     </a>
                 </div>
+            </div>
             </div>
         </div>
         <!-- END Crash Report Modal -->
@@ -3983,9 +4061,18 @@
                                     <label class="bh-label" data-i18n="betahub.fieldTitle">Title</label>
                                     <input id="bh-feedback-title" type="text" class="bh-input" data-i18n-placeholder="betahub.fieldTitlePlaceholder" placeholder="Short summary (optional)" maxlength="150">
                                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
-                                        <input id="bh-feedback-email" type="email" class="bh-input" data-i18n-placeholder="betahub.fieldContactPlaceholder" placeholder="Email (public)">
-                                        <input id="bh-feedback-discord" type="text" class="bh-input" data-i18n-placeholder="betahub.fieldDiscordPlaceholder" placeholder="Numeric ID">
+                                        <div class="bh-field-group">
+                                            <label class="bh-label"><span data-i18n="betahub.fieldEmail">Email</span> <span style="color:#ef4444">*</span></label>
+                                            <input id="bh-feedback-email" type="email" class="bh-input" data-i18n-placeholder="betahub.fieldContactPlaceholder" placeholder="user@example.com">
+                                        </div>
+                                        <div class="bh-field-group">
+                                            <label class="bh-label"><span data-i18n="betahub.fieldDiscordUsername">Discord Username</span> <span style="color:#ef4444">*</span></label>
+                                            <input id="bh-feedback-discord" type="text" class="bh-input" data-i18n-placeholder="betahub.fieldDiscordPlaceholder" placeholder="Ex: username#1234">
+                                        </div>
                                     </div>
+                                    <p style="font-size:10px;color:var(--text-muted);margin-top:6px;line-height:1.4" data-i18n="betahub.contactRequirement">
+                                        * At least one contact method is required. Please use your <strong>Discord Username</strong>.
+                                    </p>
                                 </div>
                                 <!-- Description -->
                                 <div class="bh-field-group">
@@ -4151,14 +4238,17 @@
                                     </div>
                                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
                                         <div class="bh-field-group">
-                                            <label class="bh-label" data-i18n="betahub.fieldContact">Public Contact (optional)</label>
-                                            <input id="bh-bug-contact" type="email" class="bh-input" data-i18n-placeholder="betahub.fieldContactPlaceholder" placeholder="Email (public)">
+                                            <label class="bh-label"><span data-i18n="betahub.fieldEmail">Public Email</span> <span style="color:#ef4444">*</span></label>
+                                            <input id="bh-bug-contact" type="email" class="bh-input" data-i18n-placeholder="betahub.fieldContactPlaceholder" placeholder="user@example.com">
                                         </div>
                                         <div class="bh-field-group">
-                                            <label class="bh-label" data-i18n="betahub.fieldDiscord">Discord ID (optional)</label>
-                                            <input id="bh-bug-discord" type="text" class="bh-input" data-i18n-placeholder="betahub.fieldDiscordPlaceholder" placeholder="Numeric ID">
+                                            <label class="bh-label"><span data-i18n="betahub.fieldDiscordUsername">Discord Username</span> <span style="color:#ef4444">*</span></label>
+                                            <input id="bh-bug-discord" type="text" class="bh-input" data-i18n-placeholder="betahub.fieldDiscordPlaceholder" placeholder="Ex: username#1234">
                                         </div>
                                     </div>
+                                    <p style="font-size:10px;color:var(--text-muted);margin-top:-10px;line-height:1.4" data-i18n="betahub.contactRequirementBug">
+                                        * At least one contact method is required so we can follow up. Please provide your <strong>Discord Username</strong> (not display name).
+                                    </p>
                                 </div>
 
                                 <!-- Description -->

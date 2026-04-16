@@ -31,6 +31,8 @@ import { semanticSearch } from './diagrams/semantic-search.js';
 import { integrityEngine } from './diagrams/integrity-engine.js';
 import { mtimeCache } from './diagrams/mtime-cache.js';
 import { premiumInteractions } from './diagrams/premium-interactions.js';
+import { betahubReporting } from './diagrams/betahub-reporting.js';
+
 
 // Diagram Registry
 export const diagrams = {
@@ -62,10 +64,11 @@ export const diagrams = {
     'engine-threads': engineThreads,
     'code-stack': codeStack,
     'semantic-search': semanticSearch,
-    'integrity-engine': integrityEngine,
     'mtime-cache': mtimeCache,
-    'premium-interactions': premiumInteractions
+    'premium-interactions': premiumInteractions,
+    'betahub-reporting': betahubReporting
 };
+
 
 // State
 let currentDiagramID = null;

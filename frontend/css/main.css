@@ -5550,6 +5550,33 @@ select:focus {
     to { transform: rotate(360deg); }
 }
 
+.bh-submit-btn.loading {
+    pointer-events: none;
+    opacity: 0.8;
+    filter: grayscale(0.2);
+    position: relative;
+    color: transparent !important;
+}
+
+.bh-submit-btn.loading::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    margin-left: -7px;
+    margin-top: -7px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: bh-spin 0.6s linear infinite;
+}
+
+@keyframes bh-spin {
+    to { transform: rotate(360deg); }
+}
+
 .mod-loading-overlay.fade-out {
     animation: fadeOut 0.3s ease forwards;
 }
@@ -5560,7 +5587,7 @@ select:focus {
 }
 
 /* -- Tasky Icons -- */
-.icon-info, .icon-help, .icon-verify, .icon-warning, .icon-search, .icon-layers, .icon-history, .icon-play, .icon-refresh, .icon-network {
+.icon-info, .icon-help, .icon-verify, .icon-warning, .icon-search, .icon-layers, .icon-history, .icon-play, .icon-refresh, .icon-network, .icon-lock, .icon-shield {
     width: 100%;
     height: 100%;
     display: flex;

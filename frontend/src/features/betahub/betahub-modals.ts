@@ -4,6 +4,7 @@
  */
 
 import { t, applyTranslations } from '../../core/i18n.js';
+import { BETAHUB_PROJECT_ID } from './betahub-config.local.js';
 import { invoke, pickFile } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { solvePoW } from './betahub-pow.js';
@@ -40,6 +41,9 @@ let powBugResult: any = null;
 export function initBetaHub(): void {
     wireFeedbackModal();
     wireBugReportModal();
+    wireHistoryUI();
+
+    renderReportHistory();
 
     // Global click-outside to close for BetaHub overlays
     // Note: must check overlay OR modal-container (the inner flex wrapper)
@@ -259,6 +263,7 @@ async function handleFeedbackSubmit(): Promise<void> {
 
     clearFieldErrors('bh-feedback');
     setSubmitState('feedback', true);
+    setSubmitLoading('feedback', true);
     setPowState('feedback', 'solving');
 
     try {
@@ -277,7 +282,7 @@ async function handleFeedbackSubmit(): Promise<void> {
         setPowState('feedback', 'upload');
 
         // Submit
-        await createFeatureRequest(
+        const result = await createFeatureRequest(
             description,
             emailEl?.value?.trim() || undefined,
             discordEl?.value?.trim() || undefined,
@@ -285,6 +290,8 @@ async function handleFeedbackSubmit(): Promise<void> {
             dueDate,
             selectedFeedbackScreenshots.length > 0 ? selectedFeedbackScreenshots : undefined
         );
+
+        saveReportToHistory('feedback', titleEl?.value?.trim() || t('betahub.themeFeedback'), (result as any)?.id || 'N/A');
 
         closeFeedbackModal();
         toast(t('betahub.successFeedback'), 'success');
@@ -294,6 +301,7 @@ async function handleFeedbackSubmit(): Promise<void> {
         setPowState('feedback', 'idle');
         toast(`${t('betahub.errorSubmit')}: ${err.message || err}`, 'error');
     } finally {
+        setSubmitLoading('feedback', false);
         setSubmitState('feedback', false);
         powAbortController = null;
     }
@@ -821,6 +829,7 @@ async function handleBugReportSubmit(): Promise<void> {
 
     clearFieldErrors('bh-bug');
     setSubmitState('bug', true);
+    setSubmitLoading('bug', true);
     setPowState('bug', 'solving');
 
     try {
@@ -898,6 +907,8 @@ async function handleBugReportSubmit(): Promise<void> {
         // Step 4: Publish
         await publishIssue(issueId, jwtToken, !!contactEmail);
 
+        saveReportToHistory('bug', titleEl?.value?.trim() || t('betahub.themeBug'), issueId);
+
         closeBugReportModal();
         toast(t('betahub.successBugReport'), 'success');
 
@@ -907,6 +918,7 @@ async function handleBugReportSubmit(): Promise<void> {
         setPowState('bug', 'idle');
         toast(`${t('betahub.errorSubmit')}: ${err.message || err}`, 'error');
     } finally {
+        setSubmitLoading('bug', false);
         setSubmitState('bug', false);
         powAbortController = null;
     }
@@ -989,6 +1001,97 @@ function clearFieldErrors(prefix: string): void {
     document.querySelectorAll('.bh-field-error').forEach(el => el.remove());
 }
 
+/**
+ * Save a summary of the report to local storage for the 'My Reports' history view.
+ */
+function saveReportToHistory(type: 'feedback' | 'bug', title: string, issueId: string): void {
+    try {
+        const history = JSON.parse(localStorage.getItem('bmm_report_history') || '[]');
+        history.unshift({
+            id: issueId,
+            type,
+            title,
+            date: new Date().toISOString()
+        });
+        localStorage.setItem('bmm_report_history', JSON.stringify(history.slice(0, 10)));
+        // Trigger UI refresh if needed
+        renderReportHistory();
+    } catch (e) {
+        console.warn('[BetaHub] Failed to save history:', e);
+    }
+}
+
+function wireHistoryUI(): void {
+    const refreshBtn = document.getElementById('bh-history-refresh');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => renderReportHistory());
+    }
+}
+
+/**
+ * Render the report history list in the documentation.
+ */
+function renderReportHistory(): void {
+    const list = document.getElementById('bh-history-list');
+    const section = document.getElementById('bh-history-section');
+    if (!list || !section) return;
+
+    try {
+        const history = JSON.parse(localStorage.getItem('bmm_report_history') || '[]');
+        
+        if (history.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = 'block';
+        list.innerHTML = '';
+
+        history.forEach((item: any) => {
+            const date = new Date(item.date).toLocaleString(undefined, {
+                day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+            });
+            const color = item.type === 'bug' ? '#ef4444' : '#10b981';
+            const icon = item.type === 'bug' ? 
+                '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>' :
+                '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 1 1-7.6-11.7 8.3 8.3 0 0 1 3.2.6"/>';
+
+            const url = item.type === 'bug' ? 
+                `https://app.betahub.io/projects/${BETAHUB_PROJECT_ID}/issues/g-${item.id}` :
+                `https://app.betahub.io/projects/${BETAHUB_PROJECT_ID}/feature_requests/${item.id}`;
+
+            const div = document.createElement('div');
+            div.style.cssText = 'background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:10px; display:flex; align-items:center; gap:12px; transition:all 0.2s;';
+            div.onmouseover = () => div.style.background = 'rgba(255,255,255,0.05)';
+            div.onmouseout = () => div.style.background = 'rgba(255,255,255,0.03)';
+
+            div.innerHTML = `
+                <div style="width:28px; height:28px; border-radius:6px; background:${color}15; display:flex; align-items:center; justify-content:center; color:${color}; flex-shrink:0">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        ${icon}
+                    </svg>
+                </div>
+                <div style="flex:1; overflow:hidden; display:flex; flex-direction:column; gap:2px">
+                    <div style="font-size:12px; font-weight:700; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${item.title}</div>
+                    <div style="font-size:10px; color:var(--text-muted); display:flex; align-items:center; gap:8px;">
+                        <span>${date}</span>
+                        <span style="opacity:0.3">•</span>
+                        <span style="font-family:monospace; opacity:0.6">ID: ${item.id}</span>
+                    </div>
+                </div>
+                <a href="${url}" target="_blank" class="bh-history-link" onmouseenter="window.showTaskyHelp('betahub.historyViewTip', 'info')" onmouseleave="window.hideTaskyHelp()" style="padding:6px; background:rgba(255,255,255,0.05); border-radius:6px; color:var(--text-secondary); transition:all 0.2s; display:flex; align-items:center; justify-content:center; border:1px solid rgba(255,255,255,0.05)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                </a>
+            `;
+            list.appendChild(div);
+        });
+    } catch (e) {
+        console.warn('[BetaHub] Render history failed:', e);
+    }
+}
+
 export function setPowState(modal: 'feedback' | 'bug', state: 'idle' | 'solving' | 'upload' | 'done' | 'error'): void {
     const prefix = modal === 'feedback' ? 'feedback' : 'bug';
     const container = document.getElementById(`bh-${prefix}-pow`);
@@ -1032,10 +1135,57 @@ function updatePowProgress(modal: 'feedback' | 'bug', nonce: number): void {
     }
 }
 
-function setSubmitState(modal: 'feedback' | 'bug', enabled: boolean): void {
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validateBetaHubForm(modal: 'feedback' | 'bug'): boolean {
+    const prefix = modal === 'feedback' ? 'feedback' : 'bug';
+    const desc = (document.getElementById(`bh-${prefix}-desc`) as HTMLTextAreaElement)?.value || '';
+    
+    // Check contact fields (IDs differ slightly between modals)
+    const emailEl = document.getElementById(modal === 'feedback' ? 'bh-feedback-email' : 'bh-bug-contact') as HTMLInputElement | null;
+    const discordEl = document.getElementById(`bh-${prefix}-discord`) as HTMLInputElement | null;
+    
+    const email = emailEl?.value.trim() || '';
+    const discord = discordEl?.value.trim() || '';
+    
+    const isEmailValid = email.length > 0 && EMAIL_REGEX.test(email);
+    const isDiscordValid = discord.length > 2; // Basic check for username
+    
+    const hasContact = isEmailValid || isDiscordValid;
+    const powDone = (modal === 'feedback' ? powFeedbackResult : powBugResult) !== null;
+
+    return desc.trim().length >= 10 && hasContact && powDone;
+}
+
+function setSubmitState(modal: 'feedback' | 'bug', _enabledByPow?: boolean): void {
     const prefix = modal === 'feedback' ? 'feedback' : 'bug';
     const btn = document.getElementById(`bh-${prefix}-submit`) as HTMLButtonElement | null;
-    if (btn) btn.disabled = !enabled;
+    if (btn) {
+        btn.disabled = !validateBetaHubForm(modal);
+    }
+}
+
+/**
+ * Toggle the loading state (animation + text) for the submit button.
+ */
+function setSubmitLoading(modal: 'feedback' | 'bug', isLoading: boolean): void {
+    const prefix = modal === 'feedback' ? 'feedback' : 'bug';
+    const btn = document.getElementById(`bh-${prefix}-submit`) as HTMLButtonElement | null;
+    if (!btn) return;
+
+    if (isLoading) {
+        btn.classList.add('loading');
+        // Save original text if not already saved
+        if (!btn.dataset.originalText) {
+            btn.dataset.originalText = btn.textContent || '';
+        }
+        btn.textContent = t('betahub.submitting') || 'SENDING...';
+    } else {
+        btn.classList.remove('loading');
+        if (btn.dataset.originalText) {
+            btn.textContent = btn.dataset.originalText;
+        }
+    }
 }
 
 // =============================================================================
@@ -1047,15 +1197,19 @@ function wireStrengthGauge(modal: 'feedback' | 'bug'): void {
     const inputs = [
         `bh-${prefix}-title`,
         `bh-${prefix}-desc`,
-        `bh-${prefix}-screenshots`,
+        `bh-${prefix}-discord`,
+        modal === 'feedback' ? 'bh-feedback-email' : 'bh-bug-contact'
     ];
     if (modal === 'bug') {
-        inputs.push('bh-bug-video', 'bh-bug-include-logs', 'bh-bug-include-dxdiag');
+        inputs.push('bh-bug-video', 'bh-bug-include-logs', 'bh-bug-include-dxdiag', 'bh-bug-pow-check');
+    } else {
+        inputs.push('bh-feedback-pow-check');
     }
 
     const update = () => {
         const score = calculateSubmissionStrength(modal);
         updateStrengthGauge(modal, score);
+        setSubmitState(modal); // This will update button state
     };
 
     inputs.forEach(id => {

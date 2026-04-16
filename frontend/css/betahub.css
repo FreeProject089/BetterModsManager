@@ -242,6 +242,16 @@
     filter: brightness(0.9);
 }
 
+.bh-submit-btn:disabled {
+    background: #374151 !important;
+    color: #9ca3af !important;
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none !important;
+    transform: none !important;
+    filter: grayscale(0.8) brightness(0.8);
+}
+
 .btn-secondary {
     background: transparent;
     border: 1px solid var(--border);
@@ -259,12 +269,12 @@
 .bh-step-item {
     display: flex;
     align-items: flex-start;
-    gap: 16px;
-    padding: 12px 16px;
+    gap: 12px;
+    padding: 8px 12px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 10px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .bh-step-item:focus-within {
@@ -275,17 +285,17 @@
 }
 
 .bh-step-badge {
-    width: 28px;
-    height: 28px;
-    background: rgba(99, 102, 241, 0.12);
-    border: 1.5px solid rgba(99, 102, 241, 0.3);
+    width: 24px;
+    height: 24px;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1.5px solid rgba(99, 102, 241, 0.25);
     color: #a5b4fc;
-    border-radius: 9px;
+    border-radius: 7px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    margin-top: 4px;
+    margin-top: 3px;
 }
 
 .bh-step-index {
@@ -307,11 +317,11 @@
     border: none;
     outline: none;
     color: var(--text-primary);
-    font-size: 13px;
-    padding: 8px 0;
-    min-height: 48px;
-    resize: none; /* Premium look */
-    line-height: 1.5;
+    font-size: 12px;
+    padding: 4px 0;
+    min-height: 36px;
+    resize: none; 
+    line-height: 1.4;
 }
 
 .bh-step-input::-webkit-scrollbar {
@@ -920,3 +930,151 @@
 
 .bh-theme-feedback .bh-strength-label { color: #f59e0b; }
 .bh-theme-bug .bh-strength-label { color: #a5b4fc; }
+/* ── Premium Crash Modal ── */
+.bh-crash-header {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
+    border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+    padding: 24px 28px;
+}
+
+.bh-crash-title {
+    color: #f87171;
+    font-weight: 800;
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: -0.02em;
+}
+
+.bh-crash-card {
+    background: rgba(239, 68, 68, 0.04);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+    border-radius: 14px;
+    padding: 16px;
+    margin: 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+}
+
+.bh-crash-card:hover {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.bh-crash-icon-box {
+    width: 36px;
+    height: 36px;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f87171;
+    flex-shrink: 0;
+}
+
+.bh-crash-btn-betahub {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: white !important;
+    border: none !important;
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+}
+
+.bh-crash-btn-betahub:hover {
+    filter: brightness(1.1);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+}
+/* ── Premium Crash Modal Buttons ── */
+.bh-crash-footer {
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.2);
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+}
+
+.bh-btn-premium {
+    height: 40px;
+    padding: 0 18px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid transparent;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.bh-btn-premium:active {
+    transform: scale(0.97);
+}
+
+.bh-btn-premium svg {
+    flex-shrink: 0;
+}
+
+/* Glass Variant (Secondary/Explorer/Cancel) */
+.bh-btn-glass {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    backdrop-filter: blur(8px);
+}
+
+.bh-btn-glass:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.bh-btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-muted);
+}
+
+.bh-btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+}
+
+/* Indigo Variant (BetaHub) */
+.bh-btn-indigo {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+}
+
+.bh-btn-indigo:hover {
+    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.45);
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+}
+
+/* Discord Variant (Join Discord) */
+.bh-btn-discord {
+    background: #5865F2;
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 15px rgba(88, 101, 242, 0.3);
+}
+
+.bh-btn-discord:hover {
+    box-shadow: 0 8px 25px rgba(88, 101, 242, 0.45);
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+}

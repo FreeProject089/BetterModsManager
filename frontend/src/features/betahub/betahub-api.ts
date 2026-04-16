@@ -465,10 +465,12 @@ export async function createFeatureRequest(
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                'feature_request[description]': description,
-                'feature_request[title]': title?.trim() || undefined,
-                'feature_request[due_date]': dueDate,
-                'draft': true,
+                feature_request: {
+                    description: description,
+                    title: title?.trim() || undefined,
+                    due_date: dueDate,
+                },
+                draft: true,
             }),
         }
     );
@@ -485,7 +487,7 @@ export async function createFeatureRequest(
     // Stage 2: Upload Screenshots (Optional)
     if (screenshots && screenshots.length > 0) {
         for (const file of screenshots) {
-            await uploadViaPresignedUrl('feature_requests', frId, jwtToken, 'screenshots', file, 'image/png', file.name);
+            await uploadViaPresignedUrl('feature_requests', frId, jwtToken, 'images', file, 'image/png', file.name);
         }
     }
 
