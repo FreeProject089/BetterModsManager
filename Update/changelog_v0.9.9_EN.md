@@ -47,6 +47,14 @@ This version introduces significant performance optimizations, a brand-new integ
 - **Fallback Purge**: Systematically removed all hardcoded fallback strings across `mods-details.ts`, `repo.ts`, `profiles.ts` and others to enforce strict i18n parity.
 - **Profile Backgrounds**: Added completely missing translation keys (and wiped duplicates) for custom profile background states (`prof.bgPendingNotice`, etc.) in `en.json`, `fr.json`, and `template.json`.
 
+## Support & User Feedback (BetaHub)
+### [NEW] Advanced BetaHub Integration
+- **Feedback System**: Total overhaul of the suggestion reporting modal. Feedback is now posted cleanly without redundant image uploads, leveraging native user linking via the `FormUser` header.
+- **Recent Reports**:
+    - **Tab Management**: Clear separation between `Bugs` and `Suggestions` inside the in-app settings history.
+    - **Smart Pagination**: View is now capped at visualizing the last 5 reports by default, paired with a dynamic "View Older" expansion button.
+    - **Granular Management**: Added an individual "Delete" button (trash icon) to securely forget a single report from local memory, alongside the global "CLEAR" configuration.
+
 ## Bug Fixes & Stability
 ### [FIXED] Critical Syntax Errors
 - **Lexical Collision**: Renamed internal `parent` variable to `pNode` in `interactive-docs.ts` to resolve a shadowing `SyntaxError`.

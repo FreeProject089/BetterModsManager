@@ -48,6 +48,14 @@ Cette version introduit des optimisations de performance significatives, un tout
 - **Purge des Fallbacks** : Suppression systématique de toutes les chaînes de textes écrites en dur dans `mods-details.ts`, `repo.ts`, `profiles.ts` et bien d'autres pour forcer une parité i18n stricte.
 - **Fonds de Profil** : Ajout de clés de traduction totalement manquantes (et suppression de doublons) concernant les états des images de profil (`prof.bgPendingNotice`, etc.) dans `en.json`, `fr.json` et `template.json`.
 
+## Support & Retours Utilisateurs (BetaHub)
+### [NEW] Intégration Avancée BetaHub
+- **Système de Feedback** : Refonte de la modale de retours. Les suggestions sont désormais envoyées de manière fluide (sans upload d'image superflu) avec création d'une liaison automatique de compte utilisateur via en-tête `FormUser`.
+- **Rapports Récents** :
+    - **Gestion par Onglets** : Séparation claire entre les onglets `Bugs` et `Suggestions` à l'intérieur de l'historique des paramètres.
+    - **Pagination Intelligente** : Affichage limité aux 5 derniers envois par défaut, associé à un bouton "Voir les anciens" dynamique.
+    - **Gestion Granulaire** : Ajout d'un bouton de suppression individuelle pour retirer un rapport spécifique de la mémoire système, en plus d'une option globale "EFFACER".
+
 ## Corrections de bugs & Stabilité
 ### [FIXED] Erreurs de syntaxe critiques
 - **Collision lexicale** : Renommage de la variable interne `parent` en `pNode` dans `interactive-docs.ts` pour résoudre une erreur de type `SyntaxError`.

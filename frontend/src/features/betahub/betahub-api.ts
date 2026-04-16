@@ -377,38 +377,6 @@ export async function uploadBinaryFile(
     await uploadViaPresignedUrl('issues', issueId, jwtToken, 'binary_files', file, contentType, file.name);
 }
 
-/**
- * Set contact info for the reporter.
- */
-export async function setContactInfo(
-    issueId: string,
-    jwtToken: string,
-    email?: string,
-    discordId?: string
-): Promise<void> {
-    if (!email && !discordId) return;
-
-    const body: Record<string, string> = {};
-    if (email && email.trim()) body['email'] = email.trim();
-    if (discordId && /^\d+$/.test(discordId.trim())) body['discord_id'] = discordId.trim();
-
-    const res = await fetch(
-        `${BASE_URL}/projects/${PROJECT_ID}/issues/g-${issueId}/set_contact_info`,
-        {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${jwtToken}`,
-                'BetaHub-Project-ID': PROJECT_ID,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body),
-        }
-    );
-
-    if (!res.ok) {
-        console.warn('[BetaHub] set_contact_info failed:', res.status);
-    }
-}
 
 /**
  * Publish the draft issue (makes it visible).
@@ -451,8 +419,7 @@ export async function createFeatureRequest(
     email?: string,
     discordId?: string,
     title?: string,
-    dueDate?: string,
-    screenshots?: File[]
+    dueDate?: string
 ): Promise<FeatureRequestResult> {
     // Stage 1: Create Draft
     const res = await fetch(
@@ -470,7 +437,6 @@ export async function createFeatureRequest(
                     title: title?.trim() || undefined,
                     due_date: dueDate,
                 },
-                draft: true,
             }),
         }
     );
@@ -482,74 +448,7 @@ export async function createFeatureRequest(
 
     const data = await res.json();
     const frId = data.id;
-    const jwtToken = data.token; // Critical: BetaHub returns its temporary JWT token as 'token'
-
-    // Stage 2: Upload Screenshots (Optional)
-    if (screenshots && screenshots.length > 0) {
-        for (const file of screenshots) {
-            await uploadViaPresignedUrl('feature_requests', frId, jwtToken, 'images', file, 'image/png', file.name);
-        }
-    }
-
-    // Stage 3: Set Contact Information
-    // This links the virtual user if they provided an email/discord
-    if (email?.trim() || discordId?.trim()) {
-        await setFeatureRequestContactInfo(frId, jwtToken, email, discordId);
-    }
-
-    // Stage 4: Publish
-    const publishRes = await publishFeatureRequest(frId, jwtToken);
+    // We do not parse or upload images or call publish for feature requests
     
     return { id: frId, url: data.url || '' };
-}
-
-export async function setFeatureRequestContactInfo(
-    frId: string,
-    jwtToken: string,
-    email?: string,
-    discordId?: string
-): Promise<void> {
-    const res = await fetch(
-        `${BASE_URL}/projects/${PROJECT_ID}/feature_requests/${frId}/set_contact_info`,
-        {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${jwtToken}`,
-                'BetaHub-Project-ID': PROJECT_ID,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                email: email?.trim() || undefined,
-                discord_id: discordId?.trim() || undefined,
-            }),
-        }
-    );
-
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(`Set contact info failed: ${err.error || res.statusText}`);
-    }
-}
-
-export async function publishFeatureRequest(
-    frId: string,
-    jwtToken: string
-): Promise<boolean> {
-    const res = await fetch(
-        `${BASE_URL}/projects/${PROJECT_ID}/feature_requests/${frId}/publish`,
-        {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${jwtToken}`,
-                'BetaHub-Project-ID': PROJECT_ID,
-            },
-        }
-    );
-
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(`Publish failed: ${err.error || res.statusText}`);
-    }
-
-    return true;
 }

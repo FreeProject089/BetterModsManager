@@ -2971,7 +2971,16 @@
                                         <polyline points="6 9 12 15 18 9"></polyline>
                                     </svg>
                                 </summary>
-                                <div class="faq-content" data-i18n="faq.betahub.a3">...</div>
+                                <div class="faq-content">
+                                    <p data-i18n="faq.betahub.a3" style="line-height:1.6; margin-bottom: 10px;">...</p>
+                                    <button class="btn btn-sm btn-ghost" onclick="document.getElementById('nav-settings').click(); setTimeout(() => document.getElementById('bh-history-section').scrollIntoView({behavior:'smooth'}), 300)"
+                                        style="color:#818cf8; border:1px dashed rgba(129,140,248,0.3); font-size:11px; display:inline-flex; align-items:center; gap:6px;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                                        </svg>
+                                        <span data-i18n="docs.betahub.history">MY RECENT REPORTS</span>
+                                    </button>
+                                </div>
                             </details>
                         </div>
 
@@ -3863,13 +3872,26 @@
                             <div id="bh-history-section" style="margin-top:20px; border-top:1px solid rgba(99,102,241,0.15); padding-top:16px; display:none;">
                                 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
                                     <div style="font-size:11px; font-weight:800; color:#818cf8; letter-spacing:0.1em; text-transform:uppercase" data-i18n="docs.betahub.history">MY RECENT REPORTS</div>
-                                    <button id="bh-history-refresh" class="btn btn-xs btn-ghost" style="font-size:9px; height:20px; color:#a5b4fc">
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                                        <span data-i18n="common.refresh">REFRESH</span>
-                                    </button>
+                                    <div style="display:flex; gap:6px;">
+                                        <button id="bh-history-clear" class="btn btn-xs btn-ghost" style="font-size:9px; height:20px; color:#ef4444" onmouseenter="window.showTaskyHelp('betahub.clearHistoryHelp', 'warning')" onmouseleave="window.hideTaskyHelp()">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
+                                            <span data-i18n="betahub.clearHistory">CLEAR</span>
+                                        </button>
+                                        <button id="bh-history-refresh" class="btn btn-xs btn-ghost" style="font-size:9px; height:20px; color:#a5b4fc">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                            <span data-i18n="common.refresh">REFRESH</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="bh-explorer-tabs" style="margin-bottom:12px; font-size:10px">
+                                    <button type="button" class="bh-tab active" data-bh-tab="history-bug" style="padding:4px 8px" data-i18n="betahub.tabBugs">Bugs</button>
+                                    <button type="button" class="bh-tab" data-bh-tab="history-feedback" style="padding:4px 8px" data-i18n="betahub.tabSuggestions">Suggestions</button>
                                 </div>
                                 <div id="bh-history-list" style="display:flex; flex-direction:column; gap:8px;">
                                     <!-- Populated via script -->
+                                </div>
+                                <div style="display:flex; justify-content:center; margin-top:10px">
+                                    <button id="bh-history-view-older" class="btn btn-xs btn-ghost" style="font-size:10px; color:var(--text-secondary); display:none" data-i18n="betahub.viewOlder">View Older</button>
                                 </div>
                             </div>
                         </div>
@@ -4082,18 +4104,16 @@
                                     </div>
                                     <textarea id="bh-feedback-desc" class="bh-textarea" rows="8" data-i18n-placeholder="betahub.fieldDescPlaceholderFeedback" placeholder="Describe your suggestion..." maxlength="4500"></textarea>
                                 </div>
-                                <!-- Screenshots -->
                                 <div class="bh-field-group">
                                     <label class="bh-label" data-i18n="betahub.fieldScreenshots">Screenshots</label>
-                                    <div class="bh-file-zone">
-                                        <div id="bh-feedback-screenshots-list"></div>
-                                        <button type="button" class="bh-add-file-btn" id="bh-feedback-screenshots-add" onclick="document.getElementById('bh-feedback-screenshots').click()">
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                                            </svg>
-                                            <span data-i18n="betahub.addScreenshot">+ Add Screenshot</span>
-                                        </button>
-                                        <input id="bh-feedback-screenshots" type="file" accept="image/png,image/jpeg,image/jpg,image/webp" multiple style="display:none">
+                                    <div style="background: rgba(129, 140, 248, 0.1); border: 1px dashed rgba(129, 140, 248, 0.3); border-radius: 8px; padding: 12px; font-size: 11px; color: #a5b4fc; text-align: center; line-height: 1.5;">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:6px">
+                                            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                                        </svg>
+                                        <br>
+                                        <span data-i18n="betahub.screenshotFeedbackDesc">
+                                            BetaHub does not support direct image uploads for suggestions. To attach screenshots, please create an account on BetaHub with the email provided below and attach them manually after submitting.
+                                        </span>
                                     </div>
                                 </div>
                             </div>

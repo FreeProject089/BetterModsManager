@@ -14,7 +14,6 @@ import {
     uploadVideoClip,
     uploadLogContents,
     uploadBinaryFile,
-    setContactInfo,
     publishIssue,
     createFeatureRequest,
 } from './betahub-api.js';
@@ -287,8 +286,7 @@ async function handleFeedbackSubmit(): Promise<void> {
             emailEl?.value?.trim() || undefined,
             discordEl?.value?.trim() || undefined,
             titleEl?.value?.trim() || undefined,
-            dueDate,
-            selectedFeedbackScreenshots.length > 0 ? selectedFeedbackScreenshots : undefined
+            dueDate
         );
 
         saveReportToHistory('feedback', titleEl?.value?.trim() || t('betahub.themeFeedback'), (result as any)?.id || 'N/A');
@@ -901,9 +899,6 @@ async function handleBugReportSubmit(): Promise<void> {
 
         await Promise.all(uploadTasks);
 
-        // Step 3: Set contact info
-        await setContactInfo(issueId, jwtToken, contactEmail, discordId === t('common.na') ? undefined : discordId);
-
         // Step 4: Publish
         await publishIssue(issueId, jwtToken, !!contactEmail);
 
@@ -1021,19 +1016,71 @@ function saveReportToHistory(type: 'feedback' | 'bug', title: string, issueId: s
     }
 }
 
+(window as any).deleteBetaHubHistoryItem = (id: string, type: string) => {
+    try {
+        const history = JSON.parse(localStorage.getItem('bmm_report_history') || '[]');
+        const newHistory = history.filter((i: any) => !(String(i.id) === String(id) && i.type === type));
+        localStorage.setItem('bmm_report_history', JSON.stringify(newHistory));
+        renderReportHistory();
+    } catch (e) {
+        console.warn('[BetaHub] Failed to delete history item:', e);
+    }
+};
+
+let historyCurrentTab: 'bug' | 'feedback' = 'bug';
+let historyShowAll = false;
+
 function wireHistoryUI(): void {
     const refreshBtn = document.getElementById('bh-history-refresh');
     if (refreshBtn) {
-        refreshBtn.addEventListener('click', () => renderReportHistory());
+        refreshBtn.addEventListener('click', () => {
+            historyShowAll = false;
+            renderReportHistory();
+        });
     }
+
+    const clearBtn = document.getElementById('bh-history-clear');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            localStorage.removeItem('bmm_report_history');
+            renderReportHistory();
+        });
+    }
+
+    const viewOlderBtn = document.getElementById('bh-history-view-older');
+    if (viewOlderBtn) {
+        viewOlderBtn.addEventListener('click', () => {
+            historyShowAll = true;
+            renderReportHistory();
+        });
+    }
+
+    const tabs = document.querySelectorAll('.bh-explorer-tabs .bh-tab');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            const target = e.target as HTMLElement;
+            if (!target) return;
+            const tabId = target.getAttribute('data-bh-tab');
+            if (!tabId) return;
+
+            tabs.forEach(t => t.classList.remove('active'));
+            target.classList.add('active');
+
+            historyCurrentTab = tabId === 'history-bug' ? 'bug' : 'feedback';
+            historyShowAll = false;
+            renderReportHistory();
+        });
+    });
 }
 
 /**
- * Render the report history list in the documentation.
+ * Render the report history list in the settings tab.
  */
 function renderReportHistory(): void {
     const list = document.getElementById('bh-history-list');
     const section = document.getElementById('bh-history-section');
+    const viewOlderBtn = document.getElementById('bh-history-view-older');
+    
     if (!list || !section) return;
 
     try {
@@ -1047,7 +1094,21 @@ function renderReportHistory(): void {
         section.style.display = 'block';
         list.innerHTML = '';
 
-        history.forEach((item: any) => {
+        const filteredHistory = history.filter((item: any) => item.type === historyCurrentTab);
+        
+        if (filteredHistory.length === 0) {
+            list.innerHTML = `<div style="text-align:center; padding:12px; font-size:11px; color:var(--text-muted); font-style:italic">No records found.</div>`;
+            if (viewOlderBtn) viewOlderBtn.style.display = 'none';
+            return;
+        }
+
+        const itemsToShow = historyShowAll ? filteredHistory : filteredHistory.slice(0, 5);
+
+        if (viewOlderBtn) {
+            viewOlderBtn.style.display = (!historyShowAll && filteredHistory.length > 5) ? 'block' : 'none';
+        }
+
+        itemsToShow.forEach((item: any) => {
             const date = new Date(item.date).toLocaleString(undefined, {
                 day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
             });
@@ -1084,13 +1145,32 @@ function renderReportHistory(): void {
                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
                     </svg>
                 </a>
+                <button class="bh-history-link bh-history-del" data-id="${item.id}" data-type="${item.type}" style="padding:6px; background:rgba(239,68,68,0.05); border-radius:6px; color:#ef4444; transition:all 0.2s; display:flex; align-items:center; justify-content:center; border:1px solid rgba(239,68,68,0.1); cursor:pointer">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>
+                    </svg>
+                </button>
             `;
             list.appendChild(div);
         });
+
+        const delButtons = list.querySelectorAll('.bh-history-del');
+        delButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const target = e.currentTarget as HTMLElement;
+                const id = target.getAttribute('data-id');
+                const type = target.getAttribute('data-type');
+                if (id && type) {
+                    (window as any).deleteBetaHubHistoryItem(id, type);
+                }
+            });
+        });
+
     } catch (e) {
         console.warn('[BetaHub] Render history failed:', e);
     }
 }
+
 
 export function setPowState(modal: 'feedback' | 'bug', state: 'idle' | 'solving' | 'upload' | 'done' | 'error'): void {
     const prefix = modal === 'feedback' ? 'feedback' : 'bug';
