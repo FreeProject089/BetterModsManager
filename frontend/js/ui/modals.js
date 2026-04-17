@@ -8,8 +8,8 @@ export function initModals() {
         btn.addEventListener('click', () => {
             const id = btn.dataset.close;
             const modal = document.getElementById(id);
-            // Check if modal has data-prevent-close attribute
-            if (modal && modal.hasAttribute('data-prevent-close')) {
+            // Check if modal has data-prevent-close attribute set to 'true'
+            if (modal && modal.getAttribute('data-prevent-close') === 'true') {
                 return; // Prevent closing
             }
             invoke('log_frontend_line', { line: `Modal closed: ${id}` });
@@ -20,8 +20,8 @@ export function initModals() {
         const btn = e.target.closest('.modal-close');
         if (btn) {
             const modal = btn.closest('.modal-overlay');
-            // Check if modal has data-prevent-close attribute
-            if (modal && modal.hasAttribute('data-prevent-close')) {
+            // Check if modal has data-prevent-close attribute set to 'true'
+            if (modal && modal.getAttribute('data-prevent-close') === 'true') {
                 return; // Prevent closing
             }
             if (modal)
@@ -30,8 +30,8 @@ export function initModals() {
     });
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
         overlay.addEventListener('click', (e) => {
-            // Check if modal has data-prevent-close attribute
-            if (overlay.hasAttribute('data-prevent-close')) {
+            // Check if modal has data-prevent-close attribute set to 'true'
+            if (overlay.getAttribute('data-prevent-close') === 'true') {
                 return; // Prevent closing
             }
             if (e.target === overlay)

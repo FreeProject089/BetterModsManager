@@ -26,8 +26,8 @@ export function initModals(): void {
             const id = (btn as HTMLElement).dataset.close!;
             const modal = document.getElementById(id);
             
-            // Check if modal has data-prevent-close attribute
-            if (modal && modal.hasAttribute('data-prevent-close')) {
+            // Check if modal has data-prevent-close attribute set to 'true'
+            if (modal && modal.getAttribute('data-prevent-close') === 'true') {
                 return; // Prevent closing
             }
             
@@ -41,8 +41,8 @@ export function initModals(): void {
         if (btn) {
             const modal = btn.closest('.modal-overlay');
             
-            // Check if modal has data-prevent-close attribute
-            if (modal && modal.hasAttribute('data-prevent-close')) {
+            // Check if modal has data-prevent-close attribute set to 'true'
+            if (modal && modal.getAttribute('data-prevent-close') === 'true') {
                 return; // Prevent closing
             }
             
@@ -52,8 +52,8 @@ export function initModals(): void {
 
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
         overlay.addEventListener('click', (e: Event) => {
-            // Check if modal has data-prevent-close attribute
-            if (overlay.hasAttribute('data-prevent-close')) {
+            // Check if modal has data-prevent-close attribute set to 'true'
+            if (overlay.getAttribute('data-prevent-close') === 'true') {
                 return; // Prevent closing
             }
             
