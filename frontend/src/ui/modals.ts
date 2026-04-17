@@ -24,8 +24,15 @@ export function initModals(): void {
     document.querySelectorAll('[data-close]').forEach(btn => {
         btn.addEventListener('click', () => {
             const id = (btn as HTMLElement).dataset.close!;
+            const modal = document.getElementById(id);
+            
+            // Check if modal has data-prevent-close attribute
+            if (modal && modal.hasAttribute('data-prevent-close')) {
+                return; // Prevent closing
+            }
+            
             invoke('log_frontend_line', { line: `Modal closed: ${id}` });
-            document.getElementById(id)?.classList.remove('open');
+            modal?.classList.remove('open');
         });
     });
 
@@ -33,12 +40,23 @@ export function initModals(): void {
         const btn = (e.target as Element).closest('.modal-close');
         if (btn) {
             const modal = btn.closest('.modal-overlay');
+            
+            // Check if modal has data-prevent-close attribute
+            if (modal && modal.hasAttribute('data-prevent-close')) {
+                return; // Prevent closing
+            }
+            
             if (modal) modal.classList.remove('open');
         }
     });
 
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
         overlay.addEventListener('click', (e: Event) => {
+            // Check if modal has data-prevent-close attribute
+            if (overlay.hasAttribute('data-prevent-close')) {
+                return; // Prevent closing
+            }
+            
             if (e.target === overlay) (overlay as HTMLElement).classList.remove('open');
         });
     });

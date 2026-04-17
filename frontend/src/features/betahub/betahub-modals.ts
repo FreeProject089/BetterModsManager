@@ -326,7 +326,7 @@ function wireBugReportModal(): void {
     if (addStepBtn) {
         addStepBtn.addEventListener('click', () => {
             if (dynamicSteps.length >= 50) {
-                toast(t('betahub.errorMaxSteps') || 'Maximum 50 steps allowed', 'warning');
+                toast(t('betahub.errorMaxSteps'), 'warning');
                 return;
             }
             dynamicSteps.push("");
@@ -342,7 +342,7 @@ function wireBugReportModal(): void {
             if (path) {
                 if (!selectedCrashZipPaths.includes(path)) {
                     if (selectedCrashZipPaths.length >= 3) {
-                        toast(t('betahub.errorMaxZips') || 'Maximum 3 attachments allowed', 'warning');
+                        toast(t('betahub.errorMaxZips'), 'warning');
                         return;
                     }
                     selectedCrashZipPaths.push(path);
@@ -492,7 +492,7 @@ async function renderCrashReports(): Promise<void> {
                     selectedCrashZipPaths = selectedCrashZipPaths.filter(p => p !== report.path);
                 } else {
                     if (selectedCrashZipPaths.length >= 3) {
-                        toast(t('betahub.errorMaxZips') || 'Maximum 3 attachments allowed', 'warning');
+                        toast(t('betahub.errorMaxZips'), 'warning');
                         return;
                     }
                     selectedCrashZipPaths.push(report.path);
@@ -693,7 +693,7 @@ function renderScreenshotList(modal: 'bug' | 'feedback'): void {
         (limitText as HTMLElement).className = 'bh-btn-limit';
         (limitText as HTMLElement).style.marginLeft = '4px';
         (limitText as HTMLElement).style.opacity = '0.6';
-        limitText.textContent = `(${targetList.length}/3)`;
+        limitText.textContent = t('betahub.filesSelected', { count: String(targetList.length) });
         if (!addBtn.contains(limitText)) addBtn.appendChild(limitText);
     }
 }
@@ -733,7 +733,7 @@ function renderVideoPreview(): void {
             (limitText as HTMLElement).className = 'bh-btn-limit';
             (limitText as HTMLElement).style.marginLeft = '4px';
             (limitText as HTMLElement).style.opacity = '0.6';
-            limitText.textContent = `(0/1)`;
+            limitText.textContent = '(0/1)';
             if (!addBtn.contains(limitText)) addBtn.appendChild(limitText);
         }
     }

@@ -406,9 +406,9 @@ const _renderStorageModal = async () => {
             }
 
             return `
-            <div style="background:rgba(0,0,0,0.25);border:1px solid ${usedPct > 90 ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.06)'};border-radius:12px;padding:16px;transition:border-color 0.2s;" class="storage-disk-card">
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;">
-                    <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+            <div class="storage-disk-card">
+                <div class="storage-disk-header">
+                    <div class="storage-disk-identity">
                         <div style="width:38px;height:38px;background:rgba(59,130,246,0.08);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2">
                                 <rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><line x1="6" y1="12" x2="6.01" y2="12"/>
@@ -434,8 +434,8 @@ const _renderStorageModal = async () => {
                         <span>${formatBytes(disk.total_space_bytes - disk.available_space_bytes)} / ${formatBytes(disk.total_space_bytes)}</span>
                         <span style="color:${usedColor};font-weight:600;">${usedPct}%</span>
                     </div>
-                    <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;">
-                        <div style="height:100%;width:${usedPct}%;background:${usedColor};border-radius:2px;transition:width 0.3s;"></div>
+                    <div class="storage-usage-bar">
+                        <div class="storage-usage-fill" style="width:${usedPct}%;background:${usedColor}"></div>
                     </div>
                 </div>
 

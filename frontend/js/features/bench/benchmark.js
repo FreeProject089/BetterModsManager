@@ -26,6 +26,11 @@ export async function initBenchmark() {
         btn.style.display = 'flex';
         btn.addEventListener('click', openBenchmarkModal);
     }
+    window.addEventListener('resize', () => {
+        if (document.getElementById('modal-benchmark')?.classList.contains('open')) {
+            updateBenchmarkUI();
+        }
+    });
     // Listen for backend data
     const { listen } = window.__TAURI__.event;
     await listen('benchmark-point', (event) => {
@@ -50,7 +55,6 @@ export async function initBenchmark() {
             const lMb = event.payload.limit_mb_s;
             let diskStr = activeDiskName ? ` [${activeDiskName}]` : "";
             if (lMb && lMb > 0 && tMb > 0) {
-                // Approximate 5% overhead in calculation 
                 const sec = Math.ceil((tMb / lMb) * 1.05);
                 const m = Math.floor(sec / 60);
                 const s = Math.floor(sec % 60);
@@ -68,7 +72,6 @@ export async function initBenchmark() {
         if (currentEvent) {
             const isFinished = (typeof event.payload === 'object' && event.payload !== null) ? event.payload.finished : true;
             const eventId = Date.now() + Math.random().toString(36).substr(2, 9);
-            // If it's a "finished" event, try to find and remove the "progress" entry for the same mod to avoid duplicates
             if (isFinished && typeof event.payload === 'object' && event.payload !== null) {
                 const modName = payloadText.split(': ').pop();
                 recentEvents = recentEvents.filter(e => {
@@ -84,11 +87,9 @@ export async function initBenchmark() {
             });
             if (recentEvents.length > 20)
                 recentEvents.pop();
-            // Granular clearing: only remove this specific event after 5s if it's finished
             if (isFinished) {
                 setTimeout(() => {
                     recentEvents = recentEvents.filter(e => e.id !== eventId);
-                    // Also clear main label if it matches
                     if (currentEvent === payloadText + (activeDiskName ? ` [${activeDiskName}]` : "")) {
                         currentEvent = "";
                         activeDiskName = "";
@@ -129,11 +130,6 @@ export async function initBenchmark() {
             syncPlaybackView();
         });
     }
-    // Global listener to ensure PiP stays active if it was already active
-    const modal = document.getElementById('modal-benchmark');
-    if (modal) {
-        // No-op or specific persistence logic if needed
-    }
     const timeline = document.getElementById('main-timeline');
     if (timeline) {
         timeline.addEventListener('click', (e) => {
@@ -146,58 +142,6 @@ export async function initBenchmark() {
             playbackIndex = Math.min(Math.max(0, playbackIndex), fullBenchmarkHistory.length - 1);
             syncPlaybackView();
         });
-    }
-}
-function resetBenchmarkSession() {
-    benchmarkPoints = [];
-    fullBenchmarkHistory = [];
-    recentEvents = [];
-    benchmarkStartTime = isBenchmarkActive ? Date.now() : null;
-    playbackIndex = -1;
-    updateBenchmarkUI();
-    toast(t('benchmark.sessionReset'), "info");
-}
-async function importBenchmark() {
-    try {
-        const { open } = window.__TAURI__.dialog;
-        const selected = await open({
-            multiple: false,
-            filters: [{ name: 'CSV', extensions: ['csv'] }]
-        });
-        if (selected) {
-            const { readTextFile } = window.__TAURI__.fs;
-            const content = await readTextFile(selected);
-            const lines = content.split('\n');
-            const data = [];
-            // Basic CSV parser for BMM format
-            for (let i = 1; i < lines.length; i++) {
-                const parts = lines[i].split(',');
-                if (parts.length < 5 || isNaN(parseInt(parts[0])))
-                    continue;
-                data.push({
-                    timestamp: parseInt(parts[0]),
-                    cpu_usage: parseFloat(parts[1]),
-                    ram_usage: parseInt(parts[2]),
-                    disk_read: parseInt(parts[3]),
-                    disk_write: parseInt(parts[4]),
-                    event: parts[5] || ""
-                });
-            }
-            if (data.length > 0) {
-                stopBenchmark(); // stop live tracking if active
-                benchmarkPoints = data.length > MAX_DISPLAY_POINTS ? data.slice(-MAX_DISPLAY_POINTS) : data;
-                fullBenchmarkHistory = data;
-                isBenchmarkActive = false; // It's a static view
-                updateBenchmarkUI();
-                toast(t('benchmark.importSuccess').replace('{count}', data.length), "success");
-            }
-            else {
-                toast(t('benchmark.importInvalid'), "error");
-            }
-        }
-    }
-    catch (e) {
-        toast(t('common.error') + " : " + e, "error");
     }
 }
 async function startBenchmark() {
@@ -263,7 +207,6 @@ async function stopBenchmark() {
         <span id="label-toggle-bench" data-i18n="benchmark.startTracking">${t('benchmark.startTracking') || 'Start Tracking'}</span>
     `;
     toast(t('benchmark.stopped'), "success");
-    // Sync PiP buttons
     if (fullBenchmarkHistory.length > 0) {
         updateFloatingMonitor(fullBenchmarkHistory[fullBenchmarkHistory.length - 1]);
     }
@@ -302,6 +245,8 @@ function getElapsedString(customStartTime = null) {
     return `${m}:${s}`;
 }
 function formatDisk(kbps) {
+    if (kbps >= 1024 * 1024)
+        return (kbps / (1024 * 1024)).toFixed(2) + ' GB/s';
     if (kbps >= 1024)
         return (kbps / 1024).toFixed(1) + ' MB/s';
     return kbps.toFixed(0) + ' KB/s';
@@ -342,15 +287,39 @@ function updateBenchmarkUI(isPlayback = false) {
     const maxDisk = Math.max(100, ...diskData) * 1.2;
     const last = benchmarkPoints.length > 0 ? benchmarkPoints[benchmarkPoints.length - 1] : { cpu_usage: 0, ram_usage: 0, disk_read: 0, disk_write: 0 };
     const totalDisk = last.disk_read + last.disk_write;
-    // Calculate Averages
     const getAvg = (arr) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
     const cpuAvg = getAvg(cpuData);
     const ramAvg = getAvg(ramData);
     const diskAvg = getAvg(diskData);
+    const hint = document.getElementById('benchmark-empty-hint');
+    if (benchmarkPoints.length === 0) {
+        if (hint) {
+            hint.style.display = 'block';
+            hint.innerHTML = `
+                <div style="display:flex;flex-direction:column;align-items:center;padding:48px 20px;text-align:center;">
+                    <div style="width:64px;height:64px;background:rgba(59,130,246,0.1);border-radius:20px;display:flex;align-items:center;justify-content:center;color:var(--accent);margin-bottom:20px;animation:pulse-tasky 2.5s infinite;">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <h3 style="margin:0 0 8px 0;font-size:16px;font-weight:700;color:var(--text-primary);letter-spacing:-0.01em;" data-i18n="benchmark.waitingSensors">${t('benchmark.waitingSensors')}</h3>
+                    <p style="margin:0;font-size:13px;color:var(--text-muted);max-width:300px;line-height:1.5;">${t('benchmark.noData')}</p>
+                    <div style="margin-top:24px;display:flex;gap:8px;">
+                        <div class="stat-dot" style="background:#3b82f6"></div>
+                        <div class="stat-dot" style="background:#10b981"></div>
+                        <div class="stat-dot" style="background:#f59e0b"></div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    else {
+        if (hint)
+            hint.style.display = 'none';
+    }
     renderChart('cpu-chart', cpuData, maxCpu, '#3b82f6', '%', MAX_DISPLAY_POINTS, last.cpu_usage.toFixed(1), cpuAvg);
     renderChart('ram-chart', ramData, maxRam, '#10b981', 'MB', MAX_DISPLAY_POINTS, last.ram_usage.toFixed(0), ramAvg);
     renderChart('disk-chart', diskData, maxDisk, '#f59e0b', 'KB/s', MAX_DISPLAY_POINTS, formatDisk(totalDisk), diskAvg);
-    // Update Avg Badges
     const updateAvgBadge = (id, val, unit) => {
         const el = document.getElementById(id);
         if (el)
@@ -379,24 +348,20 @@ function updateTimeline() {
     const currentIdx = playbackIndex >= 0 ? playbackIndex : total - 1;
     const windowSize = MAX_DISPLAY_POINTS;
     const half = Math.floor(windowSize / 2);
-    // Calculate visualization window based on playhead at center
     let startWindow = currentIdx - half;
     let endWindow = currentIdx + half - 1;
-    // Clamp
     if (startWindow < 0) {
         endWindow -= startWindow;
         startWindow = 0;
     }
     endWindow = Math.min(total - 1, endWindow);
-    // Total Duration (Purple) - always 100% in this view
     const totalTimeEl = document.getElementById('timeline-total-time');
     if (totalTimeEl) {
-        const totalSec = total; // 1 sample = 1s
+        const totalSec = total;
         const m = Math.floor(totalSec / 60).toString().padStart(2, '0');
         const s = (totalSec % 60).toString().padStart(2, '0');
         totalTimeEl.textContent = `${m}:${s}`;
     }
-    // Current Time (based on playhead/playbackIndex)
     const currentTimeEl = document.getElementById('timeline-current-time');
     if (currentTimeEl) {
         const curSec = currentIdx + 1;
@@ -404,7 +369,6 @@ function updateTimeline() {
         const s = (curSec % 60).toString().padStart(2, '0');
         currentTimeEl.textContent = `${m}:${s}`;
     }
-    // Bars
     const redTrack = document.getElementById('tl-track-window');
     if (redTrack) {
         const left = (startWindow / total) * 100;
@@ -416,23 +380,18 @@ function updateTimeline() {
     if (playhead) {
         playhead.style.left = (currentIdx / total) * 100 + '%';
     }
-    // Draw Activity Spikes
     drawTimelineSpikes(total);
 }
 function drawTimelineSpikes(total) {
     const purpleTrack = document.getElementById('tl-track-total');
     if (!purpleTrack)
         return;
-    // Only draw once or update efficiently
     if (purpleTrack.dataset.renderedTotal === String(total))
         return;
     purpleTrack.dataset.renderedTotal = total;
-    // Clear old spikes
     purpleTrack.innerHTML = '';
-    // Calculate max activity to normalize spikes
     const maxDisk = Math.max(...fullBenchmarkHistory.map(p => p.disk_read + p.disk_write), 10);
     const maxCpu = Math.max(...fullBenchmarkHistory.map(p => p.cpu_usage), 10);
-    // Create spikes
     const MAX_SPIKES = 200;
     const step = Math.max(1, Math.floor(total / MAX_SPIKES));
     for (let i = 0; i < total; i += step) {
@@ -445,7 +404,7 @@ function drawTimelineSpikes(total) {
             spike.style.bottom = '0';
             spike.style.width = '3px';
             spike.style.height = Math.max((activity * 100), 20) + '%';
-            spike.style.backgroundColor = '#facc15'; // Bright yellow
+            spike.style.backgroundColor = '#facc15';
             spike.style.boxShadow = '0 0 10px #facc15';
             spike.style.borderRadius = '2px';
             spike.style.zIndex = '5';
@@ -460,22 +419,19 @@ function toggleReplay() {
     if (replayInterval) {
         clearInterval(replayInterval);
         replayInterval = null;
-        // set icon to play
         btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
     }
     else {
-        // start playback
         if (playbackIndex >= fullBenchmarkHistory.length - 1) {
-            playbackIndex = 0; // restart if at end
+            playbackIndex = 0;
         }
         replayInterval = setInterval(() => {
             playbackIndex++;
             syncPlaybackView();
             if (playbackIndex >= fullBenchmarkHistory.length - 1) {
-                toggleReplay(); // stop at end
+                toggleReplay();
             }
         }, 1000);
-        // set icon to pause
         btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
     }
 }
@@ -489,7 +445,7 @@ function updateReplayControls() {
     else {
         replayBtn.style.display = 'none';
         if (replayInterval)
-            toggleReplay(); // stop it
+            toggleReplay();
     }
 }
 function updateFloatingMonitor(point, isPlayback = false) {
@@ -619,7 +575,6 @@ function renderChart(elementId, data, maxValue, color, unit, maxPoints, currentV
         pointsStr += `${x},${y} `;
     });
     const avgY = height - (avgValue / maxValue) * (height - padding * 2) - padding;
-    // Build the SVG
     container.innerHTML = `
         <div class="chart-tooltip">${currentValue} ${unit}</div>
         <div class="chart-seeker" style="display:none"></div>
@@ -630,14 +585,11 @@ function renderChart(elementId, data, maxValue, color, unit, maxPoints, currentV
                     <stop offset="100%" stop-color="${color}" stop-opacity="0" />
                 </linearGradient>
             </defs>
-            <!-- Average Line -->
             <line x1="0" y1="${avgY}" x2="${width}" y2="${avgY}" stroke="${color}" stroke-width="1" stroke-dasharray="4,4" opacity="0.4" />
-            
             <polyline points="${pointsStr} ${(data.length - 1) * step},${height} 0,${height}" fill="url(#grad-${elementId})" />
             <polyline points="${pointsStr}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
         </svg>
     `;
-    // Interactivity: Seeker Line
     container.onmousemove = (e) => {
         const rect = container.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -663,10 +615,18 @@ function renderChart(elementId, data, maxValue, color, unit, maxPoints, currentV
         const seeker = container.querySelector('.chart-seeker');
         if (seeker)
             seeker.style.display = 'none';
-        // Keep tooltip showing last value or hide? User said "naviguée", so showing hover value is good.
         if (tooltip)
             tooltip.textContent = `${currentValue} ${unit}`;
     };
+}
+function resetBenchmarkSession() {
+    benchmarkPoints = [];
+    fullBenchmarkHistory = [];
+    recentEvents = [];
+    benchmarkStartTime = isBenchmarkActive ? Date.now() : null;
+    playbackIndex = -1;
+    updateBenchmarkUI();
+    toast(t('benchmark.sessionReset'), "info");
 }
 async function exportBenchmark() {
     const dataToExport = fullBenchmarkHistory.length > 0 ? fullBenchmarkHistory : benchmarkPoints;
@@ -698,6 +658,48 @@ async function exportBenchmark() {
             const { writeTextFile } = window.__TAURI__.fs;
             await writeTextFile(dest, csv);
             toast(t('benchmark.exportSuccessStatus'), "success");
+        }
+    }
+    catch (e) {
+        toast(t('common.error') + " : " + e, "error");
+    }
+}
+async function importBenchmark() {
+    try {
+        const { open } = window.__TAURI__.dialog;
+        const selected = await open({
+            multiple: false,
+            filters: [{ name: 'CSV', extensions: ['csv'] }]
+        });
+        if (selected) {
+            const { readTextFile } = window.__TAURI__.fs;
+            const content = await readTextFile(selected);
+            const lines = content.split('\n');
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                const parts = lines[i].split(',');
+                if (parts.length < 5 || isNaN(parseInt(parts[0])))
+                    continue;
+                data.push({
+                    timestamp: parseInt(parts[0]),
+                    cpu_usage: parseFloat(parts[1]),
+                    ram_usage: parseInt(parts[2]),
+                    disk_read: parseInt(parts[3]),
+                    disk_write: parseInt(parts[4]),
+                    event: parts[5] || ""
+                });
+            }
+            if (data.length > 0) {
+                stopBenchmark();
+                benchmarkPoints = data.length > MAX_DISPLAY_POINTS ? data.slice(-MAX_DISPLAY_POINTS) : data;
+                fullBenchmarkHistory = data;
+                isBenchmarkActive = false;
+                updateBenchmarkUI();
+                toast(t('benchmark.importSuccess'), "success");
+            }
+            else {
+                toast(t('benchmark.importInvalid'), "error");
+            }
         }
     }
     catch (e) {

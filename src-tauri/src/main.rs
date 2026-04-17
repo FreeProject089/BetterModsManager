@@ -247,6 +247,7 @@ fn main() {
             // Update notes
             commands::update::get_update_notes,
             commands::update::get_old_updates_count,
+            commands::update::get_update_folder_structure,
             // Tags
             commands::tag::get_tags,
             commands::tag::create_tag,
@@ -263,6 +264,7 @@ fn main() {
             commands::settings::is_fsdm_mode,
             commands::settings::is_ptb_mode,
             commands::settings::is_update_disabled,
+            commands::settings::is_auto_eula_enabled,
             commands::settings::get_license_text,
             commands::settings::get_eula_text,
             commands::settings::get_app_version,
@@ -271,6 +273,7 @@ fn main() {
             commands::settings::get_language_content,
             commands::settings::import_language,
             commands::settings::get_resource_debug_info,
+            commands::settings::exit_app,
             // ... (other commands)
             commands::mods::open_folder,
             commands::mods::open_file,

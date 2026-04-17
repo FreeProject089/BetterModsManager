@@ -73,8 +73,41 @@
     transition: border-color 0.2s;
 }
 
-.bh-file-zone:hover {
-    border-color: rgba(255, 255, 255, 0.3);
+/* --- Storage Manager Polish --- */
+.storage-disk-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.storage-disk-identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.storage-usage-bar {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 6px;
+}
+
+.storage-usage-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (max-width: 500px) {
+    .storage-disk-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
 }
 
 .bh-add-file-btn {
@@ -793,7 +826,7 @@
 }
 
 .bh-gauge-label {
-    fill: var(--text-muted);
+    fill: #ffffff;
     font-size: 5px;
     font-weight: 800;
     text-transform: uppercase;
@@ -991,13 +1024,33 @@
 }
 /* ── Premium Crash Modal Buttons ── */
 .bh-crash-footer {
-    padding: 24px;
-    background: rgba(0, 0, 0, 0.2);
-    border-top: 1px solid var(--border);
     display: flex;
     justify-content: flex-end;
     align-items: center;
+    padding: 20px 28px;
+    background: rgba(0,0,0,0.22);
+    border-top: 1px solid rgba(255,255,255,0.05);
     gap: 12px;
+    flex-wrap: wrap;
+}
+
+.bh-crash-footer .bh-btn-ghost {
+    margin-right: auto;
+}
+
+@media (max-width: 650px) {
+    .bh-crash-footer {
+        justify-content: center;
+        gap: 10px;
+        padding: 16px;
+    }
+    
+    .bh-crash-footer .bh-btn-ghost {
+        margin-right: 0;
+        width: 100%;
+        min-width: 200px;
+        justify-content: center;
+    }
 }
 
 .bh-btn-premium {
@@ -1014,7 +1067,9 @@
     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     border: 1px solid transparent;
     user-select: none;
-    white-space: nowrap;
+    white-space: normal;
+    text-align: center;
+    min-width: fit-content;
 }
 
 .bh-btn-premium:active {

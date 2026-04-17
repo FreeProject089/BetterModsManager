@@ -37,6 +37,12 @@ export async function initProfiles() {
                     await renderProfiles();
                     updateProfileChip();
                     updateLibraryProfileSelector();
+                    // Refresh repo export profiles list
+                    const profilesListEl = document.getElementById('repo-export-profiles-list');
+                    if (profilesListEl) {
+                        const { loadProfilesForExport } = await import('../repo/repo.js');
+                        await loadProfilesForExport(profilesListEl);
+                    }
                 }
                 else {
                     toast(t('prof.importNone'), 'info');
@@ -97,6 +103,12 @@ export async function initProfiles() {
                     await renderProfiles();
                     updateProfileChip();
                     updateLibraryProfileSelector();
+                    // Refresh repo export profiles list
+                    const profilesListEl = document.getElementById('repo-export-profiles-list');
+                    if (profilesListEl) {
+                        const { loadProfilesForExport } = await import('../repo/repo.js');
+                        await loadProfilesForExport(profilesListEl);
+                    }
                 }
                 else {
                     toast(t('prof.importNone'), 'info');
@@ -277,6 +289,12 @@ async function confirmCreateProfile() {
         // Refresh mods and conflicts
         const { refreshMods } = await import('../mods/mods.js');
         await refreshMods(true);
+        // Refresh repo export profiles list
+        const profilesListEl = document.getElementById('repo-export-profiles-list');
+        if (profilesListEl) {
+            const { loadProfilesForExport } = await import('../repo/repo.js');
+            await loadProfilesForExport(profilesListEl);
+        }
     }
     catch (err) {
         toast(t('common.error') + ' : ' + err, 'error');

@@ -306,6 +306,7 @@ export function showTaskyHelp(key, iconClass = 'info', isLiteral = false) {
     // Show Container if hidden (for non-modal use)
     if (taskyContainer.style.display === 'none') {
         taskyContainer.style.display = 'flex';
+        taskyContainer.style.pointerEvents = 'auto';
         setTimeout(() => taskyContainer.style.opacity = '1', 10);
     }
 
@@ -343,6 +344,8 @@ export function showTaskyHelp(key, iconClass = 'info', isLiteral = false) {
     if (exp && (isLiteral || exp !== key)) {
         explanationEl.textContent = exp;
         bubble.classList.add('active');
+        // Re-enable pointer events when showing
+        bubble.style.pointerEvents = 'auto';
         
         if (eyes) {
             eyes.className = finalIcon;
@@ -360,17 +363,18 @@ export function hideTaskyHelp() {
     const taskyContainer = document.getElementById('tasky-bubble-docs');
     const modal = document.getElementById('modal-docs-diagram');
 
-    if (bubble) bubble.classList.remove('active');
+    if (bubble) {
+        bubble.classList.remove('active');
+        // Immediately disable pointer events when hiding
+        bubble.style.pointerEvents = 'none';
+    }
     updateTaskyMascot('Tasky.png');
 
-    // If modal is NOT active, hide the whole container after a delay
+    // If modal is NOT active, hide the whole container immediately
     if (taskyContainer && (!modal || !modal.classList.contains('active'))) {
         taskyContainer.style.opacity = '0';
-        setTimeout(() => {
-            if (taskyContainer.style.opacity === '0') {
-                taskyContainer.style.display = 'none';
-            }
-        }, 200);
+        taskyContainer.style.pointerEvents = 'none';
+        taskyContainer.style.display = 'none';
     }
 }
 

@@ -297,6 +297,12 @@
     pointer-events: all;
 }
 
+.debug-crash-overlay button {
+    pointer-events: auto;
+    position: relative;
+    z-index: 1;
+}
+
 .crash-title {
     font-size: 56px;
     font-weight: 900;
@@ -429,6 +435,7 @@
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 1), 0 0 0 1px rgba(255,255,255,0.02) inset;
     transform: translateY(20px) scale(0.95);
     transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: auto;
 }
 
 .debug-modal-overlay.active .debug-modal-content {
@@ -465,6 +472,12 @@
 
 .debug-modal-input:focus {
     border-color: var(--debug-accent);
+}
+
+.debug-modal-content button {
+    pointer-events: auto;
+    position: relative;
+    z-index: 1;
 }
 
 /* Debugger Tab specific styles */

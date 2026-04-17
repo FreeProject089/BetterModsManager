@@ -18,7 +18,7 @@ import { initDeepLinks } from '../core/deep_link_manager.js';
 import { initTitlebar } from './titlebar.js';
 import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
 import { initModals } from './modals.js';
-import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode } from './update-notes.js';
+import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode, checkAutoEula, checkShowReleaseNotes } from './update-notes.js';
 
 // New Modularized Imports
 import { initModlist } from '../features/mods/modlist.js';
@@ -26,6 +26,22 @@ import { initCrashReportUI, checkPreviousCrash } from './crash-report.js';
 import { initInteractionLogging } from './user-logger.js';
 import { initDebugMenu } from '../features/debug/debug-menu.js';
 import { escHtml, escAttr, formatBytes } from '../core/utils.js';
+
+ async function waitForModalClosed(id: string): Promise<void> {
+     const el = document.getElementById(id);
+     if (!el) return;
+     if (!el.classList.contains('open')) return;
+
+     await new Promise<void>((resolve) => {
+         const obs = new MutationObserver(() => {
+             if (!el.classList.contains('open')) {
+                 obs.disconnect();
+                 resolve();
+             }
+         });
+         obs.observe(el, { attributes: true, attributeFilter: ['class'] });
+     });
+ }
 
 // ── Tauri bridge ──────────────────────────────────────────
 import { loadTauri, invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification } from '../core/api.js';
@@ -400,9 +416,29 @@ async function main() {
 
     await initSettings();
 
-    // Show onboarding on first launch (language is step 0 inside onboarding)
+    // ── Startup Modal Sequence ──
+    // 1. Auto EULA on first start (if enabled in app.cfg)
+    await checkAutoEula();
+    await waitForModalClosed('modal-eula');
+
+    // 2. Crash report UI wiring and check
+    initCrashReportUI();
+    await checkPreviousCrash();
+    await waitForModalClosed('modal-crash-report');
+
+    // 3. Auto Update System
+    initAutoUpdate();
+
+    // 4. Show release notes on first launch
+    await checkShowReleaseNotes();
+    await waitForModalClosed('modal-update-notes');
+
+    // 5. Show onboarding on first launch (language is step 0 inside onboarding)
     if (await shouldShowOnboarding()) {
-        setTimeout(() => startOnboarding(), 500);
+        // Delay slightly to allow UI to render
+        setTimeout(() => {
+            startOnboarding();
+        }, 800);
     }
 
     // ── Auto-Calibration trigger at startup ──
@@ -423,14 +459,6 @@ async function main() {
 
     // Debug Menu
     initDebugMenu();
-
-    // Crash report UI wiring
-    initCrashReportUI();
-    // Check if the previous session crashed and show the modal
-    checkPreviousCrash();
-
-    // Auto Update System
-    initAutoUpdate();
 
     // PTB Mode check
     checkPtbMode();

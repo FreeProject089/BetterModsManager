@@ -7,22 +7,48 @@ import { invoke } from '../core/api.js';
 import { t } from '../core/i18n.js';
 import { toast } from './app.js';
 import { escHtml, escAttr } from '../core/utils.js';
+// Persistence for expanded folders in the release notes tree
+const expandedFolders = new Set();
 // ── Navbar Version Button ────────────────────────────────
 export function initNavbarVersion() {
     // Relying on inline onclick in index.html for nav-version-btn
 }
 // ── Update notes modal ───────────────────────────────────
 export async function openUpdateNotesModal() {
-    let notes = [];
-    let oldNotes = [];
+    const { getLang } = await import('../core/i18n.js');
+    const lang = getLang();
+    let folderStructure = [];
     try {
-        notes = await invoke('get_update_notes', { subDir: null });
-        oldNotes = await invoke('get_update_notes', { subDir: 'Old_Update' });
+        folderStructure = await invoke('get_update_folder_structure', { lang });
     }
     catch (e) {
         console.error(e);
     }
-    const allNotes = [...notes, ...oldNotes];
+    // Flatten folder structure to get all notes with their paths
+    const allNotesMap = new Map();
+    async function loadNotesFromStructure(structure, basePath = '') {
+        for (const item of structure) {
+            const itemPath = item.path;
+            if (item.is_folder) {
+                await loadNotesFromStructure(item.children, itemPath);
+            }
+            else {
+                try {
+                    const subDir = basePath ? basePath.split('/').join('\\') : null;
+                    const notes = await invoke('get_update_notes', { subDir, lang });
+                    const note = notes.find((n) => n.filename === item.name);
+                    if (note) {
+                        allNotesMap.set(itemPath, { ...note, path: itemPath });
+                    }
+                }
+                catch (e) {
+                    console.error(e);
+                }
+            }
+        }
+    }
+    await loadNotesFromStructure(folderStructure);
+    const allNotes = Array.from(allNotesMap.values());
     let modal = document.getElementById('modal-update-notes');
     if (!modal) {
         modal = document.createElement('div');
@@ -30,68 +56,140 @@ export async function openUpdateNotesModal() {
         modal.className = 'modal-overlay';
         document.getElementById('app-window-outer').appendChild(modal);
     }
-    modal.innerHTML = `
-            <div class="modal glass" style="max-width:900px; width:95%; height:80vh; display:flex; flex-direction:column;">
-                <div class="modal-header" style="flex-shrink:0">
-                    <h2 class="modal-title" style="display:flex; align-items:center; gap:10px;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        ${t('update.title')}
-                    </h2>
-                    <button class="modal-close" id="close-update-notes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    // Render folder tree
+    // IMPORTANT: always compute a full nested path, otherwise files in subfolders won't be clickable.
+    const renderFolderTree = (items, depth = 0) => {
+        return items.map(item => {
+            const paddingLeft = 12 + depth * 16;
+            const fullPath = item.path;
+            if (item.is_folder) {
+                const isExpanded = expandedFolders.has(fullPath);
+                return `
+                    <div class="tree-folder" style="padding-left:${paddingLeft}px">
+                        <div class="tree-folder-header ${isExpanded ? 'expanded' : ''}" data-folder="${escAttr(fullPath)}" style="display:flex; align-items:center; gap:8px; padding:6px 8px; cursor:pointer; font-size:12px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: rotate(${isExpanded ? '90deg' : '0'}); transition: transform 0.2s;"><path d="M9 18l6-6-6-6"/></svg>
+                            ${escHtml(item.name)}
+                        </div>
+                        <div class="tree-folder-children" style="display:${isExpanded ? 'block' : 'none'}">
+                            ${renderFolderTree(item.children, depth + 1)}
+                        </div>
+                    </div>
+                `;
+            }
+            const note = allNotes.find(n => n.path === fullPath);
+            return `
+                <div class="archive-sidebar-item ${allNotes.length > 0 && note === allNotes[0] ? 'active' : ''}" data-path="${escAttr(fullPath)}" style="padding:8px ${paddingLeft + 8}px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); border-left:2px solid transparent;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(item.name)}</span>
                 </div>
-                <div class="modal-body" style="padding:0; flex:1; overflow:hidden;">
-                    <div class="archive-modal-container" style="display:flex; height:100%;">
-                        <div class="archive-sidebar" id="archive-sidebar" style="width:260px; background:rgba(0,0,0,0.2); border-right:1px solid var(--border); overflow-y:auto; padding:12px 0;">
-                            
-                            <div class="tree-group" style="margin-bottom:16px;">
-                                <div class="tree-label" style="padding:0 16px 8px; font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center; gap:6px;">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                                    Release Notes
-                                </div>
-                                ${notes.map((n, i) => `
-                                    <div class="archive-sidebar-item ${i === 0 ? 'active' : ''}" data-index="${i}" style="padding:8px 16px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); border-left:2px solid transparent;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(n.filename)}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-
-                            <div class="tree-group">
-                                <div class="tree-label" style="padding:0 16px 8px; font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center; gap:6px;">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                                    Archives
-                                </div>
-                                ${oldNotes.map((n, i) => `
-                                    <div class="archive-sidebar-item" data-index="${notes.length + i}" style="padding:8px 16px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); border-left:2px solid transparent;">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(n.filename)}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-
-                        </div>
-                        <div class="archive-content" id="archive-content" style="flex:1; overflow-y:auto; padding:32px; background:var(--bg-primary);">
-                            ${allNotes.length > 0 ? renderMarkdown(allNotes[0].content) : `<p style="color:var(--text-muted)">${t('update.none')}</p>`}
-                        </div>
+            `;
+        }).join('');
+    };
+    modal.innerHTML = `
+        <div class="modal glass" style="max-width:900px; width:95%; height:80vh; display:flex; flex-direction:column;">
+            <div class="modal-header" style="flex-shrink:0">
+                <h2 class="modal-title" style="display:flex; align-items:center; gap:10px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    ${t('update.title')}
+                </h2>
+                <button class="modal-close" id="close-update-notes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+            <div class="modal-body" style="padding:0; flex:1; overflow:hidden;">
+                <div class="archive-modal-container" style="display:flex; height:100%;">
+                    <div class="archive-sidebar" id="archive-sidebar" style="width:260px; background:rgba(0,0,0,0.2); border-right:1px solid var(--border); overflow-y:auto; padding:12px 0;">
+                        ${renderFolderTree(folderStructure)}
+                    </div>
+                    <div class="archive-content" id="archive-content" style="flex:1; overflow-y:auto; padding:32px; background:var(--bg-primary);">
+                        ${allNotes.length > 0 ? renderMarkdown(allNotes[0].content) : `<p style="color:var(--text-muted)">${t('update.none')}</p>`}
                     </div>
                 </div>
             </div>
-        `;
+        </div>
+    `;
     modal.classList.add('open');
     modal.querySelector('#close-update-notes').addEventListener('click', () => modal.classList.remove('open'));
     modal.addEventListener('click', e => { if (e.target === modal)
         modal.classList.remove('open'); });
-    // Sidebar selection logic
-    const sidebarItems = modal.querySelectorAll('.archive-sidebar-item');
+    // Folder toggle logic
+    modal.querySelectorAll('.tree-folder-header').forEach(header => {
+        header.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const folderPath = header.dataset.folder;
+            const children = header.nextElementSibling;
+            if (children) {
+                const isNowOpen = children.style.display === 'none';
+                children.style.display = isNowOpen ? 'block' : 'none';
+                header.classList.toggle('expanded');
+                // Update persistent state
+                if (isNowOpen)
+                    expandedFolders.add(folderPath);
+                else
+                    expandedFolders.delete(folderPath);
+                // Animate chevron
+                const svg = header.querySelector('svg');
+                if (svg)
+                    svg.style.transform = `rotate(${isNowOpen ? '90deg' : '0'})`;
+            }
+        });
+    });
+    // Sidebar selection logic with event delegation
     const contentArea = modal.querySelector('#archive-content');
-    sidebarItems.forEach(item => {
-        item.addEventListener('click', () => {
-            sidebarItems.forEach(i => i.classList.remove('active'));
-            item.classList.add('active');
-            const note = allNotes[item.dataset.index];
+    modal.addEventListener('click', async (e) => {
+        const item = e.target.closest('.archive-sidebar-item');
+        if (!item)
+            return;
+        e.stopPropagation();
+        // Remove active from all items
+        modal.querySelectorAll('.archive-sidebar-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        const path = item.dataset.path;
+        console.log('Clicked item with path:', path);
+        // Auto-expand parent folders and save state
+        let parent = item.parentElement;
+        while (parent) {
+            if (parent.classList.contains('tree-folder-children')) {
+                parent.style.display = 'block';
+                const header = parent.previousElementSibling;
+                if (header && header.classList.contains('tree-folder-header')) {
+                    header.classList.add('expanded');
+                    const folderPath = header.dataset.folder;
+                    if (folderPath)
+                        expandedFolders.add(folderPath);
+                    const svg = header.querySelector('svg');
+                    if (svg)
+                        svg.style.transform = 'rotate(90deg)';
+                }
+            }
+            parent = parent.parentElement;
+        }
+        let note = allNotes.find(n => n.path === path);
+        // If note not found in pre-loaded notes, try to load it on-demand
+        if (!note && path) {
+            try {
+                const { getLang } = await import('../core/i18n.js');
+                const lang = getLang();
+                const pathParts = path.split('/');
+                const fileName = pathParts[pathParts.length - 1];
+                const subDir = pathParts.slice(0, -1).join('\\');
+                console.log('Loading note on-demand:', { fileName, subDir, lang });
+                const notes = await invoke('get_update_notes', { subDir, lang });
+                const foundNote = notes.find((n) => n.filename === fileName);
+                if (foundNote) {
+                    note = { ...foundNote, path };
+                }
+            }
+            catch (err) {
+                console.error('Failed to load note on-demand:', err);
+            }
+        }
+        if (note) {
             contentArea.innerHTML = renderMarkdown(note.content);
             contentArea.scrollTop = 0;
-        });
+        }
+        else {
+            console.warn('Note not found for path:', path);
+            contentArea.innerHTML = `<p style="color:var(--text-muted)">${t('update.none') || 'No content'}</p>`;
+        }
     });
 }
 export function initUpdateNotes() {
@@ -128,6 +226,19 @@ export function renderMarkdown(md) {
     else {
         html = md.replace(/\n/g, '<br>');
     }
+    // Replace badges with styled spans
+    // FR badges
+    html = html.replace(/\[NOUVEAU\]/g, '<span class="md-badge md-badge-new">' + t('update.badge.new') + '</span>');
+    html = html.replace(/\[RAFFINEMENT\]/g, '<span class="md-badge md-badge-refine">' + t('update.badge.refine') + '</span>');
+    html = html.replace(/\[AMÉLIORÉ\]/g, '<span class="md-badge md-badge-improved">' + t('update.badge.improved') + '</span>');
+    html = html.replace(/\[FIXÉ\]/g, '<span class="md-badge md-badge-fixed">' + t('update.badge.fixed') + '</span>');
+    html = html.replace(/\[VISUEL\]/g, '<span class="md-badge md-badge-visual">' + t('update.badge.visual') + '</span>');
+    // EN badges
+    html = html.replace(/\[NEW\]/g, '<span class="md-badge md-badge-new">' + t('update.badge.new') + '</span>');
+    html = html.replace(/\[REFINE\]/g, '<span class="md-badge md-badge-refine">' + t('update.badge.refine') + '</span>');
+    html = html.replace(/\[IMPROVED\]/g, '<span class="md-badge md-badge-improved">' + t('update.badge.improved') + '</span>');
+    html = html.replace(/\[FIXED\]/g, '<span class="md-badge md-badge-fixed">' + t('update.badge.fixed') + '</span>');
+    html = html.replace(/\[VISUAL\]/g, '<span class="md-badge md-badge-visual">' + t('update.badge.visual') + '</span>');
     return `<div class="md-body">${html}</div>`;
 }
 // Inject markdown body styles once
@@ -188,6 +299,43 @@ export function renderMarkdown(md) {
         .md-body td { padding: 8px 10px; border: 1px solid var(--border); color: var(--text-secondary); }
         .md-body a { color: var(--accent); text-decoration: none; }
         .md-body a:hover { text-decoration: underline; }
+        
+        .md-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-right: 6px;
+            margin-bottom: 4px;
+        }
+        .md-badge-new {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .md-badge-refine {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        .md-badge-improved {
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        .md-badge-fixed {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .md-badge-visual {
+            background: rgba(168, 85, 247, 0.15);
+            color: #a855f7;
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
     `;
     document.head.appendChild(style);
 })();
@@ -435,19 +583,44 @@ export async function checkPtbMode(force = false, initialFileName = null) {
         const isPtb = await invoke('is_ptb_mode');
         if (!isPtb && !force)
             return;
-        const currentNotes = await invoke('get_update_notes', { subDir: null });
-        const oldNotes = await invoke('get_update_notes', { subDir: "Old_Update" });
-        showPtbModal(currentNotes, oldNotes, initialFileName);
+        const { getLang } = await import('../core/i18n.js');
+        const lang = getLang();
+        const folderStructure = await invoke('get_update_folder_structure', { lang });
+        showPtbModal(folderStructure, lang, initialFileName);
     }
     catch (e) {
         console.warn('[BMM] PTB check failed:', e);
     }
 }
-function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
+async function showPtbModal(folderStructure, lang, initialFileName = null) {
     const existing = document.getElementById('ptb-welcome-modal');
     if (existing)
         existing.remove();
-    const allNotes = [...currentNotes, ...oldNotes];
+    // Flatten folder structure to get all notes with their paths
+    const allNotesMap = new Map();
+    async function loadNotesFromStructure(structure, basePath = '') {
+        for (const item of structure) {
+            const itemPath = item.path;
+            if (item.is_folder) {
+                await loadNotesFromStructure(item.children, itemPath);
+            }
+            else {
+                try {
+                    const subDir = basePath ? basePath.split('/').join('\\') : null;
+                    const notes = await invoke('get_update_notes', { subDir, lang });
+                    const note = notes.find((n) => n.filename === item.name);
+                    if (note) {
+                        allNotesMap.set(itemPath, { ...note, path: itemPath });
+                    }
+                }
+                catch (e) {
+                    console.error(e);
+                }
+            }
+        }
+    }
+    await loadNotesFromStructure(folderStructure);
+    const allNotes = Array.from(allNotesMap.values());
     if (allNotes.length === 0)
         return;
     const modal = document.createElement('div');
@@ -470,42 +643,35 @@ function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
     `;
+    const renderFolderTree = (items, depth = 0) => {
+        return items.map(item => {
+            const paddingLeft = 12 + depth * 16;
+            if (item.is_folder) {
+                return `
+                    <div class="tree-folder" style="padding-left:${paddingLeft}px">
+                        <div class="tree-folder-header" data-folder="${escAttr(item.path)}" style="display:flex; align-items:center; gap:8px; padding:6px 8px; cursor:pointer; font-size:12px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            ${escHtml(item.name)}
+                        </div>
+                        <div class="tree-folder-children" style="display:none">
+                            ${renderFolderTree(item.children, depth + 1)}
+                        </div>
+                    </div>
+                `;
+            }
+            else {
+                const note = allNotes.find(n => n.path === item.path);
+                return `
+                    <div class="ptb-sidebar-item ${allNotes.length > 0 && note === allNotes[0] ? 'active' : ''}" data-path="${escAttr(item.path)}" style="padding:8px ${paddingLeft + 8}px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); border-left:2px solid transparent;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(item.name)}</span>
+                    </div>
+                `;
+            }
+        }).join('');
+    };
     const renderSidebar = () => {
-        let html = '<div class="ptb-sidebar">';
-        if (currentNotes.length > 0) {
-            html += `
-                <div class="ptb-sidebar-section">
-                    <div class="ptb-sidebar-label">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                        RELEASE NOTES
-                    </div>
-                    ${currentNotes.map(n => `
-                        <div class="ptb-sidebar-item ${n.filename === activeNote.filename ? 'active' : ''}" data-file="${escAttr(n.filename)}">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                            ${escHtml(n.filename)}
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        }
-        if (oldNotes.length > 0) {
-            html += `
-                <div class="ptb-sidebar-section">
-                    <div class="ptb-sidebar-label">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                        ARCHIVES
-                    </div>
-                    ${oldNotes.map(n => `
-                        <div class="ptb-sidebar-item ${n.filename === activeNote.filename ? 'active' : ''}" data-file="${escAttr(n.filename)}">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                            ${escHtml(n.filename)}
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        }
-        html += '</div>';
-        return html;
+        return `<div class="ptb-sidebar">${renderFolderTree(folderStructure)}</div>`;
     };
     const renderContent = (note) => {
         return `<div class="ptb-modal-body" style="overflow-y:auto; flex:1; padding:32px;">${renderMarkdown(note.content)}</div>`;
@@ -522,11 +688,20 @@ function showPtbModal(currentNotes, oldNotes, initialFileName = null) {
         </div>
     `;
     document.getElementById('app-window-outer').appendChild(modal);
+    // Folder toggle logic
+    modal.querySelectorAll('.tree-folder-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const children = header.nextElementSibling;
+            if (children) {
+                children.style.display = children.style.display === 'none' ? 'block' : 'none';
+            }
+        });
+    });
     modal.addEventListener('click', (e) => {
         const item = e.target.closest('.ptb-sidebar-item');
         if (item) {
-            const filename = item.dataset.file;
-            const note = allNotes.find(n => n.filename === filename);
+            const path = item.dataset.path;
+            const note = allNotes.find(n => n.path === path);
             if (note) {
                 activeNote = note;
                 modal.querySelectorAll('.ptb-sidebar-item').forEach(i => i.classList.remove('active'));
@@ -561,12 +736,23 @@ export async function openLicenseModal() {
     }
 }
 // ── EULA ──────────────────────────────────────────────────
-export async function openEulaModal() {
+export async function openEulaModal(showButtons = false) {
     const modal = document.getElementById('modal-eula');
     const contentEl = document.getElementById('eula-content');
     if (!modal || !contentEl)
         return;
     modal.classList.add('open');
+    // Toggle UI based on whether buttons are shown or just viewing
+    const footer = modal.querySelector('.modal-footer');
+    const closeBtn = document.getElementById('btn-eula-close');
+    if (footer) {
+        footer.style.setProperty('display', showButtons ? 'flex' : 'none', 'important');
+    }
+    if (closeBtn) {
+        closeBtn.style.display = showButtons ? 'none' : 'block';
+    }
+    // Prevent closing if buttons are shown (mandatory acceptance)
+    modal.setAttribute('data-prevent-close', showButtons ? 'true' : 'false');
     contentEl.textContent = t('common.loading');
     try {
         const { getLang } = await import('../core/i18n.js');
@@ -577,9 +763,58 @@ export async function openEulaModal() {
     catch (err) {
         contentEl.textContent = t('common.error') + " (EULA): " + err;
     }
+    // Setup Accept button
+    const acceptBtn = document.getElementById('btn-eula-accept');
+    if (acceptBtn) {
+        acceptBtn.onclick = () => {
+            markEulaAccepted();
+            modal.classList.remove('open');
+        };
+    }
+    // Setup Quit button
+    const quitBtn = document.getElementById('btn-eula-quit');
+    if (quitBtn) {
+        quitBtn.onclick = () => {
+            invoke('exit_app');
+        };
+    }
 }
 // Global expose for onclick
 window.openLicenseModal = openLicenseModal;
 window.openEulaModal = openEulaModal;
 window.checkPtbMode = checkPtbMode;
+// ── Auto EULA on First Start ────────────────────────────────
+const EULA_ACCEPTED_KEY = 'bmm_eula_accepted';
+export async function checkAutoEula() {
+    try {
+        const isEnabled = await invoke('is_auto_eula_enabled');
+        const isAccepted = localStorage.getItem(EULA_ACCEPTED_KEY) === 'true';
+        if (isEnabled && !isAccepted) {
+            // Show EULA modal with mandatory buttons
+            await openEulaModal(true);
+        }
+    }
+    catch (e) {
+        console.warn('[BMM] Auto EULA check failed:', e);
+    }
+}
+// ── Auto Show Release Notes on Startup ─────────────────────
+const RELEASE_NOTES_SHOWN_KEY = 'bmm_release_notes_shown';
+export async function checkShowReleaseNotes() {
+    try {
+        const wasShown = localStorage.getItem(RELEASE_NOTES_SHOWN_KEY) === 'true';
+        if (!wasShown) {
+            // Show release notes modal
+            await openUpdateNotesModal();
+            localStorage.setItem(RELEASE_NOTES_SHOWN_KEY, 'true');
+        }
+    }
+    catch (e) {
+        console.warn('[BMM] Auto release notes check failed:', e);
+    }
+}
+export function markEulaAccepted() {
+    localStorage.setItem(EULA_ACCEPTED_KEY, 'true');
+}
+window.markEulaAccepted = markEulaAccepted;
 //# sourceMappingURL=update-notes.js.map

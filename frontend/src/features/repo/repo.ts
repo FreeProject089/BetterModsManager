@@ -63,6 +63,49 @@ export const showConfirm = (title, message, isDanger = true) => {
     });
 };
 
+// --- Profile Checklist (exportable function) ---
+export const loadProfilesForExport = async (profilesListEl) => {
+    if (!profilesListEl) return;
+    try {
+        // Store currently checked profile IDs before refresh
+        const currentlyChecked = new Set();
+        profilesListEl.querySelectorAll('.repo-profile-cb:checked').forEach(cb => {
+            currentlyChecked.add(cb.value);
+        });
+
+        const profiles = await invoke('get_profiles');
+        profilesListEl.innerHTML = '';
+        if (!profiles || profiles.length === 0) {
+            profilesListEl.innerHTML = `<div style="color:var(--text-muted); font-size:12px; text-align:center;">${t('repo.noProfiles')}</div>`;
+            return;
+        }
+        profiles.forEach(p => {
+            const item = document.createElement('div');
+            item.className = 'repo-profile-item';
+            item.style.cssText = 'display:flex; align-items:center; padding:10px 12px; margin-bottom:6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px; cursor:pointer; transition:all 0.2s ease;';
+            item.onmouseenter = () => { item.style.background = 'rgba(255,255,255,0.06)'; item.style.borderColor = 'rgba(255,255,255,0.1)'; };
+            item.onmouseleave = () => { item.style.background = 'rgba(255,255,255,0.03)'; item.style.borderColor = 'rgba(255,255,255,0.05)'; };
+
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = p.id;
+            cb.className = 'repo-profile-cb';
+            // Check if profile was previously checked or if it's the active profile
+            cb.checked = currentlyChecked.has(p.id) || (window.activeProfileId === p.id);
+            item.onclick = (e) => { if (e.target !== cb) cb.checked = !cb.checked; };
+
+            const info = document.createElement('div');
+            info.style.cssText = 'margin-left:12px; display:flex; flex-direction:column;';
+            info.innerHTML = `<span style="font-size:13.5px; font-weight:600; color:var(--text-color);">${escHtml(p.name)}</span>
+                              <span style="font-size:11px; color:var(--text-muted); opacity:0.7;">${escHtml(t(p.game_name) || p.game_name || t('repo.genericGame'))}</span>`;
+            
+            item.appendChild(cb);
+            item.appendChild(info);
+            profilesListEl.appendChild(item);
+        });
+    } catch (err) { console.error(err); }
+};
+
 export function initRepo() {
     const elements = {
         // --- Export elements ---
@@ -111,6 +154,7 @@ export function initRepo() {
 
         // --- Host Server elements ---
         profilesListEl: document.getElementById('repo-export-profiles-list'),
+        btnRefreshProfiles: document.getElementById('btn-refresh-repo-profiles'),
         btnToggleServer: document.getElementById('btn-toggle-repo-server'),
         urlContainerServer: document.getElementById('repo-server-url-container'),
         urlInputServer: document.getElementById('repo-server-url'),
@@ -353,41 +397,15 @@ export function initRepo() {
     }
 
     // --- Profile Checklist ---
-    const loadProfilesForExport = async () => {
-        if (!elements.profilesListEl) return;
-        try {
-            const profiles = await invoke('get_profiles');
-            elements.profilesListEl.innerHTML = '';
-            if (!profiles || profiles.length === 0) {
-                elements.profilesListEl.innerHTML = `<div style="color:var(--text-muted); font-size:12px; text-align:center;">${t('repo.noProfiles')}</div>`;
-                return;
-            }
-            profiles.forEach(p => {
-                const item = document.createElement('div');
-                item.className = 'repo-profile-item';
-                item.style.cssText = 'display:flex; align-items:center; padding:10px 12px; margin-bottom:6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px; cursor:pointer; transition:all 0.2s ease;';
-                item.onmouseenter = () => { item.style.background = 'rgba(255,255,255,0.06)'; item.style.borderColor = 'rgba(255,255,255,0.1)'; };
-                item.onmouseleave = () => { item.style.background = 'rgba(255,255,255,0.03)'; item.style.borderColor = 'rgba(255,255,255,0.05)'; };
+    loadProfilesForExport(elements.profilesListEl);
 
-                const cb = document.createElement('input');
-                cb.type = 'checkbox';
-                cb.value = p.id;
-                cb.className = 'repo-profile-cb';
-                cb.checked = (window.activeProfileId === p.id);
-                item.onclick = (e) => { if (e.target !== cb) cb.checked = !cb.checked; };
-
-                const info = document.createElement('div');
-                info.style.cssText = 'margin-left:12px; display:flex; flex-direction:column;';
-                info.innerHTML = `<span style="font-size:13.5px; font-weight:600; color:var(--text-color);">${escHtml(p.name)}</span>
-                                  <span style="font-size:11px; color:var(--text-muted); opacity:0.7;">${escHtml(t(p.game_name) || p.game_name || t('repo.genericGame'))}</span>`;
-                
-                item.appendChild(cb);
-                item.appendChild(info);
-                elements.profilesListEl.appendChild(item);
-            });
-        } catch (err) { console.error(err); }
-    };
-    loadProfilesForExport();
+    // Refresh button
+    if (elements.btnRefreshProfiles) {
+        elements.btnRefreshProfiles.addEventListener('click', () => {
+            loadProfilesForExport(elements.profilesListEl);
+            toast(t('repo.profilesRefreshed') || 'Profiles list refreshed', 'success');
+        });
+    }
 
     // --- Pickers ---
     if (elements.btnPickExport) {

@@ -761,8 +761,14 @@
                                     data-i18n="repo.stepOneDesc">...</p>
 
                                 <div class="form-group" style="margin-bottom:12px;">
-                                    <label class="form-label" style="margin-bottom:4px;"
-                                        data-i18n="repo.selectProfiles">...</label>
+                                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                                        <label class="form-label"
+                                            data-i18n="repo.selectProfiles">...</label>
+                                        <button class="btn btn-sm btn-secondary" id="btn-refresh-repo-profiles" style="padding:4px 8px;font-size:11px;">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px;"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                                            Refresh
+                                        </button>
+                                    </div>
                                     <div id="repo-export-profiles-list"
                                         style="max-height:130px;overflow-y:auto;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:7px;">
                                         <div style="color:var(--text-muted);font-size:12px;text-align:center;"
@@ -3979,7 +3985,7 @@
         <!-- Crash Report Modal -->
         <div class="modal-overlay bh-modal-overlay" id="modal-crash-report">
             <div class="modal-container">
-            <div class="modal-content glass" style="max-width:580px;padding:0;border:1px solid rgba(239,68,68,0.25)">
+            <div class="modal-content glass" style="max-width:680px;padding:0;border:1px solid rgba(239,68,68,0.25)">
                 <!-- Header -->
                 <div class="bh-crash-header">
                     <div style="display:flex;align-items:center;gap:16px">
@@ -4146,10 +4152,10 @@
                                             </g>
 
                                             <!-- Labels -->
-                                            <text x="12" y="58" class="bh-gauge-label" text-anchor="middle">Bad</text>
-                                            <text x="25" y="15" class="bh-gauge-label" text-anchor="middle">Well</text>
-                                            <text x="75" y="15" class="bh-gauge-label" text-anchor="middle">Good</text>
-                                            <text x="88" y="58" class="bh-gauge-label" text-anchor="middle">Best</text>
+                                            <text x="12" y="58" class="bh-gauge-label" text-anchor="middle" data-i18n="betahub.strengthBad">Bad</text>
+                                            <text x="25" y="15" class="bh-gauge-label" text-anchor="middle" data-i18n="betahub.strengthWell">Well</text>
+                                            <text x="75" y="15" class="bh-gauge-label" text-anchor="middle" data-i18n="betahub.strengthGood">Good</text>
+                                            <text x="88" y="58" class="bh-gauge-label" text-anchor="middle" data-i18n="betahub.strengthBest">Best</text>
 
                                             <!-- Needle -->
                                             <g id="bh-feedback-gauge-needle-group" class="bh-gauge-needle-group">
@@ -4275,7 +4281,7 @@
                                 <div class="bh-field-group">
                                     <div style="display:flex;justify-content:space-between;align-items:baseline">
                                         <label class="bh-label" data-i18n="betahub.fieldDesc">Description <span style="color:#ef4444">*</span></label>
-                                        <span id="bh-bug-desc-count" class="bh-counter">0/4500</span>
+                                        <span id="bh-bug-desc-count" class="bh-counter" data-i18n="betahub.descCount">0/4500</span>
                                     </div>
                                     <textarea id="bh-bug-desc" class="bh-textarea" rows="6" data-i18n-placeholder="betahub.fieldDescPlaceholder" placeholder="Provide as much detail as possible..."></textarea>
                                 </div>
@@ -4284,7 +4290,7 @@
                                 <div class="bh-field-group">
                                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
                                         <label class="bh-label" data-i18n="betahub.fieldSteps">Steps to Reproduce</label>
-                                        <button type="button" class="bh-add-file-btn" id="bh-bug-add-step" style="padding:4px 10px;font-size:10px">+ Add Step</button>
+                                        <button type="button" class="bh-add-file-btn" id="bh-bug-add-step" style="padding:4px 10px;font-size:10px" data-i18n="betahub.addStep">+ Add Step</button>
                                     </div>
                                     <div id="bh-bug-steps-container" style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;padding-right:4px">
                                         <!-- Steps injected here -->
@@ -4294,28 +4300,28 @@
                                 <!-- Attachments -->
                                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
                                     <div class="bh-field-group">
-                                        <label class="bh-label">Visual Media <span style="opacity:0.6;font-size:10px">(max 3 images, 1 video)</span></label>
+                                        <label class="bh-label" data-i18n="betahub.visualMedia">Visual Media <span style="opacity:0.6;font-size:10px">(max 3 images, 1 video)</span></label>
                                         <div class="bh-file-zone">
                                             <div id="bh-bug-screenshots-list"></div>
                                             <div id="bh-bug-video-preview"></div>
                                             <div style="display:flex;gap:8px">
-                                                <button type="button" class="bh-add-file-btn" id="bh-bug-screenshots-add" onclick="document.getElementById('bh-bug-screenshots').click()">+ Image</button>
-                                                <button type="button" class="bh-add-file-btn" id="bh-bug-video-add" onclick="document.getElementById('bh-bug-video').click()">+ Video</button>
+                                                <button type="button" class="bh-add-file-btn" id="bh-bug-screenshots-add" onclick="document.getElementById('bh-bug-screenshots').click()" data-i18n="betahub.addImage">+ Image</button>
+                                                <button type="button" class="bh-add-file-btn" id="bh-bug-video-add" onclick="document.getElementById('bh-bug-video').click()" data-i18n="betahub.addVideo">+ Video</button>
                                             </div>
                                             <input id="bh-bug-screenshots" type="file" accept="image/*" multiple style="display:none">
                                             <input id="bh-bug-video" type="file" accept="video/*" style="display:none">
                                         </div>
                                     </div>
                                     <div class="bh-field-group">
-                                        <label class="bh-label">Logs & Data</label>
+                                        <label class="bh-label" data-i18n="betahub.logsData">Logs & Data</label>
                                         <div class="bh-file-zone" style="gap:12px;padding:16px">
                                             <label class="bh-checkbox-label" style="display:flex;align-items:center;gap:10px;cursor:pointer">
                                                 <input type="checkbox" id="bh-bug-include-logs" style="width:16px;height:16px;accent-color:#6366f1" checked>
-                                                <span style="font-size:12px;color:var(--text-secondary)">Include BMM Frontend Logs</span>
+                                                <span style="font-size:12px;color:var(--text-secondary)" data-i18n="betahub.includeLogs">Include BMM Frontend Logs</span>
                                             </label>
                                             <label class="bh-checkbox-label" style="display:flex;align-items:center;gap:10px;cursor:pointer">
                                                 <input type="checkbox" id="bh-bug-include-dxdiag" style="width:16px;height:16px;accent-color:#6366f1" checked>
-                                                <span style="font-size:12px;color:var(--text-secondary)">Include DxDiag Report</span>
+                                                <span style="font-size:12px;color:var(--text-secondary)" data-i18n="betahub.includeDxDiag">Include DxDiag Report</span>
                                             </label>
                                         </div>
                                     </div>
@@ -4326,7 +4332,7 @@
                             <div style="display:flex;flex-direction:column;gap:24px;align-self:flex-start">
                                 <!-- Quality Gauge -->
                                 <div class="bh-strength-box">
-                                    <h3 class="bh-strength-title">Submission Strength</h3>
+                                    <h3 class="bh-strength-title" data-i18n="betahub.submissionStrength">Submission Strength</h3>
                                     <div class="bh-gauge-container">
                                         <svg viewBox="0 0 100 65" class="bh-gauge-svg">
                                             <defs>
@@ -4360,10 +4366,10 @@
                                             </g>
 
                                             <!-- Labels -->
-                                            <text x="12" y="58" class="bh-gauge-label" text-anchor="middle">Bad</text>
-                                            <text x="25" y="15" class="bh-gauge-label" text-anchor="middle">Well</text>
-                                            <text x="75" y="15" class="bh-gauge-label" text-anchor="middle">Good</text>
-                                            <text x="88" y="58" class="bh-gauge-label" text-anchor="middle">Best</text>
+                                            <text x="12" y="58" class="bh-gauge-label" text-anchor="middle" data-i18n="betahub.strengthBad">Bad</text>
+                                            <text x="25" y="15" class="bh-gauge-label" text-anchor="middle" data-i18n="betahub.strengthWell">Well</text>
+                                            <text x="75" y="15" class="bh-gauge-label" text-anchor="middle" data-i18n="betahub.strengthGood">Good</text>
+                                            <text x="88" y="58" class="bh-gauge-label" text-anchor="middle" data-i18n="betahub.strengthBest">Best</text>
 
                                             <!-- Needle -->
                                             <g id="bh-bug-gauge-needle-group" class="bh-gauge-needle-group">
@@ -4482,13 +4488,12 @@
         </div>
 
         <!-- EULA Modal -->
-        <div class="modal-overlay" id="modal-eula">
+        <div class="modal-overlay" id="modal-eula" data-prevent-close="true">
             <div class="modal glass" style="max-width: 600px; width: 90%;">
                 <div class="modal-header">
                     <h2 class="modal-title" data-i18n="credits.eula">Terms of Use (EULA)</h2>
-                    <button class="modal-close" data-close="modal-eula">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
+                    <button class="modal-close" data-close="modal-eula" id="btn-eula-close" style="display:none">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                             <line x1="18" y1="6" x2="6" y2="18" />
                             <line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
@@ -4498,6 +4503,10 @@
                     style="max-height: 500px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 20px; margin-top:10px; border: 1px solid var(--border);">
                     <div id="eula-content"
                         style="text-align: left;">Loading EULA...</div>
+                </div>
+                <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:12px;padding:20px;">
+                    <button class="btn btn-danger" id="btn-eula-quit" data-i18n="eula.quit">Quit BMM</button>
+                    <button class="btn btn-primary" id="btn-eula-accept" data-i18n="eula.accept">Accept</button>
                 </div>
             </div>
         </div>

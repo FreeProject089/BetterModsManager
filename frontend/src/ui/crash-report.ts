@@ -73,7 +73,7 @@ export function initCrashReportUI(): void {
             try {
                 await invoke('open_crash_zip', { path });
             } catch (err) {
-                toast('Could not open zip: ' + err, 'error');
+                toast((t('crash.openZipError') || 'Could not open zip') + ': ' + err, 'error');
             }
         }
     };

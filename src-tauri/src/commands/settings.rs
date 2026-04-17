@@ -139,6 +139,17 @@ pub fn is_update_disabled(app_handle: tauri::AppHandle) -> bool {
     false
 }
 
+#[tauri::command]
+pub fn is_auto_eula_enabled(app_handle: tauri::AppHandle) -> bool {
+    if let Some(path) = resolve_path(&app_handle, "app.cfg") {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let normalized = content.to_lowercase();
+            return normalized.contains("autoeula_on_first_start=true");
+        }
+    }
+    false
+}
+
 
 #[tauri::command]
 pub fn get_available_languages(app_handle: tauri::AppHandle) -> Vec<String> {
@@ -237,10 +248,15 @@ pub fn get_resource_debug_info(app_handle: tauri::AppHandle) -> String {
         if let Ok(entries) = std::fs::read_dir(&res_dir) {
             debug.push_str("\nResource Dir Listing:\n");
             for entry in entries.flatten() {
-                debug.push_str(&format!(" - {:?}\n", entry.path()));
+                debug.push_str(&format!("  {:?}\n", entry.file_name()));
             }
         }
     }
-
+    
     debug
+}
+
+#[tauri::command]
+pub fn exit_app() {
+    std::process::exit(0);
 }
