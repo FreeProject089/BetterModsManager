@@ -37,30 +37,75 @@ function initArchiveContextMenu() {
       btn.addEventListener('click', hideCtx);
   });
 
-  document.getElementById('ctx-open-file')?.addEventListener('click', () => {
-      if (!(window as any)._currentArchiveNode) return;
-      const fullPath = (window as any)._currentArchiveNode.dataset.full;
-      const tType = (window as any)._currentArchiveNode.dataset.type;
-      if (fullPath) {
-          if (tType === 'folder') invoke('open_folder', { path: fullPath }).catch((e:any) => toast(String(e), 'error'));
-          else invoke('open_file', { path: fullPath }).catch((e:any) => toast(String(e), 'error'));
-      }
-      hideCtx();
-  });
+  const ctxOpenFile = document.getElementById('ctx-open-file');
+  const ctxOpenFolder = document.getElementById('ctx-open-folder');
+  const ctxCopyPath = document.getElementById('ctx-copy-path');
 
-  document.getElementById('ctx-open-folder')?.addEventListener('click', () => {
-      if (!(window as any)._currentArchiveNode) return;
-      const fullPath = (window as any)._currentArchiveNode.dataset.full;
-      if (fullPath) invoke('open_folder', { path: fullPath }).catch((e:any) => toast(String(e), 'error'));
-      hideCtx();
-  });
+  if (ctxOpenFile) {
+    ctxOpenFile.addEventListener('click', async () => {
+        if (!(window as any)._currentArchiveNode) return;
+        const relPath = (window as any)._currentArchiveNode.dataset.full;
+        const tType = (window as any)._currentArchiveNode.dataset.type;
+        const modId = (window as any)._currentExplorerModId;
+        if (!relPath || !modId) return;
+        
+        try {
+            const mod = S.allMods.find(m => m.id === modId);
+            if (!mod) return;
+            const modFolderPath = mod.mod_folder_path;
+            const fullPath = modFolderPath.replace(/\\/g, '/') + '/' + relPath.replace(/\\/g, '/');
+            
+            if (tType === 'folder') invoke('open_folder', { path: fullPath }).catch((e:any) => toast(String(e), 'error'));
+            else invoke('open_file', { path: fullPath }).catch((e:any) => toast(String(e), 'error'));
+        } catch (e) {
+            toast(String(e), 'error');
+        }
+        hideCtx();
+    });
+  }
 
-  document.getElementById('ctx-copy-path')?.addEventListener('click', () => {
-      if (!(window as any)._currentArchiveNode) return;
-      const relPath = (window as any)._currentArchiveNode.dataset.path;
-      if (relPath) navigator.clipboard.writeText(relPath).then(() => toast(t('common.copied') || 'Copié !', 'success'));
-      hideCtx();
-  });
+  if (ctxOpenFolder) {
+    ctxOpenFolder.addEventListener('click', async () => {
+        const modId = (window as any)._currentExplorerModId;
+        if (!modId) return;
+        
+        try {
+            const mod = S.allMods.find(m => m.id === modId);
+            if (!mod) return;
+            
+            // Use the appropriate command based on mod status
+            if (mod.enabled) {
+                await invoke('open_mod_active_folder', { modId });
+            } else {
+                await invoke('open_mod_backup_folder', { modId });
+            }
+        } catch (e) {
+            toast(String(e), 'error');
+        }
+        hideCtx();
+    });
+  }
+
+  if (ctxCopyPath) {
+    ctxCopyPath.addEventListener('click', async () => {
+        if (!(window as any)._currentArchiveNode) return;
+        const relPath = (window as any)._currentArchiveNode.dataset.full;
+        const modId = (window as any)._currentExplorerModId;
+        if (!relPath || !modId) return;
+        
+        try {
+            const mod = S.allMods.find(m => m.id === modId);
+            if (!mod) return;
+            const modFolderPath = mod.mod_folder_path;
+            const fullPath = modFolderPath.replace(/\\/g, '/') + '/' + relPath.replace(/\\/g, '/');
+            
+            navigator.clipboard.writeText(fullPath).then(() => toast(t('common.copied') || 'Copié !', 'success'));
+        } catch (e) {
+            toast(String(e), 'error');
+        }
+        hideCtx();
+    });
+  }
 }
 
 
