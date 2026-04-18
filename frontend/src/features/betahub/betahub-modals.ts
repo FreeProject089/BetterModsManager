@@ -33,6 +33,118 @@ let activeExplorerTab: 'crash' | 'session' = 'crash';
 
 let powFeedbackResult: any = null;
 let powBugResult: any = null;
+
+// =============================================================================
+// Content Validation & Anti-Spam
+// =============================================================================
+
+/**
+ * Check if text contains too much gibberish/low-coherence content
+ * Uses character entropy and repeated character analysis
+ * Returns object with isGibberish flag and reason if detected
+ */
+function isGibberish(text: string): { isGibberish: boolean; reason?: string } {
+    if (text.length < 20) return { isGibberish: false };
+    
+    const cleanText = text.replace(/\s+/g, '').toLowerCase();
+    if (cleanText.length < 10) return { isGibberish: false };
+    
+    // Check for too many consecutive same characters (e.g., "aaaaa")
+    let maxConsecutive = 0;
+    let currentConsecutive = 1;
+    for (let i = 1; i < cleanText.length; i++) {
+        if (cleanText[i] === cleanText[i - 1]) {
+            currentConsecutive++;
+            maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
+        } else {
+            currentConsecutive = 1;
+        }
+    }
+    if (maxConsecutive > 5) {
+        return { isGibberish: true, reason: `Trop de caractères consécutifs identiques (${maxConsecutive})` };
+    }
+    
+    // Calculate character entropy (lower entropy = more predictable/repetitive)
+    const charCounts: Record<string, number> = {};
+    for (const char of cleanText) {
+        charCounts[char] = (charCounts[char] || 0) + 1;
+    }
+    
+    let entropy = 0;
+    for (const count of Object.values(charCounts)) {
+        const probability = count / cleanText.length;
+        if (probability > 0) {
+            entropy -= probability * Math.log2(probability);
+        }
+    }
+    
+    // Very low entropy suggests repetitive/gibberish content
+    if (entropy < 2.5) {
+        return { isGibberish: true, reason: `Entropie trop faible (${entropy.toFixed(2)}) - contenu répétitif` };
+    }
+    
+    // Check for too many random character sequences (high entropy but no meaningful words)
+    // Count consonant clusters that don't make sense in typical text
+    const clusters = cleanText.match(/[bcdfghjklmnpqrstvwxyz]{3,}/gi) || [];
+    if (clusters.length > cleanText.length / 5) {
+        return { isGibberish: true, reason: `Trop de séquences de consonants (${clusters.length})` };
+    }
+    
+    return { isGibberish: false };
+}
+
+/**
+ * Anti-spam rate limiting check
+ * Prevents multiple submissions within a short time window
+ */
+function checkRateLimit(): boolean {
+    const MIN_SUBMISSION_INTERVAL = 30000; // 30 seconds
+    const MAX_SUBMISSIONS_PER_HOUR = 5;
+    
+    const now = Date.now();
+    const lastSubmission = localStorage.getItem('betahub_last_submission');
+    const submissionCount = parseInt(localStorage.getItem('betahub_submission_count') || '0');
+    const countResetTime = parseInt(localStorage.getItem('betahub_count_reset') || '0');
+    
+    // Reset hourly counter if needed
+    if (now - countResetTime > 3600000) {
+        localStorage.setItem('betahub_submission_count', '0');
+        localStorage.setItem('betahub_count_reset', now.toString());
+    }
+    
+    // Check minimum interval between submissions
+    if (lastSubmission && now - parseInt(lastSubmission) < MIN_SUBMISSION_INTERVAL) {
+        const remainingSeconds = Math.ceil((MIN_SUBMISSION_INTERVAL - (now - parseInt(lastSubmission))) / 1000);
+        toast(`${t('betahub.errorRateLimit')} ${remainingSeconds}s`, 'error');
+        return false;
+    }
+    
+    // Check hourly limit
+    const currentCount = parseInt(localStorage.getItem('betahub_submission_count') || '0');
+    if (currentCount >= MAX_SUBMISSIONS_PER_HOUR) {
+        toast(t('betahub.errorHourlyLimit'), 'error');
+        return false;
+    }
+    
+    return true;
+}
+
+/**
+ * Record a successful submission for rate limiting
+ */
+function recordSubmission(): void {
+    const now = Date.now();
+    localStorage.setItem('betahub_last_submission', now.toString());
+    
+    const currentCount = parseInt(localStorage.getItem('betahub_submission_count') || '0');
+    localStorage.setItem('betahub_submission_count', (currentCount + 1).toString());
+    
+    const countResetTime = localStorage.getItem('betahub_count_reset');
+    if (!countResetTime || now - parseInt(countResetTime) > 3600000) {
+        localStorage.setItem('betahub_count_reset', now.toString());
+        localStorage.setItem('betahub_submission_count', '1');
+    }
+}
 // =============================================================================
 // Public API
 // =============================================================================
@@ -260,6 +372,18 @@ async function handleFeedbackSubmit(): Promise<void> {
         return;
     }
 
+    // Check for gibberish/low-coherence content
+    const gibberishCheck = isGibberish(description);
+    if (gibberishCheck.isGibberish) {
+        showFieldError('bh-feedback-desc', (t('betahub.errorGibberish') || 'Contenu incohérent détecté') + `: ${gibberishCheck.reason}`);
+        return;
+    }
+
+    // Anti-spam rate limiting check
+    if (!checkRateLimit()) {
+        return;
+    }
+
     clearFieldErrors('bh-feedback');
     setSubmitState('feedback', true);
     setSubmitLoading('feedback', true);
@@ -291,6 +415,7 @@ async function handleFeedbackSubmit(): Promise<void> {
 
         saveReportToHistory('feedback', titleEl?.value?.trim() || t('betahub.themeFeedback'), (result as any)?.id || 'N/A');
 
+        recordSubmission();
         closeFeedbackModal();
         toast(t('betahub.successFeedback'), 'success');
     } catch (err: any) {
@@ -825,6 +950,18 @@ async function handleBugReportSubmit(): Promise<void> {
         return;
     }
 
+    // Check for gibberish/low-coherence content
+    const gibberishCheck = isGibberish(description);
+    if (gibberishCheck.isGibberish) {
+        showFieldError('bh-bug-desc', (t('betahub.errorGibberish') || 'Contenu incohérent détecté') + `: ${gibberishCheck.reason}`);
+        return;
+    }
+
+    // Anti-spam rate limiting check
+    if (!checkRateLimit()) {
+        return;
+    }
+
     clearFieldErrors('bh-bug');
     setSubmitState('bug', true);
     setSubmitLoading('bug', true);
@@ -904,6 +1041,7 @@ async function handleBugReportSubmit(): Promise<void> {
 
         saveReportToHistory('bug', titleEl?.value?.trim() || t('betahub.themeBug'), issueId);
 
+        recordSubmission();
         closeBugReportModal();
         toast(t('betahub.successBugReport'), 'success');
 
