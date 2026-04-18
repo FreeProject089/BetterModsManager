@@ -84,15 +84,8 @@ export function updateConflictBadgeOnCard(modId) {
 
 export function saveConflictCache() {
   try {
-    const serialized = JSON.stringify(S.conflictCache);
-    if (serialized.length > 1024 * 1024) {
-      console.warn('[CACHE] Conflict cache too large, skipping persistence.');
-      return;
-    }
-    localStorage.setItem('bmm_conflict_cache', serialized);
-  } catch (e) {
-    console.warn('[CACHE] Failed to save conflict cache:', e);
-  }
+    localStorage.setItem('bmm_conflict_cache', JSON.stringify(S.conflictCache));
+  } catch (e) {}
 }
 
 export function restoreConflictCache() {
@@ -105,77 +98,232 @@ export function restoreConflictCache() {
 export async function openGlobalConflictModal(preselectModId = null) {
   const modal = document.getElementById('modal-global-conflicts');
   const container = document.getElementById('global-conflicts-list');
-  const searchInput = document.getElementById('global-conflict-search') as HTMLInputElement;
+  const searchInput = document.getElementById('global-conflict-search');
+  const profileFilter = document.getElementById('global-conflict-profile-filter');
+  const typeFilter = document.getElementById('global-conflict-type-filter');
+  const sortSelect = document.getElementById('global-conflict-sort-order');
+  const closeBtn = document.getElementById('btn-close-global-conflicts');
+
   if (!modal || !container) return;
 
-  const render = (filter = '') => {
-    container.innerHTML = '';
-    const entries = Object.entries(S.conflictCache);
-    if (entries.length === 0) {
-      container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">${t('conflict.none') || 'Aucun conflit détecté'}</div>`;
-      return;
-    }
-
-    entries.forEach(([modId, reports]) => {
-      const mod = S.allMods.find(m => m.id === modId);
-      if (!mod) return;
-      if (filter && !mod.name.toLowerCase().includes(filter.toLowerCase())) return;
-
-      const group = document.createElement('div');
-      group.className = 'conflict-group glass';
-      group.style.cssText = 'margin-bottom:16px; padding:16px; border-radius:12px; border:1px solid rgba(255,255,255,0.08)';
-      
-      let itemsHtml = '';
-      (reports as any[]).forEach(rep => {
-          const isWarning = rep.status === 'Potential';
-          const color = isWarning ? 'var(--warning)' : 'var(--danger)';
-          itemsHtml += `
-            <div style="display:flex; gap:12px; margin-top:10px; padding:10px; background:rgba(0,0,0,0.2); border-radius:8px; border-left:3px solid ${color}">
-                <div style="flex:1">
-                    <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em">${rep.category} Conflict</div>
-                    <div style="font-family:var(--font-mono); font-size:12px; margin:4px 0; word-break:break-all">${escHtml(rep.file_path)}</div>
-                    <div style="font-size:11px; color:var(--text-secondary)">${t('conflict.with')}: <strong>${escHtml(rep.conflicting_mod_name || rep.conflicting_mod_id)}</strong></div>
-                </div>
-            </div>
-          `;
-      });
-
-      group.innerHTML = `
-        <div style="display:flex; align-items:center; justify-content:space-between">
-            <h4 style="margin:0; color:var(--text-primary)">${escHtml(mod.name)}</h4>
-            <span class="badge" style="background:rgba(239,68,68,0.15); color:var(--danger)">${reports.length} files</span>
-        </div>
-        ${itemsHtml}
-      `;
-      container.appendChild(group);
-    });
-  };
-
-  render();
-  if (searchInput) {
-      searchInput.value = '';
-      searchInput.oninput = () => render(searchInput.value);
-  }
-  modal.classList.add('open');
-}
-
-export async function showActivationWarning(modId, conflicts, onConfirm) {
-    const modal = document.getElementById('modal-conflict-warning');
-    const list = document.getElementById('conflict-warning-list');
-    if (!modal || !list) return;
-
-    list.innerHTML = conflicts.map(c => `
-        <div style="padding:8px; background:rgba(0,0,0,0.2); border-radius:6px; margin-bottom:6px; font-size:12px;">
-            <div style="font-family:var(--font-mono); color:var(--warning); word-break:break-all">${escHtml(c.file_path)}</div>
-            <div style="color:var(--text-muted); font-size:11px">${t('conflict.with')}: ${escHtml(c.conflicting_mod_name || c.conflicting_mod_id)}</div>
-        </div>
-    `).join('');
-
-    const btn = document.getElementById('btn-confirm-conflict-ignore');
-    if (btn) btn.onclick = () => {
-        modal.classList.remove('open');
-        onConfirm();
-    };
+  try {
+    const activeId = await invoke('get_active_profile_id').catch(() => null);
+    if (!activeId) return toast(t('prof.noneActive'), 'error');
 
     modal.classList.add('open');
+    container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><br>${t('conflict.loading') || 'Analyse des conflits...'}</div>`;
+
+    let allConflicts = [];
+    const allModsGlobal = await invoke('get_all_mods').catch(() => []);
+    
+    Object.keys(S.conflictCache).forEach(mid => {
+       const reports = S.conflictCache[mid];
+       if (reports && reports.length > 0) {
+          const mod = allModsGlobal.find(m => m.id === mid);
+          const modName = mod?.name || mid;
+          const activationOrder = mod?.activation_order ?? -1;
+          allConflicts.push({ sourceModId: mid, sourceModName: modName, reports, activationOrder });
+       }
+    });
+
+    if (preselectModId) {
+      const idx = allConflicts.findIndex(c => c.sourceModId === preselectModId);
+      if (idx > -1) {
+        const [target] = allConflicts.splice(idx, 1);
+        allConflicts.unshift(target);
+      }
+    }
+
+    const profiles = await invoke('get_profiles');
+    profileFilter.innerHTML = `<option value="all">${t('conflict.allProfiles') || 'Tous les profils'}</option>` + profiles.map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join('');
+
+    const renderList = (respectPrioritization = false) => {
+      const q = searchInput.value.toLowerCase();
+      const p = profileFilter.value;
+      const tFilter = typeFilter.value;
+      const sortBy = sortSelect.value;
+
+      if (!respectPrioritization || !preselectModId) {
+        allConflicts.sort((a, b) => {
+           if (sortBy === 'asc') return a.activationOrder - b.activationOrder;
+           return b.activationOrder - a.activationOrder;
+        });
+      }
+
+      let html = '';
+      allConflicts.forEach(item => {
+        let filteredReports = item.reports;
+        if (tFilter !== 'all') {
+           filteredReports = filteredReports.filter(r => r.category.toLowerCase() === tFilter.toLowerCase());
+        }
+        if (p !== 'all') {
+           const pName = profiles.find(pr => pr.id === p)?.name || '';
+           filteredReports = filteredReports.filter(r => r.other_profile_name === pName);
+        }
+        
+        if (q) {
+           const sourceMatch = item.sourceModName.toLowerCase().includes(q);
+           if (!sourceMatch) {
+              filteredReports = filteredReports.filter(r => r.other_mod_name.toLowerCase().includes(q));
+           }
+        }
+
+        if (filteredReports.length === 0) return;
+
+        const groups = {};
+        filteredReports.forEach(r => {
+           if (!groups[r.other_profile_name]) groups[r.other_profile_name] = [];
+           groups[r.other_profile_name].push(r);
+        });
+
+        const targetsHtml = Object.keys(groups).map(pName => {
+           const grps = groups[pName];
+           grps.sort((a,b) => a.activation_order - b.activation_order);
+           
+           return `
+             <div style="margin-top:6px">
+               <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:600">${escHtml(pName)}</div>
+               <div style="display:flex;flex-direction:column;gap:4px">
+                 ${grps.map(r => `
+                   <div style="display:flex;align-items:center;background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:6px;border-left:3px solid ${r.status === 'Active' ? 'var(--danger)' : 'var(--warning)'};justify-content:space-between">
+                     <span style="font-size:12px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;cursor:help" 
+                           title="${escAttr(r.other_mod_name)}"
+                           onmouseenter="window.showTaskyHelp('${escAttr(escJs(r.other_mod_name))}', 'package', true)"
+                           onmouseleave="window.hideTaskyHelp()">${escHtml(r.other_mod_name)}</span>
+                     <div style="display:flex;align-items:center;gap:10px">
+                       ${r.status === 'Active' ? `<span style="font-size:9px;background:rgba(255,255,255,0.1);color:var(--text-primary);padding:2px 5px;border-radius:4px" title="Ordre d activation">#${r.activation_order}</span>` : ''}
+                       <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);cursor:pointer;text-decoration:underline" onclick="window.showConflictContextMenu(event, '${item.sourceModId}', '${r.other_mod_id}')">${r.file_count} f.</span>
+                       <span style="font-size:9px;font-weight:900;padding:2px 6px;border-radius:12px;text-transform:uppercase;color:${r.status==='Active'?'var(--danger)':'var(--warning)'};border:1px solid ${r.status==='Active'?'var(--danger)':'var(--warning)'}">${r.status === 'Active' ? (t('conflict.active')||'ACTIF') : (t('conflict.potential')||'POTENTIEL')}</span>
+                     </div>
+                   </div>
+                 `).join('')}
+               </div>
+             </div>
+           `;
+        }).join('');
+
+        html += `
+          <div class="conflict-group-card" style="display:flex;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px;min-height:95px;height:auto">
+             <div style="flex:0 0 160px;padding:10px 12px;border-right:1px solid var(--border);background:rgba(255,255,255,0.02);display:flex;flex-direction:column;justify-content:center">
+               <div style="font-weight:600;font-size:12px;color:var(--text-primary);margin-bottom:2px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;cursor:help"
+                    onmouseenter="window.showTaskyHelp('${escAttr(escJs(item.sourceModName))}', 'package', true)"
+                    onmouseleave="window.hideTaskyHelp()">${escHtml(item.sourceModName)}</div>
+               <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">${t('conflict.modSource') || 'Mod Source'}</div>
+             </div>
+             <div style="flex:2;padding:8px 12px;overflow-y:auto;background:rgba(0,0,0,0.1)">
+               ${targetsHtml}
+             </div>
+          </div>
+        `;
+      });
+      container.innerHTML = html || `<div style="padding:40px;text-align:center;color:var(--text-muted)">${t('conflict.empty') || 'Aucun conflit.'}</div>`;
+    };
+
+    renderList(true);
+    searchInput.oninput = () => renderList(false);
+    profileFilter.onchange = () => renderList(false);
+    typeFilter.onchange = () => renderList(false);
+    sortSelect.onchange = () => renderList(false);
+    
+    if (closeBtn) closeBtn.onclick = () => modal.classList.remove('open');
+
+    if (preselectModId) {
+      setTimeout(() => {
+        searchInput.value = S.allMods.find(m => m.id === preselectModId)?.name || '';
+        renderList(true);
+      }, 100);
+    }
+  } catch (err) {
+    container.innerHTML = '<div style="color:var(--danger)">'+err+'</div>';
+  }
 }
+
+window.openGlobalConflictModal = openGlobalConflictModal;
+
+export function showConflictContextMenu(e, mod1Id, mod2Id) {
+  e.preventDefault();
+  const ctx = document.getElementById('conflict-context-menu');
+  if (!ctx) return;
+  
+  ctx.style.display = 'block';
+  ctx.style.left = e.pageX + 'px';
+  ctx.style.top = e.pageY + 'px';
+  
+  const btn = document.getElementById('ctx-open-explorer');
+  btn.onclick = async () => {
+    ctx.style.display = 'none';
+    const modal = document.getElementById('modal-conflict-tree');
+    const container = document.getElementById('conflict-tree-container');
+    const btnConfirm = document.getElementById('btn-confirm-conflict-tree');
+    if (btnConfirm) btnConfirm.style.display = 'none';
+    
+    modal.style.zIndex = '10005';
+    modal.classList.add('open');
+    container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted)">${t('conflict.loadingTree')||"Chargement de l'arbre..."}</div>`;
+    
+    try {
+      const files = await invoke('get_conflict_file_tree', { modId: mod1Id, otherModId: mod2Id });
+      if (files.length === 0) {
+        container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted)">${t('conflict.noTreeFiles')}</div>`;
+        return;
+      }
+      container.innerHTML = files.map(f => `<div style="padding:4px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escAttr(f)}">${escHtml(f)}</div>`).join('');
+    } catch (err) {
+      container.innerHTML = `<span style="color:var(--danger)">${t('common.error')||"Erreur"}: ${err}</span>`;
+    }
+  };
+  
+  document.addEventListener('mousedown', function hideCtx(ev) {
+    if (!ctx.contains(ev.target)) {
+      ctx.style.display = 'none';
+      document.removeEventListener('mousedown', hideCtx);
+    }
+  });
+}
+window.showConflictContextMenu = showConflictContextMenu;
+
+export function showActivationWarning(modId, conflicts, onConfirm) {
+  const modal = document.getElementById('modal-activation-warning');
+  const list = document.getElementById('activation-warning-list');
+  const btn = document.getElementById('btn-confirm-activation-anyway');
+  const cancelBtn = document.getElementById('btn-cancel-activation-warning');
+  const orderPanel = document.getElementById('activation-order-panel');
+  const orderList = document.getElementById('activation-order-list');
+  
+  if (!modal) return;
+
+  list.innerHTML = conflicts.map(c => `
+    <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.3);padding:8px 12px;border-radius:6px;border-left:3px solid ${c.status === 'Active' ? 'var(--danger)' : 'var(--warning)'}">
+      <div style="flex:1;min-width:0;padding-right:10px">
+        <div style="font-size:12px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</div>
+        <div style="font-size:10px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.other_profile_name)}</div>
+      </div>
+      <div style="font-size:10px;font-weight:900;padding:2px 6px;border-radius:12px;color:${c.status==='Active'?'var(--danger)':'var(--warning)'};border:1px solid ${c.status==='Active'?'var(--danger)':'var(--warning)'};flex-shrink:0">
+        ${c.status === 'Active' ? (t('conflict.active')||'ACTIF') : (t('conflict.potential')||'POTENTIEL')}
+      </div>
+    </div>
+  `).join('');
+  
+  const activeConflicts = conflicts.filter(c => c.status === 'Active');
+  if (activeConflicts.length > 0) {
+    activeConflicts.sort((a, b) => a.activation_order - b.activation_order);
+    orderList.innerHTML = activeConflicts.map(c => `
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;background:rgba(255,255,255,0.04)">
+        <span style="font-size:10px;background:rgba(255,255,255,0.12);color:var(--text-primary);padding:1px 6px;border-radius:4px;font-weight:700;flex-shrink:0">#${c.activation_order}</span>
+        <span style="font-size:11px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</span>
+        <span style="font-size:9px;color:var(--text-muted);flex-shrink:0">${escHtml(c.other_profile_name)}</span>
+      </div>
+    `).join('');
+    orderPanel.style.display = '';
+  } else {
+    orderPanel.style.display = 'none';
+  }
+  
+  btn.onclick = () => {
+    modal.classList.remove('open');
+    onConfirm();
+  };
+  if (cancelBtn) cancelBtn.onclick = () => modal.classList.remove('open');
+  modal.classList.add('open');
+}
+window.showActivationWarning = showActivationWarning;
