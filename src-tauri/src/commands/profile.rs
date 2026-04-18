@@ -46,12 +46,24 @@ pub fn create_profile(
     state: State<AppState>,
     payload: ProfilePayload,
 ) -> Result<Profile, String> {
+    // Validate paths
+    let game_p = PathBuf::from(&payload.game_path);
+    let mods_p = PathBuf::from(&payload.mods_path);
+    let backup_p = PathBuf::from(&payload.backup_path);
+
+    if !game_p.exists() {
+        return Err(format!("Le dossier du jeu n'existe pas : {}", payload.game_path));
+    }
+    if !mods_p.exists() {
+        return Err(format!("Le dossier des mods n'existe pas : {}", payload.mods_path));
+    }
+
     let mut profile = Profile::new(
         payload.name,
         payload.game_name,
-        PathBuf::from(&payload.game_path),
-        PathBuf::from(&payload.mods_path),
-        PathBuf::from(&payload.backup_path),
+        game_p,
+        mods_p,
+        backup_p,
     );
     profile.color = payload.color;
     profile.icon = payload.icon;
@@ -75,13 +87,25 @@ pub fn update_profile(
     payload: ProfilePayload,
 ) -> Result<(), String> {
     log_line(format!("[PROFILE] Updated profile '{}' ({})", payload.name, profile_id));
+    
+    // Validate paths
+    let game_p = PathBuf::from(&payload.game_path);
+    let mods_p = PathBuf::from(&payload.mods_path);
+    
+    if !game_p.exists() {
+        return Err(format!("Le dossier du jeu n'existe pas : {}", payload.game_path));
+    }
+    if !mods_p.exists() {
+        return Err(format!("Le dossier des mods n'existe pas : {}", payload.mods_path));
+    }
+
     {
         let mut data = state.data.lock().unwrap();
         if let Some(p) = data.profiles.iter_mut().find(|x| x.id == profile_id) {
             p.name = payload.name;
             p.game_name = payload.game_name;
-            p.game_path = PathBuf::from(&payload.game_path);
-            p.mods_path = PathBuf::from(&payload.mods_path);
+            p.game_path = game_p;
+            p.mods_path = mods_p;
             p.backup_path = PathBuf::from(&payload.backup_path);
             p.color = payload.color;
             p.icon = payload.icon;

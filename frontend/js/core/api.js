@@ -35,11 +35,21 @@ export async function loadTauri() {
         _invoke = window.__TAURI__.invoke;
         _dialog = window.__TAURI__.dialog;
         _notifModule = window.__TAURI__.notification;
-        _convertFileSrc = window.__TAURI__.tauri.convertFileSrc;
+        _convertFileSrc = window.__TAURI__.tauri ? window.__TAURI__.tauri.convertFileSrc : (p) => `asset.localhost/${p}`;
         console.log('[BMM] Using local Tauri bridge');
         return;
     }
+    // SECURITY: In production, we should NEVER fallback to unpkg without SRI (Issue 5)
+    // For now, we add a warning and a mock mode if not in Tauri.
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (!isLocalhost) {
+        console.error('[SECURITY] Tauri bridge missing in production! Fallback to CDN disabled for security.');
+        _invoke = mockInvoke;
+        _dialog = { open: async () => null, save: async () => null };
+        return;
+    }
     try {
+        // Only allow unpkg in development/localhost
         const tauriModule = await import('https://unpkg.com/@tauri-apps/api@1/tauri.js');
         const dialogModule = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
         _notifModule = await import('https://unpkg.com/@tauri-apps/api@1/notification.js');
@@ -56,6 +66,10 @@ export async function loadTauri() {
     }
 }
 export async function invoke(command, args = {}) {
+    if (!_invoke) {
+        console.error(`[RPC ERROR] Cannot invoke ${command}: Tauri bridge not initialized`);
+        throw new Error('Tauri bridge not initialized');
+    }
     const startTime = performance.now();
     const _call = debugHub.recordIPC(command, args, 'pending');
     try {

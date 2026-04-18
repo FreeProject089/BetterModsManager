@@ -21,9 +21,14 @@ declare global {
  * Listens for 'deep-link-received' events from the Rust backend.
  */
 export async function initDeepLinks(): Promise<void> {
+    if (typeof window === 'undefined' || !window.__TAURI__ || !window.__TAURI__.event) {
+        console.warn('[DEEP-LINK] Tauri event module not available. Deep links disabled.');
+        return;
+    }
+    
     console.log('[BMM] Initializing Deep Link Manager...');
     
-    const { listen } = (window as any).__TAURI__.event;
+    const { listen } = window.__TAURI__.event;
 
     await listen('deep-link-received', async (event: { payload: string }) => {
         handleDeepLink(event.payload);

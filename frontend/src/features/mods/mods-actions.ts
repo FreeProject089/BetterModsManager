@@ -61,8 +61,8 @@ export async function confirmAddMod() {
   btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('common.processing') || 'Copie en cours...'}`;
 
   const modal = document.getElementById('modal-add-mod');
-  const download_links = modal ? modal._pendingLinks : null;
-  const dependencies = document.getElementById('mod-dependency-input')?._selectedDeps || [];
+  const download_links = (modal as any)?._pendingLinks || null;
+  const dependencies = (document.getElementById('mod-dependency-input') as any)?._selectedDeps || [];
 
   try {
     await invoke('add_mod', {
@@ -73,8 +73,8 @@ export async function confirmAddMod() {
     });
     
     if (modal) {
-      modal._pendingLinks = null;
-      document.getElementById('mod-dependency-input')._selectedDeps = [];
+      (modal as any)._pendingLinks = null;
+      (document.getElementById('mod-dependency-input') as any)._selectedDeps = [];
     }
     document.getElementById('modal-add-mod').classList.remove('open');
     toast(t('mod.added', { name }), 'success');
@@ -82,8 +82,10 @@ export async function confirmAddMod() {
   } catch (err) {
     toast(t('common.error') + ' : ' + err, 'error');
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = originalText;
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
   }
 }
 

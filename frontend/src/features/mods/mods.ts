@@ -52,7 +52,7 @@ export async function initMods() {
 
   const viewBtn = document.getElementById('btn-view-mode');
   const modlist = document.getElementById('mod-list');
-  const scrollContainer = document.querySelector('.content area'); // Careful: space in selector in previous code? No, usually whitespace is allowed but check.
+  const scrollContainer = document.querySelector('.content-area'); // Fixed selector typo (Issue 21)
 
   if (S.isCompact && modlist) modlist.classList.add('compact');
 
@@ -69,9 +69,8 @@ export async function initMods() {
     localStorage.setItem('bmm-view-compact', S.isCompact);
   });
 
-  const contentArea = document.querySelector('.content-area');
-  if (contentArea) {
-    contentArea.addEventListener('scroll', () => {
+  if (scrollContainer) {
+    scrollContainer.addEventListener('scroll', () => {
         requestAnimationFrame(() => renderModList(false));
     }, { passive: true });
   }

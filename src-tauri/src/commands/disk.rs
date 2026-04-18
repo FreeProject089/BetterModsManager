@@ -101,17 +101,17 @@ pub fn get_system_disks(state: State<AppState>) -> Vec<DiskLimitInfo> {
 
         // Map profiles to this disk
         let mut mp_lower = mount_point.to_lowercase();
-        if mp_lower.starts_with(r"\\?\") { mp_lower = mp_lower[4..].to_string(); }
+        if mp_lower.starts_with(r"\\?\") && mp_lower.len() >= 4 { mp_lower = mp_lower[4..].to_string(); }
         let mut profile_usages = Vec::new();
         for profile in profiles.iter() {
             let mut game_path = profile.game_path.to_string_lossy().to_lowercase();
-            if game_path.starts_with(r"\\?\") { game_path = game_path[4..].to_string(); }
+            if game_path.starts_with(r"\\?\") && game_path.len() >= 4 { game_path = game_path[4..].to_string(); }
             
             let mut mods_path = profile.mods_path.to_string_lossy().to_lowercase();
-            if mods_path.starts_with(r"\\?\") { mods_path = mods_path[4..].to_string(); }
+            if mods_path.starts_with(r"\\?\") && mods_path.len() >= 4 { mods_path = mods_path[4..].to_string(); }
             
             let mut backup_path = profile.backup_path.to_string_lossy().to_lowercase();
-            if backup_path.starts_with(r"\\?\") { backup_path = backup_path[4..].to_string(); }
+            if backup_path.starts_with(r"\\?\") && backup_path.len() >= 4 { backup_path = backup_path[4..].to_string(); }
 
             if game_path.starts_with(&mp_lower) {
                 profile_usages.push(DiskProfileUsage {
@@ -159,7 +159,7 @@ pub fn get_limit_for_path(state: &AppState, path: &std::path::Path) -> Option<u6
 
     let path_can = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let mut path_str = path_can.to_string_lossy().to_lowercase();
-    if path_str.starts_with(r"\\?\") {
+    if path_str.starts_with(r"\\?\") && path_str.len() >= 4 {
         path_str = path_str[4..].to_string();
     }
 
@@ -167,7 +167,7 @@ pub fn get_limit_for_path(state: &AppState, path: &std::path::Path) -> Option<u6
 
     for disk in disks_list.iter() {
         let mut mp = disk.mount_point().to_string_lossy().to_lowercase();
-        if mp.starts_with(r"\\?\") {
+        if mp.starts_with(r"\\?\") && mp.len() >= 4 {
             mp = mp[4..].to_string();
         }
 
@@ -313,12 +313,12 @@ pub fn check_disk_space(path: String) -> Result<DiskSpaceInfo, String> {
     let target = std::path::Path::new(&path);
     let mut path_str = target.canonicalize().unwrap_or(target.to_path_buf())
         .to_string_lossy().to_lowercase();
-    if path_str.starts_with(r"\\?\") { path_str = path_str[4..].to_string(); }
+    if path_str.starts_with(r"\\?\") && path_str.len() >= 4 { path_str = path_str[4..].to_string(); }
 
     let mut best: Option<(u64, u64, String, usize)> = None;
     for disk in disks.iter() {
         let mut mp = disk.mount_point().to_string_lossy().to_lowercase();
-        if mp.starts_with(r"\\?\") { mp = mp[4..].to_string(); }
+        if mp.starts_with(r"\\?\") && mp.len() >= 4 { mp = mp[4..].to_string(); }
         if path_str.starts_with(&mp) {
             let len = mp.len();
             if best.as_ref().map_or(true, |(_, _, _, l)| len > *l) {

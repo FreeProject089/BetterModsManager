@@ -62,5 +62,6 @@ export const appState = new StateManager({
     cachedActiveProfileId: null,
     isCompact: localStorage.getItem('bmm-view-compact') === 'true',
     debugMode: false,
+    currentTagFilter: 'all'
 });
 //# sourceMappingURL=state.js.map

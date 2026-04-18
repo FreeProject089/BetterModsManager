@@ -45,6 +45,10 @@ interface TauriAPI {
   invoke(cmd: string, args?: Record<string, unknown>): Promise<unknown>;
   dialog: TauriDialogAPI;
   notification: TauriNotificationAPI;
+  event: {
+    listen(event: string, handler: (event: { payload: any | string }) => void): Promise<() => void>;
+    emit(event: string, payload?: any): Promise<void>;
+  };
   tauri: {
     invoke(cmd: string, args?: Record<string, unknown>): Promise<unknown>;
     convertFileSrc(path: string, protocol?: string): string;

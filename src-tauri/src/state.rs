@@ -103,8 +103,18 @@ pub struct AppState {
 impl AppState {
     pub fn load(data_path: PathBuf) -> Self {
         let data = if data_path.exists() {
-            let content = std::fs::read_to_string(&data_path).unwrap_or_default();
-            serde_json::from_str(&content).unwrap_or_default()
+            match std::fs::read_to_string(&data_path) {
+                Ok(content) => {
+                    serde_json::from_str(&content).unwrap_or_else(|e| {
+                        crate::commands::crash::log_line(format!("[STATE] Error parsing data.json: {}. Using default.", e));
+                        AppData::default()
+                    })
+                }
+                Err(e) => {
+                    crate::commands::crash::log_line(format!("[STATE] Error reading data.json: {}. Using default.", e));
+                    AppData::default()
+                }
+            }
         } else {
             AppData::default()
         };

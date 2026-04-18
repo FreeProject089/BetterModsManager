@@ -179,14 +179,21 @@ export function createModCard(mod) {
             return;
         }
         const conflicts = S.conflictCache[mod.id];
-        const ignoreConflicts = localStorage.getItem('bmm_ignore_conflicts') === 'true';
+        let ignoreConflicts = false;
+        try {
+            ignoreConflicts = localStorage.getItem('bmm_ignore_conflicts') === 'true';
+        }
+        catch (e) { }
         const bypassKey = `bypass_conflict_${mod.id}`;
         if (toggle.checked && conflicts && conflicts.length > 0 && !ignoreConflicts && !window[bypassKey]) {
             toggle.checked = false;
             const { showActivationWarning } = await import('./mods-conflicts.js');
             showActivationWarning(mod.id, conflicts, () => {
-                if (document.getElementById('conflict-ignore-forever')?.checked)
-                    localStorage.setItem('bmm_ignore_conflicts', 'true');
+                try {
+                    if (document.getElementById('conflict-ignore-forever')?.checked)
+                        localStorage.setItem('bmm_ignore_conflicts', 'true');
+                }
+                catch (e) { }
                 window[bypassKey] = true;
                 toggle.checked = true;
                 toggle.dispatchEvent(new Event('change'));
@@ -206,8 +213,11 @@ export function createModCard(mod) {
                 }
                 else {
                     toast(t('mod.activated', { name: mod.name }), 'success');
-                    if (localStorage.getItem('bmm_sysNotif') === 'true')
-                        sendOsNotification('Better Mod Manager', t('mod.activated', { name: mod.name }));
+                    try {
+                        if (localStorage.getItem('bmm_sysNotif') === 'true')
+                            sendOsNotification('Better Mod Manager', t('mod.activated', { name: mod.name }));
+                    }
+                    catch (e) { }
                 }
             }
             else {
@@ -227,8 +237,11 @@ export function createModCard(mod) {
                 }
                 await invoke('disable_mod', { modId: mod.id });
                 toast(t('mod.deactivated', { name: mod.name }), 'info');
-                if (localStorage.getItem('bmm_sysNotif') === 'true')
-                    sendOsNotification('Better Mod Manager', t('mod.deactivated', { name: mod.name }));
+                try {
+                    if (localStorage.getItem('bmm_sysNotif') === 'true')
+                        sendOsNotification('Better Mod Manager', t('mod.deactivated', { name: mod.name }));
+                }
+                catch (e) { }
             }
         }
         catch (err) {

@@ -22,11 +22,12 @@ export interface AppStateShape {
     selectedModId: string | null;
     processingMods: Set<string>;
     isGlobalProcessing: boolean;
-    conflictCache: Record<string, any>;
+    conflictCache: Record<string, any[]>;
     cachedActiveProfileId: string | null;
     isCompact: boolean;
     debugMode: boolean;
-    [key: string]: any;
+    currentTagFilter: string;
+    [key: string]: unknown;
 }
 
 class StateManager {
@@ -94,4 +95,5 @@ export const appState = new StateManager({
     cachedActiveProfileId: null,
     isCompact: localStorage.getItem('bmm-view-compact') === 'true',
     debugMode: false,
+    currentTagFilter: 'all'
 });

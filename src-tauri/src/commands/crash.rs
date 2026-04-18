@@ -23,11 +23,15 @@ pub fn log_line(line: impl Into<String>) {
     let entry = format!("[{}] {}", ts, s_line);
 
     // 1. Buffer mémoire
-    if let Ok(mut buf) = LOG_BUFFER.lock() {
+    // Use try_lock to avoid blocking the caller if the buffer is currently being accessed
+    if let Ok(mut buf) = LOG_BUFFER.try_lock() {
         if buf.len() >= MAX_LOG_LINES {
             buf.pop_front();
         }
         buf.push_back(entry.clone());
+    } else {
+        // Fallback: we still have the real-time file below, so we don't lose the log entirely
+        // but we skip the memory buffer to avoid blocking
     }
 
     // 2. Real-time file (Open, write, flush, close to be safe against crashes)
@@ -101,7 +105,9 @@ fn archive_old_reports(dir: &Path, archive_dir: &Path) {
                 let old_path = files[i].path();
                 if let Some(name) = old_path.file_name() {
                     let new_path = archive_dir.join(name);
-                    let _ = fs::rename(&old_path, &new_path);
+                    if let Err(e) = fs::rename(&old_path, &new_path) {
+                        eprintln!("[ARCHIVE] Failed to rename {:?} to {:?}: {}", old_path, new_path, e);
+                    }
                 }
             }
         }
@@ -113,7 +119,9 @@ fn archive_old_reports(dir: &Path, archive_dir: &Path) {
         if archive_files.len() > 20 {
             archive_files.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
             for i in 0..(archive_files.len() - 20) {
-                let _ = fs::remove_file(archive_files[i].path());
+                if let Err(e) = fs::remove_file(archive_files[i].path()) {
+                    eprintln!("[ARCHIVE] Failed to remove old archive file {:?}: {}", archive_files[i].path(), e);
+                }
             }
         }
     }

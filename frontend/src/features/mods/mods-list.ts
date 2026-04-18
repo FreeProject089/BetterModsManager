@@ -196,21 +196,22 @@ export function createModCard(mod) {
     }
 
     const conflicts = S.conflictCache[mod.id];
-    const ignoreConflicts = localStorage.getItem('bmm_ignore_conflicts') === 'true';
+    let ignoreConflicts = false;
+    try { ignoreConflicts = localStorage.getItem('bmm_ignore_conflicts') === 'true'; } catch(e) {}
     const bypassKey = `bypass_conflict_${mod.id}`;
 
-    if (toggle.checked && conflicts && conflicts.length > 0 && !ignoreConflicts && !window[bypassKey]) {
+    if (toggle.checked && conflicts && conflicts.length > 0 && !ignoreConflicts && !(window as any)[bypassKey]) {
       toggle.checked = false;
       const { showActivationWarning } = await import('./mods-conflicts.js');
       showActivationWarning(mod.id, conflicts, () => {
-        if (document.getElementById('conflict-ignore-forever')?.checked) localStorage.setItem('bmm_ignore_conflicts', 'true');
-        window[bypassKey] = true;
+        try { if (document.getElementById('conflict-ignore-forever')?.checked) localStorage.setItem('bmm_ignore_conflicts', 'true'); } catch(e) {}
+        (window as any)[bypassKey] = true;
         toggle.checked = true;
         toggle.dispatchEvent(new Event('change'));
       });
       return;
     }
-    window[bypassKey] = false;
+    (window as any)[bypassKey] = false;
 
     S.isGlobalProcessing = true;
     S.processingMods.add(mod.id);
@@ -224,7 +225,7 @@ export function createModCard(mod) {
           toast(t('storage.alertWarningMod', { label: parts[1], free: parts[2], limit: parts[3] }), 'warning', 5000);
         } else {
           toast(t('mod.activated', { name: mod.name }), 'success');
-          if (localStorage.getItem('bmm_sysNotif') === 'true') sendOsNotification('Better Mod Manager', t('mod.activated', { name: mod.name }));
+          try { if (localStorage.getItem('bmm_sysNotif') === 'true') sendOsNotification('Better Mod Manager', t('mod.activated', { name: mod.name })); } catch(e) {}
         }
       } else {
         const dependents = S.allMods.filter(m => m.enabled && m.dependencies && m.dependencies.includes(mod.id));
@@ -247,7 +248,7 @@ export function createModCard(mod) {
 
         await invoke('disable_mod', { modId: mod.id });
         toast(t('mod.deactivated', { name: mod.name }), 'info');
-        if (localStorage.getItem('bmm_sysNotif') === 'true') sendOsNotification('Better Mod Manager', t('mod.deactivated', { name: mod.name }));
+        try { if (localStorage.getItem('bmm_sysNotif') === 'true') sendOsNotification('Better Mod Manager', t('mod.deactivated', { name: mod.name })); } catch(e) {}
       }
     } catch (err) {
       if (typeof err === 'string' && err.startsWith('CRITICAL_SPACE|')) {

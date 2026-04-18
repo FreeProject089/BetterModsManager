@@ -48,8 +48,14 @@ pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, String> {
     };
     let active_profile = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?;
     
-    // Canonicalize once outside the loop
-    let active_mods_path = active_profile.mods_path.canonicalize().unwrap_or(active_profile.mods_path.clone());
+    // Canonicalize once outside the loop with safe fallback and logging
+    let active_mods_path = match active_profile.mods_path.canonicalize() {
+        Ok(path) => path,
+        Err(e) => {
+            log_line(format!("[MODS] Failed to canonicalize active mods path {:?}: {}. Using original.", active_profile.mods_path, e));
+            active_profile.mods_path.clone()
+        }
+    };
     
     let mut results = Vec::new();
     
@@ -94,14 +100,17 @@ pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, String> {
 }
 
 fn ensure_cache_populated(state: &State<AppState>) -> Result<(), String> {
+    // 1. First check if update is needed (read-only check under data lock to ensure ordering)
+    // Actually, we must enforce Data -> LastUpdate -> Cache -> Index
+    let mut data = state.data.lock().unwrap();
     let mut last_update = state.last_cache_update.lock().unwrap();
+    
     if last_update.is_some() { return Ok(()); }
 
     log_line("[CACHE] Populating mod file cache for the first time...");
     let mut needs_save = false;
 
     {
-        let mut data = state.data.lock().unwrap();
         let mut cache = state.mod_files_cache.lock().unwrap();
         let mut index = state.conflict_index.lock().unwrap();
 
@@ -110,19 +119,23 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), String> {
         index.clear();
 
         for m in data.mods.iter_mut() {
-            let current_mtime = m.mod_folder_path.metadata().ok()
-                .and_then(|meta| meta.modified().ok())
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
+            // Fragile mtime invalidation check (Issue 14 fallback: log metadata failures)
+            let current_mtime = m.mod_folder_path.metadata()
+                .map(|meta| meta.modified().ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0))
+                .unwrap_or_else(|e| {
+                    log_line(format!("[CACHE] Warning: Failed to read metadata for {:?}: {}. Resetting mtime.", m.mod_folder_path, e));
+                    0
+                });
 
             let files = match &m.cached_files {
-                Some(cached) if m.last_scan_mtime == current_mtime => cached.clone(),
+                Some(cached) if m.last_scan_mtime == current_mtime && current_mtime != 0 => cached.clone(),
                 _ => if let Ok(f_paths) = crate::fs_utils::list_mod_files(&m.mod_folder_path) {
                     let f_strings: Vec<String> = f_paths.into_iter().map(|p| p.to_string_lossy().to_string()).collect();
                     m.cached_files = Some(f_strings.clone());
                     
-                    // If hashes were previously tracked, update them too
                     if m.file_hashes.is_some() {
                         let mut new_hashes = std::collections::HashMap::new();
                         for rel in &f_strings {
@@ -150,11 +163,15 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), String> {
         }
     }
     
+    *last_update = Some(Instant::now());
+    
     if needs_save {
+        // Drop other locks before saving to be safe, although save() only takes data lock
+        drop(last_update);
+        drop(data); 
         let _ = state.save();
     }
     
-    *last_update = Some(Instant::now());
     Ok(())
 }
 
@@ -315,7 +332,7 @@ pub async fn add_mod(
         if !is_same_dir {
             std::fs::create_dir_all(&target_dir_clone).map_err(|e| e.to_string())?;
 
-            if src.is_file() && src.extension().and_then(|e| e.to_str()).unwrap_or("").eq_ignore_ascii_case("zip") {
+            if src.is_file() && src.extension().and_then(|e| e.to_str()).map(|s| s.eq_ignore_ascii_case("zip")).unwrap_or(false) {
                 let file = std::fs::File::open(&src).map_err(|e| e.to_string())?;
                 let archive = zip::ZipArchive::new(file).map_err(|e| format!("Erreur Zip: {}", e))?;
                 let len = archive.len();

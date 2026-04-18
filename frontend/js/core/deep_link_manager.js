@@ -11,6 +11,10 @@ import { escHtml } from './utils.js';
  * Listens for 'deep-link-received' events from the Rust backend.
  */
 export async function initDeepLinks() {
+    if (typeof window === 'undefined' || !window.__TAURI__ || !window.__TAURI__.event) {
+        console.warn('[DEEP-LINK] Tauri event module not available. Deep links disabled.');
+        return;
+    }
     console.log('[BMM] Initializing Deep Link Manager...');
     const { listen } = window.__TAURI__.event;
     await listen('deep-link-received', async (event) => {

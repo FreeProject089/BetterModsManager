@@ -30,7 +30,8 @@ fn register_bmm_protocol() -> Result<(), Box<dyn std::error::Error>> {
 
     let (shell_key, _) = key.create_subkey("shell\\open\\command")?;
     let exe_path = std::env::current_exe()?;
-    let command = format!("\"{}\" \"%1\"", exe_path.to_str().unwrap());
+    let exe_str = exe_path.to_string_lossy();
+    let command = format!("\"{}\" \"%1\"", exe_str);
     shell_key.set_value("", &command)?;
 
     Ok(())
