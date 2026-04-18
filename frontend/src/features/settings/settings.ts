@@ -241,6 +241,20 @@ async function renderSettingsShortcuts() {
 
 // ── Storage Performance Settings ──
 
+/** Reset all disk limits to null (Unlimited) */
+export async function resetStorageLimits() {
+    try {
+        const disks = await invoke('get_system_disks');
+        for (const disk of disks) {
+            await invoke('set_disk_limit', { mountPoint: disk.mount_point, limitMbS: null });
+        }
+        toast(t('storage.limitsReset'), 'success');
+        _renderStorageModal();
+    } catch (e) {
+        toast('Reset failed: ' + e, 'error');
+    }
+}
+
 /** Run benchmarks for all disks currently in use by profiles */
 export async function runAutoBenchmarks(disksList, isBoot = false) {
     const inUseDisks = disksList.filter(d => d.profiles_using && d.profiles_using.length > 0);
@@ -248,13 +262,22 @@ export async function runAutoBenchmarks(disksList, isBoot = false) {
 
     if (!isBoot) toast(t('storage.optimizing'), 'info');
 
+    let successCount = 0;
     for (const disk of inUseDisks) {
         try {
             const result = await invoke('benchmark_disk', { mountPoint: disk.mount_point });
             await invoke('set_disk_limit', { mountPoint: disk.mount_point, limitMbS: result.suggested_limit });
-            if (!isBoot) toast(t('storage.optimized', { name: disk.name, limit: String(result.suggested_limit) }), 'success');
+            successCount++;
         } catch (e) {
             console.error(`Failed auto-bench for ${disk.mount_point}:`, e);
+        }
+    }
+
+    if (!isBoot) {
+        if (successCount > 0) {
+            toast(t('storage.calibrationSuccess'), 'success');
+        } else {
+            toast(t('storage.calibrationError'), 'error');
         }
     }
 
@@ -326,10 +349,15 @@ const _renderStorageModal = async () => {
                     <div style="font-size:14px; font-weight:800; color:var(--text-bright)">${t('storage.autoCalibTitle')}</div>
                     <div style="font-size:11px; color:var(--text-muted); line-height:1.4">${t('storage.autoCalibDesc')}</div>
                 </div>
-                <label class="bmm-switch">
-                    <input type="checkbox" id="chk-auto-io" ${isAuto ? 'checked' : ''}>
-                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
-                </label>
+                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+                    <label class="bmm-switch">
+                        <input type="checkbox" id="chk-auto-io" ${isAuto ? 'checked' : ''}>
+                        <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                    </label>
+                    <button id="btn-reset-limits" class="btn btn-outline-danger btn-xs" style="font-size:9px; height:20px; padding:0 8px; border-radius:6px; font-weight:800; border-color:rgba(239, 68, 68, 0.2);">
+                        ${t('storage.resetBtn')}
+                    </button>
+                </div>
             </div>
 
             ${thresholdsBlock}
@@ -347,6 +375,10 @@ const _renderStorageModal = async () => {
                 toast(t('storage.autoCalibToast'), 'info');
                 runAutoBenchmarks(disks);
             }
+        });
+
+        document.getElementById('btn-reset-limits')?.addEventListener('click', () => {
+            resetStorageLimits();
         });
 
         // Alert enabled toggle
@@ -409,33 +441,39 @@ const _renderStorageModal = async () => {
             <div class="storage-disk-card">
                 <div class="storage-disk-header">
                     <div class="storage-disk-identity">
-                        <div style="width:38px;height:38px;background:rgba(59,130,246,0.08);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2">
-                                <rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><line x1="6" y1="12" x2="6.01" y2="12"/>
+                        <div style="width:42px;height:42px;background:var(--accent-dim);border:1px solid var(--border-accent);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:var(--accent-glow);">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5">
+                                <rect x="2" y="4" width="20" height="16" rx="2" ry="2"/>
+                                <line x1="6" y1="12" x2="6.01" y2="12"/>
                             </svg>
                         </div>
-                        <div style="min-width:0;">
-                            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                                <span style="font-size:14px;font-weight:700;color:var(--text-bright);">${disk.name}</span>
+                        <div class="storage-disk-meta">
+                            <div class="storage-disk-name">
+                                ${disk.name}
                                 ${getKindBadge(disk)}
-                                <span style="font-size:10px;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:1px 6px;border-radius:4px;">${disk.file_system}</span>
+                                <span style="font-size:10px;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:1px 6px;border-radius:4px;margin-left:4px;">${disk.file_system}</span>
                             </div>
-                            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${disk.mount_point}</div>
+                            <div class="storage-disk-path">${disk.mount_point}</div>
                         </div>
                     </div>
-                    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-                        <input type="number" min="0" step="10" class="form-input disk-limit-input" data-mount="${disk.mount_point}" value="${limitVal}" style="width:90px;font-size:13px;padding:6px 8px;text-align:right;border-radius:8px;" placeholder="0">
-                        <span style="font-size:12px;color:var(--text-muted);font-weight:600;">MB/s</span>
+                    <div class="storage-disk-actions">
+                        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+                            <span style="font-size:9px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Limit</span>
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <input type="number" min="0" step="10" class="form-input disk-limit-input" data-mount="${disk.mount_point}" value="${limitVal}" style="width:80px;font-size:12px;padding:4px 8px;text-align:right;border-radius:6px;background:rgba(0,0,0,0.2);" placeholder="0">
+                                <span style="font-size:11px;color:var(--text-muted);font-weight:700;">MB/s</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div style="margin-bottom:8px;">
-                    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:4px;">
-                        <span>${formatBytes(disk.total_space_bytes - disk.available_space_bytes)} / ${formatBytes(disk.total_space_bytes)}</span>
-                        <span style="color:${usedColor};font-weight:600;">${usedPct}%</span>
+                <div class="storage-usage-container">
+                    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:6px;font-family:var(--font-mono);">
+                        <span style="font-weight:500;">USED: <span style="color:var(--text-secondary);">${formatBytes(disk.total_space_bytes - disk.available_space_bytes)}</span> / ${formatBytes(disk.total_space_bytes)}</span>
+                        <span style="color:${usedColor};font-weight:900;">${usedPct}%</span>
                     </div>
                     <div class="storage-usage-bar">
-                        <div class="storage-usage-fill" style="width:${usedPct}%;background:${usedColor}"></div>
+                        <div class="storage-usage-fill" style="width:${usedPct}%;background:${usedColor};box-shadow:0 0 15px ${usedColor}66;"></div>
                     </div>
                 </div>
 
@@ -443,14 +481,14 @@ const _renderStorageModal = async () => {
                     const freePct = disk.total_space_bytes > 0 ? (disk.available_space_bytes / disk.total_space_bytes) * 100 : 0;
                     const hasProfiles = disk.profiles_using && disk.profiles_using.length > 0;
                     if (hasProfiles && freePct <= criticalPct) {
-                        return `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:11px;color:#f87171;font-weight:600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${t('storage.critical')}</div>`;
+                        return `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:12px;font-size:11px;color:#f87171;font-weight:700;animation:pulse-danger 2s infinite;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${t('storage.critical')}</div>`;
                     } else if (hasProfiles && freePct <= warningPct) {
-                        return `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:8px;font-size:11px;color:#fbbf24;font-weight:500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>${t('storage.warning')}</div>`;
+                        return `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:12px;font-size:11px;color:#fbbf24;font-weight:600;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>${t('storage.warning')}</div>`;
                     }
                     return '';
                 })()}
 
-                ${profilePills ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">${profilePills}</div>` : ''}
+                ${profilePills ? `<div style="display:flex;flex-wrap:wrap;gap:8px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.03);">${profilePills}</div>` : ''}
 
                 <div style="display:flex;align-items:center;gap:8px;">
                     <button class="btn btn-add disk-bench-btn" data-mount="${disk.mount_point}" style="font-size:12px;gap:6px;padding:6px 14px;">

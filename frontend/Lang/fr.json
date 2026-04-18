@@ -2190,5 +2190,14 @@
     "betahub.suggestDesc": "Développez votre description",
     "betahub.suggestScreenshot": "Joignez une capture d'écran si possible",
     "betahub.suggestSteps": "Ajoutez plus d'étapes de reproduction",
-    "betahub.suggestCrash": "Sélectionnez un rapport de crash pertinent"
+    "betahub.suggestCrash": "Sélectionnez un rapport de crash pertinent",
+    "__SECTION_STORAGE__": "--- STORAGE MANAGER ---",
+    "storage.loading": "Optimisation des performances de stockage...",
+    "storage.autoCalibTitle": "Auto-Calibration de Performance",
+    "storage.autoCalibDesc": "Mesurez vos disques et suggérez des limites d'E/S optimales pour éviter les ralentissements système pendant les opérations de modding.",
+    "storage.autoCalibToast": "Auto-calibration démarrée pour les disques actifs...",
+    "storage.calibrationSuccess": "Stockage optimisé avec succès !",
+    "storage.calibrationError": "Échec de la calibration pour certains disques.",
+    "storage.limitsReset": "Toutes les limites de stockage ont été réinitialisées (Illimité).",
+    "storage.resetBtn": "RÉINITIALISER"
 }

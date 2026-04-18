@@ -2454,12 +2454,12 @@ body.is-maximized .titlebar-spacer {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(4px);
-    z-index: 500;
+    backdrop-filter: blur(8px);
+    z-index: 2000;
     display: none;
     align-items: center;
     justify-content: center;
-    animation: fadeIn 0.12s ease;
+    animation: fadeIn 0.18s ease;
 }
 
 .modal-overlay.open {
@@ -4082,6 +4082,100 @@ select:focus {
     display: flex;
 }
 
+/* ── Storage Manager & Disk Cards ── */
+.storage-disk-card {
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.storage-disk-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+}
+
+.storage-disk-card:hover {
+    background: rgba(15, 23, 42, 0.6);
+    border-color: rgba(59, 130, 246, 0.35);
+    transform: translateY(-4px) scale(1.005);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.storage-disk-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+.storage-disk-identity {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+}
+
+.storage-usage-container {
+    margin-top: 4px;
+}
+
+.storage-usage-bar {
+    height: 8px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.storage-usage-fill {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
+}
+
+.storage-disk-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.storage-disk-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.storage-disk-name {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+}
+
+.storage-disk-path {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
 .pip-header {
     font-size: 11px;
     font-weight: 800;
@@ -4233,14 +4327,14 @@ select:focus {
 }
 
 /* Modal Polish */
-#modal-benchmark .modal-container {
-    width: 95%;
-    max-width: 1000px;
-    height: 90vh;
+#modal-benchmark .modal {
     background: rgba(15, 23, 42, 0.85);
     backdrop-filter: blur(24px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 24px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 #modal-benchmark .modal-header {

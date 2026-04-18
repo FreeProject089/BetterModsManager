@@ -395,18 +395,21 @@ async function main() {
         }, 800);
     }
     // ── Auto-Calibration trigger at startup ──
-    try {
-        const { getSettings } = await import('../core/api.js');
-        const settings = await getSettings();
-        if (settings.auto_io_calibration) {
-            console.log("[BMM] Auto-Calibration enabled, running boot optimization...");
-            const disks = await invoke('get_system_disks');
-            runAutoBenchmarks(disks, true); // true = silent/boot mode
+    setTimeout(async () => {
+        try {
+            const { getSettings } = await import('../core/api.js');
+            const settings = await getSettings();
+            if (settings.auto_io_calibration) {
+                console.log("[BMM] Auto-Calibration enabled, running boot optimization...");
+                const disks = await invoke('get_system_disks');
+                // Run benchmarks asynchronously without awaiting to avoid blocking other startup tasks
+                runAutoBenchmarks(disks, true);
+            }
         }
-    }
-    catch (e) {
-        console.error("[BMM] Auto-Calibration startup failed:", e);
-    }
+        catch (e) {
+            console.error("[BMM] Auto-Calibration startup failed:", e);
+        }
+    }, 2000); // 2s delay to ensure disks are mounted and system is stable
     // Interaction log
     initInteractionLogging();
     // Debug Menu

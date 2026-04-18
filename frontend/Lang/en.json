@@ -2188,5 +2188,14 @@
     "betahub.submissionStrength": "Submission Strength",
     "betahub.strengthBad": "Bad",
     "betahub.strengthWell": "Well",
-    "betahub.strengthBest": "Best"
+    "betahub.strengthBest": "Best",
+    "__SECTION_STORAGE__": "--- STORAGE MANAGER ---",
+    "storage.loading": "Optimizing storage performance...",
+    "storage.autoCalibTitle": "Performance Auto-Calibration",
+    "storage.autoCalibDesc": "Benchmark your drives and suggested optimal I/O limits to prevent system lag during mod operations.",
+    "storage.autoCalibToast": "Auto-calibration started for active disks...",
+    "storage.calibrationSuccess": "Storage optimized successfully!",
+    "storage.calibrationError": "Calibration failed for some disks.",
+    "storage.limitsReset": "All storage limits have been reset to default (Unlimited).",
+    "storage.resetBtn": "RESET ALL LIMITS"
 }
