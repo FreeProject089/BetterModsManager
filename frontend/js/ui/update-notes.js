@@ -49,11 +49,18 @@ export async function openUpdateNotesModal() {
     }
     await loadNotesFromStructure(folderStructure);
     const allNotes = Array.from(allNotesMap.values());
+    // Find the main .md file with language suffix at the root of Update folder (not in subdirectories)
+    let defaultNote = allNotes[0];
+    const langSuffix = lang === 'fr' ? '_FR.md' : '_EN.md';
+    const rootLangFile = allNotes.find(n => n.path === n.filename && n.filename.endsWith(langSuffix));
+    if (rootLangFile) {
+        defaultNote = rootLangFile;
+    }
     let modal = document.getElementById('modal-update-notes');
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'modal-update-notes';
-        modal.className = 'modal-overlay';
+        modal.className = 'update-modal-backdrop';
         document.getElementById('app-window-outer').appendChild(modal);
     }
     // Render folder tree
@@ -78,38 +85,45 @@ export async function openUpdateNotesModal() {
             }
             const note = allNotes.find(n => n.path === fullPath);
             return `
-                <div class="archive-sidebar-item ${allNotes.length > 0 && note === allNotes[0] ? 'active' : ''}" data-path="${escAttr(fullPath)}" style="padding:8px ${paddingLeft + 8}px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); border-left:2px solid transparent;">
+                <div class="ptb-sidebar-item ${allNotes.length > 0 && note === defaultNote ? 'active' : ''}" data-path="${escAttr(fullPath)}" style="padding:8px ${paddingLeft + 8}px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); border-left:2px solid transparent;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                     <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(item.name)}</span>
                 </div>
             `;
         }).join('');
     };
-    modal.innerHTML = `
-        <div class="modal glass" style="max-width:900px; width:95%; height:80vh; display:flex; flex-direction:column;">
-            <div class="modal-header" style="flex-shrink:0">
-                <h2 class="modal-title" style="display:flex; align-items:center; gap:10px;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                    ${t('update.title')}
-                </h2>
-                <button class="modal-close" id="close-update-notes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    const renderHeader = () => `
+        <div class="ptb-header-title">
+            <div class="ptb-header-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             </div>
-            <div class="modal-body" style="padding:0; flex:1; overflow:hidden;">
-                <div class="archive-modal-container" style="display:flex; height:100%;">
-                    <div class="archive-sidebar" id="archive-sidebar" style="width:260px; background:rgba(0,0,0,0.2); border-right:1px solid var(--border); overflow-y:auto; padding:12px 0;">
-                        ${renderFolderTree(folderStructure)}
-                    </div>
-                    <div class="archive-content" id="archive-content" style="flex:1; overflow-y:auto; padding:32px; background:var(--bg-primary);">
-                        ${allNotes.length > 0 ? renderMarkdown(allNotes[0].content) : `<p style="color:var(--text-muted)">${t('update.none')}</p>`}
-                    </div>
+            <span>${t('update.title')}</span>
+        </div>
+        <button class="ptb-modal-close" id="close-update-notes">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+    `;
+    const renderSidebar = () => {
+        return `<div class="ptb-modal-sidebar">${renderFolderTree(folderStructure)}</div>`;
+    };
+    const renderContent = (note) => {
+        return `<div class="ptb-modal-body" style="overflow-y:auto; flex:1; padding:40px 60px;">${note ? renderMarkdown(note.content) : `<p style="color:var(--text-muted)">${t('update.none')}</p>`}</div>`;
+    };
+    modal.innerHTML = `
+        <div class="ptb-modal-card">
+            <div class="ptb-modal-header">${renderHeader()}</div>
+            <div class="ptb-modal-layout">
+                ${renderSidebar()}
+                <div id="update-notes-content-target" style="flex:1; display:flex; flex-direction:column; overflow:hidden">
+                    ${renderContent(defaultNote)}
                 </div>
             </div>
         </div>
     `;
     modal.classList.add('open');
-    modal.querySelector('#close-update-notes').addEventListener('click', () => modal.classList.remove('open'));
+    modal.querySelector('#close-update-notes')?.addEventListener('click', () => modal.remove());
     modal.addEventListener('click', e => { if (e.target === modal)
-        modal.classList.remove('open'); });
+        modal.remove(); });
     // Folder toggle logic
     modal.querySelectorAll('.tree-folder-header').forEach(header => {
         header.addEventListener('click', (e) => {
@@ -133,14 +147,14 @@ export async function openUpdateNotesModal() {
         });
     });
     // Sidebar selection logic with event delegation
-    const contentArea = modal.querySelector('#archive-content');
+    const contentArea = modal.querySelector('#update-notes-content-target');
     modal.addEventListener('click', async (e) => {
-        const item = e.target.closest('.archive-sidebar-item');
+        const item = e.target.closest('.ptb-sidebar-item');
         if (!item)
             return;
         e.stopPropagation();
         // Remove active from all items
-        modal.querySelectorAll('.archive-sidebar-item').forEach(i => i.classList.remove('active'));
+        modal.querySelectorAll('.ptb-sidebar-item').forEach(i => i.classList.remove('active'));
         item.classList.add('active');
         const path = item.dataset.path;
         console.log('Clicked item with path:', path);
@@ -183,12 +197,12 @@ export async function openUpdateNotesModal() {
             }
         }
         if (note) {
-            contentArea.innerHTML = renderMarkdown(note.content);
+            contentArea.innerHTML = renderContent(note);
             contentArea.scrollTop = 0;
         }
         else {
             console.warn('Note not found for path:', path);
-            contentArea.innerHTML = `<p style="color:var(--text-muted)">${t('update.none') || 'No content'}</p>`;
+            contentArea.innerHTML = renderContent(null);
         }
     });
 }
@@ -626,7 +640,14 @@ async function showPtbModal(folderStructure, lang, initialFileName = null) {
     const modal = document.createElement('div');
     modal.id = 'ptb-welcome-modal';
     modal.className = 'update-modal-backdrop';
+    // Find the main .md file with language suffix at the root of Update folder (not in subdirectories)
     let activeNote = allNotes[0];
+    const langSuffix = lang === 'fr' ? '_FR.md' : '_EN.md';
+    const rootLangFile = allNotes.find(n => n.path === n.filename && n.filename.endsWith(langSuffix));
+    if (rootLangFile) {
+        activeNote = rootLangFile;
+    }
+    // Override with initialFileName if provided (for guides)
     if (initialFileName) {
         const found = allNotes.find(n => n.filename.includes(initialFileName));
         if (found)
@@ -662,7 +683,7 @@ async function showPtbModal(folderStructure, lang, initialFileName = null) {
             else {
                 const note = allNotes.find(n => n.path === item.path);
                 return `
-                    <div class="ptb-sidebar-item ${allNotes.length > 0 && note === allNotes[0] ? 'active' : ''}" data-path="${escAttr(item.path)}" style="padding:8px ${paddingLeft + 8}px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); border-left:2px solid transparent;">
+                    <div class="ptb-sidebar-item ${allNotes.length > 0 && note === activeNote ? 'active' : ''}" data-path="${escAttr(item.path)}" style="padding:8px ${paddingLeft + 8}px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); border-left:2px solid transparent;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                         <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(item.name)}</span>
                     </div>
@@ -671,10 +692,10 @@ async function showPtbModal(folderStructure, lang, initialFileName = null) {
         }).join('');
     };
     const renderSidebar = () => {
-        return `<div class="ptb-sidebar">${renderFolderTree(folderStructure)}</div>`;
+        return `<div class="ptb-modal-sidebar">${renderFolderTree(folderStructure)}</div>`;
     };
     const renderContent = (note) => {
-        return `<div class="ptb-modal-body" style="overflow-y:auto; flex:1; padding:32px;">${renderMarkdown(note.content)}</div>`;
+        return `<div class="ptb-modal-body" style="overflow-y:auto; flex:1; padding:40px 60px;">${renderMarkdown(note.content)}</div>`;
     };
     modal.innerHTML = `
         <div class="ptb-modal-card">
