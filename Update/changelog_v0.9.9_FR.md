@@ -57,15 +57,27 @@ Cette version introduit des optimisations de performance significatives, un tout
     - **Gestion Granulaire** : Ajout d'un bouton de suppression individuelle pour retirer un rapport spécifique de la mémoire système, en plus d'une option globale "EFFACER".
 
 ## Corrections de bugs & Stabilité
+### [FIXED] Interface & Modales
+- **Explorateur d'Archives** : Correction d'un bug affectant le bon fonctionnement de l'Archive Explorer.
+- **Modales EULA & Crash** : Résolution d'un problème de visibilité des boutons lors de l'accès à l'EULA depuis les Crédits, et corrections mineures d'affichage sur la modale de rapport de crash.
+
 ### [FIXED] Erreurs de syntaxe critiques
 - **Collision lexicale** : Renommage de la variable interne `parent` en `pNode` dans `interactive-docs.ts` pour résoudre une erreur de type `SyntaxError`.
+
 ### [FIXED] Stabilité RPC & Logique
+- **Filtrage des Fichiers** : Correction de la logique de filtrage pour garantir la bonne gestion des suffixes `_XX` (ex. `_EN`, `_FR`) dans la documentation localisée.
 - **Stabilité RPC** : Résolution du crash critique `TypeError: getProfiles is not a function` dans la boucle de mise à jour du statut Discord.
 - **Sécurité des commandes** : Correction de l'erreur RPC `cancel_repo_export` où la commande n'était pas correctement enregistrée dans le backend.
+- **Outil BMM Dev** : Correction de problèmes fonctionnels mineurs dans l'outil de développement interne ("BMM Dev Tool").
 
-### [FIXED] Sécurité Anti-XSS
+### [FIXED] Sécurité & Anti-XSS
+- **Content Security Policy (CSP)** : Résolution de violations critiques de la CSP pour sécuriser l'architecture hybride et autoriser correctement les ressources externes.
 - **Notifications Toast** : Refactorisation de la fonction globale `toast()` dans `app.ts` via HTML stérile (DOM `textContent`), colmatant une faille XSS potentielle.
 - **Suppression de Profil** : Sécurisation de la modale de validation dans `profiles.ts` en appliquant rigoureusement l'encodage `escHtml` sur les noms personnalisés.
+- **Modération BetaHub** : Ajout d'une validation de texte `isGibberish` sur la modale de retours BetaHub pour empêcher l'envoi de spams incohérents.
+
+### [FIXED] Localisation
+- **i18n du Gestionnaire de Stockage** : Résolution de clés de traduction dupliquées et correction de l'arborescence des sections dans les fichiers de langue (`en.json`, `fr.json`).
 
 ## Légal & Conformité
 ### [NOUVEAU] Contrat de Licence Utilisateur Final (EULA)

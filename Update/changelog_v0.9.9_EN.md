@@ -56,15 +56,27 @@ This version introduces significant performance optimizations, a brand-new integ
     - **Granular Management**: Added an individual "Delete" button (trash icon) to securely forget a single report from local memory, alongside the global "CLEAR" configuration.
 
 ## Bug Fixes & Stability
+### [FIXED] UI & Modals
+- **Archive Explorer**: Fixed a bug affecting the proper functioning of the Archive Explorer.
+- **EULA & Crash Modals**: Fixed button visibility issues when accessing the EULA from the Credits section, and resolved minor display bugs in the crash report modal.
+
 ### [FIXED] Critical Syntax Errors
 - **Lexical Collision**: Renamed internal `parent` variable to `pNode` in `interactive-docs.ts` to resolve a shadowing `SyntaxError`.
+
 ### [FIXED] RPC & Logic Stability
+- **File Filtering**: Fixed an issue with language-based file filtering to correctly handle `_XX` (e.g., `_EN`, `_FR`) suffix conventions for documentation.
 - **RPC Stability**: Resolved critical `TypeError: getProfiles is not a function` crash in the Discord status update loop.
 - **Command Security**: Fixed `cancel_repo_export` RPC error where the command was not correctly registered in the backend.
+- **BMM Dev Tool**: Addressed minor functional issues within the internal BMM development tool.
 
 ### [FIXED] Security & Anti-XSS
+- **Content Security Policy**: Resolved critical CSP violations to harden app security and ensure expected external assets are correctly authorized.
 - **Toast Notifications**: Refactored the global `toast()` function in `app.ts` to use sterile DOM structures (`.textContent`), plugging a potential XSS vulnerability.
 - **Profile Deletion**: Secured the irreversible profile deletion modal in `profiles.ts` by strictly enforcing `escHtml` checks on user-defined profile names.
+- **BetaHub Moderation**: Added an `isGibberish` text validation check to the BetaHub feedback modal to prevent nonsensical spam submissions.
+
+### [FIXED] Localization
+- **Storage Manager i18n**: Resolved duplicate translation keys and corrected nested section placements within the local language files (`en.json`, `fr.json`).
 
 ## Legal & Compliance
 ### [NEW] End User License Agreement (EULA)
