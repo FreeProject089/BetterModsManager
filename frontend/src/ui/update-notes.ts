@@ -890,3 +890,180 @@ export function markEulaAccepted() {
 }
 
 window.markEulaAccepted = markEulaAccepted;
+
+// ── Language Selection on First Start ──────────────────────
+const LANG_SELECTED_KEY = 'bmm_lang_selected';
+
+export async function checkLangSelect(): Promise<void> {
+    const alreadySelected = localStorage.getItem(LANG_SELECTED_KEY) === 'true';
+    if (!alreadySelected) {
+        await openLangSelectModal();
+    }
+}
+
+async function openLangSelectModal(): Promise<void> {
+    const { getLanguages, setLang, getLang } = await import('../core/i18n.js');
+
+    const existing = document.getElementById('modal-lang-select');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-lang-select';
+    modal.className = 'modal-backdrop open';
+    modal.style.cssText = `
+        position: fixed; inset: 0; z-index: 10500;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(5, 8, 22, 0.85);
+        backdrop-filter: blur(12px);
+        animation: fadeIn 0.35s ease;
+    `;
+
+    function buildContent() {
+        const languages = getLanguages();
+        const appLang = getLang();
+        const current = languages.find(l => l.code === appLang) || languages.find(l => l.active) || languages[0];
+
+        const getFlag = (l) => {
+            if (!l || !l.flag) return '⚪';
+            const f = l.flag.trim();
+            if (f.length === 2) {
+                const code = f.toLowerCase();
+                return `<img src="https://flagcdn.com/w20/${code}.png" width="20" height="14" style="border-radius:2px;object-fit:cover;vertical-align:middle" onerror="this.outerHTML='<span style=font-size:10px;font-weight:700>${f.toUpperCase()}</span>'">`;
+            }
+            return `<span style="margin-right:6px">${f}</span>`;
+        };
+
+        return `
+        <div style="
+            background: rgba(10, 17, 40, 0.92);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-top: 2px solid rgba(59,130,246,0.6);
+            border-radius: 20px;
+            padding: 36px 32px 28px;
+            min-width: 340px;
+            max-width: 400px;
+            box-shadow: 0 8px 8px -4px rgba(0,0,0,0.4), 0 32px 80px -8px rgba(0,0,0,0.8), 0 0 0 1px rgba(59,130,246,0.1), inset 0 1px 0 rgba(255,255,255,0.05);
+            backdrop-filter: blur(32px);
+            animation: modalIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+            text-align: center;
+            position: relative;
+        ">
+            <!-- Tasky mascot -->
+            <div style="margin-bottom:20px">
+                <img src="assets/Tasky_Happy.png" alt="Tasky"
+                    style="width:80px; height:80px; object-fit:contain;
+                    filter: drop-shadow(0 6px 18px rgba(59,130,246,0.4));
+                    animation: float 3s ease-in-out infinite;">
+            </div>
+
+            <!-- Title -->
+            <p style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--accent); margin-bottom:8px">TASKY</p>
+            <h2 style="font-size:20px; font-weight:800; color:var(--text-primary); margin:0 0 6px">
+                ${t('onboarding.lang_title')}
+            </h2>
+            <p style="font-size:13px; color:var(--text-muted); margin:0 0 24px; line-height:1.5">
+                ${t('onboarding.lang_desc')}
+            </p>
+
+            <!-- Language dropdown -->
+            <div style="position:relative; margin-bottom:16px">
+                <button id="lang-select-toggle" style="
+                    width:100%; display:flex; align-items:center; gap:10px;
+                    padding:10px 14px; border-radius:10px; cursor:pointer;
+                    background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12);
+                    color:var(--text-primary); font-size:14px; font-weight:600;
+                    transition:all 0.2s;
+                ">
+                    <span id="lang-select-flag">${getFlag(current)}</span>
+                    <span id="lang-select-name" style="flex:1; text-align:left">${current ? current.name : ''}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="lang-select-chevron" style="transition:transform 0.2s"><polyline points="18 15 12 9 6 15"/></svg>
+                </button>
+
+                <div id="lang-select-menu" style="
+                    display:none; position:absolute; bottom:calc(100% + 8px); left:0; right:0;
+                    background:rgba(10,17,40,0.98); border:1px solid rgba(255,255,255,0.1);
+                    border-radius:12px; overflow:hidden; z-index:10;
+                    box-shadow:0 -8px 32px rgba(0,0,0,0.5);
+                    backdrop-filter:blur(20px);
+                ">
+                    ${languages.map(l => `
+                        <button class="lang-select-opt" data-lang="${l.code}" style="
+                            width:100%; display:flex; align-items:center; gap:10px;
+                            padding:10px 14px; border:none; cursor:pointer;
+                            background:${l.active ? 'rgba(59,130,246,0.12)' : 'transparent'};
+                            color:${l.active ? 'var(--accent)' : 'var(--text-secondary)'};
+                            font-size:13px; font-weight:${l.active ? '700' : '500'};
+                            transition:background 0.15s;
+                        ">
+                            ${getFlag(l)}
+                            <span style="flex:1;text-align:left">${l.name}</span>
+                            ${l.active ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+
+            <!-- Confirm button -->
+            <button id="lang-select-confirm" style="
+                width:100%; padding:12px; border-radius:12px; border:none; cursor:pointer;
+                background: linear-gradient(135deg, var(--accent), #6366f1);
+                color:#fff; font-size:14px; font-weight:700; letter-spacing:0.02em;
+                box-shadow: 0 4px 16px rgba(59,130,246,0.4);
+                transition: all 0.2s; transform: translateY(0);
+            "
+            onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 20px rgba(59,130,246,0.5)'"
+            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 16px rgba(59,130,246,0.4)'"
+            >
+                ${t('common.ok')} →
+            </button>
+        </div>
+        `;
+    }
+
+    modal.innerHTML = buildContent();
+    (document.getElementById('app-window-outer') || document.body).appendChild(modal);
+
+    function rerender() {
+        modal.innerHTML = buildContent();
+        attachListeners();
+    }
+
+    function attachListeners() {
+        const toggle = document.getElementById('lang-select-toggle');
+        const menu = document.getElementById('lang-select-menu');
+        const chevron = document.getElementById('lang-select-chevron');
+        const confirm = document.getElementById('lang-select-confirm');
+
+        if (!toggle || !menu || !confirm) return;
+
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = menu.style.display === 'block';
+            menu.style.display = isOpen ? 'none' : 'block';
+            if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+        });
+
+        menu.querySelectorAll('.lang-select-opt').forEach(opt => {
+            opt.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const { setLang } = await import('../core/i18n.js');
+                await setLang((opt as HTMLElement).dataset.lang!);
+                rerender();
+            });
+        });
+
+        document.addEventListener('click', () => {
+            if (menu) menu.style.display = 'none';
+            if (chevron) chevron.style.transform = '';
+        }, { once: true });
+
+        confirm.addEventListener('click', () => {
+            localStorage.setItem(LANG_SELECTED_KEY, 'true');
+            document.removeEventListener('langChanged', rerender);
+            modal.remove();
+        });
+    }
+
+    attachListeners();
+    document.addEventListener('langChanged', rerender);
+}

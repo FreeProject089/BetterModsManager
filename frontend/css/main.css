@@ -2790,13 +2790,35 @@ select.input-field option {
     justify-content: flex-start;
     padding: 30px;
     pointer-events: none;
-    animation: fadeIn 0.3s ease;
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(2px);
+    animation: onboardingSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    /* No background/blur — app stays fully visible */
+    background: transparent;
 }
 
 .onboarding-overlay.closing {
-    animation: fadeOut 0.3s ease forwards;
+    animation: onboardingSlideOut 0.3s ease forwards;
+}
+
+@keyframes onboardingSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(24px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes onboardingSlideOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(16px);
+    }
 }
 
 .onboarding-card {
@@ -2807,10 +2829,10 @@ select.input-field option {
 }
 
 .onboarding-mascot-img {
-    width: 80px;
-    height: 80px;
+    width: 88px;
+    height: 88px;
     object-fit: contain;
-    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+    filter: drop-shadow(0 6px 18px rgba(59, 130, 246, 0.35)) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
     animation: float 3s ease-in-out infinite;
 }
 
@@ -2827,14 +2849,20 @@ select.input-field option {
 }
 
 .onboarding-content {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 16px;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid rgba(59, 130, 246, 0.45);
+    border-radius: 18px;
     padding: 18px 22px;
     min-width: 320px;
-    max-width: 400px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(16px);
+    max-width: 420px;
+    box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.3),
+        0 20px 60px -10px rgba(0, 0, 0, 0.7),
+        0 0 0 1px rgba(59, 130, 246, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
 }
 
 .onboarding-header {

@@ -15,7 +15,7 @@ import { initDeepLinks } from '../core/deep_link_manager.js';
 import { initTitlebar } from './titlebar.js';
 import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
 import { initModals } from './modals.js';
-import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode, checkAutoEula, checkShowReleaseNotes } from './update-notes.js';
+import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode, checkAutoEula, checkShowReleaseNotes, checkLangSelect } from './update-notes.js';
 // New Modularized Imports
 import { initModlist } from '../features/mods/modlist.js';
 import { initCrashReportUI, checkPreviousCrash } from './crash-report.js';
@@ -28,13 +28,29 @@ async function waitForModalClosed(id) {
     if (!el.classList.contains('open'))
         return;
     await new Promise((resolve) => {
-        const obs = new MutationObserver(() => {
+        // Observer 1: class change (modal hidden via classList.remove('open'))
+        const classObs = new MutationObserver(() => {
             if (!el.classList.contains('open')) {
-                obs.disconnect();
+                classObs.disconnect();
+                domObs.disconnect();
                 resolve();
             }
         });
-        obs.observe(el, { attributes: true, attributeFilter: ['class'] });
+        classObs.observe(el, { attributes: true, attributeFilter: ['class'] });
+        // Observer 2: element removal from DOM (modal closed via .remove())
+        const domObs = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+                for (const node of Array.from(m.removedNodes)) {
+                    if (node === el || node.contains?.(el)) {
+                        classObs.disconnect();
+                        domObs.disconnect();
+                        resolve();
+                        return;
+                    }
+                }
+            }
+        });
+        domObs.observe(document.body, { childList: true, subtree: true });
     });
 }
 // ── Tauri bridge ──────────────────────────────────────────
@@ -375,6 +391,9 @@ async function main() {
     }
     await initSettings();
     // ── Startup Modal Sequence ──
+    // 0. Language selection on first start (before everything else)
+    await checkLangSelect();
+    await waitForModalClosed('modal-lang-select');
     // 1. Auto EULA on first start (if enabled in app.cfg)
     await checkAutoEula();
     await waitForModalClosed('modal-eula');
