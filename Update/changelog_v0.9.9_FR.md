@@ -60,6 +60,10 @@ Cette version introduit des optimisations de performance significatives, un tout
 ### [FIXED] Interface & Modales
 - **Explorateur d'Archives** : Correction d'un bug affectant le bon fonctionnement de l'Archive Explorer.
 - **Modales EULA & Crash** : Résolution d'un problème de visibilité des boutons lors de l'accès à l'EULA depuis les Crédits, et corrections mineures d'affichage sur la modale de rapport de crash.
+- **Harmonisation des Modales de Mises à Jour** : Unification visuelle des modales "Notes de mise à jour" et "Journal des mises à jour" avec les classes CSS `.ptb-modal-*`.
+- **Chargement Automatique par Langue** : Les modales chargent désormais automatiquement le fichier `.md` avec le suffixe de langue approprié (`_FR.md` ou `_EN.md`) depuis le dossier racine `@Update`.
+- **Padding du Contenu** : Correction du padding du contenu des modales (40px 60px) pour éviter que le texte ne soit collé aux bords.
+- **Bouton de Fermeture** : Correction du bouton close qui ne fonctionnait pas correctement (utilisation de `modal.remove()` au lieu de `modal.classList.remove('open')`).
 
 ### [FIXED] Erreurs de syntaxe critiques
 - **Collision lexicale** : Renommage de la variable interne `parent` en `pNode` dans `interactive-docs.ts` pour résoudre une erreur de type `SyntaxError`.

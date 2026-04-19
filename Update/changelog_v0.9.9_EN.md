@@ -59,6 +59,10 @@ This version introduces significant performance optimizations, a brand-new integ
 ### [FIXED] UI & Modals
 - **Archive Explorer**: Fixed a bug affecting the proper functioning of the Archive Explorer.
 - **EULA & Crash Modals**: Fixed button visibility issues when accessing the EULA from the Credits section, and resolved minor display bugs in the crash report modal.
+- **Update Modals Harmonization**: Visual unification of "Update Notes" and "Update Journal" modals using `.ptb-modal-*` CSS classes.
+- **Automatic Language Loading**: Modals now automatically load the `.md` file with the appropriate language suffix (`_FR.md` or `_EN.md`) from the root `@Update` folder.
+- **Content Padding**: Fixed modal content padding (40px 60px) to prevent text from being flush against edges.
+- **Close Button**: Fixed non-functional close button (using `modal.remove()` instead of `modal.classList.remove('open')`).
 
 ### [FIXED] Critical Syntax Errors
 - **Lexical Collision**: Renamed internal `parent` variable to `pNode` in `interactive-docs.ts` to resolve a shadowing `SyntaxError`.
