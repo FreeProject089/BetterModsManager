@@ -269,6 +269,15 @@ export function renderMarkdown(md) {
     html = html.replace(/\[FIXED\]/g, '<span class="md-badge md-badge-fixed">' + t('update.badge.fixed') + '</span>');
     html = html.replace(/\[VISUAL\]/g, '<span class="md-badge md-badge-visual">' + t('update.badge.visual') + '</span>');
     
+    // Add Copy buttons to code blocks
+    html = html.replace(/<pre><code([^>]*)>([\s\S]*?)<\/code><\/pre>/g, (match, attrs, content) => {
+        return `
+        <div class="md-code-block" style="position: relative; margin: 10px 0;">
+            <pre style="margin: 0; padding-top: 36px; position: relative;"><code${attrs}>${content}</code></pre>
+            <button class="md-copy-btn" onclick="let b=this; let code=this.previousElementSibling.innerText; navigator.clipboard.writeText(code).then(()=>{ b.innerHTML='Copied!'; setTimeout(()=>b.innerHTML='Copy', 2000) })" style="position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: var(--text-secondary); border-radius: 4px; padding: 4px 8px; font-size: 10px; cursor: pointer; transition: 0.2s; text-transform: uppercase;">Copy</button>
+        </div>`;
+    });
+
     return `<div class="md-body">${html}</div>`;
 }
 

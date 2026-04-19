@@ -5,8 +5,9 @@ Le protocole `bmm://` permet d'installer des mods directement depuis un lien web
 ## 🔗 Structure du lien
 Pour qu'un lien soit reconnu par Better Mod Manager, il doit suivre ce format :
 
-`bmm://import?url=[LIEN_DIRECT_VERS_LE_ZIP]&name=[NOM_DU_MOD]`
-
+```text
+bmm://import?url=[LIEN_DIRECT_VERS_LE_ZIP]&name=[NOM_DU_MOD]
+```
 ### Paramètres :
 - **url** (Obligatoire) : L'adresse URL directe de l'archive du mod (généralement un fichier .zip ou .rar).
 - **name** (Optionnel) : Le nom par défaut qui sera suggéré dans la fenêtre de confirmation.
@@ -34,7 +35,10 @@ BMM a besoin d'un **Direct Download Link (DDL)** pour fonctionner. C'est un lien
 Vous pouvez générer un lien pour partager vos mods préférés avec vos amis. Utilisez cette structure :
 1. Prenez l'URL de téléchargement direct de votre mod.
 2. Utilisez un encodeur d'URL (facultatif si l'URL est simple) pour le paramètre `url`.
-3. Assemblez le tout : `bmm://import?url=VOTRE_URL&name=NOM_DU_MOD`
+3. Assemblez le tout :
+```text
+bmm://import?url=VOTRE_URL&name=NOM_DU_MOD
+```
 
 ### Pourquoi Tasky me demande-t-il une confirmation ?
 C'est une sécurité essentielle. Cela empêche un site malveillant d'installer des fichiers sur votre ordinateur sans votre accord explicite. Vous gardez toujours le contrôle sur le nom et le profil de destination.

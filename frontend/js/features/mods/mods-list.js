@@ -221,8 +221,17 @@ export function createModCard(mod) {
                 }
             }
             else {
+                const modDeps = mod.dependencies || [];
                 const dependents = S.allMods.filter(m => m.enabled && m.dependencies && m.dependencies.includes(mod.id));
-                const requirements = S.allMods.filter(m => m.enabled && mod.dependencies && mod.dependencies.includes(m.id));
+                let requirements = S.allMods.filter(m => m.enabled && modDeps.includes(m.id));
+                // Filtrer les requirements: n'afficher B que si AUCUN autre mod actif (sauf A) n'a besoin de B
+                requirements = requirements.filter(req => {
+                    const otherDependents = S.allMods.filter(other => other.id !== mod.id &&
+                        other.enabled &&
+                        other.dependencies &&
+                        other.dependencies.includes(req.id));
+                    return otherDependents.length === 0;
+                });
                 const relatedMods = [...new Set([...dependents, ...requirements])];
                 if (relatedMods.length > 0) {
                     const names = relatedMods.map(m => m.name).join(', ');
