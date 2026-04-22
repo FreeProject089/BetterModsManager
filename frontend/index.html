@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="css/mascot.css" />
     <link rel="stylesheet" href="css/debug.css" />
     <link rel="stylesheet" href="css/betahub.css" />
+    <link rel="stylesheet" href="css/modpack.css" />
     <link rel="stylesheet" href="assets/cropper/cropper.min.css">
     <script src="assets/cropper/cropper.min.js"></script>
 </head>
@@ -162,6 +163,17 @@
                         <span class="nav-label" data-i18n="nav.repo">Server Repo</span>
                     </button>
 
+                    <button class="nav-item" data-view="modpacks" id="nav-modpacks">
+                        <span class="nav-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                                <line x1="12" y1="22.08" x2="12" y2="12"/>
+                            </svg>
+                        </span>
+                        <span class="nav-label" data-i18n="nav.modpacks">Modpacks</span>
+                    </button>
+
                     <button class="nav-item" data-view="docs" id="nav-docs">
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -260,6 +272,14 @@
                                     <polyline points="12 6 12 12 16 14" />
                                 </svg>
                                 <span data-i18n="lib.history">Historique</span>
+                            </button>
+                            <button class="btn btn-ghost" id="btn-quick-apply-modpack"
+                                onmouseenter="window.showTaskyHelp('modpack.apply', 'icon-package')"
+                                onmouseleave="window.hideTaskyHelp()" style="gap:6px;">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                                <span data-i18n="modpack.apply">Activer Modpack</span>
                             </button>
                             <button class="btn btn-ghost" id="btn-scan-mods"
                                 onmouseenter="window.showTaskyHelp('lib.scanTip', 'icon-search')"
@@ -715,6 +735,8 @@
                             <h1 class="view-title" data-i18n="repo.title">...</h1>
                             <p class="view-subtitle" data-i18n="repo.subtitle">...</p>
                         </div>
+                        <div class="view-actions">
+                        </div>
                     </div>
 
                     <div
@@ -774,6 +796,15 @@
                                         style="max-height:130px;overflow-y:auto;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:7px;">
                                         <div style="color:var(--text-muted);font-size:12px;text-align:center;"
                                             data-i18n="repo.loadingProfiles">...</div>
+                                    </div>
+                                </div>
+
+                                <div class="form-group" style="margin-bottom:12px;">
+                                    <label class="form-label" data-i18n="modpack.shareTitle">Partager des Modpacks (Optionnel)</label>
+                                    <div id="repo-export-modpacks-list"
+                                        style="max-height:130px;overflow-y:auto;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:7px;">
+                                        <div style="color:var(--text-muted);font-size:12px;text-align:center;"
+                                            data-i18n="modpack.loadingModpacks">Chargement des modpacks...</div>
                                     </div>
                                 </div>
 
@@ -1308,11 +1339,11 @@
 
                             <!-- Card: Mini-Server Standalone -->
                             <div class="glass-card"
-                                style="border-left:3px solid #8A98AD; background:rgba(255,255,255,0.02); margin-top: 24px;">
+                                style="border-left:3px solid #8A98AD; background:rgba(255,255,255,0.02); margin-top: 24px; padding: 20px;">
                                 <div
-                                    style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                                    style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
                                     <h3 class="card-title"
-                                        style="margin:0; font-size:13px; opacity:0.9; display:flex; align-items:center; gap:8px;">
+                                        style="margin:0; font-size:13px; opacity:0.9; display:flex; align-items:center; gap:8px; line-height:1;">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2" style="vertical-align:middle">
                                             <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
@@ -1320,7 +1351,7 @@
                                         <span data-i18n="repo.miniServerTitle">Serveur Autonome (Léger)</span>
                                     </h3>
                                     <div
-                                        style="font-size:10px; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; color:var(--text-muted); font-weight:700;">
+                                        style="font-size:10px; background:rgba(255,255,255,0.08); padding:4px 8px; border-radius:6px; color:var(--text-muted); font-weight:700; border:1px solid rgba(255,255,255,0.1); text-transform:uppercase; letter-spacing:0.5px;">
                                         OPTIONAL</div>
                                 </div>
 
@@ -1594,10 +1625,75 @@
                                 <div
                                     style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px">
                                     <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:4px"
-                                        data-i18n="docs.basic.modding.q3">L'activation</div>
-                                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                        data-i18n="docs.basic.modding.a3">Lorsque vous activez...</div>
+                                        data-i18n="modpack.qModpacks">Comment fonctionnent les Modpacks (SHA-256) ?</div>
+                                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5" data-i18n="modpack.qModpacksDesc">
+                                        BMM crée une signature unique (hash) pour chaque mod. Lorsqu'un ami importe votre pack, BMM compare ces signatures avec sa bibliothèque locale pour activer exactement les mêmes versions, évitant ainsi les erreurs de versioning.
+                                    </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Modpacks & Sharing Documentation -->
+                        <div class="glass-card" style="border-left: 3px solid #00c2ff;">
+                            <h3 class="card-title">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00c2ff"
+                                    stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                </svg>
+                                <span style="color:#00c2ff" data-i18n="docs.modpacksTitle">Modpacks & Partage</span>
+                                <button class="btn btn-xs btn-ghost" onclick="openDiagram('modpack-flow')"
+                                    style="margin-left:auto; font-size:10px; color:#00c2ff; border:1px dashed rgba(0,194,255,0.3); padding: 2px 8px;">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" style="margin-right:4px">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                        <path d="M2 17l10 5 10-5" />
+                                        <path d="M2 12l10 5 10-5" />
+                                    </svg>
+                                    <span data-i18n="docs.exploreLifecycle">VOIR LE CYCLE DE VIE</span>
+                                </button>
+                            </h3>
+                            <div style="margin-bottom: 12px; font-size: 13px; color: var(--text-secondary); line-height: 1.6;"
+                                data-i18n="docs.modpacks.intro">
+                                Les Modpacks sont des collections de mods empaquetées dans un fichier <code style="color:#00c2ff">.bmp</code>.
+                                Ils utilisent des empreintes numériques (SHA-256) pour identifier vos fichiers, ce qui permet à vos amis de retrouver
+                                exactement les mêmes versions, même s'ils ont installé leurs mods différemment.
+                            </div>
+                            <div
+                                style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
+                                <div
+                                    style="background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.15);border-radius:10px;padding:12px">
+                                    <div style="font-size:12px;font-weight:700;color:#00c2ff;margin-bottom:4px"
+                                        data-i18n="docs.modpacks.sha256">Empreintes SHA-256</div>
+                                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                        data-i18n="docs.modpacks.sha256Desc">Identification unique des fichiers pour une
+                                        compatibilité garantie entre joueurs, même avec des noms de dossiers différents.</div>
+                                </div>
+                                <div
+                                    style="background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.15);border-radius:10px;padding:12px">
+                                    <div style="font-size:12px;font-weight:700;color:#00c2ff;margin-bottom:4px"
+                                        data-i18n="docs.modpacks.multiProf">Multi-Profile Support</div>
+                                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                        data-i18n="docs.modpacks.multiProfDesc">Créez des packs contenant des mods venant
+                                        de plusieurs profils BMM différents en une seule activation.</div>
+                                </div>
+                                <div
+                                    style="background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.15);border-radius:10px;padding:12px">
+                                    <div style="font-size:12px;font-weight:700;color:#00c2ff;margin-bottom:4px"
+                                        data-i18n="docs.modpacks.portability">Portabilité Totale</div>
+                                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                        data-i18n="docs.modpacks.portabilityDesc">Exportez votre configuration en un clic. Vos amis n'ont qu'à importer le fichier pour synchroniser leur jeu.</div>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 16px; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                                <h4 style="font-size: 13px; color: var(--text-primary); margin-bottom: 8px;" data-i18n="docs.modpacks.howToCreate">Comment créer un pack ?</h4>
+                                <ol style="font-size: 12px; color: var(--text-secondary); padding-left: 20px; line-height: 1.6;">
+                                    <li data-i18n="docs.modpacks.step1">Allez dans l'onglet <strong>Modpacks</strong> et cliquez sur <strong>Créer</strong>.</li>
+                                    <li data-i18n="docs.modpacks.step2">Donnez un nom et une description à votre pack.</li>
+                                    <li data-i18n="docs.modpacks.step3">Ajoutez les mods souhaités. BMM récupérera automatiquement leurs signatures SHA-256.</li>
+                                    <li data-i18n="docs.modpacks.step4">(Optionnel) Ajoutez des liens de téléchargement directs pour faciliter la vie de vos amis.</li>
+                                    <li data-i18n="docs.modpacks.step5">Sauvegardez et cliquez sur <strong>Exporter</strong> pour obtenir votre fichier <code style="color:#00c2ff">.bmp</code>.</li>
+                                </ol>
                             </div>
                         </div>
 
@@ -2436,8 +2532,7 @@
                                 entre joueurs.
                             </div>
                         </details>
-
-                        <details class="faq-accordion">
+                        <details class="faq-accordion">
                             <summary class="faq-summary">
                                 <span style="display:flex;align-items:center;gap:8px">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171"
@@ -2459,7 +2554,7 @@
                             </summary>
                             <div class="faq-content">
                                 <p data-i18n="faq.a3">Vous devez d'abord désactiver le mod pour que ses fichiers soient retirés du jeu et les
-                                backups restaurés, puis vous pouvez le supprimer en toute sécurité.</p>
+                                 backups restaurés, puis vous pouvez le supprimer en toute sécurité.</p>
                                 <button class="btn btn-sm btn-ghost" onclick="openDiagram('faq-deleted-mod')"
                                     style="color:var(--accent); border:1px dashed rgba(var(--accent-rgb),0.3); font-size:11px; display:inline-flex; align-items:center; gap:6px; margin-top:8px;">
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2470,6 +2565,28 @@
                                     <span data-i18n="docs.gallery.btn.faqDeletedMod">VOIR LA LOGIQUE</span>
                                 </button>
                             </div>
+                        </details>
+
+                        <details class="faq-accordion">
+                            <summary class="faq-summary">
+                                <span style="display:flex;align-items:center;gap:8px">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
+                                        stroke-width="2.2">
+                                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                                        <line x1="12" y1="22.08" x2="12" y2="12"/>
+                                    </svg>
+                                    <span data-i18n="faq.qModpacks">Comment fonctionnent les Modpacks (SHA-256) ?</span>
+                                </span>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </summary>
+                            <div class="faq-content">
+                                <p>Les Modpacks de BMM utilisent des empreintes numériques (SHA-256) pour identifier les fichiers de mods de manière unique.</p>
+                                <p>Cela permet à un utilisateur de télécharger un modpack et de l'utiliser sur n'importe quel PC : BMM reconnaîtra automatiquement si les mods sont déjà présents sur votre machine, peu importe où ils sont stockés, en comparant leur contenu.</p>
+                                <p>Si des mods manquent, BMM peut les télécharger automatiquement depuis le ServerRepo s'ils y sont disponibles.</p>
                         </details>
 
                         <details class="faq-accordion">
@@ -2728,6 +2845,33 @@
                                         <path d="M2 12l10 5 10-5" />
                                     </svg>
                                     <span data-i18n="docs.gallery.btn.faqDiskFull">VOIR LA LOGIQUE</span>
+                                </button>
+                            </div>
+                        </details>
+
+                        <details class="faq-accordion">
+                            <summary class="faq-summary">
+                                <span style="display:flex;align-items:center;gap:8px">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+                                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                    </svg>
+                                    <span data-i18n="modpack.qModpacks">Comment fonctionnent les Modpacks (SHA-256) ?</span>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity: 0.5; margin-left: auto;" title="Diagram available"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                                </span>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </summary>
+                            <div class="faq-content">
+                                <p style="margin-bottom:12px;">Les modpacks utilisent des empreintes numériques (SHA-256) pour identifier vos mods de manière unique. Cela garantit que chaque joueur utilise exactement la même version des fichiers, même si l'arborescence des dossiers diffère.</p>
+                                <button class="btn btn-sm btn-ghost" onclick="openDiagram('modpack-flow')"
+                                    style="color:var(--accent); border:1px dashed rgba(var(--accent-rgb),0.3); font-size:11px; display:inline-flex; align-items:center; gap:6px; margin-top:4px;">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                        <path d="M2 17l10 5 10-5" />
+                                        <path d="M2 12l10 5 10-5" />
+                                    </svg>
+                                    <span data-i18n="docs.gallery.btn.modpackFlow">VOIR LE CYCLE DE VIE</span>
                                 </button>
                             </div>
                         </details>
@@ -3175,6 +3319,11 @@
                                         style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
                                         <span style="font-size: 11px;"
                                             data-i18n="docs.gallery.btn.betahub">Flux BetaHub</span>
+                                    </button>
+                                    <button class="btn btn-ghost btn-sm" onclick="openDiagram('modpack-flow')"
+                                        style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                        <span style="font-size: 11px;"
+                                            data-i18n="docs.gallery.btn.modpackFlow">Cycle de vie Modpack</span>
                                     </button>
                                 </div>
                             </div>
@@ -3975,6 +4124,31 @@
 
 
 
+                    </div>
+                </section>
+
+                <!-- ══ MODPACKS VIEW ══ -->
+                <section class="view" id="view-modpacks">
+                    <div class="view-header" style="margin-bottom:32px;">
+                        <div>
+                            <h1 class="view-title" data-i18n="modpack.title">Modpacks</h1>
+                            <p class="view-subtitle" data-i18n="modpack.subtitle">Créez, éditez et partagez des packs de mods avec empreintes SHA-256 pour une compatibilité parfaite.</p>
+                        </div>
+                        <div class="view-actions" id="modpack-header-actions">
+                            <button class="btn btn-secondary" id="btn-import-modpack" style="gap:6px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                <span data-i18n="modpack.import">Importer (.bmp)</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Main Container where modpack-creator.ts will mount -->
+                    <div id="modpack-container" style="display:flex; flex-direction:column; gap:24px;">
+                        <!-- Modpack Creator UI mounts here -->
                     </div>
                 </section>
 

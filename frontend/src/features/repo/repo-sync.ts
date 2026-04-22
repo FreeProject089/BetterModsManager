@@ -209,8 +209,117 @@ export function initRepoSync(elements) {
                         }
 
                         group.appendChild(optionsContainer);
+
+                        // ── Per-mod selection ──────────────────────────────
+                        if (rp.mods && rp.mods.length > 0) {
+                            const modSection = document.createElement('details');
+                            modSection.style.marginTop = '10px';
+
+                            const summary = document.createElement('summary');
+                            summary.style.cursor = 'pointer';
+                            summary.style.fontSize = '10px';
+                            summary.style.color = 'var(--text-muted)';
+                            summary.style.userSelect = 'none';
+                            summary.textContent = `${t('repo.selectMods') || 'Choisir les mods'} (${rp.mods.length})`;
+                            modSection.appendChild(summary);
+
+                            // Select all / none buttons
+                            const modToolbar = document.createElement('div');
+                            modToolbar.style.display = 'flex';
+                            modToolbar.style.gap = '6px';
+                            modToolbar.style.margin = '6px 0 4px';
+
+                            const makeSmallBtn = (label, onClick) => {
+                                const b = document.createElement('button');
+                                b.textContent = label;
+                                b.style.cssText = 'font-size:9px;padding:2px 7px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--text-secondary);cursor:pointer;';
+                                b.addEventListener('click', (e) => { e.preventDefault(); onClick(); });
+                                return b;
+                            };
+
+                            const modCheckboxes = [];
+
+                            modToolbar.appendChild(makeSmallBtn(t('common.selectAll') || 'Tout', () => modCheckboxes.forEach(c => c.checked = true)));
+                            modToolbar.appendChild(makeSmallBtn(t('common.unselectAll') || 'Aucun', () => modCheckboxes.forEach(c => c.checked = false)));
+                            modSection.appendChild(modToolbar);
+
+                            const modList = document.createElement('div');
+                            modList.style.display = 'flex';
+                            modList.style.flexDirection = 'column';
+                            modList.style.gap = '3px';
+                            modList.style.maxHeight = '160px';
+                            modList.style.overflowY = 'auto';
+                            modList.style.paddingRight = '4px';
+
+                            rp.mods.forEach(mod => {
+                                const modSize = mod.files ? mod.files.reduce((a, f) => a + f.size, 0) : 0;
+                                const row = document.createElement('label');
+                                row.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;padding:3px 4px;border-radius:4px;transition:background 0.15s;';
+                                row.addEventListener('mouseenter', () => row.style.background = 'rgba(255,255,255,0.04)');
+                                row.addEventListener('mouseleave', () => row.style.background = '');
+
+                                const cb = document.createElement('input');
+                                cb.type = 'checkbox';
+                                cb.checked = true;
+                                cb.dataset.repoProfileId = rp.id;
+                                cb.dataset.modId = mod.id;
+                                cb.className = 'repo-sync-mod-cb';
+                                modCheckboxes.push(cb);
+
+                                const nameSpan = document.createElement('span');
+                                nameSpan.textContent = mod.name;
+                                nameSpan.style.cssText = 'font-size:10px;color:var(--text-primary);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+
+                                const sizeSpan = document.createElement('span');
+                                sizeSpan.textContent = formatBytes(modSize);
+                                sizeSpan.style.cssText = 'font-size:9px;color:var(--text-muted);flex-shrink:0;';
+
+                                row.appendChild(cb);
+                                row.appendChild(nameSpan);
+                                row.appendChild(sizeSpan);
+                                modList.appendChild(row);
+                            });
+
+                            modSection.appendChild(modList);
+                            group.appendChild(modSection);
+                        }
+
                         profilesSelectionEl.appendChild(group);
                     });
+
+                    // ── Modpacks selection ──────────────────────────────
+                    if (repo.modpacks && repo.modpacks.length > 0) {
+                        const mpGroup = document.createElement('div');
+                        mpGroup.className = 'repo-sync-profile-group glass-card';
+                        mpGroup.style.marginTop = '20px';
+                        mpGroup.style.padding = '12px';
+                        mpGroup.innerHTML = `<h4 style="margin:0 0 10px; font-size:12px; color:var(--cyan); border-bottom:1px solid rgba(0,194,255,0.2); padding-bottom:6px;">Modpacks Partagés</h4>`;
+
+                        repo.modpacks.forEach(mpShare => {
+                            const mp = mpShare.modpack;
+                            const row = document.createElement('label');
+                            row.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px 12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px; cursor:pointer; margin-bottom:6px; transition: background 0.2s;';
+                            row.addEventListener('mouseenter', () => row.style.background = 'rgba(255,255,255,0.06)');
+                            row.addEventListener('mouseleave', () => row.style.background = 'rgba(255,255,255,0.03)');
+
+                            const cb = document.createElement('input');
+                            cb.type = 'checkbox';
+                            cb.className = 'repo-sync-modpack-cb';
+                            cb.dataset.modpack = JSON.stringify(mp);
+                            cb.checked = true;
+
+                            const info = document.createElement('div');
+                            info.style.cssText = 'display:flex; flex-direction:column;';
+                            info.innerHTML = `<span style="font-size:12px; font-weight:600; color:var(--text-primary);">${escHtml(mp.name)}</span>
+                                <span style="font-size:10px; color:var(--text-muted);">${mp.mods.length} mods</span>`;
+
+                            row.appendChild(cb);
+                            row.appendChild(info);
+                            mpGroup.appendChild(row);
+                        });
+                        profilesSelectionEl.appendChild(mpGroup);
+                    }
+
                     updateSyncPathsVisibility();
                 }
 
@@ -251,10 +360,21 @@ export function initRepoSync(elements) {
             }
 
             const selectedBoxes = document.querySelectorAll('.repo-sync-choice-cb:checked');
-            const choices = Array.from(selectedBoxes).map(cb => ({
-                repoProfileId: cb.dataset.repoProfileId,
-                targetLocalProfileId: cb.value === 'NEW' ? null : cb.value
-            }));
+            const choices = Array.from(selectedBoxes).map(cb => {
+                const profileId = cb.dataset.repoProfileId;
+                // Collect selected mod IDs for this profile
+                const modCbs = document.querySelectorAll(`.repo-sync-mod-cb[data-repo-profile-id="${profileId}"]`);
+                const allModCbs = Array.from(modCbs);
+                const selectedModIds = allModCbs.length > 0
+                    ? allModCbs.filter(m => m.checked).map(m => m.dataset.modId)
+                    : null; // null = all mods
+
+                return {
+                    repoProfileId: profileId,
+                    targetLocalProfileId: cb.value === 'NEW' ? null : cb.value,
+                    selectedModIds: selectedModIds,
+                };
+            });
 
             if (choices.length === 0) return toast(t('repo.errNoSelection'), 'warning');
 
@@ -266,6 +386,7 @@ export function initRepoSync(elements) {
                 syncPercent.textContent = "0%";
                 syncFill.style.width = "0%";
                 syncDetails.textContent = t('repo.syncStarting');
+                toast(t('repo.syncStarted') || "Synchronisation commencée", "info");
                 if (btnPauseSync) btnPauseSync.style.display = 'flex';
                 if (btnCancelSync) {
                     btnCancelSync.style.display = 'flex';
@@ -309,9 +430,19 @@ export function initRepoSync(elements) {
                     }
                 });
 
+                // Import modpacks if selected
+                const modpackCbs = document.querySelectorAll('.repo-sync-modpack-cb:checked');
+                for (const cb of modpackCbs) {
+                    try {
+                        const mp = JSON.parse(cb.dataset.modpack);
+                        await invoke('save_modpack', { modpack: mp });
+                    } catch(e) { console.error("Failed to import modpack:", e); }
+                }
+
                 showSyncSummary(summary);
 
                 syncStatus.textContent = t('repo.syncDone');
+                toast(t('repo.syncSuccess') || "Synchronisation terminée avec succès", "success");
                 syncPercent.textContent = "100%";
                 syncFill.style.width = "100%";
                 syncDetails.textContent = t('repo.syncComplete');

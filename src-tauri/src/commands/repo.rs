@@ -95,6 +95,7 @@ pub async fn export_server_repo(
     output_dir: String,
     author_name: String,
     seed: Option<String>,
+    modpacks_share_config: Option<Vec<crate::models::repo::RepoModpackShare>>,
 ) -> Result<(), String> {
     if author_name.trim().is_empty() {
         return Err("repo.errAuthorRequired".to_string());
@@ -156,6 +157,8 @@ pub async fn export_server_repo(
         if !author_name.trim().is_empty() {
             repo.author = Some(author_name.clone());
         }
+
+        repo.modpacks = modpacks_share_config;
 
         let mut profiles_data = Vec::new();
         for pid in &profile_ids {
@@ -481,6 +484,8 @@ pub async fn fetch_repo_info(url: String, creator_id: Option<String>) -> Result<
 pub struct SyncChoice {
     pub repo_profile_id: String,
     pub target_local_profile_id: Option<String>, // None = Create New
+    /// If Some, only download these specific mod IDs. If None, download all mods.
+    pub selected_mod_ids: Option<Vec<String>>,
 }
 
 #[derive(serde::Deserialize)]
@@ -626,6 +631,14 @@ pub async fn sync_server_repo(
                     if path.exists() { let _ = fs::remove_dir_all(path); }
                 }
                 return Err("Synchronisation annulée".to_string());
+            }
+
+            // Selective download: skip mods not in the user's selection
+            if let Some(ref selected_ids) = choice.selected_mod_ids {
+                if !selected_ids.contains(&repo_mod.id) {
+                    println!("[Sync] Skipping mod {} (not selected by user)", repo_mod.name);
+                    continue;
+                }
             }
 
             let safe_mod_name = repo_mod.name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "_");

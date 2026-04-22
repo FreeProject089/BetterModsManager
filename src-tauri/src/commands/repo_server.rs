@@ -19,6 +19,34 @@ use regex::Regex;
 use bytes::Bytes;
 use percent_encoding::percent_decode_str;
 
+/// Emitted when a client fetches repo.json (anti-spam: 30s per client)
+#[derive(serde::Serialize, Clone)]
+pub struct ServerClientConnectedPayload {
+    pub ip: String,
+    pub creator_id: Option<String>,
+    pub protocol: String,
+}
+
+/// Emitted when a mod file download starts on the server
+#[derive(serde::Serialize, Clone)]
+pub struct ServerDownloadStartedPayload {
+    pub ip: String,
+    pub creator_id: Option<String>,
+    pub file: String,
+    pub total_size: u64,
+    pub protocol: String,
+}
+
+/// Emitted when a mod file download finishes on the server
+#[derive(serde::Serialize, Clone)]
+pub struct ServerDownloadFinishedPayload {
+    pub ip: String,
+    pub creator_id: Option<String>,
+    pub file: String,
+    pub total_size: u64,
+    pub protocol: String,
+}
+
 #[derive(serde::Serialize)]
 pub struct ActiveDownload {
     pub ip: String,
@@ -42,6 +70,8 @@ pub struct RepoServerState {
     pub upload_limit: Mutex<u32>, // KB/s
     pub seed: Mutex<Option<String>>,
     pub active_downloads: Arc<Mutex<HashMap<String, ActiveDownload>>>,
+    /// Anti-spam: tracks last notification instant per "ip|creator_id" — 30s cooldown
+    pub connected_clients: Arc<Mutex<HashMap<String, std::time::Instant>>>,
 }
 
 impl Default for RepoServerState {
@@ -58,6 +88,7 @@ impl Default for RepoServerState {
             upload_limit: Mutex::new(0),
             seed: Mutex::new(None),
             active_downloads: Arc::new(Mutex::new(HashMap::new())),
+            connected_clients: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -189,8 +220,50 @@ pub async fn start_repo_server(
 
 
     let active_downloads = state.active_downloads.clone();
+    let connected_clients = state.connected_clients.clone();
     let serve_dir_clone = serve_dir.clone();
-    
+
+    // — Connection notification route: GET /repo.json —
+    let connected_clients_conn = connected_clients.clone();
+    let handle_conn = handle.clone();
+    let conn_route = warp::get()
+        .and(warp::path("repo.json"))
+        .and(warp::addr::remote())
+        .and(warp::header::optional::<String>("x-creator-key")
+            .and(warp::header::optional::<String>("x-creator-id"))
+            .map(|k1: Option<String>, k2: Option<String>| k1.or(k2)))
+        .map(move |addr: Option<std::net::SocketAddr>, key: Option<String>| {
+            let ip = addr.map(|a| a.ip().to_string()).unwrap_or_default();
+            let protocol = if ip.starts_with("127.0.0.1") || ip == "::1" { "Local" }
+                else if ip.starts_with("192.168.") || ip.starts_with("10.") || ip.starts_with("172.") { "LAN" }
+                else { "WAN" };
+
+            // Anti-spam: 30s cooldown per unique client key
+            let spam_key = format!("{}|{}", ip, key.as_deref().unwrap_or(""));
+            let should_notify = {
+                let mut clients = connected_clients_conn.lock().unwrap();
+                let now = std::time::Instant::now();
+                let last = clients.get(&spam_key).copied();
+                let elapsed = last.map(|t| now.duration_since(t).as_secs()).unwrap_or(u64::MAX);
+                if elapsed >= 30 {
+                    clients.insert(spam_key, now);
+                    true
+                } else {
+                    false
+                }
+            };
+
+            if should_notify {
+                let _ = handle_conn.emit_all("bmm://server-client-connected", ServerClientConnectedPayload {
+                    ip: ip.clone(),
+                    creator_id: key.clone(),
+                    protocol: protocol.to_string(),
+                });
+            }
+            // Pass-through: the actual repo.json is served by the file_route below
+            warp::reply()
+        });
+
     let key_filter = warp::header::optional::<String>("x-creator-key")
         .and(warp::header::optional::<String>("x-creator-id"))
         .map(|k1: Option<String>, k2: Option<String>| k1.or(k2));
@@ -245,6 +318,69 @@ pub async fn start_repo_server(
                 let total_size = metadata.len();
                 let file_name = rel_path.to_string();
 
+                // Determine protocol for events
+                let protocol = if ip.starts_with("127.0.0.1") || ip == "::1" { "Local" }
+                    else if ip.starts_with("192.168.") || ip.starts_with("10.") || ip.starts_with("172.") { "LAN" }
+                    else { "WAN" };
+
+                // Intercept repo.json to filter modpacks based on share_mode and Creator ID
+                if file_name == "repo.json" || file_name == "repo.json\\" || file_name == "repo.json/" {
+                    // Anti-spam notification logic
+                    let client_key = format!("{}|{:?}", ip, key);
+                    let should_notify = {
+                        let mut clients = state.connected_clients.lock().unwrap();
+                        let now = std::time::Instant::now();
+                        if let Some(last) = clients.get(&client_key) {
+                            if now.duration_since(*last).as_secs() > 30 {
+                                clients.insert(client_key, now);
+                                true
+                            } else { false }
+                        } else {
+                            clients.insert(client_key, now);
+                            true
+                        }
+                    };
+
+                    if should_notify {
+                        let _ = handle.emit_all("bmm://server-client-connected", ServerClientConnectedPayload {
+                            ip: ip.clone(),
+                            creator_id: key.clone(),
+                            protocol: protocol.to_string(),
+                        });
+                    }
+
+                    if let Ok(content) = tokio::fs::read_to_string(&full_path).await {
+                        if let Ok(mut repo) = serde_json::from_str::<crate::models::repo::ServerRepo>(&content) {
+                            if let Some(mut packs) = repo.modpacks.take() {
+                                packs.retain(|p| {
+                                    match p.share_mode.as_str() {
+                                        "public" => true,
+                                        "whitelist_repo" => {
+                                            !crate::commands::ban_manager::is_banned(&ip, key.as_deref()) &&
+                                            (!crate::commands::whitelist_manager::is_whitelist_enabled() || crate::commands::whitelist_manager::is_whitelisted(&ip, key.as_deref()))
+                                        },
+                                        "whitelist_custom" => {
+                                            if let Some(ref cw) = p.custom_whitelist {
+                                                cw.contains(&key.clone().unwrap_or_default())
+                                            } else { false }
+                                        },
+                                        _ => false,
+                                    }
+                                });
+                                repo.modpacks = Some(packs);
+                            }
+                            if let Ok(filtered_json) = serde_json::to_string(&repo) {
+                                let response = warp::http::Response::builder()
+                                    .header("Content-Type", "application/json")
+                                    .header("Content-Length", filtered_json.len())
+                                    .body(warp::hyper::Body::from(filtered_json))
+                                    .unwrap();
+                                return Ok::<_, warp::Rejection>(response);
+                            }
+                        }
+                    }
+                }
+
                 let upload_limit = *state.upload_limit.lock().unwrap();
                 let stream = ReaderStream::new(file);
                 let active_downloads_inner = active_downloads.clone();
@@ -253,10 +389,6 @@ pub async fn start_repo_server(
                 // Track the download in state
                 {
                     let mut dl_lock = active_downloads_inner.lock().unwrap();
-                    let protocol = if ip.starts_with("127.0.0.1") || ip == "::1" { "Local" }
-                        else if ip.starts_with("192.168.") || ip.starts_with("10.") || ip.starts_with("172.") { "LAN" }
-                        else { "WAN" };
-
                     dl_lock.insert(ip_clone.clone(), ActiveDownload {
                         ip: ip_clone.clone(),
                         file: file_name.clone(),
@@ -264,6 +396,17 @@ pub async fn start_repo_server(
                         downloaded_size: 0,
                         start_time: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
                         creator_id: key.clone(),
+                        protocol: protocol.to_string(),
+                    });
+                }
+
+                // Emit download-started (only for mod files, not repo.json itself)
+                if is_mod_file {
+                    let _ = handle.emit_all("bmm://server-download-started", ServerDownloadStartedPayload {
+                        ip: ip.clone(),
+                        creator_id: key.clone(),
+                        file: file_name.clone(),
+                        total_size,
                         protocol: protocol.to_string(),
                     });
                 }
@@ -280,6 +423,15 @@ pub async fn start_repo_server(
 
                 let bytes_sent_acc = Arc::new(AsyncMutex::new(0usize));
                 let interval_start = Arc::new(AsyncMutex::new(std::time::Instant::now()));
+
+                // Clone values for the finish-event closure
+                let handle_finish = handle.clone();
+                let ip_finish = ip.clone();
+                let key_finish = key.clone();
+                let file_finish = file_name.clone();
+                let protocol_finish = protocol.to_string();
+                let is_mod_file_finish = is_mod_file;
+                let bytes_total_sent = 0u64;
 
                 let final_stream = tracked_stream.then(move |chunk| {
                     let bytes_sent = bytes_sent_acc.clone();
@@ -309,6 +461,34 @@ pub async fn start_repo_server(
                     }
                 });
 
+                // Wrap stream to detect completion and emit download-finished
+                let final_stream = if is_mod_file_finish {
+                    let handle_fin = handle_finish.clone();
+                    let ip_fin = ip_finish.clone();
+                    let key_fin = key_finish.clone();
+                    let file_fin = file_finish.clone();
+                    let proto_fin = protocol_finish.clone();
+                    let total = total_size;
+                    let stream_with_end = final_stream.chain(futures::stream::once(async move {
+                        let _ = handle_fin.emit_all("bmm://server-download-finished", ServerDownloadFinishedPayload {
+                            ip: ip_fin,
+                            creator_id: key_fin,
+                            file: file_fin,
+                            total_size: total,
+                            protocol: proto_fin,
+                        });
+                        // Signal end-of-stream with an empty Ok chunk
+                        Ok::<Bytes, std::io::Error>(Bytes::new())
+                    }));
+                    warp::hyper::Body::wrap_stream(stream_with_end)
+                } else {
+                    warp::hyper::Body::wrap_stream(final_stream)
+                };
+
+                // Drop unused variable
+                let _ = bytes_total_sent;
+
+
                 let content_type = if full_path.extension().map(|e| e == "json").unwrap_or(false) { "application/json" }
                     else if full_path.extension().map(|e| e == "zip").unwrap_or(false) { "application/zip" }
                     else { "application/octet-stream" };
@@ -316,7 +496,7 @@ pub async fn start_repo_server(
                 let response = warp::http::Response::builder()
                     .header("Content-Length", total_size)
                     .header("Content-Type", content_type)
-                    .body(warp::hyper::Body::wrap_stream(final_stream))
+                    .body(final_stream)
                     .map_err(|_| warp::reject::not_found())?;
 
                 Ok::<_, warp::Rejection>(response)
@@ -328,7 +508,9 @@ pub async fn start_repo_server(
         .allow_methods(vec!["GET"])
         .allow_headers(vec!["*", "x-creator-key", "x-creator-id"]);
     
-    let routes = file_route.with(cors);
+    // conn_route first (for notification side-effect), then file_route handles all files including repo.json
+    let routes = conn_route.with(cors.clone()).or(file_route.with(cors));
+
 
     // 5. Port and Address
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));

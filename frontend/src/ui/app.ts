@@ -22,6 +22,7 @@ import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode, check
 
 // New Modularized Imports
 import { initModlist } from '../features/mods/modlist.js';
+import { initModpackCreator } from '../features/mods/modpack-creator.js';
 import { initCrashReportUI, checkPreviousCrash } from './crash-report.js';
 import { initInteractionLogging } from './user-logger.js';
 import { initDebugMenu } from '../features/debug/debug-menu.js';
@@ -388,6 +389,11 @@ async function main() {
     initInteractiveDocs();
     initDocsUI();
     initDeepLinks();
+
+    const modpackContainer = document.getElementById('modpack-container');
+    if (modpackContainer) {
+        initModpackCreator(modpackContainer);
+    }
 
     // Bind Docs Diagram buttons
     document.getElementById('btn-docs-resumable')?.addEventListener('click', () => openDiagram('resumable-downloads'));

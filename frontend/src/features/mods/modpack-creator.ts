@@ -1,0 +1,892 @@
+// @ts-nocheck
+/**
+ * modpack-creator.ts — Modpack Creator UI
+ * Allows users to create, edit, and manage Modpacks stored in AppData.
+ * Features: single/multi-profile, dependency modes, per-mod download links & fallbacks,
+ * optional ServerRepo link, SHA-256 identification for cross-PC recognition.
+ */
+import { invoke } from '../../core/api.js';
+import { toast } from '../../ui/app.js';
+import { t } from '../../core/i18n.js';
+import { formatBytes } from '../../core/utils.js';
+
+// ── State ────────────────────────────────────────────────────────────────────
+
+let _modpacks = [];
+let _editingPack = null; // LocalModpack currently being edited
+let _allMods = [];
+let _profiles = [];
+let _activeProfileId = null;
+let _packMods = []; // ModpackModRef[] being assembled
+
+// ── Public init ──────────────────────────────────────────────────────────────
+
+export async function initModpackCreator(container) {
+    if (!container) return;
+
+    // Bind buttons
+    const btnImport = document.getElementById('btn-import-modpack');
+    if (btnImport && !btnImport.dataset.bound) {
+        btnImport.dataset.bound = 'true';
+        btnImport.addEventListener('click', async () => {
+            try {
+                await invoke('import_modpack');
+                toast(t('modpack.importSuccess') || 'Modpack importé avec succès', 'success');
+                await _loadData();
+                _renderModpackList(container);
+            } catch (err) {
+                if (String(err) !== 'repo.errCancel') toast(String(err), 'error');
+            }
+        });
+    }
+
+    const btnQuickApply = document.getElementById('btn-quick-apply-modpack');
+    if (btnQuickApply && !btnQuickApply.dataset.bound) {
+        btnQuickApply.dataset.bound = 'true';
+        btnQuickApply.addEventListener('click', () => _openQuickApplyModal());
+    }
+
+    await _loadData();
+    _renderModpackList(container);
+}
+
+async function _loadData() {
+    try {
+        [_modpacks, _allMods, _profiles, _activeProfileId] = await Promise.all([
+            invoke('load_modpacks'),
+            invoke('get_all_mods'),
+            invoke('get_profiles'),
+            invoke('get_active_profile_id'),
+        ]);
+    } catch (e) {
+        console.error('[ModpackCreator] load error', e);
+    }
+}
+
+// ── List view ────────────────────────────────────────────────────────────────
+
+function _renderModpackList(container) {
+    container.innerHTML = '';
+
+    const countHeader = document.createElement('div');
+    countHeader.style.cssText = 'display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap: wrap; gap: 16px;';
+    countHeader.innerHTML = `
+        <div style="display:flex; align-items:center; gap:12px;">
+            <div style="width:4px; height:20px; background:var(--accent); border-radius:2px;"></div>
+            <span style="font-size:16px; font-weight:800; color:var(--text-primary); text-transform:uppercase; letter-spacing:0.5px;">${t('modpack.title')}</span>
+            <span style="font-size:12px; color:var(--text-muted); background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:10px; font-weight:600;" id="modpack-count-badge">${_modpacks.length}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px; flex: 1; justify-content: flex-end;">
+            <div class="search-box" id="mp-search-wrap" style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:8px 12px;transition:border-color 0.2s; max-width: 250px; width: 100%;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="modpack-search" placeholder="${t('common.search') || 'Rechercher...'}" style="flex:1; background:none; border:none; outline:none; font-size:13px; color:var(--text-primary);">
+            </div>
+            <button id="modpack-create-btn" class="btn btn-primary" style="height:38px; padding:0 20px; font-size:12px; font-weight:700; border-radius:10px; background:linear-gradient(135deg, var(--accent) 0%, #0081ff 100%); border:none; box-shadow: 0 4px 15px rgba(0,194,255,0.25);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                ${t('modpack.create')}
+            </button>
+        </div>
+    `;
+    container.appendChild(countHeader);
+
+    const searchInput = countHeader.querySelector('#modpack-search');
+    const searchWrap = countHeader.querySelector('#mp-search-wrap');
+    searchWrap.addEventListener('focusin', () => searchWrap.style.borderColor = 'rgba(0,194,255,0.35)');
+    searchWrap.addEventListener('focusout', () => searchWrap.style.borderColor = 'rgba(255,255,255,0.08)');
+    
+    const countBadge = countHeader.querySelector('#modpack-count-badge');
+
+    const createBtn = countHeader.querySelector('#modpack-create-btn');
+    createBtn.addEventListener('click', () => _openEditor(container, null));
+
+    if (_modpacks.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'text-align:center;padding:60px 20px;color:var(--text-muted);display:flex;flex-direction:column;align-items:center;gap:16px;';
+        empty.innerHTML = `
+            <div style="width:64px; height:64px; border-radius:20px; background:rgba(255,255,255,0.02); display:flex; align-items:center; justify-content:center; border:1px dashed rgba(255,255,255,0.1);">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="opacity:0.5;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+            </div>
+            <div style="font-size:14px; font-weight:600; color:var(--text-secondary);">${t('modpack.noMods')}</div>
+            <p style="font-size:12px; max-width:300px; line-height:1.5;">${t('modpack.noModsDesc')}</p>
+        `;
+        container.appendChild(empty);
+        return;
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'modpack-grid';
+    
+    const cards = [];
+
+    _modpacks.forEach(pack => {
+        const card = document.createElement('div');
+        card.className = 'modpack-card';
+
+        const modsCount = pack.mods ? pack.mods.length : 0;
+        const lastUpdate = pack.updated_at ? new Date(pack.updated_at).toLocaleDateString() : '—';
+        const description = pack.description || t('modpack.noDesc');
+
+        const allEnabled = pack.mods && pack.mods.length > 0 && pack.mods.every(mref => {
+            const local = _allMods.find(m => m.id === mref.mod_id || m.sha256 === mref.sha256);
+            return local && local.enabled;
+        });
+        
+        const applyIcon = allEnabled 
+            ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>' 
+            : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
+        const applyTitle = allEnabled ? 'Désactiver le modpack' : t('modpack.apply');
+        const applyClass = allEnabled ? 'btn-apply active' : 'btn-apply';
+        const applyColor = allEnabled ? 'color: var(--success);' : '';
+
+        card.innerHTML = `
+            <div class="modpack-card-info" style="margin-left: 0; display: flex; flex-direction: column; height: 100%;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px; padding-right: 90px;">
+                    <div class="modpack-card-title" title="${pack.name}">${pack.name}</div>
+                </div>
+                <div class="modpack-card-meta">
+                    <span>${t('modpack.modsCount', { count: modsCount })}</span>
+                    <span style="opacity:0.3">•</span>
+                    <span>${pack.game_name || t('modpack.general')}</span>
+                </div>
+                <div style="font-size:10px; color:var(--text-muted); margin-top:8px; line-height:1.4; display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden; height:28px;">
+                    ${description}
+                </div>
+                <div style="margin-top:auto; display:flex; align-items:flex-end; justify-content:space-between;">
+                    <div style="font-size:9px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; opacity:0.6; padding-bottom: 4px;">
+                        ${t('modpack.updatedAt', { date: lastUpdate })}
+                    </div>
+                    <div class="bmm-switch-wrap btn-apply ${allEnabled ? 'active' : ''}" 
+                         style="width:38px; height:20px; position:relative; cursor:pointer; flex-shrink:0;"
+                         onmouseenter="window.showTaskyHelp('${t('modpack.quickApplyDesc') || 'Cliquez pour activer ou désactiver ce pack.'}', 'zap')"
+                         onmouseleave="window.hideTaskyHelp()">
+                        <div class="switch-bg" style="position:absolute; inset:0; border-radius:10px; background:${allEnabled ? 'var(--success)' : 'rgba(255,255,255,0.1)'}; transition:all 0.3s; border:1px solid ${allEnabled ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)'};"></div>
+                        <div class="switch-knob" style="position:absolute; top:3px; ${allEnabled ? 'right:3px' : 'left:3px'}; width:14px; height:14px; border-radius:50%; background:#fff; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modpack-card-actions">
+                <button class="btn btn-icon btn-ghost btn-export" title="${t('modpack.exportTitle')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
+                <button class="btn btn-icon btn-ghost btn-edit" title="${t('modpack.edit')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button class="btn btn-icon btn-ghost btn-delete" style="color:var(--danger)" title="${t('modpack.delete')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+            </div>
+        `;
+
+        card.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); _openEditor(container, pack); };
+        card.querySelector('.btn-apply').onclick = (e) => { e.stopPropagation(); _applyModpack(container, pack); };
+        card.querySelector('.btn-export').onclick = (e) => { e.stopPropagation(); _exportModpack(pack); };
+        card.querySelector('.btn-delete').onclick = (e) => { e.stopPropagation(); _deleteModpack(container, pack); };
+        card.onclick = () => _openEditor(container, pack);
+
+        grid.appendChild(card);
+        cards.push({ card, name: pack.name.toLowerCase() });
+    });
+
+    container.appendChild(grid);
+
+    searchInput.addEventListener('input', (e) => {
+        const q = e.target.value.toLowerCase().trim();
+        let visible = 0;
+        cards.forEach(({ card, name }) => {
+            if (!q || name.includes(q)) {
+                card.style.display = 'flex';
+                visible++;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+        countBadge.textContent = visible.toString();
+    });
+}
+
+// ── Editor ───────────────────────────────────────────────────────────────────
+
+async function _openEditor(container, pack) {
+    _editingPack = pack ? JSON.parse(JSON.stringify(pack)) : {
+        id: '', name: '', description: null, created_at: '', updated_at: '',
+        multi_profile: false, dependency_mode: 'manual', mods: [], sr_link: null, game_name: null
+    };
+    _packMods = _editingPack.mods ? [..._editingPack.mods] : [];
+
+    container.innerHTML = '';
+
+    // Premium Header / Breadcrumbs
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex; align-items:center; justify-content:space-between; margin-bottom:24px;';
+    header.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:4px;">
+            <div style="display:flex; align-items:center; gap:8px; color:var(--text-muted); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">
+                <span style="cursor:pointer;" id="bc-home">${t('modpack.title')}</span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 18 15 12 9 6"/></svg>
+                <span style="color:var(--accent);">${pack ? t('modpack.edit') : t('modpack.create')}</span>
+            </div>
+            <h2 style="font-size:20px; font-weight:800; margin:0; color:var(--text-primary);">${pack ? pack.name : t('modpack.newPack')}</h2>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-ghost" id="editor-cancel" style="border:1px solid rgba(255,255,255,0.05);">${t('common.cancel')}</button>
+            <button class="btn btn-primary" id="editor-save" style="background:linear-gradient(135deg, var(--accent) 0%, #0081ff 100%); border:none; box-shadow:0 4px 15px rgba(0,194,255,0.25); min-width:120px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                ${t('modpack.save')}
+            </button>
+        </div>
+    `;
+    container.appendChild(header);
+
+    const goBack = async () => { await _loadData(); _renderModpackList(container); };
+    header.querySelector('#bc-home').onclick = goBack;
+    header.querySelector('#editor-cancel').onclick = goBack;
+
+    // Split Layout
+    const layout = document.createElement('div');
+    layout.className = 'modpack-editor-layout';
+    container.appendChild(layout);
+
+    // LEFT: Meta
+    const leftCol = document.createElement('div');
+    leftCol.className = 'editor-section-card';
+    leftCol.innerHTML = `
+        <div class="editor-section-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="13 2 13 8 20 8"/></svg>
+            ${t('modpack.generalInfo')}
+        </div>
+    `;
+
+    const metaForm = document.createElement('div');
+    metaForm.style.cssText = 'display:flex; flex-direction:column; gap:16px;';
+    
+    metaForm.appendChild(_formField(t('modpack.name'), `<input id="mp-name" type="text" class="form-input" placeholder="${t('modpack.namePlaceholder')}" value="${_editingPack.name || ''}" style="width:100%;">`));
+    metaForm.appendChild(_formField(t('modpack.description'), `<textarea id="mp-desc" class="form-input" style="width:100%; height:100px; resize:none;">${_editingPack.description || ''}</textarea>`));
+    metaForm.appendChild(_formField(t('modpack.game'), `<input id="mp-game" type="text" class="form-input" placeholder="e.g. DCS World" value="${_editingPack.game_name || ''}" style="width:100%;">`));
+    
+    // Multi-profile toggle (re-styled)
+    const multiRow = document.createElement('label');
+    multiRow.style.cssText = 'display:flex; align-items:center; gap:12px; cursor:pointer; padding:16px; border-radius:14px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); transition:all 0.2s;';
+    multiRow.onmouseenter = () => multiRow.style.borderColor = 'rgba(var(--accent-rgb), 0.2)';
+    multiRow.onmouseleave = () => multiRow.style.borderColor = 'rgba(255,255,255,0.05)';
+    
+    const multiCb = document.createElement('input');
+    multiCb.type = 'checkbox';
+    multiCb.id = 'mp-multi';
+    multiCb.style.cssText = 'width:20px; height:20px; accent-color:var(--accent); cursor:pointer;';
+    multiCb.checked = _editingPack.multi_profile;
+    multiCb.onchange = () => {
+        _editingPack.multi_profile = multiCb.checked;
+    };
+    
+    const multiInfo = document.createElement('div');
+    multiInfo.innerHTML = `
+        <div style="font-size:13px; font-weight:700; color:var(--text-primary);">${t('modpack.multiProfile')}</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${t('modpack.multiProfileDesc')}</div>
+    `;
+    
+    multiRow.appendChild(multiCb);
+    multiRow.appendChild(multiInfo);
+    metaForm.appendChild(multiRow);
+
+    metaForm.appendChild(_formField(t('modpack.depMode'), `
+        <select id="mp-depmode" class="form-input" style="width:100%;">
+            <option value="all" ${_editingPack.dependency_mode === 'all' ? 'selected' : ''}>${t('modpack.depModeAll')}</option>
+            <option value="none" ${_editingPack.dependency_mode === 'none' ? 'selected' : ''}>${t('modpack.depModeNone')}</option>
+            <option value="manual" ${_editingPack.dependency_mode === 'manual' ? 'selected' : ''}>${t('modpack.depModeManual')}</option>
+        </select>
+    `));
+
+    metaForm.appendChild(_formField(t('modpack.srLink'), `<input id="mp-srlink" type="text" class="form-input" placeholder="${t('modpack.srLinkPlaceholder')}" value="${_editingPack.sr_link || ''}" style="width:100%;">`));
+
+    leftCol.appendChild(metaForm);
+    layout.appendChild(leftCol);
+
+    // RIGHT: Mods
+    const rightCol = document.createElement('div');
+    rightCol.className = 'editor-section-card';
+    rightCol.style.flex = '1';
+    rightCol.innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+            <div class="editor-section-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                ${t('modpack.modsManagement')}
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-add-mods-pack" style="font-size:11px; height:32px; border-radius:8px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                ${t('modpack.addMods')}
+            </button>
+        </div>
+    `;
+
+    const modListEl = document.createElement('div');
+    modListEl.id = 'mp-modlist';
+    modListEl.style.cssText = 'display:flex; flex-direction:column; gap:10px; margin-top:10px;';
+    rightCol.appendChild(modListEl);
+    _renderPackModList(modListEl);
+
+    rightCol.querySelector('#btn-add-mods-pack').onclick = () => _openMultiSelectModal(modListEl);
+
+    layout.appendChild(rightCol);
+
+    // Save Logic
+    header.querySelector('#editor-save').onclick = async () => {
+        const name = document.getElementById('mp-name')?.value.trim();
+        if (!name) return toast(t('modpack.errNoName'), 'warning');
+        if (_packMods.length === 0) return toast(t('modpack.errNoMods'), 'warning');
+
+        const payload = {
+            ..._editingPack,
+            name,
+            description: document.getElementById('mp-desc')?.value.trim() || null,
+            game_name: document.getElementById('mp-game')?.value.trim() || null,
+            multi_profile: document.getElementById('mp-multi')?.checked || false,
+            dependency_mode: document.getElementById('mp-depmode')?.value || 'manual',
+            sr_link: document.getElementById('mp-srlink')?.value.trim() || null,
+            mods: _packMods,
+        };
+
+        try {
+            const btn = header.querySelector('#editor-save');
+            btn.disabled = true;
+            btn.textContent = t('modpack.saving');
+            await invoke('save_modpack', { modpack: payload });
+            toast(t('modpack.savedOk'), 'success');
+            await _loadData();
+            _renderModpackList(container);
+        } catch (err) {
+            toast(String(err), 'error');
+            header.querySelector('#editor-save').disabled = false;
+            header.querySelector('#editor-save').textContent = t('modpack.save');
+        }
+    };
+}
+
+function _renderPackModList(listEl) {
+    listEl.innerHTML = '';
+    if (_packMods.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'padding:40px 20px; text-align:center; color:var(--text-muted); border-radius:16px; border:1px dashed rgba(255,255,255,0.08); background:rgba(0,0,0,0.02); display:flex; flex-direction:column; align-items:center; gap:12px;';
+        empty.innerHTML = `
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+            <span style="font-size:12px;">${t('modpack.noMods')}</span>
+        `;
+        listEl.appendChild(empty);
+        return;
+    }
+
+    _packMods.forEach((pm, idx) => {
+        const card = document.createElement('div');
+        card.className = 'mod-item-card';
+        card.style.display = 'flex';
+        card.style.flexDirection = 'column';
+        card.style.gap = '12px';
+
+        card.innerHTML = `
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="flex:1; min-width:0;">
+                    <div style="font-size:13px; font-weight:700; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${pm.mod_name}</div>
+                    <div style="font-size:10px; color:var(--text-muted); display:flex; gap:6px;">
+                        <span>V${pm.mod_version}</span>
+                        <span style="opacity:0.3">|</span>
+                        <span style="color:var(--text-secondary);">${pm.profile_name || 'Global'}</span>
+                    </div>
+                </div>
+                <button class="btn btn-icon btn-ghost btn-remove" style="color:var(--danger); opacity:0.5;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.03);">
+                <div style="display:flex; flex-direction:column; gap:4px;">
+                    <label style="font-size:9px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">${t('modpack.modDownloadLink')}</label>
+                    <input type="text" class="form-input dl-input" placeholder="https://..." value="${pm.download_link || ''}" style="font-size:11px; height:30px; padding:0 8px;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:4px;">
+                    <label style="font-size:9px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">${t('modpack.modFallback')}</label>
+                    <input type="text" class="form-input fb-input" placeholder="Nexus, Drive, etc." value="${pm.download_fallback || ''}" style="font-size:11px; height:30px; padding:0 8px;">
+                </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:8px; margin-top:4px;">
+                <div style="display:flex; align-items:center; gap:16px;">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:10px; font-weight:600; color:var(--text-secondary);">
+                        <input type="checkbox" class="deps-cb" ${pm.include_dependencies ? 'checked' : ''} style="width:14px; height:14px; accent-color:var(--accent);">
+                        ${t('modpack.modDeps')}
+                    </label>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-size:9px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">${t('modpack.modFallbackType') || 'Type Fallback'}</span>
+                        <select class="form-select fb-type-select" style="font-size:10px; height:24px; padding:0 4px; border-radius:4px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); color:var(--text-primary);">
+                            <option value="direct" ${pm.fallback_type === 'direct' ? 'selected' : ''}>Direct Link</option>
+                            <option value="sr" ${pm.fallback_type === 'sr' ? 'selected' : ''}>Server Repo</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="deps-list" style="display:flex; flex-wrap:wrap; gap:4px; opacity:0.6;"></div>
+            </div>
+        `;
+
+        card.querySelector('.btn-remove').onclick = () => {
+            _packMods.splice(idx, 1);
+            _renderPackModList(listEl);
+        };
+
+        const dlIn = card.querySelector('.dl-input');
+        dlIn.oninput = () => { _packMods[idx].download_link = dlIn.value.trim(); };
+
+        const fbIn = card.querySelector('.fb-input');
+        fbIn.oninput = () => { _packMods[idx].download_fallback = fbIn.value.trim(); };
+
+        const depCb = card.querySelector('.deps-cb');
+        depCb.onchange = () => { _packMods[idx].include_dependencies = depCb.checked; };
+
+        const fbTypeSelect = card.querySelector('.fb-type-select');
+        fbTypeSelect.onchange = () => { _packMods[idx].fallback_type = fbTypeSelect.value; };
+
+        // Pre-show dependencies if mod is found locally
+        const localMod = _allMods.find(m => m.id === pm.mod_id);
+        if (localMod && localMod.dependencies && localMod.dependencies.length > 0) {
+            const dlist = card.querySelector('.deps-list');
+            localMod.dependencies.forEach(did => {
+                const tag = document.createElement('span');
+                tag.style.cssText = 'font-size:9px; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.05); color:var(--text-muted);';
+                const dmod = _allMods.find(m => m.id === did);
+                tag.textContent = dmod ? dmod.name : did;
+                dlist.appendChild(tag);
+            });
+        }
+
+        listEl.appendChild(card);
+    });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function _formField(label, inputHtml) {
+    const wrap = document.createElement('div');
+    wrap.style.marginBottom = '16px';
+    wrap.innerHTML = `
+        <div style="font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em;">${label}</div>
+        ${inputHtml}
+    `;
+    return wrap;
+}
+
+function _makeIconBtn(svgHtml, bgColor, color) {
+    const btn = document.createElement('button');
+    btn.style.cssText = `
+        width:26px;height:26px;border-radius:6px;border:1px solid ${bgColor};
+        background:${bgColor};color:${color};cursor:pointer;
+        display:flex;align-items:center;justify-content:center;flex-shrink:0;
+        transition:all 0.15s;
+    `;
+    btn.innerHTML = svgHtml;
+    btn.addEventListener('mouseenter', () => btn.style.opacity = '0.8');
+    btn.addEventListener('mouseleave', () => btn.style.opacity = '1');
+    return btn;
+}
+
+function _openMultiSelectModal(listEl) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; z-index:100000; opacity:0; transition:opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1); pointer-events:auto;';
+
+
+
+    const content = document.createElement('div');
+    content.className = 'modal-content glass';
+    content.style.cssText = 'width:660px; max-width:95vw; height:80vh; max-height:700px; display:flex; flex-direction:column; padding:0; border-radius:16px; overflow:hidden; background:var(--card-bg, #0f172a); border:1px solid var(--border, #1e293b); box-shadow:0 32px 64px rgba(0,0,0,0.7); transform:translateY(20px) scale(0.98); transition:all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); pointer-events:auto;';
+
+    // Header with search
+    const header = document.createElement('div');
+    header.style.cssText = 'padding:20px 24px 0; border-bottom:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); flex-shrink:0;';
+    header.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="width:36px; height:36px; border-radius:10px; background:rgba(0,194,255,0.12); border:1px solid rgba(0,194,255,0.25); display:flex; align-items:center; justify-content:center; color:var(--accent);">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                </div>
+                <div>
+                    <div style="font-size:16px; font-weight:700; color:var(--text-primary);">${t('modpack.selectMods')}</div>
+                    <div style="font-size:11px; color:var(--text-muted); margin-top:1px;" id="ms-count-label"></div>
+                </div>
+            </div>
+            <button class="btn btn-icon btn-ghost" id="ms-close" style="color:var(--text-muted); width:32px; height:32px; border-radius:8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div style="padding-bottom:16px; display:flex; align-items:center; gap:10px;">
+            <div style="flex:1; display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 12px; transition:border-color 0.2s;" id="ms-search-wrap">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="ms-search" placeholder="${t('common.search') || 'Rechercher...'}" style="flex:1; background:none; border:none; outline:none; font-size:13px; color:var(--text-primary);">
+            </div>
+        </div>
+    `;
+
+    // Body
+    const body = document.createElement('div');
+    body.style.cssText = 'flex:1; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:5px;';
+
+    // Filter available mods
+    let availableMods = _allMods.filter(m => !_packMods.some(pm => String(pm.mod_id) === String(m.id)));
+    console.log('[Modpack] Total available before profile filter:', availableMods.length);
+    
+    // If multi-profile is OFF, only show mods from the current active profile
+    if (!_editingPack.multi_profile) {
+        const targetId = _activeProfileId || window.cachedActiveProfileId;
+        const activeProfile = _profiles.find(p => String(p.id) === String(targetId));
+        console.log('[Modpack] Active Profile detected:', activeProfile?.name, 'ID:', targetId);
+        
+        if (activeProfile) {
+            availableMods = availableMods.filter(m => {
+                // Match by profile_id or by directory path (path is very reliable in BMM)
+                const matchesId = m.profile_id && String(m.profile_id) === String(activeProfile.id);
+                const matchesPath = m.mod_folder_path && m.mod_folder_path.toLowerCase().startsWith(activeProfile.mods_path.toLowerCase());
+                return matchesId || matchesPath;
+            });
+            console.log('[Modpack] Available after profile filter:', availableMods.length);
+        } else {
+            console.warn('[Modpack] No active profile found, showing all mods.');
+        }
+    }
+
+    const checkboxes = [];
+    const rows = [];
+
+    if (availableMods.length === 0) {
+        body.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:60px 20px; display:flex; flex-direction:column; align-items:center; gap:12px;">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="opacity:0.3;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+            <span>${t('modpack.noMoreMods')}</span>
+        </div>`;
+    }
+
+    availableMods.forEach(m => {
+        const prof = _profiles.find(p => m.mod_folder_path && (m.mod_folder_path.toString().includes(p.mods_path?.toString()) || p.mods_path?.toString().includes(m.mod_folder_path?.toString())));
+        const depCount = m.dependencies ? m.dependencies.length : 0;
+        const searchLabel = (m.name + (prof ? prof.name : '')).toLowerCase();
+
+        const row = document.createElement('label');
+        row.style.cssText = 'display:flex; align-items:center; gap:14px; padding:10px 12px; border-radius:12px; cursor:pointer; transition:all 0.15s; border:1px solid transparent; background:rgba(255,255,255,0.02);';
+        row.addEventListener('mouseenter', () => { if (!row.querySelector('input').checked) row.style.background = 'rgba(0,194,255,0.04)'; row.style.borderColor = 'rgba(0,194,255,0.12)'; });
+        row.addEventListener('mouseleave', () => { if (!row.querySelector('input').checked) { row.style.background = 'rgba(255,255,255,0.02)'; row.style.borderColor = 'transparent'; } });
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = m.id;
+        cb.dataset.profId = prof?.id || '';
+        cb.style.cssText = 'width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0;';
+        cb.addEventListener('change', () => {
+            row.style.background = cb.checked ? 'rgba(0,194,255,0.08)' : 'rgba(255,255,255,0.02)';
+            row.style.borderColor = cb.checked ? 'rgba(0,194,255,0.25)' : 'transparent';
+            updateSelCount();
+        });
+
+        const iconBox = document.createElement('div');
+        iconBox.style.cssText = 'width:32px; height:32px; border-radius:8px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; color:var(--text-muted); flex-shrink:0;';
+        iconBox.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>';
+
+        const info = document.createElement('div');
+        info.style.cssText = 'flex:1; min-width:0;';
+        info.innerHTML = `
+            <div style="font-size:13px; font-weight:600; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${m.name}</div>
+            <div style="display:flex; align-items:center; gap:5px; margin-top:3px; flex-wrap:wrap;">
+                <span style="font-size:10px; color:var(--text-muted);">v${m.version || '?'}</span>
+                ${prof ? `<span style="font-size:9px; font-weight:700; color:var(--accent); background:rgba(0,194,255,0.1); border:1px solid rgba(0,194,255,0.2); border-radius:4px; padding:1px 6px;">${prof.name}</span>` : ''}
+                ${depCount > 0 ? `<span style="font-size:9px; color:var(--text-muted); background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.06); border-radius:4px; padding:1px 6px;">&rarr; ${depCount} dep.</span>` : ''}
+            </div>
+        `;
+
+        row.appendChild(cb);
+        row.appendChild(iconBox);
+        row.appendChild(info);
+        body.appendChild(row);
+        checkboxes.push(cb);
+        rows.push({ row, searchLabel });
+    });
+
+    // Footer
+    const footer = document.createElement('div');
+    footer.style.cssText = 'padding:14px 20px; border-top:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between; gap:12px; background:rgba(0,0,0,0.15); flex-shrink:0;';
+    footer.innerHTML = `
+        <span style="font-size:11px; color:var(--text-muted);" id="ms-footer-count"></span>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-ghost" id="ms-cancel" style="border:1px solid rgba(255,255,255,0.07);">${t('common.cancel')}</button>
+            <button class="btn btn-primary" id="ms-confirm" style="background:linear-gradient(135deg, var(--accent) 0%, #0081ff 100%); border:none; box-shadow:0 4px 15px rgba(0,194,255,0.2); min-width:130px; opacity:0.5; transition:opacity 0.2s;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><polyline points="20 6 9 17 4 12"/></svg>
+                ${t('modpack.addMod')}
+            </button>
+        </div>
+    `;
+
+    const countLabel = header.querySelector('#ms-count-label');
+    const footerCount = footer.querySelector('#ms-footer-count');
+    const confirmBtn = footer.querySelector('#ms-confirm');
+
+    function updateSelCount() {
+        const selCount = checkboxes.filter(c => c.checked).length;
+        const total = availableMods.length;
+        countLabel.textContent = `${total} ${t('modpack.modsAvailable') || 'mods disponibles'}`;
+        footerCount.textContent = selCount > 0 ? `${selCount} ${t('modpack.modsSelected') || 'sélectionné(s)'}` : '';
+        confirmBtn.style.opacity = selCount === 0 ? '0.5' : '1';
+        confirmBtn.disabled = selCount === 0;
+    }
+    updateSelCount();
+
+    // Search
+    header.querySelector('#ms-search').addEventListener('input', (e) => {
+        const q = e.target.value.toLowerCase().trim();
+        rows.forEach(({ row, searchLabel }) => {
+            row.style.display = !q || searchLabel.includes(q) ? 'flex' : 'none';
+        });
+    });
+    header.querySelector('#ms-search-wrap').addEventListener('focusin', () => {
+        header.querySelector('#ms-search-wrap').style.borderColor = 'rgba(0,194,255,0.35)';
+    });
+    header.querySelector('#ms-search-wrap').addEventListener('focusout', () => {
+        header.querySelector('#ms-search-wrap').style.borderColor = 'rgba(255,255,255,0.08)';
+    });
+
+    const close = () => {
+        overlay.style.opacity = '0';
+        content.style.transform = 'translateY(10px) scale(0.97)';
+        setTimeout(() => overlay.remove(), 220);
+    };
+
+    footer.querySelector('#ms-cancel').addEventListener('click', close);
+    header.querySelector('#ms-close').addEventListener('click', close);
+
+    confirmBtn.addEventListener('click', async () => {
+        const checked = checkboxes.filter(cb => cb.checked);
+        if (checked.length === 0) return;
+
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><circle cx="12" cy="12" r="10" opacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10"/></svg> ${t('common.loading')}`;
+
+        const depMode = document.getElementById('mp-depmode')?.value || 'manual';
+        const includeDeps = depMode === 'all';
+        let errors = 0;
+
+        for (const cb of checked) {
+            try {
+                const ref = await invoke('build_modpack_mod_ref', {
+                    modId: cb.value,
+                    profileId: cb.dataset.profId || null,
+                    includeDependencies: includeDeps,
+                    downloadLink: null,
+                    fallbackLink: null,
+                    fallbackType: 'direct',
+                });
+                _packMods.push(ref);
+            } catch(e) {
+                console.error(e);
+                errors++;
+            }
+        }
+
+        if (errors > 0) toast(t('modpack.addModErrors')?.replace('{count}', String(errors)) || `${errors} mods ont échoué.`, 'warning');
+        _renderPackModList(listEl);
+        close();
+    });
+
+    content.appendChild(header);
+    content.appendChild(body);
+    content.appendChild(footer);
+    overlay.appendChild(content);
+    
+    // Close on click outside (backdrop)
+    overlay.addEventListener('mousedown', (e) => {
+        if (e.target === overlay) close();
+    });
+    
+    const appOuter = document.getElementById('app-window-outer') || document.body;
+    appOuter.appendChild(overlay);
+
+    requestAnimationFrame(() => {
+        overlay.style.opacity = '1';
+        content.style.transform = 'translateY(0) scale(1)';
+        setTimeout(() => header.querySelector('#ms-search').focus(), 100);
+    });
+}
+
+
+async function _applyModpack(container, pack) {
+    if (!pack || !pack.mods || pack.mods.length === 0) return;
+
+    try {
+        const allEnabled = pack.mods.every(mref => {
+            const local = _allMods.find(m => m.id === mref.mod_id || m.sha256 === mref.sha256);
+            return local && local.enabled;
+        });
+        
+        const isApplying = !allEnabled;
+        toast(isApplying ? (t('modpack.applying') || 'Application du modpack...') : 'Désactivation du modpack...', 'info');
+        
+        let appliedCount = 0;
+        let missingCount = 0;
+
+        for (const mref of pack.mods) {
+            // Find local mod by ID or SHA-256
+            const local = _allMods.find(m => m.id === mref.mod_id || m.sha256 === mref.sha256);
+            if (local) {
+                if (isApplying && !local.enabled) {
+                    await invoke('enable_mod', { modId: local.id });
+                    appliedCount++;
+                    if (mref.include_dependencies && local.dependencies && local.dependencies.length > 0) {
+                        for (const depId of local.dependencies) {
+                            const depLocal = _allMods.find(m => m.id === depId);
+                            if (depLocal && !depLocal.enabled) {
+                                await invoke('enable_mod', { modId: depId });
+                                appliedCount++;
+                            }
+                        }
+                    }
+                } else if (!isApplying && local.enabled) {
+                    await invoke('disable_mod', { modId: local.id });
+                    appliedCount++;
+                    if (mref.include_dependencies && local.dependencies && local.dependencies.length > 0) {
+                        for (const depId of local.dependencies) {
+                            const depLocal = _allMods.find(m => m.id === depId);
+                            if (depLocal && depLocal.enabled) {
+                                await invoke('disable_mod', { modId: depId });
+                                appliedCount++;
+                            }
+                        }
+                    }
+                }
+            } else {
+                if (isApplying) missingCount++;
+            }
+        }
+
+        if (isApplying && missingCount > 0) {
+            toast(t('modpack.applyPartial').replace('{applied}', appliedCount.toString()).replace('{missing}', missingCount.toString()), 'warning');
+        } else {
+            toast(isApplying ? (t('modpack.applyOk') || 'Modpack activé avec succès !') : 'Modpack désactivé avec succès !', 'success');
+        }
+        
+        await _loadData();
+        if (container) _renderModpackList(container);
+        
+        // Always refresh the library via the global refresh function
+        if (window._refreshModsFn) {
+            window._refreshModsFn(false, true);
+        } else {
+            window.dispatchEvent(new CustomEvent('bmm://mods-updated'));
+        }
+    } catch (err) {
+        toast(String(err), 'error');
+    }
+}
+
+async function _openQuickApplyModal() {
+    if (document.querySelector('.modal-overlay.quick-apply')) return;
+    await _loadData();
+    if (_modpacks.length === 0) {
+        toast(t('modpack.noMods') || 'Aucun modpack disponible.', 'info');
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay quick-apply';
+    overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; z-index:100000; opacity:0; transition:opacity 0.25s ease; pointer-events:auto;';
+    
+    const close = () => {
+        overlay.style.opacity = '0';
+        content.style.transform = 'scale(0.95)';
+        setTimeout(() => overlay.remove(), 200);
+    };
+
+    // Close on click outside (backdrop)
+    overlay.addEventListener('mousedown', (e) => {
+        if (e.target === overlay) close();
+    });
+
+    const content = document.createElement('div');
+    content.className = 'modal-content glass';
+    content.style.cssText = 'width:480px; max-width:95vw; max-height:85vh; display:flex; flex-direction:column; padding:0; border-radius:16px; overflow:hidden; background:var(--card-bg, #0f172a); border:1px solid var(--border, #1e293b); box-shadow:0 32px 64px rgba(0,0,0,0.7); transform:translateY(20px) scale(0.98); transition:all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); pointer-events:auto;';
+
+    content.innerHTML = `
+        <div style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02);">
+            <h2 style="font-size:16px; font-weight:700; margin:0; color:var(--text-primary);">${t('modpack.apply')}</h2>
+            <button class="btn btn-icon btn-ghost" id="qa-close" style="color:var(--text-muted);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div id="qa-body" style="flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:8px;"></div>
+    `;
+
+    const body = content.querySelector('#qa-body');
+    _modpacks.forEach(pack => {
+        const item = document.createElement('div');
+        item.className = 'glass-card';
+        item.style.cssText = 'padding:14px 18px; border-radius:14px; border:1px solid rgba(255,255,255,0.05); transition:all 0.25s; display:flex; align-items:center; gap:16px; background:rgba(255,255,255,0.02);';
+        
+        const allEnabled = pack.mods.every(mref => {
+            const local = _allMods.find(m => m.id === mref.mod_id || m.sha256 === mref.sha256);
+            return local && local.enabled;
+        });
+
+        const gameLabel = pack.game_name ? `<span style="opacity:0.3">|</span> <span style="color:var(--text-secondary);">${pack.game_name}</span>` : '';
+        
+        item.innerHTML = `
+            <div style="flex:1; min-width:0;">
+                <div style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:2px;">${pack.name}</div>
+                <div style="font-size:11px; color:var(--text-muted); display:flex; gap:8px; align-items:center;">
+                    <span style="font-weight:600; color:${allEnabled ? 'var(--success)' : 'var(--text-muted)'}">${allEnabled ? 'Active' : 'Inactive'}</span>
+                    <span style="opacity:0.3">•</span>
+                    <span>${pack.mods.length} mods</span>
+                    ${gameLabel}
+                </div>
+            </div>
+            <div class="bmm-switch-wrap" 
+                 style="width:44px; height:24px; position:relative; cursor:pointer; flex-shrink:0;"
+                 onmouseenter="window.showTaskyHelp('${t('modpack.quickApplyDesc') || 'Activer/Désactiver le pack.'}', 'zap')"
+                 onmouseleave="window.hideTaskyHelp()">
+                <div class="switch-bg" style="position:absolute; inset:0; border-radius:12px; background:${allEnabled ? 'var(--success)' : 'rgba(255,255,255,0.1)'}; transition:all 0.3s; border:1px solid ${allEnabled ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)'};"></div>
+                <div class="switch-knob" style="position:absolute; top:4px; ${allEnabled ? 'right:4px' : 'left:4px'}; width:16px; height:16px; border-radius:50%; background:#fff; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
+            </div>
+        `;
+
+        item.onclick = async () => {
+            const swBg = item.querySelector('.switch-bg');
+            const swKnob = item.querySelector('.switch-knob');
+            
+            // Visual feedback before logic
+            const targetState = !allEnabled;
+            swBg.style.background = targetState ? 'var(--success)' : 'rgba(255,255,255,0.1)';
+            swBg.style.borderColor = targetState ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)';
+            swKnob.style.left = targetState ? 'auto' : '4px';
+            swKnob.style.right = targetState ? '4px' : 'auto';
+
+            await _applyModpack(null, pack);
+            // Refresh modal state
+            setTimeout(() => {
+                overlay.remove();
+                _openQuickApplyModal();
+            }, 500);
+        };
+        body.appendChild(item);
+    });
+
+    content.querySelector('#qa-close').onclick = close;
+
+    overlay.appendChild(content);
+    const appOuter = document.getElementById('app-window-outer') || document.body;
+    appOuter.appendChild(overlay);
+    requestAnimationFrame(() => { overlay.style.opacity = '1'; content.style.transform = 'scale(1)'; });
+}
+
+async function _exportModpack(pack) {
+    if (!pack) return;
+    try {
+        await invoke('export_modpack', { id: pack.id });
+        toast(t('modpack.exportSuccess') || 'Modpack exporté !', 'success');
+    } catch (err) {
+        if (String(err) !== 'repo.errCancel') toast(String(err), 'error');
+    }
+}
+
+async function _deleteModpack(container, pack) {
+    if (!pack) return;
+    if (!confirm(t('modpack.deleteConfirm') || 'Supprimer ce modpack ?')) return;
+    try {
+        await invoke('delete_modpack', { id: pack.id });
+        toast(t('modpack.deletedOk') || 'Modpack supprimé.', 'success');
+        await _loadData();
+        _renderModpackList(container);
+    } catch (err) {
+        toast(String(err), 'error');
+    }
+}

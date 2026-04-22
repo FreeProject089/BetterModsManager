@@ -13,6 +13,15 @@ pub struct ServerRepo {
     pub seed: Option<String>,
     pub upload_limit: Option<u32>, // KB/s
     pub profiles: Vec<RepoProfile>,
+    pub modpacks: Option<Vec<RepoModpackShare>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RepoModpackShare {
+    pub modpack: crate::models::modpack::LocalModpack,
+    /// "public", "whitelist_repo", "whitelist_custom"
+    pub share_mode: String,
+    pub custom_whitelist: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -71,6 +80,7 @@ impl ServerRepo {
             seed: None,
             upload_limit: None,
             profiles: Vec::new(),
+            modpacks: None,
         }
     }
 }

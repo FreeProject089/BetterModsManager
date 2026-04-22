@@ -361,6 +361,14 @@ fn main() {
             get_pending_deep_link,
             commands::crash::get_dxdiag_report,
             commands::crash::list_crash_reports,
+            // Modpack System
+            commands::modpack::save_modpack,
+            commands::modpack::load_modpacks,
+            commands::modpack::get_modpack_by_id,
+            commands::modpack::delete_modpack,
+            commands::modpack::build_modpack_mod_ref,
+            commands::modpack::export_modpack,
+            commands::modpack::import_modpack,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

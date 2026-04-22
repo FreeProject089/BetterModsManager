@@ -2,10 +2,36 @@ use crate::state::AppState;
 use crate::fs_utils::{resolve_path, get_lang_dir};
 use tauri::State;
 
+#[derive(serde::Deserialize)]
+pub struct ExportOptions {
+    pub profiles: bool,
+    pub mods: bool,
+    pub settings: bool,
+    pub custom_tags: bool,
+    pub disk_limits: bool,
+}
+
 #[tauri::command]
-pub fn export_app_data(state: State<AppState>, dest_path: String) -> Result<(), String> {
+pub fn export_app_data(state: State<AppState>, dest_path: String, options: Option<ExportOptions>) -> Result<(), String> {
     let _ = state.save(); // Save current memory to disk first
-    std::fs::copy(&state.data_path, dest_path).map_err(|e| e.to_string())?;
+    
+    if let Some(opts) = options {
+        let data = state.data.lock().unwrap();
+        let mut export_data = crate::state::AppData::default();
+        if opts.profiles { 
+            export_data.profiles = data.profiles.clone(); 
+            export_data.active_profile_id = data.active_profile_id.clone(); 
+        }
+        if opts.mods { export_data.mods = data.mods.clone(); }
+        if opts.settings { export_data.settings = data.settings.clone(); }
+        if opts.custom_tags { export_data.custom_tags = data.custom_tags.clone(); }
+        if opts.disk_limits { export_data.disk_limits = data.disk_limits.clone(); }
+        
+        let json = serde_json::to_string_pretty(&export_data).map_err(|e| e.to_string())?;
+        std::fs::write(&dest_path, json).map_err(|e| e.to_string())?;
+    } else {
+        std::fs::copy(&state.data_path, dest_path).map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 

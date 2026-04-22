@@ -10,6 +10,7 @@ import { initRepoServer } from './repo-server.js';
 import { initRepoMonitoring } from './repo-monitoring.js';
 import { initRepoSync, showSyncSummary } from './repo-sync.js';
 import { initRepoAdmin } from './repo-admin.js';
+import { initModpackCreator } from '../mods/modpack-creator.js';
 
 export const copyToClipboard = async (text, successMsg) => {
     try {
@@ -97,13 +98,77 @@ export const loadProfilesForExport = async (profilesListEl) => {
             const info = document.createElement('div');
             info.style.cssText = 'margin-left:12px; display:flex; flex-direction:column;';
             info.innerHTML = `<span style="font-size:13.5px; font-weight:600; color:var(--text-color);">${escHtml(p.name)}</span>
-                              <span style="font-size:11px; color:var(--text-muted); opacity:0.7;">${escHtml(t(p.game_name) || p.game_name || t('repo.genericGame'))}</span>`;
+                <span style="font-size:11px; color:var(--text-muted); margin-top:2px;">${escHtml(t(p.game_name) || p.game_name || t('repo.genericGame'))}</span>`;
             
             item.appendChild(cb);
             item.appendChild(info);
             profilesListEl.appendChild(item);
         });
-    } catch (err) { console.error(err); }
+    } catch (err) {
+        console.error("Failed to load profiles for export:", err);
+    }
+};
+
+// --- Modpack Checklist (exportable function) ---
+export const loadModpacksForExport = async (modpacksListEl) => {
+    if (!modpacksListEl) return;
+    try {
+        const modpacks = await invoke('load_modpacks');
+        modpacksListEl.innerHTML = '';
+        if (!modpacks || modpacks.length === 0) {
+            modpacksListEl.innerHTML = `<div style="color:var(--text-muted); font-size:12px; text-align:center; padding: 10px;">${t('modpack.noMods') || 'Aucun modpack disponible'}</div>`;
+            return;
+        }
+        modpacks.forEach(pack => {
+            const item = document.createElement('div');
+            item.className = 'repo-modpack-item';
+            item.style.cssText = 'display:flex; flex-direction:column; padding:10px; margin-bottom:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px;';
+
+            const topRow = document.createElement('div');
+            topRow.style.cssText = 'display:flex; align-items:center; gap:10px; margin-bottom:8px;';
+
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = pack.id;
+            cb.className = 'repo-modpack-cb';
+            cb.dataset.pack = JSON.stringify(pack);
+
+            const name = document.createElement('span');
+            name.style.cssText = 'font-size:13px; font-weight:600; color:var(--text-color); flex:1;';
+            name.textContent = pack.name;
+
+            topRow.appendChild(cb);
+            topRow.appendChild(name);
+            item.appendChild(topRow);
+
+            const settingsRow = document.createElement('div');
+            settingsRow.style.cssText = 'display:flex; align-items:center; gap:8px; padding-left:26px;';
+            settingsRow.innerHTML = `
+                <select class="repo-modpack-share-mode input-field" style="font-size:11px; padding:4px; flex:1; background: rgba(0,0,0,0.3);">
+                    <option value="public">${t('modpack.sharePublic') || 'Public'}</option>
+                    <option value="whitelist_repo">${t('modpack.shareWhitelistRepo') || 'Whitelist Serveur'}</option>
+                    <option value="whitelist_custom">${t('modpack.shareWhitelistCustom') || 'Whitelist Dédiée'}</option>
+                </select>
+            `;
+            
+            const customWhitelistInput = document.createElement('input');
+            customWhitelistInput.type = 'text';
+            customWhitelistInput.className = 'input-field repo-modpack-custom-whitelist';
+            customWhitelistInput.placeholder = 'IDs (sép. par virgule)';
+            customWhitelistInput.style.cssText = 'font-size:11px; padding:4px; flex:1; display:none; background: rgba(0,0,0,0.3);';
+            
+            const shareModeSelect = settingsRow.querySelector('.repo-modpack-share-mode');
+            shareModeSelect.addEventListener('change', () => {
+                customWhitelistInput.style.display = shareModeSelect.value === 'whitelist_custom' ? 'block' : 'none';
+            });
+
+            settingsRow.appendChild(customWhitelistInput);
+            item.appendChild(settingsRow);
+            modpacksListEl.appendChild(item);
+        });
+    } catch (err) {
+        console.error("Failed to load modpacks for export:", err);
+    }
 };
 
 export function initRepo() {
@@ -154,6 +219,7 @@ export function initRepo() {
 
         // --- Host Server elements ---
         profilesListEl: document.getElementById('repo-export-profiles-list'),
+        modpacksListEl: document.getElementById('repo-export-modpacks-list'),
         btnRefreshProfiles: document.getElementById('btn-refresh-repo-profiles'),
         btnToggleServer: document.getElementById('btn-toggle-repo-server'),
         urlContainerServer: document.getElementById('repo-server-url-container'),
@@ -398,11 +464,13 @@ export function initRepo() {
 
     // --- Profile Checklist ---
     loadProfilesForExport(elements.profilesListEl);
+    loadModpacksForExport(elements.modpacksListEl);
 
     // Refresh button
     if (elements.btnRefreshProfiles) {
         elements.btnRefreshProfiles.addEventListener('click', () => {
             loadProfilesForExport(elements.profilesListEl);
+            loadModpacksForExport(elements.modpacksListEl);
             toast(t('repo.profilesRefreshed') || 'Profiles list refreshed', 'success');
         });
     }
@@ -480,9 +548,28 @@ export function initRepo() {
                     });
                 }
 
+                const modpackCbs = document.querySelectorAll('.repo-modpack-cb:checked');
+                const modpacksShareConfig = Array.from(modpackCbs).map(cb => {
+                    const pack = JSON.parse(cb.dataset.pack);
+                    const item = cb.closest('.repo-modpack-item');
+                    const shareMode = item.querySelector('.repo-modpack-share-mode').value;
+                    const customWhitelistStr = item.querySelector('.repo-modpack-custom-whitelist').value;
+                    const customWhitelist = shareMode === 'whitelist_custom' ? 
+                        customWhitelistStr.split(',').map(s => s.trim()).filter(s => s.length > 0) : null;
+                    
+                    return {
+                        modpack: pack,
+                        share_mode: shareMode,
+                        custom_whitelist: customWhitelist
+                    };
+                });
+
                 await invoke('export_server_repo', { 
-                    profileIds, outputDir: outPath, authorName,
-                    seed: elements.inputExportSeed ? elements.inputExportSeed.value.trim() || null : null
+                    profileIds, 
+                    outputDir: outPath, 
+                    authorName,
+                    seed: elements.inputExportSeed ? elements.inputExportSeed.value.trim() || null : null,
+                    modpacksShareConfig: modpacksShareConfig.length > 0 ? modpacksShareConfig : null
                 });
                 saveHostHistory(outPath);
                 elements.exportStatus.textContent = t('repo.exportDone');

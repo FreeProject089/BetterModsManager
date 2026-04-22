@@ -778,16 +778,69 @@ export async function initSettings() {
     const exportBtn = document.getElementById('btn-export-data');
     if (exportBtn) {
         exportBtn.addEventListener('click', async () => {
-            const destPath = await saveFile([{ name: 'App Data Backup', extensions: ['json'] }]);
-            if (destPath) {
-                try {
-                    await invoke('export_app_data', { destPath });
-                    toast(t('settings.dataExported'), 'success');
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; z-index:100000; opacity:0; transition:opacity 0.25s ease; pointer-events:auto;';
+            const close = () => {
+                overlay.style.opacity = '0';
+                content.style.transform = 'translateY(20px) scale(0.98)';
+                setTimeout(() => overlay.remove(), 250);
+            };
+            overlay.addEventListener('mousedown', (e) => {
+                if (e.target === overlay)
+                    close();
+            });
+            const content = document.createElement('div');
+            content.className = 'modal-content glass';
+            content.style.cssText = 'width:400px; max-width:95vw; display:flex; flex-direction:column; padding:0; border-radius:16px; overflow:hidden; background:var(--card-bg, #0f172a); border:1px solid var(--border, #1e293b); box-shadow: 0 10px 25px rgba(0,0,0,0.5), 0 20px 48px rgba(0,0,0,0.3); transform:translateY(20px) scale(0.98); transition:all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); pointer-events:auto;';
+            content.innerHTML = `
+                <div style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-size:16px; font-weight:700; color:var(--text-bright); display:flex; align-items:center; gap:8px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        Export Data
+                    </div>
+                    <button class="btn-close-modal" style="background:none; border:none; color:var(--text-muted); cursor:pointer;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+                <div style="padding:20px; display:flex; flex-direction:column; gap:12px; font-size: 13px; color: var(--text-primary);">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="exp-profiles" checked style="width: 16px; height: 16px; cursor:pointer;"> Profiles</label>
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="exp-mods" checked style="width: 16px; height: 16px; cursor:pointer;"> Mods Data</label>
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="exp-tags" checked style="width: 16px; height: 16px; cursor:pointer;"> Custom Tags</label>
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="exp-settings" checked style="width: 16px; height: 16px; cursor:pointer;"> App Settings</label>
+                </div>
+                <div style="padding:16px 20px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:flex-end; gap:12px;">
+                    <button class="btn btn-ghost btn-cancel-exp">Cancel</button>
+                    <button class="btn btn-primary btn-confirm-exp">Export</button>
+                </div>
+            `;
+            overlay.appendChild(content);
+            const appOuter = document.getElementById('app-window-outer') || document.body;
+            appOuter.appendChild(overlay);
+            content.querySelector('.btn-close-modal').onclick = close;
+            content.querySelector('.btn-cancel-exp').onclick = close;
+            content.querySelector('.btn-confirm-exp').onclick = async () => {
+                const options = {
+                    profiles: content.querySelector('#exp-profiles').checked,
+                    mods: content.querySelector('#exp-mods').checked,
+                    settings: content.querySelector('#exp-settings').checked,
+                    custom_tags: content.querySelector('#exp-tags').checked,
+                    disk_limits: true
+                };
+                close();
+                const destPath = await saveFile([{ name: 'App Data Backup', extensions: ['json'] }]);
+                if (destPath) {
+                    try {
+                        await invoke('export_app_data', { destPath, options });
+                        toast(t('settings.dataExported') || 'Data exported successfully', 'success');
+                    }
+                    catch (e) {
+                        toast(t('settings.dataExportError', { err: String(e) }), 'error');
+                    }
                 }
-                catch (e) {
-                    toast(t('settings.dataExportError', { err: String(e) }), 'error');
-                }
-            }
+            };
+            requestAnimationFrame(() => {
+                overlay.style.opacity = '1';
+                content.style.transform = 'scale(1)';
+            });
         });
     }
     const importBtn = document.getElementById('btn-import-data');

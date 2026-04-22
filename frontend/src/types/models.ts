@@ -234,3 +234,65 @@ export interface UpdateInfo {
   pub_date: string;
   url: string;
 }
+
+// ── Modpack System ────────────────────────────────────────────────────────────
+
+export type DependencyMode = 'all' | 'none' | 'manual';
+
+export interface ModpackFileRef {
+  relative_path: string;
+  sha256: string;
+  size: number;
+}
+
+export interface ModpackModRef {
+  mod_id: string;
+  mod_name: string;
+  mod_version: string;
+  profile_id: string | null;
+  profile_name: string | null;
+  /** SHA-256 of the mod's primary/first file for cross-PC identification */
+  sha256: string;
+  file_manifest: ModpackFileRef[];
+  include_dependencies: boolean;
+  download_link: string | null;
+  fallback_link: string | null;
+  fallback_type: 'direct' | 'sr' | null;
+}
+
+export interface LocalModpack {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+  multi_profile: boolean;
+  dependency_mode: DependencyMode;
+  mods: ModpackModRef[];
+  sr_link: string | null;
+  game_name: string | null;
+}
+
+// ── Server Repo Notification Payloads ────────────────────────────────────────
+
+export interface ServerClientConnectedPayload {
+  ip: string;
+  creator_id: string | null;
+  protocol: 'Local' | 'LAN' | 'WAN';
+}
+
+export interface ServerDownloadStartedPayload {
+  ip: string;
+  creator_id: string | null;
+  file: string;
+  total_size: number;
+  protocol: 'Local' | 'LAN' | 'WAN';
+}
+
+export interface ServerDownloadFinishedPayload {
+  ip: string;
+  creator_id: string | null;
+  file: string;
+  total_size: number;
+  protocol: 'Local' | 'LAN' | 'WAN';
+}

@@ -31,6 +31,7 @@ import { semanticSearch } from './diagrams/semantic-search.js';
 import { mtimeCache } from './diagrams/mtime-cache.js';
 import { premiumInteractions } from './diagrams/premium-interactions.js';
 import { betahubReporting } from './diagrams/betahub-reporting.js';
+import { modpackFlow } from './diagrams/modpack-flow.js';
 // Diagram Registry
 export const diagrams = {
     'resumable-downloads': resumableDownloads,
@@ -63,7 +64,8 @@ export const diagrams = {
     'semantic-search': semanticSearch,
     'mtime-cache': mtimeCache,
     'premium-interactions': premiumInteractions,
-    'betahub-reporting': betahubReporting
+    'betahub-reporting': betahubReporting,
+    'modpack-flow': modpackFlow
 };
 // State
 let currentDiagramID = null;
@@ -141,7 +143,7 @@ export async function openDiagram(id, highlightNodeId = null) {
     const taskyText = document.getElementById('tasky-explanation');
     currentDiagramID = id;
     title.textContent = t(diagram.titleKey);
-    taskyText.textContent = "Passez votre souris sur une étape pour que je vous explique !";
+    taskyText.textContent = t('docs.diagram.taskyInstruction');
     // Reset Tasky mascot to default
     updateTaskyMascot('Tasky.png');
     // Show modal

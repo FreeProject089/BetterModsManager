@@ -3,15 +3,58 @@ import { invoke } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { copyToClipboard } from './repo.js';
+import { formatBytes } from '../../core/utils.js';
 export function initRepoServer(elements) {
     const { btnToggleServer, urlContainerServer, urlInputServer, btnCopyUrlServer, serverStatusDot, serverStatusLabel, publicSection, publicUrlInput, btnCopyPublicUrl, upnpBadgeStatus, publicHintBox, repoCreatorIdContainer, repoCreatorIdValue, tunnelSection, tunnelUrlInput, btnCopyTunnelUrl, inputServerPort, inputServerUploadLimit, serverTools, btnGenMiniServer, btnPickMiniRepo, btnPickMiniFolder, inputMiniRepoPath, cbAutoStart, inputMiniServerUploadLimit, inputExportPath } = elements;
     let isServerRunning = false;
+    /** Cleanup functions for Tauri event listeners */
+    let _unlistenConnected = null;
+    let _unlistenDlStarted = null;
+    let _unlistenDlFinished = null;
+    // ── Subscribe to server-side events ──────────────────────────────────────
+    async function subscribeServerEvents() {
+        if (!window.__TAURI__)
+            return;
+        const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
+        _unlistenConnected = await listen('bmm://server-client-connected', (event) => {
+            const { ip, creator_id, protocol } = event.payload;
+            const id = creator_id || t('repo.notifClientAnonymous');
+            toast(`🔌 ${t('repo.notifClientConnected')} — ${protocol} [${ip}] · ID: ${id}`, 'info', 5000);
+        });
+        _unlistenDlStarted = await listen('bmm://server-download-started', (event) => {
+            const { ip, creator_id, file, total_size, protocol } = event.payload;
+            const id = creator_id || t('repo.notifClientAnonymous');
+            const shortFile = (file || '').split('/').pop() || file;
+            toast(`⬇️ ${t('repo.notifDownloadStarted')} — ${protocol} [${ip}]\n${id} · ${shortFile} (${formatBytes(total_size)})`, 'info', 4000);
+        });
+        _unlistenDlFinished = await listen('bmm://server-download-finished', (event) => {
+            const { ip, creator_id, file, total_size, protocol } = event.payload;
+            const id = creator_id || t('repo.notifClientAnonymous');
+            const shortFile = (file || '').split('/').pop() || file;
+            toast(`✅ ${t('repo.notifDownloadFinished')} — ${protocol} [${ip}]\n${id} · ${shortFile} (${formatBytes(total_size)})`, 'success', 5000);
+        });
+    }
+    function unsubscribeServerEvents() {
+        if (_unlistenConnected) {
+            _unlistenConnected();
+            _unlistenConnected = null;
+        }
+        if (_unlistenDlStarted) {
+            _unlistenDlStarted();
+            _unlistenDlStarted = null;
+        }
+        if (_unlistenDlFinished) {
+            _unlistenDlFinished();
+            _unlistenDlFinished = null;
+        }
+    }
     // --- Host Server toggle ---
     if (btnToggleServer) {
         btnToggleServer.addEventListener('click', async () => {
             if (isServerRunning) {
                 try {
                     await invoke('stop_repo_server');
+                    unsubscribeServerEvents();
                     isServerRunning = false;
                     btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
                     const txt = btnToggleServer.querySelector('#repo-server-btn-text');
@@ -59,6 +102,8 @@ export function initRepoServer(elements) {
                     const uploadLimit = parseInt(inputServerUploadLimit ? inputServerUploadLimit.value : "0") || 0;
                     const result = await invoke('start_repo_server', { path, port, uploadLimit });
                     isServerRunning = true;
+                    // Subscribe to host-side notifications
+                    await subscribeServerEvents();
                     btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
                     const newTextEl = btnToggleServer.querySelector('#repo-server-btn-text');
                     newTextEl.textContent = t('repo.hostStop');
@@ -165,12 +210,14 @@ export function initRepoServer(elements) {
     if (btnCopyTunnelUrl) {
         btnCopyTunnelUrl.addEventListener('click', () => copyToClipboard(tunnelUrlInput.value));
     }
-    // --- Restore Server Status ---
+    // --- Restore Server Status on page load ---
     const restoreServerStatus = async () => {
         try {
             const status = await invoke('get_repo_server_status');
             if (status) {
                 isServerRunning = true;
+                // Re-subscribe if server was already running (e.g. page reload)
+                await subscribeServerEvents();
                 const btnTxt = btnToggleServer.querySelector('#repo-server-btn-text');
                 if (btnTxt)
                     btnTxt.textContent = t('repo.hostStop');
@@ -231,7 +278,6 @@ export function initRepoServer(elements) {
             }
         });
     }
-    // Restore last mini repo path
     if (inputMiniRepoPath) {
         const last = localStorage.getItem('bmm_last_mini_repo_json');
         if (last)
