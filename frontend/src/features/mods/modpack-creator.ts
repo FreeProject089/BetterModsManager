@@ -18,6 +18,10 @@ let _allMods = [];
 let _profiles = [];
 let _activeProfileId = null;
 let _packMods = []; // ModpackModRef[] being assembled
+let _isAddingMods = false; // Background state for selection modal
+let _currentAddingModName = ''; // Name of the mod currently being processed
+let _currentSelectionModalUpdateFn = null; // Ref to update UI from background
+let _currentSelectionModalOverlay = null; // Ref to current modal overlay for auto-close
 
 // ── Public init ──────────────────────────────────────────────────────────────
 
@@ -40,11 +44,17 @@ export async function initModpackCreator(container) {
         });
     }
 
-    const btnQuickApply = document.getElementById('btn-quick-apply-modpack');
-    if (btnQuickApply && !btnQuickApply.dataset.bound) {
-        btnQuickApply.dataset.bound = 'true';
-        btnQuickApply.addEventListener('click', () => _openQuickApplyModal());
-    }
+
+    // Listen for language changes
+    document.addEventListener('langChanged', () => {
+        if (_editingPack) {
+            // If editing, re-render the editor
+            _openEditor(container, _editingPack);
+        } else {
+            // If viewing list, re-render the list
+            _renderModpackList(container);
+        }
+    });
 
     await _loadData();
     _renderModpackList(container);
@@ -126,17 +136,17 @@ function _renderModpackList(container) {
         const lastUpdate = pack.updated_at ? new Date(pack.updated_at).toLocaleDateString() : '—';
         const description = pack.description || t('modpack.noDesc');
 
-        const allEnabled = pack.mods && pack.mods.length > 0 && pack.mods.every(mref => {
+        const anyEnabled = pack.mods && pack.mods.length > 0 && pack.mods.some(mref => {
             const local = _allMods.find(m => m.id === mref.mod_id || m.sha256 === mref.sha256);
             return local && local.enabled;
         });
         
-        const applyIcon = allEnabled 
+        const applyIcon = anyEnabled 
             ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>' 
             : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
-        const applyTitle = allEnabled ? 'Désactiver le modpack' : t('modpack.apply');
-        const applyClass = allEnabled ? 'btn-apply active' : 'btn-apply';
-        const applyColor = allEnabled ? 'color: var(--success);' : '';
+        const applyTitle = anyEnabled ? t('modpack.deactivate') || 'Désactiver le modpack' : t('modpack.apply');
+        const applyClass = anyEnabled ? 'btn-apply active' : 'btn-apply';
+        const applyColor = anyEnabled ? 'color: var(--success);' : '';
 
         card.innerHTML = `
             <div class="modpack-card-info" style="margin-left: 0; display: flex; flex-direction: column; height: 100%;">
@@ -155,12 +165,12 @@ function _renderModpackList(container) {
                     <div style="font-size:9px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; opacity:0.6; padding-bottom: 4px;">
                         ${t('modpack.updatedAt', { date: lastUpdate })}
                     </div>
-                    <div class="bmm-switch-wrap btn-apply ${allEnabled ? 'active' : ''}" 
+                    <div class="bmm-switch-wrap btn-apply ${anyEnabled ? 'active' : ''}" 
                          style="width:38px; height:20px; position:relative; cursor:pointer; flex-shrink:0;"
                          onmouseenter="window.showTaskyHelp('${t('modpack.quickApplyDesc') || 'Cliquez pour activer ou désactiver ce pack.'}', 'zap')"
                          onmouseleave="window.hideTaskyHelp()">
-                        <div class="switch-bg" style="position:absolute; inset:0; border-radius:10px; background:${allEnabled ? 'var(--success)' : 'rgba(255,255,255,0.1)'}; transition:all 0.3s; border:1px solid ${allEnabled ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)'};"></div>
-                        <div class="switch-knob" style="position:absolute; top:3px; ${allEnabled ? 'right:3px' : 'left:3px'}; width:14px; height:14px; border-radius:50%; background:#fff; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
+                        <div class="switch-bg" style="position:absolute; inset:0; border-radius:10px; background:${anyEnabled ? 'var(--success)' : 'rgba(255,255,255,0.1)'}; transition:all 0.3s; border:1px solid ${anyEnabled ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)'};"></div>
+                        <div class="switch-knob" style="position:absolute; top:3px; ${anyEnabled ? 'right:3px' : 'left:3px'}; width:14px; height:14px; border-radius:50%; background:#fff; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
                     </div>
                 </div>
             </div>
@@ -255,7 +265,7 @@ async function _openEditor(container, pack) {
     
     metaForm.appendChild(_formField(t('modpack.name'), `<input id="mp-name" type="text" class="form-input" placeholder="${t('modpack.namePlaceholder')}" value="${_editingPack.name || ''}" style="width:100%;">`));
     metaForm.appendChild(_formField(t('modpack.description'), `<textarea id="mp-desc" class="form-input" style="width:100%; height:100px; resize:none;">${_editingPack.description || ''}</textarea>`));
-    metaForm.appendChild(_formField(t('modpack.game'), `<input id="mp-game" type="text" class="form-input" placeholder="e.g. DCS World" value="${_editingPack.game_name || ''}" style="width:100%;">`));
+    metaForm.appendChild(_formField(t('modpack.game'), `<input id="mp-game" type="text" class="form-input" placeholder="${t('modpack.gamePlaceholder') || 'e.g. DCS World'}" value="${_editingPack.game_name || ''}" style="width:100%;">`));
     
     // Multi-profile toggle (re-styled)
     const multiRow = document.createElement('label');
@@ -344,9 +354,12 @@ async function _openEditor(container, pack) {
             btn.disabled = true;
             btn.textContent = t('modpack.saving');
             await invoke('save_modpack', { modpack: payload });
-            toast(t('modpack.savedOk'), 'success');
+            toast(t('modpack.savedOk') || 'Modpack sauvegardé !', 'success');
             await _loadData();
             _renderModpackList(container);
+            
+            // Notify other components (like Repo page)
+            window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
         } catch (err) {
             toast(String(err), 'error');
             header.querySelector('#editor-save').disabled = false;
@@ -382,7 +395,7 @@ function _renderPackModList(listEl) {
                     <div style="font-size:10px; color:var(--text-muted); display:flex; gap:6px;">
                         <span>V${pm.mod_version}</span>
                         <span style="opacity:0.3">|</span>
-                        <span style="color:var(--text-secondary);">${pm.profile_name || 'Global'}</span>
+                        <span style="color:var(--text-secondary);">${pm.profile_name || t('modpack.global') || 'Global'}</span>
                     </div>
                 </div>
                 <button class="btn btn-icon btn-ghost btn-remove" style="color:var(--danger); opacity:0.5;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
@@ -395,7 +408,7 @@ function _renderPackModList(listEl) {
                 </div>
                 <div style="display:flex; flex-direction:column; gap:4px;">
                     <label style="font-size:9px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">${t('modpack.modFallback')}</label>
-                    <input type="text" class="form-input fb-input" placeholder="Nexus, Drive, etc." value="${pm.download_fallback || ''}" style="font-size:11px; height:30px; padding:0 8px;">
+                    <input type="text" class="form-input fb-input" placeholder="${t('modpack.modFallbackPlaceholder') || 'Nexus, Drive, etc.'}" value="${pm.download_fallback || ''}" style="font-size:11px; height:30px; padding:0 8px;">
                 </div>
             </div>
 
@@ -406,10 +419,10 @@ function _renderPackModList(listEl) {
                         ${t('modpack.modDeps')}
                     </label>
                     <div style="display:flex; align-items:center; gap:6px;">
-                        <span style="font-size:9px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">${t('modpack.modFallbackType') || 'Type Fallback'}</span>
+                        <span style="font-size:9px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">${t('modpack.modFallbackType')}</span>
                         <select class="form-select fb-type-select" style="font-size:10px; height:24px; padding:0 4px; border-radius:4px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); color:var(--text-primary);">
-                            <option value="direct" ${pm.fallback_type === 'direct' ? 'selected' : ''}>Direct Link</option>
-                            <option value="sr" ${pm.fallback_type === 'sr' ? 'selected' : ''}>Server Repo</option>
+                            <option value="direct" ${pm.fallback_type === 'direct' ? 'selected' : ''}>${t('modpack.fallbackDirect') || 'Direct Link'}</option>
+                            <option value="sr" ${pm.fallback_type === 'sr' ? 'selected' : ''}>${t('modpack.fallbackServerRepo') || 'Server Repo'}</option>
                         </select>
                     </div>
                 </div>
@@ -520,8 +533,8 @@ function _openMultiSelectModal(listEl) {
     body.style.cssText = 'flex:1; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:5px;';
 
     // Filter available mods
-    let availableMods = _allMods.filter(m => !_packMods.some(pm => String(pm.mod_id) === String(m.id)));
-    console.log('[Modpack] Total available before profile filter:', availableMods.length);
+    // Show all mods, but mark those already in pack
+    let availableMods = [..._allMods];
     
     // If multi-profile is OFF, only show mods from the current active profile
     if (!_editingPack.multi_profile) {
@@ -556,26 +569,57 @@ function _openMultiSelectModal(listEl) {
         const prof = _profiles.find(p => m.mod_folder_path && (m.mod_folder_path.toString().includes(p.mods_path?.toString()) || p.mods_path?.toString().includes(m.mod_folder_path?.toString())));
         const depCount = m.dependencies ? m.dependencies.length : 0;
         const searchLabel = (m.name + (prof ? prof.name : '')).toLowerCase();
+        
+        const alreadyInPack = _packMods.some(pm => String(pm.mod_id) === String(m.id));
 
         const row = document.createElement('label');
-        row.style.cssText = 'display:flex; align-items:center; gap:14px; padding:10px 12px; border-radius:12px; cursor:pointer; transition:all 0.15s; border:1px solid transparent; background:rgba(255,255,255,0.02);';
-        row.addEventListener('mouseenter', () => { if (!row.querySelector('input').checked) row.style.background = 'rgba(0,194,255,0.04)'; row.style.borderColor = 'rgba(0,194,255,0.12)'; });
-        row.addEventListener('mouseleave', () => { if (!row.querySelector('input').checked) { row.style.background = 'rgba(255,255,255,0.02)'; row.style.borderColor = 'transparent'; } });
+        row.style.cssText = `display:flex; align-items:center; gap:14px; padding:10px 12px; border-radius:12px; cursor:pointer; transition:all 0.15s; border:1px solid transparent; background:${alreadyInPack ? 'rgba(0,194,255,0.08)' : 'rgba(255,255,255,0.02)'};`;
+        if (alreadyInPack) row.style.borderColor = 'rgba(0,194,255,0.25)';
+        if (_isAddingMods) {
+            row.style.pointerEvents = 'none';
+            row.style.opacity = '0.7';
+        }
+        
+        row.addEventListener('mouseenter', () => { 
+            if (!row.querySelector('input').checked) {
+                row.style.background = 'rgba(0,194,255,0.04)';
+                row.style.borderColor = 'rgba(0,194,255,0.12)'; 
+            }
+        });
+        row.addEventListener('mouseleave', () => { 
+            if (!row.querySelector('input').checked) { 
+                row.style.background = 'rgba(255,255,255,0.02)'; 
+                row.style.borderColor = 'transparent'; 
+            } else if (alreadyInPack) {
+                row.style.background = 'rgba(0,194,255,0.08)';
+                row.style.borderColor = 'rgba(0,194,255,0.25)';
+            }
+        });
 
+        const switchWrap = document.createElement('label');
+        switchWrap.className = 'bmm-switch';
+        switchWrap.style.cssText = 'flex-shrink:0;';
+        
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.value = m.id;
+        cb.checked = alreadyInPack;
         cb.dataset.profId = prof?.id || '';
-        cb.style.cssText = 'width:16px; height:16px; accent-color:var(--accent); cursor:pointer; flex-shrink:0;';
+        
+        const track = document.createElement('span');
+        track.className = 'bmm-switch-track';
+        const thumb = document.createElement('span');
+        thumb.className = 'bmm-switch-thumb';
+        track.appendChild(thumb);
+        
+        switchWrap.appendChild(cb);
+        switchWrap.appendChild(track);
+
         cb.addEventListener('change', () => {
             row.style.background = cb.checked ? 'rgba(0,194,255,0.08)' : 'rgba(255,255,255,0.02)';
             row.style.borderColor = cb.checked ? 'rgba(0,194,255,0.25)' : 'transparent';
             updateSelCount();
         });
-
-        const iconBox = document.createElement('div');
-        iconBox.style.cssText = 'width:32px; height:32px; border-radius:8px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; color:var(--text-muted); flex-shrink:0;';
-        iconBox.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>';
 
         const info = document.createElement('div');
         info.style.cssText = 'flex:1; min-width:0;';
@@ -584,12 +628,12 @@ function _openMultiSelectModal(listEl) {
             <div style="display:flex; align-items:center; gap:5px; margin-top:3px; flex-wrap:wrap;">
                 <span style="font-size:10px; color:var(--text-muted);">v${m.version || '?'}</span>
                 ${prof ? `<span style="font-size:9px; font-weight:700; color:var(--accent); background:rgba(0,194,255,0.1); border:1px solid rgba(0,194,255,0.2); border-radius:4px; padding:1px 6px;">${prof.name}</span>` : ''}
-                ${depCount > 0 ? `<span style="font-size:9px; color:var(--text-muted); background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.06); border-radius:4px; padding:1px 6px;">&rarr; ${depCount} dep.</span>` : ''}
+                ${depCount > 0 ? `<span style="font-size:9px; color:var(--text-muted); background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.06); border-radius:4px; padding:1px 6px;">&rarr; ${depCount} ${t('modpack.dependenciesShort') || 'dep.'}</span>` : ''}
+                ${alreadyInPack ? `<span style="font-size:8px; font-weight:800; color:var(--success); background:rgba(16,185,129,0.1); padding:1px 4px; border-radius:3px; text-transform:uppercase;">${t('modpack.alreadyAdded') || 'DÉJÀ AJOUTÉ'}</span>` : ''}
             </div>
         `;
 
-        row.appendChild(cb);
-        row.appendChild(iconBox);
+        row.appendChild(switchWrap);
         row.appendChild(info);
         body.appendChild(row);
         checkboxes.push(cb);
@@ -615,13 +659,28 @@ function _openMultiSelectModal(listEl) {
     const confirmBtn = footer.querySelector('#ms-confirm');
 
     function updateSelCount() {
+        if (_isAddingMods) {
+            countLabel.textContent = _currentAddingModName ? `${t('modpack.adding')}: ${_currentAddingModName}` : t('modpack.addingInProgress');
+            footerCount.textContent = '';
+            confirmBtn.style.opacity = '0.5';
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px; animation: bmm-loading-spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('common.loading')}`;
+            return;
+        }
+        
+        // Restore buttons if we just finished
+        confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><polyline points="20 6 9 17 4 12"/></svg> ${t('modpack.addMod')}`;
+        footer.querySelector('#ms-cancel').disabled = false;
+        header.querySelector('#ms-close').disabled = false;
+        
         const selCount = checkboxes.filter(c => c.checked).length;
         const total = availableMods.length;
-        countLabel.textContent = `${total} ${t('modpack.modsAvailable') || 'mods disponibles'}`;
-        footerCount.textContent = selCount > 0 ? `${selCount} ${t('modpack.modsSelected') || 'sélectionné(s)'}` : '';
+        countLabel.textContent = `${total} ${t('modpack.modsAvailable')}`;
+        footerCount.textContent = selCount > 0 ? `${selCount} ${t('modpack.modsSelected')}` : '';
         confirmBtn.style.opacity = selCount === 0 ? '0.5' : '1';
         confirmBtn.disabled = selCount === 0;
     }
+    _currentSelectionModalUpdateFn = updateSelCount;
     updateSelCount();
 
     // Search
@@ -639,6 +698,8 @@ function _openMultiSelectModal(listEl) {
     });
 
     const close = () => {
+        _currentSelectionModalUpdateFn = null;
+        _currentSelectionModalOverlay = null;
         overlay.style.opacity = '0';
         content.style.transform = 'translateY(10px) scale(0.97)';
         setTimeout(() => overlay.remove(), 220);
@@ -651,15 +712,29 @@ function _openMultiSelectModal(listEl) {
         const checked = checkboxes.filter(cb => cb.checked);
         if (checked.length === 0) return;
 
-        confirmBtn.disabled = true;
-        confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><circle cx="12" cy="12" r="10" opacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10"/></svg> ${t('common.loading')}`;
-
+        _isAddingMods = true;
+        updateSelCount(); // Show loading state in current modal
+        
+        // No more prevent-close here as per user request
+        
         const depMode = document.getElementById('mp-depmode')?.value || 'manual';
         const includeDeps = depMode === 'all';
         let errors = 0;
-
+        
+        // Clear current pack mods and rebuild from selection to ensure sync and uniqueness
+        // Actually, we should only add the new ones, or rebuild the whole list.
+        // The user wants uniqueness, so we filter out what's already there before pushing.
+        
         for (const cb of checked) {
+            // Uniqueness check: avoid adding if already in _packMods
+            const exists = _packMods.some(pm => String(pm.mod_id) === String(cb.value));
+            if (exists) continue;
+
             try {
+                const targetMod = availableMods.find(m => String(m.id) === String(cb.value));
+                _currentAddingModName = targetMod ? targetMod.name : '';
+                if (_currentSelectionModalUpdateFn) _currentSelectionModalUpdateFn();
+
                 const ref = await invoke('build_modpack_mod_ref', {
                     modId: cb.value,
                     profileId: cb.dataset.profId || null,
@@ -674,24 +749,41 @@ function _openMultiSelectModal(listEl) {
                 errors++;
             }
         }
+        
+        // Also remove mods that were UNCHECKED in the modal
+        const selectedIds = checked.map(cb => String(cb.value));
+        _packMods = _packMods.filter(pm => selectedIds.includes(String(pm.mod_id)));
 
         if (errors > 0) toast(t('modpack.addModErrors')?.replace('{count}', String(errors)) || `${errors} mods ont échoué.`, 'warning');
         _renderPackModList(listEl);
-        close();
+
+        _isAddingMods = false;
+        _currentAddingModName = '';
+
+        if (_currentSelectionModalUpdateFn) {
+            _currentSelectionModalUpdateFn();
+        }
+
+        // Close the modal if it exists (even if it was reopened)
+        if (_currentSelectionModalOverlay && document.body.contains(_currentSelectionModalOverlay)) {
+            const closeBtn = _currentSelectionModalOverlay.querySelector('#ms-close') || _currentSelectionModalOverlay.querySelector('#ms-cancel');
+            if (closeBtn) closeBtn.click();
+        }
     });
 
     content.appendChild(header);
     content.appendChild(body);
     content.appendChild(footer);
     overlay.appendChild(content);
-    
+
     // Close on click outside (backdrop)
     overlay.addEventListener('mousedown', (e) => {
         if (e.target === overlay) close();
     });
-    
+
     const appOuter = document.getElementById('app-window-outer') || document.body;
     appOuter.appendChild(overlay);
+    _currentSelectionModalOverlay = overlay;
 
     requestAnimationFrame(() => {
         overlay.style.opacity = '1';
@@ -705,13 +797,13 @@ async function _applyModpack(container, pack) {
     if (!pack || !pack.mods || pack.mods.length === 0) return;
 
     try {
-        const allEnabled = pack.mods.every(mref => {
+        const anyEnabled = pack.mods.some(mref => {
             const local = _allMods.find(m => m.id === mref.mod_id || m.sha256 === mref.sha256);
             return local && local.enabled;
         });
         
-        const isApplying = !allEnabled;
-        toast(isApplying ? (t('modpack.applying') || 'Application du modpack...') : 'Désactivation du modpack...', 'info');
+        const isApplying = !anyEnabled;
+        toast(isApplying ? t('modpack.applying') : t('modpack.deactivating') || 'Désactivation du modpack...', 'info');
         
         let appliedCount = 0;
         let missingCount = 0;
@@ -753,7 +845,7 @@ async function _applyModpack(container, pack) {
         if (isApplying && missingCount > 0) {
             toast(t('modpack.applyPartial').replace('{applied}', appliedCount.toString()).replace('{missing}', missingCount.toString()), 'warning');
         } else {
-            toast(isApplying ? (t('modpack.applyOk') || 'Modpack activé avec succès !') : 'Modpack désactivé avec succès !', 'success');
+            toast(isApplying ? t('modpack.applyOk') : t('modpack.deactivateOk') || 'Modpack désactivé avec succès !', 'success');
         }
         
         await _loadData();
@@ -770,104 +862,6 @@ async function _applyModpack(container, pack) {
     }
 }
 
-async function _openQuickApplyModal() {
-    if (document.querySelector('.modal-overlay.quick-apply')) return;
-    await _loadData();
-    if (_modpacks.length === 0) {
-        toast(t('modpack.noMods') || 'Aucun modpack disponible.', 'info');
-        return;
-    }
-
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay quick-apply';
-    overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; z-index:100000; opacity:0; transition:opacity 0.25s ease; pointer-events:auto;';
-    
-    const close = () => {
-        overlay.style.opacity = '0';
-        content.style.transform = 'scale(0.95)';
-        setTimeout(() => overlay.remove(), 200);
-    };
-
-    // Close on click outside (backdrop)
-    overlay.addEventListener('mousedown', (e) => {
-        if (e.target === overlay) close();
-    });
-
-    const content = document.createElement('div');
-    content.className = 'modal-content glass';
-    content.style.cssText = 'width:480px; max-width:95vw; max-height:85vh; display:flex; flex-direction:column; padding:0; border-radius:16px; overflow:hidden; background:var(--card-bg, #0f172a); border:1px solid var(--border, #1e293b); box-shadow:0 32px 64px rgba(0,0,0,0.7); transform:translateY(20px) scale(0.98); transition:all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); pointer-events:auto;';
-
-    content.innerHTML = `
-        <div style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02);">
-            <h2 style="font-size:16px; font-weight:700; margin:0; color:var(--text-primary);">${t('modpack.apply')}</h2>
-            <button class="btn btn-icon btn-ghost" id="qa-close" style="color:var(--text-muted);">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-        </div>
-        <div id="qa-body" style="flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:8px;"></div>
-    `;
-
-    const body = content.querySelector('#qa-body');
-    _modpacks.forEach(pack => {
-        const item = document.createElement('div');
-        item.className = 'glass-card';
-        item.style.cssText = 'padding:14px 18px; border-radius:14px; border:1px solid rgba(255,255,255,0.05); transition:all 0.25s; display:flex; align-items:center; gap:16px; background:rgba(255,255,255,0.02);';
-        
-        const allEnabled = pack.mods.every(mref => {
-            const local = _allMods.find(m => m.id === mref.mod_id || m.sha256 === mref.sha256);
-            return local && local.enabled;
-        });
-
-        const gameLabel = pack.game_name ? `<span style="opacity:0.3">|</span> <span style="color:var(--text-secondary);">${pack.game_name}</span>` : '';
-        
-        item.innerHTML = `
-            <div style="flex:1; min-width:0;">
-                <div style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:2px;">${pack.name}</div>
-                <div style="font-size:11px; color:var(--text-muted); display:flex; gap:8px; align-items:center;">
-                    <span style="font-weight:600; color:${allEnabled ? 'var(--success)' : 'var(--text-muted)'}">${allEnabled ? 'Active' : 'Inactive'}</span>
-                    <span style="opacity:0.3">•</span>
-                    <span>${pack.mods.length} mods</span>
-                    ${gameLabel}
-                </div>
-            </div>
-            <div class="bmm-switch-wrap" 
-                 style="width:44px; height:24px; position:relative; cursor:pointer; flex-shrink:0;"
-                 onmouseenter="window.showTaskyHelp('${t('modpack.quickApplyDesc') || 'Activer/Désactiver le pack.'}', 'zap')"
-                 onmouseleave="window.hideTaskyHelp()">
-                <div class="switch-bg" style="position:absolute; inset:0; border-radius:12px; background:${allEnabled ? 'var(--success)' : 'rgba(255,255,255,0.1)'}; transition:all 0.3s; border:1px solid ${allEnabled ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)'};"></div>
-                <div class="switch-knob" style="position:absolute; top:4px; ${allEnabled ? 'right:4px' : 'left:4px'}; width:16px; height:16px; border-radius:50%; background:#fff; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
-            </div>
-        `;
-
-        item.onclick = async () => {
-            const swBg = item.querySelector('.switch-bg');
-            const swKnob = item.querySelector('.switch-knob');
-            
-            // Visual feedback before logic
-            const targetState = !allEnabled;
-            swBg.style.background = targetState ? 'var(--success)' : 'rgba(255,255,255,0.1)';
-            swBg.style.borderColor = targetState ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)';
-            swKnob.style.left = targetState ? 'auto' : '4px';
-            swKnob.style.right = targetState ? '4px' : 'auto';
-
-            await _applyModpack(null, pack);
-            // Refresh modal state
-            setTimeout(() => {
-                overlay.remove();
-                _openQuickApplyModal();
-            }, 500);
-        };
-        body.appendChild(item);
-    });
-
-    content.querySelector('#qa-close').onclick = close;
-
-    overlay.appendChild(content);
-    const appOuter = document.getElementById('app-window-outer') || document.body;
-    appOuter.appendChild(overlay);
-    requestAnimationFrame(() => { overlay.style.opacity = '1'; content.style.transform = 'scale(1)'; });
-}
-
 async function _exportModpack(pack) {
     if (!pack) return;
     try {
@@ -880,12 +874,22 @@ async function _exportModpack(pack) {
 
 async function _deleteModpack(container, pack) {
     if (!pack) return;
-    if (!confirm(t('modpack.deleteConfirm') || 'Supprimer ce modpack ?')) return;
+    
+    const ok = await window.confirmCustom(
+        t('modpack.delete') || 'Supprimer',
+        t('modpack.deleteConfirm') || 'Voulez-vous vraiment supprimer ce modpack ?',
+        'danger'
+    );
+    if (!ok) return;
+
     try {
         await invoke('delete_modpack', { id: pack.id });
         toast(t('modpack.deletedOk') || 'Modpack supprimé.', 'success');
         await _loadData();
         _renderModpackList(container);
+        
+        // Notify other components (like Repo page)
+        window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
     } catch (err) {
         toast(String(err), 'error');
     }

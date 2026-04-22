@@ -598,4 +598,11 @@ export function initRepo() {
 
     const lastAuthor = localStorage.getItem('bmm_last_author');
     if (lastAuthor && elements.inputExportAuthor) elements.inputExportAuthor.value = lastAuthor;
+
+    // --- Events ---
+    window.addEventListener('bmm://modpacks-updated', () => {
+        if (elements.modpacksListEl) {
+            loadModpacksForExport(elements.modpacksListEl);
+        }
+    });
 }

@@ -5450,7 +5450,11 @@ select:focus {
 
 @keyframes pulse-danger {
     0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(1.2); }
+    50% { opacity: 0.8; transform: scale(1.02); }
+}
+
+@keyframes bmm-loading-spin {
+    to { transform: rotate(360deg); }
 }
 
 @keyframes slideDown {

@@ -98,6 +98,10 @@ pub struct AppState {
     pub last_cache_update: Mutex<Option<Instant>>,
     // Discord RPC
     pub discord_client: Mutex<Option<Box<dyn discord_rich_presence::DiscordIpc + Send + Sync>>>,
+    // SHA calculation queue (priority queue for background hashing)
+    pub sha_queue: std::sync::Arc<Mutex<std::collections::VecDeque<String>>>,
+    pub sha_queue_priority: std::sync::Arc<Mutex<std::collections::VecDeque<String>>>,
+    pub sha_calculation_active: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl AppState {
@@ -129,6 +133,9 @@ impl AppState {
             conflict_index: Mutex::new(HashMap::new()),
             last_cache_update: Mutex::new(None),
             discord_client: Mutex::new(None),
+            sha_queue: std::sync::Arc::new(Mutex::new(std::collections::VecDeque::new())),
+            sha_queue_priority: std::sync::Arc::new(Mutex::new(std::collections::VecDeque::new())),
+            sha_calculation_active: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 

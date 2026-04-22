@@ -395,16 +395,41 @@ pub async fn add_mod(
 #[tauri::command]
 pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files: bool) -> Result<(), String> {
     log_line(format!("[MOD] Removing mod '{}' (delete_files: {})", mod_id, delete_files));
-    let mod_path = {
+    let (mod_path, mods_dependent_on_this) = {
         let mut data = state.data.lock().unwrap();
         let idx = data.mods.iter().position(|m| m.id == mod_id).ok_or("Mod introuvable")?;
-        let m = &data.mods[idx];
-        if m.enabled {
+        
+        // Clone needed data before mutable borrow
+        let mod_enabled = data.mods[idx].enabled;
+        let mod_folder_path = data.mods[idx].mod_folder_path.clone();
+        
+        if mod_enabled {
             return Err("Désactivez le mod avant de le supprimer.".to_string());
         }
-        let p = m.mod_folder_path.clone();
+        
+        // Find all mods that have this mod as a dependency
+        let mut dependent_mods = Vec::new();
+        for other_mod in &data.mods {
+            if other_mod.dependencies.contains(&mod_id) {
+                dependent_mods.push(other_mod.name.clone());
+            }
+        }
+        
+        // Remove this mod from all other mods' dependencies
+        let mut removed_from = Vec::new();
+        for other_mod in data.mods.iter_mut() {
+            if other_mod.dependencies.contains(&mod_id) {
+                other_mod.dependencies.retain(|dep_id| dep_id != &mod_id);
+                removed_from.push(other_mod.name.clone());
+            }
+        }
+        
+        if !removed_from.is_empty() {
+            log_line(format!("[MOD] Removed '{}' from dependencies of: {:?}", mod_id, removed_from));
+        }
+        
         data.mods.remove(idx);
-        p
+        (mod_folder_path, dependent_mods)
     };
 
     if delete_files {
@@ -418,6 +443,11 @@ pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files
 
     let _ = state.save();
     invalidate_cache(&state);
+    
+    if !mods_dependent_on_this.is_empty() {
+        return Ok(()); // Silently remove from dependencies
+    }
+    
     Ok(())
 }
 
@@ -427,6 +457,7 @@ fn resolve_dependencies(
     all_mods: &[ModEntry],
     resolved: &mut Vec<String>,
     unresolved: &mut Vec<String>,
+    missing: &mut Vec<String>,
 ) -> Result<(), String> {
     if resolved.contains(target_id) {
         return Ok(());
@@ -442,7 +473,12 @@ fn resolve_dependencies(
         if unresolved.contains(dep_id) {
             return Err(format!("Dépendance circulaire détectée: {} -> {}", target_id, dep_id));
         }
-        resolve_dependencies(dep_id, all_mods, resolved, unresolved)?;
+        // Check if dependency exists
+        if !all_mods.iter().any(|m| &m.id == dep_id) {
+            missing.push(dep_id.clone());
+        } else {
+            resolve_dependencies(dep_id, all_mods, resolved, unresolved, missing)?;
+        }
     }
     
     let pos = unresolved.iter().position(|x| x == target_id).unwrap();
@@ -454,15 +490,29 @@ fn resolve_dependencies(
 pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: String) -> Result<Option<String>, String> {
     log_line(format!("[MOD] Enabling mod '{}' (recursive if needed)", mod_id));
     
-    // 1. Resolve full dependency chain
-    let (mod_ids_to_enable, profile_data, warning_settings) = {
-        let data = state.data.lock().unwrap();
+    // 1. Resolve full dependency chain and check for missing dependencies
+    let (mod_ids_to_enable, profile_data, warning_settings, missing_deps, needs_save) = {
+        let mut data = state.data.lock().unwrap();
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
         
         let mut resolved = Vec::new();
         let mut unresolved = Vec::new();
-        resolve_dependencies(&mod_id, &data.mods, &mut resolved, &mut unresolved)?;
+        let mut missing = Vec::new();
+        resolve_dependencies(&mod_id, &data.mods, &mut resolved, &mut unresolved, &mut missing)?;
+        
+        // If there are missing dependencies, remove them from the mod's dependency list
+        let needs_save = if !missing.is_empty() {
+            log_line(format!("[MOD] Found {} missing dependencies for mod '{}': {:?}", missing.len(), mod_id, missing));
+            if let Some(mod_entry) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+                let original_deps = mod_entry.dependencies.clone();
+                mod_entry.dependencies.retain(|dep_id| !missing.contains(dep_id));
+                log_line(format!("[MOD] Removed missing dependencies from mod '{}': {:?}", mod_id, original_deps.iter().filter(|d| missing.contains(d)).collect::<Vec<_>>()));
+            }
+            true
+        } else {
+            false
+        };
         
         // Only enable those not already enabled in this profile
         let to_enable: Vec<String> = resolved.into_iter()
@@ -475,8 +525,21 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
         let critical_pct = data.settings.storage_critical_space_pct;
         let alert_enabled = data.settings.storage_alert_enabled;
 
-        (to_enable, p, (warning_pct, critical_pct, alert_enabled))
+        (to_enable, p, (warning_pct, critical_pct, alert_enabled), missing, needs_save)
     };
+
+    // Save if dependencies were modified
+    if needs_save {
+        let _ = state.save();
+    }
+
+    // Log warning about missing dependencies (no event to avoid potential crashes)
+    if !missing_deps.is_empty() {
+        log_line(format!("[MOD] Missing dependencies removed from mod '{}': {:?}", mod_id, missing_deps));
+    }
+
+    // Add mod to priority SHA queue if it has no hashes
+    add_mod_to_priority_sha_queue(state.clone(), mod_id.clone());
 
     ensure_cache_populated(&state)?;
     let mut active_files_set = HashSet::<PathBuf>::new();
@@ -1844,4 +1907,126 @@ pub async fn update_mod_hashes(state: State<'_, AppState>, mod_id: String) -> Re
     
     let _ = state.save();
     Ok(())
+}
+
+pub fn start_sha_calculation_background(state: tauri::State<'_, AppState>) {
+    let sha_queue = state.sha_queue.clone();
+    let sha_queue_priority = state.sha_queue_priority.clone();
+    let sha_calculation_active = state.sha_calculation_active.clone();
+    let data_path = state.data_path.clone();
+    
+    std::thread::spawn(move || {
+        log_line("[SHA-CALC] Background SHA calculation thread started");
+        
+        loop {
+            // Check if already running
+            if sha_calculation_active.load(std::sync::atomic::Ordering::SeqCst) {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                continue;
+            }
+            
+            // Get next mod from priority queue or normal queue
+            let mod_id = {
+                let mut priority_queue = sha_queue_priority.lock().unwrap();
+                if let Some(id) = priority_queue.pop_front() {
+                    Some(id)
+                } else {
+                    drop(priority_queue);
+                    let mut normal_queue = sha_queue.lock().unwrap();
+                    normal_queue.pop_front()
+                }
+            };
+            
+            match mod_id {
+                Some(id) => {
+                    sha_calculation_active.store(true, std::sync::atomic::Ordering::SeqCst);
+                    
+                    log_line(format!("[SHA-CALC] Calculating hashes for mod: {}", id));
+                    
+                    // Load data to get mod path
+                    let mod_path_opt = {
+                        let data = crate::state::AppState::load(data_path.clone());
+                        let data_lock = data.data.lock().unwrap();
+                        data_lock.mods.iter().find(|m| m.id == id).map(|m| m.mod_folder_path.clone())
+                    };
+                    
+                    if mod_path_opt.is_none() {
+                        log_line(format!("[SHA-CALC] Mod {} not found, skipping", id));
+                    }
+                    
+                    if let Some(mod_path) = mod_path_opt {
+                        if let Ok(current_files) = fs_utils::list_mod_files(&mod_path) {
+                            let mut new_hashes = std::collections::HashMap::new();
+                            let mut calculated = 0;
+                            
+                            for f in current_files {
+                                let full_path = mod_path.join(&f);
+                                if let Ok(hash) = fs_utils::compute_file_sha256(&full_path) {
+                                    new_hashes.insert(f.to_string_lossy().to_string(), hash);
+                                    calculated += 1;
+                                }
+                            }
+                            
+                            // Reload data, update hashes, and save
+                            {
+                                let mut data = crate::state::AppState::load(data_path.clone());
+                                let mut data_lock = data.data.lock().unwrap();
+                                if let Some(m) = data_lock.mods.iter_mut().find(|m| m.id == id) {
+                                    m.file_hashes = Some(new_hashes);
+                                }
+                                let _ = data.save();
+                            }
+                            
+                            log_line(format!("[SHA-CALC] Completed mod {} ({} files)", id, calculated));
+                        }
+                    }
+                    
+                    sha_calculation_active.store(false, std::sync::atomic::Ordering::SeqCst);
+                    
+                    // Throttle: wait between mods to avoid CPU/disk saturation
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                None => {
+                    // No mods in queue, sleep longer
+                    std::thread::sleep(std::time::Duration::from_millis(1000));
+                }
+            }
+        }
+    });
+}
+
+pub fn populate_sha_queue(state: tauri::State<'_, AppState>) {
+    let data = state.data.lock().unwrap();
+    let mut queue = state.sha_queue.lock().unwrap();
+    
+    for mod_entry in &data.mods {
+        if mod_entry.file_hashes.is_none() || mod_entry.file_hashes.as_ref().map_or(true, |h| h.is_empty()) {
+            queue.push_back(mod_entry.id.clone());
+        }
+    }
+    
+    log_line(format!("[SHA-CALC] Added {} mods to SHA calculation queue", queue.len()));
+}
+
+pub fn add_mod_to_priority_sha_queue(state: tauri::State<'_, AppState>, mod_id: String) {
+    let mut priority_queue = state.sha_queue_priority.lock().unwrap();
+    
+    // Check if mod already needs hashing
+    let needs_hash = {
+        let data = state.data.lock().unwrap();
+        data.mods.iter().find(|m| m.id == mod_id)
+            .map_or(false, |m| m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty()))
+    };
+    
+    if needs_hash {
+        // Remove from normal queue if present
+        {
+            let mut normal_queue = state.sha_queue.lock().unwrap();
+            normal_queue.retain(|id| id != &mod_id);
+        }
+        
+        // Add to priority queue
+        priority_queue.push_back(mod_id.clone());
+        log_line(format!("[SHA-CALC] Added mod {} to priority SHA queue", mod_id));
+    }
 }

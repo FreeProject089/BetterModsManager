@@ -152,6 +152,11 @@ fn main() {
             app.manage(app_state);
             app.manage(crate::commands::repo_server::RepoServerState::default());
             
+            // 2.5. Start background SHA calculation
+            let state_handle = app.state::<AppState>();
+            commands::mods::start_sha_calculation_background(state_handle.clone());
+            commands::mods::populate_sha_queue(state_handle);
+            
             // 3. Load Bans
             if let Err(e) = commands::ban_manager::load_bans(&app.handle()) {
                 commands::crash::log_line(format!("[WARNING] Failed to load bans: {}", e));
