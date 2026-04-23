@@ -30,6 +30,7 @@ import {
   closeModDetail, 
   renderModDetail 
 } from './mods-details.js';
+import { openQuickApplyModal } from './modpack-creator.js';
 
 const S = new Proxy(appState.state, {
   get(target, prop) { return target[prop]; },
@@ -43,6 +44,7 @@ export async function initMods() {
 
   // --- Core Listeners ---
   document.getElementById('btn-add-mod')?.addEventListener('click', openAddModModal);
+  document.getElementById('btn-quick-apply-modpack')?.addEventListener('click', openQuickApplyModal);
   document.getElementById('btn-confirm-add-mod')?.addEventListener('click', confirmAddMod);
   document.getElementById('btn-enable-all')?.addEventListener('click', () => toggleAllMods());
   document.getElementById('btn-disable-all-alt')?.addEventListener('click', () => toggleAllMods(false));

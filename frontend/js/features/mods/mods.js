@@ -10,6 +10,7 @@ import { renderModList, updateBadge, updateSubtitle, updateToggleAllBtn } from '
 import { checkAllConflicts, restoreConflictCache } from './mods-conflicts.js';
 import { openAddModModal, confirmAddMod, toggleAllMods, scanModsFolder, verifyIntegrity } from './mods-actions.js';
 import { selectMod, closeModDetail, renderModDetail } from './mods-details.js';
+import { openQuickApplyModal } from './modpack-creator.js';
 const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
     set(target, prop, value) { appState.set(prop, value); return true; }
@@ -19,6 +20,7 @@ export async function initMods() {
     window._refreshModsFn = refreshMods;
     // --- Core Listeners ---
     document.getElementById('btn-add-mod')?.addEventListener('click', openAddModModal);
+    document.getElementById('btn-quick-apply-modpack')?.addEventListener('click', openQuickApplyModal);
     document.getElementById('btn-confirm-add-mod')?.addEventListener('click', confirmAddMod);
     document.getElementById('btn-enable-all')?.addEventListener('click', () => toggleAllMods());
     document.getElementById('btn-disable-all-alt')?.addEventListener('click', () => toggleAllMods(false));

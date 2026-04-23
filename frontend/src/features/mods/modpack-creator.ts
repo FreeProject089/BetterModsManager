@@ -309,8 +309,8 @@ async function _openEditor(container, pack) {
     
     const skipInfo = document.createElement('div');
     skipInfo.innerHTML = `
-        <div style="font-size:13px; font-weight:700; color:#ff8800;">Ignorer la vérification d'intégrité</div>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Désactive la vérification des fichiers au lancement (plus rapide, mais ne répare pas les mods cassés).</div>
+        <div style="font-size:13px; font-weight:700; color:#ff8800;">${t('modpack.skipIntegrity') || "Ignorer la vérification d'intégrité"}</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${t('modpack.skipIntegrityDesc') || "Désactive la vérification des fichiers au lancement (plus rapide, mais ne répare pas les mods cassés)."}</div>
     `;
     
     skipRow.appendChild(skipCb);
@@ -1147,3 +1147,186 @@ async function _deleteModpack(container, pack) {
         toast(String(err), 'error');
     }
 }
+
+// ── Quick Apply Modal ────────────────────────────────────────────────────────
+export async function openQuickApplyModal() {
+    await _loadData();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; z-index:100000; opacity:0; transition:opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1); pointer-events:auto;';
+
+    const content = document.createElement('div');
+    content.className = 'modal-content glass';
+    content.style.cssText = 'width:660px; max-width:95vw; height:80vh; max-height:700px; display:flex; flex-direction:column; padding:0; border-radius:16px; overflow:hidden; background:var(--card-bg, #0f172a); border:1px solid var(--border, #1e293b); box-shadow:0 32px 64px rgba(0,0,0,0.7); transform:translateY(20px) scale(0.98); transition:all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); pointer-events:auto;';
+
+    // Header
+    const header = document.createElement('div');
+    header.style.cssText = 'padding:20px 24px 0; border-bottom:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); flex-shrink:0;';
+    header.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="width:36px; height:36px; border-radius:10px; background:rgba(0,194,255,0.12); border:1px solid rgba(0,194,255,0.25); display:flex; align-items:center; justify-content:center; color:var(--accent);">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                </div>
+                <div>
+                    <div style="font-size:16px; font-weight:700; color:var(--text-primary);">${t('modpack.quickApplyTitle') || 'Activer un Modpack'}</div>
+                    <div style="font-size:11px; color:var(--text-muted); margin-top:1px;">${_modpacks.length} ${t('modpack.available') || 'disponibles'}</div>
+                </div>
+            </div>
+            <button class="btn btn-icon btn-ghost" id="qa-close" style="color:var(--text-muted); width:32px; height:32px; border-radius:8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div style="padding-bottom:16px; display:flex; align-items:center; gap:10px;">
+            <div style="flex:1; display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 12px; transition:border-color 0.2s;" id="qa-search-wrap">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="qa-search" placeholder="${t('common.search') || 'Rechercher...'}" style="flex:1; background:none; border:none; outline:none; font-size:13px; color:var(--text-primary);">
+            </div>
+            <select id="qa-filter" style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 12px; font-size:13px; color:var(--text-primary); outline:none; cursor:pointer;">
+                <option value="all">${t('modpack.filterAll') || 'Tous'}</option>
+                <option value="single">${t('modpack.singleProfile') || 'Profil unique'}</option>
+                <option value="multi">${t('modpack.multiProfile') || 'Multi-profil'}</option>
+            </select>
+        </div>
+    `;
+
+    // Body
+    const body = document.createElement('div');
+    body.style.cssText = 'flex:1; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:8px;';
+    body.className = 'custom-scrollbar';
+
+    const cards = [];
+
+    if (_modpacks.length === 0) {
+        body.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:60px 20px; display:flex; flex-direction:column; align-items:center; gap:12px;">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="opacity:0.3;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+            <span>${t('modpack.noModpacks') || 'Aucun modpack trouvé'}</span>
+        </div>`;
+    }
+
+    _modpacks.forEach(pack => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); transition:background 0.2s, border-color 0.2s;';
+        row.onmouseenter = () => {
+            row.style.background = 'rgba(255,255,255,0.05)';
+            row.style.borderColor = 'rgba(0,194,255,0.2)';
+        };
+        row.onmouseleave = () => {
+            row.style.background = 'rgba(255,255,255,0.03)';
+            row.style.borderColor = 'rgba(255,255,255,0.05)';
+        };
+
+        const modsCount = pack.mods ? pack.mods.length : 0;
+        
+        let anyEnabled = false;
+        if (pack.mods) {
+            anyEnabled = pack.mods.some(mref => {
+                const local = _allMods.find(m => m.id === mref.mod_id || (m.file_hashes && Object.values(m.file_hashes).includes(mref.sha256)));
+                return local && local.enabled;
+            });
+        }
+
+        row.innerHTML = `
+            <div style="flex:1; min-width:0; padding-right:16px;">
+                <div style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:4px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${pack.name}</div>
+                <div style="font-size:11px; color:var(--text-muted); display:flex; gap:8px; align-items:center;">
+                    <span>${t('modpack.modsCount', { count: modsCount }) || modsCount + ' mods'}</span>
+                    <span style="opacity:0.3">•</span>
+                    <span style="color:var(--text-secondary);">${pack.multi_profile ? t('modpack.multiProfile') : (pack.game_name || t('modpack.general'))}</span>
+                </div>
+            </div>
+            <div class="bmm-switch-wrap btn-apply ${anyEnabled ? 'active' : ''}" 
+                 style="width:38px; height:20px; position:relative; cursor:pointer; flex-shrink:0;">
+                <div class="switch-bg" style="position:absolute; inset:0; border-radius:10px; background:${anyEnabled ? 'var(--success)' : 'rgba(255,255,255,0.1)'}; transition:all 0.3s; border:1px solid ${anyEnabled ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)'};"></div>
+                <div class="switch-knob" style="position:absolute; top:3px; ${anyEnabled ? 'right:3px' : 'left:3px'}; width:14px; height:14px; border-radius:50%; background:#fff; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
+            </div>
+        `;
+
+        const applyBtn = row.querySelector('.btn-apply');
+        applyBtn.onclick = async () => {
+            const wrap = applyBtn.closest('.bmm-switch-wrap');
+            wrap.style.opacity = '0.5';
+            wrap.style.pointerEvents = 'none';
+            await _applyModpack(null, pack);
+            
+            // Recalculate anyEnabled after apply
+            await _loadData();
+            let newAnyEnabled = false;
+            const updatedPack = _modpacks.find(p => p.id === pack.id);
+            if (updatedPack && updatedPack.mods) {
+                newAnyEnabled = updatedPack.mods.some(mref => {
+                    const local = _allMods.find(m => m.id === mref.mod_id || (m.file_hashes && Object.values(m.file_hashes).includes(mref.sha256)));
+                    return local && local.enabled;
+                });
+            }
+            
+            if (newAnyEnabled) {
+                wrap.classList.add('active');
+                wrap.querySelector('.switch-bg').style.background = 'var(--success)';
+                wrap.querySelector('.switch-bg').style.borderColor = 'rgba(16,185,129,0.3)';
+                wrap.querySelector('.switch-knob').style.left = 'auto';
+                wrap.querySelector('.switch-knob').style.right = '3px';
+            } else {
+                wrap.classList.remove('active');
+                wrap.querySelector('.switch-bg').style.background = 'rgba(255,255,255,0.1)';
+                wrap.querySelector('.switch-bg').style.borderColor = 'rgba(255,255,255,0.05)';
+                wrap.querySelector('.switch-knob').style.right = 'auto';
+                wrap.querySelector('.switch-knob').style.left = '3px';
+            }
+            wrap.style.opacity = '1';
+            wrap.style.pointerEvents = 'auto';
+        };
+
+        body.appendChild(row);
+        cards.push({ card: row, name: pack.name.toLowerCase(), isMulti: pack.multi_profile });
+    });
+
+    const searchInput = header.querySelector('#qa-search');
+    const filterSelect = header.querySelector('#qa-filter');
+    const searchWrap = header.querySelector('#qa-search-wrap');
+
+    searchInput.addEventListener('focus', () => { searchWrap.style.borderColor = 'var(--accent)'; });
+    searchInput.addEventListener('blur', () => { searchWrap.style.borderColor = 'rgba(255,255,255,0.08)'; });
+
+    const applyFilters = () => {
+        const q = searchInput.value.toLowerCase().trim();
+        const f = filterSelect.value;
+        cards.forEach(({ card, name, isMulti }) => {
+            let match = true;
+            if (q && !name.includes(q)) match = false;
+            if (f === 'single' && isMulti) match = false;
+            if (f === 'multi' && !isMulti) match = false;
+            card.style.display = match ? 'flex' : 'none';
+        });
+    };
+
+    searchInput.addEventListener('input', applyFilters);
+    filterSelect.addEventListener('change', applyFilters);
+
+    content.appendChild(header);
+    content.appendChild(body);
+    overlay.appendChild(content);
+
+    const appOuter = document.getElementById('app-window-outer') || document.body;
+    appOuter.appendChild(overlay);
+
+    requestAnimationFrame(() => {
+        overlay.style.opacity = '1';
+        content.style.transform = 'translateY(0) scale(1)';
+    });
+
+    const closeBtn = header.querySelector('#qa-close');
+
+    const closeModal = () => {
+        overlay.style.opacity = '0';
+        content.style.transform = 'translateY(10px) scale(0.98)';
+        setTimeout(() => overlay.remove(), 300);
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('mousedown', (e) => {
+        if (e.target === overlay) closeModal();
+    });
+}
+
