@@ -52,9 +52,10 @@ pub struct LocalModpack {
     pub description: Option<String>,
     pub created_at: String,
     pub updated_at: String,
-    /// If true, mods from different profiles can be mixed
     pub multi_profile: bool,
     pub dependency_mode: DependencyMode,
+    #[serde(default)]
+    pub skip_integrity_check: bool,
     pub mods: Vec<ModpackModRef>,
     /// Optional link to a ServerRepo that can supply missing mods
     pub sr_link: Option<String>,

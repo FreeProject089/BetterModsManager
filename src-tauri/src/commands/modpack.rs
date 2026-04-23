@@ -226,3 +226,347 @@ pub async fn import_modpack(
     }
     Err("repo.errCancel".to_string())
 }
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackIntegrityReport {
+    pub total_mods: usize,
+    pub missing_mods: Vec<crate::models::modpack::ModpackModRef>,
+    pub corrupted_mods: Vec<crate::models::modpack::ModpackModRef>,
+    pub valid_mods: Vec<crate::models::modpack::ModpackModRef>,
+}
+
+#[tauri::command]
+pub async fn check_modpack_integrity(
+    state: State<'_, AppState>,
+    modpack: LocalModpack,
+) -> Result<ModpackIntegrityReport, String> {
+    let mut missing_mods = Vec::new();
+    let mut corrupted_mods = Vec::new();
+    let mut valid_mods = Vec::new();
+
+    let data = state.data.lock().unwrap();
+
+    for mref in &modpack.mods {
+        let mut found_mod = data.mods.iter().find(|m| m.id == mref.mod_id);
+
+        if found_mod.is_none() && !mref.sha256.is_empty() {
+            found_mod = data.mods.iter().find(|m| {
+                if let Some(hashes) = &m.file_hashes {
+                    hashes.values().any(|h| h == &mref.sha256)
+                } else {
+                    false
+                }
+            });
+        }
+
+        if let Some(local_mod) = found_mod {
+            let mut is_corrupted = false;
+            
+            for file_ref in &mref.file_manifest {
+                let local_file_path = local_mod.mod_folder_path.join(&file_ref.relative_path);
+                if !local_file_path.exists() {
+                    is_corrupted = true;
+                    break;
+                }
+                
+                if let Ok(meta) = std::fs::metadata(&local_file_path) {
+                    if meta.len() != file_ref.size {
+                        is_corrupted = true;
+                        break;
+                    }
+                } else {
+                    is_corrupted = true;
+                    break;
+                }
+                
+                if let Ok(local_hash) = crate::fs_utils::compute_file_sha256(&local_file_path) {
+                    if local_hash != file_ref.sha256 {
+                        is_corrupted = true;
+                        break;
+                    }
+                } else {
+                    is_corrupted = true;
+                    break;
+                }
+            }
+            
+            if is_corrupted {
+                corrupted_mods.push(mref.clone());
+            } else {
+                valid_mods.push(mref.clone());
+            }
+        } else {
+            missing_mods.push(mref.clone());
+        }
+    }
+
+    Ok(ModpackIntegrityReport {
+        total_mods: modpack.mods.len(),
+        missing_mods,
+        corrupted_mods,
+        valid_mods,
+    })
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepairArgs {
+    pub mod_ref: crate::models::modpack::ModpackModRef,
+    pub sr_link: Option<String>,
+    pub target_profile_id: String,
+    pub creator_id: Option<String>,
+}
+
+fn find_file_by_hash_in_dir(dir: &std::path::Path, expected_hash: &str) -> Option<std::path::PathBuf> {
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Ok(hash) = crate::fs_utils::compute_file_sha256(&path) {
+                    if hash == expected_hash {
+                        return Some(path);
+                    }
+                }
+            } else if path.is_dir() {
+                if let Some(found) = find_file_by_hash_in_dir(&path, expected_hash) {
+                    return Some(found);
+                }
+            }
+        }
+    }
+    None
+}
+
+#[tauri::command]
+pub async fn repair_modpack_mod(
+    window: tauri::Window,
+    state: State<'_, AppState>,
+    args: RepairArgs,
+) -> Result<crate::models::mod_entry::ModEntry, String> {
+    use std::io::Write;
+    use futures::StreamExt;
+    
+    let mod_ref = args.mod_ref;
+    let fallback_type = mod_ref.fallback_type.clone().unwrap_or_else(|| "direct".to_string());
+    
+    // 1. Déterminer ou créer le dossier cible
+    let (target_dir, mut existing_mod) = {
+        let mut data = state.data.lock().unwrap();
+        let profile = data.profiles.iter().find(|p| p.id == args.target_profile_id)
+            .ok_or("Profil introuvable")?;
+            
+        let mut found_mod = data.mods.iter().find(|m| m.id == mod_ref.mod_id).cloned();
+        if found_mod.is_none() && !mod_ref.sha256.is_empty() {
+            found_mod = data.mods.iter().find(|m| {
+                if let Some(hashes) = &m.file_hashes {
+                    hashes.values().any(|h| h == &mod_ref.sha256)
+                } else {
+                    false
+                }
+            }).cloned();
+        }
+        
+        let target_dir = if let Some(m) = &found_mod {
+            m.mod_folder_path.clone()
+        } else {
+            let safe_mod_name = mod_ref.mod_name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "_");
+            let subfolder = format!("{}_{}", &mod_ref.mod_id.chars().take(8).collect::<String>(), safe_mod_name);
+            profile.mods_path.join(subfolder)
+        };
+        
+        if !target_dir.exists() {
+            std::fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
+        }
+        
+        (target_dir, found_mod)
+    };
+
+    // 2. Téléchargement et Réparation
+    let mut client_builder = reqwest::Client::builder();
+    if let Some(ref cid) = args.creator_id {
+        let mut headers = reqwest::header::HeaderMap::new();
+        if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) {
+            headers.insert("X-Creator-ID", hv);
+        }
+        client_builder = client_builder.default_headers(headers);
+    }
+    let client = client_builder.build().map_err(|e| e.to_string())?;
+
+    if fallback_type == "sr" {
+        // ServerRepo Logique
+        let base_url = if let Some(url) = mod_ref.fallback_link.clone().or(args.sr_link) {
+            if url.ends_with("repo.json") { url.trim_end_matches("repo.json").to_string() }
+            else if url.ends_with('/') { url }
+            else { format!("{}/", url) }
+        } else {
+            return Err("Aucun lien ServerRepo fourni".to_string());
+        };
+
+        for (idx, file_ref) in mod_ref.file_manifest.iter().enumerate() {
+            let local_path = target_dir.join(&file_ref.relative_path);
+            let mut needs_download = true;
+
+            if local_path.exists() {
+                if let Ok(local_hash) = crate::fs_utils::compute_file_sha256(&local_path) {
+                    if local_hash == file_ref.sha256 {
+                        needs_download = false;
+                    }
+                }
+            }
+
+            if needs_download {
+                // Tentative de récupération locale (fichier déplacé par mégarde)
+                let mut recovered = false;
+                if let Some(found_path) = find_file_by_hash_in_dir(&target_dir, &file_ref.sha256) {
+                    if let Some(parent) = local_path.parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                    if std::fs::rename(&found_path, &local_path).is_ok() || std::fs::copy(&found_path, &local_path).is_ok() {
+                        recovered = true;
+                    }
+                }
+
+                if !recovered {
+                    if let Some(parent) = local_path.parent() {
+                        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                    }
+                    
+                    let file_url = format!("{}mods/{}/{}", base_url, mod_ref.mod_id, file_ref.relative_path.replace("\\", "/"));
+                    let mut resp = client.get(&file_url).send().await.map_err(|e| e.to_string())?;
+                    
+                    if !resp.status().is_success() {
+                        if resp.status() == 403 {
+                            return Err("Accès refusé par le serveur".to_string());
+                        }
+                        return Err(format!("Fichier non trouvé sur le serveur: {}", file_ref.relative_path));
+                    }
+                    
+                    let total_size = resp.content_length().unwrap_or(file_ref.size);
+                    let mut downloaded: u64 = 0;
+                    let mut file_out = std::fs::File::create(&local_path).map_err(|e| e.to_string())?;
+                    
+                    while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+                        file_out.write_all(&chunk).map_err(|e| e.to_string())?;
+                        downloaded += chunk.len() as u64;
+                        
+                        let progress = if total_size > 0 {
+                            (downloaded as f32 / total_size as f32) * 100.0
+                        } else {
+                            0.0
+                        };
+                        
+                        let _ = window.emit("bmm://repair-progress", serde_json::json!({
+                            "modName": mod_ref.mod_name,
+                            "file": file_ref.relative_path,
+                            "progress": progress
+                        }));
+                    }
+                }
+            }
+        }
+    } else {
+        // Direct Download Logique
+        // 1. Tentative de récupération locale AVANT de télécharger (fichiers déplacés par mégarde)
+        let mut all_recovered = true;
+        
+        if !mod_ref.file_manifest.is_empty() {
+            // Si on a un manifest de fichiers, on peut vérifier chaque fichier individuellement
+            for file_ref in &mod_ref.file_manifest {
+                let local_path = target_dir.join(&file_ref.relative_path);
+                let mut needs_fix = true;
+                
+                if local_path.exists() {
+                    if let Ok(h) = crate::fs_utils::compute_file_sha256(&local_path) {
+                        if h == file_ref.sha256 { needs_fix = false; }
+                    }
+                }
+                
+                if needs_fix {
+                    if let Some(found) = find_file_by_hash_in_dir(&target_dir, &file_ref.sha256) {
+                        if let Some(parent) = local_path.parent() {
+                            let _ = std::fs::create_dir_all(parent);
+                        }
+                        let _ = std::fs::rename(&found, &local_path)
+                            .or_else(|_| std::fs::copy(&found, &local_path).map(|_| ()));
+                    } else {
+                        all_recovered = false; // Au moins un fichier vraiment absent
+                    }
+                }
+            }
+        } else {
+            // Pas de manifest : on ne peut pas récupérer localement
+            all_recovered = false;
+        }
+        
+        // 2. Si la récupération locale ne suffit pas, on télécharge
+        if !all_recovered {
+            let url = mod_ref.download_link.clone().or(mod_ref.fallback_link.clone())
+                .ok_or("Aucun lien de téléchargement direct fourni")?;
+                
+            let _ = window.emit("bmm://repair-progress", serde_json::json!({
+                "modName": mod_ref.mod_name,
+                "file": "Téléchargement de l'archive...",
+                "progress": 50.0
+            }));
+
+            let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
+            if !res.status().is_success() {
+                return Err(format!("Erreur lors du téléchargement: {}", res.status()));
+            }
+            
+            let bytes = res.bytes().await.map_err(|e| e.to_string())?;
+            
+            // Extraction en mémoire ou via temp file
+            let temp_dir = std::env::temp_dir();
+            let temp_zip = temp_dir.join(format!("{}.zip", uuid::Uuid::new_v4()));
+            std::fs::write(&temp_zip, &bytes).map_err(|e| e.to_string())?;
+            
+            let file = std::fs::File::open(&temp_zip).map_err(|e| e.to_string())?;
+            let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+            
+            for i in 0..archive.len() {
+                let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+                let outpath = target_dir.join(file.name());
+                
+                if file.name().ends_with('/') {
+                    std::fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
+                } else {
+                    if let Some(p) = outpath.parent() {
+                        std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
+                    }
+                    let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
+                    std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+                }
+            }
+            let _ = std::fs::remove_file(temp_zip);
+        }
+    }
+
+    // 3. Mettre à jour l'entrée du mod dans la librairie
+    let final_entry = {
+        let mut data = state.data.lock().unwrap();
+        
+        // Si le mod existait sous un autre ID (trouvé par SHA256), on va l'écraser et FORCER le nouvel ID
+        if let Some(existing) = &existing_mod {
+            if let Some(m) = data.mods.iter_mut().find(|m| m.id == existing.id) {
+                m.id = mod_ref.mod_id.clone(); // Force modpack ID
+                m.name = mod_ref.mod_name.clone();
+                m.version = mod_ref.mod_version.clone();
+            }
+        } else {
+            // Créer le nouveau mod
+            let mut new_mod = crate::models::mod_entry::ModEntry::new(mod_ref.mod_name.clone(), target_dir);
+            new_mod.id = mod_ref.mod_id.clone();
+            new_mod.version = mod_ref.mod_version.clone();
+            data.mods.push(new_mod);
+        }
+        
+        data.mods.iter().find(|m| m.id == mod_ref.mod_id).unwrap().clone()
+    };
+    
+    let _ = state.save();
+    crate::commands::mods::invalidate_cache(&state);
+
+    Ok(final_entry)
+}

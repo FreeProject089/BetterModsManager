@@ -374,6 +374,8 @@ fn main() {
             commands::modpack::build_modpack_mod_ref,
             commands::modpack::export_modpack,
             commands::modpack::import_modpack,
+            commands::modpack::check_modpack_integrity,
+            commands::modpack::repair_modpack_mod,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

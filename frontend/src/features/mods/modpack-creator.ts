@@ -292,6 +292,31 @@ async function _openEditor(container, pack) {
     multiRow.appendChild(multiInfo);
     metaForm.appendChild(multiRow);
 
+    // Skip Integrity Check toggle
+    const skipRow = document.createElement('label');
+    skipRow.style.cssText = 'display:flex; align-items:center; gap:12px; cursor:pointer; padding:16px; border-radius:14px; background:rgba(255,136,0,0.05); border:1px solid rgba(255,136,0,0.1); transition:all 0.2s;';
+    skipRow.onmouseenter = () => skipRow.style.borderColor = 'rgba(255,136,0,0.3)';
+    skipRow.onmouseleave = () => skipRow.style.borderColor = 'rgba(255,136,0,0.1)';
+    
+    const skipCb = document.createElement('input');
+    skipCb.type = 'checkbox';
+    skipCb.id = 'mp-skip-integrity';
+    skipCb.style.cssText = 'width:20px; height:20px; accent-color:#ff8800; cursor:pointer;';
+    skipCb.checked = _editingPack.skip_integrity_check;
+    skipCb.onchange = () => {
+        _editingPack.skip_integrity_check = skipCb.checked;
+    };
+    
+    const skipInfo = document.createElement('div');
+    skipInfo.innerHTML = `
+        <div style="font-size:13px; font-weight:700; color:#ff8800;">Ignorer la vérification d'intégrité</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Désactive la vérification des fichiers au lancement (plus rapide, mais ne répare pas les mods cassés).</div>
+    `;
+    
+    skipRow.appendChild(skipCb);
+    skipRow.appendChild(skipInfo);
+    metaForm.appendChild(skipRow);
+
     metaForm.appendChild(_formField(t('modpack.depMode'), `
         <select id="mp-depmode" class="form-input" style="width:100%;">
             <option value="all" ${_editingPack.dependency_mode === 'all' ? 'selected' : ''}>${t('modpack.depModeAll')}</option>
@@ -344,6 +369,7 @@ async function _openEditor(container, pack) {
             description: document.getElementById('mp-desc')?.value.trim() || null,
             game_name: document.getElementById('mp-game')?.value.trim() || null,
             multi_profile: document.getElementById('mp-multi')?.checked || false,
+            skip_integrity_check: document.getElementById('mp-skip-integrity')?.checked || false,
             dependency_mode: document.getElementById('mp-depmode')?.value || 'manual',
             sr_link: document.getElementById('mp-srlink')?.value.trim() || null,
             mods: _packMods,
@@ -763,7 +789,6 @@ function _openMultiSelectModal(listEl) {
         if (_currentSelectionModalUpdateFn) {
             _currentSelectionModalUpdateFn();
         }
-
         // Close the modal if it exists (even if it was reopened)
         if (_currentSelectionModalOverlay && document.body.contains(_currentSelectionModalOverlay)) {
             const closeBtn = _currentSelectionModalOverlay.querySelector('#ms-close') || _currentSelectionModalOverlay.querySelector('#ms-cancel');
@@ -793,72 +818,300 @@ function _openMultiSelectModal(listEl) {
 }
 
 
+async function _showRepairModal(container, pack, report, onComplete) {
+    const activeProfileId = _activeProfileId || window.cachedActiveProfileId;
+    if (!activeProfileId) {
+        toast("Aucun profil actif", "error");
+        return;
+    }
+
+    const modalOverlay = document.createElement('div');
+    modalOverlay.className = 'mod-repair-overlay';
+    modalOverlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(10px); z-index:9999; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);';
+    
+    const content = document.createElement('div');
+    content.className = 'editor-section-card';
+    content.style.cssText = 'width:600px; max-width:90vw; max-height:85vh; display:flex; flex-direction:column; padding:24px; border-radius:16px; background:var(--bg-secondary); border:1px solid rgba(255,255,255,0.08); box-shadow:0 20px 50px rgba(0,0,0,0.5); transform:scale(0.95); transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);';
+    
+    // Build lists
+    let modsHtml = '';
+    const problematicMods = [...report.missingMods, ...report.corruptedMods];
+    
+    let canRepairAny = false;
+    
+    problematicMods.forEach(m => {
+        const isMissing = report.missingMods.some(x => x.mod_id === m.mod_id);
+        const statusText = isMissing ? t('modpack.repair.statusMissing') || "Manquant" : t('modpack.repair.statusCorrupted') || "Corrompu";
+        const statusColor = isMissing ? "var(--danger)" : "#fbbf24";
+        const fallbackType = m.fallback_type || "direct";
+        
+        // Vérification de la possibilité de réparation :
+        // - Corrompu => peut toujours être réparé localement (fichiers déplacés), pas besoin de lien
+        // - Manquant  => nécessite un lien de téléchargement
+        const hasLink = fallbackType === "sr" ? !!pack.sr_link : !!(m.download_fallback || m.download_link);
+        const isCorrupted = !isMissing; // Corrupted = can be fixed locally (moved file)
+        if (hasLink || isCorrupted) canRepairAny = true;
+        
+        const sourceLabel = hasLink
+            ? (fallbackType === "sr" ? "ServerRepo" : t('modpack.repair.directLink') || "Lien Direct")
+            : isCorrupted
+                ? `<span style="color:#fbbf24; font-weight:800;">${t('modpack.repair.localRecovery') || 'Récupération Locale'}</span>`
+                : `<span style="color:var(--danger); font-weight:800;">${t('modpack.repair.linkMissing') || 'Lien Manquant'}</span>`;
+        
+        modsHtml += `
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:rgba(255,255,255,0.03); border-radius:12px; border:1px solid rgba(255,255,255,0.05); margin-bottom:8px;">
+                <div style="display:flex; flex-direction:column; gap:4px;">
+                    <div style="font-size:13px; font-weight:600; color:var(--text-primary);">${m.mod_name}</div>
+                    <div style="font-size:10px; color:var(--text-muted);">${m.mod_version}</div>
+                </div>
+                <div style="text-align:right; display:flex; flex-direction:column; gap:4px;">
+                    <div style="font-size:11px; font-weight:800; color:${statusColor}; text-transform:uppercase; letter-spacing:0.5px;">${statusText}</div>
+                    <div style="font-size:10px; color:var(--text-muted); opacity:0.6;">Source: ${sourceLabel}</div>
+                </div>
+            </div>
+        `;
+    });
+
+    content.innerHTML = `
+        <div style="display:flex; align-items:center; gap:14px; margin-bottom:24px;">
+            <div style="width:48px; height:48px; border-radius:14px; background:linear-gradient(135deg, rgba(255,136,0,0.2) 0%, rgba(255,85,0,0.05) 100%); color:#ff8800; display:flex; align-items:center; justify-content:center; border:1px solid rgba(255,136,0,0.2);">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px;">
+                <h3 style="font-size:20px; font-weight:800; margin:0; color:var(--text-primary); letter-spacing:-0.5px;">${t('modpack.repair.title') || 'Réparation Requise'}</h3>
+                <p style="font-size:12px; color:var(--text-muted); margin:0;">${t('modpack.repair.subtitle') || 'Certains mods sont manquants ou corrompus.'}</p>
+            </div>
+        </div>
+        
+        <div style="max-height:350px; overflow-y:auto; margin-bottom:24px; padding-right:8px; display:flex; flex-direction:column;" class="custom-scrollbar">
+            ${modsHtml}
+        </div>
+        
+        <div id="repair-progress-container" style="display:none; flex-direction:column; gap:8px; margin-bottom:24px; padding:16px; background:rgba(0,0,0,0.2); border-radius:12px; border:1px solid rgba(255,255,255,0.03);">
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">
+                <span id="repair-status-text">${t('modpack.repair.preparing') || 'Préparation...'}</span>
+                <span id="repair-status-pct" style="color:#ff8800;">0%</span>
+            </div>
+            <div style="width:100%; height:6px; background:rgba(0,0,0,0.4); border-radius:10px; overflow:hidden;">
+                <div id="repair-progress-bar" style="height:100%; background:linear-gradient(90deg, #ff8800, #ff5500); width:0%; transition:width 0.3s ease; box-shadow:0 0 10px rgba(255,136,0,0.5);"></div>
+            </div>
+        </div>
+
+        <div id="repair-actions" style="display:flex; justify-content:flex-end; gap:12px; margin-top:auto;">
+            <button id="repair-cancel" class="btn btn-ghost" style="border:1px solid rgba(255,255,255,0.05); border-radius:10px;">${t('modpack.repair.cancel') || 'Annuler'}</button>
+            <button id="repair-start" class="btn btn-primary" style="background:linear-gradient(135deg, #ff8800 0%, #ff5500 100%); border:none; border-radius:10px; box-shadow:0 4px 15px rgba(255, 136, 0, 0.3); ${!canRepairAny ? 'opacity:0.5; cursor:not-allowed;' : ''}" ${!canRepairAny ? 'disabled' : ''}>
+                ${canRepairAny ? (t('modpack.repair.startBtn') || 'Réparer et Appliquer') : (t('modpack.repair.impossible') || 'Réparation Impossible')}
+            </button>
+        </div>
+    `;
+    
+    modalOverlay.appendChild(content);
+    
+    const appOuter = document.getElementById('app-window-outer') || document.body;
+    appOuter.appendChild(modalOverlay);
+    
+    requestAnimationFrame(() => {
+        modalOverlay.style.opacity = '1';
+        content.style.transform = 'scale(1)';
+    });
+
+    const closeBtn = content.querySelector('#repair-cancel');
+    const startBtn = content.querySelector('#repair-start');
+    const progressContainer = content.querySelector('#repair-progress-container');
+    const statusText = content.querySelector('#repair-status-text');
+    const statusPct = content.querySelector('#repair-status-pct');
+    const progressBar = content.querySelector('#repair-progress-bar');
+    const actionsBlock = content.querySelector('#repair-actions');
+
+    const closeModal = () => {
+        modalOverlay.style.opacity = '0';
+        content.style.transform = 'scale(0.95)';
+        setTimeout(() => modalOverlay.remove(), 300);
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    modalOverlay.addEventListener('mousedown', (e) => {
+        if (e.target === modalOverlay) closeModal();
+    });
+
+    startBtn.addEventListener('click', async () => {
+        actionsBlock.style.display = 'none';
+        progressContainer.style.display = 'flex';
+        
+        let unlisten = null;
+        try {
+            unlisten = await window.__TAURI__.event.listen('bmm://repair-progress', (event) => {
+                const data = event.payload;
+                statusText.textContent = `[${data.modName}] ${data.file}`;
+                statusPct.textContent = `${Math.round(data.progress)}%`;
+                progressBar.style.width = `${data.progress}%`;
+            });
+
+            const modRepairErrors = [];
+
+            for (let i = 0; i < problematicMods.length; i++) {
+                const mref = problematicMods[i];
+                
+                const fallbackType = mref.fallback_type || "direct";
+                const hasLink = fallbackType === "sr" ? !!pack.sr_link : !!(mref.download_fallback || mref.download_link);
+                
+                const isMissingMref = report.missingMods.some(x => x.mod_id === mref.mod_id);
+                
+                // Mods manquants sans lien : impossible à réparer, on notifie et on passe
+                if (!hasLink && isMissingMref) {
+                    modRepairErrors.push(t('modpack.repair.noLink', { name: mref.mod_name }) || `${mref.mod_name} : aucun lien fourni`);
+                    statusText.style.color = 'var(--text-muted)';
+                    statusText.textContent = `⚠ ${mref.mod_name} : aucun lien fourni, ignoré.`;
+                    await new Promise(r => setTimeout(r, 1200));
+                    statusText.style.color = '';
+                    continue;
+                }
+
+                statusText.textContent = `Réparation de ${mref.mod_name}...`;
+                statusPct.textContent = `0%`;
+                progressBar.style.width = `0%`;
+
+                try {
+                    await invoke('repair_modpack_mod', {
+                        args: {
+                            modRef: mref,
+                            srLink: pack.sr_link || null,
+                            targetProfileId: activeProfileId,
+                            creatorId: null
+                        }
+                    });
+                    statusText.textContent = `✓ ${mref.mod_name}`;
+                } catch (modErr) {
+                    const errStr = String(modErr);
+                    let friendlyMsg;
+                    if (errStr.includes('aucun lien') || errStr.includes('Aucun lien')) {
+                        friendlyMsg = t('modpack.repair.noLink', { name: mref.mod_name }) || `${mref.mod_name} : aucun lien de téléchargement fourni`;
+                    } else if (errStr.includes('non trouvé') || errStr.includes('404')) {
+                        friendlyMsg = t('modpack.repair.notFound', { name: mref.mod_name }) || `${mref.mod_name} : fichier introuvable sur le serveur`;
+                    } else if (errStr.includes('refusé') || errStr.includes('403')) {
+                        friendlyMsg = t('modpack.repair.denied', { name: mref.mod_name }) || `${mref.mod_name} : accès refusé par le serveur`;
+                    } else {
+                        friendlyMsg = `${mref.mod_name} : ${errStr}`;
+                    }
+                    modRepairErrors.push(friendlyMsg);
+                    statusText.style.color = 'var(--danger)';
+                    statusText.textContent = `✗ ${friendlyMsg}`;
+                    await new Promise(r => setTimeout(r, 1500));
+                    statusText.style.color = '';
+                }
+            }
+
+            await _loadData();
+            
+            statusText.textContent = t('modpack.repair.finalCheck') || 'Vérification finale...';
+            const finalReport = await invoke('check_modpack_integrity', { modpack: pack });
+            
+            if (modRepairErrors.length > 0 && (finalReport.missingMods.length > 0 || finalReport.corruptedMods.length > 0)) {
+                toast(t('modpack.repair.incomplete', { errors: modRepairErrors.join('\n• ') }) || `Réparation incomplète :\n• ${modRepairErrors.join('\n• ')}`, 'warning');
+                closeModal();
+            } else if (modRepairErrors.length > 0) {
+                toast(t('modpack.repair.partial', { errors: modRepairErrors.join('\n• ') }) || `Réparé, mais certains mods ont été ignorés :\n• ${modRepairErrors.join('\n• ')}`, 'warning');
+                closeModal();
+                onComplete();
+            } else if (finalReport.missingMods.length > 0 || finalReport.corruptedMods.length > 0) {
+                toast(t('modpack.repair.unstable') || "La réparation n'a pas pu tout résoudre.", 'warning');
+                closeModal();
+                onComplete();
+            } else {
+                toast(t('modpack.repair.success') || "Réparation terminée avec succès !", 'success');
+                closeModal();
+                onComplete();
+            }
+        } catch (err) {
+            toast('Erreur de réparation : ' + err.toString(), 'error');
+            actionsBlock.style.display = 'flex';
+        } finally {
+            if (unlisten) unlisten();
+        }
+    });
+}
+
+async function _executeApplyModpack(container, pack, isApplying) {
+    toast(isApplying ? t('modpack.applying') : t('modpack.deactivating') || 'Désactivation du modpack...', 'info');
+    
+    let appliedCount = 0;
+    let missingCount = 0;
+
+    for (const mref of pack.mods) {
+        // Find local mod by ID or SHA-256
+        const local = _allMods.find(m => m.id === mref.mod_id || (m.file_hashes && Object.values(m.file_hashes).includes(mref.sha256)));
+        if (local) {
+            if (isApplying && !local.enabled) {
+                await invoke('enable_mod', { modId: local.id });
+                appliedCount++;
+                if (mref.include_dependencies && local.dependencies && local.dependencies.length > 0) {
+                    for (const depId of local.dependencies) {
+                        const depLocal = _allMods.find(m => m.id === depId);
+                        if (depLocal && !depLocal.enabled) {
+                            await invoke('enable_mod', { modId: depId });
+                            appliedCount++;
+                        }
+                    }
+                }
+            } else if (!isApplying && local.enabled) {
+                await invoke('disable_mod', { modId: local.id });
+                appliedCount++;
+                if (mref.include_dependencies && local.dependencies && local.dependencies.length > 0) {
+                    for (const depId of local.dependencies) {
+                        const depLocal = _allMods.find(m => m.id === depId);
+                        if (depLocal && depLocal.enabled) {
+                            await invoke('disable_mod', { modId: depId });
+                            appliedCount++;
+                        }
+                    }
+                }
+            }
+        } else {
+            if (isApplying) missingCount++;
+        }
+    }
+
+    if (isApplying && missingCount > 0) {
+        toast(t('modpack.applyPartial').replace('{applied}', appliedCount.toString()).replace('{missing}', missingCount.toString()), 'warning');
+    } else {
+        toast(isApplying ? t('modpack.applyOk') : t('modpack.deactivateOk') || 'Modpack désactivé avec succès !', 'success');
+    }
+    
+    await _loadData();
+    if (container) _renderModpackList(container);
+    
+    if (window._refreshModsFn) {
+        window._refreshModsFn(false, true);
+    } else {
+        window.dispatchEvent(new CustomEvent('bmm://mods-updated'));
+    }
+}
+
 async function _applyModpack(container, pack) {
     if (!pack || !pack.mods || pack.mods.length === 0) return;
 
     try {
         const anyEnabled = pack.mods.some(mref => {
-            const local = _allMods.find(m => m.id === mref.mod_id || m.sha256 === mref.sha256);
+            const local = _allMods.find(m => m.id === mref.mod_id || (m.file_hashes && Object.values(m.file_hashes).includes(mref.sha256)));
             return local && local.enabled;
         });
         
         const isApplying = !anyEnabled;
-        toast(isApplying ? t('modpack.applying') : t('modpack.deactivating') || 'Désactivation du modpack...', 'info');
         
-        let appliedCount = 0;
-        let missingCount = 0;
-
-        for (const mref of pack.mods) {
-            // Find local mod by ID or SHA-256
-            const local = _allMods.find(m => m.id === mref.mod_id || m.sha256 === mref.sha256);
-            if (local) {
-                if (isApplying && !local.enabled) {
-                    await invoke('enable_mod', { modId: local.id });
-                    appliedCount++;
-                    if (mref.include_dependencies && local.dependencies && local.dependencies.length > 0) {
-                        for (const depId of local.dependencies) {
-                            const depLocal = _allMods.find(m => m.id === depId);
-                            if (depLocal && !depLocal.enabled) {
-                                await invoke('enable_mod', { modId: depId });
-                                appliedCount++;
-                            }
-                        }
-                    }
-                } else if (!isApplying && local.enabled) {
-                    await invoke('disable_mod', { modId: local.id });
-                    appliedCount++;
-                    if (mref.include_dependencies && local.dependencies && local.dependencies.length > 0) {
-                        for (const depId of local.dependencies) {
-                            const depLocal = _allMods.find(m => m.id === depId);
-                            if (depLocal && depLocal.enabled) {
-                                await invoke('disable_mod', { modId: depId });
-                                appliedCount++;
-                            }
-                        }
-                    }
-                }
-            } else {
-                if (isApplying) missingCount++;
+        if (isApplying && !pack.skip_integrity_check) {
+            const report = await invoke('check_modpack_integrity', { modpack: pack });
+            
+            if (report.missingMods.length > 0 || report.corruptedMods.length > 0) {
+                _showRepairModal(container, pack, report, async () => {
+                    await _executeApplyModpack(container, pack, true);
+                });
+                return;
             }
         }
 
-        if (isApplying && missingCount > 0) {
-            toast(t('modpack.applyPartial').replace('{applied}', appliedCount.toString()).replace('{missing}', missingCount.toString()), 'warning');
-        } else {
-            toast(isApplying ? t('modpack.applyOk') : t('modpack.deactivateOk') || 'Modpack désactivé avec succès !', 'success');
-        }
-        
-        await _loadData();
-        if (container) _renderModpackList(container);
-        
-        // Always refresh the library via the global refresh function
-        if (window._refreshModsFn) {
-            window._refreshModsFn(false, true);
-        } else {
-            window.dispatchEvent(new CustomEvent('bmm://mods-updated'));
-        }
+        await _executeApplyModpack(container, pack, isApplying);
     } catch (err) {
-        toast(String(err), 'error');
+        toast('Erreur: ' + err.toString(), 'error');
     }
 }
 
