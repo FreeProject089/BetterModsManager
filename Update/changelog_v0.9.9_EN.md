@@ -6,12 +6,15 @@ This version introduces significant performance optimizations, a brand-new integ
 - **Optimized Disk Checks**: Refined the storage monitoring system to refresh disk lists once per operation, significantly speeding up complex mod activations with many dependencies.
 - **File List Cache Integration**: The stacked copy engine now leverages the centralized mod file cache instead of performing redundant recursive directory scans, reducing total I/O overhead by up to 60% during deployment.
 - **Code Hardening**: Resolved compiler warnings and optimized Zip archive handling in the Rust core for better stability.
+- **[IMPROVED] Storage Manager**: Automatic detection of Cloud drives (Google Drive, OneDrive, Dropbox, MEGA) and Network storage (NAS/UNC) for more accurate performance warnings.
 
 ## Social & Community
 ### [NEW] Discord Rich Presence Integration
 - **Live Activity**: Shows your active game profile and enabled mod count to your Discord friends.
 - **Privacy First**: Fully toggleable from the Settings menu.
 - **Reactive Updates**: Synchronized state changes when switching profiles or toggling mods.
+- **[NEW] Deep Link Support (`bmm://`)**: One-click mod installation directly from your browser using the `bmm://import?url=...` protocol.
+- **Shared Activation Tracking**: Instantly visualize which other profiles use and enable the same mod for easier multi-instance management.
 - **Community Support**: Added a "Join Discord" button directly in the crash report modal for instant help.
 
 ## Server Repository (Server Mode)
@@ -25,11 +28,12 @@ This version introduces significant performance optimizations, a brand-new integ
 - **Weighted Algorithm**: Replaced binary 100% matches with keyword-ratio scoring (Perfect, Anchored, and Partial matches).
 - **Visual Feedback**: Added a "Match %" badge to each search result for granular relevance identification.
 
-### [NEW] Diagrams Gallery Expansion
-- **New Technical Schemas**: Added 3 high-fidelity interactive diagrams to the gallery:
+- **New Technical Schemas**: Added 4 high-fidelity interactive diagrams to the gallery:
     - **Deep Integrity Engine**: Visualizes the cryptographic SHA-256 verification process.
     - **Conflict Cache (mtime)**: Details our timestamp-based optimization logic.
     - **Premium UI Interactions**: Documents the menu grace period and "catching" system.
+    - **System Access Control**: Details the security bridge between the frontend and Tauri backend.
+- **Tasky Mascot (Interactive Assistance)**: Tasky now provides context-aware explanations when hovering over diagram nodes and edges.
 - **Improved Accessibility**: FAQ entries now feature a "Layers" stack icon if they contain an interactive diagram.
 - **Gallery Link Resolution**: Fixed the broken `semanticSearch` link in the documentation gallery.
 - **Visual Feedback**: Added a "Pulsing Blue" glow for diagram nodes found via search.
@@ -39,11 +43,14 @@ This version introduces significant performance optimizations, a brand-new integ
 - **Usability Grace Period**: Added a 100ms delay to prevent accidental menu closing.
 - **Menu "Catching"**: Dropdowns can now be "caught" and instantly re-opened while closing.
 - **Icon Harmonization**: Standardized all dropdown chevrons for a consistent "Vanguard" look.
+- **[NEW] System Access Control (Security Modal)**: New security mode selection system (Full vs Limited) to protect your system while using third-party mods.
+- **Backdrop Polish**: Fixed security modal background blur to be confined to the app window without obscuring the Tasky mascot.
 
 ## Localization & i18n
 - **Storage Manager**: Fully localized "Critical" and "Warning" alerts for English and French.
 - **Diagram Clusters**: Standardized technical labels across all interactive schemas.
-- **i18n Audit**: Fully translated the "Found in Diagrams" search header.
+- **i18n Audit**: Fully translated the "Found in Diagrams" search header and the new security system.
+- **Robust i18n Engine**: Upgraded the translation engine to support complex nested keys (e.g., `docs.gallery.btn.*`) and dots in property names.
 - **Fallback Purge**: Systematically removed all hardcoded fallback strings across `mods-details.ts`, `repo.ts`, `profiles.ts` and others to enforce strict i18n parity.
 - **Profile Backgrounds**: Added completely missing translation keys (and wiped duplicates) for custom profile background states (`prof.bgPendingNotice`, etc.) in `en.json`, `fr.json`, and `template.json`.
 
@@ -81,6 +88,7 @@ This version introduces significant performance optimizations, a brand-new integ
 
 ### [FIXED] Localization
 - **Storage Manager i18n**: Resolved duplicate translation keys and corrected nested section placements within the local language files (`en.json`, `fr.json`).
+- **Gallery Key Detection**: Resolved a bug where diagram gallery buttons failed to detect their translations due to JSON structure.
 
 ## Legal & Compliance
 ### [NEW] End User License Agreement (EULA)
@@ -90,4 +98,4 @@ This version introduces significant performance optimizations, a brand-new integ
 - **Moderation Clauses**: Formalized guidelines regarding Server Repositories and user moderation for a safer modding environment.
 
 ---
-*Generated on: 2026-04-02*
+*Generated on: 2026-04-25*

@@ -7,12 +7,15 @@ Cette version introduit des optimisations de performance significatives, un tout
 - **Vérifications Disques Optimisées** : Le système de surveillance du stockage ne rafraîchit désormais la liste des disques qu'une seule fois par opération, accélérant considérablement l'activation de mods complexes avec de nombreuses dépendances.
 - **Intégration du Cache de Fichiers** : Le moteur de copie empilée utilise désormais le cache centralisé au lieu d'effectuer des scans récursifs redondants, réduisant la charge I/O globale jusqu'à 60% lors du déploiement.
 - **Renforcement du Code** : Résolution des avertissements du compilateur et optimisation de la manipulation des archives Zip pour une meilleure stabilité.
+- **[IMPROVED] Gestionnaire de Stockage** : Détection automatique des lecteurs Cloud (Google Drive, OneDrive, Dropbox, MEGA) et des stockages réseau (NAS/UNC) pour des avertissements de performance plus précis.
 
 ## Social & Communauté
 ### [NEW] Intégration Discord Rich Presence
 - **Activité en direct** : Affiche votre profil de jeu actif et le nombre de mods activés à vos amis Discord.
 - **Confidentialité d'abord** : Entièrement désactivable depuis le menu Paramètres.
 - **Mises à jour réactives** : Changements d'état synchronisés lors du changement de profil ou de l'activation de mods.
+- **[NOUVEAU] Support des Deep Links (`bmm://`)** : Installation de mods en un clic directement depuis votre navigateur via le protocole `bmm://import?url=...`.
+- **Suivi des Activations Partagées** : Visualisez instantanément quels autres profils utilisent et activent le même mod pour une gestion multi-instance facilitée.
 - **Support communautaire** : Ajout d'un bouton "Rejoindre Discord" directement dans la modale de rapport de crash pour une aide instantanée.
 
 ## Dépôt Serveur (Mode Serveur)
@@ -26,11 +29,12 @@ Cette version introduit des optimisations de performance significatives, un tout
 - **Algorithme pondéré** : Remplacement des correspondances binaires à 100% par un score basé sur le ratio de mots-clés (Parfait, Ancré et Partiel).
 - **Retour visuel** : Ajout d'un badge "% de match" à chaque résultat de recherche pour une identification granulaire de la pertinence.
 
-### [NEW] Expansion de la Galerie de Diagrammes
-- **Nouveaux schémas techniques** : Ajout de 3 diagrammes interactifs haute fidélité à la galerie :
+- **Nouveaux schémas techniques** : Ajout de 4 diagrammes interactifs haute fidélité à la galerie :
     - **Moteur d'Intégrité Deep** : Visualise le processus de vérification cryptographique SHA-256.
     - **Cache de Conflits (mtime)** : Détaille notre logique d'optimisation basée sur l'horodatage.
     - **Interactions UI Premium** : Documente le délai de grâce du menu et le système de "rattrapage".
+    - **Contrôle d'Accès Système** : Détaille le pont de sécurité entre l'interface et le backend Tauri.
+- **Tasky Mascot (Assistance Interactive)** : Tasky fournit désormais des explications contextuelles lors du survol des nœuds et des liens dans les diagrammes.
 - **Accessibilité améliorée** : Les entrées de la FAQ arborent désormais une icône de pile "Layers" si elles contiennent un diagramme interactif.
 - **Résolution des liens de la galerie** : Correction du lien `semanticSearch` cassé dans la galerie de documentation.
 - **Retour visuel** : Ajout d'un halo "Bleu Pulsé" pour les nœuds de diagramme trouvés via la recherche.
@@ -40,11 +44,14 @@ Cette version introduit des optimisations de performance significatives, un tout
 - **Période de grâce d'ergonomie** : Ajout d'un délai de 100ms pour éviter la fermeture accidentelle du menu.
 - **"Rattrapage" de menu** : Les menus déroulants peuvent désormais être "rattrapés" et instantanément rouverts pendant leur fermeture.
 - **Harmonisation des icônes** : Standardisation de tous les chevrons de menus déroulants pour un look "Vanguard" cohérent.
+- **[NOUVEAU] Contrôle d'Accès Système (Security Modal)** : Nouveau système de sélection de mode de sécurité (Complet vs Limité) pour protéger votre système lors de l'utilisation de mods tiers.
+- **Polissage Backdrop** : Correction du flou de fond des modales de sécurité pour qu'il soit confiné à l'application sans masquer la mascotte Tasky.
 
 ## Localisation & i18n
 - **Gestionnaire de stockage** : Alertes "Critique" et "Attention" entièrement localisées pour l'anglais et le français.
 - **Clusters de diagramme** : Standardisation des étiquettes techniques sur tous les schémas interactifs.
-- **Audit i18n** : Traduction intégrale de l'en-tête de recherche "Trouvé dans les diagrammes".
+- **Audit i18n** : Traduction intégrale de l'en-tête de recherche "Trouvé dans les diagrammes" et du nouveau système de sécurité.
+- **Moteur i18n Robuste** : Upgrade du moteur de traduction pour supporter les clés complexes imbriquées (ex. `docs.gallery.btn.*`) et les points dans les noms de propriétés.
 - **Purge des Fallbacks** : Suppression systématique de toutes les chaînes de textes écrites en dur dans `mods-details.ts`, `repo.ts`, `profiles.ts` et bien d'autres pour forcer une parité i18n stricte.
 - **Fonds de Profil** : Ajout de clés de traduction totalement manquantes (et suppression de doublons) concernant les états des images de profil (`prof.bgPendingNotice`, etc.) dans `en.json`, `fr.json` et `template.json`.
 
@@ -82,6 +89,7 @@ Cette version introduit des optimisations de performance significatives, un tout
 
 ### [FIXED] Localisation
 - **i18n du Gestionnaire de Stockage** : Résolution de clés de traduction dupliquées et correction de l'arborescence des sections dans les fichiers de langue (`en.json`, `fr.json`).
+- **Détection des Clés de Galerie** : Résolution d'un bug où les boutons de la galerie de diagrammes ne détectaient pas leurs traductions à cause de la structure JSON.
 
 ## Légal & Conformité
 ### [NOUVEAU] Contrat de Licence Utilisateur Final (EULA)
@@ -91,4 +99,4 @@ Cette version introduit des optimisations de performance significatives, un tout
 - **Clauses de Modération** : Formalisation des directives concernant les dépôts de serveurs et la modération des utilisateurs pour un environnement de modding plus sûr.
 
 ---
-*Généré le : 2026-04-02*
+*Généré le : 2026-04-25*
