@@ -3074,6 +3074,38 @@
                             </div>
                         </details>
                         
+                        <!-- Security & Access FAQ -->
+                        <div style="margin-top:20px; border-top:1px solid rgba(59,130,246,0.1); padding-top:20px;">
+                            <h4 style="font-size:11px; font-weight:800; color:#3b82f6; letter-spacing:0.1em; margin-bottom:12px; text-transform:uppercase">Sécurité & Accès Système</h4>
+                            
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.2">
+                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                        </svg>
+                                        <span data-i18n="faq.security.qModes">Différence entre Accès Complet et Limité ?</span>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity: 0.5; margin-left: auto;" title="Diagram available"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </summary>
+                                <div class="faq-content">
+                                    <p data-i18n="faq.security.aModes" style="line-height:1.6; margin-bottom: 10px;">L'Accès Complet permet à BMM de gérer vos fichiers sans restrictions (nécessaire pour le Storage Manager). L'Accès Limité restreint BMM aux seuls dossiers définis dans vos profils pour une sécurité maximale.</p>
+                                    <button class="btn btn-sm btn-ghost" onclick="openDiagram('security-system')"
+                                        style="color:#3b82f6; border:1px dashed rgba(59,130,246,0.3); font-size:11px; display:inline-flex; align-items:center; gap:6px;">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                            <path d="M2 17l10 5 10-5" />
+                                            <path d="M2 12l10 5 10-5" />
+                                        </svg>
+                                        <span data-i18n="docs.gallery.btn.securitySystem">VOIR LE SYSTÈME DE SÉCURITÉ</span>
+                                    </button>
+                                </div>
+                            </details>
+                        </div>
+
                         <!-- BetaHub Specific FAQ -->
                         <div style="margin-top:20px; border-top:1px solid rgba(168,85,247,0.1); padding-top:20px;">
                             <h4 style="font-size:11px; font-weight:800; color:#a855f7; letter-spacing:0.1em; margin-bottom:12px; text-transform:uppercase">BetaHub & Reporting</h4>
@@ -3322,6 +3354,11 @@
                                         style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
                                         <span style="font-size: 11px;"
                                             data-i18n="docs.gallery.btn.modpackFlow">Cycle de vie Modpack</span>
+                                    </button>
+                                    <button class="btn btn-ghost btn-sm" onclick="openDiagram('security-system')"
+                                        style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                        <span style="font-size: 11px;"
+                                            data-i18n="docs.gallery.btn.securitySystem">Contrôle d'Accès Système</span>
                                     </button>
                                 </div>
                             </div>
@@ -4048,6 +4085,58 @@
                                     <button id="bh-history-view-older" class="btn btn-xs btn-ghost" style="font-size:10px; color:var(--text-secondary); display:none" data-i18n="betahub.viewOlder">View Older</button>
                                 </div>
                             </div>
+                        </div>
+
+
+                        <!-- ── Security Mode ── -->
+                        <div class="glass-card" id="settings-security-section" style="margin-bottom: 24px;">
+                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                                    stroke-width="2.2">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                </svg>
+                                <span data-i18n="security.modal.title">Sécurité des fichiers</span>
+                            </h3>
+                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6"
+                                data-i18n="security.modal.desc">
+                                Choisissez le niveau d'accès au disque accordé à l'interface de l'application.
+                            </p>
+
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+                                <div class="security-card" id="settings-sec-full" style="cursor:pointer; padding:20px; border-radius:16px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position:relative; overflow:hidden;">
+                                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+                                        <div style="width:36px; height:36px; border-radius:10px; background:rgba(59,130,246,0.1); display:flex; align-items:center; justify-content:center; color:var(--accent); border:1px solid rgba(59,130,246,0.2);">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                                        </div>
+                                        <div class="check-indicator" style="width:20px; height:20px; border-radius:50%; background:var(--accent); display:none; align-items:center; justify-content:center; color:#fff; box-shadow:0 0 15px rgba(59, 130, 246, 0.4);">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><polyline points="20 6 9 17 4 12"/></svg>
+                                        </div>
+                                    </div>
+                                    <div style="font-size:15px; font-weight:700; color:var(--text-primary); margin-bottom:4px;" data-i18n="security.modal.full">Full Access</div>
+                                    <div style="font-size:11px; color:var(--text-muted); line-height:1.4;" data-i18n="security.modal.fullDesc">Allows BMM to manage mods across all your drives without restriction.</div>
+                                </div>
+
+                                <div class="security-card" id="settings-sec-limited" style="cursor:pointer; padding:20px; border-radius:16px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position:relative; overflow:hidden;">
+                                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+                                        <div style="width:36px; height:36px; border-radius:10px; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; color:var(--text-muted); border:1px solid rgba(255,255,255,0.1);">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                        </div>
+                                        <div class="check-indicator" style="width:20px; height:20px; border-radius:50%; background:var(--accent); display:none; align-items:center; justify-content:center; color:#fff; box-shadow:0 0 15px rgba(59, 130, 246, 0.4);">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><polyline points="20 6 9 17 4 12"/></svg>
+                                        </div>
+                                    </div>
+                                    <div style="font-size:15px; font-weight:700; color:var(--text-primary); margin-bottom:4px;" data-i18n="security.modal.limited">Limited Access</div>
+                                    <div style="font-size:11px; color:var(--text-muted); line-height:1.4;" data-i18n="security.modal.limitedDesc">Restricts frontend access to only your game and mod directories.</div>
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:12px; align-items:center;">
+                                <span id="security-apply-msg" style="font-size:11px; color:var(--success); opacity:0; transition:all 0.3s; font-weight:600;" data-i18n="security.modal.settingsApplied">Paramètres appliqués !</span>
+                                <button class="btn btn-primary btn-sm" id="btn-settings-apply-security" disabled style="padding: 0 24px; height: 36px; border-radius: 10px; font-weight: 700;">
+                                    <span data-i18n="security.modal.apply">Appliquer</span>
+                                </button>
+                            </div>
+
                         </div>
 
                         <!-- ── Debug Menu ── -->
@@ -5478,7 +5567,7 @@
         </div>
 
         <!-- Interactive Documentation Diagram Modal -->
-        <div class="modal-overlay" id="modal-docs-diagram" style="z-index: 10000;">
+        <div class="modal-overlay" id="modal-docs-diagram" style="z-index: 10002;">
             <div class="modal-docs-container glass">
                 <div class="modal-docs-header">
                     <div class="modal-docs-title-group">

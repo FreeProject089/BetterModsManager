@@ -70,6 +70,11 @@ pub fn update_settings(state: State<AppState>, settings: crate::state::AppSettin
 }
 
 #[tauri::command]
+pub fn apply_fs_security_mode_command(app: tauri::AppHandle) {
+    crate::apply_fs_security_mode(app);
+}
+
+#[tauri::command]
 pub fn reset_app_data(state: State<AppState>) -> Result<(), String> {
     {
         let mut data = state.data.lock().unwrap();

@@ -22,6 +22,7 @@ import { initModpackCreator } from '../features/mods/modpack-creator.js';
 import { initCrashReportUI, checkPreviousCrash } from './crash-report.js';
 import { initInteractionLogging } from './user-logger.js';
 import { initDebugMenu } from '../features/debug/debug-menu.js';
+import { checkSecurityMode } from './security-modal.js';
 async function waitForModalClosed(id) {
     const el = document.getElementById(id);
     if (!el)
@@ -411,6 +412,9 @@ async function main() {
     // 4. Show release notes on first launch
     await checkShowReleaseNotes();
     await waitForModalClosed('modal-update-notes');
+    // 4.5. FS Security Mode Choice (Persistent)
+    await checkSecurityMode();
+    await waitForModalClosed('modal-security-choice');
     // 5. Show onboarding on first launch (language is step 0 inside onboarding)
     if (await shouldShowOnboarding()) {
         // Delay slightly to allow UI to render

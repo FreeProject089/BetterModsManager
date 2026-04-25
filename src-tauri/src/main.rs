@@ -37,6 +37,47 @@ fn register_bmm_protocol() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+pub fn apply_fs_security_mode(app: tauri::AppHandle) {
+    let state = app.state::<AppState>();
+    let (mode, profiles) = {
+        let data = state.data.lock().unwrap();
+        (data.settings.fs_security_mode.clone(), data.profiles.clone())
+    };
+
+    if let Some(m) = mode {
+        if m == "full" {
+            commands::crash::log_line("[SECURITY] Applying FULL FS Access Mode.");
+            // Allow all disk roots for broad access as requested
+            let disks = sysinfo::Disks::new_with_refreshed_list();
+            for disk in disks.iter() {
+                let mount = disk.mount_point();
+                let _ = app.fs_scope().allow_directory(mount, true);
+                let _ = app.asset_protocol_scope().allow_directory(mount, true);
+            }
+        } else {
+            commands::crash::log_line("[SECURITY] Applying LIMITED FS Access Mode.");
+            // Only allow profile paths
+            for p in profiles {
+                if p.game_path.exists() {
+                    let _ = app.fs_scope().allow_directory(&p.game_path, true);
+                    let _ = app.asset_protocol_scope().allow_directory(&p.game_path, true);
+                }
+                if p.mods_path.exists() {
+                    let _ = app.fs_scope().allow_directory(&p.mods_path, true);
+                    let _ = app.asset_protocol_scope().allow_directory(&p.mods_path, true);
+                }
+                if p.backup_path.exists() {
+                    let _ = app.fs_scope().allow_directory(&p.backup_path, true);
+                    let _ = app.asset_protocol_scope().allow_directory(&p.backup_path, true);
+                }
+            }
+        }
+    } else {
+        commands::crash::log_line("[SECURITY] FS Security Mode not set. Defaulting to RESTRICTED (Limited) until user choice.");
+        // We stay restricted (only config-defined paths) until the modal choice
+    }
+}
+
 fn main() {
     // 1. Initialise le gestionnaire de crash dès le démarrage (Expert Mode)
     commands::crash::setup_panic_hook();
@@ -176,6 +217,9 @@ fn main() {
             if let Some(link) = PENDING_DEEP_LINK.lock().unwrap().clone() {
                 let _ = app.emit_all("deep-link-received", link);
             }
+            
+            // 7. Apply FS Security Mode
+            apply_fs_security_mode(app.handle());
 
             Ok(())
         })
@@ -266,6 +310,7 @@ fn main() {
             commands::settings::reset_app_data,
             commands::settings::get_settings,
             commands::settings::update_settings,
+            commands::settings::apply_fs_security_mode_command,
             commands::settings::is_debug_mode,
             commands::settings::is_fsdm_mode,
             commands::settings::is_ptb_mode,

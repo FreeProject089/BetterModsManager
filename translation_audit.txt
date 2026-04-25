@@ -1,0 +1,95 @@
+--- MISSING IN FR ---
+__SECTION_DIAG_SERVER__
+modpack.deactivatedOk
+modpack.fallbackServerRepo
+
+--- SAME VALUE ---
+common.version: V{version}
+common.pause: Pause
+conflict.intra: Intra
+conflict.inter: Inter
+detail.description: Description
+detail.tags: Tags
+detail.version: Version
+__SECTION_DOCS__: --- DOCUMENTATION & GUIDES ---
+docs.basic.links.q1: GitHub
+docs.basic.links.q2: Direct (Zip / Rar)
+docs.videos.tuto1.online: https://www.youtube.com/embed/dQw4w9WgXcQ
+docs.videos.tuto2.online: https://www.youtube.com/embed/dQw4w9WgXcQ
+docs.security.modes.title: Full vs Limited
+__SECTION_DIAGRAMS_GENERAL__: --- DIAGRAMMES INTERACTIFS ---
+docs.diagram.premium.node.CATCH: Menu Catching
+docs.diagram.btn.architecture: ARCHITECTURE
+docs.diagram.btn.image_meta: IMAGE & META
+docs.diagram.cache.node.REMOTE: Acquisition
+docs.diagram.cluster.SENSORS: MONITORING
+docs.diagram.conflict.node.DUPES: Intersection
+betahub.tabBugs: Bugs
+betahub.tabSuggestions: Suggestions
+docs.diagram.betahub.node.CHALLENGE: Challenge
+docs.diagram.hosting.node.SFTP: SFTP / RSYNC / SCP
+docs.diagram.hosting.node.TUNNEL: Tunnel (Cloudflare/Tailscale)
+docs.diagram.io.node.CONFIG: Configuration
+docs.diagram.label.audit: Audit
+docs.diagram.label.dispatch: Dispatch
+docs.diagram.label.local: Local
+docs.diagram.label.rollback: Rollback
+docs.diagram.label.structure: Structure
+docs.diagram.label.sync: Sync
+docs.diagram.label.trace: Trace
+docs.diagram.mech.node.REDIRECT: Redirection
+docs.diagram.mod_arch.edge.DETECT: Mapping
+docs.diagram.mod_arch.node.Mod2: Mod B (Base)
+docs.diagram.sync.node.APPLY: Application
+docs.exploreArch: ARCHITECTURE
+docs.exploreImageMeta: IMAGE & META
+docs.ioLimiter.benchmark: Benchmark
+docs.ioLimiter.cloud: Cloud / NAS
+docs.modArchitecture: Architecture
+docs.techStack: Technologies & Architecture
+docs.techStack.core: Tauri & Rust
+docs.techStack.mermaid: Mermaid.js
+docs.techStack.tauri: Tauri & Rust
+docs.techStack.visual: Mermaid.js
+docs.title: Documentation
+__SECTION_FAQ__: --- FAQ ---
+__SECTION_NAV__: --- NAVIGATION ---
+nav.docs: Documentation
+nav.modpacks: Modpacks
+__SECTION_ONBOARD__: --- ONBOARDING (TASKY) ---
+onboard.tasky: Tasky
+onboarding.lang_desc: Choisissez votre langue / Choose your language
+onboarding.tasky: TASKY
+prof.backupDirPlaceholder: C:\Backups\DCS...
+prof.gamePlaceholder: DCS World...
+prof.importOmm: Open Mod Manager (.omx)
+prof.modsDirPlaceholder: C:\Mods\DCS...
+__SECTION_PTB__: --- FULL ACCESS BETA ---
+repo.monAction: Action
+repo.upnpOk: UPnP OK
+repo.miniServerRepoPlaceholder: C:\...\repo.json
+settings.discordRpcTitle: Discord Rich Presence
+settings.githubPatPlaceholder: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+settings.langGuide: Guide
+settings.benchmarkTitle: Performance & Benchmark
+settings.notifications: Notifications
+__SECTION_STORAGE__: --- STORAGE MANAGER ---
+dev.tab.console: Console
+dev.label.logs: LOGS
+dev.tab.sources: Sources
+docs.diagram.discordRpc.node.STATUS: Rich Presence
+docs.diagram.discordRpc.title: Discord Rich Presence
+__SECTION_DIAGRAMS__: --- DIAGRAMS ---
+betahub.btnFeedback: Suggestion / Feedback
+betahub.feedbackTitle: Suggestion / Feedback
+betahub.fieldDesc: Description
+betahub.addImage: + Image
+modpack.title: Modpacks
+modpack.description: Description
+modpack.srLinkPlaceholder: http://repo.example.com/repo.json
+modpack.modFallbackPlaceholder: Nexus, Drive, etc.
+modpack.fallbackSR: ServerRepo
+modpack.sharePublic: Public
+docs.diagram.cluster.ACTION: ACTION
+modpack.global: Global
+settings.export.modpacks: Modpacks

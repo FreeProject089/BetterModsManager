@@ -7,7 +7,7 @@ import { invoke, getSettings, updateSettings, pickFile, saveFile } from '../../c
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
-import { formatBytes } from '../../core/utils.js';
+import { formatBytes, escHtml } from '../../core/utils.js';
 import { initBetaHub, openBugReportModal, openFeedbackModal } from '../betahub/betahub-modals.js';
 
 
@@ -449,18 +449,18 @@ const _renderStorageModal = async () => {
                         </div>
                         <div class="storage-disk-meta">
                             <div class="storage-disk-name">
-                                ${disk.name}
+                                ${escHtml(disk.name)}
                                 ${getKindBadge(disk)}
-                                <span style="font-size:10px;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:1px 6px;border-radius:4px;margin-left:4px;">${disk.file_system}</span>
+                                <span style="font-size:10px;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:1px 6px;border-radius:4px;margin-left:4px;">${escHtml(disk.file_system)}</span>
                             </div>
-                            <div class="storage-disk-path">${disk.mount_point}</div>
+                            <div class="storage-disk-path">${escHtml(disk.mount_point)}</div>
                         </div>
                     </div>
                     <div class="storage-disk-actions">
                         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
                             <span style="font-size:9px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Limit</span>
                             <div style="display:flex;align-items:center;gap:6px;">
-                                <input type="number" min="0" step="10" class="form-input disk-limit-input" data-mount="${disk.mount_point}" value="${limitVal}" style="width:80px;font-size:12px;padding:4px 8px;text-align:right;border-radius:6px;background:rgba(0,0,0,0.2);" placeholder="0">
+                                <input type="number" min="0" step="10" class="form-input disk-limit-input" data-mount="${escHtml(disk.mount_point)}" value="${limitVal}" style="width:80px;font-size:12px;padding:4px 8px;text-align:right;border-radius:6px;background:rgba(0,0,0,0.2);" placeholder="0">
                                 <span style="font-size:11px;color:var(--text-muted);font-weight:700;">MB/s</span>
                             </div>
                         </div>
@@ -704,7 +704,7 @@ export async function renderSettingsTags() {
         tags.forEach(tag => {
             const chip = document.createElement('div');
             chip.style.cssText = `display:flex;align-items:center;gap:4px;background:${tag.color}20;color:${tag.color};border:1px solid ${tag.color}40;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600`;
-            chip.innerHTML = `<span>${String(tag.name).replace(/</g, '&lt;')}</span><button data-id="${tag.id}" class="btn-del-tag" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:6px;font-size:14px" title="${t('common.delete')}">&times;</button>`;
+            chip.innerHTML = `<span>${escHtml(tag.name)}</span><button data-id="${tag.id}" class="btn-del-tag" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:6px;font-size:14px" title="${t('common.delete')}">&times;</button>`;
             list.appendChild(chip);
         });
 
@@ -724,7 +724,93 @@ export async function renderSettingsTags() {
 }
 window.renderSettingsTags = renderSettingsTags;
 
+
+// ── Security Settings ──────────────────────────────────────
+async function initSecuritySettings() {
+    const cardFull = document.getElementById('settings-sec-full');
+    const cardLimited = document.getElementById('settings-sec-limited');
+    const btnApply = document.getElementById('btn-settings-apply-security');
+    const applyMsg = document.getElementById('security-apply-msg');
+    if (!cardFull || !cardLimited || !btnApply) return;
+
+    let initialMode = 'full';
+    let currentSelected = 'full';
+
+    try {
+        const settings = await getSettings();
+        initialMode = settings.fs_security_mode || 'full';
+        currentSelected = initialMode;
+        updateUI(initialMode);
+    } catch (e) {
+        console.error('Failed to load security settings:', e);
+    }
+
+    function updateUI(mode) {
+        currentSelected = mode;
+        if (mode === 'full') {
+            cardFull.classList.add('active');
+            cardLimited.classList.remove('active');
+            const ciFull = cardFull.querySelector('.check-indicator');
+            const ciLim = cardLimited.querySelector('.check-indicator');
+            if (ciFull) ciFull.style.display = 'flex';
+            if (ciLim) ciLim.style.display = 'none';
+        } else {
+            cardFull.classList.remove('active');
+            cardLimited.classList.add('active');
+            const ciFull = cardFull.querySelector('.check-indicator');
+            const ciLim = cardLimited.querySelector('.check-indicator');
+            if (ciFull) ciFull.style.display = 'none';
+            if (ciLim) ciLim.style.display = 'flex';
+        }
+        
+        btnApply.disabled = currentSelected === initialMode;
+    }
+
+    const addGlowEffect = (card) => {
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            card.style.setProperty('--x', `${x}px`);
+            card.style.setProperty('--y', `${y}px`);
+        });
+    };
+
+    addGlowEffect(cardFull);
+    addGlowEffect(cardLimited);
+
+    cardFull.onclick = () => updateUI('full');
+    cardLimited.onclick = () => updateUI('limited');
+
+    btnApply.onclick = async () => {
+        btnApply.disabled = true;
+        btnApply.innerHTML = `<span>${t('common.loading') || '...'}</span>`;
+        
+        try {
+            const settings = await getSettings();
+            settings.fs_security_mode = currentSelected;
+            await updateSettings(settings);
+            await invoke('apply_fs_security_mode_command');
+            
+            initialMode = currentSelected;
+            btnApply.innerHTML = `<span>${t('security.modal.apply')}</span>`;
+            
+            if (applyMsg) {
+                applyMsg.style.opacity = '1';
+                setTimeout(() => { if (applyMsg) applyMsg.style.opacity = '0'; }, 3000);
+            }
+            toast(t('common.success'), 'success');
+        } catch (err) {
+            console.error('Failed to apply security mode:', err);
+            toast(t('common.error'), 'error');
+            btnApply.disabled = false;
+            btnApply.innerHTML = `<span>${t('security.modal.apply')}</span>`;
+        }
+    };
+}
+
 // ── Settings Initializer ──────────────────────────────────
+
 export async function initSettings() {
     await initGithubPatSettings();
     await initDiscordRpcSettings();
@@ -732,6 +818,7 @@ export async function initSettings() {
     renderSettingsShortcuts();
     await initStorageSettings();
     await initLanguageSettings();
+    await initSecuritySettings();
     
     // Tags Settings
     const btnCreateTag = document.getElementById('btn-create-tag');

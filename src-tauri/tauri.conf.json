@@ -26,8 +26,7 @@
                     "$APP/**",
                     "$APPDATA/**",
                     "$HOME/**",
-                    "$RESOURCE/**",
-                    "**"
+                    "$RESOURCE/**"
                 ]
             },
             "path": {
@@ -45,7 +44,9 @@
             "protocol": {
                 "asset": true,
                 "assetScope": [
-                    "**"
+                    "$APP/**",
+                    "$APPDATA/**",
+                    "$RESOURCE/**"
                 ]
             }
         },

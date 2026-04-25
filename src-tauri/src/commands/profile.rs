@@ -2,7 +2,7 @@ use crate::models::profile::Profile;
 use crate::state::AppState;
 use crate::commands::crash::log_line;
 use std::path::PathBuf;
-use tauri::State;
+use tauri::{State, Manager};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -43,6 +43,7 @@ pub fn set_active_profile(state: State<AppState>, profile_id: String) -> Result<
 
 #[tauri::command]
 pub fn create_profile(
+    app: tauri::AppHandle,
     state: State<AppState>,
     payload: ProfilePayload,
 ) -> Result<Profile, String> {
@@ -61,9 +62,9 @@ pub fn create_profile(
     let mut profile = Profile::new(
         payload.name,
         payload.game_name,
-        game_p,
-        mods_p,
-        backup_p,
+        game_p.clone(),
+        mods_p.clone(),
+        backup_p.clone(),
     );
     profile.color = payload.color;
     profile.icon = payload.icon;
@@ -77,11 +78,24 @@ pub fn create_profile(
     }
     state.save().map_err(|e| e.to_string())?;
     log_line(format!("[PROFILE] Created profile '{}' (game: {}, id: {})", result.name, result.game_name, result.id));
+
+    // Dynamic Scope Extension
+    let mode = state.data.lock().unwrap().settings.fs_security_mode.clone();
+    if mode.as_deref() == Some("limited") {
+        let _ = app.fs_scope().allow_directory(&game_p, true);
+        let _ = app.fs_scope().allow_directory(&mods_p, true);
+        let _ = app.fs_scope().allow_directory(&backup_p, true);
+        let _ = app.asset_protocol_scope().allow_directory(&game_p, true);
+        let _ = app.asset_protocol_scope().allow_directory(&mods_p, true);
+        let _ = app.asset_protocol_scope().allow_directory(&backup_p, true);
+    }
+
     Ok(result)
 }
 
 #[tauri::command]
 pub fn update_profile(
+    app: tauri::AppHandle,
     state: State<AppState>,
     profile_id: String,
     payload: ProfilePayload,
@@ -104,8 +118,8 @@ pub fn update_profile(
         if let Some(p) = data.profiles.iter_mut().find(|x| x.id == profile_id) {
             p.name = payload.name;
             p.game_name = payload.game_name;
-            p.game_path = game_p;
-            p.mods_path = mods_p;
+            p.game_path = game_p.clone();
+            p.mods_path = mods_p.clone();
             p.backup_path = PathBuf::from(&payload.backup_path);
             p.color = payload.color;
             p.icon = payload.icon;
@@ -113,7 +127,20 @@ pub fn update_profile(
             return Err("Profile not found".to_string());
         }
     }
-    state.save().map_err(|e| e.to_string())
+    state.save().map_err(|e| e.to_string())?;
+
+    // Dynamic Scope Extension
+    let mode = state.data.lock().unwrap().settings.fs_security_mode.clone();
+    if mode.as_deref() == Some("limited") {
+        let _ = app.fs_scope().allow_directory(&game_p, true);
+        let _ = app.fs_scope().allow_directory(&mods_p, true);
+        let _ = app.fs_scope().allow_directory(&PathBuf::from(&payload.backup_path), true);
+        let _ = app.asset_protocol_scope().allow_directory(&game_p, true);
+        let _ = app.asset_protocol_scope().allow_directory(&mods_p, true);
+        let _ = app.asset_protocol_scope().allow_directory(&PathBuf::from(&payload.backup_path), true);
+    }
+
+    Ok(())
 }
 
 #[tauri::command]

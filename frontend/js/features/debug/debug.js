@@ -97,13 +97,9 @@ class DebugHub {
             document.head.appendChild(style);
         }
         else if (type === 'JS') {
-            try {
-                eval(content);
-            }
-            catch (e) {
-                this.recordLog('error', [`[Patch-JS] ${e.message}`]);
-                throw e;
-            }
+            const msg = "⚠️ Patch JS désactivé pour des raisons de sécurité (Security Audit). Utilisez la console (F12) si nécessaire.";
+            this.recordLog('warn', [msg]);
+            console.warn(msg, content);
         }
         this.patches.push(patch);
         this.emit('patches', this.patches);

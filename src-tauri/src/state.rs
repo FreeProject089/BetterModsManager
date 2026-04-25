@@ -38,6 +38,8 @@ pub struct AppSettings {
     pub cloudflared_path: Option<String>,
     #[serde(default = "default_true")]
     pub discord_rpc_enabled: bool,
+    #[serde(default)]
+    pub fs_security_mode: Option<String>, // Some("full") | Some("limited") | None
 }
 
 impl Default for AppSettings {
@@ -58,6 +60,7 @@ impl Default for AppSettings {
             auto_fill_metadata: false,
             cloudflared_path: None,
             discord_rpc_enabled: default_true(),
+            fs_security_mode: None,
         }
     }
 }

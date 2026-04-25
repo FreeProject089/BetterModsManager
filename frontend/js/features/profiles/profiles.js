@@ -231,12 +231,10 @@ function showDuplicateFolderModal(conflictingProfileName) {
             return;
         }
         if (msgText) {
-            msgText.innerHTML = t('prof.duplicateFolderMsg', { profile: `<strong style="color:var(--text-primary)">${escHtml(conflictingProfileName)}</strong>` });
-        }
-        applyTranslations(modal);
-        // Re-inject the profile name even after applyTranslations if it was overwritten
-        if (msgText) {
-            msgText.innerHTML = t('prof.duplicateFolderMsg', { profile: `<strong style="color:var(--text-primary)">${escHtml(conflictingProfileName)}</strong>` });
+            const safeName = escHtml(conflictingProfileName);
+            msgText.innerHTML = t('prof.duplicateFolderMsg', {
+                profile: `<strong style="color:var(--text-primary)">${safeName}</strong>`
+            });
         }
         const onConfirm = () => {
             if (checkbox.checked)
@@ -476,13 +474,13 @@ export async function renderProfiles() {
       ${bgLayer}
       <div style="position:relative;z-index:1;display:flex;flex-direction:column;height:100%">
       <div class="profile-card-header" style="display:flex;align-items:flex-start;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:16px;min-height:54px;gap:12px">
-        <div style="width:3px;height:32px;border-radius:2px;background:${brandColor};flex-shrink:0;margin-top:2px"></div>
+        <div style="width:3px;height:32px;border-radius:2px;background:${escAttr(brandColor)};flex-shrink:0;margin-top:2px"></div>
         <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:8px">
-            <div style="font-weight:700;font-size:16px;color:var(--text-primary);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(p.name)}">${escHtml(p.name)}</div>
-            ${p.icon ? `<div style="color:${brandColor};display:flex;align-items:center;opacity:0.9">${getProfileIconSvg(p.icon, 'margin:0;width:16px;height:16px')}</div>` : ''}
+            <div style="font-weight:700;font-size:16px;color:var(--text-primary);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escAttr(p.name)}">${escHtml(p.name)}</div>
+            ${p.icon ? `<div style="color:${escAttr(brandColor)};display:flex;align-items:center;opacity:0.9">${getProfileIconSvg(p.icon, 'margin:0;width:16px;height:16px')}</div>` : ''}
           </div>
-          ${p.game_name ? `<div style="font-family:var(--font-mono);font-weight:600;font-size:10px;padding:2px 8px;border-radius:4px;background:${brandColor}15;color:${brandColor};border:1px solid ${brandColor}30;align-self:flex-start;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${escHtml(t(p.game_name) || p.game_name)}</div>` : ''}
+          ${p.game_name ? `<div style="font-family:var(--font-mono);font-weight:600;font-size:10px;padding:2px 8px;border-radius:4px;background:${escAttr(brandColor)}15;color:${escAttr(brandColor)};border:1px solid ${escAttr(brandColor)}30;align-self:flex-start;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${escHtml(t(p.game_name) || p.game_name)}</div>` : ''}
         </div>
       </div>
       <div class="profile-card-paths" style="margin-bottom:16px;background:rgba(255,255,255,0.015);padding:10px 12px;border-radius:8px;border:1px solid var(--border)">
@@ -509,19 +507,19 @@ export async function renderProfiles() {
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px;margin-top:auto;">
-        <span style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${modCountLabel}</span>
+        <span style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${escHtml(modCountLabel)}</span>
         ${activeModsHtml}
       </div>
       <div class="profile-card-actions">
-        <button class="btn btn-secondary btn-sm flex-1 btn-activate" style="flex:1" data-id="${p.id}">
+        <button class="btn btn-secondary btn-sm flex-1 btn-activate" style="flex:1" data-id="${escAttr(p.id)}">
           ${isActive ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="vertical-align:middle;margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg>' + t('prof.active') : t('mod.activate')}
         </button>
-        <button class="btn btn-secondary btn-sm btn-edit-profile" data-id="${p.id}" onmouseenter="window.showTaskyHelp('prof.editTip', 'edit')" onmouseleave="window.hideTaskyHelp()">
+        <button class="btn btn-secondary btn-sm btn-edit-profile" data-id="${escAttr(p.id)}" onmouseenter="window.showTaskyHelp('prof.editTip', 'edit')" onmouseleave="window.hideTaskyHelp()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
           </svg>
         </button>
-        <button class="btn btn-danger btn-sm btn-del-profile" data-id="${p.id}" onmouseenter="window.showTaskyHelp('prof.deleteTip', 'trash')" onmouseleave="window.hideTaskyHelp()">
+        <button class="btn btn-danger btn-sm btn-del-profile" data-id="${escAttr(p.id)}" onmouseenter="window.showTaskyHelp('prof.deleteTip', 'trash')" onmouseleave="window.hideTaskyHelp()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
             <path d="M10 11v6"/><path d="M14 11v6"/>
