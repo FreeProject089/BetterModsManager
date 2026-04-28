@@ -12,3 +12,5 @@ frontend/src/features/betahub/betahub-config.local.ts
 
 # Obsidian
 .obsidian/
+
+tmp/
