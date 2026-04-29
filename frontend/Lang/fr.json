@@ -164,6 +164,8 @@
     "eula.quit": "Quitter BMM",
     "eula.accept": "Accepter",
     "credits.linksTitle": "Liens & Communauté",
+    "credits.reddit": "Subreddit Officiel",
+    "credits.redditSub": "Rejoignez la communauté",
     "credits.checkUpdates": "Vérifier les mises à jour",
     "__SECTION_CTX__": "--- MENUS CONTEXTUELS ---",
     "ctx.copyPath": "Copier le chemin relatif",
