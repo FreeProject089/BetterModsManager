@@ -19,6 +19,13 @@ Cette version introduit des optimisations de performance significatives, un tout
 - **Support communautaire** : Ajout d'un bouton "Rejoindre Discord" directement dans la modale de rapport de crash pour une aide instantanée.
 
 ## Dépôt Serveur (Mode Serveur)
+### [NOUVEAU] Standalone Server (BMM_LW_V2)
+- **Suite Administrative Complète** : Finalisation de l'interface de gestion autonome ultra-légère.
+- **Sécurité Admin** : Ajout d'une authentification locale par mot de passe avec masquage dynamique (icône œil).
+- **Inspecteur de Session** : Nouvelle interface responsive pour surveiller les téléchargements actifs et les métadonnées en temps réel.
+- **Gestion des Bannissements** : Possibilité de bannir des IPs ou des IDs de créateurs directement depuis le dashboard.
+- **Support Multilingue Intégral** : L'interface d'administration et les options de génération sont désormais disponibles en Français et Anglais.
+
 ### [IMPROVED] Gestion des opérations
 - **Support de l'annulation** : L'export du serveur et la synchronisation peuvent désormais être annulés en cours de processus.
 - **Fiabilité atomique** : Implémentation de gardes `Arc<AtomicBool>` pour assurer une terminaison immédiate sans laisser de handles de fichiers orphelins ou d'archives temporaires.
@@ -43,7 +50,7 @@ Cette version introduit des optimisations de performance significatives, un tout
 - **Animations de menus déroulants fluides** : Implémentation d'animations d'entrée (fondu/échelle/glissement) et de sortie pour le menu des actions de mod.
 - **Période de grâce d'ergonomie** : Ajout d'un délai de 100ms pour éviter la fermeture accidentelle du menu.
 - **"Rattrapage" de menu** : Les menus déroulants peuvent désormais être "rattrapés" et instantanément rouverts pendant leur fermeture.
-- **Harmonisation des icônes** : Standardisation de tous les chevrons de menus déroulants pour un look "Vanguard" cohérent.
+- **Harmonisation des icônes** : Standardisation de tous les chevrons de menus déroulants et des icônes d'ouverture de dossier (Actif, Backup, Source) pour une cohérence visuelle parfaite.
 - **[NOUVEAU] Contrôle d'Accès Système (Security Modal)** : Nouveau système de sélection de mode de sécurité (Complet vs Limité) pour protéger votre système lors de l'utilisation de mods tiers.
 - **Polissage Backdrop** : Correction du flou de fond des modales de sécurité pour qu'il soit confiné à l'application sans masquer la mascotte Tasky.
 
@@ -98,5 +105,10 @@ Cette version introduit des optimisations de performance significatives, un tout
 - **Localisation Communautaire** : Création d'un **Guide de Traduction EULA** (EN/FR) complet pour permettre à la communauté de proposer ses propres traductions légales.
 - **Clauses de Modération** : Formalisation des directives concernant les dépôts de serveurs et la modération des utilisateurs pour un environnement de modding plus sûr.
 
+### [FIXED] Standalone Server & Dashboard
+- **Erreurs de Syntaxe JS** : Résolution de bugs critiques empêchant le login et le bon fonctionnement des actions de bannissement sur le dashboard généré.
+- **Responsive Dashboard** : L'inspecteur de session s'adapte désormais correctement à toutes les tailles d'écran.
+- **UI Server Repo** : Correction de l'icône de mot de passe manquante et suppression des effets de survol trompeurs sur les badges statiques "Optionnel".
+
 ---
-*Généré le : 2026-04-25*
+*Généré le : 2026-04-29*

@@ -18,6 +18,13 @@ This version introduces significant performance optimizations, a brand-new integ
 - **Community Support**: Added a "Join Discord" button directly in the crash report modal for instant help.
 
 ## Server Repository (Server Mode)
+### [NEW] Standalone Server (BMM_LW_V2)
+- **Full Admin Suite**: Finalized the ultra-lightweight standalone server management interface.
+- **Admin Security**: Added local password authentication with dynamic visibility toggle (eye icon).
+- **Session Inspector**: New responsive modal to monitor active downloads and metadata in real-time.
+- **Ban Management**: Ability to ban specific IPs or Creator IDs directly from the dashboard.
+- **Full i18n Support**: The admin interface and generation options are now localized in both English and French.
+
 ### [IMPROVED] Operation Management
 - **Cancellation Support**: Both Server Export and Synchronization can now be cancelled mid-process.
 - **Atomic Reliability**: Implemented `Arc<AtomicBool>` guards to ensure immediate termination without leaving orphaned file handles or temporary archives.
@@ -42,7 +49,7 @@ This version introduces significant performance optimizations, a brand-new integ
 - **Smooth Dropdown Animations**: Implemented entry (fade/scale/slide) and exit animations for the mod actions menu.
 - **Usability Grace Period**: Added a 100ms delay to prevent accidental menu closing.
 - **Menu "Catching"**: Dropdowns can now be "caught" and instantly re-opened while closing.
-- **Icon Harmonization**: Standardized all dropdown chevrons for a consistent "Vanguard" look.
+- **Icon Harmonization**: Standardized all dropdown chevrons and folder opening icons (Active, Backup, Source) for perfect visual consistency.
 - **[NEW] System Access Control (Security Modal)**: New security mode selection system (Full vs Limited) to protect your system while using third-party mods.
 - **Backdrop Polish**: Fixed security modal background blur to be confined to the app window without obscuring the Tasky mascot.
 
@@ -97,5 +104,10 @@ This version introduces significant performance optimizations, a brand-new integ
 - **Community Localization**: Created a comprehensive **EULA Translation Guide** (EN/FR) to allow community members to bundle their own legal translations easily.
 - **Moderation Clauses**: Formalized guidelines regarding Server Repositories and user moderation for a safer modding environment.
 
+### [FIXED] Standalone Server & Dashboard
+- **JS Syntax Errors**: Resolved critical bugs preventing login and ban actions from working on the generated dashboard.
+- **Responsive Dashboard**: The Session Inspector modal now correctly adapts to all screen sizes.
+- **Server Repo UI**: Fixed missing password eye icon and removed misleading hover effects on static "Optional" badges.
+
 ---
-*Generated on: 2026-04-25*
+*Generated on: 2026-04-29*
