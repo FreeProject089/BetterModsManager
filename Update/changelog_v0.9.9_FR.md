@@ -109,6 +109,7 @@ Cette version introduit des optimisations de performance significatives, un tout
 - **Erreurs de Syntaxe JS** : Résolution de bugs critiques empêchant le login et le bon fonctionnement des actions de bannissement sur le dashboard généré.
 - **Responsive Dashboard** : L'inspecteur de session s'adapte désormais correctement à toutes les tailles d'écran.
 - **UI Server Repo** : Correction de l'icône de mot de passe manquante et suppression des effets de survol trompeurs sur les badges statiques "Optionnel".
+- **Nettoyage des Warnings Rust** : Élimination systématique de tous les avertissements de compilation et des mutabilités inutiles dans le cœur Rust pour garantir des performances et une stabilité maximales.
 
 ---
 *Généré le : 2026-04-29*

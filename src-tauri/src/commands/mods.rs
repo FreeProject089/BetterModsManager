@@ -1969,7 +1969,7 @@ pub fn start_sha_calculation_background(state: tauri::State<'_, AppState>) {
                             
                             // Reload data, update hashes, and save
                             {
-                                let mut data = crate::state::AppState::load(data_path.clone());
+                                let data = crate::state::AppState::load(data_path.clone());
                                 let mut data_lock = data.data.lock().unwrap();
                                 if let Some(m) = data_lock.mods.iter_mut().find(|m| m.id == id) {
                                     m.file_hashes = Some(new_hashes);

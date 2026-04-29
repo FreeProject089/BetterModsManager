@@ -1,14 +1,12 @@
-use serde::Serialize;
 use std::path::PathBuf;
-use std::collections::HashMap;
 
-#[derive(Serialize)]
+#[derive(serde::Serialize)]
 pub struct UpdateNote {
     pub filename: String,
     pub content: String,
 }
 
-#[derive(Serialize)]
+#[derive(serde::Serialize)]
 pub struct UpdateFolder {
     pub name: String,
     pub path: String,
@@ -111,7 +109,7 @@ pub fn get_update_folder_structure(app_handle: tauri::AppHandle, lang: Option<St
         .resource_dir()
         .unwrap_or_else(|| PathBuf::from("."));
     
-    let mut update_dir = exe_dir.join("Update");
+    let update_dir = exe_dir.join("Update");
     
     // Also try the project root Update directory (dev mode)
     let dev_base = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

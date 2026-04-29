@@ -345,14 +345,13 @@ pub async fn repair_modpack_mod(
     args: RepairArgs,
 ) -> Result<crate::models::mod_entry::ModEntry, String> {
     use std::io::Write;
-    use futures::StreamExt;
     
     let mod_ref = args.mod_ref;
     let fallback_type = mod_ref.fallback_type.clone().unwrap_or_else(|| "direct".to_string());
     
     // 1. Déterminer ou créer le dossier cible
-    let (target_dir, mut existing_mod) = {
-        let mut data = state.data.lock().unwrap();
+    let (target_dir, existing_mod) = {
+        let data = state.data.lock().unwrap();
         let profile = data.profiles.iter().find(|p| p.id == args.target_profile_id)
             .ok_or("Profil introuvable")?;
             
@@ -403,7 +402,7 @@ pub async fn repair_modpack_mod(
             return Err("Aucun lien ServerRepo fourni".to_string());
         };
 
-        for (idx, file_ref) in mod_ref.file_manifest.iter().enumerate() {
+        for (_idx, file_ref) in mod_ref.file_manifest.iter().enumerate() {
             let local_path = target_dir.join(&file_ref.relative_path);
             let mut needs_download = true;
 
