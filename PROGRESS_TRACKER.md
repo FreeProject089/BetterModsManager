@@ -15,10 +15,16 @@ Ouvrez progress.json et modifiez les valeurs suivantes :
 - lastUpdate : Changez la date pour indiquer le jour de la modification.
 - art / code : Les pourcentages globaux affichés dans les grands cercles.
 - percent : Le pourcentage d'avancement d'une tâche spécifique (0 à 100).
-- status : 
-  - "complete" : Affiche la barre en Vert.
-  - "testing" : Affiche la barre en Bleu.
-  - "progress" : Affiche la barre en Orange/Jaune.
+- status : Voir le tableau des statuts ci-dessous.
+
+## Types de Statuts
+
+| Valeur JSON   | Badge affiché | Couleur de la barre | Usage recommandé                        |
+|---------------|---------------|---------------------|-----------------------------------------|
+| `"complete"`  | COMPLETE      | 🟢 Vert             | Tâche terminée à 100%                   |
+| `"progress"`  | IN PROGRESS   | 🟡 Jaune/Amber      | Tâche en cours de développement         |
+| `"testing"`   | TESTING       | 🔵 Bleu             | Tâche développée, en phase de test      |
+| `"planned"`   | PLANNED       | ⚫ Gris             | Tâche planifiée, pas encore commencée   |
 
 ## Support Multilingue
 
