@@ -99,11 +99,17 @@ export function getModCardHTML(mod, ctx) {
                 </button>
                 <div class="mod-actions-dropdown-content" onmouseleave="window.closeGlobalDropdown()">
                     <div class="dropdown-item btn-open-active-folder" data-id="${mod.id}">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                            <path d="m9 13 2 2 4-4"/>
+                        </svg>
                         <span data-i18n="mod.openActiveFolder">${t('mod.openActiveFolder')}</span>
                     </div>
                     <div class="dropdown-item btn-open-backup-folder" data-id="${mod.id}">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2.5">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                            <path d="M12 10v4l2 2"/>
+                        </svg>
                         <span data-i18n="mod.openBackupFolder">${t('mod.openBackupFolder')}</span>
                     </div>
                     <div class="dropdown-divider"></div>

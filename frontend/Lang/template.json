@@ -1633,6 +1633,8 @@
     "repo.outputDirHint": "You can point directly to a folder that already contains a repo.json to serve it without regenerating.",
     "repo.pauseSync": "Pause",
     "repo.portLabel": "Port:",
+    "repo.miniServerPassword": "Password",
+    "repo.miniServerVersion": "Version",
     "repo.profilesCount": "Profiles ({count}):",
     "repo.publicIPHint": "For Internet access: The Private URL (192.168.x.x) won't work for friends outside your network. Use the Public URL above and ensure Port 8000 is forwarded on your router.",
     "repo.resumeSync": "Resume",

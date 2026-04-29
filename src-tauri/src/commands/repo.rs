@@ -334,6 +334,8 @@ fn generate_mini_server_files(
     use_upnp: bool,
     _lang: &str,
     upload_limit: u32,
+    server_version: u8,
+    admin_password: &str,
 ) -> Result<(), String> {
     // 1. Get custom cloudflared path or "AUTO"
     let state = handle.state::<crate::state::AppState>();
@@ -342,13 +344,19 @@ fn generate_mini_server_files(
         data.settings.cloudflared_path.clone().unwrap_or_else(|| "AUTO".to_string())
     };
 
-    // 2. Load and Prepare Hybrid Template (One-file solution)
-    let hybrid_template = include_str!("../templates/mini-server/server.hybrid.bat.template");
+    // 2. Load and Prepare Template
+    let hybrid_template = if server_version == 2 {
+        include_str!("../templates/mini-server/server.v2.bat.template")
+    } else {
+        include_str!("../templates/mini-server/server.hybrid.bat.template")
+    };
+    
     let mut hybrid_content = hybrid_template.replace("PORT_PLACEHOLDER", &port.to_string());
     hybrid_content = hybrid_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "true" } else { "false" });
     hybrid_content = hybrid_content.replace("USE_UPNP_PLACE_HOLDER", if use_upnp { "true" } else { "false" });
     hybrid_content = hybrid_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
     hybrid_content = hybrid_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
+    hybrid_content = hybrid_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
 
     // 3. Write Single Executable Batch File
     let main_bat_path = output_path.join("BMM-Standalone-Server.bat");
@@ -378,25 +386,33 @@ fn generate_mini_server_files(
             let hkcu = RegKey::predef(HKEY_CURRENT_USER);
             match hkcu.open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_SET_VALUE) {
                 Ok(run) => {
-                    // Ensure absolute path and remove UNC prefix which can break registry commands
                     let mut path_str = if let Ok(abs_path) = fs::canonicalize(&main_bat_path) {
                         abs_path.to_string_lossy().to_string().replace("\\\\?\\", "").replace("/","\\")
                     } else {
                         main_bat_path.to_string_lossy().to_string()
                     };
 
-                    // CRITICAL: Must be quoted if contains spaces
                     if path_str.contains(' ') && !path_str.starts_with('"') {
                         path_str = format!("\"{}\"", path_str);
                     }
 
-                    println!("[STARTUP] Writing to registry: BMM-Mini-Server -> {}", path_str);
                     match run.set_value("BMM-Mini-Server", &path_str) {
                         Ok(_) => println!("[STARTUP] Registry key set successfully."),
                         Err(e) => println!("[STARTUP] Failed to set registry value: {}", e),
                     }
                 },
                 Err(e) => println!("[STARTUP] Failed to open registry key: {}", e),
+            }
+        }
+    } else {
+        #[cfg(target_os = "windows")]
+        {
+            use winreg::enums::*;
+            use winreg::RegKey;
+            let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+            if let Ok(run) = hkcu.open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_SET_VALUE) {
+                let _ = run.delete_value("BMM-Mini-Server");
+                println!("[STARTUP] Autostart disabled (registry key removed).");
             }
         }
     }
@@ -414,6 +430,8 @@ pub struct StandaloneServerConfig {
     pub use_upnp: bool,
     pub lang: String,
     pub upload_limit: u32,
+    pub server_version: Option<u8>,
+    pub admin_password: Option<String>,
 }
 
 #[tauri::command]
@@ -429,6 +447,8 @@ pub async fn generate_standalone_server(
         use_upnp,
         lang,
         upload_limit,
+        server_version,
+        admin_password,
     } = payload;
     let mut repo_json = PathBuf::from(&repo_path);
     
@@ -443,7 +463,9 @@ pub async fn generate_standalone_server(
 
     let output_path = repo_json.parent().ok_or_else(|| "repo.miniServerErrNoDir".to_string())?;
 
-    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang, upload_limit)
+    let version = server_version.unwrap_or(1);
+    let pw = admin_password.unwrap_or_else(|| "admin".to_string());
+    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang, upload_limit, version, &pw)
 }
 
 #[tauri::command]

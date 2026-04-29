@@ -1336,21 +1336,34 @@
                             </div>
 
                             <!-- Card: Mini-Server Standalone -->
-                            <div class="glass-card"
-                                style="border-left:3px solid #8A98AD; background:rgba(255,255,255,0.02); margin-top: 24px; padding: 20px;">
+                            <div
+                                style="border-left:3px solid #8A98AD; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:12px; margin-top: 24px; padding: 20px; position:relative; transition: none;">
                                 <div
                                     style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
-                                    <h3 class="card-title"
-                                        style="margin:0; font-size:13px; opacity:0.9; display:flex; align-items:center; gap:8px; line-height:1;">
+                                    <h3
+                                        style="margin:0; font-size:13px; opacity:0.9; display:flex; align-items:center; gap:8px; line-height:1; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.08em; border:none; padding:0;">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2" style="vertical-align:middle">
                                             <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
                                         </svg>
                                         <span data-i18n="repo.miniServerTitle">Serveur Autonome (Léger)</span>
                                     </h3>
-                                    <div
-                                        style="font-size:10px; background:rgba(255,255,255,0.08); padding:4px 8px; border-radius:6px; color:var(--text-muted); font-weight:700; border:1px solid rgba(255,255,255,0.1); text-transform:uppercase; letter-spacing:0.5px;">
-                                        OPTIONAL</div>
+                                    <style>
+                                        .badge-server-tag {
+                                            font-size: 10px;
+                                            background: rgba(255, 255, 255, 0.08);
+                                            padding: 4px 8px;
+                                            border-radius: 6px;
+                                            color: var(--text-muted);
+                                            font-weight: 700;
+                                            border: 1px solid rgba(255, 255, 255, 0.1);
+                                            text-transform: uppercase;
+                                            letter-spacing: 0.5px;
+                                            cursor: default;
+                                        }
+
+                                    </style>
+                                    <div class="badge-server-tag">OPTIONAL</div>
                                 </div>
 
                                 <div class="form-group" style="margin-bottom:12px;">
@@ -1413,6 +1426,29 @@
                                             <input type="number" id="repo-mini-server-upload-limit" class="form-input"
                                                 value="0" min="0" step="50"
                                                 style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--accent); font-weight:700;">
+                                        </div>
+                                        <div style="display:flex; align-items:center; justify-content:space-between;">
+                                            <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;" data-i18n="repo.miniServerPassword">PASSWORD</span>
+                                            <div style="display:flex; align-items:center; gap:5px;">
+                                                <button onclick="const p = document.getElementById('repo-mini-server-password'); p.type = p.type === 'password' ? 'text' : 'password';" 
+                                                        class="btn btn-sm" style="height:24px; width:24px; padding:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.05); border-radius:4px;">
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                                        <circle cx="12" cy="12" r="3"></circle>
+                                                    </svg>
+                                                </button>
+                                                <input type="password" id="repo-mini-server-password" class="form-input" value="admin"
+                                                    style="width:80px; height:24px; font-size:11px; padding:0 8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--warning); font-weight:700;">
+                                            </div>
+                                        </div>
+                                        <div style="display:flex; align-items:center; justify-content:space-between;">
+                                            <span
+                                                style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;" data-i18n="repo.miniServerVersion">VERSION</span>
+                                            <select id="repo-mini-server-version" class="form-input"
+                                                style="width:80px; height:24px; font-size:11px; padding:0 4px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--success); font-weight:700; cursor:pointer;">
+                                                <option value="1">v1 (Std)</option>
+                                                <option value="2" selected>v2 (Lux)</option>
+                                            </select>
                                         </div>
                                     </div>
 

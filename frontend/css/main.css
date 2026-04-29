@@ -2385,6 +2385,11 @@ body.is-maximized .titlebar-spacer {
     width: 100%;
 }
 
+.form-input:hover {
+    border-color: var(--border-hover);
+    background: rgba(255, 255, 255, 0.06);
+}
+
 .form-input:focus {
     border-color: var(--border-accent);
     box-shadow: 0 0 0 3px var(--accent-dim);
@@ -2752,6 +2757,11 @@ select.input-field option {
     transition: var(--transition);
     outline: none;
     width: 100%;
+}
+
+.input-field:hover {
+    border-color: var(--border-hover);
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .input-field:focus {

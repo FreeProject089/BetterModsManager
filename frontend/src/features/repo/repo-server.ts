@@ -306,6 +306,12 @@ export function initRepoServer(elements) {
         const last = localStorage.getItem('bmm_last_mini_repo_json');
         if (last) inputMiniRepoPath.value = last;
     }
+
+    const inputVersion = document.getElementById('repo-mini-server-version');
+    if (inputVersion) {
+        const lastVersion = localStorage.getItem('bmm_last_mini_server_version');
+        if (lastVersion) inputVersion.value = lastVersion;
+    }
     
     if (btnGenMiniServer) {
         btnGenMiniServer.addEventListener('click', async () => {
@@ -325,15 +331,19 @@ export function initRepoServer(elements) {
             const autoStart = cbAutoStart ? cbAutoStart.checked : false;
             const useCloudflare = document.getElementById('repo-mini-server-cloudflare').checked;
             const useUpnp = document.getElementById('repo-mini-server-upnp').checked;
+            const serverVersion = parseInt(document.getElementById('repo-mini-server-version')?.value || "1");
             const lang = localStorage.getItem('bmm-lang') || 'en';
+
+            const adminPassword = document.getElementById('repo-mini-server-password')?.value || "admin";
 
             try {
                 btnGenMiniServer.disabled = true;
                 const uploadLimit = parseInt(inputMiniServerUploadLimit ? inputMiniServerUploadLimit.value : "0") || 0;
+                localStorage.setItem('bmm_last_mini_server_version', serverVersion.toString());
 
                 await invoke('generate_standalone_server', { 
                     payload: {
-                        repoPath: jsonPath, port, autoStart, useCloudflare, useUpnp, lang, uploadLimit
+                        repoPath: jsonPath, port, autoStart, useCloudflare, useUpnp, lang, uploadLimit, serverVersion, adminPassword
                     }
                 });
 

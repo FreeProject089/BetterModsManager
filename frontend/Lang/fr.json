@@ -1708,6 +1708,8 @@
     "repo.outputDirHint": "💡 Vous pouvez pointer directement vers un dossier qui contient déjà un repo.json pour le servir sans regénérer.",
     "repo.pauseSync": "Mettre en pause",
     "repo.portLabel": "Port du serveur",
+    "repo.miniServerPassword": "Mot de passe",
+    "repo.miniServerVersion": "Version",
     "repo.profilesCount": "Profils ({count}) :",
     "repo.publicIPHint": "⚠️ Pour Internet : L'URL Privée (192.168.x.x) ne fonctionne pas pour vos amis externes. Utilisez l'URL Publique ci-dessus et assurez-vous que le port 8000 est redirigé sur votre box.",
     "repo.resumeSync": "Reprendre",
