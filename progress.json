@@ -1,0 +1,33 @@
+{
+  "lastUpdate": {
+    "en": "April 29th 2026",
+    "fr": "29 Avril 2026"
+  },
+  "art": 0,
+  "code": 0,
+  "categories": [
+    {
+      "name": { "en": "Core Systems (v1.0)", "fr": "Systèmes Core (v1.0)" },
+      "items": [
+        { "label": { "en": "C_Plugin System", "fr": "Système de Plugins C" }, "status": "progress", "percent": 0 },
+        { "label": { "en": "CLI (Command Interface)", "fr": "Interface Commande (CLI)" }, "status": "progress", "percent": 0 },
+        { "label": { "en": "MCP Integration (Model Context Protocol)", "fr": "Intégration MCP (Model Context Protocol)" }, "status": "progress", "percent": 0 },
+        { "label": { "en": "P2P Sync System", "fr": "Système P2P Sync" }, "status": "progress", "percent": 0 }
+      ]
+    },
+    {
+      "name": { "en": "Documentation & Learning", "fr": "Documentation & Apprentissage" },
+      "items": [
+        { "label": { "en": "Full Documentation Overhaul", "fr": "Refonte Complète de la Doc" }, "status": "progress", "percent": 0 },
+        { "label": { "en": "Tutorial Videos Series", "fr": "Série de Vidéos Tutoriels" }, "status": "progress", "percent": 0 }
+      ]
+    },
+    {
+      "name": { "en": "User Experience", "fr": "Expérience Utilisateur" },
+      "items": [
+        { "label": { "en": "Glassmorphism UI v2", "fr": "Interface Glassmorphism v2" }, "status": "progress", "percent": 0 },
+        { "label": { "en": "Rust Performance Optimization", "fr": "Optimisation Performances Rust" }, "status": "progress", "percent": 0 }
+      ]
+    }
+  ]
+}
