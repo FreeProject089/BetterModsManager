@@ -103,7 +103,7 @@ function _renderModpackList(container) {
     const searchWrap = countHeader.querySelector('#mp-search-wrap');
     searchWrap.addEventListener('focusin', () => searchWrap.style.borderColor = 'rgba(0,194,255,0.35)');
     searchWrap.addEventListener('focusout', () => searchWrap.style.borderColor = 'rgba(255,255,255,0.08)');
-    
+
     const countBadge = countHeader.querySelector('#modpack-count-badge');
 
     const createBtn = countHeader.querySelector('#modpack-create-btn');
@@ -114,8 +114,10 @@ function _renderModpackList(container) {
         empty.style.cssText = 'text-align:center;padding:60px 20px;color:var(--text-muted);display:flex;flex-direction:column;align-items:center;gap:16px;';
         empty.innerHTML = `
             <div style="width:64px; height:64px; border-radius:20px; background:rgba(255,255,255,0.02); display:flex; align-items:center; justify-content:center; border:1px dashed rgba(255,255,255,0.1);">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" style="opacity:0.5;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-            </div>
+ <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
+                                <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
+                            </svg>            </div>
             <div style="font-size:14px; font-weight:600; color:var(--text-secondary);">${t('modpack.noMods')}</div>
             <p style="font-size:12px; max-width:300px; line-height:1.5;">${t('modpack.noModsDesc')}</p>
         `;
@@ -125,7 +127,7 @@ function _renderModpackList(container) {
 
     const grid = document.createElement('div');
     grid.className = 'modpack-grid';
-    
+
     const cards = [];
 
     _modpacks.forEach(pack => {
@@ -140,9 +142,9 @@ function _renderModpackList(container) {
             const local = _allMods.find(m => m.id === mref.mod_id || m.sha256 === mref.sha256);
             return local && local.enabled;
         });
-        
-        const applyIcon = anyEnabled 
-            ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>' 
+
+        const applyIcon = anyEnabled
+            ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>'
             : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
         const applyTitle = anyEnabled ? t('modpack.deactivate') || 'Désactiver le modpack' : t('modpack.apply');
         const applyClass = anyEnabled ? 'btn-apply active' : 'btn-apply';
@@ -262,17 +264,17 @@ async function _openEditor(container, pack) {
 
     const metaForm = document.createElement('div');
     metaForm.style.cssText = 'display:flex; flex-direction:column; gap:16px;';
-    
+
     metaForm.appendChild(_formField(t('modpack.name'), `<input id="mp-name" type="text" class="form-input" placeholder="${t('modpack.namePlaceholder')}" value="${_editingPack.name || ''}" style="width:100%;">`));
     metaForm.appendChild(_formField(t('modpack.description'), `<textarea id="mp-desc" class="form-input" style="width:100%; height:100px; resize:none;">${_editingPack.description || ''}</textarea>`));
     metaForm.appendChild(_formField(t('modpack.game'), `<input id="mp-game" type="text" class="form-input" placeholder="${t('modpack.gamePlaceholder') || 'e.g. DCS World'}" value="${_editingPack.game_name || ''}" style="width:100%;">`));
-    
+
     // Multi-profile toggle (re-styled)
     const multiRow = document.createElement('label');
     multiRow.style.cssText = 'display:flex; align-items:center; gap:12px; cursor:pointer; padding:16px; border-radius:14px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); transition:all 0.2s;';
     multiRow.onmouseenter = () => multiRow.style.borderColor = 'rgba(var(--accent-rgb), 0.2)';
     multiRow.onmouseleave = () => multiRow.style.borderColor = 'rgba(255,255,255,0.05)';
-    
+
     const multiCb = document.createElement('input');
     multiCb.type = 'checkbox';
     multiCb.id = 'mp-multi';
@@ -281,13 +283,13 @@ async function _openEditor(container, pack) {
     multiCb.onchange = () => {
         _editingPack.multi_profile = multiCb.checked;
     };
-    
+
     const multiInfo = document.createElement('div');
     multiInfo.innerHTML = `
         <div style="font-size:13px; font-weight:700; color:var(--text-primary);">${t('modpack.multiProfile')}</div>
         <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${t('modpack.multiProfileDesc')}</div>
     `;
-    
+
     multiRow.appendChild(multiCb);
     multiRow.appendChild(multiInfo);
     metaForm.appendChild(multiRow);
@@ -297,7 +299,7 @@ async function _openEditor(container, pack) {
     skipRow.style.cssText = 'display:flex; align-items:center; gap:12px; cursor:pointer; padding:16px; border-radius:14px; background:rgba(255,136,0,0.05); border:1px solid rgba(255,136,0,0.1); transition:all 0.2s;';
     skipRow.onmouseenter = () => skipRow.style.borderColor = 'rgba(255,136,0,0.3)';
     skipRow.onmouseleave = () => skipRow.style.borderColor = 'rgba(255,136,0,0.1)';
-    
+
     const skipCb = document.createElement('input');
     skipCb.type = 'checkbox';
     skipCb.id = 'mp-skip-integrity';
@@ -306,13 +308,13 @@ async function _openEditor(container, pack) {
     skipCb.onchange = () => {
         _editingPack.skip_integrity_check = skipCb.checked;
     };
-    
+
     const skipInfo = document.createElement('div');
     skipInfo.innerHTML = `
         <div style="font-size:13px; font-weight:700; color:#ff8800;">${t('modpack.skipIntegrity') || "Ignorer la vérification d'intégrité"}</div>
         <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${t('modpack.skipIntegrityDesc') || "Désactive la vérification des fichiers au lancement (plus rapide, mais ne répare pas les mods cassés)."}</div>
     `;
-    
+
     skipRow.appendChild(skipCb);
     skipRow.appendChild(skipInfo);
     metaForm.appendChild(skipRow);
@@ -337,8 +339,10 @@ async function _openEditor(container, pack) {
     rightCol.innerHTML = `
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
             <div class="editor-section-title">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                ${t('modpack.modsManagement')}
+ <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
+                                <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
+                            </svg>                ${t('modpack.modsManagement')}
             </div>
             <button class="btn btn-secondary btn-sm" id="btn-add-mods-pack" style="font-size:11px; height:32px; border-radius:8px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -383,7 +387,7 @@ async function _openEditor(container, pack) {
             toast(t('modpack.savedOk') || 'Modpack sauvegardé !', 'success');
             await _loadData();
             _renderModpackList(container);
-            
+
             // Notify other components (like Repo page)
             window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
         } catch (err) {
@@ -400,8 +404,10 @@ function _renderPackModList(listEl) {
         const empty = document.createElement('div');
         empty.style.cssText = 'padding:40px 20px; text-align:center; color:var(--text-muted); border-radius:16px; border:1px dashed rgba(255,255,255,0.08); background:rgba(0,0,0,0.02); display:flex; flex-direction:column; align-items:center; gap:12px;';
         empty.innerHTML = `
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-            <span style="font-size:12px;">${t('modpack.noMods')}</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
+                                <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
+                            </svg>            <span style="font-size:12px;">${t('modpack.noMods')}</span>
         `;
         listEl.appendChild(empty);
         return;
@@ -535,8 +541,10 @@ function _openMultiSelectModal(listEl) {
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
             <div style="display:flex; align-items:center; gap:12px;">
                 <div style="width:36px; height:36px; border-radius:10px; background:rgba(0,194,255,0.12); border:1px solid rgba(0,194,255,0.25); display:flex; align-items:center; justify-content:center; color:var(--accent);">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                </div>
+ <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
+                                <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
+                            </svg>                </div>
                 <div>
                     <div style="font-size:16px; font-weight:700; color:var(--text-primary);">${t('modpack.selectMods')}</div>
                     <div style="font-size:11px; color:var(--text-muted); margin-top:1px;" id="ms-count-label"></div>
@@ -561,13 +569,13 @@ function _openMultiSelectModal(listEl) {
     // Filter available mods
     // Show all mods, but mark those already in pack
     let availableMods = [..._allMods];
-    
+
     // If multi-profile is OFF, only show mods from the current active profile
     if (!_editingPack.multi_profile) {
         const targetId = _activeProfileId || window.cachedActiveProfileId;
         const activeProfile = _profiles.find(p => String(p.id) === String(targetId));
         console.log('[Modpack] Active Profile detected:', activeProfile?.name, 'ID:', targetId);
-        
+
         if (activeProfile) {
             availableMods = availableMods.filter(m => {
                 // Match by profile_id or by directory path (path is very reliable in BMM)
@@ -586,7 +594,10 @@ function _openMultiSelectModal(listEl) {
 
     if (availableMods.length === 0) {
         body.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:60px 20px; display:flex; flex-direction:column; align-items:center; gap:12px;">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="opacity:0.3;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.3; margin-bottom: 4px;">
+                <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
+                <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
+            </svg>
             <span>${t('modpack.noMoreMods')}</span>
         </div>`;
     }
@@ -595,7 +606,7 @@ function _openMultiSelectModal(listEl) {
         const prof = _profiles.find(p => m.mod_folder_path && (m.mod_folder_path.toString().includes(p.mods_path?.toString()) || p.mods_path?.toString().includes(m.mod_folder_path?.toString())));
         const depCount = m.dependencies ? m.dependencies.length : 0;
         const searchLabel = (m.name + (prof ? prof.name : '')).toLowerCase();
-        
+
         const alreadyInPack = _packMods.some(pm => String(pm.mod_id) === String(m.id));
 
         const row = document.createElement('label');
@@ -605,17 +616,17 @@ function _openMultiSelectModal(listEl) {
             row.style.pointerEvents = 'none';
             row.style.opacity = '0.7';
         }
-        
-        row.addEventListener('mouseenter', () => { 
+
+        row.addEventListener('mouseenter', () => {
             if (!row.querySelector('input').checked) {
                 row.style.background = 'rgba(0,194,255,0.04)';
-                row.style.borderColor = 'rgba(0,194,255,0.12)'; 
+                row.style.borderColor = 'rgba(0,194,255,0.12)';
             }
         });
-        row.addEventListener('mouseleave', () => { 
-            if (!row.querySelector('input').checked) { 
-                row.style.background = 'rgba(255,255,255,0.02)'; 
-                row.style.borderColor = 'transparent'; 
+        row.addEventListener('mouseleave', () => {
+            if (!row.querySelector('input').checked) {
+                row.style.background = 'rgba(255,255,255,0.02)';
+                row.style.borderColor = 'transparent';
             } else if (alreadyInPack) {
                 row.style.background = 'rgba(0,194,255,0.08)';
                 row.style.borderColor = 'rgba(0,194,255,0.25)';
@@ -625,19 +636,19 @@ function _openMultiSelectModal(listEl) {
         const switchWrap = document.createElement('label');
         switchWrap.className = 'bmm-switch';
         switchWrap.style.cssText = 'flex-shrink:0;';
-        
+
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.value = m.id;
         cb.checked = alreadyInPack;
         cb.dataset.profId = prof?.id || '';
-        
+
         const track = document.createElement('span');
         track.className = 'bmm-switch-track';
         const thumb = document.createElement('span');
         thumb.className = 'bmm-switch-thumb';
         track.appendChild(thumb);
-        
+
         switchWrap.appendChild(cb);
         switchWrap.appendChild(track);
 
@@ -693,12 +704,12 @@ function _openMultiSelectModal(listEl) {
             confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px; animation: bmm-loading-spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('common.loading')}`;
             return;
         }
-        
+
         // Restore buttons if we just finished
         confirmBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><polyline points="20 6 9 17 4 12"/></svg> ${t('modpack.addMod')}`;
         footer.querySelector('#ms-cancel').disabled = false;
         header.querySelector('#ms-close').disabled = false;
-        
+
         const selCount = checkboxes.filter(c => c.checked).length;
         const total = availableMods.length;
         countLabel.textContent = `${total} ${t('modpack.modsAvailable')}`;
@@ -740,17 +751,17 @@ function _openMultiSelectModal(listEl) {
 
         _isAddingMods = true;
         updateSelCount(); // Show loading state in current modal
-        
+
         // No more prevent-close here as per user request
-        
+
         const depMode = document.getElementById('mp-depmode')?.value || 'manual';
         const includeDeps = depMode === 'all';
         let errors = 0;
-        
+
         // Clear current pack mods and rebuild from selection to ensure sync and uniqueness
         // Actually, we should only add the new ones, or rebuild the whole list.
         // The user wants uniqueness, so we filter out what's already there before pushing.
-        
+
         for (const cb of checked) {
             // Uniqueness check: avoid adding if already in _packMods
             const exists = _packMods.some(pm => String(pm.mod_id) === String(cb.value));
@@ -770,12 +781,12 @@ function _openMultiSelectModal(listEl) {
                     fallbackType: 'direct',
                 });
                 _packMods.push(ref);
-            } catch(e) {
+            } catch (e) {
                 console.error(e);
                 errors++;
             }
         }
-        
+
         // Also remove mods that were UNCHECKED in the modal
         const selectedIds = checked.map(cb => String(cb.value));
         _packMods = _packMods.filter(pm => selectedIds.includes(String(pm.mod_id)));
@@ -828,36 +839,36 @@ async function _showRepairModal(container, pack, report, onComplete) {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'mod-repair-overlay';
     modalOverlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(10px); z-index:9999; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);';
-    
+
     const content = document.createElement('div');
     content.className = 'editor-section-card';
     content.style.cssText = 'width:600px; max-width:90vw; max-height:85vh; display:flex; flex-direction:column; padding:24px; border-radius:16px; background:var(--bg-secondary); border:1px solid rgba(255,255,255,0.08); box-shadow:0 20px 50px rgba(0,0,0,0.5); transform:scale(0.95); transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);';
-    
+
     // Build lists
     let modsHtml = '';
     const problematicMods = [...report.missingMods, ...report.corruptedMods];
-    
+
     let canRepairAny = false;
-    
+
     problematicMods.forEach(m => {
         const isMissing = report.missingMods.some(x => x.mod_id === m.mod_id);
         const statusText = isMissing ? t('modpack.repair.statusMissing') || "Manquant" : t('modpack.repair.statusCorrupted') || "Corrompu";
         const statusColor = isMissing ? "var(--danger)" : "#fbbf24";
         const fallbackType = m.fallback_type || "direct";
-        
+
         // Vérification de la possibilité de réparation :
         // - Corrompu => peut toujours être réparé localement (fichiers déplacés), pas besoin de lien
         // - Manquant  => nécessite un lien de téléchargement
         const hasLink = fallbackType === "sr" ? !!pack.sr_link : !!(m.download_fallback || m.download_link);
         const isCorrupted = !isMissing; // Corrupted = can be fixed locally (moved file)
         if (hasLink || isCorrupted) canRepairAny = true;
-        
+
         const sourceLabel = hasLink
             ? (fallbackType === "sr" ? "ServerRepo" : t('modpack.repair.directLink') || "Lien Direct")
             : isCorrupted
                 ? `<span style="color:#fbbf24; font-weight:800;">${t('modpack.repair.localRecovery') || 'Récupération Locale'}</span>`
                 : `<span style="color:var(--danger); font-weight:800;">${t('modpack.repair.linkMissing') || 'Lien Manquant'}</span>`;
-        
+
         modsHtml += `
             <div style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:rgba(255,255,255,0.03); border-radius:12px; border:1px solid rgba(255,255,255,0.05); margin-bottom:8px;">
                 <div style="display:flex; flex-direction:column; gap:4px;">
@@ -904,12 +915,12 @@ async function _showRepairModal(container, pack, report, onComplete) {
             </button>
         </div>
     `;
-    
+
     modalOverlay.appendChild(content);
-    
+
     const appOuter = document.getElementById('app-window-outer') || document.body;
     appOuter.appendChild(modalOverlay);
-    
+
     requestAnimationFrame(() => {
         modalOverlay.style.opacity = '1';
         content.style.transform = 'scale(1)';
@@ -937,7 +948,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
     startBtn.addEventListener('click', async () => {
         actionsBlock.style.display = 'none';
         progressContainer.style.display = 'flex';
-        
+
         let unlisten = null;
         try {
             unlisten = await window.__TAURI__.event.listen('bmm://repair-progress', (event) => {
@@ -951,12 +962,12 @@ async function _showRepairModal(container, pack, report, onComplete) {
 
             for (let i = 0; i < problematicMods.length; i++) {
                 const mref = problematicMods[i];
-                
+
                 const fallbackType = mref.fallback_type || "direct";
                 const hasLink = fallbackType === "sr" ? !!pack.sr_link : !!(mref.download_fallback || mref.download_link);
-                
+
                 const isMissingMref = report.missingMods.some(x => x.mod_id === mref.mod_id);
-                
+
                 // Mods manquants sans lien : impossible à réparer, on notifie et on passe
                 if (!hasLink && isMissingMref) {
                     modRepairErrors.push(t('modpack.repair.noLink', { name: mref.mod_name }) || `${mref.mod_name} : aucun lien fourni`);
@@ -1002,10 +1013,10 @@ async function _showRepairModal(container, pack, report, onComplete) {
             }
 
             await _loadData();
-            
+
             statusText.textContent = t('modpack.repair.finalCheck') || 'Vérification finale...';
             const finalReport = await invoke('check_modpack_integrity', { modpack: pack });
-            
+
             if (modRepairErrors.length > 0 && (finalReport.missingMods.length > 0 || finalReport.corruptedMods.length > 0)) {
                 toast(t('modpack.repair.incomplete', { errors: modRepairErrors.join('\n• ') }) || `Réparation incomplète :\n• ${modRepairErrors.join('\n• ')}`, 'warning');
                 closeModal();
@@ -1033,7 +1044,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
 
 async function _executeApplyModpack(container, pack, isApplying) {
     toast(isApplying ? t('modpack.applying') : t('modpack.deactivating') || 'Désactivation du modpack...', 'info');
-    
+
     let appliedCount = 0;
     let missingCount = 0;
 
@@ -1076,10 +1087,10 @@ async function _executeApplyModpack(container, pack, isApplying) {
     } else {
         toast(isApplying ? t('modpack.applyOk') : t('modpack.deactivateOk') || 'Modpack désactivé avec succès !', 'success');
     }
-    
+
     await _loadData();
     if (container) _renderModpackList(container);
-    
+
     if (window._refreshModsFn) {
         window._refreshModsFn(false, true);
     } else {
@@ -1095,12 +1106,12 @@ async function _applyModpack(container, pack) {
             const local = _allMods.find(m => m.id === mref.mod_id || (m.file_hashes && Object.values(m.file_hashes).includes(mref.sha256)));
             return local && local.enabled;
         });
-        
+
         const isApplying = !anyEnabled;
-        
+
         if (isApplying && !pack.skip_integrity_check) {
             const report = await invoke('check_modpack_integrity', { modpack: pack });
-            
+
             if (report.missingMods.length > 0 || report.corruptedMods.length > 0) {
                 _showRepairModal(container, pack, report, async () => {
                     await _executeApplyModpack(container, pack, true);
@@ -1127,7 +1138,7 @@ async function _exportModpack(pack) {
 
 async function _deleteModpack(container, pack) {
     if (!pack) return;
-    
+
     const ok = await window.confirmCustom(
         t('modpack.delete') || 'Supprimer',
         t('modpack.deleteConfirm') || 'Voulez-vous vraiment supprimer ce modpack ?',
@@ -1140,7 +1151,7 @@ async function _deleteModpack(container, pack) {
         toast(t('modpack.deletedOk') || 'Modpack supprimé.', 'success');
         await _loadData();
         _renderModpackList(container);
-        
+
         // Notify other components (like Repo page)
         window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
     } catch (err) {
@@ -1200,8 +1211,10 @@ export async function openQuickApplyModal() {
 
     if (_modpacks.length === 0) {
         body.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:60px 20px; display:flex; flex-direction:column; align-items:center; gap:12px;">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="opacity:0.3;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-            <span>${t('modpack.noModpacks') || 'Aucun modpack trouvé'}</span>
+ <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
+                                <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
+                            </svg>            <span>${t('modpack.noModpacks') || 'Aucun modpack trouvé'}</span>
         </div>`;
     }
 
@@ -1218,7 +1231,7 @@ export async function openQuickApplyModal() {
         };
 
         const modsCount = pack.mods ? pack.mods.length : 0;
-        
+
         let anyEnabled = false;
         if (pack.mods) {
             anyEnabled = pack.mods.some(mref => {
@@ -1249,7 +1262,7 @@ export async function openQuickApplyModal() {
             wrap.style.opacity = '0.5';
             wrap.style.pointerEvents = 'none';
             await _applyModpack(null, pack);
-            
+
             // Recalculate anyEnabled after apply
             await _loadData();
             let newAnyEnabled = false;
@@ -1260,7 +1273,7 @@ export async function openQuickApplyModal() {
                     return local && local.enabled;
                 });
             }
-            
+
             if (newAnyEnabled) {
                 wrap.classList.add('active');
                 wrap.querySelector('.switch-bg').style.background = 'var(--success)';

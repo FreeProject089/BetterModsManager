@@ -1,53 +1,70 @@
+<p align="center">
+  <img src=".Assets/image/BetterMM.png" alt="BMM Logo" width="200" />
+</p>
+
 # Better Mod Manager (BMM)
 
-A modern, high-performance, and universal mod manager built with Rust and Tauri. Designed for performance, safety, and a premium "workstation" user experience across any PC game.
+<p align="center">
+  <img src="https://img.shields.io/badge/version-0.9.9-blue.svg?style=for-the-badge" alt="Version" />
+  <img src="https://img.shields.io/badge/license-GPL--3.0-green.svg?style=for-the-badge" alt="License" />
+  <img src="https://img.shields.io/badge/Rust-1.70%2B-orange?style=for-the-badge&logo=rust" alt="Rust" />
+  <img src="https://img.shields.io/badge/Tauri-Desktop-24C8D8?style=for-the-badge&logo=tauri" alt="Tauri" />
+</p>
 
-## Overview
+<p align="center">
+  <b>Official Website:</b> <a href="https://freeproject089.github.io/BMM_Web/">https://freeproject089.github.io/BMM_Web/</a>
+</p>
 
-Better Mod Manager (BMM) simplifies the process of managing, installing, and sharing mods. Unlike traditional managers that rely on unstable symlinks, BMM uses a "Smart Physical Copy" engine with automated backup and restoration layers.
+---
+
+**Better Mod Manager (BMM)** is a modern, high-performance, and universal mod manager built with **Rust** and **Tauri**. Designed for performance, safety, and a premium "workstation" user experience, it redefines how you manage game modifications across any PC title.
+
+**Important Note:** BMM is currently **Windows Only**.
+
+## The "Smart Physical Copy" Engine
+Unlike traditional managers that rely on unstable symlinks or hardlinks, BMM uses a proprietary **Smart Physical Copy** engine. It provides:
+- **Physical Isolation**: Mods are physically moved to the game directory only when activated.
+- **Automated Backups**: Original game files are automatically backed up before any modification.
+- **Atomic Restorations**: One-click restoration of the original game state, guaranteed.
 
 ## Key Features
 
-- **Multi-Game Profiles**: Manage multiple games independently with dedicated paths and visual themes.
-- **Smart Activation**: Physical file installation with automatic backups of original game files.
-- **Conflict Detection**: Real-time monitoring of file collisions between active mods.
-- **Mod Sharing (.MM)**: Export and import complete mod configurations, including download links and installation priorities.
-- **Local Mod Pooling**: Automatically detects and copies mods already present in other profiles to save bandwidth.
-- **Server Administration Suite**: Integrated tools for live monitoring, IP whitelisting, and creator key ban management with a premium glassmorphic UI.
-- **Dynamic Internationalization**: Fully extensible translation system with auto-discovery, full FR/EN support, and FlagCDN integration.
-- **Automated Versioning & Updates**: Real-time update checks via GitHub API (v0.9.8 finalized) and automated build-time date capture.
-- **Integrity Reporting**: Diagnostic tool to verify if modded files have been corrupted or overwritten by game updates.
-- **Archive Explorer**: Built-in tree view for navigating .zip and .rar contents without extraction.
+### Management & Performance
+- **Multi-Game Profiles**: Dedicated paths, visual themes, and configurations for every game in your library.
+- **Conflict Detection**: Real-time monitoring of file collisions between active mods with intelligent priority handling.
+- **Local Mod Pooling**: Save bandwidth and disk space by automatically detecting mods already present in other profiles.
+- **Archive Explorer**: Navigate `.zip` and `.rar` contents with a built-in tree view - no extraction required.
+
+### Safety & Integrity
+- **Integrity Reporting**: Diagnostic tools to verify if modded files have been corrupted or overwritten by game updates.
+- **Physical Backup Layer**: Safety first - your original game files are protected by automated restoration layers.
+- **Thread-Safe I/O**: High-speed file operations protected by global Mutex locking for maximum stability.
+- **End User License Agreement (EULA)**: BMM includes an integrated EULA to ensure safe and compliant usage for all users.
+
+### Ecosystem & Community
+- **.MM Mod Sharing**: Export/Import complete configurations, including download links and installation priorities.
+- **Reddit Community**: Join our official [r/BetterModsManager](https://www.reddit.com/r/BetterModManager/) for support, updates, and community sharing.
+- **Dynamic i18n**: Fully extensible translation system (FR/EN) with auto-discovery and FlagCDN integration.
 - **Interactive Documentation**: Technical architecture visualized through dynamic Mermaid.js diagrams with Tasky mascot guidance.
-- **Mod Link Support**: Categorize links (GitHub, MEGA, etc.) with custom icons and behavior.
 
-## Mod Link Types
-
-In the **Mod Detail Panel** and **.MM Lists**, links can be set to different types to improve identification and automated processing:
-
-- **GitHub**: Link to a repository or release. Stable and community-standard.
-- **Google Drive**: Link to a shared folder or file. Often requires manual clicking.
-- **MEGA**: Secure cloud storage link.
-- **Direct**: A **direct download link** (ending in .zip, .rar, .7z). This allows BMM to download and extract the mod automatically during imports.
-- **Other**: For generic websites or specialized forums.
+### Administration Suite
+- **Server Suite**: Integrated tools for live monitoring, IP whitelisting, and creator key management with a premium glassmorphic UI.
 
 ## Technical Stack
 
 - **Backend**: Rust 1.70+ (Tauri, Reqwest, Zip-rs)
-- **Frontend**: ES2022 JavaScript (Modular Architecture), CSS3 (Vanilla), HTML5
-- **Performance**: Low memory footprint (<80MB RAM), 60FPS responsive UI.
-- **Safety**: Thread-safe I/O operations with global Mutex locking.
+- **Frontend**: Modular ES2022 JavaScript, Vanilla CSS3 (Glassmorphism), HTML5
+- **Performance**: Low memory footprint (less than 80MB RAM), 60FPS fluid responsive UI.
+- **Safety**: Safe concurrency and memory management provided by the Rust compiler.
 
 ## Installation & Development
 
 ### Prerequisites
-
 - [Node.js](https://nodejs.org/) (LTS recommended)
 - [Rust](https://www.rust-lang.org/tools/install)
 - [Tauri Dependencies](https://tauri.app/v1/guides/getting-started/prerequisites)
 
 ### Setup
-
 1. Clone the repository.
 2. Install dependencies:
    ```bash
@@ -55,20 +72,22 @@ In the **Mod Detail Panel** and **.MM Lists**, links can be set to different typ
    ```
 3. Run in development mode:
    ```bash
-   npm run tauri dev
+   npm run dev
    ```
 4. Build for production:
    ```bash
-   npm run tauri build
+   npm run build
    ```
 
 ## Documentation
-
-Detailed documentation is available in the `Update/` directory:
-- [User Guide & Features](Update/Old_Update/App_Features.md)
-- [Technical Architecture Analysis](Update/Old_Update/Technical_Analysis.md)
-- [Latest Changelog (EN)](Update/changelog_since_7e839e.md) | [Changelog (FR)](Update/changelog_since_7e839e_FR.md)
+- [User Guide & Features](Update/Documentation/App_Features_EN.md)
+- [Technical Architecture](Update/Documentation/Technical_Analysis_EN.md)
+- [Latest Changelog (EN)](Update/Updates/changelog_since_7e839e_EN.md) | [Changelog (FR)](Update/Updates/changelog_since_7e839e_FR.md)
 
 ## License
+This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. See the [LICENSE.md](LICENSE.md) file for details.
 
-This project is licensed under the GNU General Public License v3.0 (GPL-3.0).
+---
+<p align="center">
+  Built with passion for the Modding Community
+</p>
