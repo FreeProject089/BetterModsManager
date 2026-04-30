@@ -59,5 +59,17 @@ Mettez à jour les fichiers de langue :
 N'oubliez pas de mettre à jour `Update/Documentation/Badges_EN.md` et `Badges_FR.md` pour inclure votre nouveau badge dans le tableau !
 
 ---
+
+## 📢 Note sur les Alertes GitHub
+
+BMM analyse également les alertes standard de style GitHub en utilisant `<blockquote>` et des balises spécifiques. Les balises suivantes sont prises en charge :
+- `> [!NOTE]` (ou `[!REMARQUE]`)
+- `> [!TIP]` (ou `[!ASTUCE]`)
+- `> [!IMPORTANT]`
+- `> [!WARNING]` (ou `[!AVERTISSEMENT]`)
+- `> [!CAUTION]` (ou `[!ATTENTION]`)
+
+Pour ajouter un nouveau type d'alerte GitHub, mettez à jour la regex dans `frontend/src/ui/update-notes.ts` qui capture `<blockquote>\s*<p>\[!(NOTE|TIP...)\]` et ajoutez les classes CSS correspondantes (`.md-alert-[type]`) dans `injectMarkdownStyles()`.
+
 > [!IMPORTANT]
 > Utilisez toujours `rgba` pour les arrière-plans afin de maintenir l'esthétique glassmorphism de BMM.

@@ -269,6 +269,20 @@ export function renderMarkdown(md) {
     html = html.replace(/\[FIXED\]/g, '<span class="md-badge md-badge-fixed">' + t('update.badge.fixed') + '</span>');
     html = html.replace(/\[VISUAL\]/g, '<span class="md-badge md-badge-visual">' + t('update.badge.visual') + '</span>');
     
+    // GitHub-style alerts
+    html = html.replace(/<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|REMARQUE|ASTUCE|AVERTISSEMENT|ATTENTION)\](?:<br>)?\s*/gi, (match, type) => {
+        const tLower = type.toLowerCase();
+        let alertClass = 'note';
+        if (tLower === 'tip' || tLower === 'astuce') alertClass = 'tip';
+        else if (tLower === 'important') alertClass = 'important';
+        else if (tLower === 'warning' || tLower === 'avertissement') alertClass = 'warning';
+        else if (tLower === 'caution' || tLower === 'attention') alertClass = 'caution';
+        else if (tLower === 'note' || tLower === 'remarque') alertClass = 'note';
+        
+        const title = t(`update.alert.${alertClass}`);
+        return `<blockquote class="md-alert md-alert-${alertClass}"><div class="md-alert-title">${title}</div><p>`;
+    });
+
     // Add Copy buttons to code blocks
     html = html.replace(/<pre><code([^>]*)>([\s\S]*?)<\/code><\/pre>/g, (match, attrs, content) => {
         return `
@@ -331,6 +345,35 @@ export function renderMarkdown(md) {
             border-radius: 0 8px 8px 0;
             color: var(--text-secondary);
         }
+        
+        .md-body blockquote.md-alert {
+            padding: 12px 16px;
+            background: rgba(0,0,0,0.1);
+        }
+        .md-alert-title {
+            font-weight: 700;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .md-alert-note { border-left-color: var(--accent); background: rgba(59, 130, 246, 0.1) !important; }
+        .md-alert-note .md-alert-title { color: var(--accent); }
+        
+        .md-alert-tip { border-left-color: #10b981; background: rgba(16, 185, 129, 0.1) !important; }
+        .md-alert-tip .md-alert-title { color: #10b981; }
+        
+        .md-alert-important { border-left-color: #a855f7; background: rgba(168, 85, 247, 0.1) !important; }
+        .md-alert-important .md-alert-title { color: #a855f7; }
+        
+        .md-alert-warning { border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.1) !important; }
+        .md-alert-warning .md-alert-title { color: #f59e0b; }
+        
+        .md-alert-caution { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.1) !important; }
+        .md-alert-caution .md-alert-title { color: #ef4444; }
         
         .md-body hr { height: 1px; border: none; border-top: 1px solid var(--border); margin: 20px 0; }
         .md-body table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 12.5px; }

@@ -13,6 +13,18 @@ Ce document sert de référence visuelle et technique pour tous les badges stand
 | **Interface** | <span style="background:rgba(168,85,247,0.15);color:#a855f7;border:1px solid rgba(168,85,247,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">VISUEL</span> | `[VISUEL]` | Changements graphiques, styles ou animations. |
 | **Système** | <span style="background:rgba(156,163,175,0.15);color:#9ca3af;border:1px solid rgba(156,163,175,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">SYSTÈME</span> | `[SYSTÈME]` | Changements du moteur principal ou du backend. |
 
+## 📢 Alertes de style GitHub
+
+BMM prend également en charge les alertes standard de style GitHub pour mettre en évidence les informations importantes dans votre documentation.
+
+| Syntaxe | Rendu | Cas d'utilisation |
+|:---|:---|:---|
+| `> [!REMARQUE]` ou `> [!NOTE]` | Boîte d'alerte bleue | Informations utiles ou contexte. |
+| `> [!ASTUCE]` ou `> [!TIP]` | Boîte d'alerte verte | Conseils utiles ou bonnes pratiques. |
+| `> [!IMPORTANT]` | Boîte d'alerte violette | Informations cruciales à ne pas manquer. |
+| `> [!AVERTISSEMENT]` ou `> [!WARNING]` | Boîte d'alerte jaune/orange | Problèmes potentiels ou effets secondaires. |
+| `> [!ATTENTION]` ou `> [!CAUTION]` | Boîte d'alerte rouge | Actions à haut risque ou avertissements critiques. |
+
 ## 🛠️ Détails d'Implémentation
 
 Les badges sont automatiquement rendus à l'aide d'un analyseur regex personnalisé dans la fonction `renderMarkdown` de l'interface BMM.

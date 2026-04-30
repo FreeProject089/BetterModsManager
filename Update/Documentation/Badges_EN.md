@@ -13,6 +13,18 @@ This document serves as a visual and technical reference for all standard badges
 | **UI/UX** | <span style="background:rgba(168,85,247,0.15);color:#a855f7;border:1px solid rgba(168,85,247,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">VISUAL</span> | `[VISUAL]` | Graphic changes, styling, or animations. |
 | **System** | <span style="background:rgba(156,163,175,0.15);color:#9ca3af;border:1px solid rgba(156,163,175,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">SYSTEM</span> | `[SYSTEM]` | Core engine or backend changes. |
 
+## 📢 GitHub Alerts
+
+BMM also supports standard GitHub-style alerts for calling out important information in your documentation.
+
+| Syntax | Renders As | Use Case |
+|:---|:---|:---|
+| `> [!NOTE]` | Blue alert box | Useful information or context. |
+| `> [!TIP]` | Green alert box | Helpful advice or best practices. |
+| `> [!IMPORTANT]` | Purple alert box | Crucial information users shouldn't miss. |
+| `> [!WARNING]` | Yellow/Orange alert box | Potential issues or side effects. |
+| `> [!CAUTION]` | Red alert box | High-risk actions or critical warnings. |
+
 ## 🛠️ Implementation Details
 
 Badges are automatically rendered using a custom regex parser in the `renderMarkdown` function of the BMM UI.
