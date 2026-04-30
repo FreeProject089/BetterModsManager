@@ -1664,7 +1664,7 @@
     "docs.diagram.hosting.node.SELF_HOST.desc": "Vous pouvez héberger le dossier n'importe où (VPS, Nginx). Pointez simplement l'URL vers le repo.json.",
     "repo.initServer": "Initialisation...",
     "repo.loadingProfiles": "Chargement des profils...",
-    "repo.modeInfo": "Ce mode fonctionne comme un serveur web classique : vous exportez vos profils dans un dossier, puis vous hébergez ce dossier depuis votre PC ou un VPS. Vos amis entrent l'URL pour télécharger et synchroniser les mods automatiquement. Pas de P2P, pas de réseau décentralisé.",
+    "repo.modeInfo": "Ce mode fonctionne comme un serveur web classique : vous exportez vos profils dans un dossier, puis vous hébergez ce dossier depuis votre PC ou un VPS. Vos amis entrent l'URL pour télécharger et synchroniser les mods automatiquement.",
     "repo.natLoopbackTip": "Si l'URL Publique ne fonctionne pas depuis ce PC, testez avec un téléphone en 4G/5G (NAT Loopback). Assurez-vous aussi que le Pare-feu Windows autorise BMM.",
     "repo.noChanges": "Aucun changement détecté.",
     "repo.noProfiles": "Aucun profil trouvé.",

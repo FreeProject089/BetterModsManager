@@ -1664,7 +1664,7 @@
     "docs.diagram.hosting.node.SELF_HOST.desc": "You can host the folder anywhere (VPS, Nginx). Just point the URL to your repo.json.",
     "repo.initServer": "Initializing...",
     "repo.loadingProfiles": "Loading profiles...",
-    "repo.modeInfo": "This mode works like a traditional web server: you export your profiles to a folder, then host it from your PC or a VPS. Your friends enter the URL to automatically download and sync mods. No P2P, no decentralized network.",
+    "repo.modeInfo": "This mode works like a traditional web server: you export your profiles to a folder, then host it from your PC or a VPS. Your friends enter the URL to automatically download and sync mods.",
     "repo.natLoopbackTip": "If the Public URL doesn't work from this PC, test with a phone on 4G/5G (NAT Loopback). Also, ensure Windows Firewall allows BMM.",
     "repo.noChanges": "No changes detected.",
     "repo.noProfiles": "No profiles found.",
