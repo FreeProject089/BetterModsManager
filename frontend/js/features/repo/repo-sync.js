@@ -12,9 +12,8 @@ export function initRepoSync(elements) {
         const sec = document.getElementById('repo-sync-paths-section');
         if (!sec)
             return;
-        const boxes = document.querySelectorAll('.repo-sync-choice-cb:checked');
-        const hasNew = Array.from(boxes).some(cb => cb.value === 'NEW');
-        sec.style.display = hasNew ? 'block' : 'none';
+        // Always keep visible so users can override paths even when updating
+        sec.style.display = 'block';
         updateSyncTotalSize();
     };
     const updateSyncTotalSize = () => {
@@ -226,26 +225,46 @@ export function initRepoSync(elements) {
                         mpGroup.className = 'repo-sync-profile-group glass-card';
                         mpGroup.style.marginTop = '20px';
                         mpGroup.style.padding = '12px';
-                        mpGroup.innerHTML = `<h4 style="margin:0 0 10px; font-size:12px; color:var(--cyan); border-bottom:1px solid rgba(0,194,255,0.2); padding-bottom:6px;">Modpacks Partagés</h4>`;
+                        mpGroup.style.background = 'rgba(255,255,255,0.02)';
+                        mpGroup.style.border = '1px solid rgba(255,255,255,0.08)';
+                        mpGroup.style.borderRadius = '8px';
+                        mpGroup.innerHTML = `<h4 style="margin:0 0 12px; font-size:13px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                            ${t('modpack.sharedModpacks') || 'Modpacks Partagés'}
+                        </h4>`;
+                        const mpList = document.createElement('div');
+                        mpList.style.cssText = 'display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto; padding-right:4px;';
                         repo.modpacks.forEach(mpShare => {
                             const mp = mpShare.modpack;
-                            const row = document.createElement('label');
-                            row.style.cssText = 'display:flex; align-items:center; gap:10px; padding:8px 12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px; cursor:pointer; margin-bottom:6px; transition: background 0.2s;';
-                            row.addEventListener('mouseenter', () => row.style.background = 'rgba(255,255,255,0.06)');
-                            row.addEventListener('mouseleave', () => row.style.background = 'rgba(255,255,255,0.03)');
+                            const item = document.createElement('div');
+                            item.className = 'repo-modpack-item';
+                            item.style.cssText = 'display:flex; flex-direction:column; padding:10px; margin-bottom:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px;';
+                            const topRow = document.createElement('div');
+                            topRow.style.cssText = 'display:flex; align-items:center; gap:10px; margin-bottom:8px;';
                             const cb = document.createElement('input');
                             cb.type = 'checkbox';
                             cb.className = 'repo-sync-modpack-cb';
                             cb.dataset.modpack = JSON.stringify(mp);
                             cb.checked = true;
-                            const info = document.createElement('div');
-                            info.style.cssText = 'display:flex; flex-direction:column;';
-                            info.innerHTML = `<span style="font-size:12px; font-weight:600; color:var(--text-primary);">${escHtml(mp.name)}</span>
-                                <span style="font-size:10px; color:var(--text-muted);">${mp.mods.length} mods</span>`;
-                            row.appendChild(cb);
-                            row.appendChild(info);
-                            mpGroup.appendChild(row);
+                            const name = document.createElement('span');
+                            name.style.cssText = 'font-size:13px; font-weight:600; color:var(--text-primary); flex:1;';
+                            name.textContent = mp.name;
+                            const badge = document.createElement('div');
+                            badge.style.cssText = 'font-size:9px; font-weight:800; padding:3px 8px; border-radius:4px; background:rgba(59, 130, 246, 0.15); color:var(--accent); text-transform:uppercase; letter-spacing:0.5px;';
+                            badge.textContent = t('modpack.modpackBadge') || 'MODPACK';
+                            topRow.appendChild(cb);
+                            topRow.appendChild(name);
+                            topRow.appendChild(badge);
+                            item.appendChild(topRow);
+                            const infoRow = document.createElement('div');
+                            infoRow.style.cssText = 'display:flex; align-items:center; gap:8px; padding-left:26px;';
+                            infoRow.innerHTML = `<span style="font-size:11px; color:var(--text-muted);">
+                                <span style="color:var(--accent); font-weight:600;">${mp.mods.length}</span> ${t('modpack.modsIncluded') || 'mods inclus'}
+                            </span>`;
+                            item.appendChild(infoRow);
+                            mpList.appendChild(item);
                         });
+                        mpGroup.appendChild(mpList);
                         profilesSelectionEl.appendChild(mpGroup);
                     }
                     updateSyncPathsVisibility();

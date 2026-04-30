@@ -76,9 +76,11 @@ function updateRepoCache() {
         try { 
             repoData = JSON.parse(fs.readFileSync(repoFile, 'utf8')); 
             totalRepoSize = 0;
-            if (repoData.modpacks) {
-                repoData.modpacks.forEach(m => {
-                    if (m.files) m.files.forEach(f => totalRepoSize += (f.size || 0));
+            if (repoData.profiles) {
+                repoData.profiles.forEach(p => {
+                    if (p.mods) p.mods.forEach(m => {
+                        if (m.files) m.files.forEach(f => totalRepoSize += (f.size || 0));
+                    });
                 });
             }
         } catch(e) {}
@@ -359,9 +361,10 @@ const DASHBOARD_HTML = `
             
             const modpacks = repo && Array.isArray(repo.modpacks) ? repo.modpacks : [];
             document.getElementById('modpacks-list').innerHTML = modpacks.map((m, i) => {
+                const mp = m.modpack || m;
                 let row = '<div style="background:rgba(255,255,255,0.02); padding:12px; border-radius:10px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">';
-                row += '<div><div style="font-weight:700; font-size:12px;">' + m.name + '</div>';
-                row += '<div style="font-size:9px; color:var(--muted)">PROFILES: ' + (m.profile_ids ? m.profile_ids.length : 0) + '</div></div>';
+                row += '<div><div style="font-weight:700; font-size:12px;">' + (mp.name || 'Unnamed') + '</div>';
+                row += '<div style="font-size:9px; color:var(--muted)">MODS: ' + (mp.mods ? mp.mods.length : 0) + ' | MODE: ' + (m.share_mode || 'public') + '</div></div>';
                 row += '<label class="toggle"><input type="checkbox" ' + (m.enabled !== false ? 'checked' : '') + ' onchange="toggleModpack(' + i + ')"><span class="slider"></span></label>';
                 row += '</div>';
                 return row;
@@ -407,10 +410,24 @@ const DASHBOARD_HTML = `
             return (b / 1048576).toFixed(1) + ' MB';
         }
 
+        function formatUptime(ms) {
+            const s = Math.floor(ms / 1000);
+            const d = Math.floor(s / 86400);
+            const h = Math.floor((s % 86400) / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            let str = '';
+            if (d > 0) str += d + 'd ';
+            if (h > 0) str += h + 'h ';
+            if (m > 0) str += m + 'm ';
+            if (sec > 0 || str === '') str += sec + 's';
+            return str;
+        }
+
         async function updateStats() {
             const data = await fetch('/monitoring.json').then(r => r.json());
             lastFullData = data;
-            document.getElementById('stat-uptime').innerText = Math.floor(data.server.uptime / 1000) + 's';
+            document.getElementById('stat-uptime').innerText = formatUptime(data.server.uptime);
             document.getElementById('stat-data').innerText = formatBytes(data.server.totalBytes);
             document.getElementById('stat-active').innerText = data.sessions.length;
 
