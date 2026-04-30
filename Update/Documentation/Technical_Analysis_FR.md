@@ -250,43 +250,43 @@ Mode de distribution spécial avec notes de mise à jour thématiques.
 
 ---
 
-## 17. Surveillance de performance en temps réel
+## 18. Surveillance de performance en temps réel
 
 Utilisation de `sysinfo`, rendu Canvas haute performance et scrubbing de timeline.
 
 ---
 
-## 18. Moteur de documentation interactive
+## 19. Moteur de documentation interactive
 
 Pont Mermaid.js avec traduction dynamique des labels et gestion persistante du viewport.
 
 ---
 
-## 19. Moteur Multimédia et Crédits
+## 20. Moteur Multimédia et Crédits
 
 Arrière-plans vidéo `asset://` avec Intersection Observer pour économiser les ressources.
 
 ---
 
-## 20. Système de Dépôt Serveur (Mode Serveur)
+## 21. Système de Dépôt Serveur (Mode Serveur)
 
 Serveur HTTP intégré, manifeste `repo.json` et Smart Sync basé sur SHA-256.
 
 ---
 
-## 21. Migration Javascript vers TypeScript (v0.9.9)
+## 22. Migration Javascript vers TypeScript (v0.9.9)
 
 Transition complète vers Strictly Typed ESM pour une stabilité structurelle et sécurité IPC.
 
 ---
 
-## 22. Algorithme de Recherche Sémantique et Score Pondéré
+## 23. Algorithme de Recherche Sémantique et Score Pondéré
 
 Correspondance pondérée (Perfect, Anchored, Keyword Ratio) avec badges de pourcentage de réussite.
 
 ---
 
-## 23. Manipulation avancée des SVG & Highlighting (v0.9.9)
+## 24. Manipulation avancée des SVG & Highlighting (v0.9.9)
 
 BMM v0.9.9 intègre un moteur de mise en évidence spécialisé pour les diagrammes Mermaid.js.
 - **Prévention du découpage (Filter Clipping)** : Le système parcourt récursivement le DOM SVG pour forcer `overflow: visible` sur tous les parents, garantissant que les effets d'ombre portée (`drop-shadow`) ne sont jamais tronqués.
@@ -294,26 +294,111 @@ BMM v0.9.9 intègre un moteur de mise en évidence spécialisé pour les diagram
 
 ---
 
-## 24. Threading de base et isolation des E/S
+## 25. Threading de base et isolation des E/S
 
 Isolation stricte des tâches lourdes dans `spawn_blocking` pour maintenir une interface fluide à 60 FPS.
 
 ---
 
-## 25. Framework d'Animation UI Premium & Ergonomie (v0.9.9)
+## 26. Framework d'Animation UI Premium & Ergonomie (v0.9.9)
 
 BMM v0.9.9 introduit une couche logique spécialisée pour les éléments interactifs haute fidélité.
 
-### 25.1. Machine d'état des menus déroulants
+### 26.1. Machine d'état des menus déroulants
 Le système de dropdown global (`modals.ts`) utilise une machine d'état asynchrone pour gérer les phases d'entrée et de sortie.
 - **Injection Portal** : Les menus sont clonés et injectés dans un `#global-dropdown-portal` de haut niveau.
 - **Fermeture asynchrone** : La fonction `closeGlobalDropdown` implémente une suppression en deux étapes. Elle déclenche d'abord une animation CSS `.closing` avant de purger physiquement le DOM après une fenêtre de sécurité de 200 ms.
 
-### 25.2. Période de grâce et récupération d'état
+### 26.2. Période de grâce et récupération d'état
 Pour résoudre les problèmes courants de perte de focus lors de mouvements de souris rapides :
 - **Délai de grâce de 100 ms** : Le déclenchement de la fermeture est bufferisé par un timer de 100 ms.
 - **"Rattrapage" de menu** : Entrer dans le dropdown ou revenir sur le bouton déclencheur annule le `dropTimer` et restaure immédiatement l'état `.open`, annulant la fermeture en cours d'animation.
 - **Invisible Bridging** : Utilisation de pseudo-éléments (`::before`) pour créer un pont de survol invisible entre le bouton et le menu flottant, évitant les événements `mouseleave` accidentels.
+
+---
+
+## 27. Moteur de Modpacks — Format `.bmp` (v0.9.9)
+
+BMM implémente un système complet de cycle de vie des modpacks dans `commands/modpack.rs`.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Modèle de données** | Struct `LocalModpack` contenant des métadonnées, un `Vec<ModpackModRef>` et des `ModpackFileRef` par fichier avec hashes SHA-256 |
+| **Persistance** | Chaque modpack sérialisé en `<id>.json` dans `AppData/modpacks/` via `serde_json` |
+| **Vérification d'intégrité** | `check_modpack_integrity` compare les fichiers locaux octet par octet contre le manifeste : Manquant, Corrompu ou Valide |
+| **Moteur de réparation** | `repair_modpack_mod` supporte deux modes : Téléchargement Direct (extraction zip) et Dépôt Serveur (récupération fichier par fichier SHA-256) |
+| **Récupération locale** | `find_file_by_hash_in_dir` scanne récursivement le répertoire cible pour trouver des fichiers correspondant au hash attendu avant tout téléchargement |
+| **Événements de progression** | Émet des événements IPC `bmm://repair-progress` avec des pourcentages de progression par fichier |
+| **Export/Import** | Intégration de dialogue de fichier via `tauri::api::dialog` pour le format `.bmp` avec évitement de collision UUID à l'import |
+
+---
+
+## 28. Intégration BetaHub & Proof-of-Work (v0.9.9)
+
+BMM s'intègre avec BetaHub pour les rapports de bugs structurés.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Client API** | `betahub-api.ts` gère l'authentification, la soumission de rapports et la récupération de l'historique |
+| **Système de Modale** | `betahub-modals.ts` (~63 Ko) fournit une UI complète pour la soumission de bugs/suggestions avec onglets de catégories |
+| **Moteur PoW** | `betahub-pow.ts` implémente des défis proof-of-work SHA-256 pour prévenir le spam sans captchas |
+| **Intégration Crash** | `crash-report.ts` chaîne `openBugReportModal()` avec le chemin du ZIP de crash pré-attaché depuis le flux de détection de crash |
+
+---
+
+## 29. Contrôle d'Accès Système (v0.9.9)
+
+`security-modal.ts` implémente une porte de sécurité à deux modes pour le système de fichiers.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Modale de Sécurité** | Modale glassmorphique de premier lancement avec sélection par carte radio (Complet/Limité) |
+| **Accès Complet** | `fs_security_mode = "full"` — accès au système de fichiers sans restriction sur tous les disques |
+| **Accès Limité** | `fs_security_mode = "limited"` — interface JS restreinte aux dossiers définis dans les profils |
+| **Commande Backend** | `apply_fs_security_mode_command` applique le mode sélectionné via la reconfiguration du scope Tauri |
+| **Effet de Lueur** | Suivi `mousemove` via propriétés CSS personnalisées (`--x`, `--y`) pour des effets de survol premium à gradient radial |
+
+---
+
+## 30. Système d'Onboarding (v0.9.9)
+
+`onboarding.ts` implémente un tutoriel guidé de première utilisation.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Définition des Étapes** | 14+ étapes définies comme objets typés avec `navTarget`, `selector`, `img` et `icon` |
+| **Sélecteur de Langue** | L'étape -1 affiche un menu de langues complet avec intégration FlagCDN et re-rendu réactif sur les événements `langChanged` |
+| **Mise en Évidence** | Calcule le `getBoundingClientRect()` de l'élément cible relatif à `#app-window-outer` et superpose un anneau de focus avec `box-shadow: 0 0 0 9999px rgba(0,0,0,0.6)` |
+| **Effet Machine à Écrire** | Rendu caractère par caractère à 18 ms d'intervalle via `setInterval` |
+| **Persistance** | Flag booléen `onboarding_shown` dans `settings` empêche le ré-affichage aux lancements suivants |
+
+---
+
+## 31. Moteur d'Alertes Markdown (v0.9.9)
+
+La fonction `renderMarkdown` dans `update-notes.ts` supporte désormais les alertes de style GitHub.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Parseur Regex** | Capture les patterns `<blockquote>\s*<p>\[!(NOTE\|TIP\|IMPORTANT\|WARNING\|CAUTION\|...)\]` dans le HTML rendu |
+| **Support Bilingue** | Les équivalents français (`REMARQUE`, `ASTUCE`, `AVERTISSEMENT`, `ATTENTION`) pointent vers les mêmes classes d'alerte |
+| **Classes CSS** | `.md-alert-note` (bleu), `.md-alert-tip` (vert), `.md-alert-important` (violet), `.md-alert-warning` (ambre), `.md-alert-caution` (rouge) |
+| **Titres i18n** | Titres d'alertes récupérés via `t('update.alert.<type>')` pour un rendu localisé |
+
+---
+
+## 32. Télémétrie d'Interactions Frontend (v0.9.9)
+
+`user-logger.ts` implémente une télémétrie frontend complète.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Logger de Clics** | Capture les clics boutons/liens via un handler `click` délégué avec traversée `closest()` |
+| **Logger Clavier** | Suit `Ctrl+Alt+D` (DevTools), `Ctrl+Shift+F` (FSDM), `Ctrl+D` (bascule Menu Debug) |
+| **Logger de Scroll** | Journalisation debounced (1s) de la position de défilement avec identification de la vue active |
+| **Logger de Drop** | L'événement `drop` capture les noms de fichiers depuis `DataTransfer` |
+| **Capture d'Erreurs** | `window.error` et `unhandledrejection` transmis à la commande backend `log_frontend_line` |
+| **Focus/Blur** | Changements de focus de fenêtre journalisés pour aider à la reconstruction de la timeline de crash |
 
 ---
 

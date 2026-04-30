@@ -276,69 +276,154 @@ Distribution mode controlled via `app.cfg` with themed release note modals.
 
 ---
 
-## 17. Real-Time Performance Monitoring
+## 18. Real-Time Performance Monitoring
 
 `sysinfo` backend with high-perf Canvas/SVG visualization and timeline scrubbing.
 
 ---
 
-## 18. Interactive Documentation Engine
+## 19. Interactive Documentation Engine
 
 - **Mermaid.js bridge**: Technical visualization with localized node labels.
 - **Pan-Zoom**: Persistent viewport management.
 
 ---
 
-## 19. Multimedia & Credits Engine
+## 20. Multimedia & Credits Engine
 
 Video backgrounds using `asset://` protocol with Intersection Observer throttling.
 
 ---
 
-## 20. Server Repository System (Server Mode)
+## 21. Server Repository System (Server Mode)
 
 Integrated HTTP server with manifest generation and Smart Sync (SHA-256).
 
 ---
 
-## 21. Javascript to TypeScript Migration (v0.9.9)
+## 22. Javascript to TypeScript Migration (v0.9.9)
 
 Complete transition to Strictly Typed ESM for structural stability and IPC safety.
 
 ---
 
-## 22. Semantic Search Algorithm & Weighted Scoring
+## 23. Semantic Search Algorithm & Weighted Scoring
 
 Weighted intersection matching (Perfect, Anchored, Keyword Ratio) with Match % badges.
 
 ---
 
-## 23. Advanced SVG Manipulation & Highlighting (v0.9.9)
+## 24. Advanced SVG Manipulation & Highlighting (v0.9.9)
 
 Recursive DOM traversal to prevent filter clipping and "Pulsing Glow" effect for diagram search.
 
 ---
 
-## 24. Core Threading & I/O Isolation
+## 25. Core Threading & I/O Isolation
 
 Isolation of Disk I/O and Network tasks in background workers to ensure 60 FPS UI.
 
 ---
 
-## 25. Premium UI Animation & Usability Framework (v0.9.9)
+## 26. Premium UI Animation & Usability Framework (v0.9.9)
 
 BMM v0.9.9 introduces a specialized logic layer for high-fidelity interactive elements.
 
-### 25.1. Dropdown State Machine
+### 26.1. Dropdown State Machine
 The global dropdown system (`modals.ts`) uses an asynchronous state machine to manage entry and exit phases.
 - **Portal Injection**: Menus are cloned and injected into a top-level `#global-dropdown-portal`.
 - **Async Closure**: The `closeGlobalDropdown` function implements a two-stage removal. It first triggers a CSS `.closing` animation before physically purging the DOM after a 200ms safety window.
 
-### 25.2. Mouse Grace Period & State Recovery
+### 26.2. Mouse Grace Period & State Recovery
 To solve common "hover loss" issues during rapid mouse movement:
 - **100ms Grace Delay**: The closure trigger is buffered by a 100ms timer.
 - **State "Catching"**: Entering the dropdown or re-entering the trigger clears the `dropTimer` and immediately restores the `.open` state, effectively canceling the closure mid-animation.
 - **Invisible Bridging**: Uses pseudo-elements (`::before`) to create an invisible hover bridge between the trigger and the floating menu, preventing `mouseleave` events in the gap.
+
+---
+
+## 27. Modpack Engine — `.bmp` Format (v0.9.9)
+
+BMM implements a complete modpack lifecycle system in `commands/modpack.rs`.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Data Model** | `LocalModpack` struct containing metadata, a `Vec<ModpackModRef>` and per-file `ModpackFileRef` with SHA-256 hashes |
+| **Persistence** | Each modpack serialized as `<id>.json` in `AppData/modpacks/` via `serde_json` |
+| **Integrity Verification** | `check_modpack_integrity` compares local files byte-level against the manifest: Missing, Corrupted, or Valid |
+| **Repair Engine** | `repair_modpack_mod` supports two repair modes: Direct Download (zip extraction) and Server Repo (file-by-file SHA-256 fetch) |
+| **Local Recovery** | `find_file_by_hash_in_dir` recursively scans the target directory for files matching an expected hash before initiating network downloads |
+| **Progress Events** | Emits `bmm://repair-progress` IPC events with per-file progress percentages |
+| **Export/Import** | File dialog integration via `tauri::api::dialog` for `.bmp` format with UUID collision avoidance on import |
+
+---
+
+## 28. BetaHub Integration & Proof-of-Work (v0.9.9)
+
+BMM integrates with BetaHub for structured bug reporting.
+
+| Component | Implementation |
+| :--- | :--- |
+| **API Client** | `betahub-api.ts` handles authentication, report submission, and history retrieval |
+| **Modal System** | `betahub-modals.ts` (~63KB) provides a full UI for bug/suggestion submission with category tabs |
+| **PoW Engine** | `betahub-pow.ts` implements SHA-256 proof-of-work challenges to prevent spam without captchas |
+| **Crash Integration** | `crash-report.ts` chains `openBugReportModal()` with crash ZIP path pre-attachment from the crash detection flow |
+
+---
+
+## 29. System Access Control (v0.9.9)
+
+`security-modal.ts` implements a dual-mode filesystem security gate.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Security Modal** | Glassmorphic first-launch modal with radio-card selection (Full/Limited) |
+| **Full Access** | `fs_security_mode = "full"` — unrestricted filesystem access across all drives |
+| **Limited Access** | `fs_security_mode = "limited"` — JS interface restricted to profile-defined folders |
+| **Backend Command** | `apply_fs_security_mode_command` applies the selected mode via Tauri scope reconfiguration |
+| **Mouse Glow Effect** | `mousemove` tracking via CSS custom properties (`--x`, `--y`) for premium radial-gradient hover effects |
+
+---
+
+## 30. Onboarding System (v0.9.9)
+
+`onboarding.ts` implements a guided first-use tutorial.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Step Definition** | 14+ steps defined as typed objects with `navTarget`, `selector`, `img`, and `icon` |
+| **Language Picker** | Step -1 renders a full language menu with FlagCDN integration and reactive re-rendering on `langChanged` events |
+| **Element Highlighting** | Computes target element `getBoundingClientRect()` relative to `#app-window-outer` and overlays a focus ring with `box-shadow: 0 0 0 9999px rgba(0,0,0,0.6)` |
+| **Typewriter Effect** | Character-by-character rendering at 18ms intervals via `setInterval` |
+| **Persistence** | `onboarding_shown` boolean flag in `settings` prevents re-display on subsequent launches |
+
+---
+
+## 31. Markdown Alert Engine (v0.9.9)
+
+The `renderMarkdown` function in `update-notes.ts` now supports GitHub-style alerts.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Regex Parser** | Matches `<blockquote>\s*<p>\[!(NOTE\|TIP\|IMPORTANT\|WARNING\|CAUTION\|...)\]` patterns in rendered HTML |
+| **Bilingual Support** | French equivalents (`REMARQUE`, `ASTUCE`, `AVERTISSEMENT`, `ATTENTION`) map to the same alert classes |
+| **CSS Classes** | `.md-alert-note` (blue), `.md-alert-tip` (green), `.md-alert-important` (purple), `.md-alert-warning` (amber), `.md-alert-caution` (red) |
+| **i18n Titles** | Alert titles fetched via `t('update.alert.<type>')` for localized rendering |
+
+---
+
+## 32. Frontend Interaction Telemetry (v0.9.9)
+
+`user-logger.ts` implements comprehensive frontend telemetry.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Click Logger** | Captures button/link clicks via delegated `click` handler with `closest()` traversal |
+| **Keyboard Logger** | Tracks `Ctrl+Alt+D` (DevTools), `Ctrl+Shift+F` (FSDM), `Ctrl+D` (Debug Menu toggle) |
+| **Scroll Logger** | Debounced (1s) scroll position logging with active view identification |
+| **Drop Logger** | `drop` event captures file names from `DataTransfer` |
+| **Error Capture** | `window.error` and `unhandledrejection` forwarded to `log_frontend_line` backend command |
+| **Focus/Blur** | Window focus changes logged to aid crash timeline reconstruction |
 
 ---
 

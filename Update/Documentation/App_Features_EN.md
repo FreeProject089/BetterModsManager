@@ -182,7 +182,7 @@ BMM includes a high-reliability diagnostic system to ensure any issue can be ide
 
 ---
 
-### 15. Performance & Storage Management
+## 15. Performance & Storage Management
 
 BMM features a suite of high-end diagnostic and optimization tools to ensure maximum stability and responsiveness.
 
@@ -336,6 +336,102 @@ BMM ensures legal transparency and provides clear guidelines for community safet
 | **Localized Legal Agreement** | The EULA automatically adapts to your system language (EN/FR support) for better accessibility. |
 | **Moderation Clauses** | Explicit legal definitions for server repository moderation and user conduct. |
 | **Translation Guide** | Comprehensive documentation for community members to create and bundle their own localized EULA versions. |
+
+---
+
+## 27. Modpack System — The .BMP Format (v0.9.9)
+
+BMM introduces a complete modpack lifecycle system for curating, sharing, and verifying collections of mods.
+
+| Feature | Description |
+| :--- | :--- |
+| **Create & Manage Modpacks** | Bundle multiple mods from any profile into a single modpack with metadata (name, description, author, version). |
+| **SHA-256 File Manifest** | Each mod in a modpack stores a complete file manifest with per-file SHA-256 hashes for integrity verification. |
+| **Export (.bmp)** | Export modpacks as `.bmp` (Better ModPack) files — a JSON-based format designed for easy sharing. |
+| **Import (.bmp)** | Import modpacks from `.bmp` files. A new UUID is generated on import to prevent collisions. |
+| **Integrity Check** | Verify that all mods referenced in a modpack are present locally and that their files match the recorded SHA-256 hashes. |
+| **Auto-Repair** | Missing or corrupted mods can be automatically re-downloaded from their original source (Direct Link or Server Repo). |
+| **Local Recovery** | Before downloading, the repair engine searches the local disk for misplaced files matching the expected hash. |
+
+---
+
+## 28. BetaHub Bug Reporting Integration (v0.9.9)
+
+BMM integrates with BetaHub for structured bug reporting and community feedback.
+
+| Feature | Description |
+| :--- | :--- |
+| **Bug & Suggestion Tabs** | Submit bugs or feature suggestions through a dedicated modal interface. |
+| **Proof-of-Work Spam Protection** | Uses SHA-256 cryptographic challenges to verify genuine submissions without captchas. |
+| **Privacy-First Design** | Strictly separates public report details from private system logs and contact information. |
+| **Crash-to-Report Flow** | From the crash report modal, users can directly open a pre-filled BetaHub bug report with the crash ZIP attached. |
+| **Report History** | View and track your recent submissions with direct links to view them on BetaHub. |
+
+---
+
+## 29. System Access Control (v0.9.9)
+
+BMM features a dual-layer security system to balance functionality and file safety.
+
+| Feature | Description |
+| :--- | :--- |
+| **First-Launch Modal** | A premium glassmorphic modal prompts users to choose their security mode on first launch. |
+| **Full Access Mode** | Allows BMM to manage all games, mods, and disks without restrictions. Recommended for multi-drive setups. |
+| **Limited Access Mode** | Restricts the JS interface to only access folders explicitly defined in profiles. Heavy Rust operations remain unrestricted. |
+| **Persistent Setting** | The chosen security mode is persisted in settings and applied on every launch. |
+
+---
+
+## 30. Tasky Onboarding Tutorial (v0.9.9)
+
+BMM features a guided interactive tutorial powered by the Tasky mascot.
+
+| Feature | Description |
+| :--- | :--- |
+| **Language Selection** | The tutorial begins with an interactive language picker with flag previews. |
+| **Step-by-Step Guide** | Tasky walks new users through profiles, library, mod sharing, performance tools, and documentation. |
+| **Typewriter Animation** | Each explanation is revealed with a premium typewriter text effect. |
+| **Element Highlighting** | Target UI elements are highlighted with a blue glow overlay to guide the user's attention. |
+| **Skip & Navigate** | Users can skip the tutorial at any time or navigate back to previous steps. |
+
+---
+
+## 31. Lightweight Standalone Server (v0.9.9)
+
+Generate a minimal standalone server script that runs without the BMM interface.
+
+| Feature | Description |
+| :--- | :--- |
+| **Script Generation** | Generates a `.bat` script to launch an ultra-lightweight mod server for dedicated/headless machines. |
+| **Cloudflare Tunnel** | Built-in Cloudflare Tunnel support for public URL sharing (enabled by default). |
+| **UPnP Port Forwarding** | Automatic port forwarding via UPnP for LAN-friendly setups. |
+| **Configurable** | Set port, upload speed limit, password, and server version (v1/v2) directly from the UI. |
+
+---
+
+## 32. GitHub-Style Markdown Alerts (v0.9.9)
+
+BMM's Markdown renderer supports GitHub-style alert blocks for rich documentation.
+
+| Feature | Description |
+| :--- | :--- |
+| **5 Alert Types** | `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]` — each with distinct colors and styling. |
+| **Bilingual Syntax** | French equivalents (`[!REMARQUE]`, `[!ASTUCE]`, `[!AVERTISSEMENT]`, `[!ATTENTION]`) are also supported. |
+| **Localized Titles** | Alert titles are automatically translated based on the active language. |
+
+---
+
+## 33. Frontend Interaction Logging (v0.9.9)
+
+BMM captures detailed frontend interaction telemetry for diagnostics and crash investigation.
+
+| Feature | Description |
+| :--- | :--- |
+| **Click Tracking** | All button clicks and link navigations are logged with labels for debugging. |
+| **Keyboard Shortcuts** | Common shortcuts (Ctrl+N, Ctrl+S, etc.) and debug toggles (Ctrl+Alt+D) are tracked. |
+| **Drag & Drop Logging** | File drops are recorded with filenames for import troubleshooting. |
+| **Error Capture** | Unhandled JS errors and rejected promises are forwarded to the backend log buffer. |
+| **Focus/Blur Tracking** | Window focus changes are logged to help identify timing-related issues. |
 
 ---
 
