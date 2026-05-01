@@ -22,11 +22,11 @@ This site allows you to:
 
 ## Major Features
 
-- **Modpack System**: Improved modpack management with smart activation
-- **Interactive Documentation**: New technical diagrams and improved search
-- **BetaHub Integration**: Enhanced feedback system and bug reporting
-- **Performance Optimizations**: Significant speed and stability improvements
-- **EULA**: Integrated End User License Agreement
+- **Modpack System**: 
+- **Interactive Documentation**: 
+- **BetaHub Integration**: 
+- **Performance Optimizations**: 
+- **EULA**: 
 
 ## Early Access Notes
 

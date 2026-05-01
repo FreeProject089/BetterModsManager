@@ -1,7 +1,5 @@
 # Better Mod Manager 0.9.9 RT1 - Early Access
 
-**Date de sortie : 1er mai 2026 à 18:00 (Europe/Zurich) <t:1714584000:F>**
-
 Nous sommes ravis d'annoncer la sortie en **Early Access** de **Better Mod Manager 0.9.9 RT1** !
 
 Cette version apporte des améliorations majeures et de nouvelles fonctionnalités pour une expérience utilisateur encore plus fluide.
@@ -22,11 +20,11 @@ Ce site permet de :
 
 ## Nouveautés Majeures
 
-- **Système de Modpacks** : Gestion améliorée des modpacks avec activation intelligente
-- **Documentation Interactive** : Nouveaux diagrammes techniques et recherche améliorée
-- **Intégration BetaHub** : Système de feedback et rapports de bugs améliorés
-- **Optimisations de Performance** : Améliorations significatives de la vitesse et de la stabilité
-- **EULA** : Contrat de licence utilisateur final intégré
+- **Système de Modpacks**
+- **Documentation Interactive**
+- **Intégration BetaHub**
+- **Optimisations de Performance**
+- **EULA**
 
 ## Notes de l'Early Access
 
@@ -38,7 +36,7 @@ Nous apprécions vos retours et rapports de bugs pour nous aider à stabiliser l
 
 ## Installation
 
-La version 0.9.9 RT1 sera bientôt disponible via :
+La version 0.9.9 RT1 est disponible via :
 - [GitHub Releases](https://github.com/FreeProject089/BetterModsManager/releases/tag/LR)
 - Mise à jour automatique depuis les versions précédentes
 

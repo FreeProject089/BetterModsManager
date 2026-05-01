@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".Assets/image/BetterMM.png" alt="BMM Logo" width="200" />
+  <img src="frontend/assets/BetterMM.png" alt="BMM Logo" width="200" />
 </p>
 
 # Better Mod Manager (BMM)
