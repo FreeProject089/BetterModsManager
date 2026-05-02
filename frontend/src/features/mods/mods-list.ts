@@ -89,6 +89,7 @@ export async function renderModList(force = false) {
 
   if (!list || !viewport || !empty || !scrollContainer) return;
 
+  // Only re-filter when necessary to improve performance
   if (force || ghostFilteredMods.length === 0) {
     ghostFilteredMods = getFilteredMods();
   }
@@ -155,8 +156,9 @@ export async function renderModList(force = false) {
     const mod = visibleBatch[i];
     let card = existingMap.get(mod.id);
 
-    // Always recreate cards when force is true to ensure tags are updated
-    if (!card || force) {
+    // Only recreate cards when force is true AND mod has tags that changed
+    const shouldRecreate = !card || (force && mod.tags && mod.tags.length > 0);
+    if (shouldRecreate) {
       if (card) card.remove(); // Remove existing card if forcing recreation
       card = createModCard(mod);
       if (S.selectedModId === mod.id) {

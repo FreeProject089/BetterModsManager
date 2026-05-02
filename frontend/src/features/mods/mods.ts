@@ -71,13 +71,24 @@ export async function initMods() {
 
   if (S.isCompact && modlist) modlist.classList.add('compact');
 
-  // React to state changes
+  // React to state changes with debouncing
+  let stateChangeTimeout = null;
+  const debouncedRender = () => {
+    if (stateChangeTimeout) {
+      clearTimeout(stateChangeTimeout);
+    }
+    stateChangeTimeout = setTimeout(() => {
+      renderModList(true);
+      stateChangeTimeout = null;
+    }, 50); // 50ms debounce for better performance
+  };
+
   appState.subscribe('isCompact', (val) => {
     if (modlist) modlist.classList.toggle('compact', val);
-    renderModList(true);
+    debouncedRender();
   });
-  appState.subscribe('currentFilter', () => renderModList(true));
-  appState.subscribe('currentSort', () => renderModList(true));
+  appState.subscribe('currentFilter', debouncedRender);
+  appState.subscribe('currentSort', debouncedRender);
 
   viewBtn?.addEventListener('click', () => {
     S.isCompact = !S.isCompact;
@@ -85,8 +96,13 @@ export async function initMods() {
   });
 
   if (scrollContainer) {
+    let scrollTimeout = null;
     scrollContainer.addEventListener('scroll', () => {
-        requestAnimationFrame(() => renderModList(false));
+        // Throttle scroll events to improve performance
+        if (scrollTimeout) {
+            cancelAnimationFrame(scrollTimeout);
+        }
+        scrollTimeout = requestAnimationFrame(() => renderModList(false));
     }, { passive: true });
   }
 
