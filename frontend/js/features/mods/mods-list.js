@@ -144,7 +144,10 @@ export async function renderModList(force = false) {
     for (let i = 0; i < visibleBatch.length; i++) {
         const mod = visibleBatch[i];
         let card = existingMap.get(mod.id);
-        if (!card) {
+        // Always recreate cards when force is true to ensure tags are updated
+        if (!card || force) {
+            if (card)
+                card.remove(); // Remove existing card if forcing recreation
             card = createModCard(mod);
             if (S.selectedModId === mod.id) {
                 // Re-render detail panel if this is the selected mod

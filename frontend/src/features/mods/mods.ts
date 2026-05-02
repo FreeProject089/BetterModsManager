@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { invoke, listenFileDrop } from '../../core/api.js';
+import { invoke, listenFileDrop, pickFolder } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { updateDiscordStatus } from '../settings/settings.js';
 import { renderProfiles } from '../profiles/profiles.js';
@@ -51,6 +51,19 @@ export async function initMods() {
   document.getElementById('btn-scan-mods')?.addEventListener('click', scanModsFolder);
   document.getElementById('btn-verify-integrity')?.addEventListener('click', verifyIntegrity);
   document.getElementById('btn-close-detail')?.addEventListener('click', closeModDetail);
+  
+  // Add Mod folder picker
+  document.getElementById('btn-pick-mod-folder')?.addEventListener('click', async () => {
+    try {
+      const folder = await pickFolder();
+      if (folder) {
+        document.getElementById('mod-folder').value = folder;
+      }
+    } catch (error) {
+      console.error('Error picking folder:', error);
+      toast('Erreur lors de la sélection du dossier', 'error');
+    }
+  });
 
   const viewBtn = document.getElementById('btn-view-mode');
   const modlist = document.getElementById('mod-list');
