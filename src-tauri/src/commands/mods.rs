@@ -1016,11 +1016,15 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
 
     let added: Vec<ModEntry> = tauri::async_runtime::spawn_blocking(move || -> Result<Vec<ModEntry>, String> {
         if !mods_path.exists() {
-            return Err(format!("Dossier mods introuvable: {:?}", mods_path));
+            log_line(format!("[MOD-SCAN] Mods folder does not exist: {:?}. Skipping scan.", mods_path));
+            return Ok(Vec::new());
         }
 
         let mut discovered = Vec::new();
-        let entries = std::fs::read_dir(&mods_path).map_err(|e| e.to_string())?;
+        let entries = std::fs::read_dir(&mods_path).map_err(|e| {
+            log_line(format!("[MOD-SCAN] Failed to read mods folder {:?}: {}", mods_path, e));
+            e.to_string()
+        })?;
 
         for entry in entries.flatten() {
             let path = entry.path();

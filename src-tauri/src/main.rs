@@ -382,6 +382,7 @@ fn main() {
             commands::repo_server::start_repo_server,
             commands::repo_server::stop_repo_server,
             commands::repo_server::get_repo_server_status,
+            commands::repo_server::get_connected_clients,
             commands::repo_server::get_active_downloads,
             commands::security::get_creator_id,
             commands::security::get_salted_creator_id,

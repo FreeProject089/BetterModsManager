@@ -1,3 +1,6 @@
+#[cfg(windows)]
+use windows::Win32::System::Threading::CREATE_NO_WINDOW;
+
 use std::sync::Mutex;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::oneshot;
@@ -72,6 +75,10 @@ pub struct RepoServerState {
     pub active_downloads: Arc<Mutex<HashMap<String, ActiveDownload>>>,
     /// Anti-spam: tracks last notification instant per "ip|creator_id" — 30s cooldown
     pub connected_clients: Arc<Mutex<HashMap<String, std::time::Instant>>>,
+    /// Track session download notifications per client - only notify once per session start
+    pub session_download_started: Arc<Mutex<HashMap<String, bool>>>,
+    /// Track session completion notifications per client - only notify when all downloads complete
+    pub session_download_completed: Arc<Mutex<HashMap<String, bool>>>,
 }
 
 impl Default for RepoServerState {
@@ -89,6 +96,8 @@ impl Default for RepoServerState {
             seed: Mutex::new(None),
             active_downloads: Arc::new(Mutex::new(HashMap::new())),
             connected_clients: Arc::new(Mutex::new(HashMap::new())),
+            session_download_started: Arc::new(Mutex::new(HashMap::new())),
+            session_download_completed: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -220,49 +229,10 @@ pub async fn start_repo_server(
 
 
     let active_downloads = state.active_downloads.clone();
-    let connected_clients = state.connected_clients.clone();
+    let _connected_clients = state.connected_clients.clone();
+    let session_download_started = state.session_download_started.clone();
+    let session_download_completed = state.session_download_completed.clone();
     let serve_dir_clone = serve_dir.clone();
-
-    // — Connection notification route: GET /repo.json —
-    let connected_clients_conn = connected_clients.clone();
-    let handle_conn = handle.clone();
-    let conn_route = warp::get()
-        .and(warp::path("repo.json"))
-        .and(warp::addr::remote())
-        .and(warp::header::optional::<String>("x-creator-key")
-            .and(warp::header::optional::<String>("x-creator-id"))
-            .map(|k1: Option<String>, k2: Option<String>| k1.or(k2)))
-        .map(move |addr: Option<std::net::SocketAddr>, key: Option<String>| {
-            let ip = addr.map(|a| a.ip().to_string()).unwrap_or_default();
-            let protocol = if ip.starts_with("127.0.0.1") || ip == "::1" { "Local" }
-                else if ip.starts_with("192.168.") || ip.starts_with("10.") || ip.starts_with("172.") { "LAN" }
-                else { "WAN" };
-
-            // Anti-spam: 30s cooldown per unique client key
-            let spam_key = format!("{}|{}", ip, key.as_deref().unwrap_or(""));
-            let should_notify = {
-                let mut clients = connected_clients_conn.lock().unwrap();
-                let now = std::time::Instant::now();
-                let last = clients.get(&spam_key).copied();
-                let elapsed = last.map(|t| now.duration_since(t).as_secs()).unwrap_or(u64::MAX);
-                if elapsed >= 30 {
-                    clients.insert(spam_key, now);
-                    true
-                } else {
-                    false
-                }
-            };
-
-            if should_notify {
-                let _ = handle_conn.emit_all("bmm://server-client-connected", ServerClientConnectedPayload {
-                    ip: ip.clone(),
-                    creator_id: key.clone(),
-                    protocol: protocol.to_string(),
-                });
-            }
-            // Pass-through: the actual repo.json is served by the file_route below
-            warp::reply()
-        });
 
     let key_filter = warp::header::optional::<String>("x-creator-key")
         .and(warp::header::optional::<String>("x-creator-id"))
@@ -276,6 +246,8 @@ pub async fn start_repo_server(
         .and_then(move |tail: warp::path::Tail, addr: Option<std::net::SocketAddr>, key: Option<String>| {
             let handle = handle_clone.clone();
             let active_downloads = active_downloads.clone();
+            let session_download_started = session_download_started.clone();
+            let session_download_completed = session_download_completed.clone();
             let serve_dir = serve_dir_clone.clone();
             async move {
                 let state = handle.state::<RepoServerState>();
@@ -401,14 +373,28 @@ pub async fn start_repo_server(
                 }
 
                 // Emit download-started (only for mod files, not repo.json itself)
+                // Only notify once per session start per client
                 if is_mod_file {
-                    let _ = handle.emit_all("bmm://server-download-started", ServerDownloadStartedPayload {
-                        ip: ip.clone(),
-                        creator_id: key.clone(),
-                        file: file_name.clone(),
-                        total_size,
-                        protocol: protocol.to_string(),
-                    });
+                    let client_key = format!("{}|{}", ip, key.as_deref().unwrap_or(""));
+                    let should_notify = {
+                        let mut session_notifs = session_download_started.lock().unwrap();
+                        if !session_notifs.contains_key(&client_key) {
+                            session_notifs.insert(client_key, true);
+                            true
+                        } else {
+                            false
+                        }
+                    };
+
+                    if should_notify {
+                        let _ = handle.emit_all("bmm://server-download-started", ServerDownloadStartedPayload {
+                            ip: ip.clone(),
+                            creator_id: key.clone(),
+                            file: file_name.clone(),
+                            total_size,
+                            protocol: protocol.to_string(),
+                        });
+                    }
                 }
 
                 let tracked_stream = stream.map(move |chunk: std::io::Result<Bytes>| {
@@ -469,14 +455,38 @@ pub async fn start_repo_server(
                     let file_fin = file_finish.clone();
                     let proto_fin = protocol_finish.clone();
                     let total = total_size;
+                    let session_completed = session_download_completed.clone();
                     let stream_with_end = final_stream.chain(futures::stream::once(async move {
-                        let _ = handle_fin.emit_all("bmm://server-download-finished", ServerDownloadFinishedPayload {
-                            ip: ip_fin,
-                            creator_id: key_fin,
-                            file: file_fin,
-                            total_size: total,
-                            protocol: proto_fin,
-                        });
+                        // Check if this is the last download for this client
+                        let client_key = format!("{}|{}", ip_fin, key_fin.as_deref().unwrap_or(""));
+                        let should_notify_complete = {
+                            let state = handle_fin.state::<RepoServerState>();
+                            let active_downloads = state.active_downloads.lock().unwrap();
+                            let completed_notifs = session_completed.lock().unwrap();
+                            
+                            // Check if there are no more active downloads for this client
+                            let has_active_downloads = active_downloads.values().any(|dl| {
+                                dl.ip == ip_fin && dl.creator_id == key_fin
+                            });
+                            
+                            // Only notify if no more downloads and we haven't notified yet
+                            !has_active_downloads && !completed_notifs.contains_key(&client_key)
+                        };
+
+                        if should_notify_complete {
+                            let _state = handle_fin.state::<RepoServerState>();
+                            let mut completed_notifs = session_completed.lock().unwrap();
+                            completed_notifs.insert(client_key, true);
+                            
+                            let _ = handle_fin.emit_all("bmm://server-download-finished", ServerDownloadFinishedPayload {
+                                ip: ip_fin,
+                                creator_id: key_fin,
+                                file: file_fin,
+                                total_size: total,
+                                protocol: proto_fin,
+                            });
+                        }
+                        
                         // Signal end-of-stream with an empty Ok chunk
                         Ok::<Bytes, std::io::Error>(Bytes::new())
                     }));
@@ -508,8 +518,8 @@ pub async fn start_repo_server(
         .allow_methods(vec!["GET"])
         .allow_headers(vec!["*", "x-creator-key", "x-creator-id"]);
     
-    // conn_route first (for notification side-effect), then file_route handles all files including repo.json
-    let routes = conn_route.with(cors.clone()).or(file_route.with(cors));
+    // file_route handles all files including repo.json with connection notifications
+    let routes = file_route.with(cors);
 
 
     // 5. Port and Address
@@ -582,6 +592,7 @@ pub async fn start_repo_server(
                 .args(["tunnel", "--no-autoupdate", "--protocol", "http2", "--url", &target_url])
                 .stderr(Stdio::piped())
                 .stdout(Stdio::null())
+                .creation_flags(CREATE_NO_WINDOW.0)
                 .spawn()
                 .map_err(|e| format!("Erreur au lancement du tunnel: {}", e))?;
 
@@ -590,12 +601,16 @@ pub async fn start_repo_server(
                 let re = Regex::new(r"https://[a-z0-9-]+\.trycloudflare\.com").unwrap();
                 
                 let start_time = std::time::Instant::now();
-                while start_time.elapsed().as_secs() < 30 {
+                while start_time.elapsed().as_secs() < 45 {
                     if let Ok(Some(line)) = reader.next_line().await {
                         println!("[Tunnel Log] {}", line);
                         if let Some(mat) = re.find(&line) {
                             let m_str: &str = mat.as_str();
                             tunnel_url = Some(format!("{}/repo.json", m_str));
+                            
+                            // Wait additional time for tunnel to be fully ready
+                            println!("[Tunnel] URL found, waiting 5 seconds for tunnel to be ready...");
+                            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                             break;
                         }
                     } else {
@@ -633,7 +648,25 @@ pub async fn start_repo_server(
 #[tauri::command]
 pub fn get_repo_server_status(state: tauri::State<'_, RepoServerState>) -> Result<Option<StartServerResult>, String> {
     let tx_lock = state.shutdown_tx.lock().unwrap();
-    if tx_lock.is_none() {
+    let mut is_running = tx_lock.is_some();
+    
+    // Additional check: if shutdown_tx is None but we have stored URLs, 
+    // check if the port is still in use (server might still be running)
+    if !is_running {
+        let port = *state.active_port.lock().unwrap();
+        if let Some(_lan_url) = state.lan_url.lock().unwrap().clone() {
+            // Check if port is still in use
+            if let Ok(listener) = std::net::TcpListener::bind(("127.0.0.1", port)) {
+                // Port is free, server is not running
+                drop(listener);
+            } else {
+                // Port is in use, server is still running despite state loss
+                is_running = true;
+            }
+        }
+    }
+    
+    if !is_running {
         return Ok(None);
     }
     
@@ -675,6 +708,8 @@ pub async fn stop_repo_server(state: tauri::State<'_, RepoServerState>) -> Resul
         *state.public_url.lock().unwrap() = None;
         *state.tunnel_url.lock().unwrap() = None;
         *state.serve_path.lock().unwrap() = None;
+        state.session_download_started.lock().unwrap().clear();
+        state.session_download_completed.lock().unwrap().clear();
         
         let _ = tx.send(());
         Ok(())
@@ -692,6 +727,36 @@ async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, std:
     } else {
         Ok(warp::reply::with_status("Not Found", warp::http::StatusCode::NOT_FOUND))
     }
+}
+
+#[tauri::command]
+pub fn get_connected_clients(state: tauri::State<'_, RepoServerState>) -> Result<Vec<serde_json::Value>, String> {
+    let mut result = Vec::new();
+
+    let clients = state.connected_clients.lock().unwrap();
+    for (key, last_seen) in clients.iter() {
+        let elapsed_secs = last_seen.elapsed().as_secs();
+        
+        // Parse key format: "ip|creator_id"
+        let parts: Vec<&str> = key.split('|').collect();
+        let ip = parts.get(0).unwrap_or(&"").to_string();
+        let creator_id = parts.get(1).map(|s| s.to_string()).filter(|s| !s.is_empty());
+        
+        // Determine protocol
+        let protocol = if ip.starts_with("127.0.0.1") || ip == "::1" { "Local" }
+            else if ip.starts_with("192.168.") || ip.starts_with("10.") || ip.starts_with("172.") { "LAN" }
+            else { "WAN" };
+
+        result.push(serde_json::json!({
+            "ip": ip,
+            "creator_id": creator_id,
+            "protocol": protocol,
+            "last_seen": elapsed_secs,
+            "status": "idle"
+        }));
+    }
+
+    Ok(result)
 }
 
 #[tauri::command]

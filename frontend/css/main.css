@@ -5887,6 +5887,60 @@ select:focus {
 /* Specific Modal Header for Server Mgmt */
 .server-modal-header {
     padding: 24px 28px !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 12px;
+}
+
+.server-modal-header > div:first-child {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.server-modal-header > div:last-child {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.server-modal-header h2 {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 18px;
+    line-height: 1.2;
+}
+
+.server-modal-header .modal-close {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.server-modal-header .modal-close:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.server-modal-header .btn-ghost {
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 /* Search bar styling in modals */
@@ -5898,7 +5952,17 @@ select:focus {
     background: rgba(0, 0, 0, 0.2);
     padding: 10px 15px;
     border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.modal-search-bar .form-input {
+    padding-left: 36px !important;
+}
+
+.modal-search-bar svg {
+    left: 12px !important;
+    position: absolute;
+    pointer-events: none;
+    z-index: 1;
 }
 
 .modal-search-bar input {
@@ -5907,6 +5971,8 @@ select:focus {
     padding: 0 !important;
     font-size: 13px !important;
     box-shadow: none !important;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* ── Mermaid Node Highlighting ── */

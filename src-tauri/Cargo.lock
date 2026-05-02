@@ -355,7 +355,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "better-mods-manager"
-version = "0.9.9"
+version = "0.9.10"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -390,6 +390,7 @@ dependencies = [
  "uuid 1.21.0",
  "walkdir",
  "warp",
+ "windows 0.52.0",
  "windows-sys 0.45.0",
  "winreg 0.52.0",
  "zip",

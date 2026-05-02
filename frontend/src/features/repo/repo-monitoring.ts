@@ -3,6 +3,7 @@ import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
 import { copyToClipboard } from './repo.js';
+import { toast } from '../../ui/app.js';
 
 export function initRepoMonitoring(elements) {
     const {
@@ -30,8 +31,49 @@ export function initRepoMonitoring(elements) {
 
     const updateMonitoring = async () => {
         try {
-            const downloads = await invoke('get_active_downloads');
-            if (!downloads || downloads.length === 0) {
+            const [clients, downloads] = await Promise.all([
+                invoke('get_connected_clients').catch(() => []),
+                invoke('get_active_downloads').catch(() => [])
+            ]);
+
+            // Merge clients and downloads, using downloads as the source of truth for active ones
+            const allClients = new Map();
+            
+            // Add/override with active downloads first (they take priority)
+            downloads.forEach(d => {
+                // Clean creator_id if it's a Some() wrapper format
+                let cleanCreatorId = d.creator_id;
+                if (typeof cleanCreatorId === 'string' && cleanCreatorId.startsWith('Some(') && cleanCreatorId.endsWith(')')) {
+                    cleanCreatorId = cleanCreatorId.slice(5, -1);
+                }
+                allClients.set(`${d.ip}|${cleanCreatorId || ''}`, { 
+                    ...d, 
+                    creator_id: cleanCreatorId,
+                    status: 'downloading' 
+                });
+            });
+            
+            // Add idle clients only if not already in downloads
+            clients.forEach(c => {
+                // Clean creator_id if it's a Some() wrapper format
+                let cleanCreatorId = c.creator_id;
+                if (typeof cleanCreatorId === 'string' && cleanCreatorId.startsWith('Some(') && cleanCreatorId.endsWith(')')) {
+                    cleanCreatorId = cleanCreatorId.slice(5, -1);
+                }
+                
+                const key = `${c.ip}|${cleanCreatorId || ''}`;
+                if (!allClients.has(key)) {
+                    allClients.set(key, { 
+                        ...c, 
+                        creator_id: cleanCreatorId,
+                        status: 'idle' 
+                    });
+                }
+            });
+
+            const mergedClients = Array.from(allClients.values());
+
+            if (!mergedClients || mergedClients.length === 0) {
                 if (monitoringListBody) monitoringListBody.innerHTML = '';
                 if (monitoringEmptyHint) monitoringEmptyHint.style.display = 'block';
                 return;
@@ -39,9 +81,10 @@ export function initRepoMonitoring(elements) {
 
             if (monitoringEmptyHint) monitoringEmptyHint.style.display = 'none';
             if (monitoringListBody) {
-                monitoringListBody.innerHTML = downloads.map(d => {
-                    const pct = Math.min(Math.round(d.progress) || 0, 100);
-                    const speed = d.speed || 0;
+                monitoringListBody.innerHTML = mergedClients.map(d => {
+                    const isDownloading = d.status === 'downloading';
+                    const pct = isDownloading ? Math.min(Math.round(d.progress) || 0, 100) : 0;
+                    const speed = isDownloading ? (d.speed || 0) : 0;
                     const creatorIdHtml = d.creator_id && d.creator_id !== '-' ?  
                         `<div style="display:flex; align-items:center; gap:6px;">
                             <span style="overflow:hidden; text-overflow:ellipsis;">${escHtml(d.creator_id)}</span>
@@ -52,6 +95,8 @@ export function initRepoMonitoring(elements) {
                     const protocol = d.protocol || 'Unknown';
                     const protocolColor = protocol === 'LAN' ? 'var(--success)' : protocol === 'WAN' ? 'var(--accent)' : 'var(--cyan)';
                     const protocolBg = protocol === 'LAN' ? 'rgba(16, 185, 129, 0.1)' : protocol === 'WAN' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(6, 182, 212, 0.1)';
+                    const statusColor = isDownloading ? 'var(--cyan)' : 'var(--text-secondary)';
+                    const statusText = isDownloading ? (t('repo.downloading') || 'DOWNLOADING') : (t('repo.idle') || 'IDLE');
                     
                     return `
                         <tr>
@@ -67,16 +112,18 @@ export function initRepoMonitoring(elements) {
                             <td>
                                 <span style="font-size:10px; font-weight:900; background:${protocolBg}; border:1px solid rgba(255,255,255,0.05); padding:3px 8px; border-radius:6px; color:${protocolColor}; letter-spacing:0.05em;">${protocol}</span>
                             </td>
-                            <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500;" title="${escAttr(d.file)}">${escHtml(d.file)}</td>
+                            <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500;" title="${escAttr(d.file || '-')}">${escHtml(d.file || '-')}</td>
                             <td>
+                                ${isDownloading ? `
                                 <div class="mon-progress-container">
                                     <div class="mon-progress-bar">
                                         <div class="mon-progress-fill" style="width:${pct}%;"></div>
                                     </div>
                                     <span style="font-weight:800; font-size:11px; min-width:35px; color:${pct === 100 ? 'var(--success)' : 'var(--text-primary)'}">${pct}%</span>
                                 </div>
+                                ` : `<span style="font-size:11px; font-weight:600; color:${statusColor};">${statusText}</span>`}
                             </td>
-                            <td style="font-family:var(--font-mono); font-weight:600; color:var(--cyan);">${formatBytes(speed)}/s</td>
+                            <td style="font-family:var(--font-mono); font-weight:600; color:var(--cyan);">${isDownloading ? formatBytes(speed) + '/s' : '-'}</td>
                             <td style="text-align:right;">
                                 <div style="display:flex; justify-content:flex-end; gap:6px;">
                                     <button class="btn btn-ghost btn-xs whitelist-from-mon" data-ip="${escAttr(d.ip)}" data-key="${escAttr(d.creator_id || '')}" style="color:var(--accent); font-weight:800; padding:4px 10px; border-radius:8px; background:rgba(59, 130, 246, 0.08);">
