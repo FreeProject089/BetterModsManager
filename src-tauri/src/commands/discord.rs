@@ -40,12 +40,13 @@ pub fn set_discord_presence(
 
     // Update presence
     if let Some(client) = client_lock.as_mut() {
+        let version_text = format!("Better Mods Manager v{}", env!("CARGO_PKG_VERSION"));
         let payload = discord_rich_presence::activity::Activity::new()
             .details(&details)
             .state(&status)
             .assets(discord_rich_presence::activity::Assets::new()
                 .large_image("bmm_logo")
-                .large_text("Better Mods Manager"));
+                .large_text(&version_text));
 
         let _ = client.set_activity(payload);
     }

@@ -321,7 +321,8 @@ export function renderMarkdown(md) {
         }
 
         .md-body pre { 
-            background: rgba(0, 0, 0, 0.2);
+            background: rgba(10, 17, 40, 0.85);
+            backdrop-filter: blur(10px);
             padding: 16px;
             border-radius: 8px;
             overflow-x: auto;
@@ -796,6 +797,7 @@ async function showPtbModal(folderStructure, lang, initialFileName = null) {
     `;
 
     document.getElementById('app-window-outer').appendChild(modal);
+    setTimeout(() => modal.classList.add('open'), 10);
 
     // Folder toggle logic
     modal.querySelectorAll('.tree-folder-header').forEach(header => {
@@ -1119,3 +1121,7 @@ async function openLangSelectModal(): Promise<void> {
     attachListeners();
     document.addEventListener('langChanged', rerender);
 }
+
+// Global exposure
+(window as any).checkPtbMode = checkPtbMode;
+(window as any).openGuide = (name: string) => checkPtbMode(true, name);

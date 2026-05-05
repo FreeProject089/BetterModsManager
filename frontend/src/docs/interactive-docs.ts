@@ -34,6 +34,7 @@ import { premiumInteractions } from './diagrams/premium-interactions.js';
 import { betahubReporting } from './diagrams/betahub-reporting.js';
 import { modpackFlow } from './diagrams/modpack-flow.js';
 import { securitySystem } from './diagrams/security-system.js';
+import { modMapper } from './diagrams/mod-mapper.js';
 
 
 // Diagram Registry
@@ -70,7 +71,8 @@ export const diagrams = {
     'premium-interactions': premiumInteractions,
     'betahub-reporting': betahubReporting,
     'modpack-flow': modpackFlow,
-    'security-system': securitySystem
+    'security-system': securitySystem,
+    'mod-mapper': modMapper
 };
 
 

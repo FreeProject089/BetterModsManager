@@ -23,6 +23,7 @@ import { initCrashReportUI, checkPreviousCrash } from './crash-report.js';
 import { initInteractionLogging } from './user-logger.js';
 import { initDebugMenu } from '../features/debug/debug-menu.js';
 import { checkSecurityMode } from './security-modal.js';
+import { initMapper } from '../features/mapper/mapper.js';
 async function waitForModalClosed(id) {
     const el = document.getElementById(id);
     if (!el)
@@ -369,6 +370,7 @@ async function main() {
     initNavbarLangDropdown();
     initNavbarVersion();
     initUpdateNotes();
+    initMapper();
     document.getElementById('btn-restart-onboarding')?.addEventListener('click', () => {
         startOnboarding();
     });

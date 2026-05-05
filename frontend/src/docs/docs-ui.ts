@@ -160,14 +160,24 @@ function setupSearch() {
         
         modePills.forEach(pill => {
             const p = pill as HTMLElement;
+            const betaBadge = p.querySelector('span:last-child') as HTMLElement;
+            
             if (p.getAttribute('data-mode') === searchMode) {
                 p.classList.add('active');
                 p.style.background = 'var(--accent)';
                 p.style.color = 'white';
+                if (betaBadge && p.getAttribute('data-mode') === 'semantic') {
+                    betaBadge.style.background = 'white';
+                    betaBadge.style.color = 'var(--accent)';
+                }
             } else {
                 p.classList.remove('active');
                 p.style.background = 'transparent';
                 p.style.color = 'var(--text-secondary)';
+                if (betaBadge && p.getAttribute('data-mode') === 'semantic') {
+                    betaBadge.style.background = 'var(--accent)';
+                    betaBadge.style.color = 'white';
+                }
             }
         });
 
@@ -297,24 +307,32 @@ function checkMatch(text: string, query: string, mode: string): boolean | number
         const coverage = normQuery.length / normText.length;
         return 0.7 + (coverage * 0.2); 
     } else {
-        const queryWords = normQuery.split(/\s+/).filter(w => w.length > 1);
-        if (queryWords.length === 0) return normText.includes(normQuery) ? 0.7 : false;
+        const queryWords = normQuery.split(/\s+/).filter(w => w.length > 2);
+        if (queryWords.length === 0) return normText.includes(normQuery) ? 0.6 : false;
         
-        const matchingWords = queryWords.filter(word => {
-            const regex = new RegExp(`\\b${word}\\b`, 'i');
-            return regex.test(normText) || normText.includes(word);
+        let matchCount = 0;
+        let weightedScore = 0;
+        
+        queryWords.forEach(word => {
+            if (normText.includes(word)) {
+                matchCount++;
+                // Exact word match bonus (boundaries)
+                const isExactWord = new RegExp(`\\b${word}\\b`, 'i').test(normText);
+                weightedScore += isExactWord ? 1.0 : 0.7;
+            }
         });
 
-        if (matchingWords.length === 0) return false;
+        if (matchCount === 0) return false;
 
-        // Word-based inclusion score
-        const wordRatio = matchingWords.length / queryWords.length;
+        // Calculate final score
+        const wordRatio = matchCount / queryWords.length;
+        const avgWeight = weightedScore / queryWords.length;
         
-        // Bonus for exact multi-word substring
-        const exactSubstringBonus = normText.includes(normQuery) ? 0.15 : 0;
+        // Substring bonus
+        const exactSubstringBonus = normText.includes(normQuery) ? 0.2 : 0;
         
-        const score = Math.min(0.9, (wordRatio * 0.75) + exactSubstringBonus);
-        return score >= 0.4 ? score : false;
+        const finalScore = (wordRatio * 0.4) + (avgWeight * 0.4) + exactSubstringBonus;
+        return finalScore >= 0.35 ? finalScore : false;
     }
 }
 

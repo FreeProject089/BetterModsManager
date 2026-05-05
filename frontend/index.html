@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="css/debug.css" />
     <link rel="stylesheet" href="css/betahub.css" />
     <link rel="stylesheet" href="css/modpack.css" />
+    <link rel="stylesheet" href="css/mapper.css" />
     <link rel="stylesheet" href="assets/cropper/cropper.min.css">
     <script src="assets/cropper/cropper.min.js"></script>
 </head>
@@ -174,6 +175,19 @@
                             </svg>
                         </span>
                         <span class="nav-label" data-i18n="nav.modpacks">Modpacks</span>
+                    </button>
+
+                    <button class="nav-item" data-view="mapper" id="nav-mapper">
+                        <span class="nav-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.8">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                <path d="M2 17l10 5 10-5" />
+                                <path d="M2 12l10 5 10-5" />
+                                <path d="M12 22V12" />
+                            </svg>
+                        </span>
+                        <span class="nav-label" data-i18n="nav.mapper">Mapper</span>
                     </button>
 
                     <button class="nav-item" data-view="docs" id="nav-docs">
@@ -367,18 +381,15 @@
                                 <button class="filter-btn" data-filter="disabled"
                                     data-i18n="lib.filterDisabled">Inactifs</button>
 
-                                <select id="mod-tag-filter" class="profile-select"
-                                    style="margin-left: 8px; padding: 4.5px 12px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-primary); border: 1px solid var(--border); font-size: 12px; cursor: pointer; transition: var(--transition); max-width: 150px; text-overflow: ellipsis;">
+                                <select id="mod-tag-filter" class="profile-select" style="width: 140px; margin-left: 8px;">
                                     <option value="all" data-i18n="lib.tagFilterAll">Tous les tags</option>
                                 </select>
 
-                                <select id="mod-sort" class="profile-select"
-                                    style="margin-left: 4px; padding: 4.5px 8px; border-radius: 6px; background: rgba(0,0,0,0.2); color: var(--text-primary); border: 1px solid var(--border); font-size: 11px; cursor: pointer; transition: var(--transition); max-width: 130px;">
+                                <select id="mod-sort" class="profile-select" style="width: 130px; margin-left: 4px;">
                                     <option value="name_asc" data-i18n="lib.sortNameAsc">Nom (A-Z)</option>
                                     <option value="name_desc" data-i18n="lib.sortNameDesc">Nom (Z-A)</option>
                                     <option value="status" data-i18n="lib.sortStatus">Statut (Actifs en 1er)</option>
-                                    <option value="activation_order" data-i18n="lib.sortOrder">Ordre d'Activation
-                                    </option>
+                                    <option value="activation_order" data-i18n="lib.sortOrder">Ordre d'Activation</option>
                                 </select>
                             </div>
                         </div>
@@ -390,8 +401,7 @@
                                 <circle cx="12" cy="8" r="4" />
                                 <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
                             </svg>
-                            <select id="lib-profile-select" class="profile-select"
-                                style="width:200px;max-width:240px;padding:6px 10px;border-radius:8px;background:var(--card-bg);color:var(--text-primary);border:1px solid var(--border);font-size:12px;cursor:pointer">
+                            <select id="lib-profile-select" class="profile-select" style="width: 220px;">
                                 <option value="" data-i18n="lib.selectProfile">— Sélectionnez un profil —</option>
                             </select>
                         </div>
@@ -1524,6 +1534,115 @@
                 </section>
 
                 <!-- ══ DOCUMENTATION VIEW ══ -->
+                <!-- ══ MAPPER VIEW ══ -->
+                <section class="view" id="view-mapper">
+                    <div class="view-header">
+                        <div>
+                            <h1 class="view-title" data-i18n="mapper.title">Mod Mapper</h1>
+                            <p class="view-subtitle" data-i18n="mapper.subtitle">Réorganisez la structure de vos mods pour qu'elle corresponde au jeu</p>
+                        </div>
+                        <div class="view-actions">
+                            <select id="mapper-profile-select" class="profile-select" style="width: 200px;">
+                                <option value="" data-i18n="mapper.selectProfile">— Sélectionner un profil —</option>
+                            </select>
+                            <button class="btn btn-secondary" id="btn-mapper-refresh" data-i18n-title="mapper.refreshTip">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                    <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                                </svg>
+                            </button>
+                            <button class="btn btn-primary" id="btn-mapper-save" style="display:none;">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                <span data-i18n="mapper.apply">Appliquer Structure</span>
+                            </button>
+                            <button class="btn btn-secondary" id="btn-mapper-preview">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                </svg>
+                                <span data-i18n="mapper.preview">Aperçu Final</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mapper-help-banner">
+                        <span class="help-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" style="opacity:0.9">
+                                <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A5 5 0 0 0 8 8c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5" />
+                                <path d="M9 18h6" />
+                                <path d="M10 22h4" />
+                            </svg>
+                        </span>
+                        <div class="help-text" style="display: flex; align-items: center; gap: 20px;">
+                            <span data-i18n="mapper.mappingHint"><strong>Mapping :</strong> Sélectionnez à gauche, puis <strong>double-cliquez</strong> sur un dossier à droite.</span>
+                            <span style="color: var(--accent); font-size: 11px; font-weight: 600;" data-i18n="mapper.multiSelectHint">Maintenez Ctrl pour sélectionner plusieurs fichiers ou dossiers.</span>
+                            <div style="display: flex; gap: 15px;">
+                                <span class="legend-item"><span class="dot orange"></span> <span data-i18n="mapper.root">Racine</span></span>
+                                <span class="legend-item"><span class="dot green"></span> <span data-i18n="mapper.subfolder">Sous-dossier</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mapper-container">
+                        <!-- Left Panel: Mods -->
+                        <div class="mapper-panel glass-card" id="mapper-mods-panel">
+                            <div class="panel-header">
+                                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                    <h3 class="panel-title" data-i18n="mapper.modSide">Structure du Mod</h3>
+                                    <div class="selection-counter" id="mapper-selection-count">0 sélectionné</div>
+                                    <div class="tree-controls">
+                                        <button class="btn-icon-small" id="btn-mapper-mod-expand" data-i18n-title="mapper.expandAll">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                                        </button>
+                                        <button class="btn-icon-small" id="btn-mapper-mod-collapse" data-i18n-title="mapper.collapseAll">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <select id="mapper-mod-select" class="profile-select" style="width: 100%;">
+                                    <option value="" data-i18n="mapper.selectMod">— Sélectionner un mod —</option>
+                                </select>
+                                <div class="search-box-mini" style="margin-top: 8px;">
+                                    <input type="text" id="mapper-mod-search" placeholder="Filtrer les fichiers..." data-i18n-placeholder="mapper.searchMod" class="bmm-input-small">
+                                </div>
+                            </div>
+                            <div class="panel-content">
+                                <div id="mapper-mod-tree" class="file-tree">
+                                    <div class="empty-hint" data-i18n="mapper.selectModHint">Sélectionnez un mod pour voir son contenu</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Spacer (replacing arrow) -->
+                        <div style="width: 20px;"></div>
+
+                        <!-- Right Panel: Game -->
+                        <div class="mapper-panel glass-card" id="mapper-game-panel">
+                            <div class="panel-header">
+                                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                    <h3 class="panel-title" data-i18n="mapper.gameSide">Dossier du Jeu</h3>
+                                    <div class="tree-controls">
+                                        <button class="btn-icon-small" id="btn-mapper-game-expand" data-i18n-title="mapper.expandAll">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                                        </button>
+                                        <button class="btn-icon-small" id="btn-mapper-game-collapse" data-i18n-title="mapper.collapseAll">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="game-path-display" id="mapper-game-path" title="...">...</div>
+                                <div class="search-box-mini" style="margin-top: 8px;">
+                                    <input type="text" id="mapper-game-search" placeholder="Filtrer le dossier du jeu..." data-i18n-placeholder="mapper.searchGame" class="bmm-input-small">
+                                </div>
+                            </div>
+                            <div class="panel-content">
+                                <div id="mapper-game-tree" class="file-tree">
+                                    <div class="empty-hint" data-i18n="mapper.loadProfileHint">Chargez un profil pour voir le dossier du jeu</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <section class="view" id="view-docs">
                     <div class="view-header" style="flex-direction: column; align-items: flex-start; gap: 16px;">
                         <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
@@ -1536,6 +1655,7 @@
                                 style="position: relative; width: 400px; z-index: 10; display: flex; gap: 10px; align-items: center;">
                                 <div style="position: relative; flex: 1;">
                                     <input type="text" id="docs-search-input" placeholder="Rechercher..."
+                                        data-i18n-placeholder="docs.searchPlaceholder"
                                         class="bmm-input input-bordered"
                                         style="width: 100%; padding: 8px 12px 8px 36px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: var(--text-primary); font-family: 'Inter', sans-serif; transition: all 0.3s ease;">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -1549,11 +1669,14 @@
                                     style="display: flex; align-items: center; background: rgba(0,0,0,0.2); border-radius: 20px; padding: 2px; border: 1px solid rgba(255,255,255,0.05); cursor: pointer;"
                                     id="btn-toggle-search-mode">
                                     <div class="search-mode-pill active" data-mode="classic"
+                                        data-i18n="docs.searchMode.classic"
                                         style="padding: 4px 10px; border-radius: 15px; font-size: 10px; font-weight: 700; color: white; background: var(--accent); transition: all 0.3s;">
-                                        CLASSIC</div>
+                                        CLASSIQUE</div>
                                     <div class="search-mode-pill" data-mode="semantic"
-                                        style="padding: 4px 10px; border-radius: 15px; font-size: 10px; font-weight: 700; color: var(--text-secondary); transition: all 0.3s;">
-                                        SEMANTIC</div>
+                                        style="padding: 4px 10px; border-radius: 15px; font-size: 10px; font-weight: 700; color: var(--text-secondary); transition: all 0.3s; display: flex; align-items: center; gap: 4px;">
+                                        <span data-i18n="docs.searchMode.semantic">SÉMANTIQUE</span>
+                                        <span style="font-size: 8px; background: var(--accent); color: white; padding: 1px 4px; border-radius: 4px; opacity: 0.8;">BETA</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1580,12 +1703,12 @@
                         <div class="docs-tabs-nav"
                             style="display: flex; gap: 8px; width: 100%; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">
                             <button class="btn btn-docs-tab active" data-tab="basique"
-                                style="padding: 6px 16px; border-radius: 6px; background: var(--accent); color: white; border: none; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                                style="padding: 6px 16px; border-radius: 6px; background: var(--accent); color: white; border: none; font-weight: 600; cursor: pointer; transition: all 0.2s;" data-i18n="docs.tab.basic">
                                 Basique
                             </button>
                             <button class="btn btn-docs-tab" data-tab="advanced"
-                                style="padding: 6px 16px; border-radius: 6px; background: transparent; color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.1); font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                                Advanced
+                                style="padding: 6px 16px; border-radius: 6px; background: transparent; color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.1); font-weight: 600; cursor: pointer; transition: all 0.2s;" data-i18n="docs.tab.advanced">
+                                Avancé
                             </button>
                         </div>
                     </div>
@@ -1660,102 +1783,59 @@
 
                     <!-- TAB: ADVANCED -->
                     <div id="docs-tab-advanced" class="docs-tab-content" style="display: none;">
-                        <div class="settings-sections" style="grid-template-columns:1fr">
-                            <!-- Comment fonctionne le modding -->
-                            <div class="glass-card" style="border-left: 3px solid #ffffff;">
-                                <h3 class="card-title">
+                        <div class="settings-sections" style="display: flex; flex-direction: column; gap: 24px;">
+                            <!-- Mécaniques de Modding -->
+                            <div class="glass-card" style="border-left: 3px solid #ffffff; margin-bottom: 20px;">
+                                <h3 class="card-title" style="display: flex; align-items: center; gap: 10px; text-transform: uppercase; font-size: 15px;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-                                        fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round" style="margin-right:8px;vertical-align:middle">
-                                        <path
-                                            d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z" />
-                                        <line x1="12" x2="12" y1="16" y2="12" />
-                                        <line x1="12" x2="12.01" y1="8" y2="8" />
+                                        fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                                        stroke-linejoin="round" style="opacity: 0.7;">
+                                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
                                     </svg>
-                                    <span data-i18n="docs.howModdingWorks">Comment fonctionne le modding ?</span>
-                                    <div style="margin-left:auto; display:flex; gap:8px">
-                                        <button class="btn btn-xs btn-ghost" onclick="openDiagram('app-architecture')"
-                                            style="font-size:10px; color:var(--text-primary); border:1px dashed rgba(255,255,255,0.2); padding: 2px 8px;">
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2" style="margin-right:4px">
-                                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                                <path d="M2 17l10 5 10-5" />
-                                                <path d="M2 12l10 5 10-5" />
-                                            </svg>
-                                            <span data-i18n="docs.exploreArch">ARCHITECTURE</span>
-                                        </button>
-                                        <button class="btn btn-xs btn-ghost" onclick="openDiagram('modding-mechanics')"
-                                            style="font-size:10px; color:#ffffff; border:1px dashed rgba(255,255,255,0.3); padding: 2px 8px;">
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2" style="margin-right:4px">
-                                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                                <path d="M2 17l10 5 10-5" />
-                                                <path d="M2 12l10 5 10-5" />
-                                            </svg>
-                                            <span data-i18n="docs.exploreMods">MÉCANIQUES</span>
-                                        </button>
-                                        <button id="btn-open-mod-architecture" onclick="openDiagram('mod-architecture')"
-                                            style="background:#ffffff; color:#0f172a; border:none; border-radius:4px; padding:2px 10px; font-size:11px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; margin-left:6px; box-shadow: 0 0 8px rgba(255,255,255,0.3);">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2">
-                                                <circle cx="12" cy="12" r="10" />
-                                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                                                <line x1="12" y1="17" x2="12.01" y2="17" />
-                                            </svg>
-                                            <span data-i18n="docs.modArchitecture">Architecture</span>
-                                        </button>
-                                    </div>
+                                    <span data-i18n="docs.moddingMechanics">Modding Mechanics</span>
+                                    <button class="btn btn-xs btn-ghost" onclick="openDiagram('modding-mechanics')"
+                                        style="font-size: 9px; padding: 1px 8px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 800; border-radius: 12px; height: 18px;">
+                                        <span data-i18n="docs.diagram.label.mech">MECHANICS</span>
+                                    </button>
+                                    <button class="btn btn-xs btn-ghost" onclick="openGuide('Modding_Mechanics')"
+                                        style="font-size: 9px; padding: 1px 8px; border: 1px solid var(--accent); color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 800; border-radius: 12px; height: 18px; background: rgba(59, 130, 246, 0.05);">
+                                        <span data-i18n="docs.viewGuide">FULL GUIDE</span>
+                                    </button>
                                 </h3>
-                                <div
-                                    style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
-                                    <div
-                                        style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px">
-                                        <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:4px"
-                                            data-i18n="docs.basic.modding.q1">Le concept</div>
-                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                            data-i18n="docs.basic.modding.a1">Le modding consiste...</div>
+                                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:15px; margin-top:15px">
+                                    <div class="doc-info-block">
+                                        <h4 data-i18n="docs.mech.virtual.title">Intégration Virtuelle</h4>
+                                        <p data-i18n="docs.mech.virtual.desc">BMM gère une structure virtuelle...</p>
                                     </div>
-                                    <div
-                                        style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px">
-                                        <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:4px"
-                                            data-i18n="docs.basic.modding.q2">Dossier des mods</div>
-                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                            data-i18n="docs.basic.modding.a2">BMM simplifie...</div>
+                                    <div class="doc-info-block">
+                                        <h4 data-i18n="docs.mech.replace.title">Remplacement</h4>
+                                        <p data-i18n="docs.mech.replace.desc">En cas de conflit...</p>
                                     </div>
-                                    <div
-                                        style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px">
-                                        <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:4px"
-                                            data-i18n="modpack.qModpacks">Comment fonctionnent les Modpacks (SHA-256) ?
-                                        </div>
-                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                            data-i18n="modpack.qModpacksDesc">
-                                            BMM crée une signature unique (hash) pour chaque mod. Lorsqu'un ami importe
-                                            votre pack, BMM compare ces signatures avec sa bibliothèque locale pour
-                                            activer exactement les mêmes versions, évitant ainsi les erreurs de
-                                            versioning.
-                                        </div>
+                                    <div class="doc-info-block">
+                                        <h4 data-i18n="docs.mech.merge.title">Fusion</h4>
+                                        <p data-i18n="docs.mech.merge.desc">Les nouveaux fichiers...</p>
+                                    </div>
+                                    <div class="doc-info-block">
+                                        <h4 data-i18n="docs.mech.backup.title">Sécurité</h4>
+                                        <p data-i18n="docs.mech.backup.desc">Backup garanti...</p>
                                     </div>
                                 </div>
                             </div>
 
+
+
                             <!-- Modpacks & Sharing Documentation -->
                             <div class="glass-card" style="border-left: 3px solid #00c2ff;">
-                                <h3 class="card-title">
+                                <h3 class="card-title" style="display: flex; align-items: center; gap: 10px; text-transform: uppercase; font-size: 15px;">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00c2ff"
-                                        stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                        stroke-width="2.5" style="opacity: 0.9;">
                                         <path
                                             d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
                                     </svg>
-                                    <span style="color:#00c2ff" data-i18n="docs.modpacksTitle">Modpacks & Partage</span>
+                                    <span style="color:#00c2ff" data-i18n="docs.modpacksTitle">Modpacks & Sharing</span>
                                     <button class="btn btn-xs btn-ghost" onclick="openDiagram('modpack-flow')"
-                                        style="margin-left:auto; font-size:10px; color:#00c2ff; border:1px dashed rgba(0,194,255,0.3); padding: 2px 8px;">
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2" style="margin-right:4px">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                            <path d="M2 17l10 5 10-5" />
-                                            <path d="M2 12l10 5 10-5" />
-                                        </svg>
-                                        <span data-i18n="docs.exploreLifecycle">VOIR LE CYCLE DE VIE</span>
+                                        style="font-size: 9px; padding: 1px 8px; border: 1px dashed rgba(0,194,255,0.4); color: #00c2ff; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 800; border-radius: 12px; height: 18px; background: rgba(0, 194, 255, 0.05);">
+                                        <span data-i18n="docs.exploreLifecycle">VIEW LIFECYCLE</span>
                                     </button>
                                 </h3>
                                 <div style="margin-bottom: 12px; font-size: 13px; color: var(--text-secondary); line-height: 1.6;"
@@ -2136,7 +2216,35 @@
                             </div>
 
 
-                            <!-- Conflicts -->
+                            <!-- Mod Mapper Guide -->
+                            <div class="glass-card" style="border-left: 3px solid var(--accent);">
+                                <h3 class="card-title">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                        <path d="M12 2v8m0 0l-3-3m3 3l3-3M5 12h14v7a2 2 0 01-2 2H7a2 2 0 01-2-2v-7z" />
+                                    </svg>
+                                    <span style="color:var(--accent)" data-i18n="mapper.title">Mod Mapper</span>
+                                    <button class="btn btn-xs btn-ghost" onclick="openDiagram('mod-mapper')"
+                                        style="margin-left:auto; font-size:10px; color:var(--accent); border:1px dashed rgba(59,130,246,0.3); padding: 2px 8px;">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" style="margin-right:4px">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                            <path d="M2 17l10 5 10-5" />
+                                            <path d="M2 12l10 5 10-5" />
+                                        </svg>
+                                        <span data-i18n="docs.viewDiagram">VOIR LE DIAGRAMME</span>
+                                    </button>
+                                </h3>
+                                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
+                                    <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px" data-i18n="docs.mapper.q1">À quoi ça sert ?</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5" data-i18n="docs.mapper.a1">Le Mapper permet de réorganiser les dossiers d'un mod mal structuré sans quitter BMM.</div>
+                                    </div>
+                                    <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px" data-i18n="docs.mapper.q2">Mapping Intelligent</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5" data-i18n="docs.mapper.a2">Sélectionnez vos fichiers à gauche, puis double-cliquez sur le dossier de destination à droite.</div>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="glass-card" style="border-left: 3px solid var(--warning);">
                                 <h3 class="card-title">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warning)"
@@ -3634,6 +3742,11 @@
                                             <span style="font-size: 11px;" data-i18n="docs.gallery.btn.hostingFlow">Flux
                                                 d'Hébergement</span>
                                         </button>
+                                        <button class="btn btn-ghost btn-sm" onclick="openDiagram('mod-mapper')"
+                                            style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                            <span style="font-size: 11px;" data-i18n="docs.gallery.btn.modMapper">Flux du
+                                                Mapper</span>
+                                        </button>
                                         <button class="btn btn-ghost btn-sm" onclick="openDiagram('mod-architecture')"
                                             style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
                                             <span style="font-size: 11px;"
@@ -3700,6 +3813,7 @@
                                     </div>
                                 </div>
                             </details>
+                            </div> <!-- End of settings-sections -->
                         </div> <!-- End of docs-tab-advanced -->
                 </section>
 
@@ -6465,8 +6579,8 @@
                     </div>
                 </div>
                 <div class="modal-body" style="padding: 24px;">
-                    <p id="confirm-message" style="margin:0; line-height:1.6; color:var(--text-muted); font-size:14px;">
-                        Êtes-vous sûr de vouloir continuer ?</p>
+                    <div id="confirm-message" style="margin:0; line-height:1.6; color:var(--text-muted); font-size:14px;">
+                        Êtes-vous sûr de vouloir continuer ?</div>
                 </div>
                 <div class="modal-footer"
                     style="padding: 16px 24px; display: flex; justify-content: flex-end; gap: 12px; border-top: none;">
@@ -6677,6 +6791,56 @@
     </div> <!-- End #app-window-outer -->
 
     <script type="module" src="js/ui/app.js"></script>
+    <!-- Mapper Context Menu -->
+    <div id="mapper-context-menu" class="context-menu glass-card" style="display:none; position:fixed; z-index:1000000;">
+        <div class="menu-item" id="ctx-mapper-open">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+            <span>Ouvrir dans l'explorateur</span>
+        </div>
+        <div class="menu-item" id="ctx-mapper-copy">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span data-i18n="mapper.copyPath">Copier le chemin relatif</span>
+        </div>
+        <div class="menu-item mod-only-menu" id="ctx-mapper-cancel-mapping">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0"/><path d="m9 9 6 6"/><path d="m15 9-6 6"/></svg>
+            <span data-i18n="mapper.cancelMapping">Annuler le mappage</span>
+        </div>
+        <div class="menu-divider mod-only-menu"></div>
+        <div class="menu-item mod-only-menu" id="ctx-mapper-new-folder">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+            <span data-i18n="mapper.newFolder">Nouveau dossier</span>
+        </div>
+        <div class="menu-item mod-only-menu" id="ctx-mapper-rename">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            <span data-i18n="mapper.rename">Renommer</span>
+        </div>
+        <div class="menu-divider mod-only-menu"></div>
+        <div class="menu-item danger mod-only-menu" id="ctx-mapper-delete">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            <span>Supprimer définitivement</span>
+        </div>
+    </div>
+
+    <!-- Modal for Mapper Inputs -->
+    <div id="modal-mapper-input" class="modal-generic-overlay">
+        <div class="modal glass" style="width: 450px; max-width: 90vw;">
+            <div class="modal-header">
+                <h2 id="mapper-input-title" data-i18n="mapper.newFolder" style="margin: 0; font-size: 1.2rem; color: var(--text-main);">Nouveau Dossier</h2>
+                <button class="modal-close" onclick="document.getElementById('modal-mapper-input').classList.remove('open')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px 30px;">
+                <p id="mapper-input-label" data-i18n="mapper.enterName" style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 15px;">Entrez le nom :</p>
+                <div class="input-wrapper">
+                    <input type="text" id="mapper-input-field" class="bmm-input" placeholder="Nom..." data-i18n-placeholder="mapper.namePlaceholder" style="width: 100%;">
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 20px 30px; background: rgba(0,0,0,0.2); display: flex; justify-content: flex-end; gap: 12px;">
+                <button id="btn-mapper-input-cancel" class="btn btn-secondary" data-i18n="common.cancel">Annuler</button>
+                <button id="btn-mapper-input-confirm" class="btn btn-primary" data-i18n="common.confirm">Confirmer</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Global Dropdown Portal (Bypasses all clipping/z-index issues) -->
     <div id="global-dropdown-portal" style="position:fixed; top:0; left:0; pointer-events:none; z-index:999999;"></div>
 

@@ -364,6 +364,7 @@ dependencies = [
  "chrono",
  "discord-rich-presence",
  "ed25519-dalek",
+ "embed-resource",
  "fs_extra",
  "futures",
  "hex",

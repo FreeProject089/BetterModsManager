@@ -10,7 +10,7 @@ path = "src/main.rs"
 [build-dependencies]
 tauri-build = { version = "1", features = [] }
 chrono = "0.4"
-embed-resource = "1"
+embed-resource = "2"
 
 [dependencies]
 tauri = { version = "1", features = [ "dialog-message", "dialog-confirm", "dialog-ask", "protocol-asset", "custom-protocol", "notification-all", "dialog-open", "dialog-save", "fs-all", "path-all", "window-all", "shell-open"] }

@@ -28,6 +28,7 @@ import { initInteractionLogging } from './user-logger.js';
 import { initDebugMenu } from '../features/debug/debug-menu.js';
 import { checkSecurityMode } from './security-modal.js';
 import { escHtml, escAttr, formatBytes } from '../core/utils.js';
+import { initMapper } from '../features/mapper/mapper.js';
 
  async function waitForModalClosed(id: string): Promise<void> {
      const el = document.getElementById(id);
@@ -407,6 +408,7 @@ async function main() {
     initNavbarLangDropdown();
     initNavbarVersion();
     initUpdateNotes();
+    initMapper();
 
     document.getElementById('btn-restart-onboarding')?.addEventListener('click', () => {
         startOnboarding();

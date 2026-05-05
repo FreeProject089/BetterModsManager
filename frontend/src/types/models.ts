@@ -74,6 +74,16 @@ export interface ModEntry {
   file_hashes: Record<string, string> | null;
 }
 
+export interface EnrichedMod extends ModEntry {
+  shared_activations: SharedActivation[];
+}
+
+export interface SharedActivation {
+  profile_name: string;
+  game_path: string;
+  active: boolean;
+}
+
 // ── Tags ─────────────────────────────────────────────────
 
 export interface TagDef {
@@ -295,4 +305,11 @@ export interface ServerDownloadFinishedPayload {
   file: string;
   total_size: number;
   protocol: 'Local' | 'LAN' | 'WAN';
+}
+
+export interface FileTreeNode {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  children: FileTreeNode[] | null;
 }
