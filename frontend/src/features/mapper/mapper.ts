@@ -847,27 +847,78 @@ async function showMapperPreview(): Promise<void> {
                     <tbody>
         `;
 
-        if (files.length === 0) {
+        let previewItems = files.map(f => {
+            let isPending = false;
+            let finalPath = f;
+            
+            pendingMoves.forEach((targetFolder, sourcePath) => {
+                const isMatch = f === sourcePath || f.startsWith(sourcePath + '\\') || f.startsWith(sourcePath + '/');
+                if (isMatch) {
+                    isPending = true;
+                    if (targetFolder !== ".") {
+                        const fileName = sourcePath.split(/[\\/]/).pop() || sourcePath;
+                        if (f === sourcePath) {
+                            finalPath = `${targetFolder}\\${fileName}`;
+                        } else {
+                            const remainder = f.substring(sourcePath.length + 1);
+                            finalPath = `${targetFolder}\\${fileName}\\${remainder}`;
+                        }
+                    } else {
+                        // Moved to root
+                        const fileName = sourcePath.split(/[\\/]/).pop() || sourcePath;
+                        if (f === sourcePath) {
+                            finalPath = fileName;
+                        } else {
+                            const remainder = f.substring(sourcePath.length + 1);
+                            finalPath = `${fileName}\\${remainder}`;
+                        }
+                    }
+                }
+            });
+
+            return {
+                original: f,
+                finalPath: finalPath,
+                isPending: isPending,
+                isRoot: !finalPath.includes('\\') && !finalPath.includes('/')
+            };
+        });
+
+        // Priority sorting: Pending -> Mapped -> Root
+        previewItems.sort((a, b) => {
+            if (a.isPending && !b.isPending) return -1;
+            if (!a.isPending && b.isPending) return 1;
+            if (!a.isRoot && b.isRoot) return -1;
+            if (a.isRoot && !b.isRoot) return 1;
+            return a.finalPath.localeCompare(b.finalPath);
+        });
+
+        if (previewItems.length === 0) {
             html += `<tr><td colspan="3" class="empty-hint">${t("mapper.noFiles")}</td></tr>`;
         } else {
-            files.forEach(f => {
-                const isAtRoot = !f.includes('\\') && !f.includes('/');
-                const statusClass = isAtRoot ? 'root-warning' : 'ok-path';
-                const targetPath = `${activeProfile?.game_path}\\${f}`;
-                const icon = isAtRoot ? 
-                    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5">
+            previewItems.forEach(item => {
+                const statusClass = item.isPending ? 'pending-path' : (item.isRoot ? 'root-warning' : 'ok-path');
+                const targetPath = `${activeProfile?.game_path}\\${item.finalPath}`;
+                
+                let icon = '';
+                if (item.isPending) {
+                    icon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
+                } else if (item.isRoot) {
+                    icon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5">
                         <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
                         <path d="m3.3 7 8.7 5 8.7-5"/>
                         <path d="M12 22V12"/>
-                    </svg>` : 
-                    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
+                    </svg>`;
+                } else {
+                    icon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
+                }
 
                 html += `
-                <tr class="${statusClass}">
+                <tr class="${statusClass}" ${item.isPending ? 'style="background: rgba(var(--accent-rgb), 0.1);"' : ''}>
                     <td>
                         <div class="path-cell">
                             ${icon}
-                            <span class="path-text main">${f}</span>
+                            <span class="path-text main">${item.isPending ? `<span class="pending-badge">NOUVEAU</span> ` : ''}${item.finalPath}</span>
                         </div>
                     </td>
                     <td class="arrow-cell">→</td>
