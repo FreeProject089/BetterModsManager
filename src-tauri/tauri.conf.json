@@ -83,6 +83,24 @@
         "security": {
             "csp": null
         },
+        "cli": {
+            "description": "Better Mods Manager CLI",
+            "longDescription": "Interface en ligne de commande pour BMM",
+            "args": [
+                {
+                    "name": "profile",
+                    "short": "p",
+                    "description": "Charge un profil spécifique au démarrage",
+                    "takesValue": true
+                },
+                {
+                    "name": "server",
+                    "short": "s",
+                    "description": "Démarre l'application en mode Lightweight Server",
+                    "takesValue": false
+                }
+            ]
+        },
         "windows": [
             {
                 "label": "main",
