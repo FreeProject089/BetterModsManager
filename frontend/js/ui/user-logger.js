@@ -29,7 +29,7 @@ export function initInteractionLogging() {
             }
             else {
                 console.warn('[BMM-DEBUG] Access denied. Unlock Debug Mode in Settings (Ctrl+D) first.');
-                toast('DevTools locked. Unlock in Settings.', 'warning');
+                toast((window.t ? window.t('settings.devToolsLocked') : 'DevTools locked. Unlock in Settings.'), 'warning');
             }
         }
         else if (e.ctrlKey && e.shiftKey && key === 'f') {
@@ -48,10 +48,10 @@ export function initInteractionLogging() {
                     if (isHidden) {
                         appState.set('debugMode', true);
                         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        toast('Debug Mode Unlocked', 'success');
+                        toast((window.t ? window.t('settings.debugUnlocked') : 'Debug Mode Unlocked'), 'success');
                     }
                     else {
-                        toast('Debug Section Hidden', 'info');
+                        toast((window.t ? window.t('settings.debugHidden') : 'Debug Section Hidden'), 'info');
                     }
                 }
             }

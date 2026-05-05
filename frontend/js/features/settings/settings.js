@@ -255,7 +255,7 @@ export async function resetStorageLimits() {
         _renderStorageModal();
     }
     catch (e) {
-        toast('Reset failed: ' + e, 'error');
+        toast((window.t ? window.t('common.error') : 'Failed') + ': ' + e, 'error');
     }
 }
 /** Run benchmarks for all disks currently in use by profiles */
@@ -510,7 +510,7 @@ const _renderStorageModal = async () => {
                         toast(t('common.success'), 'success');
                     }
                     catch (err) {
-                        toast('Error: ' + err, 'error');
+                        toast((window.t ? window.t('common.error') : 'Error') + ': ' + err, 'error');
                     }
                 }, 800);
             });
@@ -543,7 +543,7 @@ const _renderStorageModal = async () => {
                             toast(t('common.success'), 'success');
                         }
                         catch (err) {
-                            toast('Error: ' + err, 'error');
+                            toast((window.t ? window.t('common.error') : 'Error') + ': ' + err, 'error');
                         }
                     });
                 }

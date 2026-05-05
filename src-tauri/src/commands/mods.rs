@@ -344,7 +344,7 @@ pub async fn add_mod(
 
             if src.is_file() && src.extension().and_then(|e| e.to_str()).map(|s| s.eq_ignore_ascii_case("zip")).unwrap_or(false) {
                 let file = std::fs::File::open(&src).map_err(|e| e.to_string())?;
-                let archive = zip::ZipArchive::new(file).map_err(|e| format!("Erreur Zip: {}", e))?;
+                let archive = zip::ZipArchive::new(file).map_err(|e| format!("Zip error: {}", e))?;
                 let len = archive.len();
                 let num_threads = rayon::current_num_threads().max(1);
                 let chunk_size = (len + num_threads - 1) / num_threads;

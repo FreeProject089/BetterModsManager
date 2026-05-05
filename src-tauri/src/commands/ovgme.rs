@@ -39,7 +39,7 @@ pub async fn import_ovgme_profiles(state: State<'_, AppState>) -> Result<usize, 
 }
 
 async fn parse_ovgme_path(ovgme_path: &PathBuf, state: State<'_, AppState>) -> Result<usize, String> {
-    let entries = std::fs::read_dir(ovgme_path).map_err(|e| format!("Erreur lecture OvGME: {}", e))?;
+    let entries = std::fs::read_dir(ovgme_path).map_err(|e| format!("OvGME read error: {}", e))?;
     let mut imported_count = 0;
     
     // Collect game data first without holding lock

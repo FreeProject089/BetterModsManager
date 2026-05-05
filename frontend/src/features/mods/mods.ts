@@ -61,7 +61,7 @@ export async function initMods() {
       }
     } catch (error) {
       console.error('Error picking folder:', error);
-      toast('Erreur lors de la sélection du dossier', 'error');
+      toast((window.t ? window.t('common.error') : 'Erreur'), 'error');
     }
   });
 

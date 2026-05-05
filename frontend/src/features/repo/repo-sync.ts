@@ -411,7 +411,7 @@ export function initRepoSync(elements) {
                 syncPercent.textContent = "0%";
                 syncFill.style.width = "0%";
                 syncDetails.textContent = t('repo.syncStarting');
-                toast(t('repo.syncStarted') || "Synchronisation commencée", "info");
+                toast(t('repo.syncStarted') || "Synchronization started", "info");
                 if (btnPauseSync) btnPauseSync.style.display = 'flex';
                 if (btnCancelSync) {
                     btnCancelSync.style.display = 'flex';
@@ -467,7 +467,7 @@ export function initRepoSync(elements) {
                 showSyncSummary(summary);
 
                 syncStatus.textContent = t('repo.syncDone');
-                toast(t('repo.syncSuccess') || "Synchronisation terminée avec succès", "success");
+                toast(t('repo.syncSuccess') || "Synchronization completed successfully", "success");
                 syncPercent.textContent = "100%";
                 syncFill.style.width = "100%";
                 syncDetails.textContent = t('repo.syncComplete');
@@ -526,7 +526,7 @@ export function initRepoSync(elements) {
         btnCancelSync.addEventListener('click', async () => {
             try {
                 await invoke('cancel_repo_sync');
-                toast(t('repo.syncCancelled') || "Annulation en cours...", 'info');
+                toast(t('repo.syncCancelled') || "Canceling...", 'info');
                 btnCancelSync.disabled = true;
             } catch (err) {
                 toast(t('common.error') + ': ' + err, 'error');

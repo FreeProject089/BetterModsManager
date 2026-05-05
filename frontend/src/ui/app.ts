@@ -291,7 +291,7 @@ export async function updateLibraryProfileSelector() {
                     await updateLibraryProfileSelector(); // Keep labels in sync
                     applyTranslations();
                 } catch (e) {
-                    toast('Erreur chargement profil : ' + e, 'error');
+                    toast((window.t ? window.t('common.error') : 'Erreur') + ' : ' + e, 'error');
                 }
             });
             select._hasListener = true;

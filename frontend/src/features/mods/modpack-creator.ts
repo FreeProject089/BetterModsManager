@@ -832,7 +832,7 @@ function _openMultiSelectModal(listEl) {
 async function _showRepairModal(container, pack, report, onComplete) {
     const activeProfileId = _activeProfileId || window.cachedActiveProfileId;
     if (!activeProfileId) {
-        toast("Aucun profil actif", "error");
+        toast((window.t ? window.t('common.error') : 'Aucun profil actif'), "error");
         return;
     }
 
@@ -1034,7 +1034,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
                 onComplete();
             }
         } catch (err) {
-            toast('Erreur de réparation : ' + err.toString(), 'error');
+            toast((window.t ? window.t('common.error') : 'Erreur') + ' : ' + err.toString(), 'error');
             actionsBlock.style.display = 'flex';
         } finally {
             if (unlisten) unlisten();
@@ -1122,7 +1122,7 @@ async function _applyModpack(container, pack) {
 
         await _executeApplyModpack(container, pack, isApplying);
     } catch (err) {
-        toast('Erreur: ' + err.toString(), 'error');
+        toast((window.t ? window.t('common.error') : 'Erreur') + ': ' + err.toString(), 'error');
     }
 }
 

@@ -266,7 +266,7 @@ export async function renderModDetail(modId) {
             await refreshMods(false, true);
         }
         catch (err) {
-            toast('Erreur : ' + err, 'error');
+            toast((window.t ? window.t('common.error') : 'Erreur') + ' : ' + err, 'error');
         }
     };
     panel.querySelector('#btn-add-link').onclick = () => {

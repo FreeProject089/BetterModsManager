@@ -511,7 +511,7 @@ pub async fn repair_modpack_mod(
 
             let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
             if !res.status().is_success() {
-                return Err(AppError::Internal(format!("Erreur lors du téléchargement: {}", res.status())));
+                return Err(AppError::Internal(format!("Error during download: {}", res.status())));
             }
             
             let bytes = res.bytes().await.map_err(|e| e.to_string())?;

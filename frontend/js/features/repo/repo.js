@@ -14,7 +14,7 @@ export const copyToClipboard = async (text, successMsg) => {
         toast(successMsg || t('repo.urlCopied'), "success");
     }
     catch (err) {
-        toast(t('repo.urlCopyError') || "Erreur de copie", "error");
+        toast(t('repo.urlCopyError') || "Copy error", "error");
     }
 };
 export const showConfirm = (title, message, isDanger = true) => {

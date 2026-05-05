@@ -31,7 +31,7 @@ export function initDebugMenu() {
                 toast(`Report generated: ${path}`, 'success', 5000);
             }
             catch (err) {
-                toast('Failed: ' + err, 'error');
+                toast((window.t ? window.t('common.error') : 'Failed') + ': ' + err, 'error');
             }
         });
     }
@@ -46,11 +46,11 @@ export function initDebugMenu() {
                     // 2. Reset frontend (localStorage)
                     localStorage.clear();
                     // 3. Restart app
-                    toast("System Reset. Restarting...", "warning");
+                    toast((window.t ? window.t('common.success') : 'System Reset'), "warning");
                     setTimeout(() => window.location.reload(), 1500);
                 }
                 catch (err) {
-                    toast('Reset failed: ' + err, 'error');
+                    toast((window.t ? window.t('common.error') : 'Failed') + ': ' + err, 'error');
                 }
             }
         });

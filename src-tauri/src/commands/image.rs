@@ -49,7 +49,7 @@ pub fn crop_and_save_webp(
     // Save as WebP
     cropped
         .save_with_format(&out_path, image::ImageFormat::WebP)
-        .map_err(|e| AppError::Internal(format!("Erreur sauvegarde WebP: {}", e)))?;
+        .map_err(|e| AppError::Internal(format!("WebP save error: {}", e)))?;
 
     // Only update profile's background_image field if not temp
     if !is_temp_val {
@@ -84,7 +84,7 @@ pub fn apply_profile_background(
 
     // Rename temp file to final file
     std::fs::rename(&temp_path, &final_path)
-        .map_err(|e| AppError::Internal(format!("Erreur lors de l'application de l'image: {}", e)))?;
+        .map_err(|e| AppError::Internal(format!("Error applying image: {}", e)))?;
 
     // Update profile
     {

@@ -251,7 +251,7 @@ export async function resetStorageLimits() {
         toast(t('storage.limitsReset'), 'success');
         _renderStorageModal();
     } catch (e) {
-        toast('Reset failed: ' + e, 'error');
+        toast((window.t ? window.t('common.error') : 'Failed') + ': ' + e, 'error');
     }
 }
 
@@ -513,7 +513,7 @@ const _renderStorageModal = async () => {
                     try {
                         await invoke('set_disk_limit', { mountPoint, limitMbS });
                         toast(t('common.success'), 'success');
-                    } catch (err) { toast('Error: ' + err, 'error'); }
+                    } catch (err) { toast((window.t ? window.t('common.error') : 'Error') + ': ' + err, 'error'); }
                 }, 800);
             });
         });
@@ -543,7 +543,7 @@ const _renderStorageModal = async () => {
                         try {
                             await invoke('set_disk_limit', { mountPoint: mp, limitMbS: sugVal });
                             toast(t('common.success'), 'success');
-                        } catch (err) { toast('Error: ' + err, 'error'); }
+                        } catch (err) { toast((window.t ? window.t('common.error') : 'Error') + ': ' + err, 'error'); }
                     });
                 } catch (err) {
                     resultSpan.textContent = t('common.error') + ': ' + err;

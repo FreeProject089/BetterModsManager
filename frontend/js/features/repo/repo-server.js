@@ -192,7 +192,7 @@ export function initRepoServer(elements) {
                 toast(t('repo.urlCopied'), "success");
             }
             catch (e) {
-                toast(t('repo.urlCopyError') || "Erreur lors de la copie", "error");
+                toast(t('repo.urlCopyError') || "Error during la copie", "error");
             }
         });
     }
@@ -203,7 +203,7 @@ export function initRepoServer(elements) {
                 toast(t('repo.urlCopied'), "success");
             }
             catch (e) {
-                toast(t('repo.urlCopyError') || "Erreur lors de la copie", "error");
+                toast(t('repo.urlCopyError') || "Error during la copie", "error");
             }
         });
     }

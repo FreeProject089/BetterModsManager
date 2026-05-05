@@ -261,7 +261,7 @@ export async function renderModDetail(modId) {
       });
       toast(t('common.saved') || 'Mod sauvegardé.', 'success');
       await refreshMods(false, true);
-    } catch (err) { toast('Erreur : ' + err, 'error'); }
+    } catch (err) { toast((window.t ? window.t('common.error') : 'Erreur') + ' : ' + err, 'error'); }
   };
 
   panel.querySelector('#btn-add-link').onclick = () => {

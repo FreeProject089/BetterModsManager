@@ -3,17 +3,17 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum AppError {
-    #[error("Erreur I/O: {0}")]
+    #[error("I/O Error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("Erreur de sérialisation: {0}")]
+    #[error("Serialization error: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("Erreur interne: {0}")]
+    #[error("Internal error: {0}")]
     Anyhow(#[from] anyhow::Error),
     #[error("État de l'application verrouillé: {0}")]
     LockError(String),
     #[error("Ressource non trouvée: {0}")]
     NotFound(String),
-    #[error("Erreur interne: {0}")]
+    #[error("Internal error: {0}")]
     Internal(String),
 }
 

@@ -1152,7 +1152,7 @@ class DebugUI {
                 this.filterCSSRules(query);
         }
         catch (e) {
-            container.innerHTML = `<div style="color:var(--debug-error); font-size:10px">Impossible de lire la feuille: ${e.message}</div>`;
+            container.innerHTML = `<div style="color:var(--debug-error); font-size:10px">Failed to lire la feuille: ${e.message}</div>`;
         }
     }
     filterCSSRules(query) {
@@ -1965,7 +1965,7 @@ class DebugUI {
             container.scrollTop = container.scrollHeight;
         }
         catch (e) {
-            container.innerHTML = `<div style="padding:10px; color:var(--debug-error)">Erreur: ${e}</div>`;
+            container.innerHTML = `<div style="padding:10px; color:var(--debug-error)">Error: ${e}</div>`;
         }
     }
     _getLogColor(level) {

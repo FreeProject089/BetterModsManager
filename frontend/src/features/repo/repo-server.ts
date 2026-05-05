@@ -215,7 +215,7 @@ export function initRepoServer(elements) {
                 await navigator.clipboard.writeText(urlInputServer.value);
                 toast(t('repo.urlCopied'), "success");
             } catch(e) {
-                toast(t('repo.urlCopyError') || "Erreur lors de la copie", "error");
+                toast(t('repo.urlCopyError') || "Error during la copie", "error");
             }
         });
     }
@@ -226,7 +226,7 @@ export function initRepoServer(elements) {
                 await navigator.clipboard.writeText(publicUrlInput.value);
                 toast(t('repo.urlCopied'), "success");
             } catch(e) {
-                toast(t('repo.urlCopyError') || "Erreur lors de la copie", "error");
+                toast(t('repo.urlCopyError') || "Error during la copie", "error");
             }
         });
     }

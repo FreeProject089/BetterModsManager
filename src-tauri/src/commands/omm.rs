@@ -13,7 +13,7 @@ pub async fn auto_import_omm(state: State<'_, AppState>) -> Result<usize, String
         return Err("Configuration Open Mod Manager introuvable.".to_string());
     }
 
-    let content = std::fs::read_to_string(&config_path).map_err(|e| format!("Erreur lecture config: {}", e))?;
+    let content = std::fs::read_to_string(&config_path).map_err(|e| format!("Config read error: {}", e))?;
     let re_path = Regex::new(r#"(?is)<path>(.*?)</path>"#).expect("Invalid OMM path regex");
     
     let mut imported = 0;
@@ -41,7 +41,7 @@ pub async fn import_omm_profile(state: State<'_, AppState>, path: String) -> Res
         return Err("Le fichier sélectionné est introuvable.".to_string());
     }
 
-    let raw_bytes = std::fs::read(&p).map_err(|e| format!("Erreur lecture: {}", e))?;
+    let raw_bytes = std::fs::read(&p).map_err(|e| format!("Read error: {}", e))?;
     let content = String::from_utf8_lossy(&raw_bytes).to_string();
 
     if content.contains("<Open_Mod_Manager_Hub>") {
@@ -92,7 +92,7 @@ pub async fn import_omm_profile(state: State<'_, AppState>, path: String) -> Res
 }
 
 async fn import_single_channel(state: &State<'_, AppState>, p: &PathBuf) -> Result<usize, String> {
-    let raw_bytes = std::fs::read(p).map_err(|e| format!("Erreur lecture: {}", e))?;
+    let raw_bytes = std::fs::read(p).map_err(|e| format!("Read error: {}", e))?;
     let content = String::from_utf8_lossy(&raw_bytes).to_string();
 
     // Check magic or root tag to ensure it's a channel

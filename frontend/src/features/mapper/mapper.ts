@@ -217,7 +217,7 @@ async function refreshModTree(force = false): Promise<void> {
         try {
             const mods: ModEntry[] = await invoke('get_all_mods');
             const m = mods.find(mod => mod.id === selectedModId);
-            if (!m) { container.innerHTML = `<div class="empty-hint error">Mod non trouvé</div>`; return; }
+            if (!m) { container.innerHTML = `<div class="empty-hint error">${t('mapper.modNotFound') || 'Mod non trouvé'}</div>`; return; }
             modFolderPath = m.mod_folder_path;
         } catch (e) { container.innerHTML = `<div class="empty-hint error" style="color:var(--danger)">${e}</div>`; return; }
     }
@@ -258,7 +258,7 @@ async function refreshGameTree(force = false): Promise<void> {
         lastGamePath = activeProfile.game_path;
         await renderFilteredGameTree();
     } catch (e: any) {
-        container.innerHTML = `<div class="empty-hint error" style="color:var(--danger)">Erreur: ${e.message || e}</div>`;
+        container.innerHTML = `<div class="empty-hint error" style="color:var(--danger)">Error: ${e.message || e}</div>`;
     }
 }
 
@@ -374,7 +374,7 @@ async function renderFilteredModTree(): Promise<void> {
                         <path d="M12 22V12"/>
                     </svg>
                 </span>
-                <span class="tree-item-label">Racine du Mod</span>`;
+                <span class="tree-item-label">${t('mapper.modRoot') || 'Racine du Mod'}</span>`;
             rootItem.dataset.path = ".";
             rootItem.addEventListener('contextmenu', (e) => {
                 e.preventDefault(); e.stopPropagation();
@@ -404,7 +404,7 @@ async function renderFilteredGameTree(): Promise<void> {
                     <line x1="6" y1="18" x2="6.01" y2="18"/>
                 </svg>
             </span>
-            <span class="tree-item-label">Racine du Jeu</span>`;
+            <span class="tree-item-label">${t('mapper.gameRoot') || 'Racine du Jeu'}</span>`;
         rootItem.dataset.path = ".";
         rootItem.addEventListener('dblclick', () => { if (selectedPaths.size > 0) queueMoveTo("."); });
         rootItem.addEventListener('contextmenu', (e) => {
@@ -481,7 +481,7 @@ async function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSi
         
         if (isModSide && pendingMoves.has(node.path)) {
             const target = pendingMoves.get(node.path);
-            const targetDisplay = target === "." ? "Racine" : target;
+            const targetDisplay = target === "." ? (t('mapper.root') || "Racine") : target;
             label.innerHTML = `${node.name} <span class="pending-badge">→ ${targetDisplay}</span>`;
         } else {
             label.textContent = node.name;
@@ -597,7 +597,8 @@ async function applyAllChanges() {
 function queueMoveTo(targetPath: string) {
     const count = selectedPaths.size;
     selectedPaths.forEach(p => { pendingMoves.set(p, targetPath); });
-    toast(`${count} éléments déplacés vers "${targetPath === "." ? "la racine" : targetPath}"`, "info");
+    const targetDisplay = targetPath === "." ? (t("mapper.root") || "la racine") : targetPath;
+    toast(t("mapper.itemsMoved", { count: count.toString(), target: targetDisplay }) || `${count} éléments déplacés vers "${targetDisplay}"`, "info");
     updateSaveButtonVisibility();
     renderFilteredModTree();
 }
@@ -675,7 +676,7 @@ function setupContextMenu() {
         hideContextMenu();
     });
     document.getElementById('ctx-mapper-copy')?.addEventListener('click', (e) => {
-        e.stopPropagation(); if (lastSelectedPath) { navigator.clipboard.writeText(lastSelectedPath); toast('Chemin copié !'); }
+        e.stopPropagation(); if (lastSelectedPath) { navigator.clipboard.writeText(lastSelectedPath); toast(t('mapper.pathCopied') || 'Chemin copié !'); }
         hideContextMenu();
     });
     document.getElementById('ctx-mapper-cancel-mapping')?.addEventListener('click', (e) => {
@@ -918,7 +919,7 @@ async function showMapperPreview(): Promise<void> {
                     <td>
                         <div class="path-cell">
                             ${icon}
-                            <span class="path-text main">${item.isPending ? `<span class="pending-badge">NOUVEAU</span> ` : ''}${item.finalPath}</span>
+                            <span class="path-text main">${item.isPending ? `<span class="pending-badge">${t('mapper.newBadge') || 'NOUVEAU'}</span> ` : ''}${item.finalPath}</span>
                         </div>
                     </td>
                     <td class="arrow-cell">→</td>

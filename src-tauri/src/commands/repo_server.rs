@@ -141,13 +141,13 @@ async fn get_cloudflared_path(handle: &tauri::AppHandle) -> Result<PathBuf, Stri
             .build()
             .map_err(|e| format!("Client error: {}", e))?;
 
-        let response = client.get(&url).send().await.map_err(|e| format!("Erreur de téléchargement: {}", e))?;
+        let response = client.get(&url).send().await.map_err(|e| format!("Download error: {}", e))?;
         if !response.status().is_success() {
             return Err(format!("Échec du téléchargement (Status {}): {}", response.status(), url));
         }
 
-        let bytes = response.bytes().await.map_err(|e| format!("Erreur de lecture: {}", e))?;
-        std::fs::write(&cf_path, &bytes).map_err(|e| format!("Erreur d'écriture: {}", e))?;
+        let bytes = response.bytes().await.map_err(|e| format!("Read error: {}", e))?;
+        std::fs::write(&cf_path, &bytes).map_err(|e| format!("Write error: {}", e))?;
         println!("[Tunnel] Download complete.");
     }
 
@@ -594,7 +594,7 @@ pub async fn start_repo_server(
                 .stdout(Stdio::null())
                 .creation_flags(CREATE_NO_WINDOW.0)
                 .spawn()
-                .map_err(|e| format!("Erreur au lancement du tunnel: {}", e))?;
+                .map_err(|e| format!("Tunnel launch error: {}", e))?;
 
             if let Some(stderr) = child.stderr.take() {
                 let mut reader = BufReader::new(stderr).lines();

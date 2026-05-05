@@ -776,7 +776,7 @@ pub async fn sync_server_repo(
                                     } else if res.status() == 403 {
                                         return Err("repo.errForbidden".to_string());
                                     } else {
-                                        return Err(format!("Le serveur ne supporte pas les Range requests ou erreur HTTP {}", res.status()));
+                                        return Err(format!("The server does not support les Range requests ou erreur HTTP {}", res.status()));
                                     }
                                 }
                                 current_offset += r_chunk.size as u64;
@@ -792,12 +792,12 @@ pub async fn sync_server_repo(
                 }
 
                 if !partial_success {
-                        let res = client.get(&file_url).send().await.map_err(|e| format!("Erreur réseau ({}): {}", file.relative_path, e))?;
+                        let res = client.get(&file_url).send().await.map_err(|e| format!("Network error ({}): {}", file.relative_path, e))?;
                         if !res.status().is_success() {
                             if res.status() == 403 {
                                 return Err("repo.errForbidden".to_string());
                             }
-                            return Err(format!("Erreur HTTP {} pour le fichier: {}", res.status(), file.relative_path));
+                            return Err(format!("HTTP error {} pour le fichier: {}", res.status(), file.relative_path));
                         }
                         
                         let mut stream = res.bytes_stream();
