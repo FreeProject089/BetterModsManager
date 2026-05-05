@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod error;
 mod commands;
 mod fs_utils;
 mod models;
@@ -11,6 +12,7 @@ use winreg::enums::*;
 use winreg::RegKey;
 use tauri::Manager;
 use std::sync::Mutex;
+use tracing::{info, warn, error};
 
 lazy_static::lazy_static! {
     static ref PENDING_DEEP_LINK: Mutex<Option<String>> = Mutex::new(None);
@@ -74,6 +76,8 @@ pub fn apply_fs_security_mode(app: tauri::AppHandle) {
 }
 
 fn main() {
+    tracing_subscriber::fmt::init();
+    info!("Starting Better Mods Manager...");
     commands::crash::setup_panic_hook();
     commands::crash::init_session();
     let _ = register_bmm_protocol();

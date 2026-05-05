@@ -5,6 +5,8 @@ use tauri::State;
 use std::fs;
 use jwalk::WalkDir;
 use std::collections::HashMap;
+use crate::error::AppError;
+use tracing::{info, warn, error};
 
 #[derive(Serialize, Clone, Debug)]
 pub struct FileTreeNode {
@@ -15,10 +17,11 @@ pub struct FileTreeNode {
 }
 
 #[tauri::command]
-pub fn get_directory_tree(path: String) -> Result<Vec<FileTreeNode>, String> {
+pub fn get_directory_tree(path: String) -> Result<Vec<FileTreeNode>, AppError> {
     let root = Path::new(&path);
     if !root.exists() || !root.is_dir() {
-        return Err("Le dossier n'existe pas ou n'est pas un répertoire".to_string());
+        error!("Directory not found or not a dir: {}", path);
+        return Err(AppError::NotFound("Le dossier n'existe pas ou n'est pas un répertoire".to_string()));
     }
     
     // 1. Multi-threaded walk to collect all items
@@ -112,15 +115,16 @@ pub async fn restructure_mod_item(
     mod_id: String,
     item_rel_path: String,
     target_game_folder_rel: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
+    info!("Restructuring mod item {} -> {}", item_rel_path, target_game_folder_rel);
     let mod_folder = {
-        let data = state.data.lock().unwrap();
-        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or_else(|| AppError::NotFound("Mod introuvable".to_string()))?;
         m.mod_folder_path.clone()
     };
     
     let src_path = mod_folder.join(&item_rel_path);
-    let item_name = src_path.file_name().ok_or("Nom d'élément invalide")?;
+    let item_name = src_path.file_name().ok_or_else(|| AppError::Internal("Nom d'élément invalide".to_string()))?;
     
     // The target path in the game dir is target_game_folder_rel + item_name.
     // We mirror this in the mod folder.
@@ -137,7 +141,7 @@ pub async fn restructure_mod_item(
     }
     
     if !src_path.exists() {
-        return Err(format!("Élément source introuvable: {}", item_rel_path));
+        return Err(AppError::NotFound(format!("Élément source introuvable: {}", item_rel_path)));
     }
     
     // Create destination directory structure
@@ -179,16 +183,17 @@ pub async fn delete_mod_item(
     state: State<'_, AppState>,
     mod_id: String,
     item_rel_path: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
+    info!("Deleting mod item {}", item_rel_path);
     let mod_folder = {
-        let data = state.data.lock().unwrap();
-        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or_else(|| AppError::NotFound("Mod introuvable".to_string()))?;
         m.mod_folder_path.clone()
     };
     
     let path = mod_folder.join(&item_rel_path);
     if !path.exists() {
-        return Err("Fichier ou dossier introuvable".to_string());
+        return Err(AppError::NotFound("Fichier ou dossier introuvable".to_string()));
     }
     
     if path.is_dir() {
@@ -207,10 +212,11 @@ pub async fn create_mod_folder(
     mod_id: String,
     parent_rel_path: String,
     folder_name: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
+    info!("Creating mod folder {} in {}", folder_name, parent_rel_path);
     let mod_folder = {
-        let data = state.data.lock().unwrap();
-        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or_else(|| AppError::NotFound("Mod introuvable".to_string()))?;
         m.mod_folder_path.clone()
     };
     
@@ -221,7 +227,7 @@ pub async fn create_mod_folder(
     };
     
     if target_dir.exists() {
-        return Err("Ce dossier existe déjà".to_string());
+        return Err(AppError::Internal("Ce dossier existe déjà".to_string()));
     }
     
     fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
@@ -235,22 +241,23 @@ pub async fn rename_mod_item(
     mod_id: String,
     item_rel_path: String,
     new_name: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
+    info!("Renaming mod item {} to {}", item_rel_path, new_name);
     let mod_folder = {
-        let data = state.data.lock().unwrap();
-        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or_else(|| AppError::NotFound("Mod introuvable".to_string()))?;
         m.mod_folder_path.clone()
     };
     
     let src_path = mod_folder.join(&item_rel_path);
     if !src_path.exists() {
-        return Err("Élément introuvable".to_string());
+        return Err(AppError::NotFound("Élément introuvable".to_string()));
     }
     
     let dst_path = src_path.parent().unwrap_or(&mod_folder).join(new_name);
     
     if dst_path.exists() {
-        return Err("Un élément avec ce nom existe déjà".to_string());
+        return Err(AppError::Internal("Un élément avec ce nom existe déjà".to_string()));
     }
     
     fs::rename(&src_path, &dst_path).map_err(|e| e.to_string())?;
@@ -263,16 +270,17 @@ pub async fn open_item_in_explorer(
     state: State<'_, AppState>,
     mod_id: String,
     item_rel_path: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
+    info!("Opening item in explorer: {}", item_rel_path);
     let mod_folder = {
-        let data = state.data.lock().unwrap();
-        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or_else(|| AppError::NotFound("Mod introuvable".to_string()))?;
         m.mod_folder_path.clone()
     };
     
     let path = mod_folder.join(&item_rel_path);
     if !path.exists() {
-        return Err("Chemin introuvable".to_string());
+        return Err(AppError::NotFound("Chemin introuvable".to_string()));
     }
 
     #[cfg(target_os = "windows")]
