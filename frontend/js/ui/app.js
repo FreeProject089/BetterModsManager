@@ -264,7 +264,7 @@ export async function updateLibraryProfileSelector() {
                     applyTranslations();
                 }
                 catch (e) {
-                    toast((window.t ? window.t('common.error') : 'Erreur') + ' : ' + e, 'error');
+                    toast((window.t ? window.t('common.error') : 'Error') + ' : ' + e, 'error');
                 }
             });
             select._hasListener = true;

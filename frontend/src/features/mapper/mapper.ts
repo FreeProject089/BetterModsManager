@@ -203,7 +203,7 @@ async function refreshModTree(force = false): Promise<void> {
     const container = document.getElementById('mapper-mod-tree');
     if (!container) return;
     if (!selectedModId) {
-        container.innerHTML = `<div class="empty-hint">${t('mapper.selectModHint') || 'Sélectionnez un mod pour voir son contenu'}</div>`;
+        container.innerHTML = `<div class="empty-hint">${t('mapper.selectModHint') || 'Select a mod to see its contents'}</div>`;
         return;
     }
 
@@ -243,7 +243,7 @@ async function refreshGameTree(force = false): Promise<void> {
     const container = document.getElementById('mapper-game-tree');
     if (!container) return;
     if (!activeProfile) {
-        container.innerHTML = `<div class="empty-hint">${t('mapper.loadProfileHint') || 'Chargez un profil pour voir le dossier du jeu'}</div>`;
+        container.innerHTML = `<div class="empty-hint">${t('mapper.loadProfileHint') || 'Load a profile to view the game folder'}</div>`;
         return;
     }
 
@@ -435,7 +435,7 @@ async function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSi
         if (container.classList.contains('file-tree')) {
             const empty = document.createElement('div');
             empty.className = 'empty-hint';
-            empty.textContent = t('common.noResults') || 'Aucun résultat';
+            empty.textContent = t('common.noResults') || 'No results';
             container.appendChild(empty);
         }
         return;

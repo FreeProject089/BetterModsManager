@@ -312,7 +312,7 @@ async function _openEditor(container, pack) {
     const skipInfo = document.createElement('div');
     skipInfo.innerHTML = `
         <div style="font-size:13px; font-weight:700; color:#ff8800;">${t('modpack.skipIntegrity') || "Ignorer la vérification d'intégrité"}</div>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${t('modpack.skipIntegrityDesc') || "Désactive la vérification des fichiers au lancement (plus rapide, mais ne répare pas les mods cassés)."}</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${t('modpack.skipIntegrityDesc') || "Disables file verification on launch (faster, but does not repair broken mods)."}</div>
     `;
 
     skipRow.appendChild(skipCb);
@@ -832,7 +832,7 @@ function _openMultiSelectModal(listEl) {
 async function _showRepairModal(container, pack, report, onComplete) {
     const activeProfileId = _activeProfileId || window.cachedActiveProfileId;
     if (!activeProfileId) {
-        toast((window.t ? window.t('common.error') : 'Aucun profil actif'), "error");
+        toast((window.t ? window.t('common.error') : 'No active profile'), "error");
         return;
     }
 
@@ -857,7 +857,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
         const fallbackType = m.fallback_type || "direct";
 
         // Vérification de la possibilité de réparation :
-        // - Corrompu => peut toujours être réparé localement (fichiers déplacés), pas besoin de lien
+        // - Corrompu => peut toujours être réparé localement (files déplacés), pas besoin de lien
         // - Manquant  => nécessite un lien de téléchargement
         const hasLink = fallbackType === "sr" ? !!pack.sr_link : !!(m.download_fallback || m.download_link);
         const isCorrupted = !isMissing; // Corrupted = can be fixed locally (moved file)
@@ -995,7 +995,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
                 } catch (modErr) {
                     const errStr = String(modErr);
                     let friendlyMsg;
-                    if (errStr.includes('aucun lien') || errStr.includes('Aucun lien')) {
+                    if (errStr.includes('aucun lien') || errStr.includes('None lien')) {
                         friendlyMsg = t('modpack.repair.noLink', { name: mref.mod_name }) || `${mref.mod_name} : aucun lien de téléchargement fourni`;
                     } else if (errStr.includes('non trouvé') || errStr.includes('404')) {
                         friendlyMsg = t('modpack.repair.notFound', { name: mref.mod_name }) || `${mref.mod_name} : fichier introuvable sur le serveur`;
@@ -1034,7 +1034,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
                 onComplete();
             }
         } catch (err) {
-            toast((window.t ? window.t('common.error') : 'Erreur') + ' : ' + err.toString(), 'error');
+            toast((window.t ? window.t('common.error') : 'Error') + ' : ' + err.toString(), 'error');
             actionsBlock.style.display = 'flex';
         } finally {
             if (unlisten) unlisten();
@@ -1122,7 +1122,7 @@ async function _applyModpack(container, pack) {
 
         await _executeApplyModpack(container, pack, isApplying);
     } catch (err) {
-        toast((window.t ? window.t('common.error') : 'Erreur') + ': ' + err.toString(), 'error');
+        toast((window.t ? window.t('common.error') : 'Error') + ': ' + err.toString(), 'error');
     }
 }
 
@@ -1140,8 +1140,8 @@ async function _deleteModpack(container, pack) {
     if (!pack) return;
 
     const ok = await window.confirmCustom(
-        t('modpack.delete') || 'Supprimer',
-        t('modpack.deleteConfirm') || 'Voulez-vous vraiment supprimer ce modpack ?',
+        t('modpack.delete') || 'Delete',
+        t('modpack.deleteConfirm') || 'Are you sure you want to delete this modpack?',
         'danger'
     );
     if (!ok) return;
@@ -1214,7 +1214,7 @@ export async function openQuickApplyModal() {
  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
                                 <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
-                            </svg>            <span>${t('modpack.noModpacks') || 'Aucun modpack trouvé'}</span>
+                            </svg>            <span>${t('modpack.noModpacks') || 'No modpack found'}</span>
         </div>`;
     }
 

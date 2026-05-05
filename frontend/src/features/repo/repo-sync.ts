@@ -239,7 +239,7 @@ export function initRepoSync(elements) {
                             const modCheckboxes = [];
 
                             modToolbar.appendChild(makeSmallBtn(t('common.selectAll') || 'Tout', () => modCheckboxes.forEach(c => c.checked = true)));
-                            modToolbar.appendChild(makeSmallBtn(t('common.unselectAll') || 'Aucun', () => modCheckboxes.forEach(c => c.checked = false)));
+                            modToolbar.appendChild(makeSmallBtn(t('common.unselectAll') || 'None', () => modCheckboxes.forEach(c => c.checked = false)));
                             modSection.appendChild(modToolbar);
 
                             const modList = document.createElement('div');
@@ -485,7 +485,7 @@ export function initRepoSync(elements) {
                     syncFill.style.width = "0%";
                     toast(t('repo.syncCancelled'), 'info');
                 } else {
-                    syncStatus.textContent = t('repo.syncError') || "Erreur de synchro";
+                    syncStatus.textContent = t('repo.syncError') || "Sync error";
                     toast(t(errMsg) || errMsg, 'error');
                 }
             } finally {
@@ -566,7 +566,7 @@ export function showSyncSummary(summary) {
                     <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
                         <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">TRANSFERT</div>
                         <div style="display:flex; flex-direction:column; gap:4px;">
-                            <div style="font-size:12px; color:var(--text-primary); font-weight:600;">${p.files_downloaded} ${t('repo.summaryFiles') || 'fichiers'}</div>
+                            <div style="font-size:12px; color:var(--text-primary); font-weight:600;">${p.files_downloaded} ${t('repo.summaryFiles') || 'files'}</div>
                             <div style="font-size:12px; color:var(--cyan); font-weight:600;">${formatBytes(p.bytes_downloaded)}</div>
                         </div>
                     </div>

@@ -61,7 +61,7 @@ export async function initMods() {
       }
     } catch (error) {
       console.error('Error picking folder:', error);
-      toast((window.t ? window.t('common.error') : 'Erreur'), 'error');
+      toast((window.t ? window.t('common.error') : 'Error'), 'error');
     }
   });
 
@@ -267,7 +267,7 @@ function updateTagFilterUI() {
   const select = document.getElementById('mod-tag-filter') as HTMLSelectElement | null;
   if (!select) return;
   const currentVal = S.currentTagFilter || 'all';
-  let html = `<option value="all" data-i18n="lib.tagFilterAll">${t('lib.tagFilterAll') || 'Tous les tags'}</option>`;
+  let html = `<option value="all" data-i18n="lib.tagFilterAll">${t('lib.tagFilterAll') || 'All tags'}</option>`;
   if (S.userTags && S.userTags.length > 0) {
     const sortedTags = [...S.userTags].sort((a:any, b:any) => a.name.localeCompare(b.name));
     sortedTags.forEach((tag:any) => {

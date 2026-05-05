@@ -385,7 +385,7 @@ export async function renderProfiles() {
                     <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
                 </svg>
             </div>
-            <h3 data-i18n="prof.emptyTitle" style="font-size:22px; margin-bottom:12px; font-weight:700">${t('prof.emptyTitle') || 'Aucun profil configuré'}</h3>
+            <h3 data-i18n="prof.emptyTitle" style="font-size:22px; margin-bottom:12px; font-weight:700">${t('prof.emptyTitle') || 'None profil configuré'}</h3>
             <p data-i18n="prof.emptyDesc" style="color:var(--text-secondary); max-width:440px; text-align:center; margin-bottom:32px; line-height:1.6">
                 ${t('prof.emptyDesc') || 'Organisez vos mods par jeu ou par configuration...'}
             </p>

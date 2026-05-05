@@ -22,7 +22,7 @@ export function openAddModModal() {
         verEl.value = '1.0.0';
     const tagSelect = document.getElementById('mod-tag');
     if (tagSelect) {
-        tagSelect.innerHTML = `<option value="">${t('prof.none') || 'Aucun'}</option>`;
+        tagSelect.innerHTML = `<option value="">${t('prof.none') || 'None'}</option>`;
         S.userTags.forEach(tDef => {
             const opt = document.createElement('option');
             opt.value = tDef.id;
@@ -46,7 +46,7 @@ export async function confirmAddMod() {
     const tagSelect = document.getElementById('mod-tag');
     const tagId = tagSelect ? tagSelect.value : '';
     if (!name || !folder) {
-        toast(t('mod.folderRequired') || "Nom et dossier requis.", 'error');
+        toast(t('mod.folderRequired') || "Name and folder required.", 'error');
         return;
     }
     const btn = document.getElementById('btn-confirm-add-mod');

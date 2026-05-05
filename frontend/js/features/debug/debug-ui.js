@@ -1122,7 +1122,7 @@ class DebugUI {
                     </div>
                 `;
             }
-            container.innerHTML = html || '<div style="color:var(--text-muted); font-size:10px; text-align:center">Aucune règle CSS standard trouvée.</div>';
+            container.innerHTML = html || '<div style="color:var(--text-muted); font-size:10px; text-align:center">Nonee règle CSS standard trouvée.</div>';
             // Attach Live CSS Modifiers
             container.querySelectorAll('.live-css-editor').forEach(editor => {
                 editor.addEventListener('input', (e) => {
@@ -1961,7 +1961,7 @@ class DebugUI {
                         ${this.escapeHtml(line)}
                     </div>
                 `;
-            }).join('') || '<div style="padding:10px; color:var(--text-muted)">Aucun log Rust trouvé.</div>';
+            }).join('') || '<div style="padding:10px; color:var(--text-muted)">None log Rust trouvé.</div>';
             container.scrollTop = container.scrollHeight;
         }
         catch (e) {

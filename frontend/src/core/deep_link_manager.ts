@@ -241,7 +241,7 @@ async function handleDeepLink(urlStr: string): Promise<void> {
                     }
                 } catch (err) {
                     console.error('[BMM] Mod download failed:', err);
-                    toast((t('common.error') || 'Erreur') + ' : ' + err, 'error');
+                    toast((t('common.error') || 'Error') + ' : ' + err, 'error');
                 }
             }
         }

@@ -123,7 +123,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
             }
         }
         const profiles = await invoke('get_profiles');
-        profileFilter.innerHTML = `<option value="all">${t('conflict.allProfiles') || 'Tous les profils'}</option>` + profiles.map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join('');
+        profileFilter.innerHTML = `<option value="all">${t('conflict.allProfiles') || 'All profiles'}</option>` + profiles.map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join('');
         const renderList = (respectPrioritization = false) => {
             const q = searchInput.value.toLowerCase();
             const p = profileFilter.value;
@@ -198,7 +198,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
           </div>
         `;
             });
-            container.innerHTML = html || `<div style="padding:40px;text-align:center;color:var(--text-muted)">${t('conflict.empty') || 'Aucun conflit.'}</div>`;
+            container.innerHTML = html || `<div style="padding:40px;text-align:center;color:var(--text-muted)">${t('conflict.empty') || 'None conflit.'}</div>`;
         };
         renderList(true);
         searchInput.oninput = () => renderList(false);
@@ -247,7 +247,7 @@ export function showConflictContextMenu(e, mod1Id, mod2Id) {
             container.innerHTML = files.map(f => `<div style="padding:4px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escAttr(f)}">${escHtml(f)}</div>`).join('');
         }
         catch (err) {
-            container.innerHTML = `<span style="color:var(--danger)">${t('common.error') || "Erreur"}: ${err}</span>`;
+            container.innerHTML = `<span style="color:var(--danger)">${t('common.error') || "Error"}: ${err}</span>`;
         }
     };
     document.addEventListener('mousedown', function hideCtx(ev) {

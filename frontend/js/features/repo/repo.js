@@ -109,7 +109,7 @@ export const loadModpacksForExport = async (modpacksListEl) => {
         const modpacks = await invoke('load_modpacks');
         modpacksListEl.innerHTML = '';
         if (!modpacks || modpacks.length === 0) {
-            modpacksListEl.innerHTML = `<div style="color:var(--text-muted); font-size:12px; text-align:center; padding: 10px;">${t('modpack.noMods') || 'Aucun modpack disponible'}</div>`;
+            modpacksListEl.innerHTML = `<div style="color:var(--text-muted); font-size:12px; text-align:center; padding: 10px;">${t('modpack.noMods') || 'No modpack available'}</div>`;
             return;
         }
         modpacks.forEach(pack => {
