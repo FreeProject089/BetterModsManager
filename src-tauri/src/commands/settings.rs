@@ -1,6 +1,8 @@
 use crate::state::AppState;
 use crate::fs_utils::{resolve_path, get_lang_dir};
 use tauri::State;
+use crate::error::AppError;
+use tracing::{info, warn};
 
 #[derive(serde::Deserialize)]
 pub struct ExportOptions {
@@ -12,11 +14,11 @@ pub struct ExportOptions {
 }
 
 #[tauri::command]
-pub fn export_app_data(state: State<AppState>, dest_path: String, options: Option<ExportOptions>) -> Result<(), String> {
+pub fn export_app_data(state: State<AppState>, dest_path: String, options: Option<ExportOptions>) -> Result<(), AppError> {
     let _ = state.save(); // Save current memory to disk first
     
     if let Some(opts) = options {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         let mut export_data = crate::state::AppData::default();
         if opts.profiles { 
             export_data.profiles = data.profiles.clone(); 
@@ -27,21 +29,21 @@ pub fn export_app_data(state: State<AppState>, dest_path: String, options: Optio
         if opts.custom_tags { export_data.custom_tags = data.custom_tags.clone(); }
         if opts.disk_limits { export_data.disk_limits = data.disk_limits.clone(); }
         
-        let json = serde_json::to_string_pretty(&export_data).map_err(|e| e.to_string())?;
-        std::fs::write(&dest_path, json).map_err(|e| e.to_string())?;
+        let json = serde_json::to_string_pretty(&export_data)?;
+        std::fs::write(&dest_path, json)?;
     } else {
-        std::fs::copy(&state.data_path, dest_path).map_err(|e| e.to_string())?;
+        std::fs::copy(&state.data_path, dest_path)?;
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn import_app_data(state: State<AppState>, src_path: String) -> Result<(), String> {
-    std::fs::copy(src_path, &state.data_path).map_err(|e| e.to_string())?;
+pub fn import_app_data(state: State<AppState>, src_path: String) -> Result<(), AppError> {
+    std::fs::copy(src_path, &state.data_path)?;
     // Reload state into memory
     let new_state = AppState::load(state.data_path.clone());
-    let mut data = state.data.lock().unwrap();
-    let new_data = new_state.data.lock().unwrap();
+    let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    let new_data = new_state.data.lock().map_err(|_| AppError::LockError("Failed to lock new AppState".to_string()))?;
     *data = crate::state::AppData {
         profiles: new_data.profiles.clone(),
         mods: new_data.mods.clone(),
@@ -54,18 +56,18 @@ pub fn import_app_data(state: State<AppState>, src_path: String) -> Result<(), S
 }
 
 #[tauri::command]
-pub fn get_settings(state: State<AppState>) -> crate::state::AppSettings {
-    let data = state.data.lock().unwrap();
-    data.settings.clone()
+pub fn get_settings(state: State<AppState>) -> Result<crate::state::AppSettings, AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    Ok(data.settings.clone())
 }
 
 #[tauri::command]
-pub fn update_settings(state: State<AppState>, settings: crate::state::AppSettings) -> Result<(), String> {
+pub fn update_settings(state: State<AppState>, settings: crate::state::AppSettings) -> Result<(), AppError> {
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         data.settings = settings;
     }
-    state.save().map_err(|e| e.to_string())?;
+    state.save()?;
     Ok(())
 }
 
@@ -75,9 +77,9 @@ pub fn apply_fs_security_mode_command(app: tauri::AppHandle) {
 }
 
 #[tauri::command]
-pub fn reset_app_data(state: State<AppState>) -> Result<(), String> {
+pub fn reset_app_data(state: State<AppState>) -> Result<(), AppError> {
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         *data = crate::state::AppData::default();
     }
     let _ = state.save();
@@ -91,12 +93,12 @@ pub fn is_debug_mode(app_handle: tauri::AppHandle) -> bool {
         if let Ok(content) = std::fs::read_to_string(&path) {
             let normalized = content.to_lowercase();
             let is_debug = normalized.contains("prod=false");
-            println!("[DEBUG_SYSTEM] Resolution: {:?}, is_debug: {}", path, is_debug);
+            info!("[DEBUG_SYSTEM] Resolution: {:?}, is_debug: {}", path, is_debug);
             return is_debug;
         }
     }
     
-    println!("[DEBUG_SYSTEM] app.cfg could not be resolved.");
+    warn!("[DEBUG_SYSTEM] app.cfg could not be resolved.");
     false
 }
 #[tauri::command]

@@ -17,7 +17,7 @@ pub async fn start_resizing<R: Runtime>(window: Window<R>, direction: String) {
             _ => return,
         };
 
-        let hwnd = window.hwnd().unwrap().0;
+        let hwnd = window.hwnd().expect("Failed to get window handle").0;
 
         // CRITICAL: ReleaseCapture + SendMessageW MUST run on the main/UI thread.
         // The async command handler runs on a tokio thread — ReleaseCapture() on the

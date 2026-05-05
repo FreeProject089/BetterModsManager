@@ -14,7 +14,7 @@ pub async fn auto_import_omm(state: State<'_, AppState>) -> Result<usize, String
     }
 
     let content = std::fs::read_to_string(&config_path).map_err(|e| format!("Erreur lecture config: {}", e))?;
-    let re_path = Regex::new(r#"(?is)<path>(.*?)</path>"#).unwrap();
+    let re_path = Regex::new(r#"(?is)<path>(.*?)</path>"#).expect("Invalid OMM path regex");
     
     let mut imported = 0;
     let paths: Vec<String> = re_path.captures_iter(&content)
@@ -49,7 +49,7 @@ pub async fn import_omm_profile(state: State<'_, AppState>, path: String) -> Res
         let hub_dir = p.parent().unwrap_or(&p);
 
         // Technique 1: Check for explicit <channel file="..."> links
-        let re_chan = Regex::new(r#"(?i)<channel[^>]*file="([^"]+)""#).unwrap();
+        let re_chan = Regex::new(r#"(?i)<channel[^>]*file="([^"]+)""#).expect("Invalid OMM channel regex");
         for cap in re_chan.captures_iter(&content) {
             let rel_path = &cap[1];
             let abs_path = hub_dir.join(rel_path);
@@ -100,10 +100,10 @@ async fn import_single_channel(state: &State<'_, AppState>, p: &PathBuf) -> Resu
         return Ok(0);
     }
 
-    let re_title = Regex::new(r#"(?is)<title[^>]*>(.*?)</title>"#).unwrap();
-    let re_install = Regex::new(r#"(?is)<install[^>]*>(.*?)</install>"#).unwrap();
-    let re_backup = Regex::new(r#"(?is)<backup[^>]*>(.*?)</backup>"#).unwrap();
-    let re_library = Regex::new(r#"(?is)<library[^>]*>(.*?)</library>"#).unwrap();
+    let re_title = Regex::new(r#"(?is)<title[^>]*>(.*?)</title>"#).expect("Invalid OMM title regex");
+    let re_install = Regex::new(r#"(?is)<install[^>]*>(.*?)</install>"#).expect("Invalid OMM install regex");
+    let re_backup = Regex::new(r#"(?is)<backup[^>]*>(.*?)</backup>"#).expect("Invalid OMM backup regex");
+    let re_library = Regex::new(r#"(?is)<library[^>]*>(.*?)</library>"#).expect("Invalid OMM library regex");
 
     let title = re_title.captures(&content)
         .and_then(|c| c.get(1))
@@ -148,7 +148,7 @@ async fn import_single_channel(state: &State<'_, AppState>, p: &PathBuf) -> Resu
         channel_dir.join("Backup")
     };
 
-    let mut data = state.data.lock().unwrap();
+    let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
 
     // Skip if already imported
     if data.profiles.iter().any(|pr| pr.name == title && pr.game_path == game_path) {
@@ -197,7 +197,7 @@ async fn import_single_channel(state: &State<'_, AppState>, p: &PathBuf) -> Resu
                         mod_name = mod_name[..mod_name.len() - 4].to_string();
                     }
 
-                    let mut data = state.data.lock().unwrap();
+                    let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
                     let is_already_added = data.mods.iter().any(|m| m.mod_folder_path == inner_path || m.mod_folder_path.canonicalize().ok() == inner_path.canonicalize().ok());
 
                     if !is_already_added {

@@ -1,4 +1,5 @@
 use crate::state::AppState;
+use crate::error::AppError;
 use serde::Serialize;
 use sysinfo::Disks;
 use tauri::State;
@@ -65,9 +66,9 @@ fn detect_cloud_provider(mount_point: &str, name: &str) -> Option<String> {
 }
 
 #[tauri::command]
-pub fn get_system_disks(state: State<AppState>) -> Vec<DiskLimitInfo> {
+pub fn get_system_disks(state: State<AppState>) -> Result<Vec<DiskLimitInfo>, AppError> {
     let disks_list = Disks::new_with_refreshed_list();
-    let data = state.data.lock().unwrap();
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
 
     let profiles = &data.profiles;
 
@@ -150,12 +151,12 @@ pub fn get_system_disks(state: State<AppState>) -> Vec<DiskLimitInfo> {
         });
     }
 
-    infos
+    Ok(infos)
 }
 
 pub fn get_limit_for_path(state: &AppState, path: &std::path::Path) -> Option<u64> {
     let disks_list = Disks::new_with_refreshed_list();
-    let data = state.data.lock().unwrap();
+    let data = state.data.lock().ok()?;  // Returns None on poisoned lock (safe fallback)
 
     let path_can = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let mut path_str = path_can.to_string_lossy().to_lowercase();
@@ -187,9 +188,9 @@ pub fn get_limit_for_path(state: &AppState, path: &std::path::Path) -> Option<u6
 }
 
 #[tauri::command]
-pub fn set_disk_limit(state: State<AppState>, mount_point: String, limit_mb_s: Option<u64>) -> Result<(), String> {
+pub fn set_disk_limit(state: State<AppState>, mount_point: String, limit_mb_s: Option<u64>) -> Result<(), AppError> {
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         if let Some(limit) = limit_mb_s {
             data.disk_limits.insert(mount_point, limit);
         } else {
@@ -210,7 +211,10 @@ pub fn benchmark_disk(mount_point: String) -> Result<BenchmarkResult, String> {
         return Err(format!("Mount point {} does not exist.", mount_point));
     }
 
-    let test_filename = format!(".bmm_bench_{}.tmp", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros());
+    let test_filename = format!(".bmm_bench_{}.tmp",
+        // unwrap_or is safe here — UNIX_EPOCH is always valid
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_micros()
+    );
     
     let candidates = vec![
         test_dir.clone(), // Root of the drive
@@ -311,7 +315,7 @@ pub struct DiskSpaceInfo {
 pub fn check_disk_space(path: String) -> Result<DiskSpaceInfo, String> {
     let disks = Disks::new_with_refreshed_list();
     let target = std::path::Path::new(&path);
-    let mut path_str = target.canonicalize().unwrap_or(target.to_path_buf())
+    let mut path_str = target.canonicalize().unwrap_or_else(|_| target.to_path_buf())
         .to_string_lossy().to_lowercase();
     if path_str.starts_with(r"\\?\") && path_str.len() >= 4 { path_str = path_str[4..].to_string(); }
 

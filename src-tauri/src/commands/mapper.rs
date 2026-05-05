@@ -6,7 +6,7 @@ use std::fs;
 use jwalk::WalkDir;
 use std::collections::HashMap;
 use crate::error::AppError;
-use tracing::{info, warn, error};
+use tracing::{info, error};
 
 #[derive(Serialize, Clone, Debug)]
 pub struct FileTreeNode {
@@ -17,77 +17,78 @@ pub struct FileTreeNode {
 }
 
 #[tauri::command]
-pub fn get_directory_tree(path: String) -> Result<Vec<FileTreeNode>, AppError> {
-    let root = Path::new(&path);
-    if !root.exists() || !root.is_dir() {
-        error!("Directory not found or not a dir: {}", path);
-        return Err(AppError::NotFound("Le dossier n'existe pas ou n'est pas un répertoire".to_string()));
-    }
-    
-    // 1. Multi-threaded walk to collect all items
-    let mut entries: Vec<_> = WalkDir::new(root)
-        .sort(true)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.depth > 0)
-        .collect();
-
-    // 2. Build map of all nodes
-    let mut nodes_map: HashMap<PathBuf, FileTreeNode> = HashMap::new();
-    let mut root_paths = Vec::new();
-
-    for entry in &entries {
-        let path = entry.path();
-        let rel_path = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().to_string();
-        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-        let is_dir = entry.file_type().is_dir();
-        
-        let node = FileTreeNode {
-            name,
-            path: rel_path,
-            is_dir,
-            children: if is_dir { Some(Vec::new()) } else { None },
-        };
-        
-        nodes_map.insert(path.clone(), node);
-        if entry.depth == 1 {
-            root_paths.push(path);
+pub async fn get_directory_tree(path: String) -> Result<Vec<FileTreeNode>, AppError> {
+    let path_clone = path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = Path::new(&path_clone);
+        if !root.exists() || !root.is_dir() {
+            error!("Directory not found or not a dir: {}", path_clone);
+            return Err(AppError::NotFound("Le dossier n'existe pas ou n'est pas un répertoire".to_string()));
         }
-    }
+        
+        // 1. Multi-threaded walk to collect all items
+        let mut entries: Vec<_> = WalkDir::new(root)
+            .sort(true)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.depth > 0)
+            .collect();
 
-    // 3. Assemble the tree from leaves up (or by parent lookup)
-    // To ensure children are attached to parents, we must process from deepest to shallowest
-    entries.sort_by(|a, b| b.depth.cmp(&a.depth));
+        // 2. Build map of all nodes
+        let mut nodes_map: HashMap<PathBuf, FileTreeNode> = HashMap::new();
+        let mut root_paths = Vec::new();
 
-    for entry in &entries {
-        if entry.depth > 1 {
+        for entry in &entries {
             let path = entry.path();
-            if let Some(parent_path) = path.parent() {
-                // Remove child from map and add it to parent's children
-                if let Some(child_node) = nodes_map.remove(&path) {
-                    if let Some(parent_node) = nodes_map.get_mut(parent_path) {
-                        if let Some(children) = &mut parent_node.children {
-                            children.push(child_node);
+            let rel_path = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().to_string();
+            let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            let is_dir = entry.file_type().is_dir();
+            
+            let node = FileTreeNode {
+                name,
+                path: rel_path,
+                is_dir,
+                children: if is_dir { Some(Vec::new()) } else { None },
+            };
+            
+            nodes_map.insert(path.clone(), node);
+            if entry.depth == 1 {
+                root_paths.push(path);
+            }
+        }
+
+        // 3. Assemble the tree from leaves up
+        entries.sort_by(|a, b| b.depth.cmp(&a.depth));
+
+        for entry in &entries {
+            if entry.depth > 1 {
+                let path = entry.path();
+                if let Some(parent_path) = path.parent() {
+                    if let Some(child_node) = nodes_map.remove(&path) {
+                        if let Some(parent_node) = nodes_map.get_mut(parent_path) {
+                            if let Some(children) = &mut parent_node.children {
+                                children.push(child_node);
+                            }
                         }
                     }
                 }
             }
         }
-    }
 
-    // 4. Collect roots and sort
-    let mut final_nodes = Vec::new();
-    for path in root_paths {
-        if let Some(mut node) = nodes_map.remove(&path) {
-            if let Some(children) = &mut node.children {
-                sort_tree_recursive(children);
+        // 4. Collect roots and sort
+        let mut final_nodes = Vec::new();
+        for path in root_paths {
+            if let Some(mut node) = nodes_map.remove(&path) {
+                if let Some(children) = &mut node.children {
+                    sort_tree_recursive(children);
+                }
+                final_nodes.push(node);
             }
-            final_nodes.push(node);
         }
-    }
-    
-    sort_nodes(&mut final_nodes);
-    Ok(final_nodes)
+        
+        sort_nodes(&mut final_nodes);
+        Ok(final_nodes)
+    }).await.map_err(|e| AppError::Internal(e.to_string()))?
 }
 
 fn sort_tree_recursive(nodes: &mut Vec<FileTreeNode>) {

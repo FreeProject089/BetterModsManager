@@ -1,9 +1,10 @@
 use std::path::{Path, PathBuf};
-use base64::Engine;
-use serde::Serialize;
 use std::fs;
-use std::time::{Instant};
+use std::time::Instant;
+use serde::Serialize;
+use base64::Engine;
 use lazy_static::lazy_static;
+use crate::error::AppError;
 
 lazy_static! {
     static ref START_TIME: Instant = Instant::now();
@@ -26,8 +27,8 @@ pub struct FileEntry {
 }
 
 #[tauri::command]
-pub async fn get_project_files(app_handle: tauri::AppHandle) -> Result<Vec<FileEntry>, String> {
-    let mut current = app_handle.path_resolver().resource_dir().unwrap_or_default();
+pub async fn get_project_files(app_handle: tauri::AppHandle) -> Result<Vec<FileEntry>, AppError> {
+    let mut current = app_handle.path_resolver().resource_dir().ok_or_else(|| AppError::Internal("Impossible de trouver le dossier de ressources".to_string()))?;
     
     // Normalize UNC prefix (\\?\) which can break .exists() in some environments
     let mut s = current.to_string_lossy().to_string();
@@ -47,7 +48,7 @@ pub async fn get_project_files(app_handle: tauri::AppHandle) -> Result<Vec<FileE
     }
     
     let frontend_path = frontend_path.ok_or_else(|| {
-        format!("Frontend directory not found. Root searched: {:?}", current)
+        AppError::Internal(format!("Frontend directory not found. Root searched: {:?}", current))
     })?;
 
     let mut tree = Vec::new();
@@ -56,8 +57,8 @@ pub async fn get_project_files(app_handle: tauri::AppHandle) -> Result<Vec<FileE
     Ok(tree)
 }
 
-fn read_dir_recursive(path: &Path, base: &Path, results: &mut Vec<FileEntry>) -> Result<(), String> {
-    let entries = fs::read_dir(path).map_err(|e| e.to_string())?;
+fn read_dir_recursive(path: &Path, base: &Path, results: &mut Vec<FileEntry>) -> Result<(), AppError> {
+    let entries = fs::read_dir(path)?;
 
     for entry in entries.flatten() {
         let p = entry.path();
@@ -109,8 +110,8 @@ fn read_dir_recursive(path: &Path, base: &Path, results: &mut Vec<FileEntry>) ->
 }
 
 #[tauri::command]
-pub async fn read_project_file(app_handle: tauri::AppHandle, path: String) -> Result<String, String> {
-    let mut current = app_handle.path_resolver().resource_dir().unwrap_or_default();
+pub async fn read_project_file(app_handle: tauri::AppHandle, path: String) -> Result<String, AppError> {
+    let mut current = app_handle.path_resolver().resource_dir().ok_or_else(|| AppError::Internal("Impossible de trouver le dossier de ressources".to_string()))?;
     
     let mut s = current.to_string_lossy().to_string();
     if s.starts_with(r"\\?\") {
@@ -128,15 +129,15 @@ pub async fn read_project_file(app_handle: tauri::AppHandle, path: String) -> Re
         if !current.pop() { break; }
     }
 
-    let frontend_path = frontend_path.ok_or("Project root (frontend) not found")?;
+    let frontend_path = frontend_path.ok_or_else(|| AppError::Internal("Project root (frontend) not found".to_string()))?;
 
     let full_path = frontend_path.join(path);
     if !full_path.starts_with(&frontend_path) {
-        return Err("Access denied".to_string());
+        return Err(AppError::Internal("Access denied".to_string()));
     }
 
     if !full_path.exists() || !full_path.is_file() {
-        return Err(format!("File not found: {:?}", full_path));
+        return Err(AppError::NotFound(format!("File not found: {:?}", full_path)));
     }
 
     // Determine if it's an image or video
@@ -145,7 +146,7 @@ pub async fn read_project_file(app_handle: tauri::AppHandle, path: String) -> Re
     let is_video = matches!(ext.as_str(), "mp4" | "webm" | "ogg");
 
     if is_image || is_video {
-        let bytes = fs::read(&full_path).map_err(|e| e.to_string())?;
+        let bytes = fs::read(&full_path)?;
         let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
         let prefix = if is_image { "image" } else { "video" };
         let mime = match ext.as_str() {
@@ -162,13 +163,13 @@ pub async fn read_project_file(app_handle: tauri::AppHandle, path: String) -> Re
         };
         Ok(format!("data:{}/{};base64,{}", prefix, mime, b64))
     } else {
-        fs::read_to_string(full_path).map_err(|e| e.to_string())
+        Ok(fs::read_to_string(full_path)?)
     }
 }
 
 #[tauri::command]
-pub async fn get_debug_stats() -> Result<DebugStats, String> {
-    use sysinfo::{System};
+pub async fn get_debug_stats() -> Result<DebugStats, AppError> {
+    use sysinfo::System;
     let mut sys = System::new();
     
     let pid = std::process::id();
@@ -188,9 +189,9 @@ pub async fn get_debug_stats() -> Result<DebugStats, String> {
 }
 
 #[tauri::command]
-pub async fn get_rust_logs(max_lines: Option<usize>) -> Result<Vec<String>, String> {
+pub async fn get_rust_logs(max_lines: Option<usize>) -> Result<Vec<String>, AppError> {
     let limit = max_lines.unwrap_or(200);
-    let logs = super::crash::get_log_lines();
+    let logs = crate::commands::crash::get_log_lines();
     let start = if logs.len() > limit { logs.len() - limit } else { 0 };
     Ok(logs[start..].to_vec())
 }

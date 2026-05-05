@@ -53,7 +53,7 @@ pub async fn start_benchmark(window: Window, state: State<'_, AppState>) -> Resu
             }
 
             let point = BenchmarkPoint {
-                timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+                timestamp: SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_secs(),
                 cpu_usage: cpu,
                 ram_usage: ram,
                 disk_read: disk_r,

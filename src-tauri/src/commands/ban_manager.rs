@@ -33,7 +33,7 @@ pub fn load_bans(handle: &AppHandle) -> Result<(), String> {
     if path.exists() {
         let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
         let bans: BanList = serde_json::from_str(&content).unwrap_or_default();
-        let mut lock = BAN_LIST.lock().unwrap();
+        let mut lock = BAN_LIST.lock().unwrap_or_else(|p| p.into_inner());
         *lock = bans;
     }
     Ok(())
@@ -41,7 +41,7 @@ pub fn load_bans(handle: &AppHandle) -> Result<(), String> {
 
 pub fn save_bans(handle: &AppHandle) -> Result<(), String> {
     let path = get_ban_file_path(handle)?;
-    let lock = BAN_LIST.lock().unwrap();
+    let lock = BAN_LIST.lock().unwrap_or_else(|p| p.into_inner());
     let content = serde_json::to_string_pretty(&*lock).map_err(|e| e.to_string())?;
     fs::write(path, content).map_err(|e| e.to_string())?;
     Ok(())
@@ -50,7 +50,7 @@ pub fn save_bans(handle: &AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn ban_user(handle: tauri::AppHandle, ip: Option<String>, key: Option<String>) -> Result<(), String> {
     {
-        let mut lock = BAN_LIST.lock().unwrap();
+        let mut lock = BAN_LIST.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(ip_addr) = ip {
             if !ip_addr.trim().is_empty() {
                 lock.banned_ips.insert(ip_addr);
@@ -69,9 +69,9 @@ pub fn ban_user(handle: tauri::AppHandle, ip: Option<String>, key: Option<String
     // 2. Also save to current serve path if active (for standalone server sync)
     use tauri::Manager;
     if let Some(state) = handle.try_state::<crate::commands::repo_server::RepoServerState>() {
-        if let Some(path_str) = state.serve_path.lock().unwrap().as_ref() {
+        if let Some(path_str) = state.serve_path.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
             let path = PathBuf::from(path_str).join("bans.json");
-            let lock = BAN_LIST.lock().unwrap();
+            let lock = BAN_LIST.lock().unwrap_or_else(|p| p.into_inner());
             if let Ok(content) = serde_json::to_string_pretty(&*lock) {
                 let _ = fs::write(path, content);
             }
@@ -84,7 +84,7 @@ pub fn ban_user(handle: tauri::AppHandle, ip: Option<String>, key: Option<String
 #[tauri::command]
 pub fn unban_user(handle: tauri::AppHandle, ip: Option<String>, key: Option<String>) -> Result<(), String> {
     {
-        let mut lock = BAN_LIST.lock().unwrap();
+        let mut lock = BAN_LIST.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(ip_addr) = ip {
             lock.banned_ips.remove(&ip_addr);
         }
@@ -99,9 +99,9 @@ pub fn unban_user(handle: tauri::AppHandle, ip: Option<String>, key: Option<Stri
     // 2. Also save to current serve path
     use tauri::Manager;
     if let Some(state) = handle.try_state::<crate::commands::repo_server::RepoServerState>() {
-        if let Some(path_str) = state.serve_path.lock().unwrap().as_ref() {
+        if let Some(path_str) = state.serve_path.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
             let path = PathBuf::from(path_str).join("bans.json");
-            let lock = BAN_LIST.lock().unwrap();
+            let lock = BAN_LIST.lock().unwrap_or_else(|p| p.into_inner());
             if let Ok(content) = serde_json::to_string_pretty(&*lock) {
                 let _ = fs::write(path, content);
             }
@@ -113,12 +113,12 @@ pub fn unban_user(handle: tauri::AppHandle, ip: Option<String>, key: Option<Stri
 
 #[tauri::command]
 pub fn get_ban_list() -> Result<BanList, String> {
-    let lock = BAN_LIST.lock().unwrap();
+    let lock = BAN_LIST.lock().unwrap_or_else(|p| p.into_inner());
     Ok(lock.clone())
 }
 
 pub fn is_banned(ip: &str, key: Option<&str>) -> bool {
-    let lock = BAN_LIST.lock().unwrap();
+    let lock = BAN_LIST.lock().unwrap_or_else(|p| p.into_inner());
     if lock.banned_ips.contains(ip) {
         return true;
     }
@@ -133,7 +133,7 @@ pub fn is_banned(ip: &str, key: Option<&str>) -> bool {
 #[tauri::command]
 pub fn unban_all(handle: tauri::AppHandle) -> Result<(), String> {
     {
-        let mut lock = BAN_LIST.lock().unwrap();
+        let mut lock = BAN_LIST.lock().unwrap_or_else(|p| p.into_inner());
         lock.banned_ips.clear();
         lock.banned_keys.clear();
     }
@@ -141,9 +141,9 @@ pub fn unban_all(handle: tauri::AppHandle) -> Result<(), String> {
     
     // Sync with server if active
     if let Some(state) = handle.try_state::<crate::commands::repo_server::RepoServerState>() {
-        if let Some(path_str) = state.serve_path.lock().unwrap().as_ref() {
+        if let Some(path_str) = state.serve_path.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
             let path = PathBuf::from(path_str).join("bans.json");
-            let lock = BAN_LIST.lock().unwrap();
+            let lock = BAN_LIST.lock().unwrap_or_else(|p| p.into_inner());
             if let Ok(content) = serde_json::to_string_pretty(&*lock) {
                 let _ = fs::write(path, content);
             }
@@ -155,7 +155,7 @@ pub fn unban_all(handle: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn unban_bulk(handle: tauri::AppHandle, ips: Vec<String>, keys: Vec<String>) -> Result<(), String> {
     {
-        let mut lock = BAN_LIST.lock().unwrap();
+        let mut lock = BAN_LIST.lock().unwrap_or_else(|p| p.into_inner());
         for ip in ips {
             lock.banned_ips.remove(&ip);
         }
@@ -166,9 +166,9 @@ pub fn unban_bulk(handle: tauri::AppHandle, ips: Vec<String>, keys: Vec<String>)
     save_bans(&handle)?;
     
     if let Some(state) = handle.try_state::<crate::commands::repo_server::RepoServerState>() {
-        if let Some(path_str) = state.serve_path.lock().unwrap().as_ref() {
+        if let Some(path_str) = state.serve_path.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
             let path = PathBuf::from(path_str).join("bans.json");
-            let lock = BAN_LIST.lock().unwrap();
+            let lock = BAN_LIST.lock().unwrap_or_else(|p| p.into_inner());
             if let Ok(content) = serde_json::to_string_pretty(&*lock) {
                 let _ = fs::write(path, content);
             }

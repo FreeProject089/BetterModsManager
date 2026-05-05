@@ -134,7 +134,7 @@ pub async fn export_server_repo(
     }
 
     let (mut repo, profiles_data, all_tags) = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         
         let first_profile = data.profiles.iter().find(|p| profile_ids.contains(&p.id))
             .ok_or("repo.errNoProfile")?;
@@ -340,7 +340,7 @@ fn generate_mini_server_files(
     // 1. Get custom cloudflared path or "AUTO"
     let state = handle.state::<crate::state::AppState>();
     let cf_path = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         data.settings.cloudflared_path.clone().unwrap_or_else(|| "AUTO".to_string())
     };
 
@@ -592,7 +592,7 @@ pub async fn sync_server_repo(
 
         // Check if we already have a profile from this repo
         let existing_profile = if let Some(target_id) = &choice.target_local_profile_id {
-            let data = state.data.lock().unwrap();
+            let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
             data.profiles.iter().find(|p| &p.id == target_id).cloned()
         } else {
             None
@@ -727,11 +727,10 @@ pub async fn sync_server_repo(
 
                     // Differential Sync Logic
                     let mut partial_success = false;
-                    if local_path.exists() && file.chunks.is_some() {
-                        if let Ok(local_chunks) = compute_local_chunk_hashes(&local_path) {
-                            let remote_chunks = file.chunks.as_ref().unwrap();
-                            
-                            let mut file_to_patch = fs::OpenOptions::new().read(true).write(true).open(&local_path).map_err(|e| e.to_string())?;
+                    if local_path.exists() {
+                        if let Some(remote_chunks) = file.chunks.as_ref() {
+                            if let Ok(local_chunks) = compute_local_chunk_hashes(&local_path) {
+                                let mut file_to_patch = fs::OpenOptions::new().read(true).write(true).open(&local_path).map_err(|e| e.to_string())?;
                             
                             let mut current_offset: u64 = 0;
 
@@ -781,8 +780,9 @@ pub async fn sync_server_repo(
                             println!("[Sync] No matching chunks found for {}, falling back to full download", file.relative_path);
                         }
                     }
+                }
 
-                    if !partial_success {
+                if !partial_success {
                         let res = client.get(&file_url).send().await.map_err(|e| format!("Erreur réseau ({}): {}", file.relative_path, e))?;
                         if !res.status().is_success() {
                             if res.status() == 403 {
@@ -853,7 +853,7 @@ pub async fn sync_server_repo(
 
         // Add or update this specific profile in AppState
         {
-            let mut data = state.data.lock().unwrap();
+            let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
             
             if let Some(p) = data.profiles.iter_mut().find(|p| p.id == profile_id) {
                 p.name = format!("{} - {}", repo.name, repo_profile.name);
@@ -918,7 +918,7 @@ pub async fn sync_server_repo(
 
     // Assign active profile to the first synced one
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(first_id) = synced_profile_ids.first() {
             data.active_profile_id = Some(first_id.clone());
         }

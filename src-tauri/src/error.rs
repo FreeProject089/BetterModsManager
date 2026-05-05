@@ -7,6 +7,8 @@ pub enum AppError {
     Io(#[from] std::io::Error),
     #[error("Erreur de sérialisation: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("Erreur interne: {0}")]
+    Anyhow(#[from] anyhow::Error),
     #[error("État de l'application verrouillé: {0}")]
     LockError(String),
     #[error("Ressource non trouvée: {0}")]

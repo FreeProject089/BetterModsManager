@@ -23,6 +23,11 @@ let pendingMoves = new Map<string, string>();
 // Input Modal State
 let currentInputCallback: ((value: string) => void) | null = null;
 
+// Cache guards — avoid re-loading trees if nothing changed
+let lastGamePath: string | null = null;
+let lastModFolderPath: string | null = null;
+let lastProfileId: string | null = null;
+
 /**
  * Initializes the Mod Mapper UI and event listeners
  */
@@ -54,9 +59,12 @@ export async function initMapper(): Promise<void> {
         if (!newProfileId) return;
         try {
             await invoke('set_active_profile', { profileId: newProfileId });
+            // Profile changed — force reload both trees and reset caches
+            lastGamePath = null;
+            lastModFolderPath = null;
             await refreshMapperData();
-            await refreshGameTree();
-            if (selectedModId) await refreshModTree();
+            await refreshGameTree(true);
+            if (selectedModId) await refreshModTree(true);
             toast(t("common.saved"), "success");
         } catch (e: any) { toast(e.message || e, "error"); }
     });
@@ -70,8 +78,9 @@ export async function initMapper(): Promise<void> {
         pendingMoves.clear();
         updateSaveButtonVisibility();
         await refreshMapperData();
-        await refreshGameTree();
-        if (selectedModId) await refreshModTree();
+        // Manual refresh — always bypass cache
+        await refreshGameTree(true);
+        if (selectedModId) await refreshModTree(true);
     });
 
     saveBtn?.addEventListener('click', applyAllChanges);
@@ -84,11 +93,17 @@ export async function initMapper(): Promise<void> {
     // 4. Initial Game Tree
     await refreshGameTree();
     
-    // Auto-refresh when entering view
+    // Auto-refresh when entering view — only if profile changed
     document.querySelector('.nav-item[data-view="mapper"]')?.addEventListener('click', async () => {
-        await refreshMapperData();
-        await refreshGameTree();
-        if (selectedModId) await refreshModTree();
+        const profileSelect = document.getElementById('mapper-profile-select') as HTMLSelectElement;
+        const currentProfileId = profileSelect?.value || null;
+        const profileChanged = currentProfileId !== lastProfileId;
+
+        if (profileChanged) {
+            await refreshMapperData();
+            await refreshGameTree();
+            if (selectedModId) await refreshModTree();
+        }
     });
 
     // Global click to hide context menu
@@ -106,8 +121,9 @@ export async function initMapper(): Promise<void> {
 async function refreshMapperData(): Promise<void> {
     try {
         const profiles: Profile[] = await invoke('get_profiles');
-        const activeId: string = await invoke('get_active_profile_id');
+        const activeId: string | null = await invoke('get_active_profile_id');
         activeProfile = profiles.find(p => p.id === activeId) || null;
+        lastProfileId = activeId;
 
         const profileSelect = document.getElementById('mapper-profile-select') as HTMLSelectElement;
         if (profileSelect) {
@@ -137,6 +153,8 @@ async function refreshMapperData(): Promise<void> {
                     const opt = document.createElement('option');
                     opt.value = m.id;
                     opt.textContent = m.name;
+                    // Store folder path in dataset to avoid extra get_all_mods call
+                    opt.dataset.folderPath = (m as any).mod_folder_path || '';
                     if (m.id === currentVal) opt.selected = true;
                     modSelect.appendChild(opt);
                 });
@@ -148,19 +166,39 @@ async function refreshMapperData(): Promise<void> {
 /**
  * Loads and renders the selected mod's file tree
  */
-async function refreshModTree(): Promise<void> {
+async function refreshModTree(force = false): Promise<void> {
     const container = document.getElementById('mapper-mod-tree');
     if (!container) return;
     if (!selectedModId) {
         container.innerHTML = `<div class="empty-hint">${t('mapper.selectModHint') || 'Sélectionnez un mod pour voir son contenu'}</div>`;
         return;
     }
+
+    // Try to get folder path from the select option (cached) to avoid an extra invoke
+    const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement;
+    const selectedOption = modSelect?.options[modSelect.selectedIndex];
+    let modFolderPath: string | null = selectedOption?.dataset.folderPath || null;
+
+    // If no cached path, fall back to get_all_mods
+    if (!modFolderPath) {
+        try {
+            const mods: ModEntry[] = await invoke('get_all_mods');
+            const m = mods.find(mod => mod.id === selectedModId);
+            if (!m) { container.innerHTML = `<div class="empty-hint error">Mod non trouvé</div>`; return; }
+            modFolderPath = m.mod_folder_path;
+        } catch (e) { container.innerHTML = `<div class="empty-hint error" style="color:var(--danger)">${e}</div>`; return; }
+    }
+
+    // Skip reload if same mod folder is already loaded
+    if (!force && modFolderPath === lastModFolderPath && modTreeData.length > 0) {
+        renderFilteredTrees();
+        return;
+    }
+
     container.innerHTML = `<div class="loading-spinner-container"><div class="loading-spinner"></div></div>`;
     try {
-        const mods: ModEntry[] = await invoke('get_all_mods');
-        const m = mods.find(mod => mod.id === selectedModId);
-        if (!m) { container.innerHTML = `<div class="empty-hint error">Mod non trouvé</div>`; return; }
-        modTreeData = await invoke('get_directory_tree', { path: m.mod_folder_path });
+        modTreeData = await invoke('get_directory_tree', { path: modFolderPath });
+        lastModFolderPath = modFolderPath;
         renderFilteredTrees();
     } catch (e) { container.innerHTML = `<div class="empty-hint error" style="color:var(--danger)">${e}</div>`; }
 }
@@ -168,16 +206,24 @@ async function refreshModTree(): Promise<void> {
 /**
  * Loads and renders the game directory tree
  */
-async function refreshGameTree(): Promise<void> {
+async function refreshGameTree(force = false): Promise<void> {
     const container = document.getElementById('mapper-game-tree');
     if (!container) return;
     if (!activeProfile) {
         container.innerHTML = `<div class="empty-hint">${t('mapper.loadProfileHint') || 'Chargez un profil pour voir le dossier du jeu'}</div>`;
         return;
     }
+
+    // Skip reload if same game path is already loaded
+    if (!force && activeProfile.game_path === lastGamePath && gameTreeData.length > 0) {
+        renderFilteredTrees();
+        return;
+    }
+
     container.innerHTML = `<div class="loading-spinner-container"><div class="loading-spinner"></div></div>`;
     try {
         gameTreeData = await invoke('get_directory_tree', { path: activeProfile.game_path });
+        lastGamePath = activeProfile.game_path;
         renderFilteredTrees();
     } catch (e: any) {
         container.innerHTML = `<div class="empty-hint error" style="color:var(--danger)">Erreur: ${e.message || e}</div>`;

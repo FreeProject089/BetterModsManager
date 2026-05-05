@@ -1,10 +1,11 @@
 use crate::models::tag::TagDef;
 use crate::state::AppState;
 use tauri::State;
+use crate::error::AppError;
 
 #[tauri::command]
-pub fn get_tags(state: State<AppState>) -> Result<Vec<TagDef>, String> {
-    let data = state.data.lock().unwrap();
+pub fn get_tags(state: State<AppState>) -> Result<Vec<TagDef>, AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     Ok(data.custom_tags.clone())
 }
 
@@ -14,8 +15,8 @@ pub fn create_tag(
     name: String,
     color: String,
     icon: String,
-) -> Result<TagDef, String> {
-    let mut data = state.data.lock().unwrap();
+) -> Result<TagDef, AppError> {
+    let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     let tag = TagDef {
         id: uuid::Uuid::new_v4().to_string(),
         name,
@@ -29,8 +30,8 @@ pub fn create_tag(
 }
 
 #[tauri::command]
-pub fn delete_tag(state: State<AppState>, tag_id: String) -> Result<(), String> {
-    let mut data = state.data.lock().unwrap();
+pub fn delete_tag(state: State<AppState>, tag_id: String) -> Result<(), AppError> {
+    let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     data.custom_tags.retain(|t| t.id != tag_id);
     // Also remove the tag from all mods
     for m in &mut data.mods {

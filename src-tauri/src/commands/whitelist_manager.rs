@@ -34,7 +34,7 @@ pub fn load_whitelist(handle: &AppHandle) -> Result<(), String> {
     if path.exists() {
         let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
         let whitelist: Whitelist = serde_json::from_str(&content).unwrap_or_default();
-        let mut lock = WHITELIST.lock().unwrap();
+        let mut lock = WHITELIST.lock().unwrap_or_else(|p| p.into_inner());
         *lock = whitelist;
     }
     Ok(())
@@ -43,7 +43,7 @@ pub fn load_whitelist(handle: &AppHandle) -> Result<(), String> {
 pub fn save_whitelist(handle: &AppHandle) -> Result<(), String> {
     let path = get_whitelist_file_path(handle)?;
     let content = {
-        let lock = WHITELIST.lock().unwrap();
+        let lock = WHITELIST.lock().unwrap_or_else(|p| p.into_inner());
         serde_json::to_string_pretty(&*lock).map_err(|e| e.to_string())?
     };
     fs::write(path, content).map_err(|e| e.to_string())?;
@@ -53,7 +53,7 @@ pub fn save_whitelist(handle: &AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn toggle_whitelist(handle: AppHandle, enabled: bool) -> Result<(), String> {
     {
-        let mut lock = WHITELIST.lock().unwrap();
+        let mut lock = WHITELIST.lock().unwrap_or_else(|p| p.into_inner());
         lock.enabled = enabled;
     }
     save_whitelist(&handle)?;
@@ -64,7 +64,7 @@ pub fn toggle_whitelist(handle: AppHandle, enabled: bool) -> Result<(), String> 
 #[tauri::command]
 pub fn add_to_whitelist(handle: AppHandle, ip: Option<String>, key: Option<String>) -> Result<(), String> {
     {
-        let mut lock = WHITELIST.lock().unwrap();
+        let mut lock = WHITELIST.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(ip_addr) = ip {
             if !ip_addr.trim().is_empty() {
                 lock.ips.insert(ip_addr);
@@ -84,7 +84,7 @@ pub fn add_to_whitelist(handle: AppHandle, ip: Option<String>, key: Option<Strin
 #[tauri::command]
 pub fn remove_from_whitelist(handle: AppHandle, ip: Option<String>, key: Option<String>) -> Result<(), String> {
     {
-        let mut lock = WHITELIST.lock().unwrap();
+        let mut lock = WHITELIST.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(ip_addr) = ip {
             lock.ips.remove(&ip_addr);
         }
@@ -99,14 +99,14 @@ pub fn remove_from_whitelist(handle: AppHandle, ip: Option<String>, key: Option<
 
 #[tauri::command]
 pub fn get_whitelist() -> Result<Whitelist, String> {
-    let lock = WHITELIST.lock().unwrap();
+    let lock = WHITELIST.lock().unwrap_or_else(|p| p.into_inner());
     Ok(lock.clone())
 }
 
 #[tauri::command]
 pub fn clear_whitelist(handle: AppHandle) -> Result<(), String> {
     {
-        let mut lock = WHITELIST.lock().unwrap();
+        let mut lock = WHITELIST.lock().unwrap_or_else(|p| p.into_inner());
         lock.ips.clear();
         lock.keys.clear();
     }
@@ -116,12 +116,12 @@ pub fn clear_whitelist(handle: AppHandle) -> Result<(), String> {
 }
 
 pub fn is_whitelist_enabled() -> bool {
-    let lock = WHITELIST.lock().unwrap();
+    let lock = WHITELIST.lock().unwrap_or_else(|p| p.into_inner());
     lock.enabled
 }
 
 pub fn is_whitelisted(ip: &str, key: Option<&str>) -> bool {
-    let lock = WHITELIST.lock().unwrap();
+    let lock = WHITELIST.lock().unwrap_or_else(|p| p.into_inner());
     if lock.ips.contains(ip) {
         return true;
     }
@@ -135,9 +135,9 @@ pub fn is_whitelisted(ip: &str, key: Option<&str>) -> bool {
 
 fn sync_whitelist_to_serve_path(handle: &AppHandle) {
     if let Some(state) = handle.try_state::<crate::commands::repo_server::RepoServerState>() {
-        if let Some(path_str) = state.serve_path.lock().unwrap().as_ref() {
+        if let Some(path_str) = state.serve_path.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
             let path = PathBuf::from(path_str).join("whitelist.json");
-            let lock = WHITELIST.lock().unwrap();
+            let lock = WHITELIST.lock().unwrap_or_else(|p| p.into_inner());
             if let Ok(content) = serde_json::to_string_pretty(&*lock) {
                 let _ = fs::write(path, content);
             }

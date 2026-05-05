@@ -2,23 +2,24 @@ use crate::models::modpack::LocalModpack;
 use crate::state::AppState;
 use std::path::PathBuf;
 use tauri::{AppHandle, State};
+use crate::error::AppError;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /// Returns the path to the modpacks directory in AppData
-fn get_modpacks_dir(handle: &AppHandle) -> Result<PathBuf, String> {
+fn get_modpacks_dir(handle: &AppHandle) -> Result<PathBuf, AppError> {
     let app_dir = handle
         .path_resolver()
         .app_data_dir()
-        .ok_or_else(|| "Cannot resolve AppData directory".to_string())?;
+        .ok_or_else(|| AppError::Internal("Cannot resolve AppData directory".to_string()))?;
     let dir = app_dir.join("modpacks");
     if !dir.exists() {
-        std::fs::create_dir_all(&dir).map_err(|e| format!("Cannot create modpacks dir: {}", e))?;
+        std::fs::create_dir_all(&dir)?;
     }
     Ok(dir)
 }
 
-fn modpack_path(handle: &AppHandle, id: &str) -> Result<PathBuf, String> {
+fn modpack_path(handle: &AppHandle, id: &str) -> Result<PathBuf, AppError> {
     Ok(get_modpacks_dir(handle)?.join(format!("{}.json", id)))
 }
 
@@ -29,7 +30,7 @@ fn modpack_path(handle: &AppHandle, id: &str) -> Result<PathBuf, String> {
 pub async fn save_modpack(
     handle: AppHandle,
     mut modpack: LocalModpack,
-) -> Result<LocalModpack, String> {
+) -> Result<LocalModpack, AppError> {
     // Ensure IDs and timestamps
     if modpack.id.is_empty() {
         modpack.id = uuid::Uuid::new_v4().to_string();
@@ -41,20 +42,19 @@ pub async fn save_modpack(
     modpack.updated_at = now;
 
     let path = modpack_path(&handle, &modpack.id)?;
-    let json = serde_json::to_string_pretty(&modpack)
-        .map_err(|e| format!("Serialization error: {}", e))?;
-    std::fs::write(&path, json).map_err(|e| format!("Write error: {}", e))?;
+    let json = serde_json::to_string_pretty(&modpack)?;
+    std::fs::write(&path, json)?;
 
     Ok(modpack)
 }
 
 /// Load all modpacks from AppData/modpacks/
 #[tauri::command]
-pub async fn load_modpacks(handle: AppHandle) -> Result<Vec<LocalModpack>, String> {
+pub async fn load_modpacks(handle: AppHandle) -> Result<Vec<LocalModpack>, AppError> {
     let dir = get_modpacks_dir(&handle)?;
     let mut packs = Vec::new();
 
-    let entries = std::fs::read_dir(&dir).map_err(|e| e.to_string())?;
+    let entries = std::fs::read_dir(&dir)?;
     for entry in entries.flatten() {
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) == Some("json") {
@@ -88,22 +88,22 @@ pub async fn load_modpacks(handle: AppHandle) -> Result<Vec<LocalModpack>, Strin
 pub async fn get_modpack_by_id(
     handle: AppHandle,
     id: String,
-) -> Result<Option<LocalModpack>, String> {
+) -> Result<Option<LocalModpack>, AppError> {
     let path = modpack_path(&handle, &id)?;
     if !path.exists() {
         return Ok(None);
     }
-    let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let pack = serde_json::from_str::<LocalModpack>(&content).map_err(|e| e.to_string())?;
+    let content = std::fs::read_to_string(&path)?;
+    let pack = serde_json::from_str::<LocalModpack>(&content)?;
     Ok(Some(pack))
 }
 
 /// Delete a modpack by ID
 #[tauri::command]
-pub async fn delete_modpack(handle: AppHandle, id: String) -> Result<(), String> {
+pub async fn delete_modpack(handle: AppHandle, id: String) -> Result<(), AppError> {
     let path = modpack_path(&handle, &id)?;
     if path.exists() {
-        std::fs::remove_file(&path).map_err(|e| format!("Delete error: {}", e))?;
+        std::fs::remove_file(&path)?;
     }
     Ok(())
 }
@@ -120,16 +120,16 @@ pub async fn build_modpack_mod_ref(
     download_link: Option<String>,
     fallback_link: Option<String>,
     fallback_type: Option<String>,
-) -> Result<crate::models::modpack::ModpackModRef, String> {
+) -> Result<crate::models::modpack::ModpackModRef, AppError> {
     use sha2::{Digest, Sha256};
     use std::io::Read;
 
     let (mod_entry, profile_name) = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
 
         let m = data.mods.iter()
             .find(|m| m.id == mod_id)
-            .ok_or_else(|| format!("Mod '{}' not found", mod_id))?
+            .ok_or_else(|| AppError::NotFound(format!("Mod '{}' not found", mod_id)))?
             .clone();
 
         let pname = if let Some(ref pid) = profile_id {
@@ -209,22 +209,22 @@ pub async fn export_modpack(
 #[tauri::command]
 pub async fn import_modpack(
     handle: AppHandle,
-) -> Result<LocalModpack, String> {
+) -> Result<LocalModpack, AppError> {
     use tauri::api::dialog::blocking::FileDialogBuilder;
     
     if let Some(path) = FileDialogBuilder::new()
         .add_filter("Better ModPack", &["bmp", "json"])
         .pick_file()
     {
-        let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-        let mut pack = serde_json::from_str::<LocalModpack>(&content).map_err(|e| e.to_string())?;
+        let content = std::fs::read_to_string(path)?;
+        let mut pack = serde_json::from_str::<LocalModpack>(&content)?;
         
         // Generate new UUID to avoid collisions
         pack.id = uuid::Uuid::new_v4().to_string();
         
         return save_modpack(handle, pack).await;
     }
-    Err("repo.errCancel".to_string())
+    Err(AppError::Internal("repo.errCancel".to_string()))
 }
 
 #[derive(serde::Serialize)]
@@ -240,12 +240,12 @@ pub struct ModpackIntegrityReport {
 pub async fn check_modpack_integrity(
     state: State<'_, AppState>,
     modpack: LocalModpack,
-) -> Result<ModpackIntegrityReport, String> {
+) -> Result<ModpackIntegrityReport, AppError> {
     let mut missing_mods = Vec::new();
     let mut corrupted_mods = Vec::new();
     let mut valid_mods = Vec::new();
 
-    let data = state.data.lock().unwrap();
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
 
     for mref in &modpack.mods {
         let mut found_mod = data.mods.iter().find(|m| m.id == mref.mod_id);
@@ -343,7 +343,7 @@ pub async fn repair_modpack_mod(
     window: tauri::Window,
     state: State<'_, AppState>,
     args: RepairArgs,
-) -> Result<crate::models::mod_entry::ModEntry, String> {
+) -> Result<crate::models::mod_entry::ModEntry, AppError> {
     use std::io::Write;
     
     let mod_ref = args.mod_ref;
@@ -351,9 +351,9 @@ pub async fn repair_modpack_mod(
     
     // 1. Déterminer ou créer le dossier cible
     let (target_dir, existing_mod) = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         let profile = data.profiles.iter().find(|p| p.id == args.target_profile_id)
-            .ok_or("Profil introuvable")?;
+            .ok_or_else(|| AppError::NotFound("Profil introuvable".to_string()))?;
             
         let mut found_mod = data.mods.iter().find(|m| m.id == mod_ref.mod_id).cloned();
         if found_mod.is_none() && !mod_ref.sha256.is_empty() {
@@ -399,7 +399,7 @@ pub async fn repair_modpack_mod(
             else if url.ends_with('/') { url }
             else { format!("{}/", url) }
         } else {
-            return Err("Aucun lien ServerRepo fourni".to_string());
+            return Err(AppError::Internal("Aucun lien ServerRepo fourni".to_string()));
         };
 
         for (_idx, file_ref) in mod_ref.file_manifest.iter().enumerate() {
@@ -436,9 +436,9 @@ pub async fn repair_modpack_mod(
                     
                     if !resp.status().is_success() {
                         if resp.status() == 403 {
-                            return Err("Accès refusé par le serveur".to_string());
+                            return Err(AppError::Internal("Accès refusé par le serveur".to_string()));
                         }
-                        return Err(format!("Fichier non trouvé sur le serveur: {}", file_ref.relative_path));
+                        return Err(AppError::NotFound(format!("Fichier non trouvé sur le serveur: {}", file_ref.relative_path)));
                     }
                     
                     let total_size = resp.content_length().unwrap_or(file_ref.size);
@@ -501,7 +501,7 @@ pub async fn repair_modpack_mod(
         // 2. Si la récupération locale ne suffit pas, on télécharge
         if !all_recovered {
             let url = mod_ref.download_link.clone().or(mod_ref.fallback_link.clone())
-                .ok_or("Aucun lien de téléchargement direct fourni")?;
+                .ok_or_else(|| AppError::Internal("Aucun lien de téléchargement direct fourni".to_string()))?;
                 
             let _ = window.emit("bmm://repair-progress", serde_json::json!({
                 "modName": mod_ref.mod_name,
@@ -511,7 +511,7 @@ pub async fn repair_modpack_mod(
 
             let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
             if !res.status().is_success() {
-                return Err(format!("Erreur lors du téléchargement: {}", res.status()));
+                return Err(AppError::Internal(format!("Erreur lors du téléchargement: {}", res.status())));
             }
             
             let bytes = res.bytes().await.map_err(|e| e.to_string())?;
@@ -544,7 +544,7 @@ pub async fn repair_modpack_mod(
 
     // 3. Mettre à jour l'entrée du mod dans la librairie
     let final_entry = {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         
         // Si le mod existait sous un autre ID (trouvé par SHA256), on va l'écraser et FORCER le nouvel ID
         if let Some(existing) = &existing_mod {
@@ -561,7 +561,8 @@ pub async fn repair_modpack_mod(
             data.mods.push(new_mod);
         }
         
-        data.mods.iter().find(|m| m.id == mod_ref.mod_id).unwrap().clone()
+        data.mods.iter().find(|m| m.id == mod_ref.mod_id)
+            .ok_or_else(|| AppError::Internal("Mod introuvable après insertion".to_string()))?.clone()
     };
     
     let _ = state.save();

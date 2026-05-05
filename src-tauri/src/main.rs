@@ -12,7 +12,7 @@ use winreg::enums::*;
 use winreg::RegKey;
 use tauri::Manager;
 use std::sync::Mutex;
-use tracing::{info, warn, error};
+use tracing::info;
 
 lazy_static::lazy_static! {
     static ref PENDING_DEEP_LINK: Mutex<Option<String>> = Mutex::new(None);

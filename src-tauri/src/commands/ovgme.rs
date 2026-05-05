@@ -68,7 +68,7 @@ async fn parse_ovgme_path(ovgme_path: &PathBuf, state: State<'_, AppState>) -> R
         let game_path = PathBuf::from(&root);
         let backup_path = PathBuf::from(&back_dir);
 
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         
         // Find if profile already exists (match by same game path or name)
         let _profile_id = if let Some(p) = data.profiles.iter().find(|p| p.name == title || p.game_path == game_path) {
@@ -114,7 +114,7 @@ async fn parse_ovgme_path(ovgme_path: &PathBuf, state: State<'_, AppState>) -> R
                         }
 
                         // Re-lock to add the mod if not already there
-                        let mut data = state.data.lock().unwrap();
+                        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
                         let is_already_added = data.mods.iter().any(|m| {
                              // Compare canonicalized if possible to avoid UNC / \\?\ mismatch
                              let m_p = &m.mod_folder_path;

@@ -3,6 +3,7 @@ use crate::models::mod_entry::ModEntry;
 use crate::models::modlist::{DownloadLink, ModFileEntry, ModList, ModListEntry};
 use crate::state::AppState;
 use tauri::State;
+use crate::error::AppError;
 
 #[tauri::command]
 pub fn export_modlist(
@@ -11,8 +12,8 @@ pub fn export_modlist(
     description: String,
     author: String,
     output_path: String,
-) -> Result<(), String> {
-    let data = state.data.lock().unwrap();
+) -> Result<(), AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
 
     let active_profile = if let Some(ref id) = data.active_profile_id {
         data.profiles.iter().find(|p| &p.id == id)
@@ -62,8 +63,8 @@ pub fn export_modlist(
         });
     }
 
-    let json = serde_json::to_string_pretty(&modlist).map_err(|e| e.to_string())?;
-    std::fs::write(&output_path, json).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string_pretty(&modlist)?;
+    std::fs::write(&output_path, json)?;
     Ok(())
 }
 
@@ -73,6 +74,7 @@ fn build_file_tree(m: &ModEntry) -> Vec<ModFileEntry> {
     if let Ok(files) = fs_utils::list_mod_files(&m.mod_folder_path) {
         for rel in files {
             let full = m.mod_folder_path.join(&rel);
+            // unwrap_or(0) is safe here — missing metadata just means we report 0 bytes
             let size = std::fs::metadata(&full).map(|md| md.len()).unwrap_or(0);
             entries.push(ModFileEntry {
                 relative_path: rel.to_string_lossy().to_string(),
@@ -85,9 +87,9 @@ fn build_file_tree(m: &ModEntry) -> Vec<ModFileEntry> {
 }
 
 #[tauri::command]
-pub fn import_modlist(path: String) -> Result<ModList, String> {
-    let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&content).map_err(|e| format!("Invalid .MM file: {}", e))
+pub fn import_modlist(path: String) -> Result<ModList, AppError> {
+    let content = std::fs::read_to_string(&path)?;
+    serde_json::from_str(&content).map_err(|e| AppError::Json(e))
 }
 
 #[tauri::command]
@@ -97,9 +99,9 @@ pub fn add_download_link(
     url: String,
     link_type: String,
     label: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
             m.download_links.push(crate::models::mod_entry::DownloadLink {
                 url,
@@ -107,10 +109,11 @@ pub fn add_download_link(
                 label,
             });
         } else {
-            return Err("Mod not found".to_string());
+            return Err(AppError::NotFound("Mod not found".to_string()));
         }
     }
-    state.save().map_err(|e| e.to_string())
+    state.save()?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -118,14 +121,15 @@ pub fn remove_download_link(
     state: State<AppState>,
     mod_id: String,
     link_index: usize,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
             if link_index < m.download_links.len() {
                 m.download_links.remove(link_index);
             }
         }
     }
-    state.save().map_err(|e| e.to_string())
+    state.save()?;
+    Ok(())
 }

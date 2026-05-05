@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
+use crate::error::AppError;
 
 #[derive(Serialize, Clone)]
 struct BenchEventPayload {
@@ -37,16 +38,16 @@ lazy_static::lazy_static! {
 }
 
 #[tauri::command]
-pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, String> {
+pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, AppError> {
     // 1. Ensure cache is populated (Lazy but thread-safe)
     ensure_cache_populated(&state)?;
 
-    let data = state.data.lock().unwrap();
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     let active_id = match data.active_profile_id.as_ref() {
         Some(id) => id,
         None => return Ok(Vec::new()),
     };
-    let active_profile = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?;
+    let active_profile = data.profiles.iter().find(|p| &p.id == active_id).ok_or_else(|| AppError::NotFound("Profil introuvable".to_string()))?;
     
     // Canonicalize once outside the loop with safe fallback and logging
     let active_mods_path = match active_profile.mods_path.canonicalize() {
@@ -106,11 +107,11 @@ pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, String> {
     Ok(results)
 }
 
-fn ensure_cache_populated(state: &State<AppState>) -> Result<(), String> {
+fn ensure_cache_populated(state: &State<AppState>) -> Result<(), AppError> {
     // 1. First check if update is needed (read-only check under data lock to ensure ordering)
     // Actually, we must enforce Data -> LastUpdate -> Cache -> Index
-    let mut data = state.data.lock().unwrap();
-    let mut last_update = state.last_cache_update.lock().unwrap();
+    let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    let mut last_update = state.last_cache_update.lock().map_err(|_| AppError::LockError("Failed to lock last_update".to_string()))?;
     
     if last_update.is_some() { return Ok(()); }
 
@@ -118,8 +119,8 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), String> {
     let mut needs_save = false;
 
     {
-        let mut cache = state.mod_files_cache.lock().unwrap();
-        let mut index = state.conflict_index.lock().unwrap();
+        let mut cache = state.mod_files_cache.lock().map_err(|_| AppError::LockError("Failed to lock mod_files_cache".to_string()))?;
+        let mut index = state.conflict_index.lock().map_err(|_| AppError::LockError("Failed to lock conflict_index".to_string()))?;
 
         // Clear existing cache and index to avoid stale data from deleted mods
         cache.clear();
@@ -195,8 +196,8 @@ fn calculate_conflicts_from_cache(
     };
 
     let target_is_active = current_profile.active_mods.contains(&target_mod.id);
-    let cache = state.mod_files_cache.lock().unwrap();
-    let index = state.conflict_index.lock().unwrap();
+    let cache = state.mod_files_cache.lock().unwrap_or_else(|p| p.into_inner());
+    let index = state.conflict_index.lock().unwrap_or_else(|p| p.into_inner());
 
     let target_files = match cache.get(&target_mod.id) {
         Some(f) => f,
@@ -270,8 +271,8 @@ fn get_unique_mod_info(mods_path: &std::path::Path, original_name: &str) -> (Str
 }
 
 #[tauri::command]
-pub fn get_all_mods(state: State<AppState>) -> Result<Vec<ModEntry>, String> {
-    let data = state.data.lock().unwrap();
+pub fn get_all_mods(state: State<AppState>) -> Result<Vec<ModEntry>, AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     Ok(data.mods.clone())
 }
 
@@ -304,7 +305,7 @@ pub struct UpdateModPayload {
 pub async fn add_mod(
     state: State<'_, AppState>,
     payload: AddModPayload,
-) -> Result<ModEntry, String> {
+) -> Result<ModEntry, AppError> {
     let AddModPayload {
         name,
         mod_folder_path,
@@ -318,9 +319,9 @@ pub async fn add_mod(
     
     log_line(format!("[MOD] Adding mod '{}' from '{}'", name, mod_folder_path));
     let mods_path = {
-        let data = state.data.lock().unwrap();
-        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
-        let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        let active_id = data.active_profile_id.as_ref().ok_or_else(|| AppError::NotFound("Aucun profil actif".to_string()))?.clone();
+        let p = data.profiles.iter().find(|p| p.id == active_id).ok_or_else(|| AppError::NotFound("Profil introuvable".to_string()))?.clone();
         p.mods_path.clone()
     };
 
@@ -393,7 +394,7 @@ pub async fn add_mod(
     
     let result = entry.clone();
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         data.mods.push(entry);
     }
     let _ = state.save();
@@ -402,18 +403,18 @@ pub async fn add_mod(
 }
 
 #[tauri::command]
-pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files: bool) -> Result<(), String> {
+pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files: bool) -> Result<(), AppError> {
     log_line(format!("[MOD] Removing mod '{}' (delete_files: {})", mod_id, delete_files));
     let (mod_path, mods_dependent_on_this) = {
-        let mut data = state.data.lock().unwrap();
-        let idx = data.mods.iter().position(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        let idx = data.mods.iter().position(|m| m.id == mod_id).ok_or_else(|| AppError::NotFound("Mod introuvable".to_string()))?;
         
         // Clone needed data before mutable borrow
         let mod_enabled = data.mods[idx].enabled;
         let mod_folder_path = data.mods[idx].mod_folder_path.clone();
         
         if mod_enabled {
-            return Err("Désactivez le mod avant de le supprimer.".to_string());
+            return Err(AppError::Internal("Désactivez le mod avant de le supprimer.".to_string()));
         }
         
         // Find all mods that have this mod as a dependency
@@ -490,8 +491,11 @@ fn resolve_dependencies(
         }
     }
     
-    let pos = unresolved.iter().position(|x| x == target_id).unwrap();
-    unresolved.remove(pos);
+    // Position is always found at this point in the resolution algorithm;
+    // if somehow missing, skip removal gracefully.
+    if let Some(pos) = unresolved.iter().position(|x| x == target_id) {
+        unresolved.remove(pos);
+    }
     Ok(())
 }
 
@@ -501,7 +505,7 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
     
     // 1. Resolve full dependency chain and check for missing dependencies
     let (mod_ids_to_enable, profile_data, warning_settings, missing_deps, needs_save) = {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
         
@@ -553,8 +557,8 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
     ensure_cache_populated(&state)?;
     let mut active_files_set = HashSet::<PathBuf>::new();
     {
-        let data = state.data.lock().unwrap();
-        let cache = state.mod_files_cache.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let cache = state.mod_files_cache.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(p) = data.profiles.iter().find(|p| p.id == profile_data.id) {
             for mid in &p.active_mods {
                 if let Some(files) = cache.get(mid) {
@@ -569,10 +573,16 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
 
     for mid in mod_ids_to_enable {
         let (mod_folder, game_path, backup_path, mod_name) = {
-            let data = state.data.lock().unwrap();
-            let m = data.mods.iter().find(|m| m.id == mid).unwrap().clone();
+            let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+            let m = match data.mods.iter().find(|m| m.id == mid) {
+                Some(m) => m.clone(),
+                None => continue, // mod removed mid-iteration, skip
+            };
             
-            let p = data.profiles.iter().find(|p| p.id == profile_data.id).unwrap();
+            let p = match data.profiles.iter().find(|p| p.id == profile_data.id) {
+                Some(p) => p,
+                None => return Err("Profil actif introuvable".to_string()),
+            };
 
             // --- Block if already active in another profile on same root ---
             for op in &data.profiles {
@@ -642,7 +652,7 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
 
         let active_files_set_clone = active_files_set.clone();
         let result = tauri::async_runtime::spawn_blocking(move || {
-            let _lock = MOD_OP_LOCK.lock().unwrap();
+            let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
             fs_utils::apply_mod_stacked(&mod_folder, &game_path, &backup_path, &active_files_set_clone, game_path_limit, backup_path_limit)
         }).await.map_err(|e| e.to_string())?;
 
@@ -653,7 +663,7 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
         let applied = result.map_err(|e| e.to_string())?;
 
         {
-            let mut data = state.data.lock().unwrap();
+            let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(m) = data.mods.iter_mut().find(|m| m.id == mid) {
                 m.enabled = true;
                 m.status = ModStatus::Enabled;
@@ -667,7 +677,7 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
         }
 
         // Update active_files_set for NEXT dependency in the chain
-        if let Some(files) = state.mod_files_cache.lock().unwrap().get(&mid) {
+        if let Some(files) = state.mod_files_cache.lock().unwrap_or_else(|p| p.into_inner()).get(&mid) {
             for f in files { active_files_set.insert(f.clone()); }
         }
 
@@ -678,7 +688,7 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
     invalidate_cache(&state);
     
     // Log history for the primary mod
-    if let Some(m) = { let data = state.data.lock().unwrap(); data.mods.iter().find(|m| m.id == mod_id).cloned() } {
+    if let Some(m) = { let data = state.data.lock().unwrap_or_else(|p| p.into_inner()); data.mods.iter().find(|m| m.id == mod_id).cloned() } {
         crate::commands::history::log_activity(&state, &profile_data.id, &mod_id, &m.name, "Enabled (with dependencies)");
     }
 
@@ -689,7 +699,7 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
 pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
     log_line(format!("[MOD] Disabling mod '{}'", mod_id));
     let (game_path, backup_path, active_id, mod_name, files_to_remove, other_active_mods) = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?.clone();
         if !m.enabled { return Ok(()); }
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
@@ -733,7 +743,7 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
     });
     
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let _lock = MOD_OP_LOCK.lock().unwrap();
+        let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         fs_utils::unapply_mod_stacked(&game_path, &backup_path, files_to_remove, &other_active_mods, game_path_limit)
     }).await.map_err(|e| e.to_string())?;
 
@@ -751,7 +761,7 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
     result.map_err(|e| e.to_string())?;
 
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         
         if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
             m.enabled = false;
@@ -847,7 +857,7 @@ pub fn open_file(path: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn open_mod_folder_at(state: State<'_, AppState>, mod_id: String, relative_path: String) -> Result<(), String> {
     let mod_dir = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         m.mod_folder_path.clone()
     };
@@ -872,7 +882,7 @@ pub async fn open_mod_folder_at(state: State<'_, AppState>, mod_id: String, rela
 #[tauri::command]
 pub async fn open_mod_file_at(state: State<'_, AppState>, mod_id: String, relative_path: String) -> Result<(), String> {
     let mod_dir = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         m.mod_folder_path.clone()
     };
@@ -904,7 +914,7 @@ pub fn update_mod_meta(
     
     log_line(format!("[MOD] Updating metadata for '{}' ({})", name, mod_id));
     let mod_path = {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
             m.name = name;
             m.author = Some(author);
@@ -950,7 +960,7 @@ pub struct ScanResult {
 pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, String> {
     log_line("[MOD] Scanning mods folder for new mods...");
     let (mods_path, profile_id) = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
         (p.mods_path.clone(), active_id)
@@ -958,7 +968,7 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
 
     // 1. Prune missing mods from the state for this profile
     let removed_count = {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let mut to_remove_ids = Vec::new();
         
         // Collect all valid mods_paths from all profiles to detect orphaned mods
@@ -1005,7 +1015,7 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
     }
 
     let existing_paths: Vec<PathBuf> = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         data.mods.iter().map(|m| m.mod_folder_path.clone()).collect()
     };
 
@@ -1062,7 +1072,7 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
     let added_count = added.len();
     if added_count > 0 {
         log_line(format!("[MOD] Scan discovered {} new mod(s)", added_count));
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         data.mods.extend(added);
         drop(data);
         let _ = state.save();
@@ -1087,7 +1097,7 @@ pub async fn download_mod(
 ) -> Result<ModEntry, String> {
     log_line(format!("[MOD] Downloading mod '{}' from '{}'", mod_name, url));
     let mods_path = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let target_id = profile_id.or_else(|| data.active_profile_id.clone()).ok_or("Aucun profil actif")?;
         let p = data.profiles.iter().find(|p| p.id == target_id).ok_or("Profil introuvable")?.clone();
         p.mods_path.clone()
@@ -1138,7 +1148,7 @@ pub async fn download_mod(
     let entry = ModEntry::new(final_name, target_dir);
     let result = entry.clone();
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         data.mods.push(entry);
     }
     let _ = state.save();
@@ -1177,7 +1187,7 @@ pub async fn install_from_modlist(
     let mut newly_added_mod_folders: Vec<PathBuf> = Vec::new();
 
     let (mods_path, _profile_id_for_mods) = {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         if create_profile {
             let new_id = uuid::Uuid::new_v4().to_string();
             let game_path = PathBuf::from(&modlist.game_path_hint);
@@ -1236,7 +1246,7 @@ pub async fn install_from_modlist(
 
         // Check if already present
         if target_dir.exists() {
-            let mut data = state.data.lock().unwrap();
+            let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
             let exists = data.mods.iter().any(|m| m.mod_folder_path == target_dir);
             if !exists {
                 let mut new_mod = ModEntry::new(safe_name.clone(), target_dir.clone());
@@ -1266,7 +1276,7 @@ pub async fn install_from_modlist(
 
         // Try local copy first
         let source_path = {
-            let data = state.data.lock().unwrap();
+            let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
             data.mods.iter()
                 .find(|m| m.name == entry.name && m.mod_folder_path.exists())
                 .map(|m| m.mod_folder_path.clone())
@@ -1293,7 +1303,7 @@ pub async fn install_from_modlist(
             }).await.map_err(|e| e.to_string())?;
 
             if res.is_ok() {
-                let mut data = state.data.lock().unwrap();
+                let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
                 let mut new_mod = ModEntry::new(safe_name.clone(), target_dir.clone());
                 new_mod.name = entry.name.clone();
                 new_mod.version = entry.version.clone();
@@ -1401,7 +1411,7 @@ pub async fn install_from_modlist(
                 }).await.map_err(|e| e.to_string())?;
 
                 if let Ok(_) = res {
-                    let mut data = state.data.lock().unwrap();
+                    let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
                     let mut new_mod = ModEntry::new(safe_name.clone(), target_dir.clone());
                     new_mod.name = entry.name.clone();
                     new_mod.version = entry.version.clone();
@@ -1444,7 +1454,7 @@ pub async fn install_from_modlist(
 
     // --- CLEANUP IF CANCELLED ---
     if state.install_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         data.mods.retain(|m| !newly_added_mod_ids.contains(&m.id));
         if let Some(pid) = newly_created_profile_id {
             if let Some(idx) = data.profiles.iter().position(|p| p.id == pid) {
@@ -1474,7 +1484,7 @@ pub async fn install_from_modlist(
 #[tauri::command]
 pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>, String> {
     let enabled_info = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;
         let p = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?.clone();
         
@@ -1571,7 +1581,7 @@ pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>,
 pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable: bool) -> Result<(), String> {
     log_line(format!("[MOD] Toggle all mods: {}", if enable { "ENABLE" } else { "DISABLE" }));
     let mod_ids = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;
         let active_profile = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?;
         
@@ -1602,7 +1612,7 @@ pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable:
 #[tauri::command]
 pub async fn check_conflicts(state: State<'_, AppState>, mod_id: String) -> Result<Vec<String>, String> {
     let (mod_folder, active_mods_data) = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let target_mod = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;
@@ -1636,7 +1646,7 @@ pub async fn check_conflicts(state: State<'_, AppState>, mod_id: String) -> Resu
 #[tauri::command]
 pub async fn list_mod_files_recursive(state: State<'_, AppState>, mod_id: String) -> Result<Vec<String>, String> {
     let mod_folder = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         m.mod_folder_path.clone()
     };
@@ -1651,7 +1661,7 @@ pub async fn list_mod_files_recursive(state: State<'_, AppState>, mod_id: String
 pub fn get_mod_conflicts(state: State<AppState>, mod_id: String) -> Result<Vec<ConflictReport>, String> {
     ensure_cache_populated(&state)?;
     
-    let data = state.data.lock().unwrap();
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
     let target_mod = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
     
     // 1. Try active profile first
@@ -1684,13 +1694,13 @@ pub fn get_mod_conflicts(state: State<AppState>, mod_id: String) -> Result<Vec<C
 }
 
 pub fn invalidate_cache(state: &State<AppState>) {
-    let mut last_update = state.last_cache_update.lock().unwrap();
+    let mut last_update = state.last_cache_update.lock().unwrap_or_else(|p| p.into_inner());
     *last_update = None; // Force re-population on next call
 }
 
 #[tauri::command]
 pub fn get_conflict_file_tree(state: State<AppState>, mod_id: String, other_mod_id: String) -> Result<Vec<String>, String> {
-    let data = state.data.lock().unwrap();
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
     let m1 = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod 1 introuvable")?;
     let m2 = data.mods.iter().find(|m| m.id == other_mod_id).ok_or("Mod 2 introuvable")?;
 
@@ -1712,7 +1722,7 @@ pub fn get_conflict_file_tree(state: State<AppState>, mod_id: String, other_mod_
 #[tauri::command]
 pub async fn open_mod_active_folder(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
     let (game_path, installed_files) = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
@@ -1745,7 +1755,7 @@ pub async fn open_mod_active_folder(state: State<'_, AppState>, mod_id: String) 
 #[tauri::command]
 pub async fn open_mod_backup_folder(state: State<'_, AppState>, _mod_id: String) -> Result<(), String> {
     let backup_path = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
         p.backup_path.clone()
@@ -1804,7 +1814,7 @@ pub struct IntegrityReport {
 #[tauri::command]
 pub async fn get_mod_integrity(state: State<'_, AppState>, mod_id: String) -> Result<IntegrityReport, String> {
     let (mod_path, cached_hashes, needs_baseline) = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         (m.mod_folder_path.clone(), m.file_hashes.clone(), m.file_hashes.is_none())
     };
@@ -1821,7 +1831,7 @@ pub async fn get_mod_integrity(state: State<'_, AppState>, mod_id: String) -> Re
         }
         
         {
-            let mut data = state.data.lock().unwrap();
+            let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
                 m.file_hashes = Some(new_hashes.clone());
             }
@@ -1882,7 +1892,7 @@ pub async fn get_mod_integrity(state: State<'_, AppState>, mod_id: String) -> Re
 #[tauri::command]
 pub async fn update_mod_hashes(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
     let mod_path = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         m.mod_folder_path.clone()
     };
@@ -1898,7 +1908,7 @@ pub async fn update_mod_hashes(state: State<'_, AppState>, mod_id: String) -> Re
     }
 
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
             m.file_hashes = Some(new_hashes);
         }
@@ -1926,12 +1936,12 @@ pub fn start_sha_calculation_background(state: tauri::State<'_, AppState>) {
             
             // Get next mod from priority queue or normal queue
             let mod_id = {
-                let mut priority_queue = sha_queue_priority.lock().unwrap();
+                let mut priority_queue = sha_queue_priority.lock().unwrap_or_else(|p| p.into_inner());
                 if let Some(id) = priority_queue.pop_front() {
                     Some(id)
                 } else {
                     drop(priority_queue);
-                    let mut normal_queue = sha_queue.lock().unwrap();
+                    let mut normal_queue = sha_queue.lock().unwrap_or_else(|p| p.into_inner());
                     normal_queue.pop_front()
                 }
             };
@@ -1945,7 +1955,7 @@ pub fn start_sha_calculation_background(state: tauri::State<'_, AppState>) {
                     // Load data to get mod path
                     let mod_path_opt = {
                         let data = crate::state::AppState::load(data_path.clone());
-                        let data_lock = data.data.lock().unwrap();
+                        let data_lock = data.data.lock().unwrap_or_else(|p| p.into_inner());
                         data_lock.mods.iter().find(|m| m.id == id).map(|m| m.mod_folder_path.clone())
                     };
                     
@@ -1969,7 +1979,7 @@ pub fn start_sha_calculation_background(state: tauri::State<'_, AppState>) {
                             // Reload data, update hashes, and save
                             {
                                 let data = crate::state::AppState::load(data_path.clone());
-                                let mut data_lock = data.data.lock().unwrap();
+                                let mut data_lock = data.data.lock().unwrap_or_else(|p| p.into_inner());
                                 if let Some(m) = data_lock.mods.iter_mut().find(|m| m.id == id) {
                                     m.file_hashes = Some(new_hashes);
                                 }
@@ -1995,8 +2005,8 @@ pub fn start_sha_calculation_background(state: tauri::State<'_, AppState>) {
 }
 
 pub fn populate_sha_queue(state: tauri::State<'_, AppState>) {
-    let data = state.data.lock().unwrap();
-    let mut queue = state.sha_queue.lock().unwrap();
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    let mut queue = state.sha_queue.lock().unwrap_or_else(|p| p.into_inner());
     
     for mod_entry in &data.mods {
         if mod_entry.file_hashes.is_none() || mod_entry.file_hashes.as_ref().map_or(true, |h| h.is_empty()) {
@@ -2008,11 +2018,11 @@ pub fn populate_sha_queue(state: tauri::State<'_, AppState>) {
 }
 
 pub fn add_mod_to_priority_sha_queue(state: tauri::State<'_, AppState>, mod_id: String) {
-    let mut priority_queue = state.sha_queue_priority.lock().unwrap();
+    let mut priority_queue = state.sha_queue_priority.lock().unwrap_or_else(|p| p.into_inner());
     
     // Check if mod already needs hashing
     let needs_hash = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         data.mods.iter().find(|m| m.id == mod_id)
             .map_or(false, |m| m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty()))
     };
@@ -2020,7 +2030,7 @@ pub fn add_mod_to_priority_sha_queue(state: tauri::State<'_, AppState>, mod_id: 
     if needs_hash {
         // Remove from normal queue if present
         {
-            let mut normal_queue = state.sha_queue.lock().unwrap();
+            let mut normal_queue = state.sha_queue.lock().unwrap_or_else(|p| p.into_inner());
             normal_queue.retain(|id| id != &mod_id);
         }
         

@@ -106,7 +106,7 @@ async fn get_cloudflared_path(handle: &tauri::AppHandle) -> Result<PathBuf, Stri
     // 1. Check user settings first
     let state = handle.state::<crate::state::AppState>();
     let settings = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().map_err(|_| "Failed to lock AppState".to_string())?;
         data.settings.clone()
     };
 
@@ -218,7 +218,7 @@ pub async fn start_repo_server(
     // 3. Create graceful shutdown channel
     let (tx, rx) = oneshot::channel();
     {
-        let mut tx_lock = state.shutdown_tx.lock().unwrap();
+        let mut tx_lock = state.shutdown_tx.lock().unwrap_or_else(|p| p.into_inner());
         if tx_lock.is_some() {
             return Err("Le serveur est déjà en cours d'exécution".to_string());
         }
@@ -300,7 +300,7 @@ pub async fn start_repo_server(
                     // Anti-spam notification logic
                     let client_key = format!("{}|{:?}", ip, key);
                     let should_notify = {
-                        let mut clients = state.connected_clients.lock().unwrap();
+                        let mut clients = state.connected_clients.lock().unwrap_or_else(|p| p.into_inner());
                         let now = std::time::Instant::now();
                         if let Some(last) = clients.get(&client_key) {
                             if now.duration_since(*last).as_secs() > 30 {
@@ -346,21 +346,21 @@ pub async fn start_repo_server(
                                     .header("Content-Type", "application/json")
                                     .header("Content-Length", filtered_json.len())
                                     .body(warp::hyper::Body::from(filtered_json))
-                                    .unwrap();
+                                    .expect("Failed to build warp response");
                                 return Ok::<_, warp::Rejection>(response);
                             }
                         }
                     }
                 }
 
-                let upload_limit = *state.upload_limit.lock().unwrap();
+                let upload_limit = *state.upload_limit.lock().unwrap_or_else(|p| p.into_inner());
                 let stream = ReaderStream::new(file);
                 let active_downloads_inner = active_downloads.clone();
                 let ip_clone = ip.clone();
 
                 // Track the download in state
                 {
-                    let mut dl_lock = active_downloads_inner.lock().unwrap();
+                    let mut dl_lock = active_downloads_inner.lock().unwrap_or_else(|p| p.into_inner());
                     dl_lock.insert(ip_clone.clone(), ActiveDownload {
                         ip: ip_clone.clone(),
                         file: file_name.clone(),
@@ -377,7 +377,7 @@ pub async fn start_repo_server(
                 if is_mod_file {
                     let client_key = format!("{}|{}", ip, key.as_deref().unwrap_or(""));
                     let should_notify = {
-                        let mut session_notifs = session_download_started.lock().unwrap();
+                        let mut session_notifs = session_download_started.lock().unwrap_or_else(|p| p.into_inner());
                         if !session_notifs.contains_key(&client_key) {
                             session_notifs.insert(client_key, true);
                             true
@@ -399,7 +399,7 @@ pub async fn start_repo_server(
 
                 let tracked_stream = stream.map(move |chunk: std::io::Result<Bytes>| {
                     if let Ok(ref bytes) = chunk {
-                        let mut dl_lock = active_downloads_inner.lock().unwrap();
+                        let mut dl_lock = active_downloads_inner.lock().unwrap_or_else(|p| p.into_inner());
                         if let Some(dl) = dl_lock.get_mut(&ip_clone) {
                             dl.downloaded_size += bytes.len() as u64;
                         }
@@ -461,8 +461,8 @@ pub async fn start_repo_server(
                         let client_key = format!("{}|{}", ip_fin, key_fin.as_deref().unwrap_or(""));
                         let should_notify_complete = {
                             let state = handle_fin.state::<RepoServerState>();
-                            let active_downloads = state.active_downloads.lock().unwrap();
-                            let completed_notifs = session_completed.lock().unwrap();
+                            let active_downloads = state.active_downloads.lock().unwrap_or_else(|p| p.into_inner());
+                            let completed_notifs = session_completed.lock().unwrap_or_else(|p| p.into_inner());
                             
                             // Check if there are no more active downloads for this client
                             let has_active_downloads = active_downloads.values().any(|dl| {
@@ -475,7 +475,7 @@ pub async fn start_repo_server(
 
                         if should_notify_complete {
                             let _state = handle_fin.state::<RepoServerState>();
-                            let mut completed_notifs = session_completed.lock().unwrap();
+                            let mut completed_notifs = session_completed.lock().unwrap_or_else(|p| p.into_inner());
                             completed_notifs.insert(client_key, true);
                             
                             let _ = handle_fin.emit_all("bmm://server-download-finished", ServerDownloadFinishedPayload {
@@ -545,7 +545,7 @@ pub async fn start_repo_server(
             match gateway.add_port(PortMappingProtocol::TCP, port, local_socket, 0, "Better Mods Manager Repo") {
                 Ok(_) => {
                     upnp_success = true;
-                    *state.upnp_mapped.lock().unwrap() = true;
+                    *state.upnp_mapped.lock().unwrap_or_else(|p| p.into_inner()) = true;
                     public_ip = gateway.get_external_ip().map(|ip| ip.to_string()).ok();
                 },
                 Err(e) => {
@@ -598,7 +598,7 @@ pub async fn start_repo_server(
 
             if let Some(stderr) = child.stderr.take() {
                 let mut reader = BufReader::new(stderr).lines();
-                let re = Regex::new(r"https://[a-z0-9-]+\.trycloudflare\.com").unwrap();
+                let re = Regex::new(r"https://[a-z0-9-]+\.trycloudflare\.com").expect("Invalid static tunnel regex");
                 
                 let start_time = std::time::Instant::now();
                 while start_time.elapsed().as_secs() < 45 {
@@ -618,7 +618,7 @@ pub async fn start_repo_server(
                     }
                 }
             }
-            *state.tunnel_process.lock().unwrap() = Some(child);
+            *state.tunnel_process.lock().unwrap_or_else(|p| p.into_inner()) = Some(child);
         },
         Err(e) => {
             println!("[Tunnel] Failed to setup cloudflared: {}", e);
@@ -627,13 +627,13 @@ pub async fn start_repo_server(
 
     // 9. Store state
     {
-        *state.lan_url.lock().unwrap() = Some(lan_url.clone());
-        *state.public_url.lock().unwrap() = public_url.clone();
-        *state.tunnel_url.lock().unwrap() = tunnel_url.clone();
-        *state.serve_path.lock().unwrap() = Some(path);
-        *state.active_port.lock().unwrap() = port;
-        *state.upload_limit.lock().unwrap() = upload_limit;
-        *state.seed.lock().unwrap() = Some(server_seed.clone());
+        *state.lan_url.lock().unwrap_or_else(|p| p.into_inner()) = Some(lan_url.clone());
+        *state.public_url.lock().unwrap_or_else(|p| p.into_inner()) = public_url.clone();
+        *state.tunnel_url.lock().unwrap_or_else(|p| p.into_inner()) = tunnel_url.clone();
+        *state.serve_path.lock().unwrap_or_else(|p| p.into_inner()) = Some(path);
+        *state.active_port.lock().unwrap_or_else(|p| p.into_inner()) = port;
+        *state.upload_limit.lock().unwrap_or_else(|p| p.into_inner()) = upload_limit;
+        *state.seed.lock().unwrap_or_else(|p| p.into_inner()) = Some(server_seed.clone());
     }
 
     Ok(StartServerResult {
@@ -647,14 +647,14 @@ pub async fn start_repo_server(
 
 #[tauri::command]
 pub fn get_repo_server_status(state: tauri::State<'_, RepoServerState>) -> Result<Option<StartServerResult>, String> {
-    let tx_lock = state.shutdown_tx.lock().unwrap();
+    let tx_lock = state.shutdown_tx.lock().unwrap_or_else(|p| p.into_inner());
     let mut is_running = tx_lock.is_some();
     
     // Additional check: if shutdown_tx is None but we have stored URLs, 
     // check if the port is still in use (server might still be running)
     if !is_running {
-        let port = *state.active_port.lock().unwrap();
-        if let Some(_lan_url) = state.lan_url.lock().unwrap().clone() {
+        let port = *state.active_port.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(_lan_url) = state.lan_url.lock().unwrap_or_else(|p| p.into_inner()).clone() {
             // Check if port is still in use
             if let Ok(listener) = std::net::TcpListener::bind(("127.0.0.1", port)) {
                 // Port is free, server is not running
@@ -671,11 +671,11 @@ pub fn get_repo_server_status(state: tauri::State<'_, RepoServerState>) -> Resul
     }
     
     Ok(Some(StartServerResult {
-        lan_url: state.lan_url.lock().unwrap().clone().unwrap_or_default(),
-        public_url: state.public_url.lock().unwrap().clone(),
-        tunnel_url: state.tunnel_url.lock().unwrap().clone(),
-        upnp_success: *state.upnp_mapped.lock().unwrap(),
-        seed: state.seed.lock().unwrap().clone(),
+        lan_url: state.lan_url.lock().unwrap_or_else(|p| p.into_inner()).clone().unwrap_or_default(),
+        public_url: state.public_url.lock().unwrap_or_else(|p| p.into_inner()).clone(),
+        tunnel_url: state.tunnel_url.lock().unwrap_or_else(|p| p.into_inner()).clone(),
+        upnp_success: *state.upnp_mapped.lock().unwrap_or_else(|p| p.into_inner()),
+        seed: state.seed.lock().unwrap_or_else(|p| p.into_inner()).clone(),
     }))
 }
 
@@ -683,9 +683,9 @@ pub fn get_repo_server_status(state: tauri::State<'_, RepoServerState>) -> Resul
 pub async fn stop_repo_server(state: tauri::State<'_, RepoServerState>) -> Result<(), String> {
     // 1. Remove UPnP mapping if it exists
     {
-        let mut upnp_lock = state.upnp_mapped.lock().unwrap();
+        let mut upnp_lock = state.upnp_mapped.lock().unwrap_or_else(|p| p.into_inner());
         if *upnp_lock {
-            let port = *state.active_port.lock().unwrap();
+            let port = *state.active_port.lock().unwrap_or_else(|p| p.into_inner());
             if let Ok(gateway) = search_gateway(Default::default()) {
                 let _ = gateway.remove_port(PortMappingProtocol::TCP, port);
             }
@@ -694,22 +694,22 @@ pub async fn stop_repo_server(state: tauri::State<'_, RepoServerState>) -> Resul
     }
 
     // 2. Stop Tunnel
-    let child = state.tunnel_process.lock().unwrap().take();
+    let child = state.tunnel_process.lock().unwrap_or_else(|p| p.into_inner()).take();
     if let Some(mut child) = child {
         println!("[Tunnel] Stopping tunnel...");
         let _ = child.kill().await;
     }
 
     // 3. Shutdown the server
-    let mut tx_lock = state.shutdown_tx.lock().unwrap();
+    let mut tx_lock = state.shutdown_tx.lock().unwrap_or_else(|p| p.into_inner());
     if let Some(tx) = tx_lock.take() {
         // Clear state
-        *state.lan_url.lock().unwrap() = None;
-        *state.public_url.lock().unwrap() = None;
-        *state.tunnel_url.lock().unwrap() = None;
-        *state.serve_path.lock().unwrap() = None;
-        state.session_download_started.lock().unwrap().clear();
-        state.session_download_completed.lock().unwrap().clear();
+        *state.lan_url.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        *state.public_url.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        *state.tunnel_url.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        *state.serve_path.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        state.session_download_started.lock().unwrap_or_else(|p| p.into_inner()).clear();
+        state.session_download_completed.lock().unwrap_or_else(|p| p.into_inner()).clear();
         
         let _ = tx.send(());
         Ok(())
@@ -733,7 +733,7 @@ async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, std:
 pub fn get_connected_clients(state: tauri::State<'_, RepoServerState>) -> Result<Vec<serde_json::Value>, String> {
     let mut result = Vec::new();
 
-    let clients = state.connected_clients.lock().unwrap();
+    let clients = state.connected_clients.lock().unwrap_or_else(|p| p.into_inner());
     for (key, last_seen) in clients.iter() {
         let elapsed_secs = last_seen.elapsed().as_secs();
         
@@ -766,7 +766,7 @@ pub fn get_active_downloads(state: tauri::State<'_, RepoServerState>) -> Result<
 
     // 1. Get Built-in Downloads
     {
-        let mut downloads = state.active_downloads.lock().unwrap();
+        let mut downloads = state.active_downloads.lock().unwrap_or_else(|p| p.into_inner());
         // Remove if older than 5 seconds and 100% complete
         downloads.retain(|_, dl| {
             let progress = if dl.total_size > 0 { dl.downloaded_size as f32 / dl.total_size as f32 } else { 1.0 };
@@ -793,7 +793,7 @@ pub fn get_active_downloads(state: tauri::State<'_, RepoServerState>) -> Result<
     }
 
     // 2. Aggregate Standalone Server (External Monitoring)
-    if let Some(path_str) = state.serve_path.lock().unwrap().as_ref() {
+    if let Some(path_str) = state.serve_path.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
         let monitoring_path = std::path::PathBuf::from(path_str).join("monitoring.json");
         if monitoring_path.exists() {
             if let Ok(content) = std::fs::read_to_string(monitoring_path) {

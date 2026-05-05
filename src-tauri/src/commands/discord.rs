@@ -1,6 +1,8 @@
 use crate::state::AppState;
 use tauri::State;
 use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
+use crate::error::AppError;
+use tracing::{info, warn, error};
 
 const DISCORD_CLIENT_ID: &str = "1486151779195555920"; // Placeholder BMM Client ID
 
@@ -9,15 +11,15 @@ pub fn set_discord_presence(
     state: State<AppState>,
     details: String,
     status: String,
-) -> Result<(), String> {
-    let mut client_lock = state.discord_client.lock().unwrap();
+) -> Result<(), AppError> {
+    let mut client_lock = state.discord_client.lock().map_err(|_| AppError::LockError("Failed to lock discord client".to_string()))?;
     
     // Check if enabled in settings
     {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         if !data.settings.discord_rpc_enabled {
-            if client_lock.is_some() {
-                let _ = client_lock.as_mut().unwrap().close();
+            if let Some(client) = client_lock.as_mut() {
+                let _ = client.close();
                 *client_lock = None;
             }
             return Ok(());
@@ -29,12 +31,15 @@ pub fn set_discord_presence(
         let client_res = DiscordIpcClient::new(DISCORD_CLIENT_ID);
         if let Ok(mut client) = client_res {
             if client.connect().is_ok() {
+                info!("Connected to Discord RPC");
                 *client_lock = Some(Box::new(client));
             } else {
-                return Err("FAILED_TO_CONNECT".to_string());
+                warn!("Failed to connect to Discord RPC");
+                return Err(AppError::Internal("FAILED_TO_CONNECT".to_string()));
             }
         } else {
-            return Err("IPC_CLIENT_ERROR".to_string());
+            error!("Failed to create Discord IPC Client");
+            return Err(AppError::Internal("IPC_CLIENT_ERROR".to_string()));
         }
     }
 
@@ -55,8 +60,8 @@ pub fn set_discord_presence(
 }
 
 #[tauri::command]
-pub fn init_discord_rpc(state: State<AppState>) -> Result<(), String> {
-    let data = state.data.lock().unwrap();
+pub fn init_discord_rpc(state: State<AppState>) -> Result<(), AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     if !data.settings.discord_rpc_enabled {
         return Ok(());
     }

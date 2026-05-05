@@ -157,21 +157,21 @@ pub async fn download_and_install_update(url: String, filename: String) -> Resul
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("cmd")
-            .args(["/C", "start", "", file_path.to_str().unwrap()])
+            .args(["/C", "start", "", &file_path.to_string_lossy()])
             .spawn()
             .map_err(|e| format!("Failed to start installer: {}", e))?;
     }
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open")
-            .arg(file_path.to_str().unwrap())
+            .arg(&file_path.to_string_lossy())
             .spawn()
             .map_err(|e| format!("Failed to start installer: {}", e))?;
     }
     #[cfg(target_os = "linux")]
     {
         std::process::Command::new("xdg-open")
-            .arg(file_path.to_str().unwrap())
+            .arg(&file_path.to_string_lossy())
             .spawn()
             .map_err(|e| format!("Failed to start installer: {}", e))?;
     }
