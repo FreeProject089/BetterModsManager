@@ -78,6 +78,13 @@ pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, String> {
             // Set 'enabled' based on active profile
             enriched.mod_entry.enabled = active_profile.active_mods.contains(&m.id);
             
+            // Set per-profile activation order
+            if enriched.mod_entry.enabled {
+                enriched.mod_entry.activation_order = (active_profile.active_mods.iter().position(|id| id == &m.id).unwrap_or(0) as u32) + 1;
+            } else {
+                enriched.mod_entry.activation_order = 0;
+            }
+
             // Recalculate conflicts using MEMORY CACHE (O(1))
             enriched.mod_entry.conflicts = calculate_conflicts_from_cache(m, &data, active_id, &state);
 
@@ -224,6 +231,8 @@ fn calculate_conflicts_from_cache(
                 let is_active_in_prof = profile.active_mods.contains(&other_id);
                 let status = if target_is_active && is_active_in_prof { ConflictStatus::Active } else { ConflictStatus::Potential };
 
+                let order = (profile.active_mods.iter().position(|id| id == &other_id).unwrap_or(0) as u32) + 1;
+
                 reports.push(ConflictReport {
                     category: if is_same_profile { ConflictCategory::Intra } else { ConflictCategory::Inter },
                     status,
@@ -231,7 +240,7 @@ fn calculate_conflicts_from_cache(
                     other_mod_name: other_mod.name.clone(),
                     other_profile_name: profile.name.clone(),
                     file_count: count,
-                    activation_order: other_mod.activation_order,
+                    activation_order: order,
                 });
             }
         }
@@ -645,12 +654,10 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
 
         {
             let mut data = state.data.lock().unwrap();
-            let next_order = data.mods.iter().map(|m| m.activation_order).max().unwrap_or(0) + 1;
             if let Some(m) = data.mods.iter_mut().find(|m| m.id == mid) {
                 m.enabled = true;
                 m.status = ModStatus::Enabled;
                 m.installed_files = applied.iter().map(|p| p.to_string_lossy().to_string()).collect();
-                m.activation_order = next_order;
             }
             for p in data.profiles.iter_mut() {
                 if p.game_path == profile_data.game_path && p.mods_path == profile_data.mods_path {
@@ -746,22 +753,10 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
     {
         let mut data = state.data.lock().unwrap();
         
-        let removed_order = if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
-            let order = m.activation_order;
+        if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
             m.enabled = false;
             m.status = ModStatus::Disabled;
             m.installed_files.clear();
-            m.activation_order = 0;
-            order
-        } else { 0 };
-
-        // Re-order remaining mods to keep sequence tight
-        if removed_order > 0 {
-            for m in data.mods.iter_mut() {
-                if m.activation_order > removed_order {
-                    m.activation_order -= 1;
-                }
-            }
         }
         
         // Sync with all profiles sharing the same root and mod folder
