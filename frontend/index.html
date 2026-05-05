@@ -141,30 +141,6 @@
                         <span class="nav-badge" id="badge-profiles">0</span>
                     </button>
 
-                    <button class="nav-item" data-view="modlist" id="nav-modlist">
-                        <span class="nav-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="1.8">
-                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                <path d="M2 17l10 5 10-5" />
-                                <path d="M2 12l10 5 10-5" />
-                            </svg>
-                        </span>
-                        <span class="nav-label" data-i18n="nav.modlists">Listes .MM</span>
-                    </button>
-
-                    <button class="nav-item" data-view="repo" id="nav-repo">
-                        <span class="nav-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="1.8">
-                                <ellipse cx="12" cy="5" rx="9" ry="3" />
-                                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-                            </svg>
-                        </span>
-                        <span class="nav-label" data-i18n="nav.repo">Server Repo</span>
-                    </button>
-
                     <button class="nav-item" data-view="modpacks" id="nav-modpacks">
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -188,6 +164,30 @@
                             </svg>
                         </span>
                         <span class="nav-label" data-i18n="nav.mapper">Mapper</span>
+                    </button>
+
+                    <button class="nav-item" data-view="repo" id="nav-repo">
+                        <span class="nav-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.8">
+                                <ellipse cx="12" cy="5" rx="9" ry="3" />
+                                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                            </svg>
+                        </span>
+                        <span class="nav-label" data-i18n="nav.repo">Server Repo</span>
+                    </button>
+
+                    <button class="nav-item" data-view="modlist" id="nav-modlist">
+                        <span class="nav-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.8">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                <path d="M2 17l10 5 10-5" />
+                                <path d="M2 12l10 5 10-5" />
+                            </svg>
+                        </span>
+                        <span class="nav-label" data-i18n="nav.modlists">Listes .MM</span>
                     </button>
 
                     <button class="nav-item" data-view="docs" id="nav-docs">
@@ -622,7 +622,27 @@
                         </button>
                     </div>
 
-                    <div class="profile-grid" id="profile-grid">
+                    <div class="profiles-split-layout" id="profiles-split-layout">
+                        <!-- Left side: Profile Grid -->
+                        <div class="profile-grid-container" style="flex: 1;">
+                            <div class="profile-grid" id="profile-grid">
+                            </div>
+                        </div>
+
+                        <!-- Right side: Activated Mods List -->
+                        <div class="profiles-active-mods glass-card" id="profiles-active-mods-container">
+                            <h3 class="card-title" data-i18n="prof.allActiveMods" style="margin-bottom: 12px; font-size: 14px; font-weight: 600;">Mods Activés (Global)</h3>
+                            <div class="search-box" style="margin-bottom: 12px; height: 32px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8" />
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                </svg>
+                                <input type="text" id="prof-global-mod-search" placeholder="Rechercher..." data-i18n-placeholder="common.search" style="font-size: 13px;" />
+                            </div>
+                            <div class="active-mods-list-container" id="global-active-mods-list">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
                     </div>
                 </section>
 
@@ -5504,7 +5524,7 @@
                                 class="required">*</span></label>
                         <div class="path-picker">
                             <input type="text" class="form-input" id="mod-folder"
-                                placeholder="Chemin vers le dossier..." readonly />
+                                placeholder="Chemin vers le dossier..." data-i18n-placeholder="mod.folderPlaceholder" readonly />
                             <button class="btn btn-secondary btn-sm" id="btn-pick-mod-folder"
                                 data-i18n="prof.browse">Parcourir</button>
                         </div>
@@ -5516,7 +5536,7 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label" data-i18n="detail.author">Auteur</label>
-                            <input type="text" class="form-input" id="mod-author" placeholder="Auteur..." />
+                            <input type="text" class="form-input" id="mod-author" placeholder="Auteur..." data-i18n-placeholder="mod.authorPlaceholder" />
                         </div>
                     </div>
                     <div class="form-row">
@@ -5534,12 +5554,12 @@
                         </div>
                     </div>
                     <div class="form-group" style="margin-top: 10px;">
-                        <label class="form-label">Dépendances (Mods requis)</label>
+                        <label class="form-label" data-i18n="mod.dependencies">Dépendances (Mods requis)</label>
                         <div id="mod-dependencies-list"
                             style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px"></div>
                         <div style="position:relative">
                             <input type="text" id="mod-dependency-input" class="form-input"
-                                placeholder="Ajouter un mod requis..." />
+                                placeholder="Ajouter un mod requis..." data-i18n-placeholder="mod.addDependencyPlaceholder" />
                             <div id="mod-dependency-suggestions" class="glass"
                                 style="display:none; position:absolute; z-index:100; max-height:150px; overflow-y:auto; width:100%; border:1px solid var(--border); border-radius:8px; margin-top:4px">
                             </div>

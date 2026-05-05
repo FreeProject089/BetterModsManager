@@ -620,6 +620,105 @@ export async function renderProfiles() {
             }
         });
     });
+    // --- New Feature: Global Active Mods List ---
+    const activeModsContainer = document.getElementById('global-active-mods-list');
+    if (activeModsContainer) {
+        activeModsContainer.innerHTML = '';
+        // Collect all active mods and map them to their profiles
+        const activeModsMap = new Map(); // modId -> { mod, profileIds: Set }
+        profiles.forEach(p => {
+            const profileMods = allModsCache.filter(m => m.mod_folder_path && m.mod_folder_path.startsWith(p.mods_path));
+            const activeIds = Array.isArray(p.active_mods) ? p.active_mods : [];
+            const enabledMods = profileMods.filter(m => activeIds.includes(m.id));
+            enabledMods.forEach(m => {
+                if (!activeModsMap.has(m.id)) {
+                    activeModsMap.set(m.id, { mod: m, profileIds: new Set() });
+                }
+                activeModsMap.get(m.id).profileIds.add(p.id);
+            });
+        });
+        const sortedMods = Array.from(activeModsMap.values()).sort((a, b) => a.mod.name.localeCompare(b.mod.name));
+        const searchInput = document.getElementById('prof-global-mod-search');
+        const filterText = searchInput ? searchInput.value.toLowerCase() : '';
+        sortedMods.forEach(({ mod, profileIds }) => {
+            if (filterText && !mod.name.toLowerCase().includes(filterText))
+                return;
+            const item = document.createElement('div');
+            item.className = 'global-active-mod-item';
+            item.dataset.modId = mod.id;
+            item.dataset.profileIds = JSON.stringify(Array.from(profileIds));
+            item.innerHTML = `
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--accent); flex-shrink: 0;">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                <span style="flex:1; overflow:hidden; text-overflow:ellipsis;">${escHtml(mod.name)}</span>
+            `;
+            activeModsContainer.appendChild(item);
+        });
+        const modItems = activeModsContainer.querySelectorAll('.global-active-mod-item');
+        const profileCards = grid.querySelectorAll('.profile-card');
+        // Click to highlight profile
+        modItems.forEach(item => {
+            item.addEventListener('click', (e) => {
+                const isActive = item.classList.contains('highlight-mod');
+                // Reset all
+                modItems.forEach(mi => mi.classList.remove('highlight-mod', 'dim-mod'));
+                profileCards.forEach(pc => pc.classList.remove('highlight-profile', 'dim-profile'));
+                if (!isActive) {
+                    item.classList.add('highlight-mod');
+                    const pIds = JSON.parse(item.dataset.profileIds || '[]');
+                    profileCards.forEach(pc => {
+                        if (pIds.includes(pc.dataset.id)) {
+                            pc.classList.add('highlight-profile');
+                        }
+                        else {
+                            pc.classList.add('dim-profile');
+                        }
+                    });
+                    modItems.forEach(mi => {
+                        if (mi !== item)
+                            mi.classList.add('dim-mod');
+                    });
+                }
+            });
+        });
+        // Click profile to highlight its active mods
+        profileCards.forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('button') || e.target.closest('.btn-open-path'))
+                    return;
+                const isActive = card.classList.contains('highlight-profile');
+                // Reset all
+                modItems.forEach(mi => mi.classList.remove('highlight-mod', 'dim-mod'));
+                profileCards.forEach(pc => pc.classList.remove('highlight-profile', 'dim-profile'));
+                if (!isActive) {
+                    card.classList.add('highlight-profile');
+                    const pId = card.dataset.id;
+                    profileCards.forEach(pc => {
+                        if (pc !== card)
+                            pc.classList.add('dim-profile');
+                    });
+                    modItems.forEach(mi => {
+                        const pIds = JSON.parse(mi.dataset.profileIds || '[]');
+                        if (pIds.includes(pId)) {
+                            mi.classList.add('highlight-mod');
+                        }
+                        else {
+                            mi.classList.add('dim-mod');
+                        }
+                    });
+                }
+            });
+        });
+        // Search filter listener (re-render just the mods list if possible, or simple filter)
+        if (searchInput && !searchInput.dataset.listenerAdded) {
+            searchInput.dataset.listenerAdded = 'true';
+            searchInput.addEventListener('input', () => {
+                renderProfiles();
+            });
+        }
+    }
 }
 function openDeleteProfileModal(id, profile) {
     const modal = document.getElementById('modal-delete-profile');
