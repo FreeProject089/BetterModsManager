@@ -238,7 +238,12 @@ pub async fn export_server_repo(
             let files = fs_utils::list_mod_files(&mod_entry.mod_folder_path).map_err(|e| e.to_string())?;
             let total_files = files.len();
             
-            for (f_idx, rel_path) in files.iter().enumerate() {
+            use rayon::prelude::*;
+            use std::sync::atomic::{AtomicUsize, Ordering};
+            use std::sync::Mutex;
+
+            let f_idx_atomic = AtomicUsize::new(0);
+            let repo_files: Result<Vec<RepoFile>, String> = files.par_iter().map(|rel_path| {
                 let src_path = mod_entry.mod_folder_path.join(rel_path);
                 let dst_path = target_mod_dir.join(rel_path);
                 
@@ -248,7 +253,8 @@ pub async fn export_server_repo(
                     }
                 }
 
-                if f_idx % 5 == 0 && cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+                let f_idx = f_idx_atomic.fetch_add(1, Ordering::SeqCst);
+                if f_idx % 5 == 0 && cancel_flag.load(Ordering::SeqCst) {
                     return Err("Synchronisation annulée".to_string());
                 }
 
@@ -259,13 +265,6 @@ pub async fn export_server_repo(
                 let size = fs::metadata(&dst_path).map(|m| m.len()).unwrap_or(0);
                 let (sha256_hash, chunks) = compute_file_hash_and_chunks(&dst_path, size > CHUNK_SIZE as u64)?;
 
-                repo_mod.files.push(RepoFile {
-                    relative_path: rel_path.to_string_lossy().to_string().replace("\\", "/"),
-                    size,
-                    sha256_hash,
-                    chunks,
-                });
-
                 if f_idx % 10 == 0 || f_idx == total_files - 1 {
                     let _ = window.emit("bmm://repo-export-progress", RepoProgress {
                         step: format!(r#"{{"key":"repo.stepExporting","profile":"{}","mod":"{}","current":{},"total":{}}}"#, profile.name, mod_entry.name, idx + 1, total_mods),
@@ -273,7 +272,17 @@ pub async fn export_server_repo(
                         current_file: rel_path.to_string_lossy().to_string(),
                     });
                 }
-            }
+
+                Ok(RepoFile {
+                    relative_path: rel_path.to_string_lossy().to_string().replace("\\", "/"),
+                    size,
+                    sha256_hash,
+                    chunks,
+                })
+            }).collect();
+
+            let repo_files = repo_files?;
+            repo_mod.files = repo_files;
             repo_profile.mods.push(repo_mod);
         }
         repo.profiles.push(repo_profile);

@@ -76,6 +76,11 @@ pub fn apply_fs_security_mode(app: tauri::AppHandle) {
 }
 
 fn main() {
+    // Prevent Rayon from hogging 100% CPU and lagging the OS
+    let cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    let threads = if cpus > 6 { cpus - 2 } else if cpus > 2 { cpus - 1 } else { 2 };
+    let _ = rayon::ThreadPoolBuilder::new().num_threads(threads).build_global();
+
     tracing_subscriber::fmt::init();
     info!("Starting Better Mods Manager...");
     commands::crash::setup_panic_hook();

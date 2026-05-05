@@ -46,17 +46,30 @@ export async function initMapper(): Promise<void> {
 
     // 2. Events
     modSelect?.addEventListener('change', async () => {
+        if (!modSelect.value && modSelect.value !== "") return;
         selectedModId = modSelect.value;
         selectedPaths.clear();
         pendingMoves.clear();
         updateSaveButtonVisibility();
         updateSelectionCounter();
-        await refreshModTree();
+        
+        modSelect.disabled = true;
+        profileSelect.disabled = true;
+        try {
+            await refreshModTree();
+        } finally {
+            modSelect.disabled = false;
+            profileSelect.disabled = false;
+        }
     });
 
     profileSelect?.addEventListener('change', async () => {
         const newProfileId = profileSelect.value;
         if (!newProfileId) return;
+        
+        modSelect.disabled = true;
+        profileSelect.disabled = true;
+        
         try {
             await invoke('set_active_profile', { profileId: newProfileId });
             // Profile changed — force reload both trees and reset caches
@@ -66,7 +79,12 @@ export async function initMapper(): Promise<void> {
             await refreshGameTree(true);
             if (selectedModId) await refreshModTree(true);
             toast(t("common.saved"), "success");
-        } catch (e: any) { toast(e.message || e, "error"); }
+        } catch (e: any) { 
+            toast(e.message || e, "error"); 
+        } finally {
+            modSelect.disabled = false;
+            profileSelect.disabled = false;
+        }
     });
 
     previewBtn?.addEventListener('click', showMapperPreview);
@@ -77,10 +95,19 @@ export async function initMapper(): Promise<void> {
         }
         pendingMoves.clear();
         updateSaveButtonVisibility();
-        await refreshMapperData();
-        // Manual refresh — always bypass cache
-        await refreshGameTree(true);
-        if (selectedModId) await refreshModTree(true);
+        
+        modSelect.disabled = true;
+        profileSelect.disabled = true;
+        
+        try {
+            await refreshMapperData();
+            // Manual refresh — always bypass cache
+            await refreshGameTree(true);
+            if (selectedModId) await refreshModTree(true);
+        } finally {
+            modSelect.disabled = false;
+            profileSelect.disabled = false;
+        }
     });
 
     saveBtn?.addEventListener('click', applyAllChanges);
@@ -95,14 +122,20 @@ export async function initMapper(): Promise<void> {
     
     // Auto-refresh when entering view — only if profile changed
     document.querySelector('.nav-item[data-view="mapper"]')?.addEventListener('click', async () => {
-        const profileSelect = document.getElementById('mapper-profile-select') as HTMLSelectElement;
         const currentProfileId = profileSelect?.value || null;
         const profileChanged = currentProfileId !== lastProfileId;
 
         if (profileChanged) {
-            await refreshMapperData();
-            await refreshGameTree();
-            if (selectedModId) await refreshModTree();
+            modSelect.disabled = true;
+            profileSelect.disabled = true;
+            try {
+                await refreshMapperData();
+                await refreshGameTree();
+                if (selectedModId) await refreshModTree();
+            } finally {
+                modSelect.disabled = false;
+                profileSelect.disabled = false;
+            }
         }
     });
 
@@ -190,8 +223,8 @@ async function refreshModTree(force = false): Promise<void> {
     }
 
     // Skip reload if same mod folder is already loaded
-    if (!force && modFolderPath === lastModFolderPath && modTreeData.length > 0) {
-        renderFilteredTrees();
+    if (!force && lastModFolderPath === modFolderPath && modTreeData.length > 0) {
+        await renderFilteredModTree();
         return;
     }
 
@@ -199,7 +232,7 @@ async function refreshModTree(force = false): Promise<void> {
     try {
         modTreeData = await invoke('get_directory_tree', { path: modFolderPath });
         lastModFolderPath = modFolderPath;
-        renderFilteredTrees();
+        await renderFilteredModTree();
     } catch (e) { container.innerHTML = `<div class="empty-hint error" style="color:var(--danger)">${e}</div>`; }
 }
 
@@ -214,9 +247,8 @@ async function refreshGameTree(force = false): Promise<void> {
         return;
     }
 
-    // Skip reload if same game path is already loaded
     if (!force && activeProfile.game_path === lastGamePath && gameTreeData.length > 0) {
-        renderFilteredTrees();
+        await renderFilteredGameTree();
         return;
     }
 
@@ -224,7 +256,7 @@ async function refreshGameTree(force = false): Promise<void> {
     try {
         gameTreeData = await invoke('get_directory_tree', { path: activeProfile.game_path });
         lastGamePath = activeProfile.game_path;
-        renderFilteredTrees();
+        await renderFilteredGameTree();
     } catch (e: any) {
         container.innerHTML = `<div class="empty-hint error" style="color:var(--danger)">Erreur: ${e.message || e}</div>`;
     }
@@ -234,14 +266,19 @@ function setupFilters(): void {
     const modFilter = document.getElementById('mapper-mod-search') as HTMLInputElement;
     const gameFilter = document.getElementById('mapper-game-search') as HTMLInputElement;
     
-    let debounceTimer: any;
-    const debouncedSearch = () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => renderFilteredTrees(), 100);
+    let debounceModTimer: any;
+    let debounceGameTimer: any;
+    const debouncedModSearch = () => {
+        clearTimeout(debounceModTimer);
+        debounceModTimer = setTimeout(() => renderFilteredModTree(), 300);
+    };
+    const debouncedGameSearch = () => {
+        clearTimeout(debounceGameTimer);
+        debounceGameTimer = setTimeout(() => renderFilteredGameTree(), 300);
     };
 
-    modFilter?.addEventListener('input', debouncedSearch);
-    gameFilter?.addEventListener('input', debouncedSearch);
+    modFilter?.addEventListener('input', debouncedModSearch);
+    gameFilter?.addEventListener('input', debouncedGameSearch);
     
     document.getElementById('btn-mapper-mod-expand')?.addEventListener('click', () => toggleAll('mapper-mod-tree', true));
     document.getElementById('btn-mapper-mod-collapse')?.addEventListener('click', () => toggleAll('mapper-mod-tree', false));
@@ -319,10 +356,8 @@ function getVirtualModTree(): FileTreeNode[] {
     return virtualTree;
 }
 
-function renderFilteredTrees(): void {
+async function renderFilteredModTree(): Promise<void> {
     const modFilter = (document.getElementById('mapper-mod-search') as HTMLInputElement)?.value.toLowerCase() || '';
-    const gameFilter = (document.getElementById('mapper-game-search') as HTMLInputElement)?.value.toLowerCase() || '';
-
     const modContainer = document.getElementById('mapper-mod-tree');
     if (modContainer) {
         modContainer.innerHTML = '';
@@ -348,9 +383,13 @@ function renderFilteredTrees(): void {
             modContainer.appendChild(rootItem);
         }
 
-        renderTree(filterTree(getVirtualModTree(), modFilter), modContainer, true);
+        await renderTree(filterTree(getVirtualModTree(), modFilter), modContainer, true);
     }
+    updateLiveMappingHighlight();
+}
 
+async function renderFilteredGameTree(): Promise<void> {
+    const gameFilter = (document.getElementById('mapper-game-search') as HTMLInputElement)?.value.toLowerCase() || '';
     const gameContainer = document.getElementById('mapper-game-tree');
     if (gameContainer) {
         gameContainer.innerHTML = '';
@@ -373,7 +412,7 @@ function renderFilteredTrees(): void {
             showContextMenu(e.clientX, e.clientY, ".", true, false);
         });
         gameContainer.appendChild(rootItem);
-        renderTree(filterTree(gameTreeData, gameFilter), gameContainer, false);
+        await renderTree(filterTree(gameTreeData, gameFilter), gameContainer, false);
     }
     updateLiveMappingHighlight();
 }
@@ -391,7 +430,7 @@ function filterTree(nodes: FileTreeNode[], query: string): FileTreeNode[] {
     }, []);
 }
 
-function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSide: boolean): void {
+async function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSide: boolean): Promise<void> {
     if (!nodes || nodes.length === 0) {
         if (container.classList.contains('file-tree')) {
             const empty = document.createElement('div');
@@ -404,7 +443,13 @@ function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSide: bo
 
     const fragment = document.createDocumentFragment();
 
-    nodes.forEach(node => {
+    for (let i = 0; i < nodes.length; i++) {
+        if (i > 0 && i % 100 === 0) {
+            // Yield to main thread to prevent UI freezing on huge trees
+            await new Promise(r => setTimeout(r, 0));
+        }
+        
+        const node = nodes[i];
         const item = document.createElement('div');
         item.className = `tree-item ${node.is_dir ? 'folder' : 'file'}`;
         
@@ -511,10 +556,15 @@ function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSide: bo
             childrenContainer.className = 'tree-children';
             const isSearching = (document.getElementById(isModSide ? 'mapper-mod-search' : 'mapper-game-search') as HTMLInputElement)?.value.length > 0;
             childrenContainer.style.display = isSearching ? 'block' : 'none';
-            renderTree(node.children || [], childrenContainer, isModSide);
+            
             fragment.appendChild(childrenContainer);
+            
+            // Render children asynchronously if needed
+            if (node.children && node.children.length > 0) {
+                await renderTree(node.children, childrenContainer, isModSide);
+            }
         }
-    });
+    }
 
     container.appendChild(fragment);
 }
@@ -549,7 +599,7 @@ function queueMoveTo(targetPath: string) {
     selectedPaths.forEach(p => { pendingMoves.set(p, targetPath); });
     toast(`${count} éléments déplacés vers "${targetPath === "." ? "la racine" : targetPath}"`, "info");
     updateSaveButtonVisibility();
-    renderFilteredTrees();
+    renderFilteredModTree();
 }
 
 function updateSelectionVisuals() {
@@ -641,7 +691,7 @@ function setupContextMenu() {
             if (count > 0) {
                 toast(t("mapper.mappingCancelled", { count: count.toString() }), "info");
                 updateSaveButtonVisibility();
-                renderFilteredTrees();
+                renderFilteredModTree();
             }
         }
         hideContextMenu();

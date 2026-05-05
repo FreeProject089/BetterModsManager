@@ -35,7 +35,7 @@ pub async fn get_directory_tree(path: String) -> Result<Vec<FileTreeNode>, AppEr
             .collect();
 
         // 2. Build map of all nodes
-        let mut nodes_map: HashMap<PathBuf, FileTreeNode> = HashMap::new();
+        let mut nodes_map: HashMap<PathBuf, FileTreeNode> = HashMap::with_capacity(entries.len());
         let mut root_paths = Vec::new();
 
         for entry in &entries {
