@@ -266,7 +266,7 @@
   "docs.mapper.q2": "Mapping Intelligent",
   "docs.mapper.a2": "Sélectionnez vos fichiers à gauche, puis double-cliquez sur le dossier de destination à droite pour créer le lien.",
   "docs.tab.basic": "Basique",
-  "docs.tab.advanced": "Avancé",
+  "docs.tab.advanced": "Documentation",
   "docs.faq.header": "Foire Aux Questions (FAQ)",
   "docs.mechanics.header": "Mécaniques de Modding",
   "docs.faq.title": "Foire Aux Questions",
@@ -1319,7 +1319,7 @@
   "docs.techStack.tauriDesc": "Cœur technique assurant sécurité, rapidité d'exécution et gestion bas-niveau.",
   "docs.techStack.visual": "Mermaid.js",
   "docs.techStack.visualDesc": "Moteur de visualisation interactive avec traductions dynamiques et pan/zoom stable.",
-  "docs.title": "Documentation",
+  "docs.title": "Help & other",
   "docs.updateCycle.desc": "BMM gere automatiquement la verification, le telechargement securise et le remplacement a chaud du binaire.",
   "docs.updateCycle.title": "Cycle Intelligent",
   "docs.updates.auto": "Détection Automatique",
@@ -1575,7 +1575,7 @@
   "__SECTION_NAV__": "--- NAVIGATION ---",
   "nav.activeProfile": "PROFIL ACTIF",
   "nav.profiles": "Profils",
-  "nav.docs": "Documentation",
+  "nav.docs": "Help & other",
   "nav.docsViewDiagramTip": "Ouvrir le diagramme architectural interactif pour cette section.",
   "nav.library": "Bibliothèque",
   "nav.modlists": "Listes .MM",
@@ -2552,5 +2552,6 @@
   "settings.taskyOpacity": "Transparence des bulles",
   "settings.taskyOpacityDesc": "Ajuste l'opacite des bulles d'aide.",
   "docs.search.classicTip": "Recherche Classique : utilise des mots-clés standard pour trouver des correspondances exactes.",
-  "docs.search.semanticTip": "Recherche Sémantique : utilise l'IA pour comprendre le sens de votre recherche, même sans mots-clés exacts."
+  "docs.search.semanticTip": "Recherche Sémantique : utilise l'IA pour comprendre le sens de votre recherche, même sans mots-clés exacts.",
+  "docs.tab.faq": "FAQ"
 }

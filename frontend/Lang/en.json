@@ -266,7 +266,7 @@
   "docs.mapper.q2": "Intelligent Mapping",
   "docs.mapper.a2": "Select your files on the left, then double-click the target folder on the right to create the link.",
   "docs.tab.basic": "Basic",
-  "docs.tab.advanced": "Advanced",
+  "docs.tab.advanced": "Documentation",
   "docs.faq.header": "Frequently Asked Questions (FAQ)",
   "docs.mechanics.header": "Modding Mechanics",
   "docs.faq.title": "Frequently Asked Questions",
@@ -1319,7 +1319,7 @@
   "docs.techStack.tauriDesc": "Technical core ensuring security, speed, and low-level management.",
   "docs.techStack.visual": "Mermaid.js",
   "docs.techStack.visualDesc": "Interactive visualization engine with dynamic translations and stable pan/zoom.",
-  "docs.title": "Documentation",
+  "docs.title": "Help & other",
   "docs.updateCycle.desc": "BMM automatically handles verification, secure download, and hot swapping of binary.",
   "docs.updateCycle.title": "Smart Cycle",
   "docs.updates.auto": "Automatic Detection",
@@ -1574,7 +1574,7 @@
   "mod.removeTip": "Unregister this mod from BMM (optionally delete files).",
   "__SECTION_NAV__": "--- NAVIGATION ---",
   "nav.activeProfile": "ACTIVE PROFILE",
-  "nav.docs": "Documentation",
+  "nav.docs": "Help & other",
   "nav.docsViewDiagramTip": "Open the interactive architectural diagram for this section.",
   "nav.library": "Library",
   "nav.modlists": ".MM Lists",
@@ -2554,5 +2554,6 @@
   "settings.taskyOpacity": "Bubble Transparency",
   "settings.taskyOpacityDesc": "Adjust the opacity of help bubbles (100% = fully visible).",
   "docs.search.classicTip": "Classic Search: uses standard keywords to find exact matches in documentation.",
-  "docs.search.semanticTip": "Semantic Search: uses AI to understand the meaning of your query, even without exact keywords."
+  "docs.search.semanticTip": "Semantic Search: uses AI to understand the meaning of your query, even without exact keywords.",
+  "docs.tab.faq": "FAQ"
 }

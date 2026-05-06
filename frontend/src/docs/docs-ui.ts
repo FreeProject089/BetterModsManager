@@ -11,6 +11,42 @@ interface DiagramIndexItem {
 let diagramSearchIndex: DiagramIndexItem[] = [];
 
 export function initDocsUI() {
+    // Inject Enhanced Glow CSS
+    const dgStyle = document.createElement('style');
+    dgStyle.textContent = `
+        .docs-tab-content .glass-card, 
+        .docs-tab-content details.faq-accordion {
+            transition: opacity 0.3s ease, transform 0.3s ease, display 0.3s allow-discrete;
+        }
+        .diagram-reco-item:active { transform: scale(0.98); }
+        .node-highlight-glow rect, 
+        .node-highlight-glow polygon, 
+        .node-highlight-glow circle, 
+        .node-highlight-glow ellipse,
+        .node-highlight-glow path {
+            stroke: var(--accent) !important;
+            stroke-width: 4px !important;
+            filter: drop-shadow(0 0 6px var(--accent)) !important;
+            animation: node-glow-pulse 1.5s infinite alternate ease-in-out !important;
+            paint-order: markers stroke fill !important;
+        }
+        
+        @keyframes node-glow-pulse {
+            0% { 
+                filter: drop-shadow(0 0 4px var(--accent)); 
+                stroke-width: 3px;
+                opacity: 0.85;
+            }
+            100% { 
+                filter: drop-shadow(0 0 12px var(--accent)); 
+                stroke-width: 5px;
+                opacity: 1;
+            }
+        }
+        #mermaid-diagram-container svg { overflow: visible !important; }
+    `;
+    document.head.appendChild(dgStyle);
+
     setupTabs();
     setupVideoPlayers();
     buildDiagramIndex();
@@ -18,7 +54,10 @@ export function initDocsUI() {
     
     window.addEventListener('online', setupVideoPlayers);
     window.addEventListener('offline', setupVideoPlayers);
-    document.addEventListener('langChanged', setupVideoPlayers);
+    document.addEventListener('langChanged', () => {
+        setupVideoPlayers();
+        buildDiagramIndex(); // Rebuild index on language change
+    });
 }
 
 /**
@@ -26,13 +65,14 @@ export function initDocsUI() {
  */
 function buildDiagramIndex() {
     diagramSearchIndex = [];
+    console.log('[Docs] Building diagram search index...');
     
     for (const [id, diagram] of Object.entries(diagrams)) {
         const title = t(diagram.titleKey);
         
-        // Use a more global approach to find all labels and descriptions
         // 1. Process Nodes from definition
-        const nodeRegex = /([A-Z0-9_]+)\["?<div[^>]*>.*?\{\{([a-zA-Z0-9._-]+)\}\}.*?<\/div>"?\]/g;
+        // Flexible regex to catch various div attributes and quote styles
+        const nodeRegex = /([A-Z0-9_]+)\[['"]?<div[^>]*>.*?\{\{([a-zA-Z0-9._-]+)\}\}.*?<\/div>['"]?\]/g;
         let match;
         const processedNodes = new Map();
 
@@ -81,6 +121,7 @@ function buildDiagramIndex() {
             });
         }
     }
+    console.log(`[Docs] Index built: ${diagramSearchIndex.length} items.`);
 }
 
 function setupTabs() {
@@ -194,12 +235,19 @@ function setupSearch() {
             diagResultsList.innerHTML = '';
         }
 
-        if (query.length > 0 && advancedTabBtn && !advancedTabBtn.classList.contains('active')) {
-             advancedTabBtn.click();
+        if (query.length > 0) {
+            document.querySelectorAll('.docs-tab-content').forEach(t => (t as HTMLElement).style.display = 'block');
+            const nav = document.querySelector('.docs-tabs-nav') as HTMLElement;
+            if(nav) nav.style.opacity = '0.5';
+        } else {
+            const activeTabBtn = document.querySelector('.btn-docs-tab.active') as HTMLElement;
+            if (activeTabBtn) activeTabBtn.click();
+            const nav = document.querySelector('.docs-tabs-nav') as HTMLElement;
+            if(nav) nav.style.opacity = '1';
         }
 
         // 1. Filter Glass Cards
-        const cards = document.querySelectorAll('#docs-tab-advanced .glass-card:not(.faq-accordion)');
+        const cards = document.querySelectorAll('.docs-tab-content .glass-card:not(.faq-accordion)');
         cards.forEach(card => {
             const content = card.textContent?.toLowerCase() || "";
             const match = checkMatch(content, query, searchMode);
@@ -207,7 +255,7 @@ function setupSearch() {
         });
 
         // 2. Filter FAQ Accordions
-        const faqs = document.querySelectorAll('#docs-tab-advanced details.faq-accordion:not(.glass-card)');
+        const faqs = document.querySelectorAll('.docs-tab-content details.faq-accordion:not(.glass-card)');
         faqs.forEach(faq => {
             const faqContent = faq.textContent?.toLowerCase() || "";
             const match = checkMatch(faqContent, query, searchMode);
@@ -217,7 +265,7 @@ function setupSearch() {
         });
 
         // 3. Filter Diagram Gallery Buttons
-        const galleryButtons = document.querySelectorAll('.docs-gallery-grid button, #docs-tab-advanced details.glass-card button');
+        const galleryButtons = document.querySelectorAll('.docs-gallery-grid button, .docs-tab-content .glass-card button');
         galleryButtons.forEach(btn => {
             if (btn.getAttribute('onclick')?.includes('openDiagram')) {
                 const btnText = btn.textContent?.toLowerCase() || "";
@@ -262,7 +310,7 @@ function setupSearch() {
                     
                     const badgeColor = scorePercent > 90 ? 'var(--success)' : (scorePercent > 70 ? 'var(--accent)' : 'var(--warning)');
                     const scoreBadge = (searchMode === 'semantic') 
-                        ? `<div style="position:absolute; top:0; right:0; font-size:9x; background:${badgeColor}; color:white; padding:2px 7px; border-bottom-left-radius:8px; font-weight:800; font-family:var(--font-mono); box-shadow: -2px 2px 10px rgba(0,0,0,0.3); z-index:2;">${scorePercent}%</div>` 
+                        ? `<div style="position:absolute; top:0; right:0; font-size:9px; background:${badgeColor}; color:white; padding:2px 7px; border-bottom-left-radius:8px; font-weight:800; font-family:var(--font-mono); box-shadow: -2px 2px 10px rgba(0,0,0,0.3); z-index:2;">${scorePercent}%</div>` 
                         : '';
 
                     el.innerHTML = `
@@ -348,15 +396,6 @@ function animateVisibility(el: HTMLElement, match: boolean | number) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    const style = document.createElement('style');
-    style.textContent = `
-        #docs-tab-advanced .glass-card, 
-        #docs-tab-advanced details.faq-accordion {
-            transition: opacity 0.3s ease, transform 0.3s ease, display 0.3s allow-discrete;
-        }
-        .diagram-reco-item:active { transform: scale(0.98); }
-    `;
-    document.head.appendChild(style);
-});
+// Cleanup: remove the old style injection listener at the bottom
+
 

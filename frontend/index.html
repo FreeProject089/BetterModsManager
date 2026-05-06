@@ -198,7 +198,7 @@
                                 <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
                             </svg>
                         </span>
-                        <span class="nav-label" data-i18n="nav.docs">Documentation</span>
+                        <span class="nav-label" data-i18n="nav.docs">Help & other</span>
                     </button>
 
                     <button class="nav-item" data-view="credits" id="nav-credits">
@@ -1667,7 +1667,7 @@
                     <div class="view-header" style="flex-direction: column; align-items: flex-start; gap: 16px;">
                         <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
                             <div>
-                                <h1 class="view-title" data-i18n="docs.title">Documentation</h1>
+                                <h1 class="view-title" data-i18n="docs.title">Help & other</h1>
                                 <p class="view-subtitle" data-i18n="docs.subtitle">Guide d'utilisation de Better Mod
                                     Manager</p>
                             </div>
@@ -1732,7 +1732,11 @@
                             </button>
                             <button class="btn btn-docs-tab" data-tab="advanced"
                                 style="padding: 6px 16px; border-radius: 6px; background: transparent; color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.1); font-weight: 600; cursor: pointer; transition: all 0.2s;" data-i18n="docs.tab.advanced">
-                                Avancé
+                                Documentation
+                            </button>
+                            <button class="btn btn-docs-tab" data-tab="faq"
+                                style="padding: 6px 16px; border-radius: 6px; background: transparent; color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.1); font-weight: 600; cursor: pointer; transition: all 0.2s;" data-i18n="docs.tab.faq">
+                                FAQ
                             </button>
                         </div>
                     </div>
@@ -1791,7 +1795,7 @@
                         </div>
 
                         <div
-                            style="margin-top:20px; padding:15px; background:rgba(59,130,246,0.06); border:1px dashed rgba(59,130,246,0.25); border-radius:10px; display:flex; align-items:center; gap:12px;">
+                            style="margin-top:20px; margin-bottom: 32px; padding:15px; background:rgba(59,130,246,0.06); border:1px dashed rgba(59,130,246,0.25); border-radius:10px; display:flex; align-items:center; gap:12px;">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
                                 stroke-width="2">
                                 <circle cx="12" cy="12" r="10" />
@@ -1803,12 +1807,8 @@
                                 démonstrations temporaires. Elles seront mises à jour prochainement avec des guides
                                 complets.</span>
                         </div>
-                    </div>
 
-                    <!-- TAB: ADVANCED -->
-                    <div id="docs-tab-advanced" class="docs-tab-content" style="display: none;">
-                        <div class="settings-sections" style="display: flex; flex-direction: column; gap: 24px;">
-                            <!-- Mécaniques de Modding -->
+                            <!-- Modding Mechanics -->
                             <div class="glass-card" style="border-left: 3px solid #ffffff; margin-bottom: 20px;">
                                 <h3 class="card-title" style="display: flex; align-items: center; gap: 10px; text-transform: uppercase; font-size: 15px;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
@@ -1845,9 +1845,6 @@
                                     </div>
                                 </div>
                             </div>
-
-
-
                             <!-- Modpacks & Sharing Documentation -->
                             <div class="glass-card" style="border-left: 3px solid #00c2ff;">
                                 <h3 class="card-title" style="display: flex; align-items: center; gap: 10px; text-transform: uppercase; font-size: 15px;">
@@ -1924,6 +1921,144 @@
                                     </ol>
                                 </div>
                             </div>
+                            <!-- Best Practices & Tips -->
+                            <div class="glass-card" style="border-left: 3px solid #22c55e;">
+                                <h3 class="card-title">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e"
+                                        stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <line x1="12" y1="8" x2="12" y2="12" />
+                                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                                    </svg>
+                                    <span style="color:#22c55e" data-i18n="docs.bestPractices">Best Practices &amp;
+                                        Tips</span>
+                                    <button class="btn btn-xs btn-ghost" onclick="openDiagram('best-practices')"
+                                        style="margin-left:auto; font-size:10px; color:#22c55e; border:1px dashed rgba(34,197,94,0.3); padding: 2px 8px;">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" style="margin-right:4px">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                            <path d="M2 17l10 5 10-5" />
+                                            <path d="M2 12l10 5 10-5" />
+                                        </svg>
+                                        <span data-i18n="docs.diagram.btn.explore">EXPLORER</span>
+                                    </button>
+                                </h3>
+                                <div
+                                    style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
+                                    <div
+                                        style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
+                                            data-i18n="docs.bestPractices.oneProfile">1 Profile = 1 Mod Folder</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.bestPractices.oneProfileDesc">Utilisez un dossier de mods
+                                            distinct
+                                            par profil pour éviter les mélanges de fichiers entre jeux.</div>
+                                    </div>
+                                    <div
+                                        style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
+                                            data-i18n="docs.bestPractices.modStructure">Mod Folder Structure</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.bestPractices.modStructureDesc">Assurez-vous que vos
+                                            dossiers de
+                                            mods respectent la structure racine du jeu pour une injection correcte.
+                                        </div>
+                                    </div>
+                                    <div
+                                        style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
+                                            data-i18n="docs.bestPractices.noDelete">Never Delete an Active Mod</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.bestPractices.noDeleteDesc">Désactivez toujours un mod via
+                                            BMM
+                                            avant
+                                            de le supprimer manuellement de votre disque.</div>
+                                    </div>
+                                    <div
+                                        style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
+                                            data-i18n="docs.bestPractices.noMix">Don't Mix Mod Folders</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.bestPractices.noMixDesc">Évitez de pointer deux profils vers
+                                            le
+                                            même
+                                            dossier de mods pour prévenir les conflits d'état.</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Server Repo -->
+                            <div class="glass-card" style="border-left: 3px solid #bc74ff;">
+                                <h3 class="card-title">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#bc74ff"
+                                        stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                        <rect x="2" y="3" width="20" height="14" rx="2" />
+                                        <path d="M8 21h8M12 17v4" />
+                                    </svg>
+                                    <span style="color:#bc74ff" data-i18n="docs.repo">Server Repository (Server
+                                        Mode)</span>
+                                    <button class="btn btn-xs btn-ghost" onclick="openDiagram('server-mode')"
+                                        style="margin-left:auto; font-size:10px; color:#bc74ff; border:1px dashed rgba(188,116,255,0.3); padding: 2px 8px;">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" style="margin-right:4px">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                            <path d="M2 17l10 5 10-5" />
+                                            <path d="M2 12l10 5 10-5" />
+                                        </svg>
+                                        <span data-i18n="docs.serverMode">ARCHITECTURE SERVEUR</span>
+                                    </button>
+                                </h3>
+                                <div
+                                    style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
+                                    <div
+                                        style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
+                                            data-i18n="docs.repo.concept">Comment ça marche ?</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.repo.conceptDesc">...</div>
+                                    </div>
+                                    <div
+                                        style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
+                                            data-i18n="docs.repo.hosting">Héberger</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.repo.hostingDesc">...</div>
+                                    </div>
+                                    <div
+                                        style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px; position: relative;">
+                                        <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
+                                            data-i18n="docs.repo.syncing">Synchroniser</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.repo.syncingDesc">...</div>
+                                        <button class="btn btn-xs btn-ghost" onclick="openDiagram('mod-sync')"
+                                            style="margin-top:10px; font-size:10px; color:#bc74ff; border:1px dashed rgba(188,116,255,0.2); display:flex; align-items:center; gap:5px;">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2">
+                                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                                <path d="M2 17l10 5 10-5" />
+                                                <path d="M2 12l10 5 10-5" />
+                                            </svg>
+                                            <span data-i18n="docs.viewDiagram">VOIR LE DIAGRAMME</span>
+                                        </button>
+                                    </div>
+                                    <div
+                                        style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
+                                            data-i18n="docs.repo.security">Sécurité</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.repo.securityDesc">...</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                    </div>
+
+                    <!-- TAB: ADVANCED -->
+                    <div id="docs-tab-advanced" class="docs-tab-content" style="display: none;">
+                        <div class="settings-sections" style="display: flex; flex-direction: column; gap: 24px;">
+                            <!-- Mécaniques de Modding -->
+
+
+
 
                             <!-- Backup -->
                             <div class="glass-card" style="border-left: 3px solid #ce8a17;">
@@ -2113,68 +2248,6 @@
                             </div>
 
                             <!-- Server Repo -->
-                            <div class="glass-card" style="border-left: 3px solid #bc74ff;">
-                                <h3 class="card-title">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#bc74ff"
-                                        stroke-width="2" style="margin-right:8px;vertical-align:middle">
-                                        <rect x="2" y="3" width="20" height="14" rx="2" />
-                                        <path d="M8 21h8M12 17v4" />
-                                    </svg>
-                                    <span style="color:#bc74ff" data-i18n="docs.repo">Server Repository (Server
-                                        Mode)</span>
-                                    <button class="btn btn-xs btn-ghost" onclick="openDiagram('server-mode')"
-                                        style="margin-left:auto; font-size:10px; color:#bc74ff; border:1px dashed rgba(188,116,255,0.3); padding: 2px 8px;">
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2" style="margin-right:4px">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                            <path d="M2 17l10 5 10-5" />
-                                            <path d="M2 12l10 5 10-5" />
-                                        </svg>
-                                        <span data-i18n="docs.serverMode">ARCHITECTURE SERVEUR</span>
-                                    </button>
-                                </h3>
-                                <div
-                                    style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
-                                    <div
-                                        style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
-                                        <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
-                                            data-i18n="docs.repo.concept">Comment ça marche ?</div>
-                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                            data-i18n="docs.repo.conceptDesc">...</div>
-                                    </div>
-                                    <div
-                                        style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
-                                        <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
-                                            data-i18n="docs.repo.hosting">Héberger</div>
-                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                            data-i18n="docs.repo.hostingDesc">...</div>
-                                    </div>
-                                    <div
-                                        style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px; position: relative;">
-                                        <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
-                                            data-i18n="docs.repo.syncing">Synchroniser</div>
-                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                            data-i18n="docs.repo.syncingDesc">...</div>
-                                        <button class="btn btn-xs btn-ghost" onclick="openDiagram('mod-sync')"
-                                            style="margin-top:10px; font-size:10px; color:#bc74ff; border:1px dashed rgba(188,116,255,0.2); display:flex; align-items:center; gap:5px;">
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2">
-                                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                                <path d="M2 17l10 5 10-5" />
-                                                <path d="M2 12l10 5 10-5" />
-                                            </svg>
-                                            <span data-i18n="docs.viewDiagram">VOIR LE DIAGRAMME</span>
-                                        </button>
-                                    </div>
-                                    <div
-                                        style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
-                                        <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
-                                            data-i18n="docs.repo.security">Sécurité</div>
-                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                            data-i18n="docs.repo.securityDesc">...</div>
-                                    </div>
-                                </div>
-                            </div>
 
                             <!-- Dedicated Hosting Guide -->
                             <div class="glass-card" style="border-left: 3px solid #8b5cf6;">
@@ -2557,71 +2630,6 @@
                                 </div>
                             </div>
 
-                            <!-- Best Practices & Tips -->
-                            <div class="glass-card" style="border-left: 3px solid #22c55e;">
-                                <h3 class="card-title">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e"
-                                        stroke-width="2" style="margin-right:8px;vertical-align:middle">
-                                        <circle cx="12" cy="12" r="10" />
-                                        <line x1="12" y1="8" x2="12" y2="12" />
-                                        <line x1="12" y1="16" x2="12.01" y2="16" />
-                                    </svg>
-                                    <span style="color:#22c55e" data-i18n="docs.bestPractices">Best Practices &amp;
-                                        Tips</span>
-                                    <button class="btn btn-xs btn-ghost" onclick="openDiagram('best-practices')"
-                                        style="margin-left:auto; font-size:10px; color:#22c55e; border:1px dashed rgba(34,197,94,0.3); padding: 2px 8px;">
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2" style="margin-right:4px">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                            <path d="M2 17l10 5 10-5" />
-                                            <path d="M2 12l10 5 10-5" />
-                                        </svg>
-                                        <span data-i18n="docs.diagram.btn.explore">EXPLORER</span>
-                                    </button>
-                                </h3>
-                                <div
-                                    style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
-                                    <div
-                                        style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
-                                        <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
-                                            data-i18n="docs.bestPractices.oneProfile">1 Profile = 1 Mod Folder</div>
-                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                            data-i18n="docs.bestPractices.oneProfileDesc">Utilisez un dossier de mods
-                                            distinct
-                                            par profil pour éviter les mélanges de fichiers entre jeux.</div>
-                                    </div>
-                                    <div
-                                        style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
-                                        <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
-                                            data-i18n="docs.bestPractices.modStructure">Mod Folder Structure</div>
-                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                            data-i18n="docs.bestPractices.modStructureDesc">Assurez-vous que vos
-                                            dossiers de
-                                            mods respectent la structure racine du jeu pour une injection correcte.
-                                        </div>
-                                    </div>
-                                    <div
-                                        style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:12px">
-                                        <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
-                                            data-i18n="docs.bestPractices.noDelete">Never Delete an Active Mod</div>
-                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                            data-i18n="docs.bestPractices.noDeleteDesc">Désactivez toujours un mod via
-                                            BMM
-                                            avant
-                                            de le supprimer manuellement de votre disque.</div>
-                                    </div>
-                                    <div
-                                        style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
-                                        <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
-                                            data-i18n="docs.bestPractices.noMix">Don't Mix Mod Folders</div>
-                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                            data-i18n="docs.bestPractices.noMixDesc">Évitez de pointer deux profils vers
-                                            le
-                                            même
-                                            dossier de mods pour prévenir les conflits d'état.</div>
-                                    </div>
-                                </div>
-                            </div>
 
                             <!-- App Updates Documentation -->
                             <div class="glass-card" style="border-left: 3px solid var(--accent);">
@@ -2765,6 +2773,11 @@
                                     </div>
                                 </div>
                             </div>
+                            </div> <!-- End of settings-sections -->
+                        </div> <!-- End of docs-tab-advanced -->
+
+                    <!-- TAB: FAQ -->
+                    <div id="docs-tab-faq" class="docs-tab-content" style="display: none; padding: 24px 0;">
 
                             <h2 style="margin-top:28px;font-size:18px;color:var(--text-primary)" data-i18n="faq.title">
                                 Questions
@@ -3837,8 +3850,7 @@
                                     </div>
                                 </div>
                             </details>
-                            </div> <!-- End of settings-sections -->
-                        </div> <!-- End of docs-tab-advanced -->
+                    </div>
                 </section>
 
                 <!-- ══ CREDITS VIEW ══ -->
