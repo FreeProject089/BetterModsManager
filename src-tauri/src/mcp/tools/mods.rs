@@ -487,3 +487,18 @@ pub fn get_language_list() -> Result<Vec<String>, String> {
 pub fn read_language_file(lang_code: &str) -> Result<String, String> {
     state_bridge::read_language_file(lang_code).map_err(|e| e.to_string())
 }
+
+pub fn generate_lightweight_server(
+    repo_path: &str,
+    port: u16,
+    auto_start: bool,
+    use_cloudflare: bool,
+    use_upnp: bool,
+    upload_limit: u32,
+    server_version: u8,
+    admin_password: &str,
+) -> Result<String, String> {
+    state_bridge::generate_lightweight_server(
+        repo_path, port, auto_start, use_cloudflare, use_upnp, upload_limit, server_version, admin_password
+    ).map_err(|e| e.to_string())
+}

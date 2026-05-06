@@ -792,3 +792,88 @@ fn compute_sha256(path: &std::path::Path) -> anyhow::Result<String> {
     std::io::copy(&mut file, &mut hasher)?;
     Ok(format!("{:x}", hasher.finalize()))
 }
+
+pub fn generate_lightweight_server(
+    repo_path: &str,
+    port: u16,
+    auto_start: bool,
+    use_cloudflare: bool,
+    use_upnp: bool,
+    upload_limit: u32,
+    server_version: u8,
+    admin_password: &str,
+) -> anyhow::Result<String> {
+    let output_path = std::path::PathBuf::from(repo_path);
+    if !output_path.exists() {
+        return Err(anyhow::anyhow!("Repository path does not exist."));
+    }
+
+    let data_dir = get_bmm_data_dir();
+    let cf_path = data_dir.join("bin").join("cloudflared.exe").to_string_lossy().to_string();
+
+    let hybrid_template = if server_version == 2 {
+        include_str!("../templates/mini-server/server.v2.bat.template")
+    } else {
+        include_str!("../templates/mini-server/server.hybrid.bat.template")
+    };
+    
+    let mut hybrid_content = hybrid_template.replace("PORT_PLACEHOLDER", &port.to_string());
+    hybrid_content = hybrid_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "true" } else { "false" });
+    hybrid_content = hybrid_content.replace("USE_UPNP_PLACE_HOLDER", if use_upnp { "true" } else { "false" });
+    hybrid_content = hybrid_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
+    hybrid_content = hybrid_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
+    hybrid_content = hybrid_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+
+    let main_bat_path = output_path.join("BMM-Standalone-Server.bat");
+    std::fs::write(&main_bat_path, hybrid_content)?;
+
+    // Copy Bans if exists
+    let ban_path = data_dir.join("bans.json");
+    if ban_path.exists() {
+        let _ = std::fs::copy(ban_path, output_path.join("bans.json"));
+    }
+
+    // Copy Whitelist if exists
+    let wl_path = data_dir.join("whitelist.json");
+    if wl_path.exists() {
+        let _ = std::fs::copy(wl_path, output_path.join("whitelist.json"));
+    }
+
+    let mut msg = format!("Standalone Lightweight Server script generated successfully at: {:?}", main_bat_path);
+
+    if auto_start {
+        #[cfg(target_os = "windows")]
+        {
+            use winreg::enums::*;
+            use winreg::RegKey;
+            let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+            if let Ok(run) = hkcu.open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_SET_VALUE) {
+                let mut path_str = std::fs::canonicalize(&main_bat_path)
+                    .map(|p| p.to_string_lossy().to_string().replace("\\\\?\\", "").replace("/","\\"))
+                    .unwrap_or_else(|_| main_bat_path.to_string_lossy().to_string());
+
+                if path_str.contains(' ') && !path_str.starts_with('"') {
+                    path_str = format!("\"{}\"", path_str);
+                }
+                
+                match run.set_value("BMM-Mini-Server", &path_str) {
+                    Ok(_) => msg.push_str("\n[STARTUP] Windows Autostart enabled via Registry."),
+                    Err(e) => msg.push_str(&format!("\n[STARTUP] Failed to set Registry value: {}", e)),
+                }
+            }
+        }
+    } else {
+        #[cfg(target_os = "windows")]
+        {
+            use winreg::enums::*;
+            use winreg::RegKey;
+            let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+            if let Ok(run) = hkcu.open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_SET_VALUE) {
+                let _ = run.delete_value("BMM-Mini-Server");
+                msg.push_str("\n[STARTUP] Autostart disabled.");
+            }
+        }
+    }
+
+    Ok(msg)
+}

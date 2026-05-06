@@ -346,6 +346,24 @@ impl ServerHandler for BmmMcpServer {
                     "required": ["lang_code"]
                 })).unwrap()),
             ),
+            Tool::new(
+                "bmm_generate_lightweight_server",
+                "Generate a standalone lightweight server script (.bat) for a given repo.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "repo_path": { "type": "string" },
+                        "port": { "type": "integer" },
+                        "auto_start": { "type": "boolean" },
+                        "use_cloudflare": { "type": "boolean" },
+                        "use_upnp": { "type": "boolean" },
+                        "upload_limit": { "type": "integer" },
+                        "server_version": { "type": "integer" },
+                        "admin_password": { "type": "string" }
+                    },
+                    "required": ["repo_path", "port", "auto_start", "use_cloudflare", "use_upnp", "upload_limit", "server_version", "admin_password"]
+                })).unwrap()),
+            ),
 
             // Diagnostics
             Tool::new(
@@ -464,6 +482,23 @@ impl ServerHandler for BmmMcpServer {
             let path = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing path", None))?;
             let port = args.get("port").and_then(|v| v.as_u64()).map(|n| n as u16).unwrap_or(8000);
             match mods::start_repo_server(path, port) {
+                Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+                Err(e) => err_result(&e),
+            }
+        }
+        "bmm_generate_lightweight_server" => {
+            let repo_path = args.get("repo_path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing repo_path", None))?;
+            let port = args.get("port").and_then(|v| v.as_u64()).map(|n| n as u16).unwrap_or(8000);
+            let auto_start = args.get("auto_start").and_then(|v| v.as_bool()).unwrap_or(false);
+            let use_cloudflare = args.get("use_cloudflare").and_then(|v| v.as_bool()).unwrap_or(false);
+            let use_upnp = args.get("use_upnp").and_then(|v| v.as_bool()).unwrap_or(false);
+            let upload_limit = args.get("upload_limit").and_then(|v| v.as_u64()).map(|n| n as u32).unwrap_or(0);
+            let server_version = args.get("server_version").and_then(|v| v.as_u64()).map(|n| n as u8).unwrap_or(2);
+            let admin_password = args.get("admin_password").and_then(|v| v.as_str()).unwrap_or("admin");
+
+            match mods::generate_lightweight_server(
+                repo_path, port, auto_start, use_cloudflare, use_upnp, upload_limit, server_version, admin_password
+            ) {
                 Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
                 Err(e) => err_result(&e),
             }
