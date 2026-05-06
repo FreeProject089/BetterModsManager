@@ -292,7 +292,32 @@ impl ServerHandler for BmmMcpServer {
                 std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
             ),
 
-            // Documentation & Languages
+            Tool::new(
+        "bmm_generate_repo",
+        "Generate a repository from a list of mods.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" },
+                "mod_ids": { "type": "array", "items": { "type": "string" } }
+            },
+            "required": ["name", "mod_ids"]
+        })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_start_repo_server",
+        "Start the repository server.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string" },
+                "port": { "type": "integer" }
+            },
+            "required": ["path", "port"]
+        })).unwrap()),
+    ),
+
+    // Documentation & Languages
             Tool::new(
                 "bmm_get_documentation_list",
                 "List internal .md documentation.",
@@ -406,26 +431,43 @@ impl ServerHandler for BmmMcpServer {
                     self.tool_set_active_profile(id)
                 }
 
-                // Mods
-                "bmm_list_mods" => {
-                    let pid = args.get("profile_id").and_then(|v| v.as_str());
-                    let filter = args.get("filter").and_then(|v| v.as_str());
-                    self.tool_list_mods(pid, filter)
-                }
-                "bmm_get_mod" => {
-                    let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?;
-                    self.tool_get_mod(id)
-                }
-                "bmm_search_mods" => {
-                    let q = args.get("query").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing query", None))?;
-                    self.tool_search_mods(q)
-                }
-                "bmm_set_mod_enabled" => {
-                    let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?;
-                    let enabled = args.get("enabled").and_then(|v| v.as_bool()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing enabled", None))?;
-                    self.tool_set_mod_enabled(id, enabled)
-                }
-                "bmm_sync" => self.tool_sync_active_profile(),
+        // Mods
+        "bmm_list_mods" => {
+            let pid = args.get("profile_id").and_then(|v| v.as_str());
+            let filter = args.get("filter").and_then(|v| v.as_str());
+            self.tool_list_mods(pid, filter)
+        }
+        "bmm_get_mod" => {
+            let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?;
+            self.tool_get_mod(id)
+        }
+        "bmm_search_mods" => {
+            let q = args.get("query").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing query", None))?;
+            self.tool_search_mods(q)
+        }
+        "bmm_set_mod_enabled" => {
+            let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?;
+            let enabled = args.get("enabled").and_then(|v| v.as_bool()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing enabled", None))?;
+            self.tool_set_mod_enabled(id, enabled)
+        }
+        "bmm_sync" => self.tool_sync_active_profile(),
+        "bmm_generate_repo" => {
+            let name = args.get("name").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing name", None))?;
+            let ids = args.get("mod_ids").and_then(|v| v.as_array()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_ids", None))?;
+            let ids_vec: Vec<String> = ids.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+            match mods::generate_repo(name, ids_vec) {
+                Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+                Err(e) => err_result(&e),
+            }
+        }
+        "bmm_start_repo_server" => {
+            let path = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing path", None))?;
+            let port = args.get("port").and_then(|v| v.as_u64()).map(|n| n as u16).unwrap_or(8000);
+            match mods::start_repo_server(path, port) {
+                Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+                Err(e) => err_result(&e),
+            }
+        }
 
                 // Documentation & Lang
                 "bmm_get_documentation_list" => self.tool_get_documentation_list(),

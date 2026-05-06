@@ -355,10 +355,6 @@ pub fn clone_repository(url: &str, folder_name: Option<&str>) -> Result<String, 
     Ok(format!("Successfully cloned {} to {:?}", url, target_dir))
 }
 
-/// Generate repository manifest
-pub fn generate_repo(name: &str, mods: Vec<String>) -> Result<String, String> {
-    state_bridge::generate_repo(name, mods).map_err(|e| e.to_string())
-}
 
 /// Read documentation file
 pub fn read_documentation(name: &str) -> Result<String, String> {
@@ -390,6 +386,96 @@ pub fn export_config(path: &str) -> Result<String, String> {
 /// Generate diagnostic report
 pub fn generate_betahub_report(title: &str, description: &str) -> Result<serde_json::Value, String> {
     state_bridge::generate_betahub_report(title, description).map_err(|e| e.to_string())
+}
+
+/// List available languages
+pub fn generate_repo(name: &str, mod_ids: Vec<String>) -> Result<String, String> {
+    state_bridge::generate_repo(name, mod_ids).map_err(|e| e.to_string())
+}
+
+pub fn start_repo_server(path: &str, port: u16) -> Result<String, String> {
+    use warp::Filter;
+    use std::net::SocketAddr;
+    use local_ip_address::local_ip;
+    use tokio::process::Command;
+    use std::process::Stdio;
+    use tokio::io::{BufReader, AsyncBufReadExt};
+
+    let serve_dir = std::path::PathBuf::from(path);
+    if !serve_dir.exists() {
+        return Err(format!("Path does not exist: {}", path));
+    }
+
+    let manifest_path = serve_dir.join("repo.json");
+    if !manifest_path.exists() {
+        return Err("repo.json not found in the specified path. Generate it first.".to_string());
+    }
+
+    let addr: SocketAddr = ([0, 0, 0, 0], port).into();
+    
+    // Check if port is available
+    if let Err(e) = std::net::TcpListener::bind(addr) {
+        return Err(format!("Port {} is already in use: {}", port, e));
+    }
+
+    let routes = warp::fs::dir(serve_dir.clone())
+        .with(warp::cors().allow_any_origin().allow_methods(vec!["GET"]));
+
+    // Spawn the server in a background task
+    tokio::spawn(async move {
+        warp::serve(routes).run(addr).await;
+    });
+
+    let my_ip = local_ip().map(|ip| ip.to_string()).unwrap_or_else(|_| "127.0.0.1".to_string());
+    let lan_url = format!("http://{}:{}/repo.json", my_ip, port);
+    
+    // --- Cloudflare Tunnel Logic ---
+    let mut tunnel_msg = "\n[Tunnel] Initializing Cloudflare Tunnel...".to_string();
+    
+    // We try to find cloudflared.exe in the AppData/bin folder
+    let data_dir = state_bridge::get_bmm_data_dir();
+    let cf_path = data_dir.join("bin").join("cloudflared.exe");
+
+    if cf_path.exists() {
+        let target_url = format!("http://127.0.0.1:{}", port);
+        
+        // Spawn cloudflared
+        let mut child = Command::new(cf_path)
+            .args(["tunnel", "--no-autoupdate", "--protocol", "http2", "--url", &target_url])
+            .stderr(Stdio::piped())
+            .stdout(Stdio::null())
+            .spawn()
+            .map_err(|e| format!("Tunnel launch error: {}", e))?;
+
+        if let Some(stderr) = child.stderr.take() {
+            let mut reader = BufReader::new(stderr).lines();
+            let (tx, rx) = std::sync::mpsc::channel();
+            
+            // We need to capture the URL from stderr in a separate task
+            tokio::spawn(async move {
+                let re = regex::Regex::new(r"https://[a-zA-Z0-9.-]+\.trycloudflare\.com").unwrap();
+                let mut found = false;
+                while let Ok(Some(line)) = reader.next_line().await {
+                    if !found {
+                        if let Some(mat) = re.find(&line) {
+                            let _ = tx.send(mat.as_str().to_string());
+                            found = true;
+                        }
+                    }
+                }
+            });
+            
+            if let Ok(url) = rx.recv_timeout(std::time::Duration::from_secs(15)) {
+                tunnel_msg = format!("\n[Tunnel] Cloudflare Tunnel connected!\nPublic Link: {}/repo.json", url);
+            } else {
+                tunnel_msg = "\n[Tunnel] Cloudflare Tunnel started, but timed out waiting for the public URL.".to_string();
+            }
+        }
+    } else {
+        tunnel_msg = "\n[Tunnel] cloudflared.exe not found in AppData/bin. Please install it via BMM UI first to enable public tunneling.".to_string();
+    }
+
+    Ok(format!("Repository server started successfully at:\n{}\n\nLocal Link: {}\n{}", serve_dir.display(), lan_url, tunnel_msg))
 }
 
 /// List available languages
