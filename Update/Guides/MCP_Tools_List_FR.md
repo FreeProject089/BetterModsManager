@@ -17,6 +17,11 @@ Le **Serveur MCP de Better Mods Manager (BMM)** est une console d'administration
 *   `bmm_set_mod_enabled` : Active ou désactive un mod (nécessite `mod_id` et un booléen `enabled`).
 *   `bmm_sync` : Applique les changements au dossier du jeu (Moteur de copie physique).
 
+### 🌐 Infrastructure & Dépôts
+*   `bmm_generate_repo` : Génère un dépôt de mods complet avec signature cryptographique Ed25519 authentique (nécessite `name`, `mod_ids`).
+*   `bmm_start_repo_server` : Lance un serveur HTTP Warp + Tunnel Cloudflare automatique avec récupération de l'URL publique (nécessite `path`, `port`).
+*   `bmm_generate_lightweight_server` : Génère un script `.bat` serveur autonome (Standalone Lightweight Server) avec toutes les options de configuration (nécessite `repo_path`, `port`, `auto_start`, `use_cloudflare`, `use_upnp`, `upload_limit`, `server_version`, `admin_password`).
+
 ### 📚 Documentation & Langues
 *   `bmm_get_documentation_list` : Liste tous les fichiers de documentation interne (.md).
 *   `bmm_read_documentation` : Lit un fichier de documentation spécifique (nécessite `file_name`).
@@ -51,3 +56,6 @@ Pour utiliser BMM avec un agent IA (comme Claude Desktop ou Gemini), ajoutez ce 
 
 > [!TIP]
 > Assurez-vous de remplacer `C:/Chemin/Vers/BMM/` par le chemin réel où Better Mods Manager est installé sur votre système.
+
+> [!NOTE]
+> Le binaire MCP supporte également un mode CLI complet. Consultez le guide [BMM_CLI_Guide_FR.md](./BMM_CLI_Guide_FR.md) pour les commandes en ligne de commande.

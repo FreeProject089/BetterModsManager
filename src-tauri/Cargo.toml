@@ -59,6 +59,9 @@ tauri-plugin-single-instance = { git = "https://github.com/tauri-apps/plugins-wo
 jwalk = "0.8"
 rmcp = { version = "0.16", features = ["server", "transport-io"] }
 schemars = "0.8"
+clap = { version = "4", features = ["derive"] }
+colored = "2"
+comfy-table = "7"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
