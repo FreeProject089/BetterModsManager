@@ -585,10 +585,6 @@ window.applyTaskySettings = function() {
 
 // ── Tasky tooltip mouse-follow ───────────────────────────
 (function initTaskyMouseFollow() {
-    // Basic offsets
-    const BASE_OFFSET = 25;
-    const BUSY_OFFSET = 60; // Larger offset when over buttons/dropdowns
-
     document.addEventListener('mousemove', (e: MouseEvent) => {
         const bubble = document.querySelector('.tasky-speech-bubble') as HTMLElement;
         const container = document.getElementById('tasky-bubble-docs') as HTMLElement;
@@ -606,9 +602,9 @@ window.applyTaskySettings = function() {
         const isBusy = !!target.closest('button, .nav-item, .dropdown-menu, .mod-item-card, .glass-card, .search-mode-pill, .titlebar-controls');
         
         // Adaptive offsets: stay close by default
-        const BASE_OFFSET = 25;
-        const BUSY_OFFSET = isBusy ? 85 : BASE_OFFSET;
-        const MARGIN = 10;
+        const BASE_OFFSET = 12;
+        const BUSY_OFFSET = isBusy ? 32 : BASE_OFFSET;
+        const MARGIN = 15;
 
         // 1. Initial Candidate: Bottom-Right
         let targetX = e.clientX + BUSY_OFFSET;
@@ -630,7 +626,7 @@ window.applyTaskySettings = function() {
         if (targetY + th > vh - MARGIN) {
             const overflowAmount = (targetY + th) - (vh - MARGIN);
             if (overflowAmount > th * 0.3) {
-                targetY = e.clientY - th - (isBusy ? BUSY_OFFSET + 30 : BUSY_OFFSET);
+                targetY = e.clientY - th - BUSY_OFFSET;
                 isFlippedY = true;
             }
         }
