@@ -274,7 +274,7 @@ Serveur HTTP intégré, manifeste `repo.json` et Smart Sync basé sur SHA-256.
 
 ---
 
-## 22. Migration Javascript vers TypeScript (v0.9.9)
+## 22. Javascript vers TypeScript (v0.9.9)
 
 Transition complète vers Strictly Typed ESM pour une stabilité structurelle et sécurité IPC.
 
@@ -367,7 +367,7 @@ BMM s'intègre avec BetaHub pour les rapports de bugs structurés.
 | Composant | Implémentation |
 | :--- | :--- |
 | **Définition des Étapes** | 14+ étapes définies comme objets typés avec `navTarget`, `selector`, `img` et `icon` |
-| **Sélecteur de Langue** | L'étape -1 affiche un menu de langues complet avec intégration FlagCDN et re-rendu réactif sur les événements `langChanged` |
+| **Sélecteur de Langue** | L'étape -1 affiche un menu de langues complet avec intégration FlagCDN et re-rendu réactif sur les événements `langChanged` events |
 | **Mise en Évidence** | Calcule le `getBoundingClientRect()` de l'élément cible relatif à `#app-window-outer` et superpose un anneau de focus avec `box-shadow: 0 0 0 9999px rgba(0,0,0,0.6)` |
 | **Effet Machine à Écrire** | Rendu caractère par caractère à 18 ms d'intervalle via `setInterval` |
 | **Persistance** | Flag booléen `onboarding_shown` dans `settings` empêche le ré-affichage aux lancements suivants |
@@ -399,6 +399,89 @@ La fonction `renderMarkdown` dans `update-notes.ts` supporte désormais les aler
 | **Logger de Drop** | L'événement `drop` capture les noms de fichiers depuis `DataTransfer` |
 | **Capture d'Erreurs** | `window.error` et `unhandledrejection` transmis à la commande backend `log_frontend_line` |
 | **Focus/Blur** | Changements de focus de fenêtre journalisés pour aider à la reconstruction de la timeline de crash |
+
+---
+
+## 33. Module Launch Pack — Exécution Invisible & Pipeline de Ressources (v1.0.0)
+
+BMM v1.0.0 implémente un moteur de regroupement d'applications et d'exécution silencieuse centré sur Windows.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Lanceur VBScript** | Génère des scripts `launcher.vbs` dynamiques utilisant `WScript.Shell.Run` avec `WindowStyle=0` (Masqué) pour empêcher les pop-ups de console pour les fichiers `.exe` et `.bat`. |
+| **Furtivité PowerShell** | Utilise `powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass` pour une exécution de scripts non intrusive. |
+| **Logique d'Échappement** | Échappement personnalisé des guillemets doubles pour les chaînes VBScript afin d'éviter les erreurs de syntaxe `800A0401` dans les chemins de fichiers longs. |
+| **Pipeline d'Icônes** | Utilise la bibliothèque `image` (filtre Lanczos3) pour rééchantillonner les images sources dans un buffer `.ico` standardisé de 256x256. |
+| **Moteur de Raccourcis** | Exécute dynamiquement un sous-processus PowerShell masqué pour s'interfacer avec les objets COM `WScript.Shell` afin de créer des raccourcis `.lnk` sur le bureau. |
+| **Persistance des Ressources** | Stockage géré dans `AppData/Local/bmm/LaunchPacks/<id>/` avec nettoyage récursif automatique lors de la suppression d'un pack. |
+
+---
+
+## 34. Serveur Model Context Protocol (MCP) (v1.0.0)
+
+BMM v1.0.0 propose une implémentation JSON-RPC de niveau professionnel pour l'intégration de l'IA.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Protocole** | JSON-RPC 2.0 sur les flux d'entrées/sorties standard (stdio). |
+| **Sérialisation** | Utilisation intensive de `serde` et `serde_json` pour les définitions d'outils typées et le mapping des résultats. |
+| **Surface d'Outils** | Plus de 25 outils atomiques exposés via le binaire `mcp-server`, couvrant toute la surface de commande de BMM. |
+| **Pont d'État** | Le binaire MCP initialise une instance secondaire du moteur `AppState` pour accéder aux données locales sans nécessiter que l'interface principale de BMM soit lancée. |
+| **Gestion Asynchrone** | Traitement des requêtes entièrement asynchrone utilisant `tokio` pour gérer les appels d'outils concurrents des agents IA. |
+
+---
+
+## 35. Interface en Ligne de Commande Unifiée (CLI) (v1.0.0)
+
+Le nouveau CLI unifié offre une interface terminal puissante pour la gestion de BMM.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Parseur de Commandes** | Basé sur la bibliothèque `clap` (Command Line Argument Parser) avec des sous-commandes multi-niveaux et des arguments typés. |
+| **Retours Visuels** | Intégration de `colored` pour les niveaux de log et `tabular` pour la présentation des données structurées dans le terminal. |
+| **Moteur de Bannière** | Moteur de rendu d'art ASCII haute fidélité pour le branding et l'affichage de la version au démarrage. |
+| **Découverte de l'Environnement** | Logique de résolution `PathBuf` automatique pour localiser le répertoire de données BMM à travers les différents profils utilisateurs Windows. |
+| **Rapport d'Erreurs** | Intégration directe avec la nouvelle stratégie `AppError` pour des codes d'erreur cohérents entre le CLI et l'interface graphique. |
+
+---
+
+## 36. Polissage UI & Logique d'Aide Contextuelle (v1.0.0)
+
+BMM v1.0.0 introduit un moteur d'assistance centralisé et de raffinement visuel.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Moteur d'Aide Tasky** | `window.showTaskyHelp(key, type)` déclenche des bulles localisées. Le moteur mappe les clés i18n aux positions DOM via `getBoundingClientRect()` par rapport à la vue active. |
+| **Isolation des Tooltips** | Les bulles d'aide sont rendues dans un portail à z-index élevé pour éviter le découpage par les conteneurs parents `overflow: hidden`. |
+| **Logique des Resize Strips** | Un moteur de redimensionnement personnalisé dans `main.ts` écoute le `mousedown` sur les bandes de bordure et utilise `tauri::window::start_dragging` ou un calcul manuel des limites pour plus de précision. |
+| **Tokens Glassmorphism** | Variables CSS standardisées (`--bg-glass`, `--border-glass`) utilisées sur tous les composants 1.0 pour une cohérence visuelle. |
+
+---
+
+## 37. Mapping de Répertoires & Analytics (v1.0.0)
+
+Le moteur de Mapping de Répertoires (Mapper Visuel) est un scanner récursif haute performance conçu pour les collections de mods à grande échelle.
+
+### 37.1. Moteur de Parcours Récursif (Rust)
+La commande backend `scan_directory` implémente un parcours récursif multi-threadé.
+- **Détection de Cycles** : Utilise un `HashSet` de combinaisons d'inodes/chemins pour détecter et interrompre la récursion infinie causée par des liens symboliques circulaires ou des boucles de dossiers.
+- **Support de Profondeur Infinie** : (v1.0.0) Le parcours basé sur une pile est optimisé pour la mémoire, permettant une profondeur d'imbrication théoriquement infinie sans dépassement de pile.
+- **Logique de Filtrage** : Implémente un système de liste noire pour ignorer les dossiers système cachés (`.git`, `System Volume Information`) et les artéfacts binaires non pertinents, gardant l'arborescence propre.
+
+### 37.2. Statistiques de Mods en Temps Réel
+BMM v1.0.0 introduit une télémétrie avancée pour la santé des profils.
+- **Compteur Global de Mods** : La commande `get_profiles_with_stats` effectue un scan préemptif du répertoire `mods`. Elle différencie les dossiers de mods valides (contenant des fichiers) des entrées de métadonnées orphelines.
+- **Pont d'État Réactif** : Les résultats sont transmis via un flux IPC asynchrone, permettant à l'UI de mettre à jour le badge "Total Mods" dans la sidebar et les cartes de profil sans bloquer l'interaction utilisateur.
+- **Analyse de Propriété** : Le mapper corrèle la propriété des fichiers à travers plusieurs mods actifs, identifiant quel mod "possède" physiquement un fichier dans la racine du jeu à un instant T.
+
+### 37.3. Rendu de l'Arborescence Frontend
+Le module `Mapper.ts` gère la présentation visuelle de l'arborescence des répertoires.
+- **Scrolling Virtuel** : Optimisé pour ne rendre que les nœuds visibles dans le viewport, permettant une interaction fluide à 60 FPS même avec des bibliothèques contenant plus de 10 000 fichiers.
+- **Actions Contextuelles** : Chaque nœud de l'arbre est lié à une commande Shell native, activant les fonctionnalités "Ouvrir dans l'Explorateur" et "Copier le chemin relatif".
+- **Taxonomie Visuelle** : Utilise une iconographie SVG distincte et des jetons de couleur pour différencier :
+    - **Mods Racines** : Dossiers d'installation de base.
+    - **Conteneurs d'Assets** : Sous-dossiers contenant des textures, scripts ou modèles.
+    - **Payloads Binaires** : Fichiers `.exe` ou `.dll` qui déclenchent des vérifications de conflits prioritaires.
 
 ---
 

@@ -2114,6 +2114,7 @@
   "update.none": "No update notes available.",
   "update.showOld": "View archives",
   "update.title": "Update notes",
+  "update.badge.major": "MAJOR",
   "update.badge.new": "NEW",
   "update.badge.refine": "REFINE",
   "update.badge.improved": "IMPROVED",

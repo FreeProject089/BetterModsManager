@@ -8,7 +8,7 @@
     },
     "package": {
         "productName": "Better Mod Manager",
-        "version": "0.9.11"
+        "version": "1.0.0"
     },
     "tauri": {
         "allowlist": {
@@ -36,7 +36,10 @@
                 "open": true,
                 "sidecar": true,
                 "scope": [
-                    { "name": "binaries/bmm-mcp-server", "sidecar": true }
+                    {
+                        "name": "binaries/bmm-mcp-server",
+                        "sidecar": true
+                    }
                 ]
             },
             "window": {

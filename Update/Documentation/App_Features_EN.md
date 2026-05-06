@@ -435,4 +435,76 @@ BMM captures detailed frontend interaction telemetry for diagnostics and crash i
 
 ---
 
+## 34. Launch Packs — Application Groups (v1.0.0)
+
+Launch Packs allow you to group multiple applications and scripts into a single automated execution unit.
+
+| Feature | Description |
+| :--- | :--- |
+| **Multi-App Execution** | Group `.exe`, `.bat`, `.cmd`, and `.ps1` files together. All items in a pack launch simultaneously with one click. |
+| **Invisible Launcher** | Uses a specialized VBScript backend to launch applications silently. Command windows and console pop-ups are hidden from view. |
+| **Auto-Icon Generation** | BMM automatically converts your source images (PNG, JPG) into high-quality Windows `.ico` files for your shortcuts. |
+| **Windows Shortcuts** | Generate a native `.lnk` file on your desktop or in your start menu that points directly to your invisible launch pack. |
+| **PowerShell Stealth** | PowerShell scripts are executed with the `-WindowStyle Hidden` flag for a non-intrusive background experience. |
+| **Asset Management** | BMM handles the lifecycle of launcher scripts and icons, ensuring clean deletion when a pack is removed. |
+
+---
+
+## 35. MCP Server & Advanced CLI (v1.0.0)
+
+BMM v1.0.0 introduces professional-grade automation through the Model Context Protocol and a new unified CLI.
+
+| Feature | Description |
+| :--- | :--- |
+| **Model Context Protocol** | Connect BMM to AI agents like Claude or Gemini. Manage mods, profiles, and syncs through natural language conversation. |
+| **Unified Binary** | The `bmm-mcp-server.exe` acts as both a JSON-RPC protocol server and a standalone command-line interface. |
+| **Full Terminal Control** | Nearly every BMM operation is available via CLI: sync mods, list profiles, search the library, or run launch packs. |
+| **Remote Diagnostics** | Access installation statistics and analyze crash reports directly from a remote terminal or script. |
+| **Fancy CLI Output** | Features a high-fidelity ASCII banner, colored log levels, and structured table outputs for better readability. |
+| **Automation Friendly** | Designed for power users who want to script their mod management or integrate it into larger home cockpit systems. |
+
+---
+
+## 36. Help & other Center (v1.0.0)
+
+The Documentation view has been expanded and rebranded as "Help & other" to serve as a comprehensive resource hub.
+
+| Feature | Description |
+| :--- | :--- |
+| **Unified Hub** | Combines user guides, technical analysis, FAQs, and interactive diagrams in one location. |
+| **Interactive Diagrams** | High-fidelity Mermaid.js visualizations of BMM's internal logic with pan/zoom support. |
+| **Searchable Resources** | All help articles and FAQs are searchable with weighted relevance scoring. |
+| **Legal & EULA** | Access to terms of service and license agreements directly within the application. |
+
+---
+
+## 37. UI Polish & Contextual Help (v1.0.0)
+
+BMM v1.0.0 features significant visual refinements and a smarter assistance system.
+
+| Feature | Description |
+| :--- | :--- |
+| **Contextual Tooltips** | Hovering over nearly any UI element provides a "Tasky Help" bubble with clear explanations. |
+| **Refined Window Controls** | New high-fidelity resize strips and corner handles for more precise window management. |
+| **Glassmorphism 2.0** | Enhanced translucent effects and 1px border highlights across all modals and cards. |
+| **Profile Mod Counter** | Profile cards now display a real-time count of registered mods, also reflected in the Mapper view. |
+| **Tasky Mascot** | Improved animations and positioning for Tasky during onboarding and help interactions. |
+
+---
+
+## 38. Visual Mapper & Directory Analytics (v1.0.0)
+
+The Visual Mapper provides a deep structural analysis of your mod collection, ensuring that your installation tree is exactly as you intend.
+
+| Feature | Description |
+| :--- | :--- |
+| **Interactive Tree View** | Explore the physical file structure of every mod in your library through a high-performance interactive tree. |
+| **Real-Time Mod Analytics** | The Mapper view displays live statistics, including total mod count per profile and individual file counts per mod. |
+| **Infinite Recursion Depth** | (v1.0.0) The directory walker now supports infinite nesting depth with cycle detection, perfect for complex scenery or high-fidelity aircraft mods. |
+| **Dynamic Node Interaction** | Expand or collapse entire directory branches. Identify "Root" vs "Sub" folders instantly through visual color-coding. |
+| **Direct File Access** | Right-click any file or folder in the tree to open its physical location in Windows Explorer or copy its relative installation path. |
+| **Backend-Powered Scanning** | Utilizes a multi-threaded Rust engine for scanning, ensuring the UI remains responsive even when analyzing libraries with tens of thousands of files. |
+
+---
+
 *Better Mod Manager is developed by FreeProject089.*

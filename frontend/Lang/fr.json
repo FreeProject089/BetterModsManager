@@ -2114,6 +2114,7 @@
   "update.none": "Aucune note de mise à jour disponible.",
   "update.showOld": "Voir les archives",
   "update.title": "Notes de mise à jour",
+  "update.badge.major": "MAJEUR",
   "update.badge.new": "NOUVEAU",
   "update.badge.refine": "RAFFINEMENT",
   "update.badge.improved": "AMÉLIORÉ",

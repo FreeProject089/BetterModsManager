@@ -346,4 +346,76 @@ BMM capture la télémétrie détaillée des interactions frontend pour le diagn
 
 ---
 
+## 34. Launch Packs — Groupes d'Applications (v1.0.0)
+
+Les Launch Packs vous permettent de grouper plusieurs applications et scripts dans une seule unité d'exécution automatisée.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Exécution Multi-App** | Groupez des fichiers `.exe`, `.bat`, `.cmd` et `.ps1`. Tous les éléments d'un pack se lancent simultanément en un clic. |
+| **Lanceur Invisible** | Utilise un backend VBScript spécialisé pour lancer les applications silencieusement. Les fenêtres de commande et les pop-ups de console sont masqués. |
+| **Génération Auto d'Icônes** | BMM convertit automatiquement vos images sources (PNG, JPG) en fichiers `.ico` Windows de haute qualité pour vos raccourcis. |
+| **Raccourcis Windows** | Générez un fichier `.lnk` natif sur votre bureau ou dans votre menu démarrer pointant directement vers votre pack invisible. |
+| **PowerShell Furtif** | Les scripts PowerShell sont exécutés avec le flag `-WindowStyle Hidden` pour une expérience d'arrière-plan non intrusive. |
+| **Gestion des Ressources** | BMM gère le cycle de vie des scripts de lancement et des icônes, assurant une suppression propre lors de la suppression d'un pack. |
+
+---
+
+## 35. Serveur MCP & CLI Avancé (v1.0.0)
+
+BMM v1.0.0 introduit une automatisation de niveau professionnel via le Model Context Protocol et un nouveau CLI unifié.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Model Context Protocol** | Connectez BMM à des agents IA comme Claude ou Gemini. Gérez vos mods, profils et synchros via une conversation en langage naturel. |
+| **Binaire Unifié** | Le `bmm-mcp-server.exe` agit à la fois comme un serveur de protocole JSON-RPC et une interface en ligne de commande autonome. |
+| **Contrôle Terminal Complet** | Presque toutes les opérations BMM sont disponibles via CLI : synchro de mods, liste de profils, recherche ou lancement de packs. |
+| **Diagnostics à Distance** | Accédez aux statistiques d'installation et analysez les rapports de crash directement depuis un terminal distant ou un script. |
+| **Sortie CLI Soignée** | Comprend une bannière ASCII haute fidélité, des niveaux de logs colorés et des sorties de table structurées pour une meilleure lisibilité. |
+| **Prêt pour l'Automatisation** | Conçu pour les utilisateurs avancés qui souhaitent scripter leur gestion de mods ou l'intégrer dans des systèmes de home cockpit. |
+
+---
+
+## 36. Centre d'Aide & Autres (v1.0.0)
+
+La vue Documentation a été étendue et renommée "Help & other" pour servir de hub de ressources complet.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Hub Unifié** | Regroupe les guides d'utilisation, l'analyse technique, les FAQ et les diagrammes interactifs en un seul endroit. |
+| **Diagrammes Interactifs** | Visualisations Mermaid.js haute fidélité de la logique interne de BMM avec support pan/zoom. |
+| **Ressources Recherchables** | Tous les articles d'aide et FAQ sont consultables avec un score de pertinence pondéré. |
+| **Légal & EULA** | Accès aux conditions d'utilisation et aux contrats de licence directement dans l'application. |
+
+---
+
+## 37. Polissage UI & Aide Contextuelle (v1.0.0)
+
+BMM v1.0.0 propose des raffinements visuels significatifs et un système d'assistance plus intelligent.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Tooltips Contextuels** | Le survol de presque n'importe quel élément UI affiche une bulle "Tasky Help" avec des explications claires. |
+| **Contrôles de Fenêtre Affinés** | Nouvelles bandes de redimensionnement haute fidélité et poignées de coin pour une gestion plus précise. |
+| **Glassmorphism 2.0** | Effets translucides améliorés et bordures de 1px sur toutes les modales et cartes. |
+| **Compteur de Mods par Profil** | Les cartes de profil affichent désormais un décompte en temps réel des mods enregistrés, également reflété dans le Mapper. |
+| **Mascotte Tasky** | Animations et positionnement améliorés pour Tasky lors de l'onboarding et des interactions d'aide. |
+
+---
+
+## 38. Mapper Visuel & Analyse de Répertoire (v1.0.0)
+
+Le Mapper Visuel offre une analyse structurelle approfondie de votre collection de mods, garantissant que votre arborescence d'installation est exactement comme vous le souhaitez.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Arborescence Interactive** | Explorez la structure physique des fichiers de chaque mod de votre bibliothèque via un arbre interactif haute performance. |
+| **Analytics de Mods en Temps Réel** | La vue Mapper affiche des statistiques en direct, incluant le nombre total de mods par profil et le décompte individuel des fichiers par mod. |
+| **Profondeur de Récursion Infinie** | (v1.0.0) Le moteur de parcours de répertoire supporte désormais une profondeur d'imbrication infinie avec détection de cycles, idéal pour les mods de scènes complexes ou d'appareils haute fidélité. |
+| **Interaction Dynamique des Nœuds** | Développez ou réduisez des branches entières de répertoires. Identifiez instantanément les dossiers "Racines" vs "Secondaires" grâce à un code couleur visuel. |
+| **Accès Direct aux Fichiers** | Cliquez avec le bouton droit sur n'importe quel fichier ou dossier dans l'arborescence pour ouvrir son emplacement physique dans l'Explorateur Windows ou copier son chemin d'installation relatif. |
+| **Scan Propulsé par le Backend** | Utilise un moteur Rust multi-threadé pour le scan, garantissant que l'interface reste réactive même lors de l'analyse de bibliothèques contenant des dizaines de milliers de fichiers. |
+
+---
+
 *Better Mod Manager est développé par FreeProject089.*

@@ -1,6 +1,6 @@
 {
     "name": "better-mods-manager",
-    "version": "0.9.11",
+    "version": "1.0.0",
     "private": true,
     "type": "module",
     "scripts": {

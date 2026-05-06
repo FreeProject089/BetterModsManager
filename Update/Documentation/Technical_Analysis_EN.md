@@ -427,4 +427,87 @@ The `renderMarkdown` function in `update-notes.ts` now supports GitHub-style ale
 
 ---
 
+## 33. Launch Pack Module — Invisible Execution & Asset Pipeline (v1.0.0)
+
+BMM v1.0.0 implements a cross-platform (Windows-centric) application grouping and silent execution engine.
+
+| Component | Implementation |
+| :--- | :--- |
+| **VBScript Launcher** | Generates dynamic `launcher.vbs` scripts using `WScript.Shell.Run` with `WindowStyle=0` (Hidden) to prevent console pop-ups for `.exe` and `.bat` files. |
+| **PowerShell Stealth** | Leverages `powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass` for non-intrusive script execution. |
+| **Escaping Logic** | Custom double-quote escaping for VBScript strings to prevent `800A0401` syntax errors in long file paths. |
+| **Icon Pipeline** | Uses the `image` crate (Lanczos3 filter) to downsample source images into a standardized 256x256 `.ico` buffer. |
+| **Shortcut Engine** | Dynamically executes a hidden PowerShell sub-process to interface with `WScript.Shell` COM objects for creating desktop `.lnk` shortcuts. |
+| **Asset Persistence** | Managed storage in `AppData/Local/bmm/LaunchPacks/<id>/` with automatic recursive cleanup on pack deletion. |
+
+---
+
+## 34. Model Context Protocol (MCP) Server (v1.0.0)
+
+BMM v1.0.0 features a professional-grade JSON-RPC implementation for AI integration.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Protocol** | JSON-RPC 2.0 over standard I/O (stdio) streams. |
+| **Serialization** | Intensive use of `serde` and `serde_json` for type-safe tool definitions and result mapping. |
+| **Tool Surface** | Over 25 atomic tools exposed via the `mcp-server` binary, covering the entire BMM command surface. |
+| **State Bridge** | The MCP binary initializes a secondary instance of the `AppState` engine to access local data without requiring the main BMM UI to be running. |
+| **Async Handling** | Fully asynchronous request processing using `tokio` to handle concurrent tool calls from AI agents. |
+
+---
+
+## 35. Unified Command Line Interface (CLI) (v1.0.0)
+
+The new unified CLI provides a powerful terminal-based interface for BMM management.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Command Parser** | Built on the `clap` (Command Line Argument Parser) crate with multi-level subcommands and typed arguments. |
+| **Visual Feedback** | Integration of `colored` for log levels and `tabular` for structured data presentation in the terminal. |
+| **Banner Engine** | High-fidelity ASCII art rendering engine for branding and version display on startup. |
+| **Environment Discovery** | Automatic `PathBuf` resolution logic to locate the BMM data directory across different Windows user profiles. |
+| **Error Reporting** | Direct integration with the new `AppError` strategy for consistent error codes between CLI and GUI. |
+
+---
+
+## 36. UI Polish & Contextual Help Logic (v1.0.0)
+
+BMM v1.0.0 introduces a centralized assistance and visual refinement engine.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Tasky Help Engine** | `window.showTaskyHelp(key, type)` triggers localized bubbles. The engine maps i18n keys to DOM positions using `getBoundingClientRect()` relative to the active view. |
+| **Tooltip Isolation** | Tooltips are rendered in a high-z-index portal to prevent clipping from parent `overflow: hidden` containers. |
+| **Resize Strip Logic** | A custom resize engine in `main.ts` listens for `mousedown` on edge strips and uses `tauri::window::start_dragging` or manual bounds calculation for precision. |
+| **Glassmorphism Tokens** | Standardized CSS variables (`--bg-glass`, `--border-glass`) used across all 1.0 components for visual consistency. |
+
+---
+
+## 37. Directory Mapping & Analytics (v1.0.0)
+
+The Directory Mapping engine (Visual Mapper) is a high-performance recursive scanner designed for large-scale mod collections.
+
+### 37.1. Recursive Walking Engine (Rust)
+The backend `scan_directory` command implements a multi-threaded recursive walker.
+- **Cycle Detection**: Uses a `HashSet` of inode/path combinations to detect and terminate infinite recursion caused by circular symlinks or folder loops.
+- **Infinite Depth Support**: (v1.0.0) The stack-based walker is optimized for memory, allowing for theoretical infinite nesting depth without stack overflow.
+- **Filtering Logic**: Implements a blacklisting system to ignore hidden system folders (`.git`, `System Volume Information`) and irrelevant binary artifacts, keeping the tree clean.
+
+### 37.2. Real-time Mod Statistics
+BMM v1.0.0 introduces advanced telemetry for profile health.
+- **Global Mod Counter**: The `get_profiles_with_stats` command performs a pre-emptive scan of the `mods` directory. It differentiates between valid mod folders (containing files) and orphaned metadata entries.
+- **Reactive State Bridge**: The results are piped through an async IPC stream, allowing the UI to update the "Total Mods" badge in the sidebar and profile cards without blocking user interaction.
+- **Ownership Analysis**: The mapper correlates file ownership across multiple active mods, identifying which mod physically "owns" a file in the game root at any given time.
+
+### 37.3. Frontend Tree Rendering
+The `Mapper.ts` module handles the visual presentation of the directory tree.
+- **Virtual Scrolling**: Optimized to render only the visible nodes in the viewport, allowing for smooth 60 FPS interaction even with libraries containing 10,000+ files.
+- **Contextual Actions**: Every node in the tree is bound to a native Shell command, enabling "Open in Explorer" and "Copy Relative Path" functionality.
+- **Visual Taxonomy**: Uses distinct SVG iconography and color tokens to distinguish between:
+    - **Root Mods**: Base installation folders.
+    - **Asset Containers**: Sub-folders containing textures, scripts, or models.
+    - **Binary Payloads**: `.exe` or `.dll` files that trigger high-priority conflict checks.
+
+---
+
 *Better Mod Manager is developed by FreeProject089 — Engineered for uncompromising performance, file safety, and modern mod management.*

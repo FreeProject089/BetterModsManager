@@ -253,6 +253,8 @@ export function renderMarkdown(md) {
     html = html.replace(/\[IMPROVED\]/g, '<span class="md-badge md-badge-improved">' + t('update.badge.improved') + '</span>');
     html = html.replace(/\[FIXED\]/g, '<span class="md-badge md-badge-fixed">' + t('update.badge.fixed') + '</span>');
     html = html.replace(/\[VISUAL\]/g, '<span class="md-badge md-badge-visual">' + t('update.badge.visual') + '</span>');
+    html = html.replace(/\[MAJOR\]/g, '<span class="md-badge md-badge-major">' + t('update.badge.major') + '</span>');
+    html = html.replace(/\[MAJEUR\]/g, '<span class="md-badge md-badge-major">' + t('update.badge.major') + '</span>');
     // GitHub-style alerts
     html = html.replace(/<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|REMARQUE|ASTUCE|AVERTISSEMENT|ATTENTION)\](?:<br>)?\s*/gi, (match, type) => {
         const tLower = type.toLowerCase();
@@ -404,6 +406,11 @@ export function renderMarkdown(md) {
             background: rgba(168, 85, 247, 0.15);
             color: #a855f7;
             border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+        .md-badge-major {
+            background: rgba(249, 115, 22, 0.15);
+            color: #f97316;
+            border: 1px solid rgba(249, 115, 22, 0.3);
         }
     `;
     document.head.appendChild(style);
