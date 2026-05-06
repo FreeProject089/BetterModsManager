@@ -36,6 +36,12 @@ Le **Serveur MCP de Better Mods Manager (BMM)** est une console d'administration
 *   `bmm_generate_betahub_report` : Génère un rapport de diagnostic complet pour BetaHub (nécessite `title`, `description`).
 *   `bmm_export_config` : Exporte le fichier `data.json` pour sauvegarde (nécessite `target_path`).
 
+### 🚀 Launch Packs
+*   `bmm_list_launch_packs` : Liste tous les Launch Packs configurés.
+*   `bmm_create_launch_pack` : Crée un nouveau pack (nécessite `name`, `executable_paths`, `icon_source_path` optionnel).
+*   `bmm_run_launch_pack` : Lance les applications d'un pack (nécessite `id`).
+*   `bmm_delete_launch_pack` : Supprime un pack (nécessite `id`).
+
 ---
 
 ## ⚙️ Exemple de Configuration (mcp_config.json)

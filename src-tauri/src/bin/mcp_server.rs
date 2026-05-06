@@ -30,7 +30,7 @@ use colored::Colorize;
 use comfy_table::{Table, ContentArrangement, presets::UTF8_FULL_CONDENSED};
 use mcp::server::BmmMcpServer;
 use mcp::state_bridge;
-use mcp::tools::{mods, profiles, diagnostics};
+use mcp::tools::{mods, profiles, diagnostics, launch_packs};
 
 /// Better Mods Manager — CLI & MCP Server
 #[derive(Parser)]
@@ -193,6 +193,33 @@ enum Commands {
     ExportConfig {
         /// Target path
         target_path: String,
+    },
+
+    // ── Launch Packs ──────────────────────────────────────────────────
+    
+    /// List all launch packs
+    #[command(name = "launchpacks")]
+    LaunchPacks,
+
+    /// Run a specific launch pack
+    #[command(name = "run-pack")]
+    RunPack {
+        /// Pack ID or Name
+        id: String,
+    },
+
+    /// Delete a specific launch pack
+    #[command(name = "delete-pack")]
+    DeletePack {
+        /// Pack ID or Name
+        id: String,
+    },
+
+    /// Open the folder of a specific launch pack
+    #[command(name = "open-pack")]
+    OpenPack {
+        /// Pack ID or Name
+        id: String,
     },
 }
 
@@ -515,6 +542,51 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
         Commands::ExportConfig { target_path } => {
             match state_bridge::export_config(&target_path) {
                 Ok(_) => println!("  {} Config exported to {}", "✓".green().bold(), target_path.cyan()),
+                Err(e) => println!("  {} {}", "✗".red().bold(), e),
+            }
+        }
+
+        // ── Launch Packs ──────────────────────────────────────────────
+        Commands::LaunchPacks => {
+            let packs = launch_packs::list_launch_packs().map_err(|e| anyhow::anyhow!(e))?;
+            if packs.is_empty() {
+                println!("  {} No launch packs configured.", "⚠".yellow());
+            } else {
+                let mut table = Table::new();
+                table.load_preset(UTF8_FULL_CONDENSED);
+                table.set_content_arrangement(ContentArrangement::Dynamic);
+                table.set_header(vec!["ID", "Name", "Apps", "Created"]);
+                for p in &packs {
+                    table.add_row(vec![
+                        p.id.chars().take(8).collect::<String>() + "…",
+                        p.name.clone(),
+                        p.executable_paths.len().to_string(),
+                        p.created_at.clone().split('T').next().unwrap_or("—").to_string(),
+                    ]);
+                }
+                println!("{table}");
+                println!("  {} launch packs found.", packs.len().to_string().cyan().bold());
+            }
+        }
+
+        Commands::RunPack { id } => {
+            println!("  {} Running launch pack {}...", "⏳".yellow(), id.cyan());
+            match launch_packs::run_launch_pack(&id) {
+                Ok(msg) => println!("  {} {}", "✓".green().bold(), msg),
+                Err(e) => println!("  {} {}", "✗".red().bold(), e),
+            }
+        }
+
+        Commands::DeletePack { id } => {
+            match launch_packs::delete_launch_pack(&id) {
+                Ok(msg) => println!("  {} {}", "✓".green().bold(), msg),
+                Err(e) => println!("  {} {}", "✗".red().bold(), e),
+            }
+        }
+
+        Commands::OpenPack { id } => {
+            match launch_packs::open_launch_pack_folder(&id) {
+                Ok(msg) => println!("  {} {}", "✓".green().bold(), msg),
                 Err(e) => println!("  {} {}", "✗".red().bold(), e),
             }
         }

@@ -51,6 +51,7 @@ pub fn import_app_data(state: State<AppState>, src_path: String) -> Result<(), A
         custom_tags: new_data.custom_tags.clone(),
         disk_limits: new_data.disk_limits.clone(),
         settings: new_data.settings.clone(),
+        launch_packs: new_data.launch_packs.clone(),
     };
     Ok(())
 }

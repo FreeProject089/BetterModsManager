@@ -85,6 +85,8 @@ pub struct AppData {
     pub disk_limits: std::collections::HashMap<String, u64>,
     #[serde(default)]
     pub settings: AppSettings,
+    #[serde(default)]
+    pub launch_packs: Vec<crate::models::launch_pack::LaunchPack>,
 }
 
 pub struct AppState {

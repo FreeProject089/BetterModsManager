@@ -4507,6 +4507,34 @@
                             </div>
                         </div>
 
+                        <!-- ── Launch Packs ── -->
+                        <div class="glass-card" id="settings-launchpack-section" style="margin-bottom: 24px;">
+                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                                    stroke-width="2.2">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                                </svg>
+                                <span data-i18n="settings.launchPackTitle">Launch Packs (Multi-Apps)</span>
+                            </h3>
+                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6"
+                                data-i18n="settings.launchPackDesc">
+                                Créez des groupes d'applications à lancer simultanément avec une icône personnalisée (conversion .ico automatique).
+                            </p>
+                            <div id="launchpack-list-container" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+                                <!-- Injected from JS -->
+                            </div>
+                            <div style="display:flex;gap:10px">
+                                <button class="btn btn-primary btn-sm" id="btn-create-launchpack" style="gap:8px">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.5">
+                                        <line x1="12" y1="5" x2="12" y2="19" />
+                                        <line x1="5" y1="12" x2="19" y2="12" />
+                                    </svg>
+                                    <span data-i18n="settings.launchPackCreate">Nouveau Launch Pack</span>
+                                </button>
+                            </div>
+                        </div>
+
 
                         <!-- ── Storage Performance (button-only, opens modal) ── -->
                         <div class="glass-card" id="settings-storage-section">
@@ -6926,6 +6954,84 @@
             <div class="modal-footer" style="padding: 20px 30px; background: rgba(0,0,0,0.2); display: flex; justify-content: flex-end; gap: 12px;">
                 <button id="btn-mapper-input-cancel" class="btn btn-secondary" data-i18n="common.cancel">Annuler</button>
                 <button id="btn-mapper-input-confirm" class="btn btn-primary" data-i18n="common.confirm">Confirmer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Launch Packs -->
+    <div id="modal-launchpack" class="modal-generic-overlay">
+        <div class="modal glass" style="width: 500px; max-width: 95vw;">
+            <div class="modal-header">
+                <h2 data-i18n="settings.launchPackModalTitle" style="margin: 0; font-size: 1.2rem; color: var(--text-main);">Créer un Launch Pack</h2>
+                <button class="modal-close" onclick="document.getElementById('modal-launchpack').classList.remove('open')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px 28px; display:flex; flex-direction:column; gap:20px;">
+                <!-- Name -->
+                <div>
+                    <label style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; display:block; margin-bottom:8px;" data-i18n="settings.launchPackName">NOM DU PACK</label>
+                    <input type="text" id="lp-input-name" class="form-input" style="width:100%;" placeholder="ex: DCS VR Session" />
+                </div>
+                <!-- Exes -->
+                <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <label style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em;" data-i18n="settings.launchPackApps">APPLICATIONS (.EXE)</label>
+                        <button class="btn btn-ghost btn-xs" id="lp-btn-add-exe" style="color:var(--accent); font-size:10px;">+ Ajouter</button>
+                    </div>
+                    <div id="lp-exe-list" style="display:flex; flex-direction:column; gap:6px; max-height:150px; overflow-y:auto; padding-right:4px;">
+                        <!-- List of selected exes -->
+                    </div>
+                </div>
+                <!-- Icon -->
+                <div>
+                    <label style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; display:block; margin-bottom:8px;" data-i18n="settings.launchPackIcon">ICÔNE (PNG/JPG)</label>
+                    <div style="display:flex; gap:12px; align-items:center;">
+                        <div id="lp-icon-preview" style="width:48px; height:48px; background:rgba(255,255,255,0.03); border:1px dashed var(--border); border-radius:12px; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        </div>
+                        <button class="btn btn-secondary btn-sm" id="lp-btn-select-icon" style="font-size:11px;">Choisir une image</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px 28px; background: rgba(0,0,0,0.15); display: flex; justify-content: flex-end; gap: 12px;">
+                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('modal-launchpack').classList.remove('open')" data-i18n="common.cancel">Annuler</button>
+                <button class="btn btn-primary btn-sm" id="lp-btn-confirm" data-i18n="common.confirm">Créer le Pack</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Launch Pack Deletion -->
+    <div id="modal-launchpack-delete" class="modal-generic-overlay">
+        <div class="modal glass" style="width: 420px; max-width: 90vw; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 20px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+            <div class="modal-header" style="background: rgba(239, 68, 68, 0.1); padding: 24px 28px; border-bottom: 1px solid rgba(239, 68, 68, 0.1);">
+                <div style="display: flex; align-items: center; gap: 14px;">
+                    <div style="width: 40px; height: 40px; background: rgba(239, 68, 68, 0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #ef4444;">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2m-6 5v6m4-6v6"/></svg>
+                    </div>
+                    <div>
+                        <h2 data-i18n="settings.launchPackDeleteTitle" style="margin: 0; font-size: 1.2rem; color: #fff; font-weight: 700; letter-spacing: -0.01em;">Supprimer le Pack</h2>
+                        <p data-i18n="settings.launchPackDeleteIrreversible" style="margin: 2px 0 0; font-size: 0.8rem; color: rgba(239, 68, 68, 0.8); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Action Irréversible</p>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="document.getElementById('modal-launchpack-delete').classList.remove('open')" style="top: 24px; right: 24px;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 30px 28px;">
+                <p id="lp-delete-confirm-text" style="color: var(--text-main); font-size: 1rem; margin: 0; line-height: 1.6; font-weight: 500;">
+                    <!-- Dynamically populated -->
+                </p>
+                <div style="margin-top: 20px; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                    <div style="display: flex; gap: 12px; align-items: flex-start;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" style="margin-top: 2px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        <p data-i18n="settings.launchPackDeleteWarning" style="margin: 0; font-size: 0.85rem; color: var(--text-muted); line-height: 1.5;">
+                            Le fichier <code style="color:var(--text-bright);">launcher.vbs</code> et le raccourci Windows seront définitivement effacés de votre disque.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 20px 28px; background: rgba(0,0,0,0.2); display: flex; justify-content: flex-end; gap: 14px;">
+                <button class="btn btn-ghost" onclick="document.getElementById('modal-launchpack-delete').classList.remove('open')" data-i18n="common.cancel" style="font-weight: 600; font-size: 0.9rem; color: var(--text-muted);">Annuler</button>
+                <button id="lp-btn-delete-confirm" data-i18n="settings.launchPackDeleteBtn" class="btn" style="background: #ef4444; color: white; border: none; padding: 10px 24px; border-radius: 10px; font-weight: 700; font-size: 0.9rem; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);">
+                    Confirmer la Suppression
+                </button>
             </div>
         </div>
     </div>

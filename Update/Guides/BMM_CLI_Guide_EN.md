@@ -134,6 +134,21 @@ bmm-mcp-server export-config "C:\backup\data.json"
 
 ---
 
+## 🚀 Launch Packs (Multi-Apps)
+
+```bash
+# List configured packs
+bmm-mcp-server launchpacks
+
+# Run a pack (by ID or name)
+bmm-mcp-server run-pack "My Pack"
+
+# Delete a pack
+bmm-mcp-server delete-pack <PACK_ID>
+```
+
+---
+
 ## 🔄 MCP Mode (for AI agents)
 
 MCP mode is enabled by default (no arguments) or explicitly:

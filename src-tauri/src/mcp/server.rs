@@ -1,7 +1,7 @@
 use rmcp::{ServerHandler, model::*, service::RequestContext, RoleServer};
 use serde_json::json;
 
-use crate::mcp::tools::{profiles, mods, diagnostics};
+use crate::mcp::tools::{profiles, mods, diagnostics, launch_packs};
 
 #[derive(Clone)]
 pub struct BmmMcpServer;
@@ -177,6 +177,43 @@ impl BmmMcpServer {
         match mods::export_config(target_path) {
             Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
             Err(e) => err_result(&e),
+        }
+    }
+
+    // ── Launch Packs Tools ───────────────────────────────────────────
+
+    fn tool_list_launch_packs(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match launch_packs::list_launch_packs() {
+            Ok(packs) => ok_json(&packs),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_run_launch_pack(&self, id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match launch_packs::run_launch_pack(id) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_delete_launch_pack(&self, id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match launch_packs::delete_launch_pack(id) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_create_launch_pack(&self, name: &str, exes: Vec<String>, icon: Option<&str>) -> Result<CallToolResult, rmcp::ErrorData> {
+        match launch_packs::create_launch_pack(name.to_string(), exes, icon.map(|s| s.to_string())) {
+            Ok(pack) => ok_json(&pack),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_open_launch_pack_folder(&self, id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match launch_packs::open_launch_pack_folder(id) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e.to_string()),
         }
     }
 }
@@ -418,6 +455,52 @@ impl ServerHandler for BmmMcpServer {
                     "required": ["target_path"]
                 })).unwrap()),
             ),
+            // Launch Packs
+            Tool::new(
+                "bmm_list_launch_packs",
+                "List all configured Launch Packs.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_create_launch_pack",
+                "Create a new Launch Pack (group of apps to launch).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "name": { "type": "string", "description": "Name of the pack" },
+                        "executable_paths": { "type": "array", "items": { "type": "string" }, "description": "List of full paths to executables" },
+                        "icon_source_path": { "type": "string", "description": "Optional path to an image for the icon" }
+                    },
+                    "required": ["name", "executable_paths"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_run_launch_pack",
+                "Launch all apps in a Launch Pack.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "id": { "type": "string", "description": "ID or Name of the pack" } },
+                    "required": ["id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_delete_launch_pack",
+                "Delete a Launch Pack.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "id": { "type": "string", "description": "ID or Name of the pack" } },
+                    "required": ["id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_open_launch_pack_folder",
+                "Open the folder containing the Launch Pack files.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "id": { "type": "string", "description": "ID or Name of the pack" } },
+                    "required": ["id"]
+                })).unwrap()),
+            ),
         ];
 
         std::future::ready(Ok(ListToolsResult {
@@ -538,6 +621,28 @@ impl ServerHandler for BmmMcpServer {
                 "bmm_export_config" => {
                     let p = args.get("target_path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing target_path", None))?;
                     self.tool_export_config(p)
+                }
+
+                // Launch Packs
+                "bmm_list_launch_packs" => self.tool_list_launch_packs(),
+                "bmm_create_launch_pack" => {
+                    let name = args.get("name").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing name", None))?;
+                    let exes = args.get("executable_paths").and_then(|v| v.as_array()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing executable_paths", None))?;
+                    let exes_vec: Vec<String> = exes.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                    let icon = args.get("icon_source_path").and_then(|v| v.as_str());
+                    self.tool_create_launch_pack(name, exes_vec, icon)
+                }
+                "bmm_run_launch_pack" => {
+                    let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;
+                    self.tool_run_launch_pack(id)
+                }
+                "bmm_delete_launch_pack" => {
+                    let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;
+                    self.tool_delete_launch_pack(id)
+                }
+                "bmm_open_launch_pack_folder" => {
+                    let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;
+                    self.tool_open_launch_pack_folder(id)
                 }
 
                 _ => Err(rmcp::ErrorData::new(ErrorCode::METHOD_NOT_FOUND, format!("Tool not found: {}", name), None)),

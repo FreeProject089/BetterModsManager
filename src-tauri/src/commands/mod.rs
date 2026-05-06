@@ -22,3 +22,4 @@ pub mod whitelist_manager;
 pub mod discord;
 pub mod modpack;
 pub mod mapper;
+pub mod launch_pack;

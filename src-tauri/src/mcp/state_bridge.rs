@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::path::PathBuf;
 use walkdir;
-use sha2::{Sha256, Digest};
+
 
 // ─── Lightweight models (re-defined to avoid pulling Tauri deps) ─────────
 
@@ -137,6 +137,15 @@ impl Default for BmmSettings {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LaunchPack {
+    pub id: String,
+    pub name: String,
+    pub executable_paths: Vec<PathBuf>,
+    pub icon_path: Option<PathBuf>,
+    pub created_at: String,
+}
+
 /// Top-level persisted data (mirrors state::AppData)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct BmmAppData {
@@ -149,6 +158,8 @@ pub struct BmmAppData {
     pub disk_limits: HashMap<String, u64>,
     #[serde(default)]
     pub settings: BmmSettings,
+    #[serde(default)]
+    pub launch_packs: Vec<LaunchPack>,
 }
 
 // ─── Crash report content ────────────────────────────────────────────────

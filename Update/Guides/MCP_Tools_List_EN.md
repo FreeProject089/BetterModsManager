@@ -36,6 +36,12 @@ The **Better Mods Manager (BMM) MCP Server** is a professional administrative co
 *   `bmm_generate_betahub_report`: Generate a full diagnostic report for BetaHub (requires `title`, `description`).
 *   `bmm_export_config`: Export `data.json` for backup purposes (requires `target_path`).
 
+### 🚀 Launch Packs
+*   `bmm_list_launch_packs`: Lists all configured Launch Packs.
+*   `bmm_create_launch_pack`: Creates a new pack (requires `name`, `executable_paths`, optional `icon_source_path`).
+*   `bmm_run_launch_pack`: Launches apps in a pack (requires `id`).
+*   `bmm_delete_launch_pack`: Deletes a pack (requires `id`).
+
 ---
 
 ## ⚙️ Configuration Example (mcp_config.json)

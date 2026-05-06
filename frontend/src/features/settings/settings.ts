@@ -9,6 +9,7 @@ import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml } from '../../core/utils.js';
 import { initBetaHub, openBugReportModal, openFeedbackModal } from '../betahub/betahub-modals.js';
+import { initLaunchPackSettings } from './launch_packs.js';
 
 
 // ── GitHub PAT helper ─────────────────────────────────────
@@ -819,6 +820,7 @@ export async function initSettings() {
     await initStorageSettings();
     await initLanguageSettings();
     await initSecuritySettings();
+    await initLaunchPackSettings();
     
     // Tags Settings
     const btnCreateTag = document.getElementById('btn-create-tag');

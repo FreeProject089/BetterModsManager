@@ -5,3 +5,4 @@ pub mod tag;
 pub mod history;
 pub mod repo;
 pub mod modpack;
+pub mod launch_pack;
