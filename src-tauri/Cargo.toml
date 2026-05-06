@@ -7,13 +7,17 @@ edition = "2021"
 name = "better-mods-manager"
 path = "src/main.rs"
 
+[[bin]]
+name = "bmm-mcp-server"
+path = "src/bin/mcp_server.rs"
+
 [build-dependencies]
 tauri-build = { version = "1", features = [] }
 chrono = "0.4"
 embed-resource = "2"
 
 [dependencies]
-tauri = { version = "1", features = [ "cli", "dialog-message", "dialog-confirm", "dialog-ask", "protocol-asset", "custom-protocol", "notification-all", "dialog-open", "dialog-save", "fs-all", "path-all", "window-all", "shell-open"] }
+tauri = { version = "1", features = [ "shell-sidecar", "cli", "dialog-message", "dialog-confirm", "dialog-ask", "protocol-asset", "custom-protocol", "notification-all", "dialog-open", "dialog-save", "fs-all", "path-all", "window-all", "shell-open"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
@@ -27,7 +31,7 @@ lazy_static = "1.4"
 backtrace = "0.3"
 sysinfo = "0.30"
 tracing = "0.1"
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 discord-rich-presence = "0.2.4"
@@ -53,6 +57,8 @@ winreg = "0.52"
 rayon = "1.8"
 tauri-plugin-single-instance = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
 jwalk = "0.8"
+rmcp = { version = "0.16", features = ["server", "transport-io"] }
+schemars = "0.8"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

@@ -240,7 +240,6 @@ pub async fn export_server_repo(
             
             use rayon::prelude::*;
             use std::sync::atomic::{AtomicUsize, Ordering};
-            use std::sync::Mutex;
 
             let f_idx_atomic = AtomicUsize::new(0);
             let repo_files: Result<Vec<RepoFile>, String> = files.par_iter().map(|rel_path| {

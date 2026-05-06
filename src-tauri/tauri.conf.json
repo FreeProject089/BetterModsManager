@@ -33,7 +33,11 @@
                 "all": true
             },
             "shell": {
-                "open": true
+                "open": true,
+                "sidecar": true,
+                "scope": [
+                    { "name": "binaries/bmm-mcp-server", "sidecar": true }
+                ]
             },
             "window": {
                 "all": true
@@ -67,6 +71,9 @@
                 "../EULA.md",
                 "../EULA_FR.md",
                 "../frontend/Lang"
+            ],
+            "externalBin": [
+                "binaries/bmm-mcp-server"
             ],
             "windows": {
                 "certificateThumbprint": null,
