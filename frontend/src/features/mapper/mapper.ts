@@ -703,7 +703,8 @@ function setupContextMenu() {
             if (name && selectedModId) {
                 try {
                     await invoke('create_mod_folder', { modId: selectedModId, parentRelPath: lastSelectedPath || ".", folderName: name });
-                    toast(t("common.saved"), "success"); await refreshModTree();
+                    toast(t("common.saved"), "success"); 
+                    await refreshModTree(true); // Force reload to show new folder
                 } catch (e: any) { toast(e.message || e, "error"); }
             }
         });
@@ -715,8 +716,27 @@ function setupContextMenu() {
         openInputModal(t("mapper.rename"), t("mapper.enterName"), currentName, async (name) => {
             if (name && selectedModId && lastSelectedPath) {
                 try {
+                    const isRoot = lastSelectedPath === "." || lastSelectedPath === "" || lastSelectedPath === "/";
                     await invoke('rename_mod_item', { modId: selectedModId, itemRelPath: lastSelectedPath, newName: name });
-                    toast(t("common.saved"), "success"); await refreshModTree();
+                    
+                    if (isRoot) {
+                        await refreshMapperData();
+                        // Search for the mod with the new name in the select
+                        const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement;
+                        if (modSelect) {
+                            for (let i = 0; i < modSelect.options.length; i++) {
+                                // We check text content because ID might have changed if derived from folder name
+                                if (modSelect.options[i].text === name) {
+                                    modSelect.selectedIndex = i;
+                                    selectedModId = modSelect.value;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    toast(t("common.saved"), "success"); 
+                    await refreshModTree(true);
                 } catch (e: any) { toast(e.message || e, "error"); }
             }
         });
@@ -728,7 +748,7 @@ function setupContextMenu() {
             if (confirm(t("common.confirmDelete"))) {
                 try {
                     for (const p of selectedPaths) { await invoke('delete_mod_item', { modId: selectedModId, itemRelPath: p }); }
-                    toast(t("common.success"), 'success'); selectedPaths.clear(); await refreshModTree(); updateSelectionCounter();
+                    toast(t("common.success"), 'success'); selectedPaths.clear(); await refreshModTree(true); updateSelectionCounter();
                 } catch (e: any) { toast(e.message || e, 'error'); }
             }
         }
@@ -751,6 +771,14 @@ function showContextMenu(x: number, y: number, path: string, isDir: boolean, isM
     // For folders on mod side, show "New Folder"
     const newFolderBtn = document.getElementById('ctx-mapper-new-folder');
     if (newFolderBtn && isModSide) newFolderBtn.style.display = isDir ? 'flex' : 'none';
+
+    // Protect ModRoot: Hide Rename/Delete if path is "." (root)
+    const renameBtn = document.getElementById('ctx-mapper-rename');
+    const deleteBtn = document.getElementById('ctx-mapper-delete');
+    const isRoot = path === "." || path === "";
+    
+    if (renameBtn) renameBtn.style.display = (isModSide && !isRoot) ? 'flex' : 'none';
+    if (deleteBtn) deleteBtn.style.display = (isModSide && !isRoot) ? 'flex' : 'none';
 
     // Show "Cancel Mapping" only if at least one selected item is in pendingMoves
     const cancelMappingBtn = document.getElementById('ctx-mapper-cancel-mapping');

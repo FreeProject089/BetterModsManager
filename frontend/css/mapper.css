@@ -132,20 +132,18 @@
 /* Mapper Modals */
 .modal-generic-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(8px);
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(10px);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 2000000;
+    z-index: 9000;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: none !important; /* Ensure overlay has no shadow */
 }
 
 .modal-generic-overlay.open {
@@ -157,7 +155,7 @@
 .modal-generic-overlay .modal.glass {
     transform: translateY(20px);
     transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7), 0 0 50px rgba(59, 130, 246, 0.1);
     overflow: hidden;
 }
 
@@ -167,7 +165,7 @@
 
 /* Modal sizing for preview */
 .modal-large {
-    z-index: 2000001 !important;
+    z-index: 990001 !important;
 }
 
 .modal-large .modal.glass {

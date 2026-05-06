@@ -192,6 +192,8 @@ pub fn unapply_mod_stacked(
             let original_src = profile_backup_root.join("_original").join(&rel);
             if original_src.exists() {
                 copy_file_force_limited(&original_src, &dst_path, game_path_limit)?;
+                // Space optimization: remove the backup file as it has been safely restored
+                let _ = ensure_removed(&original_src);
             } else {
                 // File was added by mod and no original exists — DELETE IT
                 let _ = ensure_removed(&dst_path); 
@@ -230,6 +232,13 @@ pub fn unapply_mod_stacked(
             }
         }
     }
+
+    // Sequential cleanup of empty backup directories
+    let original_dir = profile_backup_root.join("_original");
+    if original_dir.exists() {
+        let _ = remove_empty_dirs(&original_dir);
+    }
+
     Ok(())
 }
 

@@ -29,7 +29,7 @@ Dès que vous sauvegardez votre fichier dans le dossier `Lang`, BMM le détecter
 
 ## 4. Tutoriels Vidéo Localisés (v0.9.9)
 BMM supporte les tutoriels vidéo localisés. Vous pouvez définir des liens YouTube spécifiques et des chemins MP4 locaux pour votre langue via les clés `docs.videos`.
-Pour plus de détails, consultez le [Guide des Vidéos Localisées](../../Update/video_localization.md).
+Pour plus de détails, consultez le [Guide des Vidéos Localisées](../Guides/video_localization_FR.md).
 
 ## 5. Partage
 N'hésitez pas à partager vos fichiers de traduction sur notre Discord afin qu'ils puissent être officiellement intégrés dans les prochaines mises à jour.

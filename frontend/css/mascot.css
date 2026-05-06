@@ -113,6 +113,24 @@ body.is-maximized #app-mascot-container {
     50% { transform: translateY(-5px) rotate(-3deg); }
 }
 
+@keyframes mascot-loading-spin {
+    0% { transform: translateY(0) rotate(-5deg); }
+    100% { transform: translateY(0) rotate(355deg); }
+}
+
+@keyframes mascot-loading-spin-reverse {
+    0% { transform: translateY(0) rotate(-5deg); }
+    100% { transform: translateY(0) rotate(-365deg); }
+}
+
+#app-mascot-container.is-loading {
+    animation: mascot-loading-spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+}
+
+#app-mascot-container.is-loading-reverse {
+    animation: mascot-loading-spin-reverse 1s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+}
+
 /* Adjustments for existing elements inside the wrapper */
 #app-window-outer .titlebar {
     position: absolute; /* Relative to #app-window-outer */

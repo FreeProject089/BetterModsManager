@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
-import { toast } from '../../ui/app.js';
+import { toast, startTaskyLoader, stopTaskyLoader } from '../../ui/app.js';
 let benchmarkPoints = [];
 let fullBenchmarkHistory = [];
 let recentEvents = [];
@@ -72,6 +72,14 @@ export async function initBenchmark() {
         if (currentEvent) {
             const isFinished = (typeof event.payload === 'object' && event.payload !== null) ? event.payload.finished : true;
             const eventId = Date.now() + Math.random().toString(36).substr(2, 9);
+            // Tasky loading animation
+            if (!isFinished) {
+                const isDisabling = payloadText && payloadText.includes('Disabling');
+                startTaskyLoader(isDisabling);
+            }
+            else {
+                stopTaskyLoader();
+            }
             if (isFinished && typeof event.payload === 'object' && event.payload !== null) {
                 const modName = payloadText.split(': ').pop();
                 recentEvents = recentEvents.filter(e => {

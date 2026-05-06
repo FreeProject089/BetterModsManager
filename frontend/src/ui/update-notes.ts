@@ -159,10 +159,42 @@ export async function openUpdateNotesModal() {
     // Sidebar selection logic with event delegation
     const contentArea = modal.querySelector('#update-notes-content-target');
 
-    modal.addEventListener('click', async (e) => {
-        const item = e.target.closest('.ptb-sidebar-item');
-        if (!item) return;
+    // Use a named function to avoid duplicate listeners if modal already existed
+    const handleModalClick = async (e: MouseEvent) => {
+        const link = (e.target as HTMLElement).closest('a');
+        if (link) {
+            const href = link.getAttribute('href');
+            if (href) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (href.startsWith('http')) {
+                    invoke('open_external_url', { url: href }).catch(err => window.open(href, '_blank'));
+                } else if (href.toLowerCase().includes('.md')) {
+                    // Fuzzy match filename (ignoring path and common suffixes like _EN/_FR)
+                    const fileName = href.split('/').pop()?.toLowerCase().replace(/(_en|_fr)\.md$/, '.md');
+                    if (fileName) {
+                        const items = Array.from(modal.querySelectorAll('.ptb-sidebar-item')) as HTMLElement[];
+                        const targetItem = items.find(el => {
+                            const p = el.dataset.path?.toLowerCase() || '';
+                            const cleanP = p.replace(/(_en|_fr)\.md$/, '.md');
+                            return cleanP.endsWith(fileName) || p.endsWith(fileName);
+                        });
 
+                        if (targetItem) {
+                            targetItem.click();
+                        } else {
+                            toast(t('update.pageNotFound', { name: fileName }) || "Page not found: " + fileName, "warning");
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
+        const item = (e.target as HTMLElement).closest('.ptb-sidebar-item') as HTMLElement;
+        if (!item) return;
+        
         e.stopPropagation();
 
         // Remove active from all items
@@ -213,13 +245,20 @@ export async function openUpdateNotesModal() {
         
         if (note) {
             contentArea.innerHTML = renderContent(note);
-            contentArea.scrollTop = 0;
+            if (contentArea) contentArea.scrollTop = 0;
         } else {
             console.warn('Note not found for path:', path);
-            contentArea.innerHTML = renderContent(null);
+            if (contentArea) contentArea.innerHTML = renderContent(null);
         }
-    });
+    };
+
+    // Remove old listener if exists (if modal was already in DOM)
+    modal.removeEventListener('click', (modal as any)._bmm_click_handler);
+    (modal as any)._bmm_click_handler = handleModalClick;
+    modal.addEventListener('click', handleModalClick);
 }
+
+
 
 export function initUpdateNotes() {
     const btn = document.getElementById('btn-show-updates');
@@ -823,6 +862,28 @@ async function showPtbModal(folderStructure, lang, initialFileName = null) {
     });
 
     modal.addEventListener('click', (e) => {
+        const link = e.target.closest('a');
+        if (link) {
+            e.preventDefault();
+            const href = link.getAttribute('href');
+            if (href) {
+                if (href.startsWith('http')) {
+                    invoke('open_external_url', { url: href }).catch(err => window.open(href, '_blank'));
+                } else if (href.endsWith('.md')) {
+                    const fileName = href.split('/').pop();
+                    if (fileName) {
+                        const targetItem = Array.from(modal.querySelectorAll('.ptb-sidebar-item')).find(el => el.dataset.path?.endsWith(fileName));
+                        if (targetItem) {
+                            targetItem.click();
+                        } else {
+                            toast("Page non trouvée: " + fileName, "warning");
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
         const item = e.target.closest('.ptb-sidebar-item');
         if (item) {
             const path = item.dataset.path;

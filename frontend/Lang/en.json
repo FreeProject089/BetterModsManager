@@ -180,8 +180,11 @@
   "detail.noFiles": "No files listed.",
   "detail.folder": "Mod folder",
   "mod.openActiveFolder": "Game Folder",
+  "mod.openActiveFolderTip": "Open the folder where this mod is currently active and linked.",
   "mod.openBackupFolder": "Backup Folder",
+  "mod.openBackupFolderTip": "Open the backup folder containing the original mod files.",
   "mod.openSourceFolder": "Source Folder",
+  "mod.openSourceFolderTip": "Open the source folder in your mods library.",
   "mod.archiveMoreFiles": "+ {count} more files not displayed for performance (click Explore Archive above).",
   "mod.filesCount": "{count} installed files",
   "mod.exploreArchive": "Explore Archive",
@@ -214,6 +217,8 @@
   "mapper.rename": "Rename",
   "mapper.delete": "Permanently Delete",
   "mapper.copyPath": "Copy relative path",
+  "mapper.modRoot": "Mod Root",
+  "mapper.gameRoot": "Game Root",
   "mapper.rootMod": "Mod Root",
   "mapper.rootGame": "Game Root",
   "mapper.diagnosticTitle": "Structure Diagnostic",
@@ -2020,6 +2025,8 @@
   "settings.launchPackDeleteConfirmText": "Are you sure you want to delete the pack {name}?",
   "settings.launchPackDeleteWarning": "The launcher.vbs file and the Windows shortcut will be permanently deleted from your disk.",
   "settings.launchPackDeleteBtn": "Confirm Deletion",
+  "settings.launchPackBtnCreate": "Create Pack",
+  "settings.launchPackSelectImage": "Choose an image",
   "settings.devToolsTitle": "Developer Tools",
   "settings.devToolsDesc": "Access advanced debugging tools and system logs for technical diagnostics.",
   "settings.openDebug": "Open Debug Menu (Ctrl+Alt+D)",
@@ -2579,5 +2586,7 @@
   "settings.taskyOpacityDesc": "Adjust the opacity of help bubbles (100% = fully visible).",
   "docs.search.classicTip": "Classic Search: uses standard keywords to find exact matches in documentation.",
   "docs.search.semanticTip": "Semantic Search: uses AI to understand the meaning of your query, even without exact keywords.",
-  "docs.tab.faq": "FAQ"
+  "docs.tab.faq": "FAQ",
+  "ctx.openInExplorer": "Open in Explorer",
+  "update.pageNotFound": "Page not found: {name}"
 }

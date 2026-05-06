@@ -110,11 +110,11 @@ export async function renderLaunchPacks() {
                 ${iconHtml}
                 <div style="flex:1; min-width:0;">
                     <div style="font-size:13px; font-weight:700; color:var(--text-bright); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(pack.name)}</div>
-                    <div style="font-size:10px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${pack.executable_paths.length} Apps</div>
+                    <div style="font-size:10px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${pack.executable_paths.length} ${t('settings.launchPackExes') || 'Apps'}</div>
                 </div>
                 <div style="display:flex; gap:8px;">
                     <button class="btn btn-primary btn-xs btn-run-lp" data-id="${pack.id}">${t('settings.launchPackRun')}</button>
-                    <button class="btn btn-ghost btn-xs btn-open-lp" data-id="${pack.id}" title="Open Folder"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
+                    <button class="btn btn-ghost btn-xs btn-open-lp" data-id="${pack.id}" title="${t('ctx.openFolder') || 'Open Folder'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
                     <button class="btn btn-ghost btn-xs btn-del-lp" data-id="${pack.id}" style="color:var(--error);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
                 </div>
             `;

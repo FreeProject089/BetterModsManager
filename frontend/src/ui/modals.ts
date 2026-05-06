@@ -123,7 +123,6 @@ let dropTimer: ReturnType<typeof setTimeout> | undefined;
 
 window.showGlobalDropdown = (btn: HTMLElement, menu: HTMLElement): void => {
     if (!menu) return;
-    window.cancelDropdownClose();
     
     let portal = document.getElementById('global-dropdown-portal');
     if (!portal) {
@@ -133,19 +132,58 @@ window.showGlobalDropdown = (btn: HTMLElement, menu: HTMLElement): void => {
         document.body.appendChild(portal);
     }
 
+    // Toggle logic: if already open for this button, close it
+    if ((window as any).currentDropdownBtn === btn) {
+        window.closeGlobalDropdown(true);
+        return;
+    }
+
     portal.innerHTML = '';
+    (window as any).currentDropdownBtn = btn;
+    
     const clone = menu.cloneNode(true) as HTMLElement;
     clone.classList.add('open');
     portal.appendChild(clone);
 
     const rect = btn.getBoundingClientRect();
     clone.style.position = 'fixed';
-    clone.style.top = (rect.bottom + 2) + 'px';
+    clone.style.top = (rect.bottom + 6) + 'px'; // Slightly more gap
     clone.style.left = (rect.left) + 'px';
     clone.style.pointerEvents = 'auto';
 
-    clone.onmouseenter = window.cancelDropdownClose;
-    clone.onmouseleave = () => window.closeGlobalDropdown();
+    // Hover-out closing behavior & click outside
+    let hoverTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    const outsideClick = (e: MouseEvent) => {
+        if (!clone.contains(e.target as Node) && !btn.contains(e.target as Node)) {
+            window.closeGlobalDropdown(true);
+        }
+    };
+
+    const mouseMove = (e: MouseEvent) => {
+        if (!clone.contains(e.target as Node) && !btn.contains(e.target as Node)) {
+            if (!hoverTimeout) {
+                hoverTimeout = setTimeout(() => {
+                    window.closeGlobalDropdown();
+                }, 300); // 300ms delay before closing
+            }
+        } else {
+            if (hoverTimeout) {
+                clearTimeout(hoverTimeout);
+                hoverTimeout = undefined;
+            }
+        }
+    };
+
+    document.addEventListener('mousedown', outsideClick);
+    document.addEventListener('mousemove', mouseMove);
+
+    (window as any).globalDropdownCleanup = () => {
+        document.removeEventListener('mousedown', outsideClick);
+        document.removeEventListener('mousemove', mouseMove);
+        if (hoverTimeout) clearTimeout(hoverTimeout);
+        (window as any).globalDropdownCleanup = null;
+    };
 
     clone.querySelectorAll('.dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod').forEach(item => {
         (item as HTMLElement).onclick = (e: MouseEvent) => {
@@ -161,12 +199,19 @@ window.showGlobalDropdown = (btn: HTMLElement, menu: HTMLElement): void => {
 };
 
 window.closeGlobalDropdown = (immediate: boolean = false): void => {
+    if ((window as any).globalDropdownCleanup) {
+        (window as any).globalDropdownCleanup();
+    }
+
     const portal = document.getElementById('global-dropdown-portal');
     const menu = portal?.querySelector('.mod-actions-dropdown-content') as HTMLElement | null;
 
     if (immediate) {
         window.cancelDropdownClose();
-        if (portal) portal.innerHTML = '';
+        if (portal) {
+            portal.innerHTML = '';
+            (window as any).currentDropdownBtn = null;
+        }
         return;
     }
 
@@ -182,7 +227,10 @@ window.closeGlobalDropdown = (immediate: boolean = false): void => {
 
         // Final removal timer (matches animation duration)
         dropTimer = setTimeout(() => {
-            if (portal) portal.innerHTML = '';
+            if (portal) {
+                portal.innerHTML = '';
+                (window as any).currentDropdownBtn = null;
+            }
         }, 200);
     }, 100);
 };

@@ -77,6 +77,47 @@ export function toast(message, type = 'info', duration = 3000) {
     };
     setTimeout(remove, duration);
 }
+// ── Tasky Sync Loading ──────────────────────────────────────
+export function startTaskyLoader(reverse = false) {
+    const mascotContainer = document.getElementById('app-mascot-container');
+    if (!mascotContainer)
+        return;
+    const isAnimated = localStorage.getItem('bmm_tasky_animated') !== 'false';
+    if (!isAnimated)
+        return;
+    const className = reverse ? 'is-loading-reverse' : 'is-loading';
+    const otherClass = reverse ? 'is-loading' : 'is-loading-reverse';
+    if (!mascotContainer.dataset.spinStartTime || mascotContainer.dataset.spinStartTime === '0') {
+        mascotContainer.dataset.spinStartTime = Date.now().toString();
+        mascotContainer.classList.remove(otherClass);
+        mascotContainer.classList.add(className);
+    }
+    if (mascotContainer._spinTimeout) {
+        clearTimeout(mascotContainer._spinTimeout);
+        mascotContainer._spinTimeout = null;
+    }
+}
+export function stopTaskyLoader() {
+    const mascotContainer = document.getElementById('app-mascot-container');
+    if (!mascotContainer || !mascotContainer.dataset.spinStartTime || mascotContainer.dataset.spinStartTime === '0')
+        return;
+    if (mascotContainer._spinTimeout)
+        return; // Already stopping
+    const startTime = parseInt(mascotContainer.dataset.spinStartTime);
+    const elapsed = Date.now() - startTime;
+    let timeToWait = 1000 - (elapsed % 1000);
+    if (timeToWait < 300)
+        timeToWait += 1000; // Add full spin if <300ms remaining
+    mascotContainer._spinTimeout = setTimeout(() => {
+        mascotContainer.classList.remove('is-loading', 'is-loading-reverse');
+        mascotContainer.dataset.spinStartTime = '0';
+        mascotContainer._spinTimeout = null;
+    }, timeToWait);
+}
+export function triggerTaskyPulse() {
+    startTaskyLoader();
+    stopTaskyLoader();
+}
 // ── Navigation ────────────────────────────────────────────
 function initNavigation() {
     const navItems = document.querySelectorAll('.nav-item[data-view]');
@@ -86,6 +127,8 @@ function initNavigation() {
             invoke('log_frontend_line', { line: `Navigated to view: ${viewId}` });
             navItems.forEach(n => n.classList.remove('active'));
             item.classList.add('active');
+            // Trigger mascot loading safely
+            triggerTaskyPulse();
             // Yield to main thread so the nav button highlights instantly
             setTimeout(() => {
                 document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -255,6 +298,8 @@ export async function updateLibraryProfileSelector() {
                 const id = select.value;
                 if (!id)
                     return;
+                // Trigger mascot loading
+                startTaskyLoader();
                 try {
                     await invoke('set_active_profile', { profileId: id });
                     await updateProfileChip();
@@ -265,6 +310,9 @@ export async function updateLibraryProfileSelector() {
                 }
                 catch (e) {
                     toast((window.t ? window.t('common.error') : 'Error') + ' : ' + e, 'error');
+                }
+                finally {
+                    stopTaskyLoader();
                 }
             });
             select._hasListener = true;
@@ -536,6 +584,7 @@ window.applyTaskySettings = function () {
         const tw = container.offsetWidth || 350;
         const th = container.offsetHeight || 100;
         const target = e.target;
+        const isDropdown = !!target.closest('#global-dropdown-portal, .mod-actions-dropdown-content, .dropdown-menu, .dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod, .btn-open-source-folder');
         const isBusy = !!target.closest('button, .nav-item, .dropdown-menu, .mod-item-card, .glass-card, .search-mode-pill, .titlebar-controls');
         // Adaptive offsets: stay close by default
         const BASE_OFFSET = 12;
@@ -546,6 +595,11 @@ window.applyTaskySettings = function () {
         let targetY = e.clientY + BUSY_OFFSET;
         let isFlippedX = false;
         let isFlippedY = false;
+        // Force position ABOVE if inside a dropdown to avoid obscuring other items
+        if (isDropdown) {
+            targetY = e.clientY - th - BUSY_OFFSET;
+            isFlippedY = true;
+        }
         // 2. Horizontal Flip Decision: If more than 30% of tooltip would be hidden on the right
         if (targetX + tw > vw - MARGIN) {
             const overflowAmount = (targetX + tw) - (vw - MARGIN);

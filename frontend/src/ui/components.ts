@@ -92,23 +92,28 @@ export function getModCardHTML(mod, ctx) {
         <div class="mod-actions">
             <div class="mod-actions-dropdown">
             <button class="btn btn-sm btn-icon btn-dropdown-toggle" 
-                onmouseenter="window.showTaskyHelp('mod.openFolderTip', 'folder'); window.cancelDropdownClose(); window.showGlobalDropdown(this, this.nextElementSibling);" 
-                onmouseleave="window.hideTaskyHelp(); window.closeGlobalDropdown(false);" 
+                onclick="window.showGlobalDropdown(this, this.nextElementSibling); event.stopPropagation();" 
+                onmouseenter="window.showTaskyHelp('mod.openFolderTip', 'folder');" 
+                onmouseleave="window.hideTaskyHelp();" 
                 style="background:rgba(255,255,255,0.05);color:var(--text-secondary);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                         <polyline points="6 9 12 15 18 9" stroke-width="2.5" style="opacity: 0.8; transform: scale(0.6); transform-origin: center; translate: 0 4px;"/>
                     </svg>
                 </button>
-                <div class="mod-actions-dropdown-content" onmouseleave="window.closeGlobalDropdown()">
-                    <div class="dropdown-item btn-open-active-folder" data-id="${mod.id}">
+                <div class="mod-actions-dropdown-content">
+                    <div class="dropdown-item btn-open-active-folder" data-id="${mod.id}" 
+                         onmouseenter="window.showTaskyHelp('mod.openActiveFolderTip', 'folder')" 
+                         onmouseleave="window.hideTaskyHelp()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5">
                             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                             <path d="m9 13 2 2 4-4"/>
                         </svg>
                         <span data-i18n="mod.openActiveFolder">${t('mod.openActiveFolder')}</span>
                     </div>
-                    <div class="dropdown-item btn-open-backup-folder" data-id="${mod.id}">
+                    <div class="dropdown-item btn-open-backup-folder" data-id="${mod.id}" 
+                         onmouseenter="window.showTaskyHelp('mod.openBackupFolderTip', 'folder')" 
+                         onmouseleave="window.hideTaskyHelp()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2.5">
                             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                             <path d="M12 10v4l2 2"/>
@@ -116,7 +121,9 @@ export function getModCardHTML(mod, ctx) {
                         <span data-i18n="mod.openBackupFolder">${t('mod.openBackupFolder')}</span>
                     </div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item btn-open-folder" data-id="${mod.id}">
+                    <div class="dropdown-item btn-open-folder" data-id="${mod.id}" 
+                         onmouseenter="window.showTaskyHelp('mod.openSourceFolderTip', 'folder')" 
+                         onmouseleave="window.hideTaskyHelp()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                         <span data-i18n="mod.openSourceFolder">${t('mod.openSourceFolder')}</span>
                     </div>
