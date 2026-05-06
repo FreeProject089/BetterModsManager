@@ -215,7 +215,7 @@ function _renderModpackList(container) {
 async function _openEditor(container, pack) {
     _editingPack = pack ? JSON.parse(JSON.stringify(pack)) : {
         id: '', name: '', description: null, created_at: '', updated_at: '',
-        multi_profile: false, dependency_mode: 'manual', mods: [], sr_link: null, game_name: null
+        multi_profile: true, dependency_mode: 'manual', mods: [], sr_link: null, game_name: null
     };
     _packMods = _editingPack.mods ? [..._editingPack.mods] : [];
 

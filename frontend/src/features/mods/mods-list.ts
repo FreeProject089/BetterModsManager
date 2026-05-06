@@ -219,6 +219,18 @@ export function createModCard(mod) {
 
     S.isGlobalProcessing = true;
     S.processingMods.add(mod.id);
+
+    // 360° spin animation on the toggle when activating
+    if (toggle.checked) {
+      const toggleLabel = card.querySelector('.mod-toggle');
+      if (toggleLabel) {
+        toggleLabel.classList.remove('spin-360');
+        void (toggleLabel as HTMLElement).offsetWidth; // force reflow
+        toggleLabel.classList.add('spin-360');
+        setTimeout(() => toggleLabel.classList.remove('spin-360'), 600);
+      }
+    }
+
     setModLoading(mod.id, true);
 
     try {

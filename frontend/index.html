@@ -1690,9 +1690,13 @@
                                     id="btn-toggle-search-mode">
                                     <div class="search-mode-pill active" data-mode="classic"
                                         data-i18n="docs.searchMode.classic"
+                                        onmouseenter="window.showTaskyHelp('docs.search.classicTip', 'search')"
+                                        onmouseleave="window.hideTaskyHelp()"
                                         style="padding: 4px 10px; border-radius: 15px; font-size: 10px; font-weight: 700; color: white; background: var(--accent); transition: all 0.3s;">
                                         CLASSIQUE</div>
                                     <div class="search-mode-pill" data-mode="semantic"
+                                        onmouseenter="window.showTaskyHelp('docs.search.semanticTip', 'layers')"
+                                        onmouseleave="window.hideTaskyHelp()"
                                         style="padding: 4px 10px; border-radius: 15px; font-size: 10px; font-weight: 700; color: var(--text-secondary); transition: all 0.3s; display: flex; align-items: center; gap: 4px;">
                                         <span data-i18n="docs.searchMode.semantic">SÉMANTIQUE</span>
                                         <span style="font-size: 8px; background: var(--accent); color: white; padding: 1px 4px; border-radius: 4px; opacity: 0.8;">BETA</span>
@@ -4219,7 +4223,60 @@
                             </div>
                         </div>
 
-                        <!-- ── GitHub PAT Token ── -->
+                        <!-- ── Tasky Appearance Settings ── -->
+                        <div class="glass-card" style="border: 1px solid rgba(99,102,241,0.2);">
+                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                                <img src="assets/Tasky_Happy.png" style="width:22px;height:22px;object-fit:contain;filter:drop-shadow(0 0 6px rgba(99,102,241,0.4))" alt="Tasky" />
+                                <span data-i18n="settings.taskyTitle">Tasky — Mascotte</span>
+                            </h3>
+                            <div style="display:flex;flex-direction:column;gap:14px;margin-top:4px">
+                                <!-- Toggle Tasky visible -->
+                                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px">
+                                    <div>
+                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)" data-i18n="settings.taskyVisible">Afficher Tasky</div>
+                                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px" data-i18n="settings.taskyVisibleDesc">Affiche ou masque la mascotte dans le coin de la fenêtre.</div>
+                                    </div>
+                                    <label class="toggle-switch" style="flex-shrink:0">
+                                        <input type="checkbox" id="toggle-tasky-visible" checked onchange="window.applyTaskySettings()" />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <!-- Toggle Tasky animation -->
+                                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px">
+                                    <div>
+                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)" data-i18n="settings.taskyAnimation">Animation de Tasky</div>
+                                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px" data-i18n="settings.taskyAnimationDesc">Active ou désactive l'animation de flottement de la mascotte.</div>
+                                    </div>
+                                    <label class="toggle-switch" style="flex-shrink:0">
+                                        <input type="checkbox" id="toggle-tasky-animation" checked onchange="window.applyTaskySettings()" />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <!-- Toggle Tasky tooltip -->
+                                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px">
+                                    <div>
+                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)" data-i18n="settings.taskyTooltip">Bulles d'aide (Tooltips)</div>
+                                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px" data-i18n="settings.taskyTooltipDesc">Active ou désactive les bulles d'explication de Tasky au survol.</div>
+                                    </div>
+                                    <label class="toggle-switch" style="flex-shrink:0">
+                                        <input type="checkbox" id="toggle-tasky-tooltip" checked onchange="window.applyTaskySettings()" />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <!-- Tasky tooltip opacity -->
+                                <div style="padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                                        <div style="font-size:13px;font-weight:600;color:var(--text-primary)" data-i18n="settings.taskyOpacity">Transparence des bulles</div>
+                                        <span id="tasky-opacity-value" style="font-size:12px;font-weight:700;color:var(--accent);font-family:var(--font-mono)">100%</span>
+                                    </div>
+                                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px" data-i18n="settings.taskyOpacityDesc">Ajuste l'opacité des bulles d'aide (100% = totalement visible).</div>
+                                    <input type="range" id="tasky-opacity-slider" min="10" max="100" value="100" step="5" oninput="window.applyTaskySettings()" style="width:100%;accent-color:var(--accent);cursor:pointer" />
+                                </div>
+                            </div>
+                        </div>
+
+
+
                         <div class="glass-card"
                             style="border: 1px solid rgba(59,130,246,0.15); position: relative; overflow: hidden;">
                             <!-- subtle glow accent -->

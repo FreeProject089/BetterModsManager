@@ -2543,5 +2543,16 @@
   "mod.addDependency": "Add a required mod...",
   "mod.folderPlaceholder": "Path to the folder...",
   "mod.authorPlaceholder": "Author...",
-  "mod.addDependencyPlaceholder": "Add a required mod..."
+  "mod.addDependencyPlaceholder": "Add a required mod...",
+  "settings.taskyTitle": "Tasky — Mascot",
+  "settings.taskyVisible": "Show Tasky",
+  "settings.taskyVisibleDesc": "Show or hide the mascot in the window corner.",
+  "settings.taskyAnimation": "Tasky Animation",
+  "settings.taskyAnimationDesc": "Enable or disable the floating bounce animation of the mascot.",
+  "settings.taskyTooltip": "Help Bubbles (Tooltips)",
+  "settings.taskyTooltipDesc": "Enable or disable Tasky help bubbles on hover.",
+  "settings.taskyOpacity": "Bubble Transparency",
+  "settings.taskyOpacityDesc": "Adjust the opacity of help bubbles (100% = fully visible).",
+  "docs.search.classicTip": "Classic Search: uses standard keywords to find exact matches in documentation.",
+  "docs.search.semanticTip": "Semantic Search: uses AI to understand the meaning of your query, even without exact keywords."
 }

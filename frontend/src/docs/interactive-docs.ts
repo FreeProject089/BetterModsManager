@@ -302,6 +302,9 @@ function fixClusterLabels() {
  * @param {boolean} isLiteral - If true, treats the key as literal text
  */
 export function showTaskyHelp(key, iconClass = 'info', isLiteral = false) {
+    // Respect user preference to disable tooltips
+    if ((window as any).__taskyTooltipEnabled === false) return;
+
     const bubble = document.querySelector('.tasky-speech-bubble');
     const eyes = document.getElementById('tasky-bubble-eyes');
     const explanationEl = document.getElementById('tasky-explanation');

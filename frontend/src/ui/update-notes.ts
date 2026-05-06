@@ -494,7 +494,7 @@ export async function initAutoUpdate() {
     const sidebarBtn = document.getElementById('btn-check-updates');
     if (sidebarBtn && !isDisabled) {
         sidebarBtn.addEventListener('click', () => {
-            openUpdateNotesModal();
+            performUpdateCheck(true);
         });
     }
 
@@ -530,10 +530,16 @@ async function performUpdateCheck(showNoUpdateToast = false) {
 
         if (info.has_update) {
             showUpdateAvailableModal(info);
+            [sidebarBtn, document.getElementById('btn-settings-check-update')].forEach(btn => {
+                if (btn) btn.classList.add('has-update');
+            });
             if (statusMsg) {
                 statusMsg.innerHTML = `<span style="color:var(--success)">✓ ${t('settings.updateAvailable') || 'Update available'}: v${escHtml(info.latest_version)}</span>`;
             }
         } else {
+            [sidebarBtn, document.getElementById('btn-settings-check-update')].forEach(btn => {
+                if (btn) btn.classList.remove('has-update');
+            });
             if (showNoUpdateToast) {
                 toast(t('settings.upToDate') || 'You are running the latest version!', 'success');
             }

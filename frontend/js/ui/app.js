@@ -468,5 +468,159 @@ async function main() {
     window.openNewProfileModal = openNewProfileModal;
     // Version button uses inline onclick
 }
+// ── Tasky mascot settings ────────────────────────────────
+window.applyTaskySettings = function () {
+    const visibleToggle = document.getElementById('toggle-tasky-visible');
+    const animToggle = document.getElementById('toggle-tasky-animation');
+    const tooltipToggle = document.getElementById('toggle-tasky-tooltip');
+    const opacitySlider = document.getElementById('tasky-opacity-slider');
+    const container = document.getElementById('app-mascot-container');
+    const mascotImg = document.getElementById('app-mascot');
+    const sidebarBrand = document.querySelector('.sidebar-brand');
+    const isVisible = visibleToggle ? visibleToggle.checked : true;
+    const isAnimated = animToggle ? animToggle.checked : true;
+    const tooltipEnabled = tooltipToggle ? tooltipToggle.checked : true;
+    const opacity = opacitySlider ? parseInt(opacitySlider.value) : 100;
+    // Persist
+    localStorage.setItem('bmm_tasky_visible', String(isVisible));
+    localStorage.setItem('bmm_tasky_animated', String(isAnimated));
+    localStorage.setItem('bmm_tasky_tooltip', String(tooltipEnabled));
+    localStorage.setItem('bmm_tasky_opacity', String(opacity));
+    // Apply visibility - when hidden, show text logo in sidebar like fullscreen
+    if (container)
+        container.style.display = isVisible ? '' : 'none';
+    // Toggle class on body for global styling adjustments (like sidebar logo)
+    if (isVisible)
+        document.body.classList.remove('tasky-hidden');
+    else
+        document.body.classList.add('tasky-hidden');
+    // Sidebar brand: removed redundant fallback logo logic
+    // Animation: when off, make mascot look "stuck" (no shadow, flat)
+    if (mascotImg) {
+        if (isAnimated) {
+            mascotImg.style.animation = '';
+            mascotImg.style.filter = 'drop-shadow(2px 4px 12px rgba(0,0,0,0.6))';
+            mascotImg.style.transform = '';
+            if (container)
+                container.style.animation = 'mascot-bounce 4s ease-in-out infinite';
+        }
+        else {
+            mascotImg.style.animation = 'none';
+            mascotImg.style.filter = 'none';
+            mascotImg.style.transform = 'rotate(0deg)';
+            if (container)
+                container.style.animation = 'none';
+        }
+    }
+    // Tooltip disable
+    window.__taskyTooltipEnabled = tooltipEnabled;
+    // Opacity for the tooltip bubble
+    document.documentElement.style.setProperty('--tasky-bubble-opacity', String(opacity / 100));
+    // Update opacity label
+    const opacityLabel = document.getElementById('tasky-opacity-value');
+    if (opacityLabel)
+        opacityLabel.textContent = opacity + '%';
+};
+// ── Tasky tooltip mouse-follow ───────────────────────────
+(function initTaskyMouseFollow() {
+    // Basic offsets
+    const BASE_OFFSET = 25;
+    const BUSY_OFFSET = 60; // Larger offset when over buttons/dropdowns
+    document.addEventListener('mousemove', (e) => {
+        const bubble = document.querySelector('.tasky-speech-bubble');
+        const container = document.getElementById('tasky-bubble-docs');
+        if (!bubble || !container)
+            return;
+        if (!bubble.classList.contains('active'))
+            return;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        // Use total container width for accurate clamping (mascot + bubble)
+        const tw = container.offsetWidth || 350;
+        const th = container.offsetHeight || 100;
+        const target = e.target;
+        const isBusy = !!target.closest('button, .nav-item, .dropdown-menu, .mod-item-card, .glass-card, .search-mode-pill, .titlebar-controls');
+        // Adaptive offsets: stay close by default
+        const BASE_OFFSET = 25;
+        const BUSY_OFFSET = isBusy ? 85 : BASE_OFFSET;
+        const MARGIN = 10;
+        // 1. Initial Candidate: Bottom-Right
+        let targetX = e.clientX + BUSY_OFFSET;
+        let targetY = e.clientY + BUSY_OFFSET;
+        let isFlippedX = false;
+        let isFlippedY = false;
+        // 2. Horizontal Flip Decision: If more than 30% of tooltip would be hidden on the right
+        if (targetX + tw > vw - MARGIN) {
+            const overflowAmount = (targetX + tw) - (vw - MARGIN);
+            if (overflowAmount > tw * 0.3) {
+                targetX = e.clientX - tw - BUSY_OFFSET;
+                isFlippedX = true;
+            }
+        }
+        // 3. Vertical Flip Decision
+        if (targetY + th > vh - MARGIN) {
+            const overflowAmount = (targetY + th) - (vh - MARGIN);
+            if (overflowAmount > th * 0.3) {
+                targetY = e.clientY - th - (isBusy ? BUSY_OFFSET + 30 : BUSY_OFFSET);
+                isFlippedY = true;
+            }
+        }
+        // 4. Final Clamping: Ensure 100% visibility (if 1% or more is hidden, we push it back)
+        let finalX = Math.max(MARGIN, Math.min(targetX, vw - tw - MARGIN));
+        let finalY = Math.max(MARGIN, Math.min(targetY, vh - th - MARGIN));
+        // 5. Layout adjustment: flip mascot if on left
+        container.style.flexDirection = isFlippedX ? 'row-reverse' : 'row';
+        container.style.position = 'fixed';
+        container.style.left = finalX + 'px';
+        container.style.top = finalY + 'px';
+        container.style.bottom = 'auto';
+        container.style.right = 'auto';
+        container.style.transform = 'none';
+        container.style.zIndex = '999999999';
+    });
+})();
+// ── Restore Tasky preferences on page load ───────────────
+(function initTaskyPrefs() {
+    const container = document.getElementById('app-mascot-container');
+    const mascotImg = document.getElementById('app-mascot');
+    const visibleToggle = document.getElementById('toggle-tasky-visible');
+    const animToggle = document.getElementById('toggle-tasky-animation');
+    const tooltipToggle = document.getElementById('toggle-tasky-tooltip');
+    const opacitySlider = document.getElementById('tasky-opacity-slider');
+    const opacityLabel = document.getElementById('tasky-opacity-value');
+    const isVisible = localStorage.getItem('bmm_tasky_visible') !== 'false';
+    const isAnimated = localStorage.getItem('bmm_tasky_animated') !== 'false';
+    const tooltipEnabled = localStorage.getItem('bmm_tasky_tooltip') !== 'false';
+    const opacity = parseInt(localStorage.getItem('bmm_tasky_opacity') || '100');
+    if (visibleToggle)
+        visibleToggle.checked = isVisible;
+    if (animToggle)
+        animToggle.checked = isAnimated;
+    if (tooltipToggle)
+        tooltipToggle.checked = tooltipEnabled;
+    if (opacitySlider)
+        opacitySlider.value = String(opacity);
+    if (opacityLabel)
+        opacityLabel.textContent = opacity + '%';
+    window.__taskyTooltipEnabled = tooltipEnabled;
+    document.documentElement.style.setProperty('--tasky-bubble-opacity', String(opacity / 100));
+    if (container)
+        container.style.display = isVisible ? '' : 'none';
+    if (mascotImg) {
+        if (isAnimated) {
+            mascotImg.style.filter = 'drop-shadow(2px 4px 12px rgba(0,0,0,0.6))';
+            if (container)
+                container.style.animation = 'mascot-bounce 4s ease-in-out infinite';
+        }
+        else {
+            mascotImg.style.animation = 'none';
+            mascotImg.style.filter = 'none';
+            mascotImg.style.transform = 'rotate(0deg)';
+            if (container)
+                container.style.animation = 'none';
+        }
+    }
+    // Sidebar logo fallback - removed as per request to look like original
+})();
 main().catch(console.error);
 //# sourceMappingURL=app.js.map

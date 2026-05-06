@@ -2541,5 +2541,16 @@
   "mod.addDependency": "Ajouter un mod requis...",
   "mod.folderPlaceholder": "Chemin vers le dossier...",
   "mod.authorPlaceholder": "Auteur...",
-  "mod.addDependencyPlaceholder": "Ajouter un mod requis..."
+  "mod.addDependencyPlaceholder": "Ajouter un mod requis...",
+  "settings.taskyTitle": "Tasky — Mascotte",
+  "settings.taskyVisible": "Afficher Tasky",
+  "settings.taskyVisibleDesc": "Affiche ou masque la mascotte dans le coin de la fenêtre.",
+  "settings.taskyAnimation": "Animation de Tasky",
+  "settings.taskyAnimationDesc": "Active ou désactive l'animation de flottement de la mascotte.",
+  "settings.taskyTooltip": "Bulles d'aide (Tooltips)",
+  "settings.taskyTooltipDesc": "Active ou desactive les bulles d'explication de Tasky au survol.",
+  "settings.taskyOpacity": "Transparence des bulles",
+  "settings.taskyOpacityDesc": "Ajuste l'opacite des bulles d'aide.",
+  "docs.search.classicTip": "Recherche Classique : utilise des mots-clés standard pour trouver des correspondances exactes.",
+  "docs.search.semanticTip": "Recherche Sémantique : utilise l'IA pour comprendre le sens de votre recherche, même sans mots-clés exacts."
 }
