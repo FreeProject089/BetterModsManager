@@ -1184,6 +1184,18 @@ body.is-maximized .titlebar-spacer {
     cursor: pointer;
 }
 
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    z-index: 5000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.18s ease;
+}
+
 .bmm-switch input:checked+.bmm-switch-track {
     background: var(--success);
     border-color: transparent;
@@ -2505,7 +2517,7 @@ body.is-maximized .titlebar-spacer {
     inset: 0;
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(8px);
-    z-index: 2000;
+    z-index: 5000;
     display: none;
     align-items: center;
     justify-content: center;
@@ -7393,3 +7405,12 @@ body.tasky-hidden .titlebar-left {
 body.tasky-hidden .titlebar-left .titlebar-version {
     margin-left: 0;
 }
+
+.tree-item.pending-delete { opacity: 0.6; }
+.tree-item.pending-delete .tree-item-label { text-decoration: line-through; }
+.tree-item.selected, .global-active-mod-item.selected { background: rgba(59, 130, 246, 0.15) !important; border-color: rgba(59, 130, 246, 0.3) !important; box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.2); }
+.global-active-mod-item { transition: all 0.2s ease; cursor: pointer; user-select: none; }
+.global-active-mod-item:hover { background: rgba(255,255,255,0.05); }
+.global-active-mod-item.highlight-mod { background: rgba(59, 130, 246, 0.1); border-color: #3b82f6; }
+.global-active-mod-item.dim-mod { opacity: 0.4; filter: grayscale(0.5); }
+

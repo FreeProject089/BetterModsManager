@@ -297,6 +297,7 @@ fn main() {
             crate::commands::mapper::restructure_mod_item,
             crate::commands::mapper::delete_mod_item,
             crate::commands::mapper::open_item_in_explorer,
+            crate::commands::mapper::open_game_item_in_explorer,
             crate::commands::mapper::create_mod_folder,
             crate::commands::mapper::rename_mod_item,
         ])

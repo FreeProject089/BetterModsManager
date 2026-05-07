@@ -19,6 +19,8 @@ let lastSelectedPath: string | null = null;
 
 // Pending changes (Draft mode)
 let pendingMoves = new Map<string, string>();
+let pendingDeletions = new Set<string>();
+let pendingNewFolders = new Map<string, { parent: string, name: string }>();
 
 // Input Modal State
 let currentInputCallback: ((value: string) => void) | null = null;
@@ -50,6 +52,7 @@ export async function initMapper(): Promise<void> {
         selectedModId = modSelect.value;
         selectedPaths.clear();
         pendingMoves.clear();
+        pendingDeletions.clear();
         updateSaveButtonVisibility();
         updateSelectionCounter();
         
@@ -301,7 +304,7 @@ function toggleAll(containerId: string, expand: boolean): void {
  * Builds a virtual tree reflecting pending moves
  */
 function getVirtualModTree(): FileTreeNode[] {
-    if (pendingMoves.size === 0) return modTreeData;
+    if (pendingMoves.size === 0 && pendingNewFolders.size === 0) return modTreeData;
 
     const virtualTree: FileTreeNode[] = typeof structuredClone === 'function' ? structuredClone(modTreeData) : JSON.parse(JSON.stringify(modTreeData)); // Deep copy
 
@@ -350,6 +353,33 @@ function getVirtualModTree(): FileTreeNode[] {
                     currentLevel = folder.children;
                 }
             });
+        }
+    });
+
+    // 3. Insert pending new folders
+    pendingNewFolders.forEach((data, virtualPath) => {
+        const newNode: FileTreeNode = {
+            name: data.name,
+            path: virtualPath,
+            is_dir: true,
+            children: []
+        };
+
+        if (data.parent === ".") {
+            virtualTree.push(newNode);
+        } else {
+            const findAndInsert = (nodes: FileTreeNode[]) => {
+                for (const node of nodes) {
+                    if (node.path === data.parent || (node.path === "." && data.parent === ".")) {
+                        if (!node.children) node.children = [];
+                        node.children.push(newNode);
+                        return true;
+                    }
+                    if (node.children && findAndInsert(node.children)) return true;
+                }
+                return false;
+            };
+            findAndInsert(virtualTree);
         }
     });
 
@@ -483,6 +513,12 @@ async function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSi
             const target = pendingMoves.get(node.path);
             const targetDisplay = target === "." ? (t('mapper.root') || "Racine") : target;
             label.innerHTML = `${node.name} <span class="pending-badge">→ ${targetDisplay}</span>`;
+        } else if (isModSide && pendingDeletions.has(node.path)) {
+            label.innerHTML = `<span style="text-decoration: line-through; opacity: 0.6;">${node.name}</span> <span class="pending-badge danger" style="background: var(--danger);">${t('common.delete') || 'Supprimer'}</span>`;
+            item.classList.add('pending-delete');
+        } else if (isModSide && pendingNewFolders.has(node.path)) {
+            label.innerHTML = `${node.name} <span class="pending-badge success" style="background: var(--success);">${t('mapper.newBadge') || 'NOUVEAU'}</span>`;
+            item.classList.add('pending-new');
         } else {
             label.textContent = node.name;
         }
@@ -543,9 +579,13 @@ async function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSi
         item.addEventListener('contextmenu', (e) => {
             e.preventDefault(); e.stopPropagation();
             if (!node.path.startsWith('VIRTUAL_')) {
-                if (isModSide && !selectedPaths.has(node.path)) {
-                    selectedPaths.clear(); selectedPaths.add(node.path);
-                    updateSelectionVisuals(); updateSelectionCounter(); updateLiveMappingHighlight();
+                // If the right-clicked item is not already selected, make it the only selection
+                if (!selectedPaths.has(node.path)) {
+                    selectedPaths.clear(); 
+                    selectedPaths.add(node.path);
+                    updateSelectionVisuals(); 
+                    updateSelectionCounter(); 
+                    if (isModSide) updateLiveMappingHighlight();
                 }
                 showContextMenu(e.clientX, e.clientY, node.path, node.is_dir, isModSide);
             }
@@ -575,23 +615,49 @@ function updateSelectionCounter() {
 }
 
 function updateSaveButtonVisibility() {
-    const saveBtn = document.getElementById('btn-mapper-save');
-    if (saveBtn) saveBtn.style.display = pendingMoves.size > 0 ? 'flex' : 'none';
+    const saveBtn = document.getElementById('btn-mapper-save') as HTMLButtonElement;
+    if (saveBtn) {
+        saveBtn.style.display = (pendingMoves.size > 0 || pendingDeletions.size > 0 || pendingNewFolders.size > 0) ? 'flex' : 'none';
+    }
 }
 
 async function applyAllChanges() {
-    if (pendingMoves.size === 0) return;
-    const count = pendingMoves.size;
+    if (pendingMoves.size === 0 && pendingDeletions.size === 0) return;
+    
+    const saveBtn = document.getElementById('btn-mapper-save') as HTMLButtonElement;
+    const originalText = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = `<span class="spinner"></span> ${t('common.saving') || 'Saving...'}`;
+
     try {
-        for (const [source, target] of pendingMoves.entries()) {
-            await invoke('restructure_mod_item', { modId: selectedModId, itemRelPath: source, targetGameFolderRel: target });
+        // 1. Handle new folders
+        for (const [vPath, data] of pendingNewFolders.entries()) {
+            await invoke('create_mod_folder', { modId: selectedModId, parentRelPath: data.parent, folderName: data.name });
         }
-        toast(t("mapper.success"), "success");
+
+        // 2. Handle moves
+        for (const [src, dst] of pendingMoves.entries()) {
+            await invoke('restructure_mod_item', { modId: selectedModId, itemRelPath: src, targetGameFolderRel: dst });
+        }
+        
+        // 3. Handle deletions
+        for (const path of pendingDeletions) {
+            await invoke('delete_mod_item', { modId: selectedModId, itemRelPath: path });
+        }
+
+        toast(t('common.success'), 'success');
         pendingMoves.clear();
+        pendingDeletions.clear();
+        pendingNewFolders.clear();
+        await refreshModTree(true);
         updateSaveButtonVisibility();
-        await refreshModTree();
         selectedPaths.clear(); updateSelectionCounter(); updateSelectionVisuals();
-    } catch (e: any) { toast(e.message || e, "error"); }
+    } catch (e: any) {
+        toast(e.message || e, 'error');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalText;
+    }
 }
 
 function queueMoveTo(targetPath: string) {
@@ -670,13 +736,39 @@ function setupContextMenu() {
         e.stopPropagation(); 
         if (lastSelectedPath) {
             const isModSide = menu.classList.contains('mod-side-active');
-            if (isModSide) await invoke('open_item_in_explorer', { modId: selectedModId, itemRelPath: lastSelectedPath });
-            // For game side, we might want a different command, but for now we skip or add if needed.
+            try {
+                if (isModSide) await invoke('open_item_in_explorer', { modId: selectedModId, itemRelPath: lastSelectedPath });
+                else await invoke('open_game_item_in_explorer', { itemRelPath: lastSelectedPath });
+            } catch (err: any) {
+                toast(err.message || err, 'error');
+            }
         }
         hideContextMenu();
     });
     document.getElementById('ctx-mapper-copy')?.addEventListener('click', (e) => {
-        e.stopPropagation(); if (lastSelectedPath) { navigator.clipboard.writeText(lastSelectedPath); toast(t('mapper.pathCopied') || 'Chemin copié !'); }
+        e.stopPropagation(); 
+        const isModSide = menu.classList.contains('mod-side-active');
+        
+        const getAbsolutePath = (relPath: string) => {
+            if (relPath === ".") {
+                return isModSide ? lastModFolderPath : activeProfile?.game_path;
+            }
+            const root = isModSide ? lastModFolderPath : activeProfile?.game_path;
+            if (!root) return relPath;
+            // Ensure no double slashes
+            const separator = root.endsWith('\\') || root.endsWith('/') ? '' : '\\';
+            return `${root}${separator}${relPath}`;
+        };
+
+        if (selectedPaths.size > 1) { 
+            const paths = Array.from(selectedPaths).map(p => getAbsolutePath(p)).join('\n');
+            navigator.clipboard.writeText(paths); 
+            toast(t('mapper.pathCopiedCount', { count: selectedPaths.size.toString() }) || `${selectedPaths.size} chemin(s) copié(s) !`); 
+        } else if (lastSelectedPath) { 
+            const fullPath = getAbsolutePath(lastSelectedPath);
+            navigator.clipboard.writeText(fullPath || ""); 
+            toast(t('mapper.pathCopied') || 'Chemin copié !'); 
+        }
         hideContextMenu();
     });
     document.getElementById('ctx-mapper-cancel-mapping')?.addEventListener('click', (e) => {
@@ -687,10 +779,18 @@ function setupContextMenu() {
                 if (pendingMoves.has(p)) {
                     pendingMoves.delete(p);
                     count++;
+                } else if (pendingDeletions.has(p)) {
+                    pendingDeletions.delete(p);
+                    count++;
+                } else if (pendingNewFolders.has(p)) {
+                    pendingNewFolders.delete(p);
+                    // Also cancel any moves targeted to this folder?
+                    // (Might be complex, for now just remove the folder)
+                    count++;
                 }
             });
             if (count > 0) {
-                toast(t("mapper.mappingCancelled", { count: count.toString() }), "info");
+                toast(t("mapper.actionCancelled", { count: count.toString() }) || `${count} action(s) annulée(s)`, "info");
                 updateSaveButtonVisibility();
                 renderFilteredModTree();
             }
@@ -701,11 +801,13 @@ function setupContextMenu() {
         e.stopPropagation();
         openInputModal(t("mapper.newFolder"), t("mapper.enterName"), "", async (name) => {
             if (name && selectedModId) {
-                try {
-                    await invoke('create_mod_folder', { modId: selectedModId, parentRelPath: lastSelectedPath || ".", folderName: name });
-                    toast(t("common.saved"), "success"); 
-                    await refreshModTree(true); // Force reload to show new folder
-                } catch (e: any) { toast(e.message || e, "error"); }
+                const parent = lastSelectedPath || ".";
+                const virtualPath = `NEW_${parent}_${name}`;
+                pendingNewFolders.set(virtualPath, { parent, name });
+                
+                toast(t("mapper.folderStaged") || "Dossier planifié pour création", "info");
+                updateSaveButtonVisibility();
+                renderFilteredModTree();
             }
         });
         hideContextMenu();
@@ -745,15 +847,61 @@ function setupContextMenu() {
     document.getElementById('ctx-mapper-delete')?.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (selectedPaths.size > 0) {
-            if (confirm(t("common.confirmDelete"))) {
-                try {
-                    for (const p of selectedPaths) { await invoke('delete_mod_item', { modId: selectedModId, itemRelPath: p }); }
-                    toast(t("common.success"), 'success'); selectedPaths.clear(); await refreshModTree(true); updateSelectionCounter();
-                } catch (e: any) { toast(e.message || e, 'error'); }
-            }
+            const msg = t("mapper.confirmStagedDelete", { count: selectedPaths.size.toString() }) 
+                || `Voulez-vous marquer ${selectedPaths.size} élément(s) pour suppression définitive ? (Sera appliqué lors du clic sur 'Appliquer la structure')`;
+            
+            openConfirmModal(t("common.confirmDelete") || "Confirmation de suppression", msg, () => {
+                const count = selectedPaths.size;
+                selectedPaths.forEach(p => {
+                    pendingDeletions.add(p);
+                    pendingMoves.delete(p); 
+                });
+                selectedPaths.clear();
+                updateSelectionCounter();
+                updateSaveButtonVisibility();
+                renderFilteredModTree();
+                toast(t("mapper.itemsMarkedForDelete", { count: count.toString() }) || `${count} élément(s) marqué(s) pour suppression`, "info");
+            });
         }
         hideContextMenu();
     });
+}
+
+function openConfirmModal(title: string, message: string, onOk: () => void) {
+    const modal = document.getElementById('modal-mapper-confirm');
+    const titleEl = document.getElementById('mapper-confirm-title');
+    const msgEl = document.getElementById('mapper-confirm-message');
+    const okBtn = document.getElementById('btn-mapper-confirm-ok');
+    const cancelBtn = document.getElementById('btn-mapper-confirm-cancel');
+
+    if (!modal || !okBtn || !cancelBtn) return;
+
+    if (titleEl) titleEl.textContent = title;
+    if (msgEl) msgEl.textContent = message;
+    if (okBtn) okBtn.textContent = t("common.confirm") || "Confirmer";
+    if (cancelBtn) cancelBtn.textContent = t("common.cancel") || "Annuler";
+
+    const close = () => {
+        modal.classList.remove('open');
+        okBtn.removeEventListener('click', handleOk);
+        cancelBtn.removeEventListener('click', close);
+        modal.removeEventListener('click', handleOverlayClick);
+    };
+
+    const handleOk = () => {
+        onOk();
+        close();
+    };
+
+    const handleOverlayClick = (e: MouseEvent) => {
+        if (e.target === modal) close();
+    };
+
+    okBtn.addEventListener('click', handleOk);
+    cancelBtn.addEventListener('click', close);
+    modal.addEventListener('click', handleOverlayClick);
+
+    modal.classList.add('open');
 }
 
 function showContextMenu(x: number, y: number, path: string, isDir: boolean, isModSide: boolean) {
@@ -780,12 +928,14 @@ function showContextMenu(x: number, y: number, path: string, isDir: boolean, isM
     if (renameBtn) renameBtn.style.display = (isModSide && !isRoot) ? 'flex' : 'none';
     if (deleteBtn) deleteBtn.style.display = (isModSide && !isRoot) ? 'flex' : 'none';
 
-    // Show "Cancel Mapping" only if at least one selected item is in pendingMoves
+    // Show "Cancel Mapping" only if at least one selected item is in pendingMoves, pendingDeletions or pendingNewFolders
     const cancelMappingBtn = document.getElementById('ctx-mapper-cancel-mapping');
     if (cancelMappingBtn) {
         if (isModSide) {
             let hasPending = false;
-            selectedPaths.forEach(p => { if (pendingMoves.has(p)) hasPending = true; });
+            selectedPaths.forEach(p => { 
+                if (pendingMoves.has(p) || pendingDeletions.has(p) || pendingNewFolders.has(p)) hasPending = true; 
+            });
             cancelMappingBtn.style.display = hasPending ? 'flex' : 'none';
         } else {
             cancelMappingBtn.style.display = 'none';

@@ -297,3 +297,38 @@ pub async fn open_item_in_explorer(
     
     Ok(())
 }
+#[tauri::command]
+pub async fn open_game_item_in_explorer(
+    state: State<'_, AppState>,
+    item_rel_path: String,
+) -> Result<(), AppError> {
+    info!("Opening game item in explorer: {}", item_rel_path);
+    let game_path = {
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        let active_id = data.active_profile_id.as_ref().ok_or_else(|| AppError::NotFound("Aucun profil actif".to_string()))?;
+        let p = data.profiles.iter().find(|p| &p.id == active_id).ok_or_else(|| AppError::NotFound("Profil introuvable".to_string()))?;
+        p.game_path.clone()
+    };
+    
+    let path = if item_rel_path == "." || item_rel_path.is_empty() {
+        game_path
+    } else {
+        game_path.join(&item_rel_path)
+    };
+
+    if !path.exists() {
+        return Err(AppError::NotFound("Chemin introuvable dans le dossier du jeu".to_string()));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        if path.is_dir() {
+            Command::new("explorer").arg(&path).spawn().map_err(|e| e.to_string())?;
+        } else {
+            Command::new("explorer").arg("/select,").arg(&path).spawn().map_err(|e| e.to_string())?;
+        }
+    }
+    
+    Ok(())
+}

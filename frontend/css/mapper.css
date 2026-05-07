@@ -155,8 +155,10 @@
 .modal-generic-overlay .modal.glass {
     transform: translateY(20px);
     transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7), 0 0 50px rgba(59, 130, 246, 0.1);
-    overflow: hidden;
+    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6), 0 0 40px rgba(59, 130, 246, 0.1);
+    background: rgba(15, 15, 20, 0.85);
+    backdrop-filter: blur(25px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .modal-generic-overlay.open .modal.glass {
@@ -255,11 +257,34 @@
     font-size: 0.7rem;
     background: var(--accent);
     color: white;
-    padding: 2px 6px;
+    padding: 2px 8px;
     border-radius: 10px;
     margin-left: 8px;
     font-style: normal;
     font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+.pending-badge.danger {
+    background: rgba(239, 68, 68, 0.2) !important;
+    color: #ff6b6b !important;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.pending-badge.success {
+    background: rgba(16, 185, 129, 0.2) !important;
+    color: #34d399 !important;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.pending-delete .tree-item-label span {
+    opacity: 0.5;
+}
+
+.pending-new .tree-item-icon {
+    color: var(--success);
 }
 
 .root-target-item.mod-root-target {

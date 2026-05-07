@@ -51,7 +51,11 @@ pub fn set_discord_presence(
             .state(&status)
             .assets(discord_rich_presence::activity::Assets::new()
                 .large_image("bmm_logo")
-                .large_text(&version_text));
+                .large_text(&version_text))
+            .buttons(vec![
+                discord_rich_presence::activity::Button::new("Website", "https://freeproject089.github.io/BMM_Web/"),
+                discord_rich_presence::activity::Button::new("GitHub", "https://github.com/FreeProject089/BetterModsManager"),
+            ]);
 
         let _ = client.set_activity(payload);
     }

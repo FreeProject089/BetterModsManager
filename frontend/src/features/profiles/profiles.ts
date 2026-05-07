@@ -9,6 +9,8 @@ import { refreshMods } from '../mods/mods.js';
 import { t, applyTranslations } from '../../core/i18n.js';
 
 window.pendingBgState = { action: null, tmpPath: null }; // Tracks 'apply', 'remove', or null
+let selectedGlobalModIds = new Set();
+let lastClickedGlobalModId = null;
 
 export async function initProfiles() {
     document.getElementById('btn-new-profile').addEventListener('click', openNewProfileModal);
@@ -164,7 +166,93 @@ export async function initProfiles() {
 
     window._refreshProfilesFn = renderProfiles;
 
+    // Global Active Mods actions
+    const btnDisableAllGlobal = document.getElementById('btn-disable-all-global');
+    if (btnDisableAllGlobal) {
+        btnDisableAllGlobal.addEventListener('click', async () => {
+            const activeModsContainer = document.getElementById('global-active-mods-list');
+            const items = activeModsContainer.querySelectorAll('.global-active-mod-item');
+            if (items.length === 0) return;
+            
+            const msg = t('prof.confirmDisableAllGlobal') || 'Voulez-vous désactiver tous les mods actifs (globalement) ?';
+            const title = t('common.confirm') || 'Confirmation';
+            
+            openGenericConfirm(title, msg, async () => {
+                const modIds = Array.from(items).map(item => item.dataset.modId);
+                await disableGlobalMods(modIds);
+            });
+        });
+    }
+
+    // Global Context Menu click outside
+    document.addEventListener('mousedown', (e) => {
+        const menu = document.getElementById('global-mods-context-menu');
+        if (menu && menu.style.display === 'block') {
+            if (!e.target.closest('#global-mods-context-menu')) {
+                menu.style.display = 'none';
+            }
+        }
+    });
+
+    // Global Context Menu actions
+    document.getElementById('ctx-global-mod-disable')?.addEventListener('click', async () => {
+        if (lastClickedGlobalModId) {
+            await disableGlobalMods([lastClickedGlobalModId]);
+        }
+        document.getElementById('global-mods-context-menu').style.display = 'none';
+    });
+
+    document.getElementById('ctx-global-mod-disable-selected')?.addEventListener('click', async () => {
+        if (selectedGlobalModIds.size > 0) {
+            await disableGlobalMods(Array.from(selectedGlobalModIds));
+            selectedGlobalModIds.clear();
+        }
+        document.getElementById('global-mods-context-menu').style.display = 'none';
+    });
+
     await renderProfiles();
+}
+
+async function disableGlobalMods(modIds) {
+    if (!modIds || modIds.length === 0) return;
+    
+    // Show a global loader if many mods
+    const wasLoading = document.body.classList.contains('loading');
+    if (modIds.length > 5) document.body.classList.add('loading');
+
+    try {
+        const profiles = await invoke('get_profiles');
+        const activeProfileId = await invoke('get_active_profile_id');
+        
+        for (const modId of modIds) {
+            // Find all profiles where it is active
+            const targetProfiles = profiles.filter(p => Array.isArray(p.active_mods) && p.active_mods.includes(modId));
+            
+            for (const p of targetProfiles) {
+                // If it's the active profile, we can use the regular disable_mod
+                // Otherwise we might need to set it directly in the profile data
+                // But the backend `disable_mod` actually syncs all profiles on the same root!
+                // So calling it once per root is enough.
+                
+                // For simplicity, we'll try to use the most "correct" one.
+                // If the mod is in the active profile's mods_path, we use it.
+                await invoke('disable_mod', { modId }); 
+                // Wait, disable_mod takes (window, state, mod_id). 
+                // The frontend invoke only passes mod_id.
+                // It uses the active profile in the backend.
+            }
+        }
+        
+        toast(t('prof.modsDisabled', { count: modIds.length }) || `${modIds.length} mods désactivés`, 'success');
+        await renderProfiles();
+        
+        const { refreshMods } = await import('../mods/mods.js');
+        await refreshMods(true);
+    } catch (err) {
+        toast(t('common.error') + ' : ' + err, 'error');
+    } finally {
+        if (!wasLoading) document.body.classList.remove('loading');
+    }
 }
 
 const AVAILABLE_ICONS = [
@@ -697,30 +785,98 @@ export async function renderProfiles() {
         
         // Click to highlight profile
         modItems.forEach(item => {
+            const modId = item.dataset.modId;
+            
             item.addEventListener('click', (e) => {
-                const isActive = item.classList.contains('highlight-mod');
+                e.stopPropagation();
                 
-                // Reset all
-                modItems.forEach(mi => mi.classList.remove('highlight-mod', 'dim-mod'));
-                profileCards.forEach(pc => pc.classList.remove('highlight-profile', 'dim-profile'));
-                
-                if (!isActive) {
-                    item.classList.add('highlight-mod');
-                    const pIds = JSON.parse(item.dataset.profileIds || '[]');
-                    
-                    profileCards.forEach(pc => {
-                        if (pIds.includes(pc.dataset.id)) {
-                            pc.classList.add('highlight-profile');
-                        } else {
-                            pc.classList.add('dim-profile');
+                if (e.ctrlKey) {
+                    // Multi-select logic
+                    // If we were just highlighting one mod without having it in the selection set, add it first
+                    const currentHighlight = document.querySelector('.global-active-mod-item.highlight-mod');
+                    if (currentHighlight && selectedGlobalModIds.size === 0) {
+                        const hId = (currentHighlight as HTMLElement).dataset.id;
+                        if (hId) {
+                            selectedGlobalModIds.add(hId);
+                            currentHighlight.classList.add('selected');
+                            currentHighlight.classList.remove('highlight-mod');
                         }
-                    });
+                    }
+
+                    if (selectedGlobalModIds.has(modId)) {
+                        selectedGlobalModIds.delete(modId);
+                        item.classList.remove('selected');
+                    } else {
+                        selectedGlobalModIds.add(modId);
+                        item.classList.add('selected');
+                    }
+
+                    // Remove all dim/highlight states when in multi-select mode
+                    modItems.forEach(mi => mi.classList.remove('highlight-mod', 'dim-mod'));
+                    profileCards.forEach(pc => pc.classList.remove('highlight-profile', 'dim-profile'));
+
+                } else {
+                    // Single select / highlight
+                    const isAlreadyHighlighted = item.classList.contains('highlight-mod');
                     
-                    modItems.forEach(mi => {
-                        if (mi !== item) mi.classList.add('dim-mod');
-                    });
+                    // Reset all
+                    modItems.forEach(mi => mi.classList.remove('highlight-mod', 'dim-mod', 'selected'));
+                    profileCards.forEach(pc => pc.classList.remove('highlight-profile', 'dim-profile'));
+                    selectedGlobalModIds.clear();
+                    
+                    if (!isAlreadyHighlighted) {
+                        item.classList.add('highlight-mod');
+                        const pIds = JSON.parse(item.dataset.profileIds || '[]');
+                        
+                        profileCards.forEach(pc => {
+                            if (pIds.includes(pc.dataset.id)) {
+                                pc.classList.add('highlight-profile');
+                            } else {
+                                pc.classList.add('dim-profile');
+                            }
+                        });
+                        
+                        modItems.forEach(mi => {
+                            if (mi !== item) mi.classList.add('dim-mod');
+                        });
+                    }
                 }
             });
+            
+            item.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                lastClickedGlobalModId = modId;
+                
+                const menu = document.getElementById('global-mods-context-menu');
+                if (!menu) return;
+                
+                // Show "Disable Selected" only if multiple items are selected
+                const selectedItem = document.getElementById('ctx-global-mod-disable-selected');
+                if (selectedItem) {
+                    selectedItem.style.display = selectedGlobalModIds.size > 1 ? 'flex' : 'none';
+                }
+                
+                menu.style.display = 'block';
+                
+                // Positioning
+                const menuWidth = 200;
+                const menuHeight = menu.offsetHeight || 100;
+                let x = e.clientX;
+                let y = e.clientY;
+                
+                if (x + menuWidth > window.innerWidth) x -= menuWidth;
+                if (y + menuHeight > window.innerHeight) y -= menuHeight;
+                
+                menu.style.left = `${x}px`;
+                menu.style.top = `${y}px`;
+            });
+            
+            // Restore selection state if re-rendered
+            if (selectedGlobalModIds.has(modId)) {
+                item.classList.add('selected');
+            }
         });
         
         // Click profile to highlight its active mods
@@ -1062,4 +1218,34 @@ function escAttr(str) {
         .replace(/"/g, '&quot;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+}
+function openGenericConfirm(title, message, onConfirm) {
+    const modal = document.getElementById('modal-confirm-generic');
+    if (!modal) return;
+
+    const titleEl = modal.querySelector('.modal-title');
+    const msgEl = modal.querySelector('#confirm-generic-message');
+    const okBtn = modal.querySelector('#btn-confirm-generic-ok');
+    const cancelBtn = modal.querySelector('#btn-confirm-generic-cancel');
+
+    if (titleEl) titleEl.textContent = title;
+    if (msgEl) msgEl.textContent = message;
+    if (okBtn) okBtn.textContent = t('common.confirm') || 'Confirmer';
+    if (cancelBtn) cancelBtn.textContent = t('common.cancel') || 'Annuler';
+
+    const cleanup = () => {
+        modal.classList.remove('open');
+        okBtn.removeEventListener('click', handleOk);
+        cancelBtn.removeEventListener('click', cleanup);
+    };
+
+    const handleOk = () => {
+        onConfirm();
+        cleanup();
+    };
+
+    okBtn.addEventListener('click', handleOk);
+    cancelBtn.addEventListener('click', cleanup);
+
+    modal.classList.add('open');
 }
