@@ -9,6 +9,7 @@ import { t, applyTranslations } from '../../core/i18n.js';
 window.pendingBgState = { action: null, tmpPath: null }; // Tracks 'apply', 'remove', or null
 let selectedGlobalModIds = new Set();
 let lastClickedGlobalModId = null;
+let allModsCache = []; // Global cache for all mods
 export async function initProfiles() {
     document.getElementById('btn-new-profile').addEventListener('click', openNewProfileModal);
     document.getElementById('btn-confirm-profile').addEventListener('click', confirmCreateProfile);
@@ -228,6 +229,8 @@ async function disableGlobalMods(modIds) {
             }
         }
         toast(t('prof.modsDisabled', { count: modIds.length }) || `${modIds.length} mods désactivés`, 'success');
+        // Force cache refresh by clearing it before re-rendering
+        allModsCache = [];
         await renderProfiles();
         const { refreshMods } = await import('../mods/mods.js');
         await refreshMods(true);
@@ -430,7 +433,6 @@ export async function renderProfiles() {
         invoke('get_active_profile_id'),
     ]);
     // Fetch all mods for count display
-    let allModsCache = [];
     try {
         allModsCache = await invoke('get_all_mods');
     }

@@ -2584,6 +2584,7 @@
   "settings.export.tags": "Custom Tags",
   "settings.export.tagsDesc": "Exports your custom tags and colors.",
   "prof.allActiveMods": "Active Mods (Global)",
+  "prof.modsDisabled": "{count} mod(s) disabled",
   "mod.addDependency": "Add a required mod...",
   "mod.folderPlaceholder": "Path to the folder...",
   "mod.authorPlaceholder": "Author...",

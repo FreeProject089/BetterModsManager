@@ -11,6 +11,7 @@ import { t, applyTranslations } from '../../core/i18n.js';
 window.pendingBgState = { action: null, tmpPath: null }; // Tracks 'apply', 'remove', or null
 let selectedGlobalModIds = new Set();
 let lastClickedGlobalModId = null;
+let allModsCache = []; // Global cache for all mods
 
 export async function initProfiles() {
     document.getElementById('btn-new-profile').addEventListener('click', openNewProfileModal);
@@ -244,6 +245,9 @@ async function disableGlobalMods(modIds) {
         }
         
         toast(t('prof.modsDisabled', { count: modIds.length }) || `${modIds.length} mods désactivés`, 'success');
+        
+        // Force cache refresh by clearing it before re-rendering
+        allModsCache = [];
         await renderProfiles();
         
         const { refreshMods } = await import('../mods/mods.js');
@@ -452,7 +456,6 @@ export async function renderProfiles() {
     ]);
 
     // Fetch all mods for count display
-    let allModsCache = [];
     try { allModsCache = await invoke('get_all_mods'); } catch { }
 
     // Badge
