@@ -3894,33 +3894,15 @@
                             </p>
                         </div>
 
-                        <!-- INFO CARDS GRID -->
-                        <div class="credit-info-grid">
-                            <div class="credit-info-card credit-info-card-full glass-card">
-                                <img src="assets/pfp.webp" alt="FreeProject089" class="credit-author-avatar" />
-                                <div>
-                                    <div class="credit-info-label credit-info-label-sub" data-i18n="credits.author">
-                                        AUTEUR</div>
-                                    <div class="credit-info-value credit-info-value-large">
-                                        FreeProject089</div>
-                                    <div class="credit-info-sub credit-info-sub-muted" data-i18n="credits.devRole">
-                                        Créateur
-                                        &
-                                        Développeur</div>
-                                </div>
-                            </div>
+                        <!-- CUSTOM MESSAGES MARQUEE -->
+                        <div class="credits-marquee-container" id="credits-marquee-container">
+                            <!-- Injected by JS -->
+                        </div>
 
-                            <div class="credit-info-card credit-info-card-full glass-card">
-                                <div class="credit-rust-icon-box">
-                                    <img src="assets/rust-logo.svg" alt="Rust" class="credit-rust-logo" />
-                                </div>
-                                <div class="credit-info-text">
-                                    <div class="credit-info-label credit-info-label-sub" data-i18n="credits.rustLabel">
-                                        RUST ARCHITECTURE</div>
-                                    <div class="credit-info-value credit-info-value-main" data-i18n="credits.rustSub">
-                                        Moteur robuste : Sécurité mémoire & Performance brute</div>
-                                </div>
-                            </div>
+                        <!-- CONTRIBUTORS SECTION -->
+                        <h2 class="contributors-title" data-i18n="credits.contributors">Contributeurs</h2>
+                        <div class="contributors-grid" id="contributors-grid">
+                            <!-- Injected by JS -->
                         </div>
 
                         <!-- COMMUNITY LINKS CARD (IMAGE 4) -->
@@ -7087,6 +7069,18 @@
         </div>
     </div>
 
+
+    <!-- Modal for Contributor Details -->
+    <div id="modal-contributor-detail" class="modal-generic-overlay" onclick="if(event.target === this) this.classList.remove('open')">
+        <div class="modal glass" style="width: 550px; max-width: 95vw; border-radius: 24px; border: 1px solid rgba(255,255,255,0.15);">
+            <div class="modal-header" style="border: none; padding: 25px 30px 10px;">
+                <button class="modal-close" onclick="document.getElementById('modal-contributor-detail').classList.remove('open')" style="top: 25px; right: 25px; font-size: 28px;">&times;</button>
+            </div>
+            <div class="modal-body" id="contributor-modal-content" style="padding: 0 30px 40px;">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+    </div>
 
 </body>
 

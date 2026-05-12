@@ -478,6 +478,7 @@ async function main() {
     await initMods();
     await updateProfileChip();
     await updateLibraryProfileSelector();
+    initCredits();
 
     // Show happy tasky when everything is ready
     const loaderImg = document.getElementById('loader-img');
@@ -750,5 +751,114 @@ window.applyTaskySettings = function() {
 
     // Sidebar logo fallback - removed as per request to look like original
 })();
+
+// ── Credits & Contributors ──────────────────────────────
+const CONTRIBUTORS = [
+    {
+        id: 'freeproject',
+        username: 'FreeProject089',
+        pfp: 'assets/pfp.webp',
+        role: 'contributor.freeproject.role',
+        description: 'contributor.freeproject.msg',
+        github: 'https://github.com/FreeProject089',
+        website: 'https://freeproject089.github.io/BMM_Web/'
+    },
+    {
+        id: 'c0c0_1er',
+        username: 'c0c0_1er',
+        pfp: 'assets/pfpc0c0.png',
+        role: 'contributor.c0c0_1er.role',
+        description: 'contributor.c0c0_1er.msg',
+        github: 'https://github.com/WarGameRP'
+    }
+];
+
+const CREDITS_MESSAGES = [
+    "Better Mods Manager — Modern Modding for DCS World",
+    "Join our Discord community for support and updates",
+    "Thank you for using BMM! Your feedback matters.",
+    "Project source code is available on GitHub"
+];
+
+function initCredits() {
+    const marqueeContainer = document.getElementById('credits-marquee-container');
+    const contributorsGrid = document.getElementById('contributors-grid');
+
+    if (marqueeContainer) {
+        let msgIndex = 0;
+        const updateMarquee = () => {
+            // Remove old content to restart animation
+            marqueeContainer.innerHTML = '';
+            const msg = document.createElement('div');
+            msg.className = 'credits-marquee-content';
+            msg.innerHTML = `<span class="marquee-msg">${CREDITS_MESSAGES[msgIndex]}</span>`;
+            marqueeContainer.appendChild(msg);
+            
+            msgIndex = (msgIndex + 1) % CREDITS_MESSAGES.length;
+        };
+        updateMarquee();
+        setInterval(updateMarquee, 10000); // Must match CSS animation duration
+    }
+
+    if (contributorsGrid) {
+        contributorsGrid.innerHTML = CONTRIBUTORS.map(c => `
+            <div class="contributor-card glass-card" onclick="openContributorModal('${c.id}')">
+                <div class="contributor-pfp-box">
+                    <img src="${c.pfp}" class="contributor-pfp" alt="${c.username}">
+                </div>
+                <div class="contributor-name">${c.username}</div>
+                <div class="contributor-role" data-i18n="${c.role}">${t(c.role)}</div>
+            </div>
+        `).join('');
+    }
+
+    // Language change support
+    document.addEventListener('langChanged', () => {
+        if (contributorsGrid) {
+            contributorsGrid.querySelectorAll('.contributor-role').forEach(el => {
+                const key = el.dataset.i18n;
+                if (key) el.textContent = t(key);
+            });
+        }
+    });
+}
+
+(window as any).openContributorModal = (id: string) => {
+    const c = CONTRIBUTORS.find(x => x.id === id);
+    if (!c) return;
+
+    const modal = document.getElementById('modal-contributor-detail');
+    const content = document.getElementById('contributor-modal-content');
+    if (!modal || !content) return;
+
+    content.innerHTML = `
+        <div class="contributor-modal-hero">
+            <img src="${c.pfp}" class="contributor-modal-pfp">
+            <div class="contributor-modal-info">
+                <h2>${c.username}</h2>
+                <p data-i18n="${c.role}">${t(c.role)}</p>
+            </div>
+        </div>
+        <div class="contributor-modal-bio" data-i18n="${c.description}">
+            ${t(c.description)}
+        </div>
+        <div class="contributor-modal-links">
+            ${c.github ? `
+                <a href="${c.github}" target="_blank" class="contributor-link-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                    GitHub
+                </a>
+            ` : ''}
+            ${c.website ? `
+                <a href="${c.website}" target="_blank" class="contributor-link-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    Website
+                </a>
+            ` : ''}
+        </div>
+    `;
+
+    modal.classList.add('open');
+};
 
 main().catch(console.error);
