@@ -301,9 +301,57 @@ function fixClusterLabels() {
  * @param {string} iconClass - The CSS class for the eyes icon
  * @param {boolean} isLiteral - If true, treats the key as literal text
  */
+let tooltipTimeout: number | null = null;
+let hideTimeout: number | null = null;
+let isTooltipVisible = false;
+let lastTooltipKey: string | null = null;
+let lastTooltipIcon: string | null = null;
+let lastTooltipLiteral: boolean = false;
+
 export function showTaskyHelp(key, iconClass = 'info', isLiteral = false) {
     // Respect user preference to disable tooltips
     if ((window as any).__taskyTooltipEnabled === false) return;
+
+    // Don't show tooltips when dropdown is open
+    if ((window as any).__dropdownOpen === true) return;
+
+    // Clear any pending hide timeout
+    if (hideTimeout) {
+        clearTimeout(hideTimeout);
+        hideTimeout = null;
+    }
+
+    // If tooltip is already showing with same content, don't re-trigger
+    if (isTooltipVisible && 
+        lastTooltipKey === key && 
+        lastTooltipIcon === iconClass && 
+        lastTooltipLiteral === isLiteral) {
+        return;
+    }
+
+    // Clear any existing show timeout
+    if (tooltipTimeout) {
+        clearTimeout(tooltipTimeout);
+    }
+
+    // Increased debounce to better filter out rapid hover changes
+    tooltipTimeout = window.setTimeout(() => {
+        // Double-check dropdown state before showing
+        if ((window as any).__dropdownOpen === true) return;
+        
+        lastTooltipKey = key;
+        lastTooltipIcon = iconClass;
+        lastTooltipLiteral = isLiteral;
+        isTooltipVisible = true;
+        showTooltipImpl(key, iconClass, isLiteral);
+        tooltipTimeout = null;
+    }, 80); // Increased to 80ms for better stability
+}
+
+/**
+ * Internal implementation for showing tooltip
+ */
+function showTooltipImpl(key: string, iconClass: string, isLiteral: boolean) {
 
     const bubble = document.querySelector('.tasky-speech-bubble');
     const eyes = document.getElementById('tasky-bubble-eyes');
@@ -368,23 +416,44 @@ export function showTaskyHelp(key, iconClass = 'info', isLiteral = false) {
  * Hide Tasky explanation bubble globally
  */
 export function hideTaskyHelp() {
-    const bubble = document.querySelector('.tasky-speech-bubble');
-    const taskyContainer = document.getElementById('tasky-bubble-docs');
-    const modal = document.getElementById('modal-docs-diagram');
-
-    if (bubble) {
-        bubble.classList.remove('active');
-        // Immediately disable pointer events when hiding
-        bubble.style.pointerEvents = 'none';
+    // Clear any pending show timeout
+    if (tooltipTimeout) {
+        clearTimeout(tooltipTimeout);
+        tooltipTimeout = null;
     }
-    updateTaskyMascot('Tasky.png');
 
-    // If modal is NOT active, hide the whole container immediately
-    if (taskyContainer && (!modal || !modal.classList.contains('active'))) {
-        taskyContainer.style.opacity = '0';
-        taskyContainer.style.pointerEvents = 'none';
-        taskyContainer.style.display = 'none';
+    // Clear any existing hide timeout
+    if (hideTimeout) {
+        clearTimeout(hideTimeout);
     }
+
+    // Debounce hide to prevent flickering during rapid hover changes
+    hideTimeout = window.setTimeout(() => {
+        const bubble = document.querySelector('.tasky-speech-bubble');
+        const taskyContainer = document.getElementById('tasky-bubble-docs');
+        const modal = document.getElementById('modal-docs-diagram');
+
+        if (bubble) {
+            bubble.classList.remove('active');
+            // Immediately disable pointer events when hiding
+            bubble.style.pointerEvents = 'none';
+        }
+        updateTaskyMascot('Tasky.png');
+
+        // If modal is NOT active, hide whole container immediately
+        if (taskyContainer && (!modal || !modal.classList.contains('active'))) {
+            taskyContainer.style.opacity = '0';
+            taskyContainer.style.pointerEvents = 'none';
+            taskyContainer.style.display = 'none';
+        }
+
+        // Reset state
+        isTooltipVisible = false;
+        lastTooltipKey = null;
+        lastTooltipIcon = null;
+        lastTooltipLiteral = false;
+        hideTimeout = null;
+    }, 30); // 30ms debounce for hide
 }
 
 /**

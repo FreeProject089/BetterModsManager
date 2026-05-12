@@ -657,10 +657,10 @@ window.applyTaskySettings = function() {
         const isDropdown = !!target.closest('#global-dropdown-portal, .mod-actions-dropdown-content, .dropdown-menu, .dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod, .btn-open-source-folder');
         const isBusy = !!target.closest('button, .nav-item, .dropdown-menu, .mod-item-card, .glass-card, .search-mode-pill, .titlebar-controls');
         
-        // Adaptive offsets: stay close by default
-        const BASE_OFFSET = 12;
-        const BUSY_OFFSET = isBusy ? 32 : BASE_OFFSET;
-        const MARGIN = 15;
+        // Adaptive offsets: increased to avoid overlap with dropdowns
+        const BASE_OFFSET = 20;
+        const BUSY_OFFSET = isBusy ? 40 : BASE_OFFSET;
+        const MARGIN = 20;
 
         // 1. Initial Candidate: Bottom-Right
         let targetX = e.clientX + BUSY_OFFSET;
@@ -671,7 +671,7 @@ window.applyTaskySettings = function() {
 
         // Force position ABOVE if inside a dropdown to avoid obscuring other items
         if (isDropdown) {
-            targetY = e.clientY - th - BUSY_OFFSET;
+            targetY = e.clientY - th - BUSY_OFFSET - 10; // Extra spacing from dropdown
             isFlippedY = true;
         }
 

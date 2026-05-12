@@ -147,8 +147,9 @@ window.showGlobalDropdown = (btn: HTMLElement, menu: HTMLElement): void => {
 
     const rect = btn.getBoundingClientRect();
     clone.style.position = 'fixed';
-    clone.style.top = (rect.bottom + 6) + 'px'; // Slightly more gap
-    clone.style.left = (rect.left) + 'px';
+    clone.style.top = (rect.bottom - 5) + 'px'; // Moved up to prevent overlap with tooltip
+    clone.style.right = (window.innerWidth - rect.right) + 'px'; // Align to right edge instead of left
+    clone.style.left = 'auto'; // Prevent left/right conflict
     clone.style.pointerEvents = 'auto';
 
     // Hover-out closing behavior & click outside
@@ -186,7 +187,24 @@ window.showGlobalDropdown = (btn: HTMLElement, menu: HTMLElement): void => {
     };
 
     clone.querySelectorAll('.dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod').forEach(item => {
-        (item as HTMLElement).onclick = (e: MouseEvent) => {
+        const element = item as HTMLElement;
+        
+        // Prevent tooltip conflicts on dropdown items
+        element.addEventListener('mouseenter', (e) => {
+            e.stopPropagation();
+            // Temporarily disable tooltips when dropdown is open
+            (window as any).__dropdownOpen = true;
+        });
+        
+        element.addEventListener('mouseleave', (e) => {
+            e.stopPropagation();
+            // Re-enable tooltips after leaving dropdown
+            setTimeout(() => {
+                (window as any).__dropdownOpen = false;
+            }, 100);
+        });
+        
+        element.onclick = (e: MouseEvent) => {
             e.stopPropagation();
             const originalItems = Array.from(menu.querySelectorAll('*'));
             const idx = Array.from(clone.querySelectorAll('*')).indexOf(item);
@@ -202,7 +220,9 @@ window.closeGlobalDropdown = (immediate: boolean = false): void => {
     if ((window as any).globalDropdownCleanup) {
         (window as any).globalDropdownCleanup();
     }
-
+    // Reset dropdown state to allow tooltips again
+    (window as any).__dropdownOpen = false;
+    (window as any).currentDropdownBtn = null;
     const portal = document.getElementById('global-dropdown-portal');
     const menu = portal?.querySelector('.mod-actions-dropdown-content') as HTMLElement | null;
 

@@ -114,8 +114,9 @@ window.showGlobalDropdown = (btn, menu) => {
     portal.appendChild(clone);
     const rect = btn.getBoundingClientRect();
     clone.style.position = 'fixed';
-    clone.style.top = (rect.bottom + 6) + 'px'; // Slightly more gap
-    clone.style.left = (rect.left) + 'px';
+    clone.style.top = (rect.bottom - 5) + 'px'; // Moved up to prevent overlap with tooltip
+    clone.style.right = (window.innerWidth - rect.right) + 'px'; // Align to right edge instead of left
+    clone.style.left = 'auto'; // Prevent left/right conflict
     clone.style.pointerEvents = 'auto';
     // Hover-out closing behavior & click outside
     let hoverTimeout;
@@ -149,7 +150,21 @@ window.showGlobalDropdown = (btn, menu) => {
         window.globalDropdownCleanup = null;
     };
     clone.querySelectorAll('.dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod').forEach(item => {
-        item.onclick = (e) => {
+        const element = item;
+        // Prevent tooltip conflicts on dropdown items
+        element.addEventListener('mouseenter', (e) => {
+            e.stopPropagation();
+            // Temporarily disable tooltips when dropdown is open
+            window.__dropdownOpen = true;
+        });
+        element.addEventListener('mouseleave', (e) => {
+            e.stopPropagation();
+            // Re-enable tooltips after leaving dropdown
+            setTimeout(() => {
+                window.__dropdownOpen = false;
+            }, 100);
+        });
+        element.onclick = (e) => {
             e.stopPropagation();
             const originalItems = Array.from(menu.querySelectorAll('*'));
             const idx = Array.from(clone.querySelectorAll('*')).indexOf(item);
@@ -164,6 +179,9 @@ window.closeGlobalDropdown = (immediate = false) => {
     if (window.globalDropdownCleanup) {
         window.globalDropdownCleanup();
     }
+    // Reset dropdown state to allow tooltips again
+    window.__dropdownOpen = false;
+    window.currentDropdownBtn = null;
     const portal = document.getElementById('global-dropdown-portal');
     const menu = portal?.querySelector('.mod-actions-dropdown-content');
     if (immediate) {
