@@ -695,10 +695,10 @@ const CONTRIBUTORS = [
     }
 ];
 const CREDITS_MESSAGES = [
-    "Better Mods Manager — Modern Modding for DCS World",
-    "Join our Discord community for support and updates",
-    "Thank you for using BMM! Your feedback matters.",
-    "Project source code is available on GitHub"
+    "credits.msg1",
+    "credits.msg2",
+    "credits.msg3",
+    "credits.msg4"
 ];
 function initCredits() {
     const marqueeContainer = document.getElementById('credits-marquee-container');
@@ -706,16 +706,20 @@ function initCredits() {
     if (marqueeContainer) {
         let msgIndex = 0;
         const updateMarquee = () => {
-            // Remove old content to restart animation
-            marqueeContainer.innerHTML = '';
-            const msg = document.createElement('div');
-            msg.className = 'credits-marquee-content';
-            msg.innerHTML = `<span class="marquee-msg">${CREDITS_MESSAGES[msgIndex]}</span>`;
-            marqueeContainer.appendChild(msg);
+            const key = CREDITS_MESSAGES[msgIndex];
+            const newContent = `<div class="credits-marquee-content"><span class="marquee-msg">${t(key) || key}</span></div>`;
+            // If first run, just set it
+            if (marqueeContainer.children.length === 0) {
+                marqueeContainer.innerHTML = newContent;
+            }
+            else {
+                // Smooth replacement: the CSS animation handles the entry/exit
+                marqueeContainer.innerHTML = newContent;
+            }
             msgIndex = (msgIndex + 1) % CREDITS_MESSAGES.length;
         };
         updateMarquee();
-        setInterval(updateMarquee, 10000); // Must match CSS animation duration
+        setInterval(updateMarquee, 7000); // Must match CSS animation duration (7s)
     }
     if (contributorsGrid) {
         contributorsGrid.innerHTML = CONTRIBUTORS.map(c => `
@@ -739,6 +743,53 @@ function initCredits() {
         }
     });
 }
+window.openStackModal = () => {
+    const modal = document.getElementById('modal-stack');
+    const content = document.getElementById('stack-modal-content');
+    if (!modal || !content)
+        return;
+    const backend = [
+        { name: "Tauri", v: "1.0", key: "tauri", url: "https://tauri.app/" },
+        { name: "Serde", v: "1.0", key: "serde", url: "https://serde.rs/" },
+        { name: "Tokio", v: "1.0", key: "tokio", url: "https://tokio.rs/" },
+        { name: "Reqwest", v: "0.11", key: "reqwest", url: "https://github.com/seanmonstar/reqwest" },
+        { name: "Walkdir", v: "2.0", key: "walkdir", url: "https://github.com/BurntSushi/walkdir" },
+        { name: "SHA2", v: "0.10", key: "sha2", url: "https://github.com/RustCrypto/hashes" },
+        { name: "Discord RP", v: "0.2", key: "discord-rich-presence", url: "https://github.com/vionya/discord-rich-presence" }
+    ];
+    const frontend = [
+        { name: "TypeScript", v: "5.7", key: "typescript", url: "https://www.typescriptlang.org/" },
+        { name: "TanStack Query", v: "5.0", key: "tanstack-query", url: "https://tanstack.com/query/latest" },
+        { name: "Cheerio", v: "1.2", key: "cheerio", url: "https://cheerio.js.org/" }
+    ];
+    content.innerHTML = `
+        <div class="stack-section-title" data-i18n="credits.stackBackend">${t('credits.stackBackend')}</div>
+        <div class="stack-grid">
+            ${backend.map(item => `
+                <div class="stack-item" style="cursor:pointer" onclick="window.open('${item.url}', '_blank')">
+                    <div class="stack-item-header">
+                        <span class="stack-item-name">${item.name}</span>
+                        <span class="stack-item-version">${item.v}</span>
+                    </div>
+                    <div class="stack-item-desc" data-i18n="credits.stackCrate.${item.key}">${t(`credits.stackCrate.${item.key}`)}</div>
+                </div>
+            `).join('')}
+        </div>
+        <div class="stack-section-title" data-i18n="credits.stackFrontend">${t('credits.stackFrontend')}</div>
+        <div class="stack-grid">
+            ${frontend.map(item => `
+                <div class="stack-item" style="cursor:pointer" onclick="window.open('${item.url}', '_blank')">
+                    <div class="stack-item-header">
+                        <span class="stack-item-name">${item.name}</span>
+                        <span class="stack-item-version">${item.v}</span>
+                    </div>
+                    <div class="stack-item-desc" data-i18n="credits.stackPkg.${item.key}">${t(`credits.stackPkg.${item.key}`)}</div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    modal.classList.add('open');
+};
 window.openContributorModal = (id) => {
     const c = CONTRIBUTORS.find(x => x.id === id);
     if (!c)

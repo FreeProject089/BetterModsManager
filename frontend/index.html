@@ -3885,6 +3885,10 @@
                                 {PU.4.LPU}</p>
 
                             <div id="credits-hero-version" class="credits-hero-version-pill">—</div>
+                            <button class="btn btn-primary" onclick="openStackModal()" style="margin: 15px auto 25px; padding: 10px 25px; border-radius: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 10px; background: #3b82f6; border: none; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); cursor: pointer;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                <span data-i18n="credits.viewStack">Technical Stack</span>
+                            </button>
 
                             <p class="credits-hero-description" data-i18n="credits.heroDesc">
                                 Un outil complet pour gérer vos mods et optimiser votre expérience. Sélectionnez vos
@@ -3900,9 +3904,19 @@
                         </div>
 
                         <!-- CONTRIBUTORS SECTION -->
-                        <h2 class="contributors-title" data-i18n="credits.contributors">Contributeurs</h2>
-                        <div class="contributors-grid" id="contributors-grid">
-                            <!-- Injected by JS -->
+                        <div class="collapsible-section" id="contributors-collapsible">
+                            <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+                                <div style="display:flex; align-items:center; gap:12px;">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                                    <h2 style="margin:0; font-size: 0.9rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.7);" data-i18n="credits.contributors">Contributeurs</h2>
+                                </div>
+                                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+                            </div>
+                            <div class="collapsible-content">
+                                <div class="contributors-grid" id="contributors-grid" style="margin-bottom:0;">
+                                    <!-- Injected by JS -->
+                                </div>
+                            </div>
                         </div>
 
                         <!-- COMMUNITY LINKS CARD (IMAGE 4) -->
@@ -7053,7 +7067,46 @@
         </div>
     </div>
 
+
+        <!-- Modals moved inside container to avoid bleeding -->
+        <div id="modal-contributor-detail" class="modal-generic-overlay" onclick="if(event.target === this) this.classList.remove('open')">
+            <div class="modal glass" style="width: 700px; max-width: 95vw; border-radius: 28px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7); position: relative;">
+                <button class="modal-close" onclick="document.getElementById('modal-contributor-detail').classList.remove('open')" style="position: absolute; top: 20px; right: 20px; width: 36px; height: 36px; border-radius: 12px; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; transition: all 0.2s; border: none; cursor: pointer; z-index: 10;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+                <div class="modal-body" id="contributor-modal-content" style="padding: 40px;">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+        </div>
+
+        <div id="modal-stack" class="modal-generic-overlay" onclick="if(event.target === this) this.classList.remove('open')">
+            <div class="modal glass" style="width: 600px; max-width: 95vw; border-radius: 24px; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7); position: relative;">
+                <button class="modal-close" onclick="document.getElementById('modal-stack').classList.remove('open')" style="position: absolute; top: 20px; right: 20px; width: 36px; height: 36px; border-radius: 12px; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; transition: all 0.2s; border: none; cursor: pointer; z-index: 10;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+                <div class="modal-header" style="padding: 25px 30px;">
+                    <div style="display:flex; align-items:center; gap:15px;">
+                        <div style="width:40px; height:40px; background:rgba(59, 130, 246, 0.1); border-radius:12px; display:flex; align-items:center; justify-content:center; color:#3b82f6;">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                        </div>
+                        <div>
+                            <h2 data-i18n="credits.stackTitle" style="margin:0; font-size:1.2rem;">Technical Architecture</h2>
+                            <p style="margin:0; font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">BMM Core Stack</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-body" id="stack-modal-content" style="padding: 0 30px 40px;">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+        </div>
     </div> <!-- End #app-window-outer -->
+
+    <!-- Modals moved outside app-window-outer but they were already here. 
+         Wait, I need to move them INSIDE to fix the bleeding if app-window-outer is the container. 
+    -->
+
 
     <script type="module" src="js/ui/app.js"></script>
 
@@ -7069,18 +7122,6 @@
         </div>
     </div>
 
-
-    <!-- Modal for Contributor Details -->
-    <div id="modal-contributor-detail" class="modal-generic-overlay" onclick="if(event.target === this) this.classList.remove('open')">
-        <div class="modal glass" style="width: 550px; max-width: 95vw; border-radius: 24px; border: 1px solid rgba(255,255,255,0.15);">
-            <div class="modal-header" style="border: none; padding: 25px 30px 10px;">
-                <button class="modal-close" onclick="document.getElementById('modal-contributor-detail').classList.remove('open')" style="top: 25px; right: 25px; font-size: 28px;">&times;</button>
-            </div>
-            <div class="modal-body" id="contributor-modal-content" style="padding: 0 30px 40px;">
-                <!-- Dynamically populated -->
-            </div>
-        </div>
-    </div>
 
 </body>
 
