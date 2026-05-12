@@ -6341,8 +6341,8 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .global-active-mod-item.dim-mod { opacity: 0.4; filter: grayscale(0.5); }
 
 
-/* --- COLLAPSIBLE SECTIONS --- */
-.collapsible-section {
+/* --- COLLAPSIBLE SECTIONS V3 (MODERN) --- */
+.collapsible-v3 {
     width: 100%;
     margin-bottom: 20px;
     border: 1px solid rgba(255, 255, 255, 0.05);
@@ -6352,7 +6352,7 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     transition: all 0.3s ease;
 }
 
-.collapsible-header {
+.collapsible-v3 .collapsible-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -6362,29 +6362,29 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     transition: background 0.2s;
 }
 
-.collapsible-header:hover {
+.collapsible-v3 .collapsible-header:hover {
     background: rgba(255, 255, 255, 0.04);
 }
 
-.collapsible-header .chevron {
+.collapsible-v3 .collapsible-header .chevron {
     width: 20px;
     height: 20px;
     transition: transform 0.3s ease;
     color: rgba(255, 255, 255, 0.3);
 }
 
-.collapsible-section.open .chevron {
+.collapsible-v3.open .chevron {
     transform: rotate(180deg);
 }
 
-.collapsible-content {
+.collapsible-v3 .collapsible-content {
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.4s cubic-bezier(0, 1, 0, 1);
     padding: 0 25px;
 }
 
-.collapsible-section.open .collapsible-content {
+.collapsible-v3.open .collapsible-content {
     max-height: 2000px; /* Big enough */
     transition: max-height 0.4s cubic-bezier(1, 0, 1, 0);
     padding: 20px 25px;
