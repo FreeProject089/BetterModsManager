@@ -481,7 +481,7 @@ async function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSi
         
         const node = nodes[i];
         const item = document.createElement('div');
-        item.className = `tree-item ${node.is_dir ? 'folder' : 'file'}`;
+        item.className = `tree-item ${node.is_dir ? 'folder pointer-clickable' : 'file'}`;
         
         if (isModSide) {
             const isPending = pendingMoves.has(node.path);
@@ -543,6 +543,7 @@ async function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSi
         item.appendChild(label);
         fragment.appendChild(item);
 
+        // Selection logic on mousedown
         item.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
             e.stopPropagation();
@@ -567,14 +568,6 @@ async function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSi
                 if (selectedPaths.size > 0) queueMoveTo(node.path);
             });
         }
-        
-        // Also allow clicking the folder item itself to toggle (if not selecting)
-        item.addEventListener('click', (e) => {
-            if (node.is_dir && (!isModSide || !e.ctrlKey)) {
-                const chevron = item.querySelector('.tree-item-chevron') as HTMLElement;
-                chevron?.click();
-            }
-        });
 
         item.addEventListener('contextmenu', (e) => {
             e.preventDefault(); e.stopPropagation();
@@ -595,14 +588,66 @@ async function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSi
             const childrenContainer = document.createElement('div');
             childrenContainer.className = 'tree-children';
             const isSearching = (document.getElementById(isModSide ? 'mapper-mod-search' : 'mapper-game-search') as HTMLInputElement)?.value.length > 0;
-            childrenContainer.style.display = isSearching ? 'block' : 'none';
             
+            // LAZY LOADING OPTIMIZATION: 
+            // If we are searching, we render everything. 
+            // If NOT searching, we only render children if the folder is already expanded (rare) or wait for user click.
+            childrenContainer.style.display = isSearching ? 'block' : 'none';
             fragment.appendChild(childrenContainer);
             
-            // Render children asynchronously if needed
-            if (node.children && node.children.length > 0) {
+            if (isSearching && node.children && node.children.length > 0) {
                 await renderTree(node.children, childrenContainer, isModSide);
             }
+
+            // Click listener for lazy expansion
+            const toggleFolder = async (e: MouseEvent) => {
+                e.stopPropagation();
+                const isCollapsed = childrenContainer.style.display === 'none';
+                
+                if (isCollapsed) {
+                    // If not rendered yet, do it now
+                    if (childrenContainer.children.length === 0 && node.children && node.children.length > 0) {
+                        const spinner = document.createElement('div');
+                        spinner.className = 'tree-loading-inline';
+                        spinner.innerHTML = '<span class="spinner-tiny"></span>';
+                        childrenContainer.appendChild(spinner);
+                        
+                        childrenContainer.style.display = 'block';
+                        await renderTree(node.children, childrenContainer, isModSide);
+                        spinner.remove();
+                    } else {
+                        childrenContainer.style.display = 'block';
+                    }
+                    if (chevron) chevron.style.transform = 'rotate(0deg)';
+                    item.style.opacity = '1';
+                    item.classList.add('expanded');
+                    const iconBox = item.querySelector('.tree-item-icon');
+                    if (iconBox) iconBox.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v2"></path><path d="M2 11h20"></path></svg>`;
+                } else {
+                    childrenContainer.style.display = 'none';
+                    if (chevron) chevron.style.transform = 'rotate(-90deg)';
+                    item.style.opacity = '0.7';
+                    item.classList.remove('expanded');
+                    const iconBox = item.querySelector('.tree-item-icon');
+                    if (iconBox) iconBox.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
+                }
+            };
+
+            const chevron = item.querySelector('.tree-item-chevron') as HTMLElement;
+            if (chevron) {
+                // Replace old listener
+                const newChevron = chevron.cloneNode(true);
+                chevron.parentNode?.replaceChild(newChevron, chevron);
+                newChevron.addEventListener('click', toggleFolder as any);
+            }
+            
+            // Also toggle on item click (includes icon and label) if not selecting
+            item.addEventListener('click', (e) => {
+                const isSelectionAction = e.ctrlKey || e.shiftKey;
+                if (!isSelectionAction) {
+                    toggleFolder(e as any);
+                }
+            });
         }
     }
 

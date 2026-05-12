@@ -9,6 +9,7 @@ import { initI18n, applyTranslations, t } from '../core/i18n.js';
 import { initBenchmark } from '../features/bench/benchmark.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
 import { initRepo } from '../features/repo/repo.js';
+import { appState } from '../core/state.js';
 import { initInteractiveDocs, openDiagram } from '../docs/interactive-docs.js';
 import { initDocsUI } from '../docs/docs-ui.js';
 import { initDeepLinks } from '../core/deep_link_manager.js';
@@ -146,6 +147,10 @@ function initNavigation() {
                     else {
                         creditsVideo.pause();
                     }
+                }
+                // MEMORY OPTIMIZATION: Flush conflict cache if not in library
+                if (viewId !== 'library') {
+                    appState.flushMemory();
                 }
             }, 15);
         });

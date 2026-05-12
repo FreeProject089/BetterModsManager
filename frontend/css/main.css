@@ -902,10 +902,19 @@ body.is-maximized .titlebar-spacer {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 2px 4px;
+    padding: 3px 6px;
     border-radius: 4px;
     cursor: default;
-    transition: background 0.2s;
+    transition: background 0.15s ease, opacity 0.15s ease;
+    user-select: none;
+}
+
+.tree-item.folder.pointer-clickable {
+    cursor: pointer;
+}
+
+.tree-item.folder.pointer-clickable:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .tree-item-chevron {

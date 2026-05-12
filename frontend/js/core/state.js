@@ -41,6 +41,15 @@ class StateManager {
         const keyListeners = this.listeners.get(key) || [];
         keyListeners.forEach(cb => cb(value));
     }
+    /**
+     * Flushes heavy caches to free memory
+     */
+    flushMemory() {
+        console.log("[STATE] Flushing memory caches...");
+        this.state.conflictCache = {};
+        // Trigger a notification so UI components can react if needed
+        this.notify('conflictCache', {});
+    }
 }
 // Instantiate a global singleton state
 export const appState = new StateManager({

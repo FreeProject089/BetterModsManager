@@ -171,6 +171,11 @@ function initNavigation() {
                         creditsVideo.pause();
                     }
                 }
+
+                // MEMORY OPTIMIZATION: Flush conflict cache if not in library
+                if (viewId !== 'library') {
+                    appState.flushMemory();
+                }
             }, 15);
         });
     });
