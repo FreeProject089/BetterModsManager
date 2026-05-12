@@ -695,10 +695,13 @@ const CONTRIBUTORS = [
     }
 ];
 const CREDITS_MESSAGES = [
-    "credits.msg1",
-    "credits.msg2",
-    "credits.msg3",
-    "credits.msg4"
+    'credits.msg1',
+    'credits.msg2',
+    'credits.msg3',
+    'credits.msg4',
+    'credits.msg5',
+    'credits.msg6',
+    'credits.msg7'
 ];
 function initCredits() {
     const marqueeContainer = document.getElementById('credits-marquee-container');
@@ -754,13 +757,34 @@ window.openStackModal = () => {
         { name: "Tokio", v: "1.0", key: "tokio", url: "https://tokio.rs/" },
         { name: "Reqwest", v: "0.11", key: "reqwest", url: "https://github.com/seanmonstar/reqwest" },
         { name: "Walkdir", v: "2.0", key: "walkdir", url: "https://github.com/BurntSushi/walkdir" },
+        { name: "Zip", v: "0.6", key: "zip", url: "https://github.com/zip-rs/zip" },
         { name: "SHA2", v: "0.10", key: "sha2", url: "https://github.com/RustCrypto/hashes" },
-        { name: "Discord RP", v: "0.2", key: "discord-rich-presence", url: "https://github.com/vionya/discord-rich-presence" }
+        { name: "Discord RP", v: "0.2", key: "discord-rich-presence", url: "https://github.com/vionya/discord-rich-presence" },
+        { name: "Warp", v: "0.3", key: "warp", url: "https://github.com/seanmonstar/warp" },
+        { name: "Rayon", v: "1.8", key: "rayon", url: "https://github.com/rayon-rs/rayon" },
+        { name: "Anyhow", v: "1.0", key: "anyhow", url: "https://github.com/dtolnay/anyhow" },
+        { name: "Sysinfo", v: "0.30", key: "sysinfo", url: "https://github.com/GuillaumeGomez/sysinfo" },
+        { name: "Tracing", v: "0.1", key: "tracing", url: "https://github.com/tokio-rs/tracing" },
+        { name: "Clap", v: "4.0", key: "clap", url: "https://github.com/clap-rs/clap" },
+        { name: "Comfy Table", v: "7.0", key: "comfy-table", url: "https://github.com/Nukesor/comfy-table" },
+        { name: "Chrono", v: "0.4", key: "chrono", url: "https://github.com/chronotope/chrono" },
+        { name: "Regex", v: "1.0", key: "regex", url: "https://github.com/rust-lang/regex" },
+        { name: "UUID", v: "1.0", key: "uuid", url: "https://github.com/uuid-rs/uuid" },
+        { name: "Image", v: "0.25", key: "image", url: "https://github.com/image-rs/image" },
+        { name: "Rand", v: "0.8", key: "rand", url: "https://github.com/rust-random/rand" },
+        { name: "Tempfile", v: "3.0", key: "tempfile", url: "https://github.com/Stebalien/tempfile" },
+        { name: "Base64", v: "0.21", key: "base64", url: "https://github.com/marshallpierce/rust-base64" },
+        { name: "Winreg", v: "0.52", key: "winreg", url: "https://github.com/gentoo90/winreg-rs" },
+        { name: "Jwalk", v: "0.8", key: "jwalk", url: "https://github.com/Byron/jwalk" },
+        { name: "Hex", v: "0.4", key: "hex", url: "https://github.com/KokaKiwi/rust-hex" }
     ];
     const frontend = [
         { name: "TypeScript", v: "5.7", key: "typescript", url: "https://www.typescriptlang.org/" },
         { name: "TanStack Query", v: "5.0", key: "tanstack-query", url: "https://tanstack.com/query/latest" },
-        { name: "Cheerio", v: "1.2", key: "cheerio", url: "https://cheerio.js.org/" }
+        { name: "Cheerio", v: "1.2", key: "cheerio", url: "https://cheerio.js.org/" },
+        { name: "Tauri API", v: "1.0", key: "tauri-api", url: "https://tauri.app/v1/api/js/" },
+        { name: "Tauri CLI", v: "1.0", key: "tauri-cli", url: "https://tauri.app/v1/guides/features/cli" },
+        { name: "Concurrently", v: "9.2", key: "concurrently", url: "https://github.com/open-cli-tools/concurrently" }
     ];
     content.innerHTML = `
         <div class="stack-section-title" data-i18n="credits.stackBackend">${t('credits.stackBackend')}</div>
