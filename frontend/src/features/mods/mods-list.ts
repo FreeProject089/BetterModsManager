@@ -450,15 +450,15 @@ export function updateCardState(card, mod) {
   // Update SHA status icon
   const shaIcon = card.querySelector('.sha-status-icon');
   if (shaIcon) {
+    const isMissing = !mod.file_hashes || Object.keys(mod.file_hashes).length === 0;
     const isInvalid = mod.file_hashes_invalid;
-    const isVerified = mod.file_hashes && Object.keys(mod.file_hashes).length > 0;
     
-    shaIcon.className = `sha-status-icon ${isInvalid ? 'invalid' : (isVerified ? 'verified' : 'missing')}`;
-    shaIcon.style.color = isInvalid ? 'var(--danger)' : (isVerified ? 'var(--success)' : 'var(--text-muted)');
-    shaIcon.style.opacity = (isInvalid || isVerified) ? '0.9' : '0.5';
+    shaIcon.className = `sha-status-icon ${isInvalid ? 'invalid' : (isMissing ? 'missing' : 'verified')}`;
+    shaIcon.style.color = isInvalid ? 'var(--danger)' : (isMissing ? 'var(--text-muted)' : 'var(--success)');
+    shaIcon.style.opacity = isMissing ? '0.5' : '0.9';
 
     // Update tooltip
-    const tooltipKey = isInvalid ? 'hashes.status.invalid' : (isVerified ? 'hashes.status.verified' : 'hashes.status.missing');
+    const tooltipKey = isInvalid ? 'hashes.status.invalid' : (isMissing ? 'hashes.status.missing' : 'hashes.status.verified');
     const tooltipIcon = isInvalid ? 'alert' : 'shield';
     shaIcon.setAttribute('onmouseenter', `window.showTaskyHelp('${tooltipKey}', '${tooltipIcon}')`);
   }

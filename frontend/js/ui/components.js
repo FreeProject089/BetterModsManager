@@ -26,6 +26,8 @@ export function getLoadingOverlayHTML() {
  */
 export function getModCardHTML(mod, ctx) {
     const isProcessing = ctx.processingMods.has(mod.id);
+    const isShaInvalid = mod.file_hashes_invalid;
+    const isMissing = !mod.file_hashes || Object.keys(mod.file_hashes).length === 0;
     let tagsHtml = '';
     if (mod.tags && mod.tags.length > 0) {
         const visibleTags = mod.tags.slice(0, 3).map(tid => {
@@ -67,11 +69,11 @@ export function getModCardHTML(mod, ctx) {
         <div class="mod-info">
             <div style="display:flex;align-items:center;gap:8px">
                 <div class="mod-name" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.name))}', 'package', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(truncate(mod.name, 100))}</div>
-                <div class="sha-status-icon ${mod.file_hashes_invalid ? 'invalid' : (mod.file_hashes && Object.keys(mod.file_hashes).length > 0 ? 'verified' : 'missing')}" 
+                <div class="sha-status-icon ${isShaInvalid ? 'invalid' : (isMissing ? 'missing' : 'verified')}" 
                      onclick="window.recalculateModSha('${mod.id}'); event.stopPropagation();"
-                     onmouseenter="window.showTaskyHelp('${mod.file_hashes_invalid ? 'hashes.status.invalid' : (mod.file_hashes && Object.keys(mod.file_hashes).length > 0 ? 'hashes.status.verified' : 'hashes.status.missing')}', '${mod.file_hashes_invalid ? 'alert' : 'shield'}')"
+                     onmouseenter="window.showTaskyHelp('${isShaInvalid ? 'hashes.status.invalid' : (isMissing ? 'hashes.status.missing' : 'hashes.status.verified')}', '${isShaInvalid ? 'alert' : 'shield'}')"
                      onmouseleave="window.hideTaskyHelp()"
-                     style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:${mod.file_hashes_invalid ? 'var(--danger)' : (mod.file_hashes && Object.keys(mod.file_hashes).length > 0 ? 'var(--success)' : 'var(--text-muted)')};opacity:${mod.file_hashes_invalid || (mod.file_hashes && Object.keys(mod.file_hashes).length > 0) ? '0.9' : '0.5'}; transition: all 0.2s ease;">
+                     style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:${isShaInvalid ? 'var(--danger)' : (isMissing ? 'var(--text-muted)' : 'var(--success)')};opacity:${isMissing ? '0.5' : '0.9'}; transition: all 0.2s ease;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 </div>
                 ${mod.enabled ? `<span class="badge badge-accent" style="font-size:9px;padding:1px 6px;border-radius:4px;font-family:var(--font-mono);font-weight:800;background:rgba(59,130,246,0.2);color:var(--accent);border:1px solid rgba(59,130,246,0.3)" onmouseenter="window.showTaskyHelp('mod.activationOrderTip', 'help')" onmouseleave="window.hideTaskyHelp()">#${mod.activation_order}</span>` : ''}
@@ -184,6 +186,8 @@ export function getModCardHTML(mod, ctx) {
  * @returns {string} HTML string
  */
 export function getModDetailHTML(mod, ctx) {
+    const isShaInvalid = mod.file_hashes_invalid;
+    const isMissing = !mod.file_hashes || Object.keys(mod.file_hashes).length === 0;
     // Helper for collapsible sections
     const renderSection = (id, title, icon, content, defaultExpanded = false) => {
         const storageKey = `bmm_section_${id}_expanded`;
@@ -270,9 +274,9 @@ export function getModDetailHTML(mod, ctx) {
         </label>
         <div style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px; border:1px solid var(--border); box-shadow:inset 0 0 10px rgba(0,0,0,0.1)">
             <div style="flex:1; display:flex; flex-direction:column; gap:2px">
-                <div style="font-size:11px; color:${mod.file_hashes_invalid ? 'var(--danger)' : (mod.file_hashes && Object.keys(mod.file_hashes).length > 0 ? 'var(--success)' : 'var(--text-muted)')}; font-weight:700; display:flex; align-items:center; gap:6px">
+                <div style="font-size:11px; color:${isShaInvalid ? 'var(--danger)' : (isMissing ? 'var(--text-muted)' : 'var(--success)')}; font-weight:700; display:flex; align-items:center; gap:6px">
                     <div style="width:6px; height:6px; border-radius:50%; background:currentColor; box-shadow: 0 0 6px currentColor"></div>
-                    ${mod.file_hashes_invalid ? (t('hashes.status.invalid') || 'INVALID') : (mod.file_hashes && Object.keys(mod.file_hashes).length > 0 ? t('hashes.status.verified') : t('hashes.status.missing'))}
+                    ${isShaInvalid ? (t('hashes.status.invalid') || 'INVALID') : (isMissing ? (t('hashes.status.missing') || 'MISSING') : (t('hashes.status.verified') || 'VERIFIED'))}
                 </div>
                 <div style="font-size:9px; color:var(--text-muted); font-family:var(--font-mono); opacity:0.7">
                     ${mod.file_hashes_timestamp ? new Date(mod.file_hashes_timestamp).toLocaleString() : '—'}

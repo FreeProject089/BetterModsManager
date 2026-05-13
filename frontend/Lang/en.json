@@ -61,6 +61,7 @@
   "common.importing": "Importing...",
   "common.installing": "Installing...",
   "common.link": "Link",
+  "common.global": "Global (All)",
   "common.loaded": "LOADED !",
   "common.loading": "Loading...",
   "common.version": "V{version}",

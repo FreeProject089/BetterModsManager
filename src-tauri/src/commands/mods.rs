@@ -21,6 +21,9 @@ pub struct ShaStatusPayload {
 pub struct HashingStats {
     pub total_mods: usize,
     pub hashed_mods: usize,
+    pub missing_mods: usize,
+    pub invalid_mods: usize,
+    pub valid_mods: usize,
     pub queue_size: usize,
     pub is_active: bool,
     pub current_mod_name: Option<String>,
@@ -1989,6 +1992,7 @@ pub fn delete_mod_hashes(app_handle: tauri::AppHandle, state: State<AppState>, m
         if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
             m.file_hashes = None;
             m.file_hashes_timestamp = None;
+            m.file_hashes_invalid = None;
         }
     }
     let _ = state.save();
@@ -2004,15 +2008,39 @@ pub fn delete_mod_hashes(app_handle: tauri::AppHandle, state: State<AppState>, m
 }
 
 #[tauri::command]
-pub fn get_hashing_stats(state: State<AppState>) -> Result<HashingStats, String> {
-    let (total_mods, hashed_mods, current_mod_name) = {
+pub fn get_hashing_stats(state: State<AppState>, profile_id: Option<String>) -> Result<HashingStats, String> {
+    let (total_mods, hashed_mods, missing_mods, invalid_mods, valid_mods, current_mod_name) = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-        let total = data.mods.len();
-        // Count once to avoid double iteration
+        
+        let target_mods = match profile_id {
+            Some(pid) => {
+                if let Some(profile) = data.profiles.iter().find(|p| p.id == pid) {
+                    data.mods.iter().filter(|m| m.mod_folder_path.starts_with(&profile.mods_path)).collect::<Vec<_>>()
+                } else {
+                    data.mods.iter().collect::<Vec<_>>()
+                }
+            },
+            None => data.mods.iter().collect::<Vec<_>>()
+        };
+
+        let total = target_mods.len();
         let mut hashed = 0;
-        for m in &data.mods {
-            if m.file_hashes.is_some() && !m.file_hashes.as_ref().unwrap().is_empty() {
-                hashed += 1;
+        let mut missing = 0;
+        let mut invalid = 0;
+        let mut valid = 0;
+        
+        for m in target_mods {
+            let is_missing = m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty());
+            let is_invalid = m.file_hashes_invalid.unwrap_or(false);
+            
+            if is_missing {
+                missing += 1;
+            } else if is_invalid {
+                invalid += 1;
+                hashed += 1; // It has hashes, just invalid ones
+            } else {
+                valid += 1;
+                hashed += 1; // Valid hashes
             }
         }
         
@@ -2024,7 +2052,7 @@ pub fn get_hashing_stats(state: State<AppState>) -> Result<HashingStats, String>
                 None
             }
         };
-        (total, hashed, current_name)
+        (total, hashed, missing, invalid, valid, current_name)
     };
     
     let queue_size = state.sha_queue.lock().unwrap_or_else(|p| p.into_inner()).len() + 
@@ -2035,6 +2063,9 @@ pub fn get_hashing_stats(state: State<AppState>) -> Result<HashingStats, String>
     Ok(HashingStats {
         total_mods,
         hashed_mods,
+        missing_mods,
+        invalid_mods,
+        valid_mods,
         queue_size,
         is_active,
         current_mod_name,
@@ -2083,7 +2114,7 @@ pub fn populate_sha_queue(state: tauri::State<'_, AppState>) {
                 .filter(|m| {
                     let missing = m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty());
                     let invalid = m.file_hashes_invalid.unwrap_or(false);
-                    missing || invalid
+                    missing && !invalid
                 })
                 .map(|m| m.id.clone())
                 .collect::<Vec<String>>();
@@ -2251,7 +2282,11 @@ pub fn add_mod_to_priority_sha_queue(state: tauri::State<'_, AppState>, mod_id: 
     let needs_hash = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         data.mods.iter().find(|m| m.id == mod_id)
-            .map_or(false, |m| m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty()))
+            .map_or(false, |m| {
+                let missing = m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty());
+                let invalid = m.file_hashes_invalid.unwrap_or(false);
+                missing && !invalid
+            })
     };
     
     if needs_hash {

@@ -60,6 +60,7 @@
   "common.importing": "Importation...",
   "common.installing": "Installation en cours...",
   "common.link": "Lien",
+  "common.global": "Global (Tous)",
   "common.loaded": "CHARGÉ !",
   "common.loading": "CHARGEMENT...",
   "common.version": "V{version}",
