@@ -80,6 +80,12 @@ pub struct ModEntry {
     /// Optional map of file relative paths to their SHA256 hashes for integrity verification
     #[serde(default)]
     pub file_hashes: Option<std::collections::HashMap<String, String>>,
+    /// Timestamp of when the hashes were last calculated
+    #[serde(default)]
+    pub file_hashes_timestamp: Option<String>,
+    /// Whether the last deep integrity check failed
+    #[serde(default)]
+    pub file_hashes_invalid: Option<bool>,
 }
 
 /// A download link for a mod
@@ -140,6 +146,8 @@ impl ModEntry {
             cached_files: None,
             last_scan_mtime: 0,
             file_hashes: None,
+            file_hashes_timestamp: None,
+            file_hashes_invalid: None,
         }
     }
 

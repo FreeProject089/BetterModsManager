@@ -32,16 +32,16 @@ pub fn export_app_data(state: State<AppState>, dest_path: String, options: Optio
         let json = serde_json::to_string_pretty(&export_data)?;
         std::fs::write(&dest_path, json)?;
     } else {
-        std::fs::copy(&state.data_path, dest_path)?;
+        std::fs::copy(&*state.data_path, dest_path)?;
     }
     Ok(())
 }
 
 #[tauri::command]
 pub fn import_app_data(state: State<AppState>, src_path: String) -> Result<(), AppError> {
-    std::fs::copy(src_path, &state.data_path)?;
+    std::fs::copy(src_path, &*state.data_path)?;
     // Reload state into memory
-    let new_state = AppState::load(state.data_path.clone());
+    let new_state = AppState::load((*state.data_path).clone());
     let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     let new_data = new_state.data.lock().map_err(|_| AppError::LockError("Failed to lock new AppState".to_string()))?;
     *data = crate::state::AppData {

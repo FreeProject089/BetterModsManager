@@ -387,6 +387,8 @@ function showTooltipImpl(key: string, iconClass: string, isLiteral: boolean) {
     if (finalIcon === 'toggle') finalIcon = 'icon-toggle';
     if (finalIcon === 'alert') finalIcon = 'icon-alert';
     if (finalIcon === 'package') finalIcon = 'icon-package';
+    if (finalIcon === 'shield') finalIcon = 'icon-verify';
+    if (finalIcon === 'network') finalIcon = 'icon-layers';
 
     // Text content logic
     let exp = key;

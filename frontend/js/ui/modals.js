@@ -72,6 +72,11 @@ window.confirmCustom = (title, message, type = 'danger', options = {}) => {
             iconContainer.style.background = 'rgba(239, 68, 68, 0.1)';
             iconContainer.style.color = 'var(--danger)';
         }
+        else if (type === 'warning') {
+            yesBtn.className = 'btn btn-warning'; // Assumes btn-warning exists or will use primary fallback
+            iconContainer.style.background = 'rgba(245, 158, 11, 0.1)';
+            iconContainer.style.color = '#f59e0b';
+        }
         else {
             yesBtn.className = 'btn btn-primary';
             iconContainer.style.background = 'rgba(59, 130, 246, 0.1)';

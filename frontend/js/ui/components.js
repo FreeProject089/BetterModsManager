@@ -67,6 +67,13 @@ export function getModCardHTML(mod, ctx) {
         <div class="mod-info">
             <div style="display:flex;align-items:center;gap:8px">
                 <div class="mod-name" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.name))}', 'package', true)" onmouseleave="window.hideTaskyHelp()">${escHtml(truncate(mod.name, 100))}</div>
+                <div class="sha-status-icon ${mod.file_hashes_invalid ? 'invalid' : (mod.file_hashes && Object.keys(mod.file_hashes).length > 0 ? 'verified' : 'missing')}" 
+                     onclick="window.recalculateModSha('${mod.id}'); event.stopPropagation();"
+                     onmouseenter="window.showTaskyHelp('${mod.file_hashes_invalid ? 'hashes.status.invalid' : (mod.file_hashes && Object.keys(mod.file_hashes).length > 0 ? 'hashes.status.verified' : 'hashes.status.missing')}', '${mod.file_hashes_invalid ? 'alert' : 'shield'}')"
+                     onmouseleave="window.hideTaskyHelp()"
+                     style="display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:${mod.file_hashes_invalid ? 'var(--danger)' : (mod.file_hashes && Object.keys(mod.file_hashes).length > 0 ? 'var(--success)' : 'var(--text-muted)')};opacity:${mod.file_hashes_invalid || (mod.file_hashes && Object.keys(mod.file_hashes).length > 0) ? '0.9' : '0.5'}; transition: all 0.2s ease;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
                 ${mod.enabled ? `<span class="badge badge-accent" style="font-size:9px;padding:1px 6px;border-radius:4px;font-family:var(--font-mono);font-weight:800;background:rgba(59,130,246,0.2);color:var(--accent);border:1px solid rgba(59,130,246,0.3)" onmouseenter="window.showTaskyHelp('mod.activationOrderTip', 'help')" onmouseleave="window.hideTaskyHelp()">#${mod.activation_order}</span>` : ''}
                 ${conflictHtml}
             </div>
@@ -253,6 +260,32 @@ export function getModDetailHTML(mod, ctx) {
         <div style="position:relative">
             <input type="text" id="detail-dep-input" class="input-field" style="width:100%;padding:6px;font-size:11px" placeholder="${t('mod.addDepPlaceholder') || 'Add a required mod...'}" />
             <div id="detail-dep-suggestions" class="glass" style="display:none; position:absolute; z-index:100; max-height:150px; overflow-y:auto; width:100%; border:1px solid var(--border); border-radius:8px; margin-top:4px"></div>
+        </div>
+      </div>
+
+      <div class="detail-section" style="margin-top:12px">
+        <label class="detail-label" style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span style="font-weight:700; color:var(--text-primary); font-size:11px; text-transform:uppercase; letter-spacing:0.5px">${t('settings.shaTitle')}</span>
+        </label>
+        <div style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px; border:1px solid var(--border); box-shadow:inset 0 0 10px rgba(0,0,0,0.1)">
+            <div style="flex:1; display:flex; flex-direction:column; gap:2px">
+                <div style="font-size:11px; color:${mod.file_hashes_invalid ? 'var(--danger)' : (mod.file_hashes && Object.keys(mod.file_hashes).length > 0 ? 'var(--success)' : 'var(--text-muted)')}; font-weight:700; display:flex; align-items:center; gap:6px">
+                    <div style="width:6px; height:6px; border-radius:50%; background:currentColor; box-shadow: 0 0 6px currentColor"></div>
+                    ${mod.file_hashes_invalid ? (t('hashes.status.invalid') || 'INVALID') : (mod.file_hashes && Object.keys(mod.file_hashes).length > 0 ? t('hashes.status.verified') : t('hashes.status.missing'))}
+                </div>
+                <div style="font-size:9px; color:var(--text-muted); font-family:var(--font-mono); opacity:0.7">
+                    ${mod.file_hashes_timestamp ? new Date(mod.file_hashes_timestamp).toLocaleString() : '—'}
+                </div>
+            </div>
+            <div style="display:flex; gap:6px">
+                <button class="btn btn-sm btn-icon" onclick="window.deleteModHashes('${mod.id}')" onmouseenter="window.showTaskyHelp('mods.sha.delete', 'trash')" onmouseleave="window.hideTaskyHelp()" style="background:rgba(239,68,68,0.1); color:var(--danger); border:1px solid rgba(239,68,68,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                </button>
+                <button class="btn btn-sm btn-icon" id="btn-recalculate-sha" onclick="window.recalculateModSha('${mod.id}')" onmouseenter="window.showTaskyHelp('mods.sha.recalculate', 'refresh')" onmouseleave="window.hideTaskyHelp()" style="background:rgba(59,130,246,0.15); color:var(--accent); border:1px solid rgba(59,130,246,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                </button>
+            </div>
         </div>
       </div>
   `;

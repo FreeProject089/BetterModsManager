@@ -189,6 +189,99 @@ function initNavigation() {
         }
     });
 
+    // Global SHA Status Listener
+    (async () => {
+        try {
+            const { listen } = await import('../core/api.js');
+            await listen('sha-status-changed', async (event: any) => {
+                const payload = event.payload; // { mod_id, status, is_manual }
+                console.log(`[SHA] Status changed for mod ${payload.mod_id}: ${payload.status}`);
+                
+                if (payload.status === 'calculating') {
+                    const isLazy = !payload.is_manual;
+                    const { getSettings } = await import('../core/api.js');
+                    const settings = await getSettings();
+                    
+                    if (payload.is_manual && settings.show_sha_loading_animation !== false) {
+                        startTaskyLoader(); // Added Tasky mascot animation
+                    }
+                    
+                    // Show spinner on mod card (both manual and lazy)
+                    const modCard = document.querySelector(`.mod-card[data-id="${payload.mod_id}"]`);
+                    if (modCard) {
+                        const shaIcon = modCard.querySelector('.sha-status-icon');
+                        if (shaIcon) {
+                            if (isLazy) {
+                                // Lighter, more transparent spinner for background lazy processing
+                                shaIcon.innerHTML = '<span class="spinner" style="width:12px;height:12px;border:2px solid rgba(139, 92, 246, 0.1);border-top-color:rgba(139, 92, 246, 0.4);border-radius:50%;animation:spin 1.5s linear infinite;display:inline-block;"></span>';
+                            } else {
+                                // Stronger spinner for manual calculation
+                                shaIcon.innerHTML = '<span class="spinner" style="width:12px;height:12px;border:2px solid rgba(139, 92, 246, 0.3);border-top-color:#8b5cf6;border-radius:50%;animation:spin 1s linear infinite;display:inline-block;"></span>';
+                            }
+                        }
+                    }
+                    // Find the detail button
+                    const btn = document.getElementById('btn-recalculate-sha');
+                    const detailContainer = document.getElementById('mod-detail-container');
+                    if (btn && detailContainer && (detailContainer as any)._currentModId === payload.mod_id) {
+                        btn.classList.add('loading');
+                        if (isLazy) {
+                            btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border:2px solid rgba(255,255,255,0.1);border-top-color:rgba(255,255,255,0.5);border-radius:50%;animation:spin 1.5s linear infinite;display:inline-block;"></span>';
+                        } else {
+                            btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 1s linear infinite;display:inline-block;"></span>';
+                        }
+                    }
+                } else if (payload.status === 'done' || payload.status === 'error' || payload.status === 'missing') {
+                    if (payload.is_manual && payload.status !== 'missing') {
+                        stopTaskyLoader(); // Stop Tasky mascot animation
+                    }
+                    
+                    // Explicitly remove loading spinners to ensure they don't get stuck before list refresh
+                    const modCard = document.querySelector(`.mod-card[data-id="${payload.mod_id}"]`);
+                    if (modCard) {
+                        const shaIcon = modCard.querySelector('.sha-status-icon') as HTMLElement;
+                        if (shaIcon) {
+                            shaIcon.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>';
+                            if (payload.status === 'done') {
+                                shaIcon.style.color = 'var(--success)';
+                                shaIcon.style.opacity = '0.9';
+                                shaIcon.className = 'sha-status-icon verified';
+                            } else {
+                                shaIcon.style.color = 'var(--text-muted)';
+                                shaIcon.style.opacity = '0.5';
+                                shaIcon.className = 'sha-status-icon missing';
+                            }
+                        }
+                    }
+                    const btn = document.getElementById('btn-recalculate-sha');
+                    if (btn) {
+                        btn.classList.remove('loading');
+                        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg><span data-i18n="mods.sha.recalculate">Recalculate SHA</span>';
+                        const { applyTranslations } = await import('../core/i18n.js');
+                        applyTranslations(btn);
+                    }
+                    
+                    if (payload.status === 'error' && payload.is_manual) {
+                        const { toast } = await import('../ui/app.js');
+                        toast('Failed to hash mod ' + payload.mod_id, 'error');
+                    } else if (payload.status === 'done' && payload.is_manual) {
+                        const { toast } = await import('../ui/app.js');
+                        toast('Hash calculation completed', 'success');
+                    }
+                    
+                    // Refresh main mod list
+                    if (window._refreshModsFn) window._refreshModsFn();
+                    
+                    // Refresh detail panel if it's the same mod
+                    const detailContainer = document.getElementById('mod-detail-container');
+                    if (detailContainer && (detailContainer as any)._currentModId === payload.mod_id) {
+                        import('../features/mods/mods-details.js').then(m => m.renderModDetail(payload.mod_id));
+                    }
+                }
+            });
+        } catch (e) { console.error("[SHA] Failed to setup global listener", e); }
+    })();
+
     // Credits video visibility control
     document.addEventListener('visibilitychange', () => {
         const creditsVideo = document.getElementById('credits-bg-video');

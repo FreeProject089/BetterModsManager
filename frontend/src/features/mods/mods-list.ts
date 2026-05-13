@@ -232,10 +232,9 @@ export function createModCard(mod) {
     }
 
     setModLoading(mod.id, true);
-
-    try {
+    try {
       if (toggle.checked) {
-        const warningMsg = await invoke('enable_mod', { modId: mod.id });
+        const warningMsg = await invoke('enable_mod', { modId: mod.id, bypassSha: false });
         if (warningMsg && warningMsg.startsWith('WARNING_SPACE|')) {
           const parts = warningMsg.split('|');
           toast(t('storage.alertWarningMod', { label: parts[1], free: parts[2], limit: parts[3] }), 'warning', 5000);
@@ -244,11 +243,11 @@ export function createModCard(mod) {
           try { if (localStorage.getItem('bmm_sysNotif') === 'true') sendOsNotification('Better Mod Manager', t('mod.activated', { name: mod.name })); } catch(e) {}
         }
       } else {
+        // ... (existing disable logic)
         const modDeps = mod.dependencies || [];
         const dependents = S.allMods.filter(m => m.enabled && m.dependencies && m.dependencies.includes(mod.id));
         let requirements = S.allMods.filter(m => m.enabled && modDeps.includes(m.id));
 
-        // Filtrer les requirements: n'afficher B que si AUCUN autre mod actif (sauf A) n'a besoin de B
         requirements = requirements.filter(req => {
            const otherDependents = S.allMods.filter(other => 
                other.id !== mod.id && 
@@ -284,6 +283,37 @@ export function createModCard(mod) {
         const parts = err.split('|');
         toast(t('storage.alertCriticalMod', { label: parts[1], free: parts[2], limit: parts[3] }), 'error', 6000);
         toggle.checked = false;
+      } else if (typeof err === 'string' && err.startsWith('MISSING_SHA|')) {
+        const parts = err.split('|');
+        const mId = parts[1];
+        const mName = parts[2];
+        
+        toggle.checked = false;
+        
+        const ok = await window.confirmCustom(
+          t('mods.sha.missingTitle') || 'Missing Integrity Hash',
+          (t('mods.sha.missingDesc') || 'The mod "{name}" does not have a valid SHA hash. For security reasons, it is recommended to calculate the hash before enabling.').replace('{name}', `<strong>${mName}</strong>`),
+          'warning',
+          { 
+            yesLabel: t('mods.sha.calculateAndEnable') || 'Calculate & Enable',
+            noLabel: t('mods.sha.enableAnyway') || 'Enable Anyway'
+          }
+        );
+        
+        if (ok) {
+           toast(t('mods.sha.calculating') || 'Calculating...', 'info');
+           await invoke('recalculate_mod_sha', { modId: mId });
+           toast(t('mods.sha.queued') || 'Mod added to calculation queue', 'success');
+        } else {
+           // Retry with bypass
+           try {
+               await invoke('enable_mod', { modId: mod.id, bypassSha: true });
+               toggle.checked = true;
+               toast(t('mod.activated', { name: mod.name }), 'success');
+           } catch (e) {
+               toast(t('common.error') + ' : ' + e, 'error');
+           }
+        }
       } else {
         toast(t('common.error') + ' : ' + err, 'error');
         toggle.checked = !toggle.checked;

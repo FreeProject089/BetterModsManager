@@ -118,7 +118,7 @@ fn main() {
             app.manage(crate::commands::repo_server::RepoServerState::default());
             
             let state_handle = app.state::<AppState>();
-            commands::mods::start_sha_calculation_background(state_handle.clone());
+            commands::mods::start_sha_calculation_background(app.handle());
             commands::mods::populate_sha_queue(state_handle);
             
             let _ = commands::ban_manager::load_bans(&app.handle());
@@ -219,6 +219,11 @@ fn main() {
             commands::mods::open_mod_backup_folder,
             commands::mods::get_mod_integrity,
             commands::mods::update_mod_hashes,
+            commands::mods::delete_mod_hashes,
+            commands::mods::get_hashing_stats,
+            commands::mods::recalculate_all_hashes,
+            commands::mods::recalculate_mod_sha,
+            commands::mods::trigger_sha_background_population,
             commands::crash::open_crash_folder,
             commands::image::crop_and_save_webp,
             commands::image::remove_profile_background,

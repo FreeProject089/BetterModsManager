@@ -122,7 +122,7 @@ export async function updateSettings(settings) {
 }
 export async function listenFileDrop(callback) {
     try {
-        const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
+        const { listen } = await getEventModule();
         return await listen('tauri://file-drop', (e) => {
             if (e.payload && e.payload.length > 0) {
                 callback(e.payload);
@@ -131,6 +131,22 @@ export async function listenFileDrop(callback) {
     }
     catch {
         console.warn('[BMM] File drop not supported in browser mockup');
+        return () => { };
+    }
+}
+async function getEventModule() {
+    if (window.__TAURI__) {
+        return window.__TAURI__.event;
+    }
+    return await import('https://unpkg.com/@tauri-apps/api@1/event.js');
+}
+export async function listen(event, callback) {
+    try {
+        const { listen } = await getEventModule();
+        return await listen(event, callback);
+    }
+    catch (e) {
+        console.warn(`[BMM] Event listening (${event}) not supported in current environment`, e);
         return () => { };
     }
 }

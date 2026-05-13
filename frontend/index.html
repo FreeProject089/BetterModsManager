@@ -182,9 +182,12 @@
                         <span class="nav-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="1.8">
-                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                <path d="M2 17l10 5 10-5" />
-                                <path d="M2 12l10 5 10-5" />
+                                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                                <path d="M12 11h4" />
+                                <path d="M12 16h4" />
+                                <path d="M8 11h.01" />
+                                <path d="M8 16h.01" />
+                                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
                             </svg>
                         </span>
                         <span class="nav-label" data-i18n="nav.modlists">Listes .MM</span>
@@ -684,9 +687,12 @@
                             <div class="info-card-icon accent">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="1.8">
-                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                    <path d="M2 17l10 5 10-5" />
-                                    <path d="M2 12l10 5 10-5" />
+                                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                                    <path d="M12 11h4" />
+                                    <path d="M12 16h4" />
+                                    <path d="M8 11h.01" />
+                                    <path d="M8 16h.01" />
+                                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
                                 </svg>
                             </div>
                             <div>
@@ -2211,8 +2217,12 @@
                                 <h3 class="card-title">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
                                         stroke-width="2" style="margin-right:8px;vertical-align:middle">
-                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                        <polyline points="14 2 14 8 20 8" />
+                                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                                        <path d="M12 11h4" />
+                                        <path d="M12 16h4" />
+                                        <path d="M8 11h.01" />
+                                        <path d="M8 16h.01" />
+                                        <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
                                     </svg>
                                     <span style="color:var(--cyan)" data-i18n="docs.mmFormat">Comprendre le format
                                         .MM</span>
@@ -4177,6 +4187,76 @@
                             </div>
                         </div>
                         <!-- ── END Discord RPC ── -->
+
+                        <!-- ── Hashes / SHA ── -->
+                        <div class="glass-card" id="settings-sha-card"
+                            style="border: 1px solid rgba(139, 92, 246, 0.25); position: relative; overflow: hidden;">
+                            <div
+                                style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(139, 92, 246, 0.1);border-radius:50%;filter:blur(30px);pointer-events:none">
+                            </div>
+                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2.2">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                    <path d="m9 12 2 2 4-4" />
+                                </svg>
+                                <span data-i18n="settings.shaTitle">Hashes / SHA & Integrity</span>
+                            </h3>
+
+                            <div
+                                style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:rgba(139, 92, 246, 0.08);border:1px solid rgba(139, 92, 246, 0.2);border-radius:10px;margin-bottom:16px">
+                                <p style="font-size:12px;line-height:1.6;color:var(--text-secondary);margin:0"
+                                    data-i18n="settings.shaDesc">
+                                    Manage file integrity verification. Hashing ensures your mod files are not corrupted or tampered with.
+                                </p>
+                            </div>
+
+                            <!-- Strict mode toggle -->
+                            <div
+                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
+                                <div style="flex:1">
+                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                        data-i18n="settings.shaStrictMode">Strict Integrity Enforcement</div>
+                                    <div style="font-size:10px;color:var(--text-muted)"
+                                        data-i18n="settings.shaStrictModeDesc">Require valid SHA hash before enabling a mod</div>
+                                </div>
+                                <label class="bmm-switch">
+                                    <input type="checkbox" id="chk-sha-strict-mode">
+                                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                                </label>
+                            </div>
+
+                            <!-- Enable Lazy SHA toggle -->
+                            <div
+                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
+                                <div style="flex:1">
+                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                        data-i18n="settings.shaEnableLazy">Enable Background Hashing</div>
+                                    <div style="font-size:10px;color:var(--text-muted)"
+                                        data-i18n="settings.shaEnableLazyDesc">Automatically calculate missing hashes in the background</div>
+                                </div>
+                                <label class="bmm-switch">
+                                    <input type="checkbox" id="chk-sha-lazy-calc">
+                                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                                </label>
+                            </div>
+
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                                <button class="btn btn-secondary btn-sm" onclick="window.showHashingStats()">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+                                        <path d="M22 12A10 10 0 0 0 12 2v10z" />
+                                    </svg>
+                                    <span data-i18n="settings.shaStatsBtn">Hashing Progress</span>
+                                </button>
+                                <button class="btn btn-secondary btn-sm" onclick="window.recalculateAllHashesPrompt()">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M23 4v6h-6M1 20v-6h6" />
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                                    </svg>
+                                    <span data-i18n="settings.shaRecalculateAllBtn">Recalculate All</span>
+                                </button>
+                            </div>
+                        </div>
 
 
                         <div class="glass-card">

@@ -3,12 +3,28 @@ use crate::models::mod_entry::{ModEntry, ModStatus, ConflictReport, ConflictCate
 use crate::commands::crash::log_line;
 use crate::state::AppState;
 use std::path::PathBuf;
-use tauri::{State, Window};
+use tauri::{State, Window, Manager};
 use std::sync::Mutex;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use crate::error::AppError;
+
+#[derive(Serialize, Clone)]
+pub struct ShaStatusPayload {
+    pub mod_id: String,
+    pub status: String,
+    pub is_manual: bool,
+}
+
+#[derive(Serialize, Clone)]
+pub struct HashingStats {
+    pub total_mods: usize,
+    pub hashed_mods: usize,
+    pub queue_size: usize,
+    pub is_active: bool,
+    pub current_mod_name: Option<String>,
+}
 
 #[derive(Serialize, Clone)]
 struct BenchEventPayload {
@@ -500,7 +516,7 @@ fn resolve_dependencies(
 }
 
 #[tauri::command]
-pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: String) -> Result<Option<String>, String> {
+pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: String, bypass_sha: Option<bool>) -> Result<Option<String>, String> {
     log_line(format!("[MOD] Enabling mod '{}' (recursive if needed)", mod_id));
     
     // 1. Resolve full dependency chain and check for missing dependencies
@@ -537,6 +553,18 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
         let warning_pct = data.settings.storage_warning_space_pct;
         let critical_pct = data.settings.storage_critical_space_pct;
         let alert_enabled = data.settings.storage_alert_enabled;
+        let require_sha = data.settings.require_valid_sha;
+        let bypass = bypass_sha.unwrap_or(false);
+
+        if require_sha && !bypass {
+            for mid in &to_enable {
+                if let Some(m) = data.mods.iter().find(|m| &m.id == mid) {
+                    if m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty()) {
+                        return Err(format!("MISSING_SHA|{}|{}", m.id, m.name));
+                    }
+                }
+            }
+        }
 
         (to_enable, p, (warning_pct, critical_pct, alert_enabled), missing, needs_save)
     };
@@ -1483,12 +1511,12 @@ pub async fn install_from_modlist(
 
 #[tauri::command]
 pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>, String> {
-    let enabled_info = {
+    let (mods_to_check, game_path) = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;
         let p = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?.clone();
         
-        let mut enabled = Vec::new();
+        let mut check_list = Vec::new();
         for m in &data.mods {
             let mod_p = &m.mod_folder_path;
             let prof_p = &p.mods_path;
@@ -1501,24 +1529,23 @@ pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>,
             };
 
             if m.enabled && is_in_profile {
-                enabled.push(m.clone());
+                check_list.push(m.clone());
             }
         }
-        (enabled, p.game_path.clone())
+        (check_list, p.game_path.clone())
     };
 
-    let (mods, game_path) = enabled_info;
-
-    let altered = tauri::async_runtime::spawn_blocking(move || -> Result<Vec<String>, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || -> Result<(Vec<String>, Vec<String>), String> {
         let mut altered = Vec::new();
-        for m in mods {
+        let mut invalid_mod_ids = Vec::new();
+        
+        for m in mods_to_check {
             let mod_dir = &m.mod_folder_path;
             let game_dir = std::path::PathBuf::from(&game_path);
+            let mut mod_has_issues = false;
             
             if let Some(hashes) = &m.file_hashes {
                 // SHA256 Deep Scan for this mod
-                
-                // 1. Check for missing or corrupted
                 for (rel_str, old_hash) in hashes {
                     let rel = std::path::PathBuf::from(rel_str);
                     let src = mod_dir.join(&rel);
@@ -1526,24 +1553,29 @@ pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>,
                     
                     if !src.exists() {
                         altered.push(format!("[{}] {} (Manquant dans biblio)", m.name, rel.display()));
+                        mod_has_issues = true;
                     } else if !dst.exists() {
                         altered.push(format!("[{}] {} (Manquant dans jeu)", m.name, rel.display()));
+                        mod_has_issues = true;
                     } else {
-                        // Check game file hash
                         if let Ok(new_hash) = crate::fs_utils::compute_file_sha256(&dst) {
                             if new_hash != *old_hash {
                                 altered.push(format!("[{}] {} (Modifié/Corrompu)", m.name, rel.display()));
+                                mod_has_issues = true;
                             }
+                        } else {
+                             mod_has_issues = true;
                         }
                     }
                 }
                 
-                // 2. Check for unexpected files in mod dir
+                // Check for unexpected files in mod dir
                 if let Ok(current_files) = crate::fs_utils::list_mod_files(mod_dir) {
                     for f in current_files {
                         let rel_str = f.to_string_lossy().to_string();
                         if !hashes.contains_key(&rel_str) {
                              altered.push(format!("[{}] {} (Fichier inattendu)", m.name, rel_str));
+                             mod_has_issues = true;
                         }
                     }
                 }
@@ -1561,24 +1593,47 @@ pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>,
                             (Some(s), Some(d)) => {
                                 if s.len() != d.len() {
                                     altered.push(format!("[{}] {}", m.name, rel.display()));
+                                    mod_has_issues = true;
                                 }
                             },
                             _ => {
                                 altered.push(format!("[{}] {} (Manquant)", m.name, rel.display()));
+                                mod_has_issues = true;
                             }
                         }
                     }
                 }
             }
+            
+            if mod_has_issues {
+                invalid_mod_ids.push(m.id.clone());
+            }
         }
-        Ok(altered)
+        Ok((altered, invalid_mod_ids))
     }).await.map_err(|e| e.to_string())??;
 
-    log_line(format!("[INTEGRITY] Profile check complete: {} issue(s) found", altered.len()));
-    Ok(altered)
+    let (altered_list, invalid_ids) = result;
+
+    // Update state with invalid flags
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        for m in &mut data.mods {
+            if invalid_ids.contains(&m.id) {
+                m.file_hashes_invalid = Some(true);
+            } else {
+                // If we checked it and it had no issues, clear the flag
+                // (Only for mods that were actually checked, i.e. enabled and in profile)
+                // Wait, for simplicity, we only set it to true here. 
+                // Setting to false is done by background worker after successful hashing.
+            }
+        }
+    }
+
+    log_line(format!("[INTEGRITY] Profile check complete: {} issue(s) found", altered_list.len()));
+    Ok(altered_list)
 }
 #[tauri::command]
-pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable: bool) -> Result<(), String> {
+pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable: bool, bypass_sha: Option<bool>) -> Result<(), String> {
     log_line(format!("[MOD] Toggle all mods: {}", if enable { "ENABLE" } else { "DISABLE" }));
     let mod_ids = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
@@ -1601,7 +1656,7 @@ pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable:
 
     for id in mod_ids {
         if enable {
-            let _ = enable_mod(window.clone(), state.clone(), id).await;
+            let _ = enable_mod(window.clone(), state.clone(), id, bypass_sha).await;
         } else {
             let _ = disable_mod(window.clone(), state.clone(), id).await;
         }
@@ -1879,6 +1934,15 @@ pub async fn get_mod_integrity(state: State<'_, AppState>, mod_id: String) -> Re
 
     let is_valid = missing.is_empty() && modified.is_empty() && added.is_empty();
 
+    // Persist invalid status to ModEntry so UI can show the warning icon
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+            m.file_hashes_invalid = Some(!is_valid);
+        }
+    }
+    let _ = state.save();
+
     Ok(IntegrityReport {
         mod_id,
         missing,
@@ -1918,106 +1982,269 @@ pub async fn update_mod_hashes(state: State<'_, AppState>, mod_id: String) -> Re
     Ok(())
 }
 
-pub fn start_sha_calculation_background(state: tauri::State<'_, AppState>) {
+#[tauri::command]
+pub fn delete_mod_hashes(app_handle: tauri::AppHandle, state: State<AppState>, mod_id: String) -> Result<(), String> {
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+            m.file_hashes = None;
+            m.file_hashes_timestamp = None;
+        }
+    }
+    let _ = state.save();
+    
+    // Emit event for UI update
+    let _ = app_handle.emit_all("sha-status-changed", ShaStatusPayload {
+        mod_id: mod_id,
+        status: "missing".to_string(),
+        is_manual: true,
+    });
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_hashing_stats(state: State<AppState>) -> Result<HashingStats, String> {
+    let (total_mods, hashed_mods, current_mod_name) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let total = data.mods.len();
+        // Count once to avoid double iteration
+        let mut hashed = 0;
+        for m in &data.mods {
+            if m.file_hashes.is_some() && !m.file_hashes.as_ref().unwrap().is_empty() {
+                hashed += 1;
+            }
+        }
+        
+        let current_name = {
+            let current_id_lock = state.current_sha_mod_id.lock().unwrap();
+            if let Some(id) = &*current_id_lock {
+                data.mods.iter().find(|m| &m.id == id).map(|m| m.name.clone())
+            } else {
+                None
+            }
+        };
+        (total, hashed, current_name)
+    };
+    
+    let queue_size = state.sha_queue.lock().unwrap_or_else(|p| p.into_inner()).len() + 
+                     state.sha_queue_priority.lock().unwrap_or_else(|p| p.into_inner()).len();
+    
+    let is_active = state.sha_calculation_active.load(std::sync::atomic::Ordering::SeqCst);
+    
+    Ok(HashingStats {
+        total_mods,
+        hashed_mods,
+        queue_size,
+        is_active,
+        current_mod_name,
+    })
+}
+
+#[tauri::command]
+pub fn recalculate_all_hashes(state: State<'_, AppState>, profile_id: Option<String>, only_missing: bool) -> Result<(), String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    let mut queue = state.sha_queue.lock().unwrap_or_else(|p| p.into_inner());
+    
+    let mod_ids: Vec<String> = if let Some(pid) = profile_id {
+        let profile = data.profiles.iter().find(|p| p.id == pid).ok_or("Profil introuvable")?;
+        data.mods.iter()
+            .filter(|m| m.mod_folder_path.starts_with(&profile.mods_path))
+            .filter(|m| !only_missing || m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty()))
+            .map(|m| m.id.clone())
+            .collect()
+    } else {
+        data.mods.iter()
+            .filter(|m| !only_missing || m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty()))
+            .map(|m| m.id.clone())
+            .collect()
+    };
+    
+    for id in mod_ids {
+        if !queue.contains(&id) {
+            queue.push_back(id);
+        }
+    }
+    
+    Ok(())
+}
+
+pub fn populate_sha_queue(state: tauri::State<'_, AppState>) {
+    let data_shared = state.data.clone();
     let sha_queue = state.sha_queue.clone();
-    let sha_queue_priority = state.sha_queue_priority.clone();
-    let sha_calculation_active = state.sha_calculation_active.clone();
-    let data_path = state.data_path.clone();
+    
+    std::thread::spawn(move || {
+        let (unhashed_mods, enabled) = {
+            let data = data_shared.lock().unwrap_or_else(|p| p.into_inner());
+            if !data.settings.enable_lazy_sha_calculation {
+                return;
+            }
+            let mods = data.mods.iter()
+                .filter(|m| {
+                    let missing = m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty());
+                    let invalid = m.file_hashes_invalid.unwrap_or(false);
+                    missing || invalid
+                })
+                .map(|m| m.id.clone())
+                .collect::<Vec<String>>();
+            (mods, data.settings.enable_lazy_sha_calculation)
+        };
+
+        if !enabled { return; }
+
+        let unhashed_mods_to_add = {
+            let queue = sha_queue.lock().unwrap_or_else(|p| p.into_inner());
+            let existing_ids: std::collections::HashSet<String> = queue.iter().cloned().collect();
+            unhashed_mods.into_iter()
+                .filter(|id| !existing_ids.contains(id))
+                .collect::<Vec<String>>()
+        };
+
+        if !unhashed_mods_to_add.is_empty() {
+            let mut queue = sha_queue.lock().unwrap_or_else(|p| p.into_inner());
+            let count = unhashed_mods_to_add.len();
+            for id in unhashed_mods_to_add {
+                queue.push_back(id);
+            }
+            crate::commands::crash::log_line(format!("[SHA-CALC] Background population done: added {} mods", count));
+        }
+    });
+}
+
+pub fn start_sha_calculation_background(app_handle: tauri::AppHandle) {
+    let (sha_queue, sha_queue_priority, sha_calculation_active, current_sha_mod_id, data_shared, data_path) = {
+        let state = app_handle.state::<AppState>();
+        (
+            state.sha_queue.clone(),
+            state.sha_queue_priority.clone(),
+            state.sha_calculation_active.clone(),
+            state.current_sha_mod_id.clone(),
+            state.data.clone(),
+            state.data_path.clone(),
+        )
+    };
     
     std::thread::spawn(move || {
         log_line("[SHA-CALC] Background SHA calculation thread started");
         
+        // Initial delay to let the app settle at startup
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        
+        let mut processed_since_save = 0;
+        
         loop {
-            // Check if already running
+            // Check if already running (redundant but safe)
             if sha_calculation_active.load(std::sync::atomic::Ordering::SeqCst) {
                 std::thread::sleep(std::time::Duration::from_millis(500));
                 continue;
             }
+
+            // Check if lazy calculation is disabled
+            let (lazy_enabled, priority_empty) = {
+                let data = data_shared.lock().unwrap_or_else(|p| p.into_inner());
+                let priority_queue = sha_queue_priority.lock().unwrap_or_else(|p| p.into_inner());
+                (data.settings.enable_lazy_sha_calculation, priority_queue.is_empty())
+            };
+
+            if !lazy_enabled && priority_empty {
+                // If we have unsaved changes, save them before sleeping
+                if processed_since_save > 0 {
+                    let data_to_save = {
+                        let data_lock = data_shared.lock().unwrap_or_else(|e| e.into_inner());
+                        (*data_lock).clone()
+                    };
+                    if let Ok(json) = serde_json::to_string_pretty(&data_to_save) {
+                        let _ = std::fs::write(&*data_path, json);
+                        log_line("[SHA-CALC] Lazy disabled, saved final changes outside lock");
+                    }
+                    processed_since_save = 0;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+                continue;
+            }
             
             // Get next mod from priority queue or normal queue
-            let mod_id = {
-                let mut priority_queue = sha_queue_priority.lock().unwrap_or_else(|p| p.into_inner());
+            let id_opt = {
+                let mut priority_queue = match sha_queue_priority.lock() {
+                    Ok(g) => g,
+                    Err(p) => p.into_inner(),
+                };
                 if let Some(id) = priority_queue.pop_front() {
-                    Some(id)
+                    Some((id, true))
                 } else {
-                    drop(priority_queue);
-                    let mut normal_queue = sha_queue.lock().unwrap_or_else(|p| p.into_inner());
-                    normal_queue.pop_front()
+                    let mut normal_queue = match sha_queue.lock() {
+                        Ok(g) => g,
+                        Err(p) => p.into_inner(),
+                    };
+                    normal_queue.pop_front().map(|id| (id, false))
                 }
             };
             
-            match mod_id {
-                Some(id) => {
-                    sha_calculation_active.store(true, std::sync::atomic::Ordering::SeqCst);
-                    
-                    log_line(format!("[SHA-CALC] Calculating hashes for mod: {}", id));
-                    
-                    // Load data to get mod path
-                    let mod_path_opt = {
-                        let data = crate::state::AppState::load(data_path.clone());
-                        let data_lock = data.data.lock().unwrap_or_else(|p| p.into_inner());
-                        data_lock.mods.iter().find(|m| m.id == id).map(|m| m.mod_folder_path.clone())
-                    };
-                    
-                    if mod_path_opt.is_none() {
-                        log_line(format!("[SHA-CALC] Mod {} not found, skipping", id));
+            if let Some((id, is_manual)) = id_opt {
+                // Set current mod ID for stats (only for background worker)
+                if !is_manual {
+                    if let Ok(mut current_id_lock) = current_sha_mod_id.lock() {
+                        *current_id_lock = Some(id.clone());
                     }
-                    
-                    if let Some(mod_path) = mod_path_opt {
-                        if let Ok(current_files) = fs_utils::list_mod_files(&mod_path) {
-                            let mut new_hashes = std::collections::HashMap::new();
-                            let mut calculated = 0;
-                            
-                            for f in current_files {
-                                let full_path = mod_path.join(&f);
-                                if let Ok(hash) = fs_utils::compute_file_sha256(&full_path) {
-                                    new_hashes.insert(f.to_string_lossy().to_string(), hash);
-                                    calculated += 1;
-                                }
-                            }
-                            
-                            // Reload data, update hashes, and save
-                            {
-                                let data = crate::state::AppState::load(data_path.clone());
-                                let mut data_lock = data.data.lock().unwrap_or_else(|p| p.into_inner());
-                                if let Some(m) = data_lock.mods.iter_mut().find(|m| m.id == id) {
-                                    m.file_hashes = Some(new_hashes);
-                                }
-                                let _ = data.save();
-                            }
-                            
-                            log_line(format!("[SHA-CALC] Completed mod {} ({} files)", id, calculated));
+                }
+                
+                sha_calculation_active.store(true, std::sync::atomic::Ordering::SeqCst);
+                
+                process_single_mod_hashing(&id, is_manual, &app_handle, &data_shared, &data_path);
+                
+                if !is_manual {
+                    processed_since_save += 1;
+                    if processed_since_save >= 10 {
+                         let data_to_save = {
+                            let data_lock = data_shared.lock().unwrap_or_else(|e| e.into_inner());
+                            (*data_lock).clone()
+                        };
+                        if let Ok(json) = serde_json::to_string_pretty(&data_to_save) {
+                            let _ = std::fs::write(&*data_path, json);
                         }
+                        processed_since_save = 0;
                     }
-                    
-                    sha_calculation_active.store(false, std::sync::atomic::Ordering::SeqCst);
-                    
-                    // Throttle: wait between mods to avoid CPU/disk saturation
-                    std::thread::sleep(std::time::Duration::from_millis(100));
                 }
-                None => {
-                    // No mods in queue, sleep longer
-                    std::thread::sleep(std::time::Duration::from_millis(1000));
+
+                sha_calculation_active.store(false, std::sync::atomic::Ordering::SeqCst);
+                
+                if !is_manual {
+                    if let Ok(mut current_id_lock) = current_sha_mod_id.lock() {
+                        *current_id_lock = None;
+                    }
                 }
+                
+                // Throttle: wait between mods to avoid CPU/disk saturation
+                std::thread::sleep(std::time::Duration::from_millis(500));
+            } else {
+                // No mods in queue, save if we have pending changes
+                if processed_since_save > 0 {
+                    let data_to_save = {
+                        let data_lock = data_shared.lock().unwrap_or_else(|e| e.into_inner());
+                        (*data_lock).clone()
+                    };
+                    if let Ok(json) = serde_json::to_string_pretty(&data_to_save) {
+                        let _ = std::fs::write(&*data_path, json);
+                        log_line(format!("[SHA-CALC] Queue empty, saved pending {} mods outside lock", processed_since_save));
+                    }
+                    processed_since_save = 0;
+                }
+                // No mods in queue, sleep longer
+                std::thread::sleep(std::time::Duration::from_millis(1000));
             }
         }
     });
 }
 
-pub fn populate_sha_queue(state: tauri::State<'_, AppState>) {
-    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-    let mut queue = state.sha_queue.lock().unwrap_or_else(|p| p.into_inner());
-    
-    for mod_entry in &data.mods {
-        if mod_entry.file_hashes.is_none() || mod_entry.file_hashes.as_ref().map_or(true, |h| h.is_empty()) {
-            queue.push_back(mod_entry.id.clone());
+pub fn add_mod_to_priority_sha_queue(state: tauri::State<'_, AppState>, mod_id: String) {
+    // Only add if lazy calculation is enabled OR if it's a manual action (this function is usually called on auto-activation)
+    {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        if !data.settings.enable_lazy_sha_calculation {
+            return;
         }
     }
-    
-    log_line(format!("[SHA-CALC] Added {} mods to SHA calculation queue", queue.len()));
-}
 
-pub fn add_mod_to_priority_sha_queue(state: tauri::State<'_, AppState>, mod_id: String) {
     let mut priority_queue = state.sha_queue_priority.lock().unwrap_or_else(|p| p.into_inner());
     
     // Check if mod already needs hashing
@@ -2038,4 +2265,123 @@ pub fn add_mod_to_priority_sha_queue(state: tauri::State<'_, AppState>, mod_id: 
         priority_queue.push_back(mod_id.clone());
         log_line(format!("[SHA-CALC] Added mod {} to priority SHA queue", mod_id));
     }
+}
+
+fn process_single_mod_hashing(
+    id: &str,
+    is_manual: bool,
+    app_handle: &tauri::AppHandle,
+    data_shared: &std::sync::Arc<std::sync::Mutex<crate::state::AppData>>,
+    data_path: &std::path::PathBuf,
+) {
+    let _ = app_handle.emit_all("sha-status-changed", ShaStatusPayload {
+        mod_id: id.to_string(),
+        status: "calculating".to_string(),
+        is_manual,
+    });
+    
+    log_line(format!("[SHA-CALC] Calculating hashes for mod: {} (manual: {})", id, is_manual));
+    
+    // Get mod path from managed state
+    let mod_path_opt = {
+        let data_lock = data_shared.lock().unwrap_or_else(|e| e.into_inner());
+        data_lock.mods.iter().find(|m| m.id == id).map(|m| m.mod_folder_path.clone())
+    };
+    
+    if let Some(mod_path) = mod_path_opt {
+        if let Ok(current_files) = fs_utils::list_mod_files(&mod_path) {
+            let mut new_hashes = std::collections::HashMap::new();
+            let mut calculated = 0;
+
+            for f in current_files {
+                let full_path = mod_path.join(&f);
+                if let Ok(hash) = fs_utils::compute_file_sha256(&full_path) {
+                    new_hashes.insert(f.to_string_lossy().to_string(), hash);
+                    calculated += 1;
+                }
+                
+                // Yield occasionally if mod is huge
+                if calculated % 50 == 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+            }
+
+            let timestamp = chrono::Local::now().to_rfc3339();
+            
+            // Update managed state
+            let data_to_save = {
+                let mut data_lock = data_shared.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(m) = data_lock.mods.iter_mut().find(|m| m.id == id) {
+                    m.file_hashes = Some(new_hashes);
+                    m.file_hashes_timestamp = Some(timestamp);
+                    m.file_hashes_invalid = Some(false);
+                }
+                
+                if is_manual {
+                    Some((*data_lock).clone())
+                } else {
+                    None
+                }
+            };
+            
+            // Perform the slow serialization and I/O outside the lock!
+            if let Some(data) = data_to_save {
+                if let Ok(json) = serde_json::to_string_pretty(&data) {
+                    let _ = std::fs::write(data_path, json);
+                    log_line(format!("[SHA-CALC] Saved manual hash for mod {}", id));
+                }
+            }
+            
+            log_line(format!("[SHA-CALC] Completed mod {} ({} files)", id, calculated));
+        } else {
+            log_line(format!("[SHA-CALC] Failed to list mod files for mod: {}", id));
+        }
+    }
+    
+    let _ = app_handle.emit_all("sha-status-changed", ShaStatusPayload {
+        mod_id: id.to_string(),
+        status: "done".to_string(),
+        is_manual,
+    });
+}
+
+#[tauri::command]
+pub fn recalculate_mod_sha(app_handle: tauri::AppHandle, state: tauri::State<'_, AppState>, mod_id: String) -> Result<(), String> {
+    // 1. Remove from all queues first
+    {
+        let mut priority_queue = state.sha_queue_priority.lock().unwrap_or_else(|p| p.into_inner());
+        priority_queue.retain(|id| id != &mod_id);
+    }
+    {
+        let mut normal_queue = state.sha_queue.lock().unwrap_or_else(|p| p.into_inner());
+        normal_queue.retain(|id| id != &mod_id);
+    }
+    
+    // 2. Check if mod is ALREADY being hashed by background worker
+    {
+        let current_id_lock = state.current_sha_mod_id.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(current_id) = &*current_id_lock {
+            if current_id == &mod_id {
+                log_line(format!("[SHA-CALC] Mod {} is already being hashed by background worker, ignoring manual request", mod_id));
+                return Ok(());
+            }
+        }
+    }
+
+    // 3. Spawn a direct thread for parallel manual calculation
+    let data_shared = state.data.clone();
+    let data_path = state.data_path.clone();
+    
+    crate::commands::crash::log_line(format!("[SHA-CALC] Manually triggered PARALLEL hash calculation for mod {}", mod_id));
+
+    std::thread::spawn(move || {
+        process_single_mod_hashing(&mod_id, true, &app_handle, &data_shared, &data_path);
+    });
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub fn trigger_sha_background_population(state: tauri::State<'_, AppState>) {
+    populate_sha_queue(state);
 }

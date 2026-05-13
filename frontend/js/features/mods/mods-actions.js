@@ -100,7 +100,7 @@ export async function toggleAllMods(forcedEnable = null) {
         altBtn.disabled = true;
     btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${enable ? t('common.enabling') : t('common.disabling')}`;
     try {
-        await invoke('toggle_all_mods', { enable });
+        await invoke('toggle_all_mods', { enable, bypassSha: false });
         await refreshMods();
         const key = enable ? 'mod.enabledCount' : 'mod.disabledCount';
         toast(t(key, { count: String(targetMods.length) }), 'success');

@@ -36,10 +36,16 @@ pub struct AppSettings {
     pub auto_fill_metadata: bool,
     #[serde(default)]
     pub cloudflared_path: Option<String>,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub discord_rpc_enabled: bool,
     #[serde(default)]
     pub fs_security_mode: Option<String>, // Some("full") | Some("limited") | None
+    #[serde(default)]
+    pub require_valid_sha: bool,
+    #[serde(default = "default_true")]
+    pub show_sha_loading_animation: bool,
+    #[serde(default = "default_true")]
+    pub enable_lazy_sha_calculation: bool,
 }
 
 impl Default for AppSettings {
@@ -56,11 +62,14 @@ impl Default for AppSettings {
             storage_critical_space_pct: default_storage_critical(),
             current_filter: default_filter(),
             current_sort_by: default_sort(),
-            last_session_clean: default_true(),
+            last_session_clean: true,
             auto_fill_metadata: false,
             cloudflared_path: None,
-            discord_rpc_enabled: default_true(),
+            discord_rpc_enabled: false,
             fs_security_mode: None,
+            require_valid_sha: false,
+            show_sha_loading_animation: true,
+            enable_lazy_sha_calculation: true,
         }
     }
 }
@@ -74,7 +83,7 @@ fn default_lang() -> String { "fr".to_string() }
 fn default_storage_warning() -> u32 { 40 }
 fn default_storage_critical() -> u32 { 30 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct AppData {
     pub profiles: Vec<Profile>,
     pub mods: Vec<ModEntry>,
@@ -90,8 +99,8 @@ pub struct AppData {
 }
 
 pub struct AppState {
-    pub data: Mutex<AppData>,
-    pub data_path: PathBuf,
+    pub data: std::sync::Arc<Mutex<AppData>>,
+    pub data_path: std::sync::Arc<PathBuf>,
     pub install_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub sync_paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub benchmark_running: std::sync::Arc<std::sync::atomic::AtomicBool>,
@@ -107,6 +116,7 @@ pub struct AppState {
     pub sha_queue: std::sync::Arc<Mutex<std::collections::VecDeque<String>>>,
     pub sha_queue_priority: std::sync::Arc<Mutex<std::collections::VecDeque<String>>>,
     pub sha_calculation_active: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub current_sha_mod_id: std::sync::Arc<Mutex<Option<String>>>,
 }
 
 impl AppState {
@@ -128,8 +138,8 @@ impl AppState {
             AppData::default()
         };
         Self {
-            data: Mutex::new(data),
-            data_path,
+            data: std::sync::Arc::new(Mutex::new(data)),
+            data_path: std::sync::Arc::new(data_path),
             install_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             sync_paused: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             benchmark_running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -141,16 +151,17 @@ impl AppState {
             sha_queue: std::sync::Arc::new(Mutex::new(std::collections::VecDeque::new())),
             sha_queue_priority: std::sync::Arc::new(Mutex::new(std::collections::VecDeque::new())),
             sha_calculation_active: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            current_sha_mod_id: std::sync::Arc::new(Mutex::new(None)),
         }
     }
 
     pub fn save(&self) -> anyhow::Result<()> {
         let data = self.data.lock().unwrap();
-        if let Some(parent) = self.data_path.parent() {
+        if let Some(parent) = (*self.data_path).parent() {
             std::fs::create_dir_all(parent)?;
         }
         let json = serde_json::to_string_pretty(&*data)?;
-        std::fs::write(&self.data_path, json)?;
+        std::fs::write(&*self.data_path, json)?;
         Ok(())
     }
 }

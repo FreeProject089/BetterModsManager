@@ -72,6 +72,7 @@ export interface ModEntry {
   cached_files: string[] | null;
   last_scan_mtime: number;
   file_hashes: Record<string, string> | null;
+  file_hashes_invalid?: boolean;
 }
 
 export interface EnrichedMod extends ModEntry {
@@ -120,6 +121,8 @@ export interface AppSettings {
   auto_fill_metadata: boolean;
   cloudflared_path: string | null;
   discord_rpc_enabled: boolean;
+  show_sha_loading_animation: boolean;
+  enable_lazy_sha_calculation: boolean;
 }
 
 // ── ModList (.MM format) ─────────────────────────────────

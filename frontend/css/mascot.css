@@ -89,7 +89,7 @@ body.is-maximized .resize-strips {
     position: absolute;
     top: 0px;
     left: 0px;
-    z-index: 10001;
+    z-index: 1000000;
     pointer-events: none;
     animation: mascot-bounce 4s ease-in-out infinite;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);

@@ -191,6 +191,13 @@ export async function renderModDetail(modId) {
     panel.querySelector('#btn-browse-archive').onclick = () => openArchiveExplorer(mod);
     panel.querySelector('#btn-verify-mod-integrity')?.addEventListener('click', async () => {
         try {
+            // If hashes are missing, trigger calculation first
+            if (!mod.file_hashes || Object.keys(mod.file_hashes).length === 0) {
+                toast(t('mods.sha.calculating'), 'info');
+                await invoke('recalculate_mod_sha', { modId: mod.id });
+                // Note: Background calculation started, report might still be empty if we call it immediately.
+                // But get_mod_integrity in Rust will report all files as "added" if no hash exists.
+            }
             toast(t('integrity.checking'), 'info');
             const report = await invoke('get_mod_integrity', { modId: mod.id });
             showIntegrityReport(mod.name, report);
