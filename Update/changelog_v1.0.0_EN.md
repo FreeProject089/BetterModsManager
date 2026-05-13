@@ -33,6 +33,15 @@ This version represents the transition to the 1.0 milestone, focusing on cross-p
 - Implemented comprehensive subcommands for all core operations (mods, profiles, sync, stats, crashes, launchpacks).
 - Added environment auto-discovery: the CLI now automatically locates the BMM data directory and configuration files.
 
+## [NEW] Mod Integrity & Advanced Security
+### Deep Scan Engine (SHA-256)
+- Implemented a full cryptographic integrity system based on SHA-256 fingerprints.
+- **Deep Audit**: Added the ability to perform a recursive audit of mod folders to identify missing, modified, or unauthorized files.
+- **Visual Alerts**: Integrated a "Pulsing Red Shield" visual indicator to highlight corrupted or compromised mods in real-time.
+- **Persistent State**: The integrity status is now persisted in the mod database, allowing for instant identification of issues upon application launch.
+- **Reactive UI**: Implemented real-time UI synchronization: the manager now updates integrity icons immediately across the library and detail panels when a scan is performed.
+- **Safety Enforcement**: Integrated integrity checks into the activation sequence to prevent enabling mods with missing or corrupted files.
+
 ## [NEW] UI/UX & Premium Polish
 ### Help Center and Navigation
 - **Help & Other**: Rebranded the Documentation section to "Help & other" to provide a unified hub for guides, interactive diagrams, and technical resources.
