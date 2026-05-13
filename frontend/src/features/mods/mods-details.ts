@@ -200,7 +200,7 @@ export async function renderModDetail(modId) {
       }
       toast(t('integrity.checking'), 'info');
       const report = await invoke('get_mod_integrity', { modId: mod.id });
-      showIntegrityReport(mod.name, report);
+      showIntegrityReport(mod, report);
     } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
   });
 
@@ -362,16 +362,28 @@ function setupTreeInteractions(mod) {
   });
 }
 
-export function showIntegrityReport(modName, report) {
+export function showIntegrityReport(mod: any, report: any) {
   const modal = document.getElementById('modal-integrity');
   const content = document.getElementById('integrity-report-content');
   if (!modal || !content) return;
+
+  // Update local mod object and global state
+  const is_valid = report.is_valid;
+  mod.file_hashes_invalid = !is_valid;
+  
+  // Find the mod in appState and update it there too
+  const stateMod = appState.state.allMods.find(m => m.id === mod.id);
+  if (stateMod) stateMod.file_hashes_invalid = !is_valid;
+
+  // Refresh only the mod list UI (non-blocking)
+  if (window._refreshModsFn) window._refreshModsFn(false, true);
+
   const hasIssues = report.missing.length > 0 || report.modified.length > 0 || report.added.length > 0;
   if (!hasIssues) {
     content.innerHTML = `<div style="color:var(--success);padding:20px;text-align:center;"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:16px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg><h3>${t('integrity.ok')}</h3><p style="font-size:13px;color:var(--text-muted)">${t('integrity.modClean')}</p></div>`;
   } else {
     const renderSec = (title, items, color) => items.length === 0 ? '' : `<div><div style="font-size:11px;font-weight:700;color:${color}">${title} (${items.length})</div><ul style="background:rgba(0,0,0,0.25);padding:10px;border-radius:8px;list-style:none">${items.map(f => `<li style="font-size:11px;font-family:var(--font-mono);color:var(--text-primary)">> ${escHtml(f)}</li>`).join('')}</ul></div>`;
-    content.innerHTML = `<div style="padding:10px 0;"><h3 style="color:var(--warning)">${t('integrity.issues')}</h3><p>Mod: <strong>${escHtml(modName)}</strong></p>${renderSec(t('integrity.missing'), report.missing, 'var(--danger)')}${renderSec(t('integrity.modified'), report.modified, 'var(--warning)')}${renderSec(t('integrity.added'), report.added, 'var(--accent)')}</div>`;
+    content.innerHTML = `<div style="padding:10px 0;"><h3 style="color:var(--warning)">${t('integrity.issues')}</h3><p>Mod: <strong>${escHtml(mod.name)}</strong></p>${renderSec(t('integrity.missing'), report.missing, 'var(--danger)')}${renderSec(t('integrity.modified'), report.modified, 'var(--warning)')}${renderSec(t('integrity.added'), report.added, 'var(--accent)')}</div>`;
   }
   modal.classList.add('open');
 }

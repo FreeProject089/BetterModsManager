@@ -440,6 +440,19 @@ export function updateCardState(card, mod) {
         pill.style.color = mod.enabled ? 'var(--success)' : 'var(--text-muted)';
         pill.textContent = mod.enabled ? (t('mod.statusActive') || 'ACTIVE') : (t('mod.statusInactive') || 'INACTIVE');
     }
+    // Update SHA status icon
+    const shaIcon = card.querySelector('.sha-status-icon');
+    if (shaIcon) {
+        const isInvalid = mod.file_hashes_invalid;
+        const isVerified = mod.file_hashes && Object.keys(mod.file_hashes).length > 0;
+        shaIcon.className = `sha-status-icon ${isInvalid ? 'invalid' : (isVerified ? 'verified' : 'missing')}`;
+        shaIcon.style.color = isInvalid ? 'var(--danger)' : (isVerified ? 'var(--success)' : 'var(--text-muted)');
+        shaIcon.style.opacity = (isInvalid || isVerified) ? '0.9' : '0.5';
+        // Update tooltip
+        const tooltipKey = isInvalid ? 'hashes.status.invalid' : (isVerified ? 'hashes.status.verified' : 'hashes.status.missing');
+        const tooltipIcon = isInvalid ? 'alert' : 'shield';
+        shaIcon.setAttribute('onmouseenter', `window.showTaskyHelp('${tooltipKey}', '${tooltipIcon}')`);
+    }
 }
 export function setModLoading(modId, isLoading) {
     const card = document.querySelector(`.mod-card[data-id="${modId}"]`);

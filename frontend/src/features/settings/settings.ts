@@ -852,6 +852,7 @@ window.recalculateModSha = async (modId) => {
     try {
         toast(t('mods.sha.calculating') || 'Calculating hashes...', 'info');
         await invoke('recalculate_mod_sha', { modId });
+        if (window._refreshModsFn) window._refreshModsFn();
     } catch (err) {
         toast(t('common.error') + ' : ' + err, 'error');
     }
