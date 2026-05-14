@@ -48,6 +48,11 @@ This version represents the transition to the 1.0 milestone, focusing on cross-p
 - **Tooltip Management**: Implemented a centralized contextual help system (`window.showTaskyHelp`) powered by the Tasky mascot, providing instant explanations for nearly every UI element.
 - **Decorative Elements**: Added high-fidelity decorative components including refined resize strips, corner handles, and glassmorphic overlays for a more premium feel.
 - **Tasky Polish**: Refined the mascot's animations and interactive positioning during onboarding and help sequences.
+- **Updates History**: Implemented a comprehensive change tracking system for mod metadata (Author, Version, Description, Tags, Links, Dependencies).
+    - **Smart Filtering**: Added action-based filtering to quickly locate specific modifications.
+    - **Retention Management**: Added configurable history retention duration (e.g., 30 days) with a manual clear option.
+    - **Premium Interface**: History entries are rendered with high-precision timestamps and dynamic badges identifying modified fields.
+
 
 ### [MAJOR] Visual Mapper & Directory Analytics
 - **Structural Tree Analysis**: Implemented a high-performance visual mapper to explore the physical structure of mod collections.

@@ -39,6 +39,11 @@ Cette version marque la transition vers l'étape 1.0, en se concentrant sur l'ut
 - **Gestion des Tooltips** : Implémentation d'un système d'aide contextuelle centralisé (`window.showTaskyHelp`) piloté par la mascotte Tasky, offrant des explications instantanées pour presque chaque élément de l'interface.
 - **Éléments Décoratifs** : Ajout de composants décoratifs haute fidélité incluant des bordures de redimensionnement affinées, des poignées de coin et des superpositions glassmorphiques pour un ressenti plus premium.
 - **Polissage de Tasky** : Amélioration des animations et du positionnement interactif de la mascotte pendant les phases d'onboarding et d'aide.
+- **Historique des Modifications** : Implémentation d'un système complet de suivi des changements pour les métadonnées des mods (Auteur, Version, Description, Tags, Liens, Dépendances).
+    - **Filtrage Intelligent** : Ajout de filtres par type d'action pour retrouver rapidement des modifications spécifiques.
+    - **Gestion de la Rétention** : Paramétrage de la durée de conservation de l'historique (ex: 30 jours) avec option de nettoyage manuel.
+    - **Interface Premium** : Rendu des entrées d'historique avec horodatage précis et badges dynamiques identifiant les champs modifiés.
+
 
 ### [MAJEUR] Mapper Visuel & Analyse de Répertoires
 - **Analyse Structurelle en Arbre** : Implémentation d'un mapper visuel haute performance pour explorer la structure physique des collections de mods.

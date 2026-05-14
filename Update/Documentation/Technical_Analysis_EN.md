@@ -278,7 +278,8 @@ Distribution mode controlled via `app.cfg` with themed release note modals.
 
 ## 18. Real-Time Performance Monitoring
 
-`sysinfo` backend with high-perf Canvas/SVG visualization and timeline scrubbing.
+`sysinfo` backend with high-perf Canvas/SVG visualization and timeline scrubbing. (v1.0.0) Enhanced with an **Advanced Performance Monitor** for deep-dive system health (Latency, Thread usage, Async tasks) and automated reporting.
+- **Solid Progress Design**: Replaced linear-gradient animations with high-visibility flat blue (`var(--accent)`) background-color for consistent performance rendering.
 
 ---
 
@@ -476,7 +477,7 @@ BMM v1.0.0 introduces a centralized assistance and visual refinement engine.
 
 | Component | Implementation |
 | :--- | :--- |
-| **Tasky Help Engine** | `window.showTaskyHelp(key, type)` triggers localized bubbles. The engine maps i18n keys to DOM positions using `getBoundingClientRect()` relative to the active view. |
+| **Tasky Help Engine** | `window.showTaskyHelp(key, type)` triggers localized bubbles. (v1.0.0) Redesigned for compactness with centered alignment, reduced padding, and optimized anchor positioning. |
 | **Tooltip Isolation** | Tooltips are rendered in a high-z-index portal to prevent clipping from parent `overflow: hidden` containers. |
 | **Resize Strip Logic** | A custom resize engine in `main.ts` listens for `mousedown` on edge strips and uses `tauri::window::start_dragging` or manual bounds calculation for precision. |
 | **Glassmorphism Tokens** | Standardized CSS variables (`--bg-glass`, `--border-glass`) used across all 1.0 components for visual consistency. |
@@ -510,4 +511,19 @@ The `Mapper.ts` module handles the visual presentation of the directory tree.
 
 ---
 
+## 38. Metadata Updates History Engine (v1.0.0)
+
+BMM v1.0.0 introduces a persistent tracking system for all mod metadata mutations.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Tracking Trigger** | Integrated into the `update_mod_metadata` command. Compares the "before" and "after" state of each field using `PartialEq`. |
+| **Event Schema** | `HistoryEntry` struct capturing: Mod ID, Timestamp (UNIX), Action Type, and a bitmask/list of modified field identifiers. |
+| **Data Storage** | Serialized as a separate `history.json` file per profile to ensure high performance and avoid bloating the main `mods.json`. |
+| **Retention Worker** | A background cleanup task that executes on application startup, purging entries older than the user-defined threshold (default: 30 days). |
+| **Search & Filter** | The frontend uses a specialized filter state to perform client-side matching on the history collection without re-fetching from disk. |
+
+---
+
 *Better Mod Manager is developed by FreeProject089 — Engineered for uncompromising performance, file safety, and modern mod management.*
+

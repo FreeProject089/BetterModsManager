@@ -507,4 +507,21 @@ The Visual Mapper provides a deep structural analysis of your mod collection, en
 
 ---
 
+## 39. Updates History (v1.0.0)
+
+The Updates History system provides a detailed audit log of all changes made to your mod collection's metadata.
+
+| Feature | Description |
+| :--- | :--- |
+| **Metadata Tracking** | Automatically logs changes to mod names, versions, authors, descriptions, tags, and download links. |
+| **Field-Level Detail** | Each entry identifies exactly which fields were modified (e.g., "Modified: Author, Tags"). |
+| **Historical Audit** | View the exact date and time of every metadata update. |
+| **Action Filtering** | Filter the history list to show only specific types of modifications. |
+| **Retention Control** | Choose how long to keep history (e.g., 30 days, 6 months) to manage disk usage. |
+| **Manual Cleanup** | Clear the entire history log with a single click from the management modal. |
+| **Premium View** | Features a glassmorphic list design with high-fidelity badges and indicators. |
+
+---
+
 *Better Mod Manager is developed by FreeProject089.*
+

@@ -418,4 +418,21 @@ Le Mapper Visuel offre une analyse structurelle approfondie de votre collection 
 
 ---
 
+## 39. Historique des Modifications (v1.0.0)
+
+Le système d'Historique des Modifications fournit un journal d'audit détaillé de tous les changements apportés aux métadonnées de votre collection de mods.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Suivi des Métadonnées** | Enregistre automatiquement les changements de noms, versions, auteurs, descriptions, tags et liens de téléchargement. |
+| **Détail par Champ** | Chaque entrée identifie exactement quels champs ont été modifiés (ex: "Modifié : Auteur, Tags"). |
+| **Audit Historique** | Consultez la date et l'heure exactes de chaque mise à jour de métadonnées. |
+| **Filtrage d'Actions** | Filtrez la liste d'historique pour afficher uniquement des types spécifiques de modifications. |
+| **Contrôle de Rétention** | Choisissez la durée de conservation de l'historique (ex: 30 jours, 6 mois) pour gérer l'espace disque. |
+| **Nettoyage Manuel** | Effacez l'intégralité du journal d'historique en un seul clic via la modale de gestion. |
+| **Vue Premium** | Design de liste glassmorphique avec badges et indicateurs haute fidélité. |
+
+---
+
 *Better Mod Manager est développé par FreeProject089.*
+

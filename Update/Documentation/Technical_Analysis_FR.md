@@ -485,4 +485,19 @@ Le module `Mapper.ts` gère la présentation visuelle de l'arborescence des rép
 
 ---
 
+## 38. Moteur d'Historique des Modifications (v1.0.0)
+
+BMM v1.0.0 introduit un système de suivi persistant pour toutes les mutations de métadonnées de mods.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Déclencheur de Suivi** | Intégré dans la commande `update_mod_metadata`. Compare l'état "avant" et "après" de chaque champ via `PartialEq`. |
+| **Schéma d'Événement** | Structure `HistoryEntry` capturant : ID du mod, Horodatage (UNIX), Type d'action et une liste d'identifiants de champs modifiés. |
+| **Stockage des Données** | Sérialisé sous forme de fichier `history.json` séparé par profil pour garantir des performances élevées et éviter de gonfler le fichier `mods.json` principal. |
+| **Worker de Rétention** | Tâche de nettoyage en arrière-plan s'exécutant au démarrage de l'application, purgeant les entrées plus anciennes que le seuil défini par l'utilisateur (défaut : 30 jours). |
+| **Recherche & Filtrage** | Le frontend utilise un état de filtre spécialisé pour effectuer des correspondances côté client sur la collection d'historique sans re-chargement depuis le disque. |
+
+---
+
 *Better Mod Manager est développé par FreeProject089 — Conçu pour une performance sans compromis, la sécurité des fichiers et une gestion moderne des mods.*
+
