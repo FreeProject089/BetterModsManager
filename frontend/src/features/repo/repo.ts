@@ -281,6 +281,17 @@ export function initRepo() {
         inputMiniRepoPath: document.getElementById('repo-mini-server-json-path'),
         cbAutoStart: document.getElementById('repo-mini-server-autostart'),
 
+        // --- Distribution ZIP ---
+        cbZipEnable: document.getElementById('repo-export-zip-enable'),
+        zipOptionsPanel: document.getElementById('repo-export-zip-options'),
+        inputZipPort: document.getElementById('repo-export-server-port'),
+        inputZipLimit: document.getElementById('repo-export-server-limit'),
+        inputZipPass: document.getElementById('repo-export-server-pass'),
+        selectZipVersion: document.getElementById('repo-export-server-version'),
+        cbZipCloudflare: document.getElementById('repo-export-server-cloudflare'),
+        cbZipUpnp: document.getElementById('repo-export-server-upnp'),
+        btnToggleZipPass: document.getElementById('toggle-repo-export-pass'),
+
         // --- History & Previews ---
         hostHistorySelect: document.getElementById('repo-host-history-select'),
         hostHistoryContainer: document.getElementById('repo-host-history-container'),
@@ -541,8 +552,11 @@ export function initRepo() {
                         const { step, progress } = event.payload;
                         if (progress !== undefined) {
                             const pct = Math.round(progress);
-                            elements.exportPercent.textContent = `${pct}%`;
-                            elements.exportFill.style.width = `${pct}%`;
+                            const currentPct = parseInt(elements.exportPercent.textContent) || 0;
+                            if (pct >= currentPct) {
+                                elements.exportPercent.textContent = `${pct}%`;
+                                elements.exportFill.style.width = `${pct}%`;
+                            }
                         }
                         if (step) elements.exportStatus.textContent = t(step) || step;
                     });
@@ -564,24 +578,44 @@ export function initRepo() {
                     };
                 });
 
+                let serverOptions = null;
+                if (elements.cbZipEnable && elements.cbZipEnable.checked) {
+                    serverOptions = {
+                        port: parseInt(elements.inputZipPort.value) || 8000,
+                        upload_limit: parseInt(elements.inputZipLimit.value) || 0,
+                        admin_password: elements.inputZipPass.value || "admin",
+                        server_version: parseInt(elements.selectZipVersion.value) || 2,
+                        use_cloudflare: elements.cbZipCloudflare.checked,
+                        use_upnp: elements.cbZipUpnp.checked
+                    };
+                }
+
                 await invoke('export_server_repo', { 
                     profileIds, 
                     outputDir: outPath, 
                     authorName,
                     seed: elements.inputExportSeed ? elements.inputExportSeed.value.trim() || null : null,
-                    modpacksShareConfig: modpacksShareConfig.length > 0 ? modpacksShareConfig : null
+                    modpacksShareConfig: modpacksShareConfig.length > 0 ? modpacksShareConfig : null,
+                    zipOutput: elements.cbZipEnable ? elements.cbZipEnable.checked : false,
+                    serverOptions: serverOptions
                 });
                 saveHostHistory(outPath);
                 elements.exportStatus.textContent = t('repo.exportDone');
                 toast(t('repo.exportSuccess'), 'success');
             } catch (err) {
                 const errMsg = String(err);
-                elements.exportStatus.textContent = errMsg.includes('cancel') ? t('repo.cancelExport') : t('repo.exportError');
-                toast(errMsg, 'error');
+                const isCancel = errMsg.includes('cancel');
+                elements.exportStatus.textContent = isCancel ? t('repo.cancelled') : t('repo.exportError');
+                if (!isCancel) toast(errMsg, 'error');
             } finally {
                 elements.btnStartExport.disabled = false;
                 if (elements.btnCancelExport) elements.btnCancelExport.style.display = 'none';
                 if (unlisten) unlisten();
+                
+                // Hide progress bar if it was a cancellation
+                if (elements.exportStatus.textContent === t('repo.cancelled')) {
+                    elements.exportProgressContainer.style.display = 'none';
+                }
             }
         });
     }
@@ -598,6 +632,22 @@ export function initRepo() {
 
     const lastAuthor = localStorage.getItem('bmm_last_author');
     if (lastAuthor && elements.inputExportAuthor) elements.inputExportAuthor.value = lastAuthor;
+
+    if (elements.cbZipEnable && elements.zipOptionsPanel) {
+        elements.cbZipEnable.addEventListener('change', () => {
+            elements.zipOptionsPanel.style.display = elements.cbZipEnable.checked ? 'block' : 'none';
+        });
+    }
+
+    if (elements.btnToggleZipPass && elements.inputZipPass) {
+        elements.btnToggleZipPass.addEventListener('click', () => {
+            const isPass = elements.inputZipPass.type === 'password';
+            elements.inputZipPass.type = isPass ? 'text' : 'password';
+            elements.btnToggleZipPass.innerHTML = isPass 
+                ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>'
+                : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+        });
+    }
 
     // --- Events ---
     window.addEventListener('bmm://modpacks-updated', () => {

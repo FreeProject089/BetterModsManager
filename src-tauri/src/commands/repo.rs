@@ -19,7 +19,7 @@ pub struct RepoProgress {
     pub current_file: String,
 }
 
-#[derive(serde::Serialize, Default, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
 pub struct ProfileSyncSummary {
     pub name: String,
     pub mods_added: usize,
@@ -29,21 +29,37 @@ pub struct ProfileSyncSummary {
     pub bytes_downloaded: u64,
 }
 
-#[derive(serde::Serialize, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct SyncSummary {
     pub profiles: Vec<ProfileSyncSummary>,
 }
 
+#[derive(serde::Deserialize)]
+pub struct MiniServerExportOptions {
+    pub port: u16,
+    pub upload_limit: u32,
+    pub admin_password: String,
+    pub server_version: u8,
+    pub use_cloudflare: bool,
+    pub use_upnp: bool,
+}
+
 const CHUNK_SIZE: usize = 4 * 1024 * 1024; // 4MB
+use std::time::Instant;
+use std::sync::Mutex as StdMutex;
+lazy_static::lazy_static! {
+    static ref LAST_EMIT: StdMutex<Option<Instant>> = StdMutex::new(None);
+}
 
 fn compute_file_hash_and_chunks(path: &Path, need_chunks: bool) -> Result<(String, Option<Vec<RepoChunk>>), String> {
-    let mut file = fs::File::open(path).map_err(|e| e.to_string())?;
+    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut reader = std::io::BufReader::with_capacity(128 * 1024, file);
     let mut global_hasher = Sha256::new();
     let mut chunks = Vec::new();
     let mut buffer = vec![0u8; CHUNK_SIZE];
     
     loop {
-        let n = file.read(&mut buffer).map_err(|e| e.to_string())?;
+        let n = reader.read(&mut buffer).map_err(|e| e.to_string())?;
         if n == 0 {
             break;
         }
@@ -96,17 +112,28 @@ pub async fn export_server_repo(
     author_name: String,
     seed: Option<String>,
     modpacks_share_config: Option<Vec<crate::models::repo::RepoModpackShare>>,
+    zip_output: bool,
+    server_options: Option<MiniServerExportOptions>,
 ) -> Result<(), String> {
     if author_name.trim().is_empty() {
         return Err("repo.errAuthorRequired".to_string());
     }
 
-    let output_path = PathBuf::from(&output_dir);
-    if !output_path.exists() {
-        fs::create_dir_all(&output_path).map_err(|_| "repo.errCreateOutputDir".to_string())?;
-    } else if !output_path.is_dir() {
-        return Err("repo.errOutputDirNotDir".to_string());
-    }
+    let mut _temp_dir: Option<tempfile::TempDir> = None;
+    let output_path = if zip_output {
+        let td = tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+        let path = td.path().to_path_buf();
+        _temp_dir = Some(td);
+        path
+    } else {
+        let p = PathBuf::from(&output_dir);
+        if !p.exists() {
+            fs::create_dir_all(&p).map_err(|_| "repo.errCreateOutputDir".to_string())?;
+        } else if !p.is_dir() {
+            return Err("repo.errOutputDirNotDir".to_string());
+        }
+        p
+    };
 
     state.install_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
     let cancel_flag = state.install_cancelled.clone();
@@ -114,8 +141,6 @@ pub async fn export_server_repo(
     let repo_mods_dir = output_path.join("mods");
     if !repo_mods_dir.exists() {
         fs::create_dir_all(&repo_mods_dir).map_err(|_| "repo.errCreateModDir".to_string())?;
-    } else if !repo_mods_dir.is_dir() {
-        return Err("repo.errOutputDirNotDir".to_string());
     }
 
     // Determine the seed to use
@@ -185,7 +210,7 @@ pub async fn export_server_repo(
     // Loop over each profile
     for (p_idx, (profile, exported_mods)) in profiles_data.into_iter().enumerate() {
         if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
-            return Err("Synchronisation annulée".to_string());
+            return Err("repo.cancelled".to_string());
         }
         let mut repo_profile = crate::models::repo::RepoProfile {
             id: profile.id.clone(),
@@ -198,12 +223,12 @@ pub async fn export_server_repo(
         for (idx, mod_entry) in exported_mods.iter().enumerate() {
             let _ = window.emit("bmm://repo-export-progress", RepoProgress {
                 step: format!(r#"{{"key":"repo.stepPreparing","profile":"{}","mod":"{}","current":{},"total":{}}}"#, profile.name, mod_entry.name, idx + 1, total_mods),
-                progress: ((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32))) * 100.0,
+                progress: (((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32))) * 85.0),
                 current_file: String::new(),
             });
 
             if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
-                return Err("Synchronisation annulée".to_string());
+                return Err("repo.cancelled".to_string());
             }
 
             let target_mod_dir = repo_mods_dir.join(&mod_entry.id);
@@ -254,7 +279,7 @@ pub async fn export_server_repo(
 
                 let f_idx = f_idx_atomic.fetch_add(1, Ordering::SeqCst);
                 if f_idx % 5 == 0 && cancel_flag.load(Ordering::SeqCst) {
-                    return Err("Synchronisation annulée".to_string());
+                    return Err("repo.cancelled".to_string());
                 }
 
                 // Copy file
@@ -264,10 +289,22 @@ pub async fn export_server_repo(
                 let size = fs::metadata(&dst_path).map(|m| m.len()).unwrap_or(0);
                 let (sha256_hash, chunks) = compute_file_hash_and_chunks(&dst_path, size > CHUNK_SIZE as u64)?;
 
-                if f_idx % 10 == 0 || f_idx == total_files - 1 {
+                // Time-based throttling for progress (max every 100ms)
+                let should_emit = {
+                    let mut last = LAST_EMIT.lock().unwrap();
+                    match *last {
+                        Some(instant) if instant.elapsed().as_millis() < 100 => false,
+                        _ => {
+                            *last = Some(Instant::now());
+                            true
+                        }
+                    }
+                };
+
+                if should_emit || f_idx == total_files - 1 {
                     let _ = window.emit("bmm://repo-export-progress", RepoProgress {
                         step: format!(r#"{{"key":"repo.stepExporting","profile":"{}","mod":"{}","current":{},"total":{}}}"#, profile.name, mod_entry.name, idx + 1, total_mods),
-                        progress: ((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods * total_profiles) as f32))) * 100.0,
+                        progress: (((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods * total_profiles) as f32))) * 85.0),
                         current_file: rel_path.to_string_lossy().to_string(),
                     });
                 }
@@ -289,7 +326,7 @@ pub async fn export_server_repo(
 
     let _ = window.emit("bmm://repo-export-progress", RepoProgress {
         step: "repo.stepFinalizing".to_string(),
-        progress: 99.0,
+        progress: 87.0,
         current_file: "repo.json".to_string(),
     });
 
@@ -307,12 +344,6 @@ pub async fn export_server_repo(
     // Auto-generate mini server by default if it's a new export? 
     // Actually better to have the dedicated button as requested.
 
-    let _ = window.emit("bmm://repo-export-progress", RepoProgress {
-        step: "repo.stepFinished".to_string(),
-        progress: 100.0,
-        current_file: String::new(),
-    });
-
     // 12. Copy Bans/Whitelist if they exist
     if let Ok(wl_path) = whitelist_manager::get_whitelist_file_path(&handle) {
         if wl_path.exists() {
@@ -325,6 +356,98 @@ pub async fn export_server_repo(
         }
     }
 
+    // 13. Generate Mini Server if requested
+    if let Some(opt) = server_options {
+        println!("[REPO] Generating integrated mini-server...");
+        generate_mini_server_files(
+            &handle,
+            &output_path,
+            opt.port,
+            false, // no auto-start for exported zip usually
+            opt.use_cloudflare,
+            opt.use_upnp,
+            "en",
+            opt.upload_limit,
+            opt.server_version,
+            &opt.admin_password
+        )?;
+    }
+
+    // 14. Zip output if requested
+    if zip_output {
+        let _ = window.emit("bmm://repo-export-progress", RepoProgress {
+            step: "repo.zipping".to_string(),
+            progress: 90.0,
+            current_file: "".to_string(),
+        });
+        
+        let zip_file_name = format!("BMM-Standalone-Server-{}.zip", chrono::Local::now().format("%Y%m%d-%H%M"));
+        // Final destination is output_dir (user's selected folder)
+        let final_dest = PathBuf::from(&output_dir);
+        if !final_dest.exists() {
+            let _ = fs::create_dir_all(&final_dest);
+        }
+        let zip_path = final_dest.join(&zip_file_name);
+        
+        let cancel_flag_zip = cancel_flag.clone();
+        match zip_directory(&output_path, &zip_path, cancel_flag_zip) {
+            Ok(_) => {
+                println!("[REPO] Zip created at: {:?}", zip_path);
+            },
+            Err(e) => {
+                // Cleanup partial zip if cancelled
+                if zip_path.exists() {
+                    let _ = fs::remove_file(&zip_path);
+                }
+                return Err(format!("Failed to create zip: {}", e));
+            }
+        }
+
+        // Note: _temp_dir will be dropped here, automatically deleting the unzipped version
+    }
+
+    let _ = window.emit("bmm://repo-export-progress", RepoProgress {
+        step: "repo.exportDone".to_string(),
+        progress: 100.0,
+        current_file: String::new(),
+    });
+
+    Ok(())
+}
+
+fn zip_directory(src_dir: &Path, dst_file: &Path, cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>) -> Result<(), String> {
+    use zip::write::FileOptions;
+    use std::io::{copy, BufWriter};
+    use walkdir::WalkDir;
+    use std::sync::atomic::Ordering;
+
+    let file = fs::File::create(dst_file).map_err(|e| e.to_string())?;
+    // Use BufWriter for better performance with large files
+    let writer = BufWriter::with_capacity(128 * 1024, file);
+    let mut zip = zip::ZipWriter::new(writer);
+    
+    // Enable ZIP64 for files > 4GB and overall archive > 4GB
+    let options = FileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated)
+        .unix_permissions(0o755)
+        .large_file(true); // <--- Enable ZIP64 support
+
+    for entry in WalkDir::new(src_dir).into_iter().filter_map(|e| e.ok()) {
+        if cancel_flag.load(Ordering::SeqCst) {
+            return Err("repo.cancelled".to_string());
+        }
+        let path = entry.path();
+        let name = path.strip_prefix(src_dir).map_err(|e| e.to_string())?;
+
+        if path.is_file() {
+            zip.start_file(name.to_string_lossy().replace("\\", "/"), options).map_err(|e| e.to_string())?;
+            let mut f = fs::File::open(path).map_err(|e| e.to_string())?;
+            copy(&mut f, &mut zip).map_err(|e| e.to_string())?;
+        } else if !name.as_os_str().is_empty() {
+            zip.add_directory(name.to_string_lossy().replace("\\", "/"), options).map_err(|e| e.to_string())?;
+        }
+    }
+    zip.finish().map_err(|e| e.to_string())?;
     Ok(())
 }
 

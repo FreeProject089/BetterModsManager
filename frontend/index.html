@@ -918,6 +918,67 @@
                                         style="font-size:11px; font-family:var(--font-mono); height:30px; background:rgba(0,0,0,0.15);" />
                                 </div>
 
+                                <!-- Distribution Options (ZIP + Server) -->
+                                <div style="margin-bottom: 16px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <label class="checkbox-container" style="font-size: 13px; font-weight: 600; color: var(--accent);">
+                                        <input type="checkbox" id="repo-export-zip-enable" />
+                                        <span class="checkmark"></span>
+                                        <span data-i18n="repo.compressAsZip">Compresser en archive .ZIP</span>
+                                        <span class="help-icon" onmouseenter="window.showTaskyHelp('repo.zipHelp', 'info')" onmouseleave="window.hideTaskyHelp()" style="margin-left:6px; cursor:help; opacity:0.6;">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                                        </span>
+                                    </label>
+                                    
+                                    <div id="repo-export-zip-options" style="display:none; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.05);">
+                                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                                            <span style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase;" data-i18n="repo.standaloneSettings">Standalone Server Settings</span>
+                                        </div>
+
+                                        <div class="form-group" style="margin-bottom:10px;">
+                                            <label class="form-label" style="font-size:11px;" data-i18n="repo.serverType">Version du serveur</label>
+                                            <select class="form-input" id="repo-export-server-version" style="font-size:12px; padding:5px; background:rgba(0,0,0,0.3);">
+                                                <option value="2" data-i18n="repo.serverVersionV2">Version V2 (Dashboard Luxe)</option>
+                                                <option value="1" data-i18n="repo.serverVersionHybrid">Version Hybride (Console Tasky)</option>
+                                            </select>
+                                        </div>
+
+                                        <div style="display:flex; gap:10px; margin-bottom:10px;">
+                                            <div style="flex:1;">
+                                                <label class="form-label" style="font-size:10px;" data-i18n="repo.port">Port</label>
+                                                <input type="number" id="repo-export-server-port" class="form-input" value="8000" style="font-size:12px; padding:5px; background:rgba(0,0,0,0.3);" />
+                                            </div>
+                                            <div style="flex:1;">
+                                                <label class="form-label" style="font-size:10px;" data-i18n="repo.uploadLimit">Limit (Ko/s)</label>
+                                                <input type="number" id="repo-export-server-limit" class="form-input" value="0" style="font-size:12px; padding:5px; background:rgba(0,0,0,0.3);" />
+                                            </div>
+                                        </div>
+
+                                        <div class="form-group" style="margin-bottom:10px;">
+                                            <label class="form-label" style="font-size:10px;" data-i18n="admin.password">Admin Password</label>
+                                            <div style="position:relative; display:flex; align-items:center;">
+                                                <input type="password" id="repo-export-server-pass" class="form-input" value="admin" style="font-size:12px; padding:5px; padding-right:30px; background:rgba(0,0,0,0.3); width:100%; border:1px solid rgba(255,255,255,0.05); border-radius:4px;" />
+                                                <button type="button" id="toggle-repo-export-pass" style="position:absolute; right:8px; background:none; border:none; color:var(--text-secondary); cursor:pointer; padding:0; display:flex; align-items:center; z-index:5;">
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div style="display:flex; flex-direction:column; gap:6px;">
+                                            <label class="checkbox-container" style="font-size: 11px;">
+                                                <input type="checkbox" id="repo-export-server-cloudflare" checked />
+                                                <span class="checkmark" style="height:14px; width:14px;"></span>
+                                                <span data-i18n="repo.enableCloudflare">Enable Cloudflare Tunnel</span>
+                                            </label>
+                                            <label class="checkbox-container" style="font-size: 11px;">
+                                                <input type="checkbox" id="repo-export-server-upnp" />
+                                                <span class="checkmark" style="height:14px; width:14px;"></span>
+                                                <span data-i18n="repo.enableUPnP">Enable UPnP Auto-Mapping</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div style="display:flex; gap:10px;">
                                     <button class="btn btn-primary" id="btn-start-repo-export"
                                         style="flex:1;justify-content:center;">
@@ -3107,6 +3168,63 @@
                                             <path d="M2 12l10 5 10-5" />
                                         </svg>
                                         <span data-i18n="docs.gallery.btn.diskIoLimiter">VOIR LA LOGIQUE</span>
+                                    </button>
+                                </div>
+                            </details>
+
+                            <details class="faq-accordion" id="faq-zip-time">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+                                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                        </svg>
+                                        <span data-i18n="faq.qZipTime">Pourquoi l'export ZIP est-il long ?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.aZipTime">
+                                    BMM effectue deux tâches lourdes : d'abord, il calcule une empreinte numérique unique (SHA-256) pour chaque fichier afin de garantir une synchronisation parfaite. Ensuite, il compresse le tout. Pour 20 Go+, c'est une opération massive pour le CPU et le Disque.
+                                </div>
+                            </details>
+
+                            <details class="faq-accordion" id="faq-lux-std">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#bc74ff" stroke-width="2.2">
+                                            <rect x="2" y="3" width="20" height="14" rx="2" />
+                                            <path d="M8 21h8M12 17v4" />
+                                        </svg>
+                                        <span data-i18n="faq.qLuxStd">Différence entre Lux et STD ?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.aLuxStd">
+                                    La version <strong>Lux</strong> inclut une interface web de monitoring pour votre dépôt, idéale pour visualiser l'état du serveur. La version <strong>STD</strong> est ultra-légère, sans interface, parfaite pour les VPS avec très peu de RAM.
+                                </div>
+                            </details>
+
+                            <details class="faq-accordion" id="faq-host-own">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+                                            <path d="M5 12.55a11 11 0 0 1 14.08 0" /><path d="M1.42 9a16 16 0 0 1 21.16 0" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" y1="20" x2="12.01" y2="20" />
+                                        </svg>
+                                        <span data-i18n="faq.qHostOwn">Puis-je héberger sur mon propre serveur ?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </summary>
+                                <div class="faq-content">
+                                    <p data-i18n="faq.aHostOwn" style="margin-bottom:10px;">Oui ! BMM est conçu pour le self-hosting. Vous pouvez utiliser n'importe quel VPS Linux (Ubuntu recommandé). Référez-vous au guide de déploiement dédié dans l'onglet 'Avancé'.</p>
+                                    <button class="btn btn-sm btn-ghost" onclick="document.querySelector('.btn-docs-tab[data-tab=\'advanced\']').click(); setTimeout(() => document.getElementById('dedicated-hosting-card')?.scrollIntoView({behavior:'smooth'}), 100);" style="font-size:11px; color:var(--accent); border:1px dashed rgba(var(--accent-rgb),0.3); padding:4px 10px; border-radius:8px;">
+                                        <span data-i18n="docs.viewDeployment">VOIR LE DÉPLOIEMENT</span>
                                     </button>
                                 </div>
                             </details>
