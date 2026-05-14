@@ -970,7 +970,7 @@ window.showHashingStats = async () => {
                                     </div>
                                 </div>
                                 <div style="height:10px; background:rgba(0,0,0,0.4); border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.05)">
-                                    <div style="width:${percent}%; height:100%; background:linear-gradient(90deg, var(--accent), #a78bfa); border-radius:10px; transition:width 1.2s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow:0 0 20px rgba(99, 102, 241, 0.4)"></div>
+                                    <div style="width:${percent}%; height:100%; background:var(--accent); border-radius:10px; transition:width 1.2s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow:0 0 20px rgba(59, 130, 246, 0.4)"></div>
                                 </div>
                             </div>
                         </div>
