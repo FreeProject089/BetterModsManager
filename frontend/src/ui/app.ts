@@ -874,7 +874,9 @@ const CONTRIBUTORS = [
         role: 'contributor.freeproject.role',
         description: 'contributor.freeproject.msg',
         github: 'https://github.com/FreeProject089',
-        website: 'https://freeproject089.github.io/BMM_Web/'
+        website: 'https://freeproject089.github.io/BMM_Web/',
+        category: 'staff',
+        subcategory: 'dev'
     },
     {
         id: 'c0c0_1er',
@@ -882,7 +884,74 @@ const CONTRIBUTORS = [
         pfp: 'assets/pfpc0c0.png',
         role: 'contributor.c0c0_1er.role',
         description: 'contributor.c0c0_1er.msg',
-        github: 'https://github.com/WarGameRP'
+        github: 'https://github.com/WarGameRP',
+        category: 'staff',
+        subcategory: 'community_support'
+    },
+    {
+        id: 'charger',
+        username: 'madbomber8526',
+        display_name: 'Charger',
+        discord_id: '485056947477938188',
+        pfp: 'assets/userpfp/charger.png',
+        role: 'contributor.charger.role',
+        description: 'contributor.charger.msg',
+        category: 'kofi'
+    },
+    {
+        id: 'jarjar',
+        username: 'banksfam_',
+        display_name: 'JAR JAR',
+        discord_id: '449591271175225355',
+        pfp: 'assets/userpfp/JarJar.png',
+        role: 'contributor.jarjar.role',
+        description: 'contributor.jarjar.msg',
+        category: 'tester',
+        subcategory: 'early_access'
+    },
+    {
+        id: 'captain_pug',
+        username: 'unclesneep',
+        display_name: 'Captain_Pug',
+        discord_id: '761967053791297536',
+        pfp: 'assets/userpfp/CaptainPug.png',
+        role: 'contributor.captain_pug.role',
+        description: 'contributor.captain_pug.msg',
+        category: 'tester',
+        subcategory: 'ptb'
+    },
+    {
+        id: 'machinegun',
+        username: 'machinegun',
+        display_name: 'Machinegun',
+        discord_id: '162362221475659778',
+        pfp: 'assets/userpfp/machinegun.png',
+        role: 'contributor.machinegun.role',
+        description: 'contributor.machinegun.msg',
+        category: 'tester',
+        subcategory: 'ptb'
+    },
+    {
+        id: 'rayak',
+        username: 'rayak_71_cef',
+        display_name: 'RAYAK_71_CEF',
+        discord_id: '312342647924588545',
+        pfp: 'assets/userpfp/rayak71cef.png',
+        role: 'contributor.rayak.role',
+        description: 'contributor.rayak.msg',
+        category: 'tester',
+        subcategory: 'ptb'
+    },
+    {
+        id: 'max_husky',
+        username: 'max_trymtube',
+        display_name: 'Max-Husky',
+        discord_id: '694296582455165069',
+        pfp: 'assets/userpfp/maxtrymtube.png',
+        role: 'contributor.max_husky.role',
+        description: 'contributor.max_husky.msg',
+        category: 'tester',
+        subcategory: 'early_access'
     }
 ];
 
@@ -899,56 +968,93 @@ const CREDITS_MESSAGES = [
 function initCredits() {
     const marqueeContainer = document.getElementById('credits-marquee-container');
     const contributorsGrid = document.getElementById('contributors-grid');
-
     if (marqueeContainer) {
         let msgIndex = 0;
         const updateMarquee = () => {
             const key = CREDITS_MESSAGES[msgIndex];
             const newContent = `<div class="credits-marquee-content"><span class="marquee-msg">${t(key) || key}</span></div>`;
-            
             // If first run, just set it
             if (marqueeContainer.children.length === 0) {
                 marqueeContainer.innerHTML = newContent;
-            } else {
+            }
+            else {
                 // Smooth replacement: the CSS animation handles the entry/exit
                 marqueeContainer.innerHTML = newContent;
             }
-            
             msgIndex = (msgIndex + 1) % CREDITS_MESSAGES.length;
         };
         updateMarquee();
         // Store interval ID on container so navigation can clear it
         (marqueeContainer as any)._marqueeInterval = setInterval(updateMarquee, 7000);
     }
-
     if (contributorsGrid) {
-        contributorsGrid.innerHTML = CONTRIBUTORS.map(c => `
-            <div class="contributor-card glass-card" onclick="openContributorModal('${c.id}')">
-                <div class="contributor-pfp-box">
-                    <img src="${c.pfp}" class="contributor-pfp" alt="${c.username}">
+        const sections = [
+            { id: 'staff', title: 'credits.sections.staff' },
+            { id: 'kofi', title: 'credits.sections.kofi' },
+            { id: 'testers', title: 'credits.sections.testers' }
+        ];
+        
+        // Subcategory role mapping
+        const subcategoryRoleMap: Record<string, string> = {
+            'dev': 'credits.subcategory.dev',
+            'community_support': 'credits.subcategory.communitySupport',
+            'testing_team': 'credits.subcategory.testingTeam',
+            'ptb': 'credits.subcategory.ptbTester',
+            'early_access': 'credits.subcategory.earlyAccessTester'
+        };
+        
+        contributorsGrid.style.display = 'block';
+        contributorsGrid.innerHTML = sections.map(section => {
+            const members = CONTRIBUTORS.filter(c => (c as any).category === section.id || (section.id === 'testers' && (c as any).category === 'tester'));
+            if (members.length === 0) return '';
+            
+            return `
+                <div class="credits-category-section" style="margin-bottom: 24px;">
+                    <div class="credits-category-title" data-i18n="${section.title}" style="margin-bottom:12px; font-size:0.8rem; opacity:0.5; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:6px;">
+                        ${t(section.title)}
+                    </div>
+                    <div class="sub-contributors-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                        ${members.map(c => {
+                            const sub = (c as any).subcategory;
+                            // Use custom role if it exists (e.g., "Main Dev / Creator"), otherwise use subcategory mapping
+                            const hasCustomRole = c.role && !c.role.startsWith('credits.subcategory.');
+                            const roleKey = hasCustomRole ? c.role : (sub && subcategoryRoleMap[sub] ? subcategoryRoleMap[sub] : c.role);
+                            return `
+                                <div class="contributor-card glass-card" onclick="openContributorModal('${c.id}')">
+                                    <div class="contributor-pfp-box">
+                                        <img src="${c.pfp}" class="contributor-pfp" alt="${(c as any).display_name || c.username}">
+                                    </div>
+                                    <div class="contributor-name">${(c as any).display_name || c.username}</div>
+                                    <div class="contributor-role" data-i18n="${roleKey}">${t(roleKey)}</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
                 </div>
-                <div class="contributor-name">${c.username}</div>
-                <div class="contributor-role" data-i18n="${c.role}">${t(c.role)}</div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
-
     // Language change support
     document.addEventListener('langChanged', () => {
         if (contributorsGrid) {
             contributorsGrid.querySelectorAll('.contributor-role').forEach(el => {
                 const key = (el as HTMLElement).dataset.i18n;
-                if (key) el.textContent = t(key);
+                if (key)
+                    el.textContent = t(key);
+            });
+            contributorsGrid.querySelectorAll('.credits-category-title').forEach(el => {
+                const key = (el as HTMLElement).dataset.i18n;
+                if (key)
+                    el.textContent = t(key);
             });
         }
     });
 }
-
 (window as any).openStackModal = () => {
     const modal = document.getElementById('modal-stack');
     const content = document.getElementById('stack-modal-content');
-    if (!modal || !content) return;
-
+    if (!modal || !content)
+        return;
     const backend = [
         { name: "Tauri", v: "1.0", key: "tauri", url: "https://tauri.app/" },
         { name: "Serde", v: "1.0", key: "serde", url: "https://serde.rs/" },
@@ -976,7 +1082,6 @@ function initCredits() {
         { name: "Jwalk", v: "0.8", key: "jwalk", url: "https://github.com/Byron/jwalk" },
         { name: "Hex", v: "0.4", key: "hex", url: "https://github.com/KokaKiwi/rust-hex" }
     ];
-
     const frontend = [
         { name: "TypeScript", v: "5.7", key: "typescript", url: "https://www.typescriptlang.org/" },
         { name: "TanStack Query", v: "5.0", key: "tanstack-query", url: "https://tanstack.com/query/latest" },
@@ -985,7 +1090,6 @@ function initCredits() {
         { name: "Tauri CLI", v: "1.0", key: "tauri-cli", url: "https://tauri.app/v1/guides/features/cli" },
         { name: "Concurrently", v: "9.2", key: "concurrently", url: "https://github.com/open-cli-tools/concurrently" }
     ];
-
     content.innerHTML = `
         <div class="stack-section-title" data-i18n="credits.stackBackend">${t('credits.stackBackend')}</div>
         <div class="stack-grid">
@@ -1012,23 +1116,21 @@ function initCredits() {
             `).join('')}
         </div>
     `;
-
     modal.classList.add('open');
 };
-
 (window as any).openContributorModal = (id: string) => {
     const c = CONTRIBUTORS.find(x => x.id === id);
-    if (!c) return;
-
+    if (!c)
+        return;
     const modal = document.getElementById('modal-contributor-detail');
     const content = document.getElementById('contributor-modal-content');
-    if (!modal || !content) return;
-
+    if (!modal || !content)
+        return;
     content.innerHTML = `
         <div class="contributor-modal-hero">
             <img src="${c.pfp}" class="contributor-modal-pfp">
             <div class="contributor-modal-info">
-                <h2>${c.username}</h2>
+                <h2>${(c as any).display_name || c.username}</h2>
                 <p data-i18n="${c.role}">${t(c.role)}</p>
             </div>
         </div>
@@ -1050,7 +1152,6 @@ function initCredits() {
             ` : ''}
         </div>
     `;
-
     modal.classList.add('open');
 };
 
