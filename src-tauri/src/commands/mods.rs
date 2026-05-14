@@ -424,7 +424,7 @@ pub async fn add_mod(
 #[tauri::command]
 pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files: bool) -> Result<(), AppError> {
     log_line(format!("[MOD] Removing mod '{}' (delete_files: {})", mod_id, delete_files));
-    let (mod_path, mods_dependent_on_this) = {
+    let (mod_path, mods_dependent_on_this, active_id, mod_name) = {
         let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         let idx = data.mods.iter().position(|m| m.id == mod_id).ok_or_else(|| AppError::NotFound("Mod introuvable".to_string()))?;
         
@@ -435,6 +435,9 @@ pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files
         if mod_enabled {
             return Err(AppError::Internal("Désactivez le mod avant de le supprimer.".to_string()));
         }
+        
+        let active_id = data.active_profile_id.clone().unwrap_or_default();
+        let mod_name = data.mods[idx].name.clone();
         
         // Find all mods that have this mod as a dependency
         let mut dependent_mods = Vec::new();
@@ -458,8 +461,10 @@ pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files
         }
         
         data.mods.remove(idx);
-        (mod_folder_path, dependent_mods)
+        (mod_folder_path, dependent_mods, active_id, mod_name)
     };
+
+    crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Deleted", None);
 
     if delete_files {
         tauri::async_runtime::spawn_blocking(move || {
@@ -720,7 +725,7 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
     
     // Log history for the primary mod
     if let Some(m) = { let data = state.data.lock().unwrap_or_else(|p| p.into_inner()); data.mods.iter().find(|m| m.id == mod_id).cloned() } {
-        crate::commands::history::log_activity(&state, &profile_data.id, &mod_id, &m.name, "Enabled (with dependencies)");
+        crate::commands::history::log_activity(&state, &profile_data.id, &mod_id, &m.name, "Enabled (with dependencies)", None);
     }
 
     Ok(overall_warning)
@@ -817,7 +822,7 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
     
     // Log history
     log_line(format!("[MOD] Mod '{}' disabled successfully", mod_name));
-    crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Disabled");
+    crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Disabled", None);
     Ok(())
 }
 
@@ -944,21 +949,42 @@ pub fn update_mod_meta(
     } = payload;
     
     log_line(format!("[MOD] Updating metadata for '{}' ({})", name, mod_id));
-    let mod_path = {
+    let (mod_path, changes_str) = {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
-            m.name = name;
+            let mut changes = Vec::new();
+            if m.name != name { changes.push(serde_json::json!({"field": "name", "old": m.name, "new": name})); }
+            if m.author.as_deref().unwrap_or("") != author { changes.push(serde_json::json!({"field": "author", "old": m.author.as_deref().unwrap_or(""), "new": author})); }
+            if m.description.as_deref().unwrap_or("") != description { changes.push(serde_json::json!({"field": "description", "old": m.description.as_deref().unwrap_or(""), "new": description})); }
+            if m.version != version { changes.push(serde_json::json!({"field": "version", "old": m.version, "new": version})); }
+            if m.tags != tags { changes.push(serde_json::json!({"field": "tags", "old": m.tags, "new": tags})); }
+            if m.download_links != download_links { changes.push(serde_json::json!({"field": "links", "old": m.download_links, "new": download_links})); }
+            if m.dependencies != dependencies { changes.push(serde_json::json!({"field": "dependencies", "old": m.dependencies, "new": dependencies})); }
+
+            m.name = name.clone();
             m.author = Some(author);
             m.description = Some(description);
             m.version = version;
             m.tags = tags;
             m.download_links = download_links;
             m.dependencies = dependencies;
-            Some((m.clone(), m.mod_folder_path.clone()))
+            
+            let changes_str = if changes.is_empty() { None } else { serde_json::to_string(&changes).ok() };
+            (Some((m.clone(), m.mod_folder_path.clone())), changes_str)
         } else {
-            None
+            (None, None)
         }
     };
+
+    let active_id = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.active_profile_id.clone().unwrap_or_default()
+    };
+    if let Some(details) = changes_str {
+        crate::commands::history::log_activity(&state, &active_id, &mod_id, &name, "Modified", Some(details));
+    } else {
+        crate::commands::history::log_activity(&state, &active_id, &mod_id, &name, "Modified", None);
+    }
 
     if let Some((_entry, _path)) = mod_path {
         // Removed as per user request

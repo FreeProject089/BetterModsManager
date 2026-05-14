@@ -6,6 +6,7 @@ import { invoke, sendOsNotification } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { updateDiscordStatus } from '../settings/settings.js';
 import { refreshMods, selectMod, closeModDetail } from './mods.js';
+import { escHtml, escAttr, escJs, truncate } from '../../core/utils.js';
 const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
     set(target, prop, value) { appState.set(prop, value); return true; }
@@ -452,6 +453,43 @@ export function updateCardState(card, mod) {
         const tooltipKey = isInvalid ? 'hashes.status.invalid' : (isMissing ? 'hashes.status.missing' : 'hashes.status.verified');
         const tooltipIcon = isInvalid ? 'alert' : 'shield';
         shaIcon.setAttribute('onmouseenter', `window.showTaskyHelp('${tooltipKey}', '${tooltipIcon}')`);
+    }
+    // Update text content to reflect saved changes immediately
+    const updateTextIfChanged = (selector, newText) => {
+        const el = card.querySelector(selector);
+        if (el && el.textContent !== newText)
+            el.textContent = newText;
+    };
+    updateTextIfChanged('.mod-name', mod.name);
+    updateTextIfChanged('.mod-version', `v${mod.version}`);
+    // Update Author
+    const authorContainer = card.querySelector('.mod-author-container');
+    if (authorContainer) {
+        authorContainer.style.display = mod.author ? 'flex' : 'none';
+        const authorNameEl = authorContainer.querySelector('.mod-author-name');
+        if (authorNameEl)
+            authorNameEl.textContent = truncate(mod.author || '', 50);
+        authorContainer.setAttribute('onmouseenter', `window.showTaskyHelp('${escAttr(escJs(mod.author || ''))}', 'user', true)`);
+    }
+    // Update Tags
+    const tagsContainer = card.querySelector('.mod-tags-container');
+    if (tagsContainer) {
+        if (mod.tags && mod.tags.length > 0) {
+            tagsContainer.style.display = 'inline-flex';
+            const userTags = appState.get('userTags') || [];
+            const visibleTags = mod.tags.slice(0, 3).map(tid => {
+                const tDef = userTags.find(t => t.id === tid);
+                if (!tDef)
+                    return '';
+                return `<span style="background:${tDef.color}15;color:${tDef.color};border:1px solid ${tDef.color}30;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600">${escHtml(tDef.name)}</span>`;
+            }).join('');
+            const extraTagsCount = mod.tags.length > 3 ? `<button class="btn btn-ghost" onclick="window.showModTagsModal('${mod.id}'); event.stopPropagation();" style="color:var(--text-muted);font-size:9px;padding:0;height:auto;min-height:0;margin:0;background:rgba(255,255,255,0.05);border-radius:4px;padding:1px 4px;border:1px solid rgba(255,255,255,0.1)">+${mod.tags.length - 3}</button>` : '';
+            tagsContainer.innerHTML = visibleTags + extraTagsCount;
+        }
+        else {
+            tagsContainer.style.display = 'none';
+            tagsContainer.innerHTML = '';
+        }
     }
 }
 export function setModLoading(modId, isLoading) {

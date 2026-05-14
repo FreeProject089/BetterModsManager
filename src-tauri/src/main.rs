@@ -184,6 +184,7 @@ fn main() {
             commands::tag::create_tag,
             commands::tag::delete_tag,
             commands::history::get_activity_history,
+            commands::history::clear_activity_history,
             commands::settings::export_app_data,
             commands::settings::import_app_data,
             commands::settings::reset_app_data,

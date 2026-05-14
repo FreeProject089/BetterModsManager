@@ -3,7 +3,7 @@ import { invoke, listenFileDrop, pickFolder } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { renderProfiles } from '../profiles/profiles.js';
 import { t } from '../../core/i18n.js';
-import { escHtml } from '../../core/utils.js';
+import { escHtml, truncate } from '../../core/utils.js';
 import { appState } from '../../core/state.js';
 // Sub-modules
 import { renderModList, updateBadge, updateSubtitle, updateToggleAllBtn } from './mods-list.js';
@@ -117,17 +117,81 @@ export async function initMods() {
         renderModList(true);
     });
     // History
+    const historyFilter = document.getElementById('history-filter');
     document.getElementById('btn-show-history')?.addEventListener('click', async () => {
         const activeId = await invoke('get_active_profile_id').catch(() => null);
         if (!activeId)
             return toast(t('prof.noneActive'), 'error');
         try {
-            const history = await invoke('get_activity_history', { profileId: activeId });
-            renderHistoryModal(history);
+            S.currentHistory = await invoke('get_activity_history', { profileId: activeId });
+            if (historyFilter)
+                historyFilter.value = 'all';
+            renderHistoryModal(S.currentHistory);
         }
         catch (err) {
             toast(t('history.error') + ' : ' + err, 'error');
         }
+    });
+    historyFilter?.addEventListener('change', () => {
+        if (S.currentHistory) {
+            const filter = historyFilter.value;
+            const filtered = filter === 'all' ? S.currentHistory : S.currentHistory.filter(i => {
+                if (filter === 'Enabled')
+                    return i.action.startsWith('Enabled');
+                return i.action === filter;
+            });
+            renderHistoryModal(filtered);
+        }
+    });
+    document.getElementById('btn-clear-history')?.addEventListener('click', async () => {
+        const activeId = await invoke('get_active_profile_id').catch(() => null);
+        if (!activeId)
+            return;
+        try {
+            await invoke('clear_activity_history', { profileId: activeId });
+            S.currentHistory = [];
+            renderHistoryModal(S.currentHistory);
+            toast(t('common.success') || 'Success', 'success');
+        }
+        catch (err) {
+            toast(t('common.error') + ': ' + err, 'error');
+        }
+    });
+    const historyRetention = document.getElementById('history-retention');
+    const historyRetentionCustom = document.getElementById('history-retention-custom-days');
+    const saveRetention = async (days) => {
+        try {
+            const settings = await invoke('get_settings');
+            settings.history_retention_days = days;
+            await invoke('update_settings', { settings });
+            toast(t('common.success') || 'Success', 'success');
+        }
+        catch (err) {
+            console.error('Failed to save retention settings', err);
+        }
+    };
+    historyRetention?.addEventListener('change', async (e) => {
+        const val = e.target.value;
+        if (val === 'custom') {
+            if (historyRetentionCustom) {
+                historyRetentionCustom.style.display = 'inline-block';
+                historyRetentionCustom.focus();
+            }
+        }
+        else {
+            if (historyRetentionCustom)
+                historyRetentionCustom.style.display = 'none';
+            const days = parseInt(val, 10);
+            await saveRetention(days);
+        }
+    });
+    historyRetentionCustom?.addEventListener('change', async (e) => {
+        let days = parseInt(e.target.value, 10);
+        if (isNaN(days) || days < 1) {
+            days = 1;
+            e.target.value = '1';
+        }
+        await saveRetention(days);
     });
     // File Drop
     listenFileDrop(async (paths) => {
@@ -158,6 +222,23 @@ export async function initMods() {
             const sortSelect = document.getElementById('mod-sort');
             if (sortSelect)
                 sortSelect.value = S.currentSort;
+            const retentionSelect = document.getElementById('history-retention');
+            const customInput = document.getElementById('history-retention-custom-days');
+            if (retentionSelect && settings.history_retention_days !== undefined) {
+                const days = settings.history_retention_days;
+                if ([0, 7, 30, 90].includes(days)) {
+                    retentionSelect.value = String(days);
+                    if (customInput)
+                        customInput.style.display = 'none';
+                }
+                else {
+                    retentionSelect.value = 'custom';
+                    if (customInput) {
+                        customInput.value = String(days);
+                        customInput.style.display = 'inline-block';
+                    }
+                }
+            }
         }
         S.userTags = await invoke('get_tags').catch(() => []);
         S.allMods = await invoke('get_mods');
@@ -226,21 +307,84 @@ function renderHistoryModal(history) {
         list.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:20px">${t('history.empty')}</div>`;
     }
     else {
-        history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        history.forEach(item => {
-            const isEnabled = item.action === 'Enabled';
-            const color = isEnabled ? 'var(--success)' : 'var(--text-muted)';
-            const actionText = isEnabled ? t('mod.statusActive') : t('mod.statusInactive');
+        // Clone to avoid mutating original
+        const sorted = [...history].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        sorted.forEach((item, idx) => {
+            const isEnabled = item.action.startsWith('Enabled');
+            const isDisabled = item.action === 'Disabled';
+            const isDeleted = item.action === 'Deleted';
+            const isModified = item.action === 'Modified';
+            let color = 'var(--text-muted)';
+            let actionText = item.action;
+            let bg = 'rgba(255,255,255,0.05)';
+            if (isEnabled) {
+                color = 'var(--success)';
+                actionText = t('mod.statusActive') || 'Enabled';
+                bg = 'rgba(16,185,129,0.15)';
+            }
+            else if (isDisabled) {
+                color = 'var(--text-muted)';
+                actionText = t('mod.statusInactive') || 'Disabled';
+                bg = 'rgba(255,255,255,0.05)';
+            }
+            else if (isDeleted) {
+                color = 'var(--danger)';
+                actionText = t('history.action.Deleted') || 'Deleted';
+                bg = 'rgba(239,68,68,0.15)';
+            }
+            else if (isModified) {
+                color = 'var(--accent)';
+                actionText = t('history.action.Modified') || 'Modified';
+                bg = 'rgba(59,130,246,0.15)';
+            }
             const dateStr = new Date(item.timestamp).toLocaleString();
+            let detailsHtml = '';
+            if (item.details && isModified) {
+                try {
+                    const changes = JSON.parse(item.details);
+                    const summary = changes.map(c => t('detail.' + c.field) || c.field).join(', ');
+                    // Store in global cache for side-by-side modal
+                    if (!window.__historyCache)
+                        window.__historyCache = {};
+                    const cacheKey = `hist_${idx}`;
+                    window.__historyCache[cacheKey] = item;
+                    const fieldBadges = changes.map(c => `
+                <span style="background:rgba(59,130,246,0.15);color:var(--accent);padding:1px 6px;border-radius:4px;font-weight:600;font-size:9px">
+                  ${escHtml(t('detail.' + c.field) || c.field)}
+                </span>
+              `).join('');
+                    detailsHtml = `
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;align-items:center">
+                  <div style="font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.04);padding:4px 10px;border-radius:12px;cursor:pointer;border:1px solid rgba(255,255,255,0.05);transition:all 0.2s" 
+                       onmouseover="this.style.background='rgba(59,130,246,0.1)';this.style.borderColor='rgba(59,130,246,0.2)'" 
+                       onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.05)'" 
+                       onclick="window.openHistoryDetail('${cacheKey}')">
+                      <span style="opacity:0.7">${t('history.action.Modified') || 'Modifié'}: </span>
+                      ${fieldBadges}
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:2px;opacity:0.5"><polyline points="9 18 15 12 9 6"/></svg>
+                  </div>
+                </div>
+              `;
+                }
+                catch (e) {
+                    detailsHtml = `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;font-style:italic;opacity:0.6">${escHtml(item.details)}</div>`;
+                }
+            }
+            else if (item.details) {
+                detailsHtml = `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;font-style:italic;opacity:0.6">${escHtml(item.details)}</div>`;
+            }
             list.innerHTML += `
         <div style="display:flex;align-items:center;gap:12px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border)">
-          <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
-          <div style="flex:1">
-            <div style="font-weight:600;color:var(--text-primary);word-break:break-all">${escHtml(item.mod_name)}</div>
+          <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;align-self:flex-start;margin-top:6px"></div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+                <div style="font-weight:600;color:var(--text-primary);word-break:break-all">${escHtml(item.mod_name)}</div>
+                <div style="font-size:11px;font-family:var(--font-mono);padding:3px 8px;border-radius:6px;background:${bg};color:${color};flex-shrink:0;">
+                    ${actionText}
+                </div>
+            </div>
             <div style="font-size:12px;color:var(--text-muted)">${dateStr}</div>
-          </div>
-          <div style="font-size:11px;font-family:var(--font-mono);padding:3px 8px;border-radius:6px;background:${isEnabled ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)'};color:${color}">
-            ${actionText}
+            ${detailsHtml}
           </div>
         </div>
       `;
@@ -248,6 +392,152 @@ function renderHistoryModal(history) {
     }
     document.getElementById('modal-history')?.classList.add('open');
 }
+window.openHistoryDetail = (cacheKey) => {
+    console.log('Opening history detail for:', cacheKey);
+    const item = window.__historyCache ? window.__historyCache[cacheKey] : null;
+    if (!item) {
+        console.error('Item not found in cache for key:', cacheKey);
+        return;
+    }
+    const modal = document.getElementById('modal-history-detail');
+    const container = document.getElementById('history-detail-diff-container');
+    const modNameEl = document.getElementById('history-detail-modname');
+    if (!modal || !container || !modNameEl) {
+        console.error('History detail modal elements not found');
+        return;
+    }
+    const modalTitle = document.getElementById('history-detail-modal-title');
+    if (modalTitle)
+        modalTitle.textContent = t('history.detail.title') || 'Modification Details';
+    modNameEl.textContent = item.mod_name;
+    container.innerHTML = '';
+    try {
+        const changes = JSON.parse(item.details);
+        console.log('Changes to display:', changes);
+        changes.forEach(c => {
+            const fieldLabel = t('detail.' + c.field) || c.field;
+            const formatValue = (v) => {
+                if (v === null || v === undefined)
+                    return '-';
+                if (typeof v === 'string')
+                    return v;
+                if (Array.isArray(v)) {
+                    if (v.length === 0)
+                        return '[]';
+                    if (c.field === 'tags') {
+                        return v.map(id => {
+                            const tDef = S.userTags.find(t => t.id === id);
+                            return tDef ? tDef.name : `[Unknown Tag: ${id}]`;
+                        }).join(', ');
+                    }
+                    if (c.field === 'dependencies') {
+                        return v.map(id => {
+                            const m = S.allMods.find(mod => mod.id === id);
+                            return m ? m.name : `[Missing Mod: ${id}]`;
+                        }).join(', ');
+                    }
+                    return JSON.stringify(v, null, 2);
+                }
+                return JSON.stringify(v, null, 2);
+            };
+            const oldVal = formatValue(c.old);
+            const newVal = formatValue(c.new);
+            container.innerHTML += `
+                <div class="diff-row" style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; overflow:hidden">
+                    <div style="background:rgba(59,130,246,0.1); padding:8px 15px; border-bottom:1px solid var(--border); font-weight:700; font-size:11px; color:var(--accent); text-transform:uppercase; letter-spacing:0.05em; display:flex; justify-content:space-between; align-items:center">
+                        <span>${escHtml(truncate(fieldLabel, 50))}</span>
+                        <span style="font-weight:400; opacity:0.5; font-size:10px">${escHtml(c.field)}</span>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--border)">
+                        <div style="background:rgba(0,0,0,0.2); padding:15px; min-height:60px">
+                            <div style="font-size:9px; color:var(--danger); font-weight:800; margin-bottom:10px; text-transform:uppercase; opacity:0.6; display:flex; align-items:center; gap:5px">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                BEFORE
+                            </div>
+                            <pre style="margin:0; font-family:var(--font-mono); font-size:11px; color:var(--text-muted); white-space:pre-wrap; word-break:break-all; line-height:1.5">${escHtml(oldVal)}</pre>
+                        </div>
+                        <div style="background:rgba(16,185,129,0.03); padding:15px; min-height:60px">
+                            <div style="font-size:9px; color:var(--success); font-weight:800; margin-bottom:10px; text-transform:uppercase; opacity:0.6; display:flex; align-items:center; gap:5px">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                                AFTER
+                            </div>
+                            <pre style="margin:0; font-family:var(--font-mono); font-size:11px; color:var(--text-primary); white-space:pre-wrap; word-break:break-all; line-height:1.5; font-weight:500">${escHtml(newVal)}</pre>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        // Add Revert Button if applicable
+        const footer = modal.querySelector('.modal-footer');
+        if (footer) {
+            const isModified = item.action === 'Modified';
+            footer.innerHTML = `
+                ${isModified ? `<button class="btn btn-primary" onclick="window.revertHistoryAction('${cacheKey}')" style="background:var(--accent); border:none; padding:10px 25px; border-radius:12px; font-weight:700; font-size:12px; color:white; cursor:pointer; box-shadow:0 4px 15px rgba(59,130,246,0.3); display:flex; align-items:center; gap:8px">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 10h10a8 8 0 0 1 8 8v2M3 10l6-6m-6 6l6 6"/></svg>
+                        ${t('history.revert') || 'REVERT'}
+                    </button>` : ''}
+                <button class="btn btn-primary" style="padding:8px 25px" onclick="document.getElementById('modal-history-detail').classList.remove('open')" data-i18n="common.close">${t('common.close') || 'Close'}</button>
+            `;
+        }
+        modal.classList.add('open');
+    }
+    catch (e) {
+        console.error('Error parsing details', e);
+    }
+};
+window.revertHistoryAction = async (cacheKey) => {
+    const item = window.__historyCache ? window.__historyCache[cacheKey] : null;
+    if (!item || !item.details)
+        return;
+    try {
+        const changes = JSON.parse(item.details);
+        const mod = S.allMods.find(m => m.id === item.mod_id);
+        if (!mod) {
+            toast('Mod introuvable pour l\'annulation', 'error');
+            return;
+        }
+        // Prepare the reverted metadata
+        // We take the current mod metadata and overwrite the fields from 'old' values in the log
+        const updatedMeta = { ...mod };
+        changes.forEach(c => {
+            if (c.field === 'dependencies' && Array.isArray(c.old)) {
+                // Keep only dependencies that still exist in the library
+                updatedMeta.dependencies = c.old.filter(id => S.allMods.some(m => m.id === id));
+            }
+            else if (c.field === 'tags' && Array.isArray(c.old)) {
+                // Keep only tags that still exist in global definitions
+                updatedMeta.tags = c.old.filter(id => S.userTags.some(t => t.id === id));
+            }
+            else {
+                updatedMeta[c.field] = c.old;
+            }
+        });
+        const inv = typeof invoke !== 'undefined' ? invoke : window.__TAURI__.tauri.invoke;
+        await inv('update_mod_meta', {
+            modId: mod.id,
+            payload: {
+                name: updatedMeta.name,
+                version: updatedMeta.version,
+                author: updatedMeta.author,
+                description: updatedMeta.description,
+                tags: updatedMeta.tags,
+                downloadLinks: updatedMeta.download_links,
+                dependencies: updatedMeta.dependencies
+            }
+        });
+        // Update local state
+        Object.assign(mod, updatedMeta);
+        appState.set('allMods', [...S.allMods]);
+        toast('Modifications annulées avec succès !', 'success');
+        document.getElementById('modal-history-detail').classList.remove('open');
+        // Refresh history modal if open
+        renderHistoryModal(S.currentHistory || []);
+    }
+    catch (e) {
+        toast('Erreur lors de l\'annulation : ' + e, 'error');
+        console.error(e);
+    }
+};
 function updateTagFilterUI() {
     const select = document.getElementById('mod-tag-filter');
     if (!select)

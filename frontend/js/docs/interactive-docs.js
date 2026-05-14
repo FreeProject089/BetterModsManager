@@ -365,6 +365,10 @@ function showTooltipImpl(key, iconClass, isLiteral) {
         finalIcon = 'icon-verify';
     if (finalIcon === 'network')
         finalIcon = 'icon-layers';
+    if (finalIcon === 'user')
+        finalIcon = 'icon-user';
+    if (finalIcon === 'settings')
+        finalIcon = 'icon-refresh'; // Fallback for now
     // Text content logic
     let exp = key;
     if (!isLiteral) {

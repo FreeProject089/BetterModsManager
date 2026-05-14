@@ -46,6 +46,8 @@ pub struct AppSettings {
     pub show_sha_loading_animation: bool,
     #[serde(default = "default_true")]
     pub enable_lazy_sha_calculation: bool,
+    #[serde(default = "default_history_retention")]
+    pub history_retention_days: u32,
 }
 
 impl Default for AppSettings {
@@ -70,6 +72,7 @@ impl Default for AppSettings {
             require_valid_sha: false,
             show_sha_loading_animation: true,
             enable_lazy_sha_calculation: true,
+            history_retention_days: default_history_retention(),
         }
     }
 }
@@ -82,6 +85,7 @@ fn default_sort() -> String { "name_asc".to_string() }
 fn default_lang() -> String { "fr".to_string() }
 fn default_storage_warning() -> u32 { 40 }
 fn default_storage_critical() -> u32 { 30 }
+fn default_history_retention() -> u32 { 30 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct AppData {

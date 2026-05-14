@@ -5298,8 +5298,8 @@ select:focus {
 .tasky-speech-bubble {
     background: rgba(15, 23, 42, 0.7);
     border: 1px solid rgba(59, 130, 246, 0.35);
-    padding: 20px 24px;
-    border-radius: 20px 20px 20px 4px; /* Tail on bottom-left */
+    padding: 8px 14px;
+    border-radius: 16px 16px 16px 4px; /* Tail on bottom-left */
     box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5),
                 inset 0 0 25px rgba(255, 255, 255, 0.03);
     max-width: 420px;
@@ -5310,7 +5310,17 @@ select:focus {
     opacity: 0;
     transform: translateX(-15px) scale(0.95);
     transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
     filter: drop-shadow(0 25px 60px rgba(0, 0, 0, 0.45)); /* Unified shadow for better corner integration */
+}
+
+#tasky-explanation {
+    margin: 0;
+    line-height: 1.4;
+    font-size: 13px;
 }
 
 .tasky-speech-bubble::after {
@@ -6316,7 +6326,7 @@ select:focus {
 .tasky-speech-bubble {
     flex-shrink: 0 !important;
     min-width: 250px !important;
-    width: max-content !important;
+    width: auto !important;
     max-width: 420px !important;
 }
 .titlebar-left {

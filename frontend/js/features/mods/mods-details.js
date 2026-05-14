@@ -5,7 +5,7 @@ import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { getModDetailHTML } from '../../ui/components.js';
-import { refreshMods } from './mods.js';
+import { renderModList, updateCardState } from './mods-list.js';
 import { setupDependencyInput } from './mods-actions.js';
 const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
@@ -206,11 +206,23 @@ export async function renderModDetail(modId) {
             toast(t('common.error') + ' : ' + err, 'error');
         }
     });
+    const setupCounter = (inputId, counterId, max) => {
+        const input = panel.querySelector('#' + inputId);
+        const counter = panel.querySelector('#' + counterId);
+        if (input && counter) {
+            const update = () => { counter.textContent = `${input.value.length}/${max}`; };
+            input.addEventListener('input', update);
+            update();
+        }
+    };
+    setupCounter('detail-name', 'counter-name', 100);
+    setupCounter('detail-author', 'counter-author', 50);
+    setupCounter('detail-desc', 'counter-desc', 2000);
     const descTextarea = panel.querySelector('#detail-desc');
     if (descTextarea) {
         descTextarea.value = mod.description || '';
         const autoResize = () => { descTextarea.style.height = 'auto'; descTextarea.style.height = (descTextarea.scrollHeight + 2) + 'px'; };
-        descTextarea.oninput = autoResize;
+        descTextarea.addEventListener('input', autoResize);
         setTimeout(autoResize, 0);
     }
     const tagSelect = panel.querySelector('#detail-tag-select');
@@ -250,10 +262,10 @@ export async function renderModDetail(modId) {
     };
     renderTagsUI();
     panel.querySelector('#btn-save-detail').onclick = async () => {
-        const name = panel.querySelector('#detail-name').value.trim();
-        const version = panel.querySelector('#detail-version').value.trim();
-        const author = panel.querySelector('#detail-author').value.trim();
-        const description = panel.querySelector('#detail-desc').value.trim();
+        const name = panel.querySelector('#detail-name').value.trim().substring(0, 100);
+        const version = panel.querySelector('#detail-version').value.trim().substring(0, 30);
+        const author = panel.querySelector('#detail-author').value.trim().substring(0, 50);
+        const description = panel.querySelector('#detail-desc').value.trim().substring(0, 2000);
         const tags = mod._currentTags || mod.tags || [];
         try {
             const linkRows = panel.querySelectorAll('#detail-links-list > div');
@@ -270,12 +282,30 @@ export async function renderModDetail(modId) {
                 modId: mod.id, payload: { name, author, description, version, tags, downloadLinks: download_links, dependencies }
             });
             toast(t('common.saved') || 'Mod sauvegardé.', 'success');
-            await refreshMods(false, true);
+            mod.name = name;
+            mod.version = version;
+            mod.author = author;
+            mod.description = description;
+            mod.tags = tags;
+            mod.download_links = download_links;
+            mod.dependencies = dependencies;
+            // Force a global state update to trigger observers and ensure UI consistency
+            appState.set('allMods', [...(S.allMods || [])]);
+            // Update the card in the list immediately
+            const card = document.querySelector(`.mod-card[data-id="${mod.id}"]`);
+            if (card)
+                updateCardState(card, mod);
+            renderModList(true);
+            renderModDetail(mod.id);
         }
         catch (err) {
             toast((window.t ? window.t('common.error') : 'Error') + ' : ' + err, 'error');
         }
     };
+    // Attach remove listeners to existing links
+    panel.querySelectorAll('.btn-remove-link').forEach(btn => {
+        btn.onclick = () => btn.closest('div').remove();
+    });
     panel.querySelector('#btn-add-link').onclick = () => {
         const list = panel.querySelector('#detail-links-list');
         const row = document.createElement('div');

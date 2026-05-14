@@ -4,17 +4,7 @@
  * Extracts large template literals and DOM manipulations from main controllers.
  */
 import { t } from '../core/i18n.js';
-import { escHtml, escAttr, escJs } from '../core/utils.js';
-/**
- * Truncate a string to a maximum length and add ellipsis if needed.
- */
-function truncate(str, maxLen) {
-    if (!str)
-        return '';
-    if (str.length <= maxLen)
-        return str;
-    return str.substring(0, maxLen) + '...';
-}
+import { escHtml, escAttr, escJs, truncate } from '../core/utils.js';
 export function getLoadingOverlayHTML() {
     return `<div class="mod-loading-overlay"><div style="display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div></div>`;
 }
@@ -37,7 +27,10 @@ export function getModCardHTML(mod, ctx) {
             return `<span style="background:${tDef.color}15;color:${tDef.color};border:1px solid ${tDef.color}30;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:600">${escHtml(tDef.name)}</span>`;
         }).join('');
         const extraTagsCount = mod.tags.length > 3 ? `<button class="btn btn-ghost" onclick="window.showModTagsModal('${mod.id}'); event.stopPropagation();" style="color:var(--text-muted);font-size:9px;padding:0;height:auto;min-height:0;margin:0;background:rgba(255,255,255,0.05);border-radius:4px;padding:1px 4px;border:1px solid rgba(255,255,255,0.1)">+${mod.tags.length - 3}</button>` : '';
-        tagsHtml = `<div style="display:inline-flex;gap:4px;align-items:center;margin-left:6px">${visibleTags}${extraTagsCount}</div>`;
+        tagsHtml = `<div class="mod-tags-container" style="display:inline-flex;gap:4px;align-items:center;margin-left:6px">${visibleTags}${extraTagsCount}</div>`;
+    }
+    else {
+        tagsHtml = `<div class="mod-tags-container" style="display:none;gap:4px;align-items:center;margin-left:6px"></div>`;
     }
     let conflictHtml = '';
     const conflicts = ctx && ctx.conflictCache ? ctx.conflictCache[mod.id] : (mod.conflicts || []);
@@ -81,13 +74,13 @@ export function getModCardHTML(mod, ctx) {
             </div>
             <div class="mod-meta">
                 <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
-                    <span class="mono" style="color: var(--cyan); font-weight:600">v${escHtml(mod.version)}</span>
+                    <span class="mono mod-version" style="color: var(--cyan); font-weight:600">v${escHtml(mod.version)}</span>
                     ${tagsHtml}
                 </div>
-                ${mod.author ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;opacity:0.8;display:flex;align-items:center;gap:4px">
+                <div class="mod-author-container" style="font-size:10px;color:var(--text-muted);margin-top:4px;opacity:0.8;display:${mod.author ? 'flex' : 'none'};align-items:center;gap:4px;cursor:help" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.author || ''))}', 'user', true)" onmouseleave="window.hideTaskyHelp()">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.7"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    <span>${escHtml(truncate(mod.author, 60))}</span>
-                </div>` : ''}
+                    <span class="mod-author-name">${escHtml(truncate(mod.author || '', 50))}</span>
+                </div>
             </div>
             <div class="mod-path-hint" onmouseenter="window.showTaskyHelp('${escAttr(escJs(mod.mod_folder_path || ''))}', 'folder', true)" onmouseleave="window.hideTaskyHelp()" style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);opacity:0.5;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;display:flex;align-items:center;gap:4px;cursor:help">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -225,24 +218,31 @@ export function getModDetailHTML(mod, ctx) {
     const infoContent = `
       <!-- Editable Fields -->
       <div class="detail-section">
-        <label class="detail-label">
-          <span>${t('detail.name')}</span>
+        <label class="detail-label" style="display:flex;justify-content:space-between">
+            <span>${t('detail.name')}</span>
+            <span id="counter-name" style="font-size:9px;opacity:0.5;font-weight:400">0/100</span>
         </label>
-        <input type="text" id="detail-name" class="input-field" value="${escAttr(mod.name)}" />
+        <input type="text" id="detail-name" class="input-field" value="${escAttr(mod.name)}" maxlength="100" oninput="if(this.value.length > 100) this.value = this.value.substring(0, 100)" />
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
         <div class="detail-section">
           <label class="detail-label">${t('detail.version')}</label>
-          <input type="text" id="detail-version" class="input-field" value="${escAttr(mod.version)}" />
+          <input type="text" id="detail-version" class="input-field" value="${escAttr(mod.version)}" maxlength="30" />
         </div>
         <div class="detail-section">
-          <label class="detail-label">${t('detail.author')}</label>
-          <input type="text" id="detail-author" class="input-field" value="${escAttr(mod.author || '')}" />
+          <label class="detail-label" style="display:flex;justify-content:space-between">
+            <span>${t('detail.author')}</span>
+            <span id="counter-author" style="font-size:9px;opacity:0.5;font-weight:400">0/50</span>
+          </label>
+          <input type="text" id="detail-author" class="input-field" value="${escAttr(mod.author || '')}" maxlength="50" oninput="if(this.value.length > 50) this.value = this.value.substring(0, 50)" />
         </div>
       </div>
       <div class="detail-section" style="margin-top:10px">
-        <label class="detail-label">${t('detail.description')}</label>
-        <textarea id="detail-desc" class="input-field" rows="4" style="resize:vertical;min-height:80px;line-height:1.5;padding:10px">${escHtml(mod.description || '')}</textarea>
+        <label class="detail-label" style="display:flex;justify-content:space-between">
+            <span>${t('detail.description')}</span>
+            <span id="counter-desc" style="font-size:9px;opacity:0.5;font-weight:400">0/2000</span>
+        </label>
+        <textarea id="detail-desc" class="input-field" rows="4" style="resize:vertical;min-height:80px;line-height:1.5;padding:10px" maxlength="2000" oninput="if(this.value.length > 2000) this.value = this.value.substring(0, 2000)"></textarea>
       </div>
 
       <!-- Tags Selection -->
@@ -326,6 +326,7 @@ export function getModDetailHTML(mod, ctx) {
                 <option value="other" ${dl.link_type === 'other' ? 'selected' : ''}>Autre</option>
               </select>
               <input type="text" class="detail-link-url input-field" style="flex:1;padding:3px 6px;font-size:10px" value="${escAttr(dl.url)}" placeholder="URL" data-index="${i}" />
+              <input type="text" class="detail-link-label input-field" style="width:80px;padding:3px 6px;font-size:10px" value="${escAttr(dl.label || '')}" placeholder="Label" data-index="${i}" />
               <button class="btn-remove-link" data-index="${i}" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;display:flex;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
           `).join('')}

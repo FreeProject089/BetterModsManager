@@ -6,4 +6,6 @@ pub struct ActivityEvent {
     pub mod_name: String,
     pub action: String,
     pub timestamp: String,
+    #[serde(default)]
+    pub details: Option<String>,
 }

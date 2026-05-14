@@ -89,7 +89,7 @@ pub struct ModEntry {
 }
 
 /// A download link for a mod
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DownloadLink {
     pub url: String,
     pub link_type: String,

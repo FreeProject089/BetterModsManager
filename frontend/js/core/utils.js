@@ -29,4 +29,11 @@ export function formatBytes(bytes) {
     const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
+export function truncate(str, maxLen) {
+    if (!str)
+        return '';
+    if (str.length <= maxLen)
+        return str;
+    return str.substring(0, maxLen) + '...';
+}
 //# sourceMappingURL=utils.js.map
