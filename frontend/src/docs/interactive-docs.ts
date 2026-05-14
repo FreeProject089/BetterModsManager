@@ -408,6 +408,11 @@ function showTooltipImpl(key: string, iconClass: string, isLiteral: boolean) {
         // Re-enable pointer events when showing
         bubble.style.pointerEvents = 'auto';
         
+        // Immediately update position since mousemove might have stopped
+        if (typeof (window as any).updateTaskyPosition === 'function') {
+            (window as any).updateTaskyPosition();
+        }
+        
         if (eyes) {
             eyes.className = finalIcon;
             eyes.style.display = 'flex'; // Match CSS flex display
@@ -426,6 +431,11 @@ function showTooltipImpl(key: string, iconClass: string, isLiteral: boolean) {
                 // or just reduce max-width of the bubble
                 const newMaxWidth = Math.max(200, 440 - overflow);
                 (bubble as HTMLElement).style.maxWidth = `${newMaxWidth}px`;
+                
+                // Max-width change might affect layout, re-run position update
+                if (typeof (window as any).updateTaskyPosition === 'function') {
+                    (window as any).updateTaskyPosition();
+                }
             } else {
                 (bubble as HTMLElement).style.maxWidth = `440px`;
             }

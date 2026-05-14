@@ -29,6 +29,7 @@ import { initDebugMenu } from '../features/debug/debug-menu.js';
 import { checkSecurityMode } from './security-modal.js';
 import { escHtml, escAttr, formatBytes } from '../core/utils.js';
 import { initMapper } from '../features/mapper/mapper.js';
+import { openAdvancedPerfModal } from '../features/bench/benchmark.js';
 
  async function waitForModalClosed(id: string): Promise<void> {
      const el = document.getElementById(id);
@@ -442,6 +443,7 @@ export async function updateLibraryProfileSelector() {
                     await updateLibraryProfileSelector(); // Keep labels in sync
                     applyTranslations();
                 } catch (e) {
+                    const { toast } = await import('../ui/app.js');
                     toast((window.t ? window.t('common.error') : 'Error') + ' : ' + e, 'error');
                 } finally {
                     stopTaskyLoader();
@@ -665,6 +667,7 @@ async function main() {
         });
     }
 
+
     const newProfileLibBtn = document.getElementById('btn-new-profile-lib');
     if (newProfileLibBtn) {
         newProfileLibBtn.addEventListener('click', () => {
@@ -738,74 +741,80 @@ window.applyTaskySettings = function() {
 };
 
 // ── Tasky tooltip mouse-follow ───────────────────────────
+let lastTaskyMouseX = 0;
+let lastTaskyMouseY = 0;
+let lastTaskyTarget: EventTarget | null = null;
+
+(window as any).updateTaskyPosition = function() {
+    const bubble = document.querySelector('.tasky-speech-bubble') as HTMLElement;
+    const container = document.getElementById('tasky-bubble-docs') as HTMLElement;
+    if (!bubble || !container) return;
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    
+    // Use total container width for accurate clamping (mascot + bubble)
+    const tw = container.offsetWidth || 350;
+    const th = container.offsetHeight || 100;
+
+    const target = lastTaskyTarget as HTMLElement;
+    const isDropdown = target ? !!target.closest('#global-dropdown-portal, .mod-actions-dropdown-content, .dropdown-menu, .dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod, .btn-open-source-folder') : false;
+    
+    // Consistent offset
+    const OFFSET = 20;
+    const MARGIN = 15;
+
+    // 1. Initial Candidate: Bottom-Right
+    let targetX = lastTaskyMouseX + OFFSET;
+    let targetY = lastTaskyMouseY + OFFSET;
+    
+    let isFlippedX = false;
+    let isFlippedY = false;
+
+    // Force position ABOVE if inside a dropdown to avoid obscuring other items
+    if (isDropdown) {
+        targetY = lastTaskyMouseY - th - OFFSET;
+        isFlippedY = true;
+    }
+
+    // 2. Horizontal Flip Decision
+    if (targetX + tw > vw - MARGIN) {
+        targetX = lastTaskyMouseX - tw - OFFSET;
+        isFlippedX = true;
+    }
+
+    // 3. Vertical Flip Decision
+    if (targetY + th > vh - MARGIN) {
+        targetY = lastTaskyMouseY - th - OFFSET;
+        isFlippedY = true;
+    }
+
+    // 4. Final Clamping
+    let finalX = Math.max(MARGIN, Math.min(targetX, vw - tw - MARGIN));
+    let finalY = Math.max(MARGIN, Math.min(targetY, vh - th - MARGIN));
+
+    // 5. Layout adjustment: flip mascot if on left
+    container.style.flexDirection = isFlippedX ? 'row-reverse' : 'row';
+    
+    container.style.position = 'fixed';
+    container.style.left = finalX + 'px';
+    container.style.top = finalY + 'px';
+    container.style.bottom = 'auto';
+    container.style.right = 'auto';
+    container.style.transform = 'none';
+    container.style.zIndex = '999999999'; 
+};
+
 (function initTaskyMouseFollow() {
     document.addEventListener('mousemove', (e: MouseEvent) => {
+        lastTaskyMouseX = e.clientX;
+        lastTaskyMouseY = e.clientY;
+        lastTaskyTarget = e.target;
+
         const bubble = document.querySelector('.tasky-speech-bubble') as HTMLElement;
-        const container = document.getElementById('tasky-bubble-docs') as HTMLElement;
-        if (!bubble || !container) return;
-        if (!bubble.classList.contains('active')) return;
-
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        
-        // Use total container width for accurate clamping (mascot + bubble)
-        const tw = container.offsetWidth || 350;
-        const th = container.offsetHeight || 100;
-
-        const target = e.target as HTMLElement;
-        const isDropdown = !!target.closest('#global-dropdown-portal, .mod-actions-dropdown-content, .dropdown-menu, .dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod, .btn-open-source-folder');
-        const isBusy = !!target.closest('button, .nav-item, .dropdown-menu, .mod-item-card, .glass-card, .search-mode-pill, .titlebar-controls');
-        
-        // Adaptive offsets: increased to avoid overlap with dropdowns
-        const BASE_OFFSET = 20;
-        const BUSY_OFFSET = isBusy ? 40 : BASE_OFFSET;
-        const MARGIN = 20;
-
-        // 1. Initial Candidate: Bottom-Right
-        let targetX = e.clientX + BUSY_OFFSET;
-        let targetY = e.clientY + BUSY_OFFSET;
-        
-        let isFlippedX = false;
-        let isFlippedY = false;
-
-        // Force position ABOVE if inside a dropdown to avoid obscuring other items
-        if (isDropdown) {
-            targetY = e.clientY - th - BUSY_OFFSET - 10; // Extra spacing from dropdown
-            isFlippedY = true;
+        if (bubble && bubble.classList.contains('active')) {
+            (window as any).updateTaskyPosition();
         }
-
-        // 2. Horizontal Flip Decision: If more than 30% of tooltip would be hidden on the right
-        if (targetX + tw > vw - MARGIN) {
-            const overflowAmount = (targetX + tw) - (vw - MARGIN);
-            if (overflowAmount > tw * 0.3) {
-                targetX = e.clientX - tw - BUSY_OFFSET;
-                isFlippedX = true;
-            }
-        }
-
-        // 3. Vertical Flip Decision
-        if (targetY + th > vh - MARGIN) {
-            const overflowAmount = (targetY + th) - (vh - MARGIN);
-            if (overflowAmount > th * 0.3) {
-                targetY = e.clientY - th - BUSY_OFFSET;
-                isFlippedY = true;
-            }
-        }
-
-        // 4. Final Clamping: Ensure 100% visibility (if 1% or more is hidden, we push it back)
-        let finalX = Math.max(MARGIN, Math.min(targetX, vw - tw - MARGIN));
-        let finalY = Math.max(MARGIN, Math.min(targetY, vh - th - MARGIN));
-
-        // 5. Layout adjustment: flip mascot if on left
-        container.style.flexDirection = isFlippedX ? 'row-reverse' : 'row';
-        
-        container.style.position = 'fixed';
-        container.style.left = finalX + 'px';
-        container.style.top = finalY + 'px';
-        container.style.bottom = 'auto';
-        container.style.right = 'auto';
-        container.style.transform = 'none';
-        container.style.zIndex = '999999999'; 
     });
 })();
 
