@@ -1,4 +1,5 @@
 # Better Mod Manager (BMM)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/I2I31ZIPPG)
 
 A modern, high-performance, and universal mod manager built with Rust and Tauri. Designed for performance, safety, and a premium "workstation" user experience across any PC game.
 
