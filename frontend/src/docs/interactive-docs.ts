@@ -388,9 +388,13 @@ function showTooltipImpl(key: string, iconClass: string, isLiteral: boolean) {
     if (finalIcon === 'alert') finalIcon = 'icon-alert';
     if (finalIcon === 'package') finalIcon = 'icon-package';
     if (finalIcon === 'shield') finalIcon = 'icon-verify';
-    if (finalIcon === 'network') finalIcon = 'icon-layers';
-    if (finalIcon === 'user') finalIcon = 'icon-user';
-    if (finalIcon === 'settings') finalIcon = 'icon-refresh'; // Fallback for now
+    if (finalIcon === 'network' || finalIcon === 'server') finalIcon = 'icon-database';
+    if (finalIcon === 'user' || finalIcon === 'profiles') finalIcon = 'icon-user';
+    if (finalIcon === 'library') finalIcon = 'icon-grid';
+    if (finalIcon === 'list') finalIcon = 'icon-list';
+    if (finalIcon === 'heart' || finalIcon === 'credits') finalIcon = 'icon-heart';
+    if (finalIcon === 'settings') finalIcon = 'icon-settings';
+    if (finalIcon === 'layers' || finalIcon === 'mapper') finalIcon = 'icon-layers';
 
     // Text content logic
     let exp = key;
@@ -408,16 +412,16 @@ function showTooltipImpl(key: string, iconClass: string, isLiteral: boolean) {
         // Re-enable pointer events when showing
         bubble.style.pointerEvents = 'auto';
         
-        // Immediately update position since mousemove might have stopped
-        if (typeof (window as any).updateTaskyPosition === 'function') {
-            (window as any).updateTaskyPosition();
-        }
-        
         if (eyes) {
             eyes.className = finalIcon;
             eyes.style.display = 'flex'; // Match CSS flex display
         }
         updateTaskyMascot('Tasky_Happy.png');
+
+        // FORCE POSITION UPDATE IMMEDIATELY
+        if (typeof (window as any).updateTaskyPosition === 'function') {
+            (window as any).updateTaskyPosition(null); // Pass null to use last known coordinates
+        }
 
         // Prevent Right-Side Clipping
         requestAnimationFrame(() => {
@@ -427,19 +431,19 @@ function showTooltipImpl(key: string, iconClass: string, isLiteral: boolean) {
             
             if (rect.right > viewportWidth - margin) {
                 const overflow = rect.right - (viewportWidth - margin);
-                // Shift mascot and bubble slightly to the left if needed, 
-                // or just reduce max-width of the bubble
                 const newMaxWidth = Math.max(200, 440 - overflow);
                 (bubble as HTMLElement).style.maxWidth = `${newMaxWidth}px`;
-                
-                // Max-width change might affect layout, re-run position update
-                if (typeof (window as any).updateTaskyPosition === 'function') {
-                    (window as any).updateTaskyPosition();
-                }
             } else {
                 (bubble as HTMLElement).style.maxWidth = `440px`;
             }
         });
+    } else {
+        // Hide if invalid key
+        bubble.classList.remove('active');
+        if (taskyContainer) {
+            taskyContainer.style.display = 'none';
+            taskyContainer.style.opacity = '0';
+        }
     }
 }
 
@@ -683,10 +687,11 @@ export function openHelpTo(targetKey) {
         (docsNavItem as HTMLElement).click();
     // 2. Small delay to allow view switch and ensure DOM is ready
     setTimeout(() => {
-        // 3. Switch to Advanced Tab (where FAQs are)
-        const advancedTabBtn = document.querySelector('.btn-docs-tab[data-tab="advanced"]');
-        if (advancedTabBtn)
-            (advancedTabBtn as HTMLElement).click();
+        // 3. Switch to the correct tab: FAQ keys go to 'faq', others to 'advanced'
+        const targetTab = targetKey.startsWith('faq.') ? 'faq' : 'advanced';
+        const tabBtn = document.querySelector(`.btn-docs-tab[data-tab="${targetTab}"]`);
+        if (tabBtn)
+            (tabBtn as HTMLElement).click();
         // 4. Find the element with the target translation key
         const targetEl = document.querySelector(`[data-i18n="${targetKey}"]`);
         if (targetEl) {

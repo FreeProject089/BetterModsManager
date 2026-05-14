@@ -108,6 +108,7 @@ pub struct AppState {
     pub install_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub sync_paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub benchmark_running: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub advanced_benchmark: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub previous_session_clean: std::sync::Arc<std::sync::atomic::AtomicBool>,
     
     // Cache for O(1) conflict detection (In-Memory only, not saved to JSON)
@@ -147,6 +148,7 @@ impl AppState {
             install_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             sync_paused: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             benchmark_running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            advanced_benchmark: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             previous_session_clean: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
             mod_files_cache: Mutex::new(HashMap::new()),
             conflict_index: Mutex::new(HashMap::new()),

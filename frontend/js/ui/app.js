@@ -4,7 +4,7 @@
  * Entry point for Better Mod Manager frontend
  */
 import { initProfiles, updateProfileChip, openNewProfileModal } from '../features/profiles/profiles.js';
-import { initMods } from '../features/mods/mods.js';
+import { initMods, refreshMods } from '../features/mods/mods.js';
 import { initI18n, applyTranslations, t } from '../core/i18n.js';
 import { initBenchmark } from '../features/bench/benchmark.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
@@ -140,12 +140,17 @@ function initNavigation() {
                 }
                 // Credits video background control
                 const creditsVideo = document.getElementById('credits-bg-video');
-                if (creditsVideo) {
-                    if (viewId === 'credits') {
-                        creditsVideo.play().catch(() => { });
-                    }
-                    else {
+                const marqueeContainer = document.getElementById('credits-marquee-container');
+                if (viewId === 'credits') {
+                    creditsVideo?.play().catch(() => { });
+                }
+                else {
+                    // Pause video and clear marquee interval to free memory
+                    if (creditsVideo && !creditsVideo.paused)
                         creditsVideo.pause();
+                    if (marqueeContainer && marqueeContainer._marqueeInterval) {
+                        clearInterval(marqueeContainer._marqueeInterval);
+                        marqueeContainer._marqueeInterval = null;
                     }
                 }
                 // MEMORY OPTIMIZATION: Flush conflict cache if not in library
@@ -155,8 +160,12 @@ function initNavigation() {
             }, 15);
         });
     });
-    // Auto-detect when app regained focus
+    // Auto-detect when app regained focus — debounced to prevent Tauri multi-fire
+    let _focusDebounce = null;
     window.addEventListener('focus', () => {
+        if (_focusDebounce)
+            return; // Ignore rapid re-fires (Tauri emits focus multiple times at startup)
+        _focusDebounce = setTimeout(() => { _focusDebounce = null; }, 2000);
         const libView = document.getElementById('view-library');
         const detailOpen = !!document.getElementById('mod-detail-panel');
         if (libView && libView.classList.contains('active') && !detailOpen) {
@@ -408,6 +417,7 @@ export async function updateLibraryProfileSelector() {
                     applyTranslations();
                 }
                 catch (e) {
+                    const { toast } = await import('../ui/app.js');
                     toast((window.t ? window.t('common.error') : 'Error') + ' : ' + e, 'error');
                 }
                 finally {
@@ -529,6 +539,8 @@ async function main() {
     await updateProfileChip();
     await updateLibraryProfileSelector();
     initCredits();
+    // Force an explicit initial scan at startup so we don't rely on the debounced focus event
+    setTimeout(() => { refreshMods(true); }, 500);
     // Show happy tasky when everything is ready
     const loaderImg = document.getElementById('loader-img');
     const loaderText = document.getElementById('loader-text');
@@ -671,55 +683,51 @@ window.applyTaskySettings = function () {
 };
 // ── Tasky tooltip mouse-follow ───────────────────────────
 (function initTaskyMouseFollow() {
-    document.addEventListener('mousemove', (e) => {
+    let lastX = 0;
+    let lastY = 0;
+    window.updateTaskyPosition = (e) => {
         const bubble = document.querySelector('.tasky-speech-bubble');
         const container = document.getElementById('tasky-bubble-docs');
         if (!bubble || !container)
             return;
-        if (!bubble.classList.contains('active'))
+        // If e is null, use last coordinates (for manual calls)
+        const clientX = e ? e.clientX : lastX;
+        const clientY = e ? e.clientY : lastY;
+        if (e && e.clientX !== undefined) {
+            lastX = e.clientX;
+            lastY = e.clientY;
+        }
+        // Only update if visible or active to save some cycles, 
+        // but we need it to be positioned correctly THE INSTANT it's shown.
+        // showTaskyHelp calls this manually.
+        if (container.style.display === 'none' && !bubble.classList.contains('active'))
             return;
         const vw = window.innerWidth;
         const vh = window.innerHeight;
-        // Use total container width for accurate clamping (mascot + bubble)
         const tw = container.offsetWidth || 350;
         const th = container.offsetHeight || 100;
-        const target = e.target;
-        const isDropdown = !!target.closest('#global-dropdown-portal, .mod-actions-dropdown-content, .dropdown-menu, .dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod, .btn-open-source-folder');
-        const isBusy = !!target.closest('button, .nav-item, .dropdown-menu, .mod-item-card, .glass-card, .search-mode-pill, .titlebar-controls');
-        // Adaptive offsets: increased to avoid overlap with dropdowns
-        const BASE_OFFSET = 20;
-        const BUSY_OFFSET = isBusy ? 40 : BASE_OFFSET;
-        const MARGIN = 20;
-        // 1. Initial Candidate: Bottom-Right
-        let targetX = e.clientX + BUSY_OFFSET;
-        let targetY = e.clientY + BUSY_OFFSET;
+        const target = (e && e.target) ? e.target : document.elementFromPoint(lastX, lastY);
+        const isDropdown = target && !!target.closest('#global-dropdown-portal, .mod-actions-dropdown-content, .dropdown-menu, .dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod, .btn-open-source-folder');
+        const OFFSET = 20;
+        const MARGIN = 15;
+        let targetX = clientX + OFFSET;
+        let targetY = clientY + OFFSET;
         let isFlippedX = false;
         let isFlippedY = false;
-        // Force position ABOVE if inside a dropdown to avoid obscuring other items
         if (isDropdown) {
-            targetY = e.clientY - th - BUSY_OFFSET - 10; // Extra spacing from dropdown
+            targetY = clientY - th - OFFSET;
             isFlippedY = true;
         }
-        // 2. Horizontal Flip Decision: If more than 30% of tooltip would be hidden on the right
         if (targetX + tw > vw - MARGIN) {
-            const overflowAmount = (targetX + tw) - (vw - MARGIN);
-            if (overflowAmount > tw * 0.3) {
-                targetX = e.clientX - tw - BUSY_OFFSET;
-                isFlippedX = true;
-            }
+            targetX = clientX - tw - OFFSET;
+            isFlippedX = true;
         }
-        // 3. Vertical Flip Decision
         if (targetY + th > vh - MARGIN) {
-            const overflowAmount = (targetY + th) - (vh - MARGIN);
-            if (overflowAmount > th * 0.3) {
-                targetY = e.clientY - th - BUSY_OFFSET;
-                isFlippedY = true;
-            }
+            targetY = clientY - th - OFFSET;
+            isFlippedY = true;
         }
-        // 4. Final Clamping: Ensure 100% visibility (if 1% or more is hidden, we push it back)
         let finalX = Math.max(MARGIN, Math.min(targetX, vw - tw - MARGIN));
         let finalY = Math.max(MARGIN, Math.min(targetY, vh - th - MARGIN));
-        // 5. Layout adjustment: flip mascot if on left
         container.style.flexDirection = isFlippedX ? 'row-reverse' : 'row';
         container.style.position = 'fixed';
         container.style.left = finalX + 'px';
@@ -728,7 +736,8 @@ window.applyTaskySettings = function () {
         container.style.right = 'auto';
         container.style.transform = 'none';
         container.style.zIndex = '999999999';
-    });
+    };
+    document.addEventListener('mousemove', (e) => window.updateTaskyPosition(e));
 })();
 // ── Restore Tasky preferences on page load ───────────────
 (function initTaskyPrefs() {
@@ -821,7 +830,8 @@ function initCredits() {
             msgIndex = (msgIndex + 1) % CREDITS_MESSAGES.length;
         };
         updateMarquee();
-        setInterval(updateMarquee, 7000); // Must match CSS animation duration (7s)
+        // Store interval ID on container so navigation can clear it
+        marqueeContainer._marqueeInterval = setInterval(updateMarquee, 7000);
     }
     if (contributorsGrid) {
         contributorsGrid.innerHTML = CONTRIBUTORS.map(c => `

@@ -363,12 +363,20 @@ function showTooltipImpl(key, iconClass, isLiteral) {
         finalIcon = 'icon-package';
     if (finalIcon === 'shield')
         finalIcon = 'icon-verify';
-    if (finalIcon === 'network')
-        finalIcon = 'icon-layers';
-    if (finalIcon === 'user')
+    if (finalIcon === 'network' || finalIcon === 'server')
+        finalIcon = 'icon-database';
+    if (finalIcon === 'user' || finalIcon === 'profiles')
         finalIcon = 'icon-user';
+    if (finalIcon === 'library')
+        finalIcon = 'icon-grid';
+    if (finalIcon === 'list')
+        finalIcon = 'icon-list';
+    if (finalIcon === 'heart' || finalIcon === 'credits')
+        finalIcon = 'icon-heart';
     if (finalIcon === 'settings')
-        finalIcon = 'icon-refresh'; // Fallback for now
+        finalIcon = 'icon-settings';
+    if (finalIcon === 'layers' || finalIcon === 'mapper')
+        finalIcon = 'icon-layers';
     // Text content logic
     let exp = key;
     if (!isLiteral) {
@@ -388,6 +396,10 @@ function showTooltipImpl(key, iconClass, isLiteral) {
             eyes.style.display = 'flex'; // Match CSS flex display
         }
         updateTaskyMascot('Tasky_Happy.png');
+        // FORCE POSITION UPDATE IMMEDIATELY
+        if (typeof window.updateTaskyPosition === 'function') {
+            window.updateTaskyPosition(null); // Pass null to use last known coordinates
+        }
         // Prevent Right-Side Clipping
         requestAnimationFrame(() => {
             const rect = bubble.getBoundingClientRect();
@@ -395,8 +407,6 @@ function showTooltipImpl(key, iconClass, isLiteral) {
             const margin = 30; // Safety margin
             if (rect.right > viewportWidth - margin) {
                 const overflow = rect.right - (viewportWidth - margin);
-                // Shift mascot and bubble slightly to the left if needed, 
-                // or just reduce max-width of the bubble
                 const newMaxWidth = Math.max(200, 440 - overflow);
                 bubble.style.maxWidth = `${newMaxWidth}px`;
             }
@@ -404,6 +414,14 @@ function showTooltipImpl(key, iconClass, isLiteral) {
                 bubble.style.maxWidth = `440px`;
             }
         });
+    }
+    else {
+        // Hide if invalid key
+        bubble.classList.remove('active');
+        if (taskyContainer) {
+            taskyContainer.style.display = 'none';
+            taskyContainer.style.opacity = '0';
+        }
     }
 }
 /**
@@ -623,10 +641,11 @@ export function openHelpTo(targetKey) {
         docsNavItem.click();
     // 2. Small delay to allow view switch and ensure DOM is ready
     setTimeout(() => {
-        // 3. Switch to Advanced Tab (where FAQs are)
-        const advancedTabBtn = document.querySelector('.btn-docs-tab[data-tab="advanced"]');
-        if (advancedTabBtn)
-            advancedTabBtn.click();
+        // 3. Switch to the correct tab: FAQ keys go to 'faq', others to 'advanced'
+        const targetTab = targetKey.startsWith('faq.') ? 'faq' : 'advanced';
+        const tabBtn = document.querySelector(`.btn-docs-tab[data-tab="${targetTab}"]`);
+        if (tabBtn)
+            tabBtn.click();
         // 4. Find the element with the target translation key
         const targetEl = document.querySelector(`[data-i18n="${targetKey}"]`);
         if (targetEl) {

@@ -272,7 +272,7 @@ export function initUpdateNotes() {
 window.copyCodeToClipboard = (text, btn) => {
     navigator.clipboard.writeText(text).then(() => {
         const originalHtml = btn.innerHTML;
-        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!';
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> ' + (t('update.copied') || 'Copied!');
         btn.classList.add('copied');
         setTimeout(() => {
             btn.innerHTML = originalHtml;
@@ -329,7 +329,7 @@ export function renderMarkdown(md) {
         return `
         <div class="md-code-block" style="position: relative; margin: 10px 0;">
             <pre style="margin: 0; padding-top: 36px; position: relative;"><code${attrs}>${content}</code></pre>
-            <button class="md-copy-btn" onclick="let b=this; let code=this.previousElementSibling.innerText; navigator.clipboard.writeText(code).then(()=>{ b.innerHTML='Copied!'; setTimeout(()=>b.innerHTML='Copy', 2000) })" style="position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: var(--text-secondary); border-radius: 4px; padding: 4px 8px; font-size: 10px; cursor: pointer; transition: 0.2s; text-transform: uppercase;">Copy</button>
+            <button class="md-copy-btn" onclick="let b=this; let code=this.previousElementSibling.innerText; navigator.clipboard.writeText(code).then(()=>{ b.innerHTML='${t('update.copied') || 'Copied!'}'; setTimeout(()=>b.innerHTML='${t('update.copy') || 'Copy'}', 2000) })" style="position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: var(--text-secondary); border-radius: 4px; padding: 4px 8px; font-size: 10px; cursor: pointer; transition: 0.2s; text-transform: uppercase;">${t('update.copy') || 'Copy'}</button>
         </div>`;
     });
 
@@ -702,7 +702,7 @@ function showUpdateAvailableModal(info) {
         downloadBtn.addEventListener('click', async () => {
             const originalContent = downloadBtn.innerHTML;
             downloadBtn.disabled = true;
-            downloadBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Downloading...';
+            downloadBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ' + (t('update.downloading') || 'Downloading...');
             try {
                 let filename = info.download_url.split('/').pop() || 'setup.exe';
                 if (!filename.includes('.')) filename += '.exe';
@@ -876,7 +876,7 @@ async function showPtbModal(folderStructure, lang, initialFileName = null) {
                         if (targetItem) {
                             targetItem.click();
                         } else {
-                            toast("Page non trouvée: " + fileName, "warning");
+                            toast((t('update.pageNotFound') || 'Page not found: {name}').replace('{name}', fileName), "warning");
                         }
                     }
                 }

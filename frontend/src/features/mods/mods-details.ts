@@ -237,8 +237,18 @@ export async function renderModDetail(modId) {
       if (!tDef) return;
       const chip = document.createElement('div');
       chip.style.cssText = `display:flex;align-items:center;gap:4px;background:${tDef.color}20;color:${tDef.color};border:1px solid ${tDef.color}40;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600`;
-      chip.innerHTML = `<span>${escHtml(tDef.name)}</span><button data-id="${tid}" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:4px">&times;</button>`;
-      chip.querySelector('button').onclick = () => { modTags = modTags.filter(id => id !== tid); renderTagsUI(); };
+      chip.innerHTML = `<span>${escHtml(tDef.name)}</span><button data-id="${tid}" onmouseenter="window.showTaskyHelp('mod.removeTagTip', 'trash')" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:4px">&times;</button>`;
+      chip.querySelector('button').onclick = async () => { 
+        const ok = await window.confirmCustom(
+          t('common.delete') || 'Retirer le tag',
+          (t('mod.removeTagConfirm') || 'Voulez-vous vraiment retirer le tag {name} ?').replace('{name}', `<strong>${escHtml(tDef.name)}</strong>`),
+          'danger'
+        );
+        if (ok) {
+          modTags = modTags.filter(id => id !== tid); 
+          renderTagsUI(); 
+        }
+      };
       tagList.appendChild(chip);
     });
     mod._currentTags = modTags;

@@ -164,12 +164,16 @@ function initNavigation() {
                 }
 
                 // Credits video background control
-                const creditsVideo = document.getElementById('credits-bg-video');
-                if (creditsVideo) {
-                    if (viewId === 'credits') {
-                        creditsVideo.play().catch(() => { });
-                    } else {
-                        creditsVideo.pause();
+                const creditsVideo = document.getElementById('credits-bg-video') as HTMLVideoElement | null;
+                const marqueeContainer = document.getElementById('credits-marquee-container');
+                if (viewId === 'credits') {
+                    creditsVideo?.play().catch(() => { });
+                } else {
+                    // Pause video and clear marquee interval to free memory
+                    if (creditsVideo && !creditsVideo.paused) creditsVideo.pause();
+                    if (marqueeContainer && (marqueeContainer as any)._marqueeInterval) {
+                        clearInterval((marqueeContainer as any)._marqueeInterval);
+                        (marqueeContainer as any)._marqueeInterval = null;
                     }
                 }
 
@@ -181,8 +185,11 @@ function initNavigation() {
         });
     });
 
-    // Auto-detect when app regained focus
+    // Auto-detect when app regained focus — debounced to prevent Tauri multi-fire
+    let _focusDebounce: ReturnType<typeof setTimeout> | null = null;
     window.addEventListener('focus', () => {
+        if (_focusDebounce) return; // Ignore rapid re-fires (Tauri emits focus multiple times at startup)
+        _focusDebounce = setTimeout(() => { _focusDebounce = null; }, 2000);
         const libView = document.getElementById('view-library');
         const detailOpen = !!document.getElementById('mod-detail-panel');
         if (libView && libView.classList.contains('active') && !detailOpen) {
@@ -580,6 +587,9 @@ async function main() {
     await updateLibraryProfileSelector();
     initCredits();
 
+    // Force an explicit initial scan at startup so we don't rely on the debounced focus event
+    setTimeout(() => { refreshMods(true); }, 500);
+
     // Show happy tasky when everything is ready
     const loaderImg = document.getElementById('loader-img');
     const loaderText = document.getElementById('loader-text');
@@ -741,81 +751,77 @@ window.applyTaskySettings = function() {
 };
 
 // ── Tasky tooltip mouse-follow ───────────────────────────
-let lastTaskyMouseX = 0;
-let lastTaskyMouseY = 0;
-let lastTaskyTarget: EventTarget | null = null;
-
-(window as any).updateTaskyPosition = function() {
-    const bubble = document.querySelector('.tasky-speech-bubble') as HTMLElement;
-    const container = document.getElementById('tasky-bubble-docs') as HTMLElement;
-    if (!bubble || !container) return;
-
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    
-    // Use total container width for accurate clamping (mascot + bubble)
-    const tw = container.offsetWidth || 350;
-    const th = container.offsetHeight || 100;
-
-    const target = lastTaskyTarget as HTMLElement;
-    const isDropdown = target ? !!target.closest('#global-dropdown-portal, .mod-actions-dropdown-content, .dropdown-menu, .dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod, .btn-open-source-folder') : false;
-    
-    // Consistent offset
-    const OFFSET = 20;
-    const MARGIN = 15;
-
-    // 1. Initial Candidate: Bottom-Right
-    let targetX = lastTaskyMouseX + OFFSET;
-    let targetY = lastTaskyMouseY + OFFSET;
-    
-    let isFlippedX = false;
-    let isFlippedY = false;
-
-    // Force position ABOVE if inside a dropdown to avoid obscuring other items
-    if (isDropdown) {
-        targetY = lastTaskyMouseY - th - OFFSET;
-        isFlippedY = true;
-    }
-
-    // 2. Horizontal Flip Decision
-    if (targetX + tw > vw - MARGIN) {
-        targetX = lastTaskyMouseX - tw - OFFSET;
-        isFlippedX = true;
-    }
-
-    // 3. Vertical Flip Decision
-    if (targetY + th > vh - MARGIN) {
-        targetY = lastTaskyMouseY - th - OFFSET;
-        isFlippedY = true;
-    }
-
-    // 4. Final Clamping
-    let finalX = Math.max(MARGIN, Math.min(targetX, vw - tw - MARGIN));
-    let finalY = Math.max(MARGIN, Math.min(targetY, vh - th - MARGIN));
-
-    // 5. Layout adjustment: flip mascot if on left
-    container.style.flexDirection = isFlippedX ? 'row-reverse' : 'row';
-    
-    container.style.position = 'fixed';
-    container.style.left = finalX + 'px';
-    container.style.top = finalY + 'px';
-    container.style.bottom = 'auto';
-    container.style.right = 'auto';
-    container.style.transform = 'none';
-    container.style.zIndex = '999999999'; 
-};
-
 (function initTaskyMouseFollow() {
-    document.addEventListener('mousemove', (e: MouseEvent) => {
-        lastTaskyMouseX = e.clientX;
-        lastTaskyMouseY = e.clientY;
-        lastTaskyTarget = e.target;
+    let lastX = 0;
+    let lastY = 0;
 
+    window.updateTaskyPosition = (e: MouseEvent | { clientX: number, clientY: number, target?: any }) => {
         const bubble = document.querySelector('.tasky-speech-bubble') as HTMLElement;
-        if (bubble && bubble.classList.contains('active')) {
-            (window as any).updateTaskyPosition();
+        const container = document.getElementById('tasky-bubble-docs') as HTMLElement;
+        if (!bubble || !container) return;
+
+        // If e is null, use last coordinates (for manual calls)
+        const clientX = e ? e.clientX : lastX;
+        const clientY = e ? e.clientY : lastY;
+        
+        if (e && e.clientX !== undefined) {
+            lastX = e.clientX;
+            lastY = e.clientY;
         }
-    });
+
+        // Only update if visible or active to save some cycles, 
+        // but we need it to be positioned correctly THE INSTANT it's shown.
+        // showTaskyHelp calls this manually.
+        if (container.style.display === 'none' && !bubble.classList.contains('active')) return;
+
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        
+        const tw = container.offsetWidth || 350;
+        const th = container.offsetHeight || 100;
+
+        const target = (e && e.target) ? e.target : document.elementFromPoint(lastX, lastY);
+        const isDropdown = target && !!(target as HTMLElement).closest('#global-dropdown-portal, .mod-actions-dropdown-content, .dropdown-menu, .dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod, .btn-open-source-folder');
+        
+        const OFFSET = 20;
+        const MARGIN = 15;
+
+        let targetX = clientX + OFFSET;
+        let targetY = clientY + OFFSET;
+        
+        let isFlippedX = false;
+        let isFlippedY = false;
+
+        if (isDropdown) {
+            targetY = clientY - th - OFFSET;
+            isFlippedY = true;
+        }
+
+        if (targetX + tw > vw - MARGIN) {
+            targetX = clientX - tw - OFFSET;
+            isFlippedX = true;
+        }
+
+        if (targetY + th > vh - MARGIN) {
+            targetY = clientY - th - OFFSET;
+            isFlippedY = true;
+        }
+
+        let finalX = Math.max(MARGIN, Math.min(targetX, vw - tw - MARGIN));
+        let finalY = Math.max(MARGIN, Math.min(targetY, vh - th - MARGIN));
+
+        container.style.flexDirection = isFlippedX ? 'row-reverse' : 'row';
+        
+        container.style.position = 'fixed';
+        container.style.left = finalX + 'px';
+        container.style.top = finalY + 'px';
+        container.style.bottom = 'auto';
+        container.style.right = 'auto';
+        container.style.transform = 'none';
+        container.style.zIndex = '999999999'; 
+    };
+
+    document.addEventListener('mousemove', (e) => window.updateTaskyPosition(e));
 })();
 
 // ── Restore Tasky preferences on page load ───────────────
@@ -911,7 +917,8 @@ function initCredits() {
             msgIndex = (msgIndex + 1) % CREDITS_MESSAGES.length;
         };
         updateMarquee();
-        setInterval(updateMarquee, 7000); // Must match CSS animation duration (7s)
+        // Store interval ID on container so navigation can clear it
+        (marqueeContainer as any)._marqueeInterval = setInterval(updateMarquee, 7000);
     }
 
     if (contributorsGrid) {

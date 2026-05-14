@@ -15,6 +15,11 @@
   <b>Official Website:</b> <a href="https://freeproject089.github.io/BMM_Web/">https://freeproject089.github.io/BMM_Web/</a>
 </p>
 
+<p align="center">
+  <a href="https://ko-fi.com/I2I31ZIPPG" target="_blank">
+    <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support on Ko-fi" style="height:45px;width:auto;" />
+  </a>
+</p>
 ---
 
 **Better Mod Manager (BMM)** is a modern, high-performance, and universal mod manager built with **Rust** and **Tauri**. Designed for performance, safety, and a premium "workstation" user experience, it redefines how you manage game modifications across any PC title.

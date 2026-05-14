@@ -302,13 +302,16 @@ function renderHistoryModal(history) {
     const list = document.getElementById('history-list');
     if (!list)
         return;
-    list.innerHTML = '';
     if (!history || history.length === 0) {
         list.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:20px">${t('history.empty')}</div>`;
     }
     else {
         // Clone to avoid mutating original
         const sorted = [...history].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        // Use array + join to avoid O(n²) innerHTML += accumulation
+        const parts = [];
+        if (!window.__historyCache)
+            window.__historyCache = {};
         sorted.forEach((item, idx) => {
             const isEnabled = item.action.startsWith('Enabled');
             const isDisabled = item.action === 'Disabled';
@@ -342,10 +345,6 @@ function renderHistoryModal(history) {
             if (item.details && isModified) {
                 try {
                     const changes = JSON.parse(item.details);
-                    const summary = changes.map(c => t('detail.' + c.field) || c.field).join(', ');
-                    // Store in global cache for side-by-side modal
-                    if (!window.__historyCache)
-                        window.__historyCache = {};
                     const cacheKey = `hist_${idx}`;
                     window.__historyCache[cacheKey] = item;
                     const fieldBadges = changes.map(c => `
@@ -373,7 +372,7 @@ function renderHistoryModal(history) {
             else if (item.details) {
                 detailsHtml = `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;font-style:italic;opacity:0.6">${escHtml(item.details)}</div>`;
             }
-            list.innerHTML += `
+            parts.push(`
         <div style="display:flex;align-items:center;gap:12px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border)">
           <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;align-self:flex-start;margin-top:6px"></div>
           <div style="flex:1;min-width:0">
@@ -387,8 +386,10 @@ function renderHistoryModal(history) {
             ${detailsHtml}
           </div>
         </div>
-      `;
+      `);
         });
+        // Single DOM write — eliminates O(n²) thrashing from innerHTML +=
+        list.innerHTML = parts.join('');
     }
     document.getElementById('modal-history')?.classList.add('open');
 }
@@ -452,14 +453,14 @@ window.openHistoryDetail = (cacheKey) => {
                         <div style="background:rgba(0,0,0,0.2); padding:15px; min-height:60px">
                             <div style="font-size:9px; color:var(--danger); font-weight:800; margin-bottom:10px; text-transform:uppercase; opacity:0.6; display:flex; align-items:center; gap:5px">
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                BEFORE
+                                ${t('history.before') || 'BEFORE'}
                             </div>
                             <pre style="margin:0; font-family:var(--font-mono); font-size:11px; color:var(--text-muted); white-space:pre-wrap; word-break:break-all; line-height:1.5">${escHtml(oldVal)}</pre>
                         </div>
                         <div style="background:rgba(16,185,129,0.03); padding:15px; min-height:60px">
                             <div style="font-size:9px; color:var(--success); font-weight:800; margin-bottom:10px; text-transform:uppercase; opacity:0.6; display:flex; align-items:center; gap:5px">
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                                AFTER
+                                ${t('history.after') || 'AFTER'}
                             </div>
                             <pre style="margin:0; font-family:var(--font-mono); font-size:11px; color:var(--text-primary); white-space:pre-wrap; word-break:break-all; line-height:1.5; font-weight:500">${escHtml(newVal)}</pre>
                         </div>
@@ -493,7 +494,7 @@ window.revertHistoryAction = async (cacheKey) => {
         const changes = JSON.parse(item.details);
         const mod = S.allMods.find(m => m.id === item.mod_id);
         if (!mod) {
-            toast('Mod introuvable pour l\'annulation', 'error');
+            toast(t('history.modNotFound') || 'Mod not found for revert', 'error');
             return;
         }
         // Prepare the reverted metadata
@@ -528,13 +529,13 @@ window.revertHistoryAction = async (cacheKey) => {
         // Update local state
         Object.assign(mod, updatedMeta);
         appState.set('allMods', [...S.allMods]);
-        toast('Modifications annulées avec succès !', 'success');
+        toast(t('history.revertSuccess') || 'Changes reverted successfully!', 'success');
         document.getElementById('modal-history-detail').classList.remove('open');
         // Refresh history modal if open
         renderHistoryModal(S.currentHistory || []);
     }
     catch (e) {
-        toast('Erreur lors de l\'annulation : ' + e, 'error');
+        toast((t('history.revertError') || 'Error during revert: {error}').replace('{error}', String(e)), 'error');
         console.error(e);
     }
 };

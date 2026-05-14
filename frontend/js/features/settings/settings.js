@@ -759,12 +759,13 @@ export async function renderSettingsTags() {
         tags.forEach(tag => {
             const chip = document.createElement('div');
             chip.style.cssText = `display:flex;align-items:center;gap:4px;background:${tag.color}20;color:${tag.color};border:1px solid ${tag.color}40;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600`;
-            chip.innerHTML = `<span>${escHtml(tag.name)}</span><button data-id="${tag.id}" class="btn-del-tag" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:6px;font-size:14px" title="${t('common.delete')}">&times;</button>`;
+            chip.innerHTML = `<span>${escHtml(tag.name)}</span><button data-id="${tag.id}" class="btn-del-tag" onmouseenter="window.showTaskyHelp('settings.tagDeleteTip', 'trash')" onmouseleave="window.hideTaskyHelp()" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;margin-left:6px;font-size:14px">&times;</button>`;
             list.appendChild(chip);
         });
         list.querySelectorAll('.btn-del-tag').forEach(btn => {
             btn.addEventListener('click', async () => {
-                if (confirm(t('settings.tagDeleteConfirm'))) {
+                const ok = await window.confirmCustom(t('common.delete') || 'Delete Tag', t('settings.tagDeleteConfirm'), 'danger', { yesLabel: t('common.delete') || 'Delete' });
+                if (ok) {
                     try {
                         await invoke('delete_tag', { tagId: btn.dataset.id });
                         toast(t('settings.tagDeleted'), 'success');

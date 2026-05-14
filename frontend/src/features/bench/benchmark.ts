@@ -1,22 +1,34 @@
-// @ts-nocheck
-import { invoke } from '../../core/api.js';
+import { invoke, listen, pickFile, saveFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
-import { toast, startTaskyLoader, stopTaskyLoader } from '../../ui/app.js';
+import { toast } from '../../ui/app.js';
+import { debugHub } from '../debug/debug.js';
+import { showTaskyHelp, hideTaskyHelp } from '../../docs/interactive-docs.js';
 
-let benchmarkPoints = [];
-let fullBenchmarkHistory = [];
-let recentEvents = [];
-let isBenchmarkActive = false;
-let currentEvent = "";
-let eventTimeout = null;
-let benchmarkStartTime = null;
-let playbackIndex = -1;
-let replayInterval = null;
-let autoStopTimeout = null;
-let activeDiskName = "";
+interface BenchmarkPoint {
+    timestamp: number;
+    cpu_usage: number;
+    ram_usage: number;
+    disk_read: number;
+    disk_write: number;
+    network_latency?: number;
+    thread_count?: number;
+    ram_virtual?: number;
+    ram_swap?: number;
+    async_tasks?: number;
+    global_cpu?: number;
+    process_uptime?: number;
+}
 
-const MAX_DISPLAY_POINTS = 60;
+let benchmarkData: BenchmarkPoint[] = [];
+let isAdvancedMode = false;
+let isLiveView = true;
+let isRecording = true;
+let benchmarkUnlisten: (() => void) | null = null;
+let hoverIndex: number | null = null;
+let miniMonitorActive = false;
+let seekIndex: number | null = null;
 
+// Initialization
 export async function initBenchmark() {
     const isEnabled = await invoke('is_benchmark_enabled');
     const btn = document.getElementById('btn-open-benchmark');
@@ -27,742 +39,646 @@ export async function initBenchmark() {
 
     if (btn) {
         btn.style.display = 'flex';
-        btn.addEventListener('click', openBenchmarkModal);
-    }
-
-    window.addEventListener('resize', () => {
-        if (document.getElementById('modal-benchmark')?.classList.contains('open')) {
-            updateBenchmarkUI();
-        }
-    });
-
-    // Listen for backend data
-    const { listen } = window.__TAURI__.event;
-    await listen('benchmark-point', (event) => {
-        if (!isBenchmarkActive) return;
-        const point = event.payload;
-        point.event = currentEvent;
-
-        benchmarkPoints.push(point);
-        if (benchmarkPoints.length > MAX_DISPLAY_POINTS) benchmarkPoints.shift();
-
-        fullBenchmarkHistory.push({ ...point });
-
-        updateBenchmarkUI();
-        updateFloatingMonitor(point);
-    });
-
-    await listen('benchmark-event', (event) => {
-        let payloadText = "";
-        let etaStr = "";
-
-        if (typeof event.payload === 'object' && event.payload !== null) {
-            payloadText = event.payload.text || "";
-            activeDiskName = event.payload.disk_name || "";
-            const tMb = event.payload.total_mb || 0;
-            const lMb = event.payload.limit_mb_s;
-
-            let diskStr = activeDiskName ? ` [${activeDiskName}]` : "";
-
-            if (lMb && lMb > 0 && tMb > 0) {
-                const sec = Math.ceil((tMb / lMb) * 1.05);
-                const m = Math.floor(sec / 60);
-                const s = Math.floor(sec % 60);
-                etaStr = ` ⏱️ ETA: ${m > 0 ? m + 'm ' : ''}${s}s`;
-            } else if (tMb > 0) {
-                etaStr = ` ⏱️ ${t('benchmark.maxSpeed')}`;
-            }
-
-            currentEvent = payloadText + diskStr + etaStr;
-        } else {
-            currentEvent = event.payload;
-            activeDiskName = "";
-        }
-
-        if (currentEvent) {
-            const isFinished = (typeof event.payload === 'object' && event.payload !== null) ? event.payload.finished : true;
-            const eventId = Date.now() + Math.random().toString(36).substr(2, 9);
+        btn.onclick = () => {
+            const modal = document.getElementById('modal-advanced-perf-overlay');
+            const mini = document.getElementById('bmm-mini-monitor');
             
-            // Tasky loading animation
-            if (!isFinished) {
-                const isDisabling = payloadText && payloadText.includes('Disabling');
-                startTaskyLoader(isDisabling);
+            if (modal && modal.classList.contains('open') && modal.style.display !== 'none') {
+                const closeBtn = modal.querySelector('#perf-modal-close') as HTMLElement;
+                closeBtn?.click();
+            } else if (mini) {
+                toggleMiniMonitor(false);
+                openAdvancedPerfModal();
             } else {
-                stopTaskyLoader();
+                openAdvancedPerfModal();
             }
-
-            if (isFinished && typeof event.payload === 'object' && event.payload !== null) {
-                const modName = payloadText.split(': ').pop();
-                recentEvents = recentEvents.filter(e => {
-                    const isOldProgress = e.text.includes('Activating mod:') || e.text.includes('Disabling mod:');
-                    const sameMod = e.text.includes(modName);
-                    return !(isOldProgress && sameMod);
-                });
-            }
-
-            recentEvents.unshift({
-                id: eventId,
-                text: currentEvent,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-            });
-
-            if (recentEvents.length > 20) recentEvents.pop();
-
-            if (isFinished) {
-                setTimeout(() => {
-                    recentEvents = recentEvents.filter(e => e.id !== eventId);
-                    if (currentEvent === payloadText + (activeDiskName ? ` [${activeDiskName}]` : "")) {
-                        currentEvent = "";
-                        activeDiskName = "";
-                    }
-                    updateBenchmarkUI();
-                    const lastPoint = benchmarkPoints[benchmarkPoints.length - 1];
-                    if (lastPoint) updateFloatingMonitor(lastPoint);
-                }, 5000);
-            }
-        }
-
-        updateBenchmarkUI();
-        const lastPoint = benchmarkPoints[benchmarkPoints.length - 1];
-        if (lastPoint) updateFloatingMonitor(lastPoint);
-    });
-
-    document.getElementById('btn-toggle-bench').addEventListener('click', () => {
-        if (isBenchmarkActive) stopBenchmark();
-        else startBenchmark();
-    });
-    document.getElementById('btn-export-bench').addEventListener('click', exportBenchmark);
-    document.getElementById('btn-import-bench').addEventListener('click', importBenchmark);
-    document.getElementById('btn-toggle-pip').addEventListener('click', togglePiP);
-
-    const btnReset = document.getElementById('btn-reset-bench');
-    if (btnReset) btnReset.addEventListener('click', resetBenchmarkSession);
-
-    const btnReplay = document.getElementById('btn-replay-playpause');
-    if (btnReplay) btnReplay.addEventListener('click', toggleReplay);
-
-    const slider = document.getElementById('benchmark-playback-slider');
-    if (slider) {
-        slider.addEventListener('input', (e) => {
-            if (fullBenchmarkHistory.length === 0) return;
-            playbackIndex = parseInt(e.target.value);
-            syncPlaybackView();
-        });
-    }
-
-    const timeline = document.getElementById('main-timeline');
-    if (timeline) {
-        timeline.addEventListener('click', (e) => {
-            if (fullBenchmarkHistory.length === 0) return;
-            const rect = timeline.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const ratio = x / rect.width;
-            playbackIndex = Math.floor(ratio * fullBenchmarkHistory.length);
-            playbackIndex = Math.min(Math.max(0, playbackIndex), fullBenchmarkHistory.length - 1);
-            syncPlaybackView();
-        });
+        };
     }
 }
 
-async function startBenchmark() {
-    try {
-        await invoke('start_benchmark');
-        isBenchmarkActive = true;
-        benchmarkStartTime = Date.now();
-        benchmarkPoints = [];
-        fullBenchmarkHistory = [];
-        recentEvents = [];
-        playbackIndex = -1;
-
-        const pb = document.getElementById('playback-controls');
-        if (pb) pb.style.display = 'none';
-
-        const autoStopVal = document.getElementById('benchmark-autostop-val');
-        const autoStopUnit = document.getElementById('benchmark-autostop-unit');
-        const val = parseInt(autoStopVal ? autoStopVal.value : "0");
-        const unit = autoStopUnit ? autoStopUnit.value : "m";
-
-        if (val > 0) {
-            let mult = 60 * 1000;
-            if (unit === 'h') mult = 60 * 60 * 1000;
-            if (unit === 'd') mult = 24 * 60 * 60 * 1000;
-
-            autoStopTimeout = setTimeout(() => {
-                if (isBenchmarkActive) stopBenchmark();
-            }, val * mult);
-        }
-
-        updateBenchmarkUI();
-        updateFloatingMonitorState(true);
-        renderEmptyMonitor();
-
-        const btn = document.getElementById('btn-toggle-bench');
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-danger', 'pulse');
-        btn.innerHTML = `
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <rect x="6" y="6" width="12" height="12" rx="2" ry="2" />
-            </svg>
-            <span id="label-toggle-bench" data-i18n="benchmark.stop">${t('benchmark.stop') || 'Stop Tracking'}</span>
-        `;
-        toast(t('benchmark.started'), "info");
-    } catch (e) {
-        toast(t('common.error') + " : " + e, "error");
+// Helper for dynamic units
+function formatUnit(val: number, type: 'MB' | 'KB/s' | 's'): string {
+    if (type === 's') {
+        const h = Math.floor(val / 3600);
+        const m = Math.floor((val % 3600) / 60);
+        const s = Math.floor(val % 60);
+        return `${h > 0 ? h + 'h ' : ''}${m > 0 ? m + 'm ' : ''}${s}s`;
     }
+    if (val < 1024) return `${val.toFixed(0)} ${type}`;
+    const base = 1024;
+    const units = type === 'MB' ? ['MB', 'GB', 'TB'] : ['KB/s', 'MB/s', 'GB/s'];
+    const i = Math.floor(Math.log(val) / Math.log(base));
+    return (val / Math.pow(base, i)).toFixed(2) + ' ' + units[i];
 }
 
-async function stopBenchmark() {
-    await invoke('stop_benchmark');
-    isBenchmarkActive = false;
-    updateFloatingMonitorState(false);
-
-    if (autoStopTimeout) {
-        clearTimeout(autoStopTimeout);
-        autoStopTimeout = null;
-    }
-
-    const btn = document.getElementById('btn-toggle-bench');
-    btn.classList.remove('btn-danger', 'pulse');
-    btn.classList.add('btn-primary');
-    btn.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M5 3l14 9-14 9V3z" />
-        </svg>
-        <span id="label-toggle-bench" data-i18n="benchmark.startTracking">${t('benchmark.startTracking') || 'Start Tracking'}</span>
-    `;
-
-    toast(t('benchmark.stopped'), "success");
-
-    if (fullBenchmarkHistory.length > 0) {
-        updateFloatingMonitor(fullBenchmarkHistory[fullBenchmarkHistory.length - 1]);
-    } else {
-        renderEmptyMonitor();
-    }
-}
-
-function openBenchmarkModal() {
-    document.getElementById('modal-benchmark').classList.add('open');
-    updateBenchmarkUI();
-}
-
-function togglePiP() {
-    const pip = document.getElementById('benchmark-pip');
-    pip.classList.toggle('active');
-    if (pip.classList.contains('active') && benchmarkPoints.length > 0) {
-        updateFloatingMonitor(benchmarkPoints[benchmarkPoints.length - 1]);
-    } else if (pip.classList.contains('active')) {
-        renderEmptyMonitor();
-    }
-}
-
-function updateFloatingMonitorState(active) {
-    const pip = document.getElementById('benchmark-pip');
-    if (active) pip.classList.add('is-tracking');
-    else pip.classList.remove('is-tracking');
-}
-
-function getElapsedString(customStartTime = null) {
-    const start = customStartTime || benchmarkStartTime;
-    if (!start) return "00:00";
-    const elapsed = Math.floor((Date.now() - start) / 1000);
-    const m = Math.floor(elapsed / 60).toString().padStart(2, '0');
-    const s = (elapsed % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-}
-
-function formatDisk(kbps) {
-    if (kbps >= 1024 * 1024) return (kbps / (1024 * 1024)).toFixed(2) + ' GB/s';
-    if (kbps >= 1024) return (kbps / 1024).toFixed(1) + ' MB/s';
-    return kbps.toFixed(0) + ' KB/s';
-}
-
-function syncPlaybackView() {
-    if (playbackIndex < 0 || playbackIndex >= fullBenchmarkHistory.length) return;
-
-    const point = fullBenchmarkHistory[playbackIndex];
-    const startWindow = Math.max(0, playbackIndex - MAX_DISPLAY_POINTS + 1);
-    benchmarkPoints = fullBenchmarkHistory.slice(startWindow, playbackIndex + 1);
-
-    updateBenchmarkUI(true);
-    updateFloatingMonitor(point, true);
-
-    const timeDisplay = document.getElementById('playback-time-display');
-    if (timeDisplay) timeDisplay.textContent = `${playbackIndex + 1} / ${fullBenchmarkHistory.length}`;
-}
-
-function renderEmptyMonitor() {
-    const pip = document.getElementById('benchmark-pip');
-    pip.innerHTML = `
-        <div class="pip-header">
-            <span>${t('benchmark.title')}</span>
-        </div>
-        <div class="pip-body" style="text-align:center; padding:20px 0; color:var(--text-muted); font-size:11px">
-            ${t('benchmark.noData')}
-        </div>
-        <div class="pip-actions">
-            <button class="pip-btn ${isBenchmarkActive ? 'stop' : 'start'}" onclick="window.dispatchBenchmarkAction('${isBenchmarkActive ? 'stop' : 'start'}')">${t(isBenchmarkActive ? 'benchmark.stop' : 'benchmark.start')}</button>
-            <button class="pip-btn close" onclick="document.getElementById('benchmark-pip').classList.remove('active')">${t('common.close')}</button>
-        </div>
-    `;
-}
-
-function updateBenchmarkUI(isPlayback = false) {
-    const cpuData = benchmarkPoints.map(p => p.cpu_usage);
-    const ramData = benchmarkPoints.map(p => p.ram_usage);
-    const diskData = benchmarkPoints.map(p => p.disk_read + p.disk_write);
-
-    const maxCpu = Math.max(10, ...cpuData, 100);
-    const maxRam = Math.max(128, ...ramData) * 1.1;
-    const maxDisk = Math.max(100, ...diskData) * 1.2;
-
-    const last = benchmarkPoints.length > 0 ? benchmarkPoints[benchmarkPoints.length - 1] : { cpu_usage: 0, ram_usage: 0, disk_read: 0, disk_write: 0 };
-    const totalDisk = last.disk_read + last.disk_write;
-
-    const getAvg = (arr) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-    const cpuAvg = getAvg(cpuData);
-    const ramAvg = getAvg(ramData);
-    const diskAvg = getAvg(diskData);
-
-    const hint = document.getElementById('benchmark-empty-hint');
-    if (benchmarkPoints.length === 0) {
-        if (hint) {
-            hint.style.display = 'block';
-            hint.innerHTML = `
-                <div style="display:flex;flex-direction:column;align-items:center;padding:48px 20px;text-align:center;">
-                    <div style="width:64px;height:64px;background:rgba(59,130,246,0.1);border-radius:20px;display:flex;align-items:center;justify-content:center;color:var(--accent);margin-bottom:20px;animation:pulse-tasky 2.5s infinite;">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-                        </svg>
-                    </div>
-                    <h3 style="margin:0 0 8px 0;font-size:16px;font-weight:700;color:var(--text-primary);letter-spacing:-0.01em;" data-i18n="benchmark.waitingSensors">${t('benchmark.waitingSensors')}</h3>
-                    <p style="margin:0;font-size:13px;color:var(--text-muted);max-width:300px;line-height:1.5;">${t('benchmark.noData')}</p>
-                    <div style="margin-top:24px;display:flex;gap:8px;">
-                        <div class="stat-dot" style="background:#3b82f6"></div>
-                        <div class="stat-dot" style="background:#10b981"></div>
-                        <div class="stat-dot" style="background:#f59e0b"></div>
-                    </div>
-                </div>
-            `;
-        }
-    } else {
-        if (hint) hint.style.display = 'none';
-    }
-
-    renderChart('cpu-chart', cpuData, maxCpu, '#3b82f6', '%', MAX_DISPLAY_POINTS, last.cpu_usage.toFixed(1), cpuAvg);
-    renderChart('ram-chart', ramData, maxRam, '#10b981', 'MB', MAX_DISPLAY_POINTS, last.ram_usage.toFixed(0), ramAvg);
-    renderChart('disk-chart', diskData, maxDisk, '#f59e0b', 'KB/s', MAX_DISPLAY_POINTS, formatDisk(totalDisk), diskAvg);
-
-    const updateAvgBadge = (id, val, unit) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = `AVG: ${val} ${unit}`;
-    };
-    updateAvgBadge('cpu-avg-badge', cpuAvg.toFixed(1), '%');
-    updateAvgBadge('ram-avg-badge', ramAvg.toFixed(0), 'MB');
-    updateAvgBadge('disk-avg-badge', formatDisk(diskAvg), '');
-
-    updateTimeline();
-    updateReplayControls();
-
-    const stats = document.getElementById('benchmark-live-stats');
-    if (stats) {
-        stats.innerHTML = `<div style="color:var(--success); font-weight:700; font-size:12px; height:20px; text-align:center">${currentEvent ? '• ' + currentEvent : ''}</div>`;
-    }
-
-    const diskTitleSpan = document.querySelector('#disk-chart')?.closest('.chart-container')?.querySelector('.chart-title span');
-    if (diskTitleSpan) {
-        if (!diskTitleSpan.dataset.origText) diskTitleSpan.dataset.origText = diskTitleSpan.textContent;
-        diskTitleSpan.textContent = diskTitleSpan.dataset.origText + (activeDiskName ? ' [' + activeDiskName + ']' : '');
-    }
-}
-
-function updateTimeline() {
-    const total = fullBenchmarkHistory.length;
-    if (total === 0) return;
-
-    const currentIdx = playbackIndex >= 0 ? playbackIndex : total - 1;
-    const windowSize = MAX_DISPLAY_POINTS;
-    const half = Math.floor(windowSize / 2);
-
-    let startWindow = currentIdx - half;
-    let endWindow = currentIdx + half - 1;
-
-    if (startWindow < 0) {
-        endWindow -= startWindow;
-        startWindow = 0;
-    }
-    endWindow = Math.min(total - 1, endWindow);
-
-    const totalTimeEl = document.getElementById('timeline-total-time');
-    if (totalTimeEl) {
-        const totalSec = total; 
-        const m = Math.floor(totalSec / 60).toString().padStart(2, '0');
-        const s = (totalSec % 60).toString().padStart(2, '0');
-        totalTimeEl.textContent = `${m}:${s}`;
-    }
-
-    const currentTimeEl = document.getElementById('timeline-current-time');
-    if (currentTimeEl) {
-        const curSec = currentIdx + 1;
-        const m = Math.floor(curSec / 60).toString().padStart(2, '0');
-        const s = (curSec % 60).toString().padStart(2, '0');
-        currentTimeEl.textContent = `${m}:${s}`;
-    }
-
-    const redTrack = document.getElementById('tl-track-window');
-    if (redTrack) {
-        const left = (startWindow / total) * 100;
-        const width = ((endWindow - startWindow + 1) / total) * 100;
-        redTrack.style.left = left + '%';
-        redTrack.style.width = width + '%';
-    }
-
-    const playhead = document.getElementById('tl-playhead');
-    if (playhead) {
-        playhead.style.left = (currentIdx / total) * 100 + '%';
-    }
-
-    drawTimelineSpikes(total);
-}
-
-function drawTimelineSpikes(total) {
-    const purpleTrack = document.getElementById('tl-track-total');
-    if (!purpleTrack) return;
-
-    if (purpleTrack.dataset.renderedTotal === String(total)) return;
-    purpleTrack.dataset.renderedTotal = total;
-
-    purpleTrack.innerHTML = '';
-
-    const maxDisk = Math.max(...fullBenchmarkHistory.map(p => p.disk_read + p.disk_write), 10);
-    const maxCpu = Math.max(...fullBenchmarkHistory.map(p => p.cpu_usage), 10);
-
-    const MAX_SPIKES = 200;
-    const step = Math.max(1, Math.floor(total / MAX_SPIKES));
-
-    for (let i = 0; i < total; i += step) {
-        const p = fullBenchmarkHistory[i];
-        const activity = Math.max((p.cpu_usage / maxCpu), ((p.disk_read + p.disk_write) / maxDisk));
-
-        if (activity > 0.1) {
-            const spike = document.createElement('div');
-            spike.style.position = 'absolute';
-            spike.style.left = (i / total) * 100 + '%';
-            spike.style.bottom = '0';
-            spike.style.width = '3px';
-            spike.style.height = Math.max((activity * 100), 20) + '%';
-            spike.style.backgroundColor = '#facc15'; 
-            spike.style.boxShadow = '0 0 10px #facc15';
-            spike.style.borderRadius = '2px';
-            spike.style.zIndex = '5';
-            purpleTrack.appendChild(spike);
-        }
-    }
-}
-
-function toggleReplay() {
-    const btn = document.getElementById('btn-replay-playpause');
-    if (!btn) return;
-
-    if (replayInterval) {
-        clearInterval(replayInterval);
-        replayInterval = null;
-        btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
-    } else {
-        if (playbackIndex >= fullBenchmarkHistory.length - 1) {
-            playbackIndex = 0;
-        }
-        replayInterval = setInterval(() => {
-            playbackIndex++;
-            syncPlaybackView();
-            if (playbackIndex >= fullBenchmarkHistory.length - 1) {
-                toggleReplay();
-            }
-        }, 1000);
-        btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
-    }
-}
-
-function updateReplayControls() {
-    const replayBtn = document.getElementById('btn-replay-playpause');
-    if (!replayBtn) return;
-
-    if (!isBenchmarkActive && fullBenchmarkHistory.length > 0) {
-        replayBtn.style.display = 'flex';
-    } else {
-        replayBtn.style.display = 'none';
-        if (replayInterval) toggleReplay();
-    }
-}
-
-function updateFloatingMonitor(point, isPlayback = false) {
-    const pip = document.getElementById('benchmark-pip');
-    if (!pip || !pip.classList.contains('active')) return;
-
-    if (!pip.querySelector('.pip-stat') || pip.querySelector('.READY-TO-RECORD')) {
-        pip.innerHTML = `
-            <div class="pip-header">
-                <span>${t('benchmark.title')}</span>
-                <div style="display:flex; gap:8px; align-items:center">
-                    <span id="pip-timer" class="ev-time" style="font-size:10px">00:00</span>
-                    <button class="pip-maximize" onclick="window.dispatchBenchmarkAction('maximize')">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
-                    </button>
-                </div>
-            </div>
-            <div class="pip-body">
-                <div class="pip-stat"><span class="stat-label">CPU</span><div class="pip-bar"><div id="pip-cpu-bar"></div></div><span id="pip-cpu-val" class="stat-value">0%</span></div>
-                <div class="pip-stat"><span class="stat-label">RAM</span><div class="pip-bar"><div id="pip-ram-bar"></div></div><span id="pip-ram-val" class="stat-value">0MB</span></div>
-                <div class="pip-stat"><span class="stat-label" id="pip-disk-label">DISK</span><div class="pip-bar"><div id="pip-disk-bar"></div></div><span id="pip-disk-val" class="stat-value">0K</span></div>
-                <div class="pip-event-list" id="pip-events"></div>
-            </div>
-            <div class="pip-actions" id="pip-actions-root"></div>
-        `;
-    }
-
-    const timerEl = document.getElementById('pip-timer');
-    if (timerEl) {
-        timerEl.textContent = isPlayback ? "PLAYBACK" : getElapsedString();
-    }
-
-    const cpuBar = document.getElementById('pip-cpu-bar');
-    const cpuVal = document.getElementById('pip-cpu-val');
-    if (cpuBar) {
-        cpuBar.style.width = Math.min(point.cpu_usage, 100) + '%';
-        cpuBar.style.background = '#3b82f6';
-        if (cpuVal) cpuVal.textContent = point.cpu_usage.toFixed(0) + '%';
-    }
-
-    const ramBar = document.getElementById('pip-ram-bar');
-    const ramVal = document.getElementById('pip-ram-val');
-    if (ramBar) {
-        ramBar.style.width = Math.min((point.ram_usage / 4096) * 100, 100) + '%';
-        ramBar.style.background = '#10b981';
-        if (ramVal) ramVal.textContent = point.ram_usage + 'M';
-    }
-
-    const totalDisk = point.disk_read + point.disk_write;
-    const diskBar = document.getElementById('pip-disk-bar');
-    const diskVal = document.getElementById('pip-disk-val');
-    if (diskBar) {
-        diskBar.style.width = Math.min((totalDisk / 50000) * 100, 100) + '%';
-        diskBar.style.background = '#f59e0b';
-        const formatted = formatDisk(totalDisk);
-        if (diskVal) diskVal.textContent = formatted.replace(' MB/s', 'M').replace(' KB/s', 'K');
-    }
-
-    const pipDiskLabel = document.getElementById('pip-disk-label');
-    if (pipDiskLabel) {
-        pipDiskLabel.textContent = `DISK ${activeDiskName ? '[' + activeDiskName + ']' : ''}`;
-    }
-
-    const eventList = document.getElementById('pip-events');
-    if (eventList) {
-        const newEventsHtml = recentEvents.map(ev => `
-            <div class="pip-event-item">
-                <span class="ev-time">${ev.time}</span>
-                <span class="ev-text">${ev.text}</span>
-            </div>
-        `).join('');
-
-        if (eventList.innerHTML !== newEventsHtml) {
-            const oldScroll = eventList.scrollTop;
-            eventList.innerHTML = newEventsHtml || '<div style="text-align:center; padding:15px; opacity:0.3; font-size:9px; letter-spacing:1px">IDLE</div>';
-            if (oldScroll > 0) eventList.scrollTop = oldScroll;
-        }
-    }
-
-    const actions = document.getElementById('pip-actions-root');
-    if (actions) {
-        let actionBtn = '';
-        if (!isPlayback) {
-            if (isBenchmarkActive) {
-                actionBtn = `<button class="pip-btn stop" onclick="window.dispatchBenchmarkAction('stop')">${t('benchmark.stop') || 'Stop'}</button>`;
-            } else {
-                actionBtn = `<button class="pip-btn start" onclick="window.dispatchBenchmarkAction('start')">${t('benchmark.start') || 'Start'}</button>`;
-            }
-        }
-
-        const actionsHtml = `
-            ${actionBtn}
-            <button class="pip-btn close" onclick="document.getElementById('benchmark-pip').classList.remove('active')">${t('common.close')}</button>
-        `;
-        if (actions.innerHTML !== actionsHtml) {
-            actions.innerHTML = actionsHtml;
-        }
-    }
-}
-
-window.dispatchBenchmarkAction = (action) => {
-    if (action === 'start') startBenchmark();
-    if (action === 'stop') stopBenchmark();
-    if (action === 'maximize') openBenchmarkModal();
-};
-
-function renderChart(elementId, data, maxValue, color, unit, maxPoints, currentValue, avgValue = 0) {
-    const container = document.getElementById(elementId);
-    if (!container) return;
-
-    const rect = container.getBoundingClientRect();
-    const width = rect.width || 600;
-    const height = 120;
-    const padding = 10;
-
-    const parent = container.closest('.chart-container');
-    if (parent) {
-        const badge = parent.querySelector('.chart-badge:not(.avg)');
-        if (badge) badge.textContent = `${currentValue} ${unit.includes('/') ? '' : unit}`;
-    }
-
-    if (data.length < 2) {
-        container.innerHTML = `<div style="height:${height}px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px; opacity:0.5; letter-spacing:1px">${t('benchmark.waitingSensors')}</div>`;
+export async function openAdvancedPerfModal() {
+    const existing = document.getElementById('modal-advanced-perf-overlay');
+    if (existing) {
+        existing.classList.add('open');
+        existing.style.display = 'flex';
+        existing.style.opacity = '1';
         return;
     }
 
-    let pointsStr = '';
-    const step = width / (maxPoints - 1);
-    data.forEach((val, i) => {
-        const x = i * step;
-        const y = height - (val / maxValue) * (height - padding * 2) - padding;
-        pointsStr += `${x},${y} `;
-    });
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-advanced-perf-overlay';
+    overlay.className = 'modal-overlay open';
+    overlay.style.zIndex = '100003';
+    overlay.style.backdropFilter = 'blur(16px)';
+    
+    const content = document.createElement('div');
+    content.className = 'modal glass';
+    content.style.width = '1200px'; 
+    content.style.maxWidth = '95vw';
+    content.style.borderRadius = '28px';
+    content.style.overflow = 'visible'; 
+    content.style.display = 'flex';
+    content.style.flexDirection = 'column';
+    content.style.maxHeight = '92vh';
+    content.style.border = '1px solid rgba(255,255,255,0.1)';
+    content.style.position = 'relative';
 
-    const avgY = height - (avgValue / maxValue) * (height - padding * 2) - padding;
+    content.innerHTML = `
+        <div class="modal-header" style="padding: 24px 32px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; border-radius: 28px 28px 0 0; z-index: 10;">
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="width: 44px; height: 44px; background: rgba(59, 130, 246, 0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--accent);">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                </div>
+                <div>
+                    <h2 style="margin:0; font-size: 1.25rem; font-weight: 800; color: #fff;">${t('bench.title') || 'Benchmark'}</h2>
+                    <p id="perf-subtitle" style="margin: 2px 0 0; font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">${t('bench.subtitle') || 'Live Diagnostics & Replay'}</p>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="btn btn-ghost btn-sm" id="btn-perf-rec" style="gap:8px; border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; color: #ef4444;">
+                    <div id="rec-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 8px #ef4444;"></div>
+                    <span id="rec-text">${t('bench.stopRec') || 'Stop Recording'}</span>
+                </button>
+                <div style="width: 1px; height: 24px; background: var(--border); margin: 0 8px;"></div>
+                <button class="btn btn-ghost btn-sm" id="btn-perf-mini" style="gap:8px; color: var(--accent); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 15h4v4h-4z"/></svg>
+                    ${t('bench.miniMonitor') || 'Mini-Monitor'}
+                </button>
+                <div id="live-controls" style="display: flex; align-items: center; gap: 12px; margin-left: 12px; border-left: 1px solid var(--border); padding-left: 12px;">
+                    <label class="bmm-switch" style="margin-right: 8px;">
+                        <input type="checkbox" id="perf-advanced-toggle">
+                        <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                    </label>
+                    <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">${t('bench.advanced') || 'Advanced'}</span>
+                </div>
+                <button class="modal-close" id="perf-modal-close" style="position: static; margin-left: 20px;">&times;</button>
+            </div>
+        </div>
 
-    container.innerHTML = `
-        <div class="chart-tooltip">${currentValue} ${unit}</div>
-        <div class="chart-seeker" style="display:none"></div>
-        <svg width="100%" height="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" style="display:block">
-            <defs>
-                <linearGradient id="grad-${elementId}" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="${color}" stop-opacity="0.4" />
-                    <stop offset="100%" stop-color="${color}" stop-opacity="0" />
-                </linearGradient>
-            </defs>
-            <line x1="0" y1="${avgY}" x2="${width}" y2="${avgY}" stroke="${color}" stroke-width="1" stroke-dasharray="4,4" opacity="0.4" />
-            <polyline points="${pointsStr} ${(data.length - 1) * step},${height} 0,${height}" fill="url(#grad-${elementId})" />
-            <polyline points="${pointsStr}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
-        </svg>
+        <div class="modal-body" style="padding: 32px; overflow-y: auto; overflow-x: visible; flex: 1; display: flex; flex-direction: column; gap: 24px; z-index: 1;">
+            
+            <!-- Real-time Stats + Averages -->
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
+                <div class="glass-card" style="padding: 24px; background: rgba(0,0,0,0.3); border-radius: 20px; position: relative; overflow: hidden;">
+                    <span class="label" style="display:block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">${t('bench.cpuAvg') || 'CPU Usage (Avg)'}</span>
+                    <div style="display: flex; align-items: baseline; gap: 8px;">
+                        <span id="perf-cpu-val" style="font-size: 32px; font-weight: 900; color: var(--accent); font-family: var(--font-mono);">0.0%</span>
+                        <span id="perf-cpu-avg" style="font-size: 14px; color: var(--text-muted); font-weight: 600;">avg: 0%</span>
+                    </div>
+                    <div id="mini-activity-cpu" style="position: absolute; bottom: 0; left: 0; right: 0; height: 30px; opacity: 0.2;"></div>
+                </div>
+                <div class="glass-card" style="padding: 24px; background: rgba(0,0,0,0.3); border-radius: 20px;">
+                    <span class="label" style="display:block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">${t('bench.ramPeak') || 'RAM Usage (Peak)'}</span>
+                    <div style="display: flex; align-items: baseline; gap: 8px;">
+                        <span id="perf-ram-val" style="font-size: 32px; font-weight: 900; color: #fff; font-family: var(--font-mono);">0 MB</span>
+                        <span id="perf-ram-peak" style="font-size: 14px; color: var(--text-muted); font-weight: 600;">peak: 0</span>
+                    </div>
+                </div>
+                <div class="glass-card" style="padding: 24px; background: rgba(0,0,0,0.3); border-radius: 20px;">
+                    <span class="label" style="display:block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">${t('bench.diskIo') || 'Disk I/O R/W'}</span>
+                    <span id="perf-disk-val" style="font-size: 24px; font-weight: 900; color: #fbbf24; font-family: var(--font-mono);">0 / 0 KB/s</span>
+                </div>
+                <div class="glass-card" style="padding: 24px; background: rgba(0,0,0,0.3); border-radius: 20px;">
+                    <span class="label" style="display:block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 8px;">${t('bench.uptime') || 'Process Uptime'}</span>
+                    <span id="perf-uptime-val" style="font-size: 24px; font-weight: 900; color: #10b981; font-family: var(--font-mono);">0s</span>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                <div class="glass-card chart-container" style="padding: 24px; background: rgba(255,255,255,0.02); position: relative; border-radius: 20px;">
+                    <h3 style="margin: 0 0 20px; font-size: 13px; color: #fff; text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em;">${t('bench.sysHist') || 'System Resources History'}</h3>
+                    <canvas id="perf-chart-main" style="width: 100%; height: 320px; cursor: crosshair;"></canvas>
+                </div>
+
+                <div class="glass-card chart-container" style="padding: 24px; background: rgba(255,255,255,0.02); position: relative; border-radius: 20px;">
+                    <h3 style="margin: 0 0 20px; font-size: 13px; color: #fff; text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em;">${t('bench.ioHist') || 'Disk Throughput History'}</h3>
+                    <canvas id="perf-chart-io" style="width: 100%; height: 320px; cursor: crosshair;"></canvas>
+                </div>
+            </div>
+
+            <!-- Seek Bar / Replay -->
+            <div class="glass-card" style="padding: 20px; background: rgba(0,0,0,0.4); border-radius: 16px; display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <button class="btn btn-primary btn-sm" id="btn-perf-live" style="background: var(--accent); border-radius: 6px; font-size: 10px; padding: 4px 10px; display: none;">${t('bench.liveMode') || 'BACK TO LIVE'}</button>
+                        <span id="replay-time" style="font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); font-weight: 700;">${t('bench.replayTime') || 'Replay'}: 00:00:00</span>
+                    </div>
+                    <span style="font-size: 10px; color: var(--text-muted); font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;">${t('bench.timelineActivity') || 'Timeline Activity Map'}</span>
+                </div>
+                <div style="position: relative; height: 36px; background: rgba(255,255,255,0.02); border-radius: 8px; cursor: pointer;" id="timeline-container">
+                    <canvas id="activity-heatmap" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0; pointer-events: none; opacity: 0.6;"></canvas>
+                    <div id="timeline-seek-handle" style="position: absolute; top: -4px; left: 0; width: 4px; height: 44px; background: var(--accent); box-shadow: 0 0 15px var(--accent); border-radius: 2px; transition: left 0.1s linear;"></div>
+                </div>
+            </div>
+
+            <!-- Advanced Metrics with Tasky Help -->
+            <div id="perf-advanced-section" style="display: none; flex-direction: column; gap: 20px;">
+                <div style="height: 1px; background: var(--border); margin: 8px 0;"></div>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
+                    <div class="glass-card" style="padding: 20px; background: rgba(59, 130, 246, 0.05); border-radius: 12px; position: relative;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">${t('bench.network') || 'Net Latency'}</span>
+                            <span class="tasky-info" data-help="latency" style="cursor: help; color: var(--accent); opacity: 0.6;">?</span>
+                        </div>
+                        <span id="perf-net-val" style="font-size: 20px; font-weight: 900; color: var(--accent); font-family: var(--font-mono);">-- ms</span>
+                    </div>
+                    <div class="glass-card" style="padding: 20px; background: rgba(59, 130, 246, 0.05); border-radius: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">${t('bench.globalCpu') || 'Global CPU Load'}</span>
+                            <span class="tasky-info" data-help="global_cpu" style="cursor: help; color: var(--accent); opacity: 0.6;">?</span>
+                        </div>
+                        <span id="perf-global-cpu-val" style="font-size: 20px; font-weight: 900; color: #fff; font-family: var(--font-mono);">-- %</span>
+                    </div>
+                    <div class="glass-card" style="padding: 20px; background: rgba(59, 130, 246, 0.05); border-radius: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">${t('bench.virtual') || 'Virtual Memory'}</span>
+                            <span class="tasky-info" data-help="virtual" style="cursor: help; color: var(--accent); opacity: 0.6;">?</span>
+                        </div>
+                        <span id="perf-vram-val" style="font-size: 20px; font-weight: 900; color: #fff; font-family: var(--font-mono);">-- MB</span>
+                    </div>
+                    <div class="glass-card" style="padding: 20px; background: rgba(59, 130, 246, 0.05); border-radius: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">${t('bench.swap') || 'Swap Memory'}</span>
+                            <span class="tasky-info" data-help="swap" style="cursor: help; color: var(--accent); opacity: 0.6;">?</span>
+                        </div>
+                        <span id="perf-swap-val" style="font-size: 20px; font-weight: 900; color: #fff; font-family: var(--font-mono);">-- MB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer" style="padding: 24px 32px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.2); display: flex; justify-content: flex-end; align-items: center; gap: 16px; border-radius: 0 0 28px 28px;">
+            <button class="btn btn-ghost" id="btn-perf-import" style="font-weight: 700; gap: 8px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                ${t('bench.import') || 'Import Session'}
+            </button>
+            <button class="btn btn-ghost" id="btn-perf-clear" style="font-weight: 700;">${t('bench.clear') || 'Clear Session'}</button>
+            <button class="btn btn-primary" id="btn-perf-export" style="font-weight: 800; padding: 0 32px; height: 40px; border-radius: 10px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 10px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                ${t('bench.export') || 'Export Session'}
+            </button>
+        </div>
     `;
 
-    container.onmousemove = (e) => {
-        const rect = container.getBoundingClientRect();
+    overlay.appendChild(content);
+    (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+
+    // Elements
+    const closeBtn = content.querySelector('#perf-modal-close') as HTMLElement;
+    const recBtn = content.querySelector('#btn-perf-rec') as HTMLElement;
+    const miniBtn = content.querySelector('#btn-perf-mini') as HTMLElement;
+    const advancedToggle = content.querySelector('#perf-advanced-toggle') as HTMLInputElement;
+    const liveBtn = content.querySelector('#btn-perf-live') as HTMLElement;
+    const timeline = content.querySelector('#timeline-container') as HTMLElement;
+    const seekHandle = content.querySelector('#timeline-seek-handle') as HTMLElement;
+    const taskyElements = content.querySelectorAll('.tasky-info');
+
+    // Create Tooltips directly on body to avoid backdrop-filter coordinate issues
+    let globalTooltip = document.getElementById('perf-global-tooltip');
+    if (!globalTooltip) {
+        globalTooltip = document.createElement('div');
+        globalTooltip.id = 'perf-global-tooltip';
+        globalTooltip.style.cssText = 'display:none; position: fixed; pointer-events: none; background: rgba(15, 23, 42, 0.98); border: 1px solid var(--accent); padding: 12px 16px; border-radius: 12px; z-index: 2000000; font-size: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); backdrop-filter: blur(12px);';
+        document.body.appendChild(globalTooltip);
+    }
+
+    if (!closeBtn || !recBtn || !miniBtn || !advancedToggle || !liveBtn || !timeline || !seekHandle) return;
+
+    // Tasky Help Tooltips
+    const helpText: Record<string, string> = {
+        latency: t('bench.help.latency') || "Network Latency: The time (ms) it takes for a request to reach Google. High values mean your connection or BMM's network thread is busy.",
+        global_cpu: t('bench.help.globalCpu') || "Global CPU Load: Total usage of all cores on your PC. Helps you see if other background apps are slowing down BMM.",
+        virtual: t('bench.help.virtual') || "Virtual Memory: Address space reserved by the OS for BMM. Not necessarily physical RAM, but indicates memory pressure.",
+        swap: t('bench.help.swap') || "Swap Memory: Data moved from RAM to your disk. If this is high, your PC is out of real RAM, which causes major slowdowns."
+    };
+
+    taskyElements.forEach(el => {
+        (el as HTMLElement).onmouseenter = (e) => {
+            const key = (el as HTMLElement).dataset.help!;
+            showTaskyHelp(helpText[key], 'info', true);
+        };
+        (el as HTMLElement).onmouseleave = () => hideTaskyHelp();
+    });
+
+    const cleanup = async () => {
+        if (benchmarkUnlisten) {
+            benchmarkUnlisten();
+            benchmarkUnlisten = null;
+        }
+        await invoke('stop_benchmark');
+        if (globalTooltip) globalTooltip.style.display = 'none';
+        hideTaskyHelp();
+        overlay.classList.remove('open');
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+            overlay.remove();
+            if (globalTooltip) globalTooltip.remove();
+        }, 250);
+    };
+
+    closeBtn.onclick = cleanup;
+    
+    recBtn.onclick = async () => {
+        isRecording = !isRecording;
+        if (isRecording) {
+            await invoke('start_benchmark');
+            recBtn.style.color = '#ef4444';
+            (recBtn.querySelector('#rec-text') as HTMLElement).textContent = 'Stop Recording';
+            (recBtn.querySelector('#rec-dot') as HTMLElement).style.display = 'block';
+        } else {
+            await invoke('stop_benchmark');
+            recBtn.style.color = '#fff';
+            (recBtn.querySelector('#rec-text') as HTMLElement).textContent = 'Start Monitoring';
+            (recBtn.querySelector('#rec-dot') as HTMLElement).style.display = 'none';
+        }
+    };
+
+    miniBtn.onclick = () => {
+        overlay.classList.remove('open');
+        overlay.style.display = 'none';
+        toggleMiniMonitor(true);
+    };
+
+    advancedToggle.onchange = async () => {
+        isAdvancedMode = advancedToggle.checked;
+        const section = content.querySelector('#perf-advanced-section') as HTMLElement;
+        if (section) section.style.display = isAdvancedMode ? 'flex' : 'none';
+        await invoke('set_advanced_benchmark_mode', { enabled: isAdvancedMode });
+    };
+
+    // Replay Logic
+    timeline.onclick = (e) => {
+        const rect = timeline.getBoundingClientRect();
         const x = e.clientX - rect.left;
-        const tooltip = container.querySelector('.chart-tooltip');
-        const seeker = container.querySelector('.chart-seeker');
-
-        if (seeker) {
-            seeker.style.display = 'block';
-            seeker.style.left = x + 'px';
-        }
-
-        if (data.length > 0) {
-            const index = Math.round(x / step);
-            const val = data[index];
-            if (val !== undefined && tooltip) {
-                tooltip.style.display = 'block';
-                tooltip.style.left = (x + 10) + 'px';
-                tooltip.style.top = (height / 2) + 'px';
-                tooltip.textContent = `${unit === 'KB/s' ? formatDisk(val) : val.toFixed(1) + ' ' + unit}`;
-            }
-        }
+        const ratio = x / rect.width;
+        seekIndex = Math.round(ratio * (benchmarkData.length - 1));
+        isLiveView = false;
+        liveBtn.style.display = 'block';
+        updateStatsView(content, benchmarkData[seekIndex!]);
+        renderCharts(content, benchmarkData, seekIndex);
+        updateSeekHandle(content, ratio);
     };
-    container.onmouseleave = () => {
-        const tooltip = container.querySelector('.chart-tooltip');
-        const seeker = container.querySelector('.chart-seeker');
-        if (seeker) seeker.style.display = 'none';
-        if (tooltip) tooltip.textContent = `${currentValue} ${unit}`;
+
+    liveBtn.onclick = () => {
+        isLiveView = true;
+        seekIndex = null;
+        liveBtn.style.display = 'none';
+        renderCharts(content, benchmarkData);
     };
+
+    // Global Tooltip Polish
+    const setupCanvasHover = (canvas: HTMLCanvasElement, type: 'main' | 'io') => {
+        canvas.onmousemove = (e) => {
+            if (benchmarkData.length < 2) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const ratio = x / rect.width;
+            hoverIndex = Math.round(ratio * (benchmarkData.length - 1));
+            
+            const point = benchmarkData[hoverIndex];
+            globalTooltip.style.display = 'block';
+            
+            // Fixed: Position closer and flip if needed
+            let tx = e.clientX + 10;
+            if (tx + 180 > window.innerWidth) tx = e.clientX - 190;
+            globalTooltip.style.left = tx + 'px';
+            globalTooltip.style.top = (e.clientY - 10) + 'px';
+
+            globalTooltip.innerHTML = `
+                <div style="color:var(--accent); font-weight:900; margin-bottom:6px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;">${new Date(point.timestamp * 1000).toLocaleTimeString()}</div>
+                <div style="color:#fff; margin: 4px 0;">CPU: <span style="color:var(--accent); font-weight:700">${point.cpu_usage.toFixed(1)}%</span></div>
+                <div style="color:#fff; margin: 4px 0;">RAM: <span style="color:#fff; font-weight:700">${formatUnit(point.ram_usage, 'MB')}</span></div>
+                ${point.network_latency ? `<div style="color:#3b82f6; margin: 4px 0;">Ping: <span style="font-weight:700">${point.network_latency}ms</span></div>` : ''}
+            `;
+            renderCharts(content, benchmarkData, isLiveView ? null : seekIndex);
+        };
+        canvas.onmouseleave = () => {
+            hoverIndex = null;
+            globalTooltip.style.display = 'none';
+            renderCharts(content, benchmarkData, isLiveView ? null : seekIndex);
+        };
+    };
+
+    setupCanvasHover(content.querySelector('#perf-chart-main') as HTMLCanvasElement, 'main');
+    setupCanvasHover(content.querySelector('#perf-chart-io') as HTMLCanvasElement, 'io');
+
+    // Live Monitoring
+    benchmarkUnlisten = await listen('benchmark-point', (event) => {
+        const point = event.payload as BenchmarkPoint;
+        benchmarkData.push(point);
+        if (benchmarkData.length > 500) benchmarkData.shift();
+
+        if (isLiveView) {
+            updateStatsView(content, point);
+            renderCharts(content, benchmarkData);
+            renderActivityMap(content, benchmarkData);
+            updateSeekHandle(content, 1);
+        }
+        
+        if (miniMonitorActive) updateMiniMonitor(point);
+    });
+
+    await invoke('start_benchmark');
 }
 
-function resetBenchmarkSession() {
-    benchmarkPoints = [];
-    fullBenchmarkHistory = [];
-    recentEvents = [];
-    benchmarkStartTime = isBenchmarkActive ? Date.now() : null;
-    playbackIndex = -1;
-    updateBenchmarkUI();
-    toast(t('benchmark.sessionReset'), "info");
-}
+function updateStatsView(container: HTMLElement, point: BenchmarkPoint) {
+    if (!point) return;
+    const cpuVal = container.querySelector('#perf-cpu-val');
+    const cpuAvg = container.querySelector('#perf-cpu-avg');
+    const ramVal = container.querySelector('#perf-ram-val');
+    const ramPeak = container.querySelector('#perf-ram-peak');
+    const diskVal = container.querySelector('#perf-disk-val');
+    const uptimeVal = container.querySelector('#perf-uptime-val');
+    const replayTime = container.querySelector('#replay-time');
 
-async function exportBenchmark() {
-    const dataToExport = fullBenchmarkHistory.length > 0 ? fullBenchmarkHistory : benchmarkPoints;
-    if (dataToExport.length === 0) return;
+    if (cpuVal) cpuVal.textContent = point.cpu_usage.toFixed(1) + '%';
+    if (ramVal) ramVal.textContent = formatUnit(point.ram_usage, 'MB');
+    if (diskVal) diskVal.textContent = `${formatUnit(point.disk_read, 'KB/s')} / ${formatUnit(point.disk_write, 'KB/s')}`;
+    if (uptimeVal) uptimeVal.textContent = formatUnit(point.process_uptime || 0, 's');
+    if (replayTime) replayTime.textContent = `Time: ${new Date(point.timestamp * 1000).toLocaleTimeString()}`;
 
-    try {
-        const { save } = window.__TAURI__.dialog;
-        const dest = await save({
-            defaultPath: `BMM_Benchmark_${new Date().toISOString().split('T')[0]}.csv`,
-            filters: [{ name: 'CSV', extensions: ['csv'] }]
-        });
-        if (dest) {
-            const duration = getElapsedString();
-            const cpuAvg = (dataToExport.reduce((s, p) => s + p.cpu_usage, 0) / dataToExport.length).toFixed(2);
-            const ramMax = Math.max(...dataToExport.map(p => p.ram_usage));
-            const diskMax = Math.max(...dataToExport.map(p => p.disk_read + p.disk_write));
+    // Averages/Peaks
+    if (benchmarkData.length > 0) {
+        const avgCpu = benchmarkData.reduce((acc, p) => acc + p.cpu_usage, 0) / benchmarkData.length;
+        const peakRam = Math.max(...benchmarkData.map(p => p.ram_usage));
+        if (cpuAvg) cpuAvg.textContent = `avg: ${avgCpu.toFixed(1)}%`;
+        if (ramPeak) ramPeak.textContent = `peak: ${peakRam.toFixed(0)} MB`;
+    }
 
-            let csv = "BMM BENCHMARK SESSION\n";
-            csv += `Date,${new Date().toLocaleString()}\n`;
-            csv += `Duration,${duration}\n`;
-            csv += `Total Samples,${dataToExport.length}\n\n`;
+    if (isAdvancedMode) {
+        const netVal = container.querySelector('#perf-net-val');
+        const gCpuVal = container.querySelector('#perf-global-cpu-val');
+        const vramVal = container.querySelector('#perf-vram-val');
+        const swapVal = container.querySelector('#perf-swap-val');
 
-            csv += "Timestamp,CPU (%),RAM (MB),Disk Read (KB/s),Disk Write (KB/s),Event\n";
-            dataToExport.forEach(p => {
-                csv += `${p.timestamp},${p.cpu_usage},${p.ram_usage},${p.disk_read},${p.disk_write},"${p.event || ""}"\n`;
-            });
-
-            csv += `\nSUMMARY\n`;
-            csv += `Average CPU,${cpuAvg}%\n`;
-            csv += `Peak RAM,${ramMax} MB\n`;
-            csv += `Peak Disk,${formatDisk(diskMax)}\n`;
-
-            const { writeTextFile } = window.__TAURI__.fs;
-            await writeTextFile(dest, csv);
-            toast(t('benchmark.exportSuccessStatus'), "success");
-        }
-    } catch (e) {
-        toast(t('common.error') + " : " + e, "error");
+        if (netVal) netVal.textContent = point.network_latency ? point.network_latency + ' ms' : '-- ms';
+        if (gCpuVal) gCpuVal.textContent = point.global_cpu ? point.global_cpu.toFixed(1) + ' %' : '-- %';
+        if (vramVal) vramVal.textContent = point.ram_virtual ? formatUnit(point.ram_virtual, 'MB') : '--';
+        if (swapVal) swapVal.textContent = point.ram_swap ? formatUnit(point.ram_swap, 'MB') : '--';
     }
 }
 
-async function importBenchmark() {
-    try {
-        const { open } = window.__TAURI__.dialog;
-        const selected = await open({
-            multiple: false,
-            filters: [{ name: 'CSV', extensions: ['csv'] }]
+function updateSeekHandle(container: HTMLElement, ratio: number) {
+    const handle = container.querySelector('#timeline-seek-handle') as HTMLElement;
+    if (handle) {
+        handle.style.left = `calc(${ratio * 100}% - 2px)`;
+    }
+}
+
+function renderActivityMap(container: HTMLElement, data: BenchmarkPoint[]) {
+    const canvas = container.querySelector('#activity-heatmap') as HTMLCanvasElement;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const w = canvas.offsetWidth;
+    const h = canvas.offsetHeight;
+    canvas.width = w; canvas.height = h;
+
+    if (data.length < 2) return;
+
+    const maxCpu = Math.max(...data.map(p => p.cpu_usage)) || 1;
+    ctx.clearRect(0, 0, w, h);
+    
+    data.forEach((p, i) => {
+        const x = (i / (data.length - 1)) * w;
+        const intensity = p.cpu_usage / maxCpu;
+        ctx.fillStyle = `rgba(59, 130, 246, ${0.1 + intensity * 0.9})`;
+        ctx.fillRect(x, h - (intensity * h), 2, intensity * h);
+    });
+}
+
+function toggleMiniMonitor(active: boolean) {
+    miniMonitorActive = active;
+    let el = document.getElementById('bmm-mini-monitor');
+    if (!active) {
+        if (el) {
+            el.style.opacity = '0';
+            setTimeout(() => el?.remove(), 300);
+        }
+        return;
+    }
+
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'bmm-mini-monitor';
+        el.className = 'glass';
+        el.style.cssText = `
+            position: fixed; top: 100px; right: 40px; width: 240px; 
+            padding: 20px; border-radius: 20px; z-index: 2000000;
+            border: 1px solid rgba(255,255,255,0.2); cursor: grab;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8); backdrop-filter: blur(24px);
+            background: rgba(15, 23, 42, 0.85); transition: opacity 0.3s, transform 0.3s;
+            display: flex; flex-direction: column; gap: 14px;
+            pointer-events: auto;
+        `;
+        el.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; pointer-events: none;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent);"></div>
+                    <span style="font-size:11px; font-weight:900; letter-spacing:0.12em; color: #fff; text-transform: uppercase;">PERF MINI</span>
+                </div>
+                <div style="display: flex; gap: 4px; align-items: center; pointer-events: auto;">
+                    <button id="mini-startstop" style="background:none; border:1px solid rgba(239,68,68,0.3); color:#ef4444; cursor:pointer; font-size:10px; font-weight:700; padding:2px 6px; border-radius: 4px; text-transform:uppercase; transition:all 0.2s;">STOP</button>
+                    <button id="mini-back" style="background:none; border:none; color:rgba(255,255,255,0.4); cursor:pointer; font-size:12px; padding:6px; border-radius: 8px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6M10 14L21 3M9 21H3v-6M21 21L13 13"/></svg>
+                    </button>
+                    <button id="mini-close" style="background:none; border:none; color:rgba(255,255,255,0.4); cursor:pointer; font-size:22px; padding:0 6px; border-radius: 8px;">&times;</button>
+                </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:12px; pointer-events: none;">
+                <!-- CPU Gauge -->
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <span style="font-size:10px; font-weight:900; color:rgba(255,255,255,0.4); width:35px;">CPU</span>
+                    <div style="flex:1; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">
+                        <div id="mini-cpu-bar" style="width:0%; height:100%; background:var(--accent); transition: width 0.3s ease;"></div>
+                    </div>
+                    <span id="mini-cpu" style="font-size:11px; font-weight:900; color:var(--accent); width:35px; text-align:right;">0%</span>
+                </div>
+                <!-- RAM Gauge -->
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <span style="font-size:10px; font-weight:900; color:rgba(255,255,255,0.4); width:35px;">RAM</span>
+                    <div style="flex:1; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">
+                        <div id="mini-ram-bar" style="width:0%; height:100%; background:#fff; transition: width 0.3s ease;"></div>
+                    </div>
+                    <span id="mini-ram" style="font-size:11px; font-weight:900; color:#fff; width:35px; text-align:right;">0M</span>
+                </div>
+                <!-- DISK Gauge -->
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <span style="font-size:10px; font-weight:900; color:rgba(255,255,255,0.4); width:35px;">DISK</span>
+                    <div style="flex:1; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">
+                        <div id="mini-disk-bar" style="width:0%; height:100%; background:#fbbf24; transition: width 0.3s ease;"></div>
+                    </div>
+                    <span id="mini-disk" style="font-size:11px; font-weight:900; color:#fbbf24; width:35px; text-align:right;">0K</span>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(el);
+
+        let isDragging = false;
+        let startPos = { x: 0, y: 0 }, startElPos = { x: 0, y: 0 };
+        el.onmousedown = (e) => {
+            if ((e.target as HTMLElement).closest('button')) return;
+            isDragging = true;
+            el!.style.cursor = 'grabbing';
+            startPos = { x: e.clientX, y: e.clientY };
+            const rect = el!.getBoundingClientRect();
+            startElPos = { x: rect.left, y: rect.top };
+            el!.style.transition = 'none';
+        };
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging || !el) return;
+            el.style.left = (startElPos.x + e.clientX - startPos.x) + 'px';
+            el.style.top = (startElPos.y + e.clientY - startPos.y) + 'px';
+            el.style.right = 'auto';
         });
+        document.addEventListener('mouseup', () => { isDragging = false; if (el) { el.style.cursor = 'grab'; el.style.transition = 'all 0.3s'; } });
 
-        if (selected) {
-            const { readTextFile } = window.__TAURI__.fs;
-            const content = await readTextFile(selected);
-            const lines = content.split('\n');
-            const data = [];
+        (el.querySelector('#mini-close') as HTMLElement).onclick = () => toggleMiniMonitor(false);
+        (el.querySelector('#mini-back') as HTMLElement).onclick = () => { toggleMiniMonitor(false); openAdvancedPerfModal(); };
 
-            for (let i = 1; i < lines.length; i++) {
-                const parts = lines[i].split(',');
-                if (parts.length < 5 || isNaN(parseInt(parts[0]))) continue;
-                data.push({
-                    timestamp: parseInt(parts[0]),
-                    cpu_usage: parseFloat(parts[1]),
-                    ram_usage: parseInt(parts[2]),
-                    disk_read: parseInt(parts[3]),
-                    disk_write: parseInt(parts[4]),
-                    event: parts[5] || ""
-                });
-            }
-
-            if (data.length > 0) {
-                stopBenchmark();
-                benchmarkPoints = data.length > MAX_DISPLAY_POINTS ? data.slice(-MAX_DISPLAY_POINTS) : data;
-                fullBenchmarkHistory = data;
-                isBenchmarkActive = false;
-                updateBenchmarkUI();
-                toast(t('benchmark.importSuccess'), "success");
+        const startStopBtn = el.querySelector('#mini-startstop') as HTMLElement;
+        const updateMiniBtnVisuals = () => {
+            if (isRecording) {
+                startStopBtn.textContent = 'STOP';
+                startStopBtn.style.color = '#ef4444';
+                startStopBtn.style.borderColor = 'rgba(239,68,68,0.3)';
             } else {
-                toast(t('benchmark.importInvalid'), "error");
+                startStopBtn.textContent = 'START';
+                startStopBtn.style.color = '#10b981';
+                startStopBtn.style.borderColor = 'rgba(16,185,129,0.3)';
             }
-        }
-    } catch (e) {
-        toast(t('common.error') + " : " + e, "error");
+        };
+        updateMiniBtnVisuals();
+        startStopBtn.onclick = () => {
+            isRecording = !isRecording;
+            if (isRecording) {
+                invoke('start_benchmark');
+            } else {
+                invoke('stop_benchmark');
+            }
+            updateMiniBtnVisuals();
+            const recBtn = document.getElementById('btn-perf-rec');
+            if (recBtn) {
+                recBtn.style.color = isRecording ? '#ef4444' : '#fff';
+                (recBtn.querySelector('#rec-text') as HTMLElement).textContent = isRecording ? (t('bench.stopRec') || 'Stop Recording') : (t('bench.startRec') || 'Start Monitoring');
+                (recBtn.querySelector('#rec-dot') as HTMLElement).style.display = isRecording ? 'block' : 'none';
+            }
+        };
     }
 }
+
+function updateMiniMonitor(point: BenchmarkPoint | null) {
+    const el = document.getElementById('bmm-mini-monitor');
+    if (!el || !point) return;
+    
+    const cpu = el.querySelector('#mini-cpu');
+    const cpuBar = el.querySelector('#mini-cpu-bar') as HTMLElement;
+    const ram = el.querySelector('#mini-ram');
+    const ramBar = el.querySelector('#mini-ram-bar') as HTMLElement;
+    const disk = el.querySelector('#mini-disk');
+    const diskBar = el.querySelector('#mini-disk-bar') as HTMLElement;
+
+    if (cpu && cpuBar) {
+        cpu.textContent = point.cpu_usage.toFixed(0) + '%';
+        cpuBar.style.width = Math.min(100, point.cpu_usage) + '%';
+    }
+    
+    if (ram && ramBar) {
+        // Estimate RAM percentage based on a 16GB baseline if total not known
+        const ramMb = point.ram_usage;
+        ram.textContent = (ramMb > 1024 ? (ramMb / 1024).toFixed(1) + 'G' : ramMb.toFixed(0) + 'M');
+        ramBar.style.width = Math.min(100, (ramMb / 16384) * 100) + '%';
+    }
+    
+    if (disk && diskBar) {
+        const totalIo = point.disk_read + point.disk_write;
+        disk.textContent = (totalIo > 1024 ? (totalIo / 1024).toFixed(1) + 'M' : totalIo.toFixed(0) + 'K');
+        // Scale 50MB/s as 100% for the mini bar
+        diskBar.style.width = Math.min(100, (totalIo / 51200) * 100) + '%';
+    }
+}
+
+function renderCharts(container: HTMLElement, data: BenchmarkPoint[], highlightIndex: number | null = null) {
+    const mainCanvas = container.querySelector('#perf-chart-main') as HTMLCanvasElement;
+    const ioCanvas = container.querySelector('#perf-chart-io') as HTMLCanvasElement;
+    if (!mainCanvas || !ioCanvas) return;
+
+    drawChart(mainCanvas, data, [
+        { key: 'cpu_usage', color: '#3b82f6', label: 'CPU %' },
+        { key: 'ram_usage', color: '#ffffff', label: 'RAM MB', scale: 0.1 }
+    ], highlightIndex);
+
+    drawChart(ioCanvas, data, [
+        { key: 'disk_read', color: '#fbbf24', label: 'Read' },
+        { key: 'disk_write', color: '#f87171', label: 'Write' }
+    ], highlightIndex);
+}
+
+function drawChart(canvas: HTMLCanvasElement, data: BenchmarkPoint[], series: { key: string, color: string, label: string, scale?: number }[], highlightIndex: number | null) {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr; canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const w = rect.width, h = rect.height;
+    ctx.clearRect(0, 0, w, h);
+
+    if (data.length < 2) return;
+
+    let maxVal = 1;
+    data.forEach(p => series.forEach(s => {
+        const val = (p as any)[s.key] * (s.scale || 1);
+        if (val > maxVal) maxVal = val;
+    }));
+    maxVal *= 1.2;
+
+    series.forEach(s => {
+        ctx.beginPath(); ctx.strokeStyle = s.color; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+        data.forEach((p, i) => {
+            const x = (i / (data.length - 1)) * w;
+            const y = Math.max(2, h - ((p as any)[s.key] * (s.scale || 1) / maxVal) * h);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        ctx.lineTo(w, h); ctx.lineTo(0, h);
+        const grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad.addColorStop(0, s.color + '33'); grad.addColorStop(1, s.color + '00');
+        ctx.fillStyle = grad; ctx.fill();
+    });
+
+    // Hover or Highlight logic
+    const index = highlightIndex !== null ? highlightIndex : hoverIndex;
+    if (index !== null && data[index]) {
+        const x = (index / (data.length - 1)) * w;
+        ctx.beginPath(); ctx.strokeStyle = highlightIndex !== null ? 'var(--accent)' : 'rgba(255,255,255,0.4)';
+        ctx.setLineDash([5, 5]); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); ctx.setLineDash([]);
+        series.forEach(s => {
+            const y = Math.max(2, h - ((data[index] as any)[s.key] * (s.scale || 1) / maxVal) * h);
+            ctx.beginPath(); ctx.fillStyle = s.color; ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+        });
+    }
+}
+
+// Compatibility exports
+export function openBenchmarkModal() { openAdvancedPerfModal(); }
+export function startBenchmark() { invoke('start_benchmark'); }
+export function stopBenchmark() { invoke('stop_benchmark'); }
