@@ -336,6 +336,163 @@ export function initRepo() {
         }
         catch (e) { }
     };
+    // ── Repo Browser ──
+    const initRepoBrowser = () => {
+        const btnBrowse = document.getElementById('btn-browse-repos');
+        const modal = document.getElementById('modal-repo-browser');
+        const loadingEl = document.getElementById('repo-browser-loading');
+        const contentEl = document.getElementById('repo-browser-content');
+        const errorEl = document.getElementById('repo-browser-error');
+        const listEl = document.getElementById('repo-browser-list');
+        const btnRetry = document.getElementById('btn-retry-repo-browser');
+        const filterBtns = document.querySelectorAll('.repo-browser-filter');
+        let currentFilter = 'all';
+        let repoList = [];
+        const REPO_LIST_URL = 'https://raw.githubusercontent.com/BetterDCS/Better_ModManager_ServerBrowse/main/repos.json';
+        const fetchRepoList = async () => {
+            loadingEl.style.display = 'block';
+            contentEl.style.display = 'none';
+            errorEl.style.display = 'none';
+            try {
+                const response = await fetch(REPO_LIST_URL);
+                if (!response.ok)
+                    throw new Error('Failed to fetch');
+                repoList = await response.json();
+                renderRepoList();
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
+            }
+            catch (err) {
+                console.error('Failed to fetch repo list:', err);
+                // Show empty state message instead of error
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
+                listEl.innerHTML = `
+                    <div style="text-align:center; padding:40px; color:var(--text-muted);">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.5;">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="2" y1="12" x2="22" y2="12"></line>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                        </svg>
+                        <p style="margin-top:16px; font-size:13px;">No repositories available yet</p>
+                        <p style="font-size:11px; opacity:0.7;">The repository list will be available soon</p>
+                    </div>
+                `;
+            }
+        };
+        const renderRepoList = () => {
+            const filtered = currentFilter === 'all'
+                ? repoList
+                : repoList.filter(r => r.category === currentFilter);
+            listEl.innerHTML = filtered.map(repo => `
+                <div class="repo-browser-item" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s ease;" data-url="${escAttr(repo.url)}">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+                        <div style="flex:1;">
+                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                                <span style="font-size:14px; font-weight:700; color:var(--text-primary);">${escHtml(repo.name)}</span>
+                                <span class="repo-badge" style="font-size:9px; font-weight:800; padding:2px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; ${repo.category === 'official' ? 'background:rgba(16,185,129,0.15); color:#10b981;' : 'background:rgba(59,130,246,0.15); color:#3b82f6;'}">${escHtml(repo.category)}</span>
+                            </div>
+                            <p style="font-size:12px; color:var(--text-secondary); margin:0; line-height:1.5;">${escHtml(repo.description || '')}</p>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; margin-left:16px;">
+                            <span style="font-size:10px; color:var(--text-muted);">${escHtml(repo.region || 'Unknown')}</span>
+                            ${repo.tags && repo.tags.length > 0 ? `
+                                <div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end;">
+                                    ${repo.tags.slice(0, 2).map(tag => `<span style="font-size:9px; padding:2px 6px; background:rgba(255,255,255,0.05); border-radius:3px; color:var(--text-muted);">${escHtml(tag)}</span>`).join('')}
+                                    ${repo.tags.length > 2 ? `<span style="font-size:9px; color:var(--text-muted);">+${repo.tags.length - 2}</span>` : ''}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:16px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+                                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                <path d="M8 21h8M12 17v4"/>
+                            </svg>
+                            <span style="font-size:11px; color:var(--text-secondary);"><span style="color:var(--accent); font-weight:600;">${repo.mods_count || 0}</span> mods</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            <span style="font-size:11px; color:var(--text-secondary);">${formatBytes(repo.size || 0)}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                            <span style="font-size:11px; color:var(--text-muted);">${escHtml(repo.last_update || 'Unknown')}</span>
+                        </div>
+                        ${repo.ping ? `
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${repo.ping < 100 ? '#10b981' : repo.ping < 200 ? '#f59e0b' : '#ef4444'}" stroke-width="2">
+                                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                            </svg>
+                            <span style="font-size:11px; color:${repo.ping < 100 ? '#10b981' : repo.ping < 200 ? '#f59e0b' : '#ef4444'}; font-weight:600;">${repo.ping}ms</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    ${repo.changelog_link ? `
+                    <div style="margin-top:8px;">
+                        <a href="${escAttr(repo.changelog_link)}" target="_blank" style="font-size:10px; color:var(--accent); text-decoration:none; display:flex; align-items:center; gap:4px;">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="16" y1="13" x2="8" y2="13"/>
+                                <line x1="16" y1="17" x2="8" y2="17"/>
+                                <polyline points="10 9 9 9 8 9"/>
+                            </svg>
+                            View Changelog
+                        </a>
+                    </div>
+                    ` : ''}
+                </div>
+            `).join('');
+            // Add click handlers
+            listEl.querySelectorAll('.repo-browser-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const url = item.dataset.url;
+                    if (elements.inputSyncUrl) {
+                        elements.inputSyncUrl.value = url;
+                    }
+                    if (elements.btnFetchInfo) {
+                        elements.btnFetchInfo.click();
+                    }
+                    modal.classList.remove('open');
+                });
+                item.addEventListener('mouseenter', () => {
+                    item.style.background = 'rgba(255,255,255,0.06)';
+                    item.style.borderColor = 'rgba(255,255,255,0.15)';
+                });
+                item.addEventListener('mouseleave', () => {
+                    item.style.background = 'rgba(255,255,255,0.03)';
+                    item.style.borderColor = 'rgba(255,255,255,0.08)';
+                });
+            });
+        };
+        if (btnBrowse) {
+            btnBrowse.addEventListener('click', () => {
+                modal.classList.add('open');
+                fetchRepoList();
+            });
+        }
+        if (btnRetry) {
+            btnRetry.addEventListener('click', fetchRepoList);
+        }
+        filterBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                filterBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                renderRepoList();
+            });
+        });
+    };
+    initRepoBrowser();
     const saveHostHistory = (path) => {
         try {
             let paths = JSON.parse(localStorage.getItem('bmm_repo_history_host') || '[]');
@@ -354,8 +511,11 @@ export function initRepo() {
             if (elements.syncHistoryContainer && elements.syncHistoryList) {
                 if (urls.length > 0) {
                     elements.syncHistoryContainer.style.display = 'block';
-                    elements.syncHistoryList.innerHTML = urls.map(u => `
-                        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 10px;">
+                    // Show only first 3 by default, with expand button
+                    const displayUrls = urls.slice(0, 3);
+                    const hasMore = urls.length > 3;
+                    elements.syncHistoryList.innerHTML = displayUrls.map((u, idx) => `
+                        <div class="sync-history-item" style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 10px; ${idx >= 3 ? 'display:none;' : ''}" data-index="${idx}">
                             <div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;" title="${escAttr(u)}">
                                 ${escHtml(u)}
                             </div>
@@ -368,7 +528,11 @@ export function initRepo() {
                                 </button>
                             </div>
                         </div>
-                    `).join('');
+                    `).join('') + (hasMore ? `
+                        <button id="sync-history-expand" style="width:100%;padding:6px;font-size:10px;color:var(--text-muted);background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:6px;cursor:pointer;margin-top:4px;">
+                            Show ${urls.length - 3} more...
+                        </button>
+                    ` : '');
                     elements.syncHistoryList.querySelectorAll('.sync-hist-connect').forEach(btn => {
                         btn.onclick = () => {
                             if (elements.inputSyncUrl)
@@ -385,6 +549,16 @@ export function initRepo() {
                             loadRepoHistories();
                         };
                     });
+                    if (hasMore) {
+                        const expandBtn = document.getElementById('sync-history-expand');
+                        if (expandBtn) {
+                            expandBtn.onclick = () => {
+                                const allItems = elements.syncHistoryList.querySelectorAll('.sync-history-item');
+                                allItems.forEach(item => item.style.display = 'flex');
+                                expandBtn.style.display = 'none';
+                            };
+                        }
+                    }
                 }
                 else {
                     elements.syncHistoryContainer.style.display = 'none';

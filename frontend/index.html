@@ -1270,7 +1270,15 @@
                                             data-i18n-placeholder="repo.urlPlaceholder" />
                                         <button class="btn btn-secondary btn-sm" id="btn-fetch-repo-info"
                                             data-i18n="repo.fetchBtn"
-                                            style="padding:0 12px; font-weight:700;">FETCH</button>
+                                            style="padding:0 20px; font-weight:600; font-size:13px; letter-spacing:0.5px; border-radius:6px; height:32px;">FETCH</button>
+                                        <button class="btn btn-secondary btn-sm" id="btn-browse-repos"
+                                            style="padding:0; width:32px; height:32px; font-weight:600; background:rgba(188,116,255,0.12); color:#bc74ff; border:1px solid rgba(188,116,255,0.25); border-radius:6px; transition:all 0.2s ease; display:flex; align-items:center; justify-content:center;">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="10"></circle>
+                                                <line x1="2" y1="12" x2="22" y2="12"></line>
+                                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                                            </svg>
+                                        </button>
                                     </div>
                                 </div>
 
@@ -1280,7 +1288,7 @@
                                         style="font-size:11px; color:var(--text-muted); margin-bottom:6px;"
                                         data-i18n="repo.syncHistoryLabel">Serveurs récents</label>
                                     <div id="repo-sync-history-list"
-                                        style="display:flex;flex-direction:column;gap:6px;">
+                                        style="max-height:80px;overflow-y:auto;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:7px;">
                                         <!-- Injected by JS -->
                                     </div>
                                 </div>
@@ -6514,6 +6522,71 @@
                     style="padding:15px 20px; background:rgba(255,255,255,0.02); display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border);">
                     <button class="btn btn-primary" data-close="modal-repo-sync-summary" style="padding:0 24px;"
                         data-i18n="common.ok">OK</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Repo Browser Modal -->
+        <div class="modal-overlay" id="modal-repo-browser">
+            <div class="modal glass" style="max-width:900px; width:95%; height:80vh;">
+                <div class="modal-header">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <div
+                            style="width:36px; height:36px; background:rgba(188,116,255,0.1); border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#bc74ff"
+                                stroke-width="2.5">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="2" y1="12" x2="22" y2="12"></line>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="modal-title" data-i18n="repo.browserTitle">Browse Server Repositories</h2>
+                            <p style="font-size:11px; color:var(--text-muted); margin:2px 0 0;"
+                                data-i18n="repo.browserSubtitle">Official and partner server repositories</p>
+                        </div>
+                    </div>
+                    <button class="modal-close" data-close="modal-repo-browser">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body" id="repo-browser-body"
+                    style="padding:20px; max-height:calc(80vh - 140px); overflow-y:auto;">
+                    <div id="repo-browser-loading" style="text-align:center; padding:40px; color:var(--text-muted);">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;">
+                            <circle cx="12" cy="12" r="10" stroke-opacity="0.3"></circle>
+                            <path d="M12 2a10 10 0 0 1 10 10" stroke-opacity="0.8"></path>
+                        </svg>
+                        <p style="margin-top:12px;" data-i18n="repo.browserLoading">Loading repositories...</p>
+                    </div>
+                    <div id="repo-browser-content" style="display:none;">
+                        <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
+                            <button class="repo-browser-filter btn btn-xs btn-secondary active" data-filter="all" style="padding:4px 12px;">All</button>
+                            <button class="repo-browser-filter btn btn-xs btn-secondary" data-filter="official" style="padding:4px 12px;">Official</button>
+                            <button class="repo-browser-filter btn btn-xs btn-secondary" data-filter="partner" style="padding:4px 12px;">Partner</button>
+                        </div>
+                        <div id="repo-browser-list" style="display:flex; flex-direction:column; gap:12px;">
+                            <!-- Repos will be injected by JS -->
+                        </div>
+                    </div>
+                    <div id="repo-browser-error" style="display:none; text-align:center; padding:40px; color:var(--danger);">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <p style="margin-top:12px;" data-i18n="repo.browserError">Failed to load repositories</p>
+                        <button id="btn-retry-repo-browser" class="btn btn-sm btn-secondary" style="margin-top:12px;">Retry</button>
+                    </div>
+                </div>
+                <div class="modal-footer"
+                    style="padding:15px 20px; background:rgba(255,255,255,0.02); display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border);">
+                    <button class="btn btn-secondary" data-close="modal-repo-browser" style="padding:0 24px;"
+                        data-i18n="common.cancel">Cancel</button>
                 </div>
             </div>
         </div>

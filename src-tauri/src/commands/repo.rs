@@ -51,6 +51,23 @@ lazy_static::lazy_static! {
     static ref LAST_EMIT: StdMutex<Option<Instant>> = StdMutex::new(None);
 }
 
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
+    let mut size = bytes as f64;
+    let mut unit_index = 0;
+    
+    while size >= 1024.0 && unit_index < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit_index += 1;
+    }
+    
+    if unit_index == 0 {
+        format!("{} {}", bytes, UNITS[unit_index])
+    } else {
+        format!("{:.2} {}", size, UNITS[unit_index])
+    }
+}
+
 fn compute_file_hash_and_chunks(path: &Path, need_chunks: bool) -> Result<(String, Option<Vec<RepoChunk>>), String> {
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
     let mut reader = std::io::BufReader::with_capacity(128 * 1024, file);
@@ -340,6 +357,58 @@ pub async fn export_server_repo(
     let final_json = serde_json::to_string_pretty(&repo).map_err(|e| e.to_string())?;
     let manifest_path = output_path.join("repo.json");
     fs::write(&manifest_path, final_json).map_err(|_| "repo.errWriteManifest".to_string())?;
+
+    // Generate Info.json with repository statistics
+    let mut total_mods_count = 0;
+    let mut total_size_bytes: u64 = 0;
+    let mut total_files_count = 0;
+    
+    for profile in &repo.profiles {
+        total_mods_count += profile.mods.len();
+        for mod_entry in &profile.mods {
+            total_files_count += mod_entry.files.len();
+            for file in &mod_entry.files {
+                total_size_bytes += file.size;
+            }
+        }
+    }
+
+    #[derive(serde::Serialize)]
+    struct RepoInfo {
+        name: String,
+        author: Option<String>,
+        game_name: String,
+        profiles_count: usize,
+        mods_count: usize,
+        files_count: usize,
+        total_size_bytes: u64,
+        total_size_formatted: String,
+        version: String,
+        created_at: String,
+        seed: Option<String>,
+        author_id: Option<String>,
+        modpacks_count: usize,
+    }
+
+    let info = RepoInfo {
+        name: repo.name.clone(),
+        author: repo.author.clone(),
+        game_name: repo.game_name.clone(),
+        profiles_count: repo.profiles.len(),
+        mods_count: total_mods_count,
+        files_count: total_files_count,
+        total_size_bytes,
+        total_size_formatted: format_bytes(total_size_bytes),
+        version: "1.0".to_string(),
+        created_at: chrono::Local::now().to_rfc3339(),
+        seed: repo.seed.clone(),
+        author_id: repo.author_id.clone(),
+        modpacks_count: repo.modpacks.as_ref().map_or(0, |m| m.len()),
+    };
+
+    let info_json = serde_json::to_string_pretty(&info).map_err(|e| e.to_string())?;
+    let info_path = output_path.join("Info.json");
+    fs::write(&info_path, info_json).map_err(|_| "repo.errWriteInfo".to_string())?;
 
     // Auto-generate mini server by default if it's a new export? 
     // Actually better to have the dedicated button as requested.

@@ -350,7 +350,16 @@ export function initRepoSync(elements) {
 
             } catch (err) {
                 const errMsg = String(err);
-                toast(t(errMsg) || errMsg, 'error');
+                // Handle common connection errors more gracefully
+                if (errMsg.includes('tcp connect error') || errMsg.includes('connection refused')) {
+                    toast(t('repo.errConnection') || 'Unable to connect to server. Check the URL and ensure the server is running.', 'error');
+                } else if (errMsg.includes('invalid port')) {
+                    toast(t('repo.errInvalidPort') || 'Invalid port number in URL.', 'error');
+                } else if (errMsg.includes('repo.errInvalidRepo')) {
+                    toast(t('repo.errInvalidRepo') || 'Invalid repository format.', 'error');
+                } else {
+                    toast(t(errMsg) || errMsg, 'error');
+                }
             } finally {
                 btnFetchInfo.disabled = false;
             }
