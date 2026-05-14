@@ -5296,31 +5296,35 @@ select:focus {
 }
 
 .tasky-speech-bubble {
-    background: rgba(15, 23, 42, 0.7);
-    border: 1px solid rgba(59, 130, 246, 0.35);
-    padding: 8px 14px;
-    border-radius: 16px 16px 16px 4px; /* Tail on bottom-left */
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5),
-                inset 0 0 25px rgba(255, 255, 255, 0.03);
-    max-width: 420px;
+    background: rgba(15, 23, 42, 0.7); /* Restored original blue-ish glass */
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    padding: 10px 16px;
+    border-radius: 14px;
+    box-shadow: 0 15px 45px rgba(0, 0, 0, 0.6),
+                inset 0 0 20px rgba(255, 255, 255, 0.02);
+    max-width: 440px;
+    width: max-content;
     position: relative;
-    backdrop-filter: blur(30px);
+    backdrop-filter: blur(30px); /* Restored original blur intensity */
     -webkit-backdrop-filter: blur(30px);
     pointer-events: auto;
     opacity: 0;
-    transform: translateX(-15px) scale(0.95);
-    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translateX(-10px) scale(0.98); /* Subtle entry */
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     word-wrap: break-word;
     white-space: pre-wrap;
     overflow-wrap: break-word;
     word-break: break-word;
-    filter: drop-shadow(0 25px 60px rgba(0, 0, 0, 0.45)); /* Unified shadow for better corner integration */
+    filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.4));
+    z-index: 1000001; /* Ensure it stays above mascot */
 }
 
 #tasky-explanation {
     margin: 0;
-    line-height: 1.4;
-    font-size: 13px;
+    line-height: 1.35;
+    font-size: 12.5px; /* Slightly smaller, more refined */
+    font-weight: 500;
+    color: #e2e8f0;
 }
 
 .tasky-speech-bubble::after {
@@ -5328,8 +5332,8 @@ select:focus {
 }
 
 .tasky-mascot-wrapper {
-    width: 64px !important;
-    height: 64px !important;
+    width: 52px !important;
+    height: 52px !important;
     flex-shrink: 0;
     pointer-events: auto;
     cursor: help;

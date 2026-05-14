@@ -413,6 +413,23 @@ function showTooltipImpl(key: string, iconClass: string, isLiteral: boolean) {
             eyes.style.display = 'flex'; // Match CSS flex display
         }
         updateTaskyMascot('Tasky_Happy.png');
+
+        // Prevent Right-Side Clipping
+        requestAnimationFrame(() => {
+            const rect = bubble.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const margin = 30; // Safety margin
+            
+            if (rect.right > viewportWidth - margin) {
+                const overflow = rect.right - (viewportWidth - margin);
+                // Shift mascot and bubble slightly to the left if needed, 
+                // or just reduce max-width of the bubble
+                const newMaxWidth = Math.max(200, 440 - overflow);
+                (bubble as HTMLElement).style.maxWidth = `${newMaxWidth}px`;
+            } else {
+                (bubble as HTMLElement).style.maxWidth = `440px`;
+            }
+        });
     }
 }
 
