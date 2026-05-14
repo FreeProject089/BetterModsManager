@@ -1,0 +1,263 @@
+#!/bin/sh
+":" //# comment; exec /usr/bin/env node "$0" "$@"
+
+/**
+ * BMM STANDALONE SERVER (Linux Hybrid Version)
+ * Adapted for Debian/Ubuntu/Linux
+ */
+
+const http = require('http');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
+const { spawn, execSync } = require('child_process');
+
+// Placeholders (populated by BMM during export)
+const PORT = PORT_PLACEHOLDER;
+const USE_CLOUDFLARE = USE_CLOUDFLARE_PLACEHOLDER;
+const USE_UPNP = USE_UPNP_PLACE_HOLDER; 
+const CLOUDFLARE_PATH = 'CLOUDFLARE_BINARY_PLACEHOLDER';
+const UPLOAD_LIMIT = UPLOAD_LIMIT_PLACEHOLDER; // KB/s
+
+const logFile = path.join(__dirname, 'server.log');
+const bansFile = path.join(__dirname, 'bans.json');
+
+function getLocalIP() {
+    const interfaces = require('os').networkInterfaces();
+    let bestIp = '127.0.0.1';
+    for (const name of Object.keys(interfaces)) {
+        if (name.toLowerCase().includes('virtual') || name.toLowerCase().includes('vbox') || name.toLowerCase().includes('vmware') || name.toLowerCase().includes('docker')) continue;
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                if (iface.address.startsWith('192.168.') || iface.address.startsWith('10.')) return iface.address;
+                bestIp = iface.address;
+            }
+        }
+    }
+    return bestIp;
+}
+
+const LOCAL_IP = getLocalIP();
+
+function log(msg, level = 'INFO', print = true) {
+    const ts = new Date().toISOString().replace('T', ' ').split('.')[0];
+    const line = "[" + ts + "][" + level + "] " + msg;
+    if (print) {
+        const colors = { INFO: '\x1b[36m', ERROR: '\x1b[31m', WARN: '\x1b[33m', BAN: '\x1b[35m', OK: '\x1b[32m', ADMIN: '\x1b[35m' };
+        console.log((colors[level] || '') + line + '\x1b[0m');
+    }
+    try { fs.appendFileSync(logFile, line + '\n', 'utf8'); } catch(e) {}
+}
+
+const activeDownloads = new Map();
+
+function saveMonitoring() {
+    const report = [];
+    const now = Date.now();
+    for (const [id, dl] of activeDownloads.entries()) {
+        const elapsed = (now - dl.startTime) / 1000;
+        const speed = elapsed > 0 ? dl.downloaded / elapsed : 0;
+        report.push({
+            ip: dl.ip,
+            creator_id: dl.creatorId,
+            file: dl.file,
+            progress: (dl.downloaded / dl.total) * 100,
+            speed: speed,
+            downloaded: dl.downloaded,
+            total: dl.total,
+            protocol: dl.protocol
+        });
+    }
+    try { fs.writeFileSync(path.join(__dirname, 'monitoring.json'), JSON.stringify(report)); } catch(e) {}
+}
+setInterval(saveMonitoring, 1000);
+
+function getBans() {
+    if (fs.existsSync(bansFile)) {
+        try { return JSON.parse(fs.readFileSync(bansFile, 'utf8')); } catch(e) {}
+    }
+    return { banned_ips: [], banned_keys: [] };
+}
+
+const server = http.createServer((req, res) => {
+    const xff = req.headers['x-forwarded-for'];
+    const ip = (xff ? xff.split(',')[0].trim() : req.socket.remoteAddress || '127.0.0.1').replace('::ffff:', '');
+    
+    const b = getBans();
+    const key = req.headers['x-creator-id'] || req.headers['x-creator-key'];
+
+    const isLocal = ip === '127.0.0.1' || ip === '::1';
+    
+    if (!isLocal) {
+        const isIpBanned = b.banned_ips && b.banned_ips.includes(ip);
+        const isKeyBanned = key && b.banned_keys && b.banned_keys.includes(key);
+        if (isIpBanned || isKeyBanned) {
+            log("BLOCK (BANNED): " + ip + " [Key: " + (key || 'None') + "]", 'BAN');
+            res.statusCode = 403; res.end('Forbidden (Banned)'); return;
+        }
+
+        const wlFile = path.join(__dirname, 'whitelist.json');
+        if (fs.existsSync(wlFile)) {
+            try {
+                const wlData = JSON.parse(fs.readFileSync(wlFile, 'utf8'));
+                if (wlData.enabled) {
+                    const isIpOk = wlData.ips && wlData.ips.includes(ip);
+                    const isKeyOk = key && wlData.keys && wlData.keys.includes(key);
+                    if (!isIpOk && !isKeyOk) {
+                        res.statusCode = 403; res.end('repo.errNotWhitelisted'); return;
+                    }
+                }
+            } catch(e) {}
+        }
+    }
+
+    let urlPath = decodeURIComponent(req.url.split('?')[0]);
+    if (urlPath === '/' || urlPath === '') urlPath = '/repo.json';
+
+    const isModFile = urlPath.toLowerCase().includes('/mods/');
+    if (isModFile && !key) {
+        res.statusCode = 403; res.end('Forbidden: Creator ID Required'); return;
+    }
+
+    // Fix for Linux: remove leading slash before joining to avoid absolute path reset
+    const relativeUrl = urlPath.startsWith('/') ? urlPath.substring(1) : urlPath;
+    const absolutePath = path.resolve(__dirname, relativeUrl);
+
+    if (!absolutePath.startsWith(__dirname) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+        res.statusCode = 404; res.end('Not Found'); return;
+    }
+
+    const total = fs.statSync(absolutePath).size;
+    const protocol = isLocal ? 'Local' : (ip.startsWith('192.168.') || ip.startsWith('10.') ? 'LAN' : 'WAN');
+    const dlId = ip + "-" + Date.now();
+    const dlObj = { ip, creatorId: key || '-', file: urlPath, total, downloaded: 0, startTime: Date.now(), protocol };
+    
+    activeDownloads.set(dlId, dlObj);
+
+    const mime = { '.json': 'application/json', '.zip': 'application/zip', '.txt': 'text/plain', '.lua': 'text/plain' };
+    res.setHeader('Content-Type', mime[path.extname(absolutePath).toLowerCase()] || 'application/octet-stream');
+    res.setHeader('Content-Length', total);
+    res.statusCode = 200;
+
+    const stream = fs.createReadStream(absolutePath);
+    let bytesSentInInterval = 0;
+    let intervalStart = Date.now();
+
+    stream.on('data', (chunk) => {
+        dlObj.downloaded += chunk.length;
+        if (UPLOAD_LIMIT > 0) {
+            bytesSentInInterval += chunk.length;
+            const now = Date.now();
+            const elapsed = now - intervalStart;
+            if (elapsed < 1000 && bytesSentInInterval > (UPLOAD_LIMIT * 1024)) {
+                stream.pause();
+                setTimeout(() => { bytesSentInInterval = 0; intervalStart = Date.now(); stream.resume(); }, 1000 - elapsed);
+            } else if (elapsed >= 1000) { bytesSentInInterval = 0; intervalStart = now; }
+        }
+    });
+    stream.on('end', () => activeDownloads.delete(dlId));
+    res.on('close', () => { stream.destroy(); activeDownloads.delete(dlId); });
+    stream.pipe(res);
+});
+
+async function ensureCloudflared(cfPath) {
+    if (fs.existsSync(cfPath) && fs.statSync(cfPath).size > 10 * 1024 * 1024) return true;
+    const arch = (process.arch === 'x64') ? 'amd64' : (process.arch === 'arm64' ? 'arm64' : 'arm');
+    const url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-" + arch;
+    try {
+        execSync("curl -L " + url + " -o " + cfPath + " && chmod +x " + cfPath, { stdio: 'ignore' });
+        return fs.existsSync(cfPath);
+    } catch (e) {
+        try {
+            execSync("wget -O " + cfPath + " " + url + " && chmod +x " + cfPath, { stdio: 'ignore' });
+            return fs.existsSync(cfPath);
+        } catch(e2) { return false; }
+    }
+}
+
+async function ensureUpnpc() {
+    try {
+        execSync('upnpc -h', { stdio: 'ignore' });
+        return true;
+    } catch (e) {
+        log('UPnP: upnpc not found, attempting auto-install...', 'INFO');
+        try {
+            // Try Alpine (apk)
+            execSync('apk add miniupnpc', { stdio: 'ignore' });
+            return true;
+        } catch (e2) {
+            try {
+                // Try Debian/Ubuntu (apt)
+                execSync('sudo apt update && sudo apt install -y miniupnpc', { stdio: 'ignore' });
+                return true;
+            } catch (e3) {
+                return false;
+            }
+        }
+    }
+}
+
+async function getPublicIP() {
+    return new Promise(r => https.get('https://api.ipify.org', res => { let d = ''; res.on('data', c => d+=c); res.on('end', () => r(d.trim())); }).on('error', () => r(null)));
+}
+
+async function testLocalReachability() {
+    return new Promise(r => {
+        const req = http.get("http://127.0.0.1:" + PORT + "/repo.json", res => r(res.statusCode === 200)).on('error', () => r(false));
+        req.setTimeout(1000, () => { req.destroy(); r(false); });
+    });
+}
+
+server.listen(PORT, '0.0.0.0', async () => {
+    console.clear();
+    const cyan = '\x1b[36m'; const green = '\x1b[32m'; const magenta = '\x1b[35m';
+    const blue = '\x1b[34m'; const reset = '\x1b[0m'; const bold = '\x1b[1m';
+    const yellow = '\x1b[33m';
+
+    console.log(bold + cyan + "   +------------------------------------------------------+");
+    console.log("   |         BMM STANDALONE SERVER (LINUX) v4.5           |");
+    console.log("   +------------------------------------------------------+" + reset + "\n");
+    console.log(bold + blue + "    Tasky " + reset + "  " + bold + magenta + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + reset + "\n");
+
+    console.log("  " + bold + green + "[STATUS]" + reset + "  🟢 SERVER ONLINE (Port " + PORT + ")");
+    console.log("  " + bold + cyan + "[LOCAL]" + reset + "   http://" + LOCAL_IP + ":" + PORT + "/");
+    
+    const publicIp = await getPublicIP();
+    if (publicIp) console.log("  " + bold + yellow + "[PUBLIC]" + reset + "  http://" + publicIp + ":" + PORT + "/");
+
+    if (USE_UPNP) {
+        if (await ensureUpnpc()) {
+            try {
+                log('UPnP: Attempting port mapping...', 'INFO');
+                execSync('upnpc -a ' + LOCAL_IP + ' ' + PORT + ' ' + PORT + ' TCP', { stdio: 'ignore' });
+                log('UPnP: Port ' + PORT + ' mapped successfully', 'OK');
+            } catch (e) {
+                log('UPnP: Failed to map port (router may not support it)', 'WARN');
+            }
+        } else {
+            log('UPnP: upnpc not found and auto-install failed', 'WARN');
+        }
+    }
+
+    if (USE_CLOUDFLARE) {
+        const cfExe = CLOUDFLARE_PATH === 'AUTO' ? path.join(__dirname, 'cloudflared') : CLOUDFLARE_PATH;
+        if (await ensureCloudflared(cfExe)) {
+            const cfLog = path.join(__dirname, 'cloudflared.log');
+            if (fs.existsSync(cfLog)) try { fs.unlinkSync(cfLog); } catch(e) {}
+            const cf = spawn(cfExe, ['tunnel', '--no-autoupdate', '--url', "http://127.0.0.1:" + PORT, '--logfile', cfLog], { detached: true, stdio: 'ignore' });
+            cf.unref();
+            log('Tunnel: Starting...', 'INFO');
+            const checkLog = setInterval(() => {
+                if (fs.existsSync(cfLog)) {
+                    const content = fs.readFileSync(cfLog, 'utf8');
+                    const match = content.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+                    if (match) {
+                        console.log("  " + bold + magenta + "[TUNNEL]" + reset + "  🚀 \x1b[4m" + match[0] + "\x1b[0m");
+                        clearInterval(checkLog);
+                    }
+                }
+            }, 1000);
+            setTimeout(() => clearInterval(checkLog), 30000);
+        }
+    }
+});

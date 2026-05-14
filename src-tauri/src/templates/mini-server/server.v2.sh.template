@@ -1,47 +1,11 @@
-0</* ::
-@echo off
-title BMM_LW_V2
-setlocal enabledelayedexpansion
+#!/bin/sh
+":" //# comment; exec /usr/bin/env node "$0" "$@"
 
-:init
-:: 1. Check/Install Portable Node.js if missing
-set NODE_EXE=
-where node >nul 2>nul
-if %errorlevel% equ 0 ( set NODE_EXE=node ) else (
-    if exist "node.exe" (
-        ".\node.exe" -v >nul 2>nul
-        if !errorlevel! equ 0 (
-            set NODE_EXE=".\node.exe"
-        ) else (
-            del /f /q "node.exe"
-        )
-    )
-    
-    if not defined NODE_EXE (
-        echo [BMM] Node.js missing. Downloading...
-        set "NODE_ARCH=win-x64"
-        if "%PROCESSOR_ARCHITECTURE%"=="x86" (
-            if not defined PROCESSOR_ARCHITEW6432 set "NODE_ARCH=win-x86"
-        )
-        set "NODE_URL=https://nodejs.org/dist/v20.11.1/!NODE_ARCH!/node.exe"
-        powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('!NODE_URL!', 'node.exe')"
-        if exist "node.exe" (
-            set NODE_EXE=".\node.exe"
-        ) else (
-            echo [ERROR] Failed to download Node.js. ; pause ; exit /b
-        )
-    )
-)
+/**
+ * BMM_LW_V2 (Lightweight Linux Server)
+ * Adapted for Debian/Ubuntu/Linux
+ */
 
-:: 2. Launch this file with Node (Polyglot)
-%NODE_EXE% "%~f0" %*
-if %errorlevel% neq 0 pause
-exit /b
-*/0;
-
-// ────────────────────────────────────────────────────────────
-//  BMM_LW_V2 (Luxury Lightweight Server)
-// ────────────────────────────────────────────────────────────
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
@@ -49,15 +13,15 @@ const path = require('path');
 const zlib = require('zlib');
 const { spawn, execSync } = require('child_process');
 
-// placeholders
+// Placeholders (populated by BMM during export)
 const PORT = PORT_PLACEHOLDER;
 const USE_CLOUDFLARE = USE_CLOUDFLARE_PLACEHOLDER;
-const USE_UPNP = USE_UPNP_PLACE_HOLDER;
+const USE_UPNP = USE_UPNP_PLACE_HOLDER; 
 const CLOUDFLARE_PATH = 'CLOUDFLARE_BINARY_PLACEHOLDER';
 const UPLOAD_LIMIT = UPLOAD_LIMIT_PLACEHOLDER; // KB/s
 const ADMIN_PASSWORD = 'ADMIN_PASSWORD_PLACEHOLDER';
 
-const VERSION = "2.4.0";
+const VERSION = "2.4.0-linux";
 const logFile = path.join(__dirname, 'server.log');
 const bansFile = path.join(__dirname, 'bans.json');
 const whitelistFile = path.join(__dirname, 'whitelist.json');
@@ -91,7 +55,7 @@ updateRepoCache();
 function getLocalIP() {
     const interfaces = require('os').networkInterfaces();
     for (const name of Object.keys(interfaces)) {
-        if (name.toLowerCase().includes('virtual') || name.toLowerCase().includes('vbox') || name.toLowerCase().includes('vmware')) continue;
+        if (name.toLowerCase().includes('virtual') || name.toLowerCase().includes('vbox') || name.toLowerCase().includes('vmware') || name.toLowerCase().includes('docker')) continue;
         for (const iface of interfaces[name]) {
             if (iface.family === 'IPv4' && !iface.internal) return iface.address;
         }
@@ -103,10 +67,10 @@ const LOCAL_IP = getLocalIP();
 
 function log(msg, level = 'INFO', print = true) {
     const ts = new Date().toISOString().replace('T', ' ').split('.')[0];
-    const line = `[${ts}][${level}] ${msg}`;
+    const line = "[" + ts + "][" + level + "] " + msg;
     if (print) {
         const colors = { INFO: '\x1b[36m', ERROR: '\x1b[31m', WARN: '\x1b[33m', BAN: '\x1b[35m', OK: '\x1b[32m', ADMIN: '\x1b[35m' };
-        console.log(`${colors[level] || ''}${line}\x1b[0m`);
+        console.log((colors[level] || '') + line + '\x1b[0m');
     }
     try { fs.appendFileSync(logFile, line + '\n', 'utf8'); } catch(e) {}
 }
@@ -152,9 +116,6 @@ function getSecurityData() {
     return { bans, whitelist: wl, repo };
 }
 
-// ────────────────────────────────────────────────────────────
-//  DASHBOARD HTML
-// ────────────────────────────────────────────────────────────
 const DASHBOARD_HTML = `
 <!DOCTYPE html>
 <html>
@@ -330,7 +291,7 @@ const DASHBOARD_HTML = `
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
             document.getElementById('tab-' + id).classList.add('active');
-            e.target.classList.add('active');
+            if (e) e.target.classList.add('active');
         }
 
         async function refreshData() {
@@ -554,8 +515,7 @@ const server = http.createServer((req, res) => {
     const ip = (xff ? xff.split(',')[0].trim() : req.socket.remoteAddress || '127.0.0.1').replace('::ffff:', '');
     const isAuthorized = () => req.headers['authorization'] === ADMIN_PASSWORD;
 
-    // Advanced ID Capture
-    const urlObj = new URL(req.url, `http://${req.headers.host}`);
+    const urlObj = new URL(req.url, "http://" + (req.headers.host || "localhost"));
     const queryKey = urlObj.searchParams.get('key') || urlObj.searchParams.get('id') || urlObj.searchParams.get('creatorid');
     const headerKey = req.headers['x-creator-id'] || req.headers['x-creator-key'] || req.headers['x-bmm-id'] || req.headers['authorization'];
     const key = (headerKey || queryKey || "UNKNOWN").replace('Bearer ', '').trim();
@@ -600,7 +560,7 @@ const server = http.createServer((req, res) => {
                 fs.writeFileSync(whitelistFile, JSON.stringify(data.whitelist, null, 2));
                 fs.writeFileSync(repoFile, JSON.stringify(data.repo, null, 2));
                 updateRepoCache();
-                log(`Server config updated`, 'ADMIN');
+                log("Server config updated", 'ADMIN');
                 res.end(JSON.stringify({ok: true}));
             } catch(e) { res.statusCode = 400; res.end(JSON.stringify({err: e.message})); }
         });
@@ -624,8 +584,10 @@ const server = http.createServer((req, res) => {
 
     let urlPath = decodeURIComponent(req.url.split('?')[0]);
     if (urlPath === '/' || urlPath === '') urlPath = '/repo.json';
-    const safePath = path.normalize(path.join(__dirname, urlPath.replace(/\//g, path.sep))).replace(/^(\.\.(\/|\\|$))+/, '');
-    const absolutePath = path.resolve(__dirname, safePath.startsWith(path.sep) ? safePath.substring(1) : safePath);
+    
+    // Fix for Linux: remove leading slash before joining to avoid absolute path reset
+    const relativeUrl = urlPath.startsWith('/') ? urlPath.substring(1) : urlPath;
+    const absolutePath = path.resolve(__dirname, relativeUrl);
 
     if (!absolutePath.startsWith(__dirname) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
         res.statusCode = 404; res.end('Not Found'); return;
@@ -647,7 +609,7 @@ const server = http.createServer((req, res) => {
 
     const total = fs.statSync(absolutePath).size;
     const protocol = isLocal ? 'Local' : (ip.startsWith('192.168.') ? 'LAN' : 'WAN');
-    const dlId = `${ip}-${Date.now()}`;
+    const dlId = ip + "-" + Date.now();
     const dlObj = { ip, creatorId: key, file: urlPath, total, downloaded: 0, startTime: Date.now(), protocol };
     
     activeDownloads.set(dlId, dlObj);
@@ -687,35 +649,46 @@ const server = http.createServer((req, res) => {
 
 server.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
-        console.log(`\n[ERROR] Port ${PORT} already in use!`);
+        console.log("\n[ERROR] Port " + PORT + " already in use!");
         setTimeout(() => process.exit(1), 5000);
     }
 });
 
 async function ensureCloudflared(cfPath) {
-    if (fs.existsSync(cfPath) && fs.statSync(cfPath).size > 20 * 1024 * 1024) return true;
-    const arch = (process.arch === 'x64' || process.arch === 'arm64') ? 'amd64' : '386';
-    const url = `https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-${arch}.exe`;
-    log(`Downloading cloudflared...`, 'INFO');
+    if (fs.existsSync(cfPath) && fs.statSync(cfPath).size > 10 * 1024 * 1024) return true;
+    const arch = (process.arch === 'x64') ? 'amd64' : (process.arch === 'arm64' ? 'arm64' : 'arm');
+    const url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-" + arch;
+    log("Downloading cloudflared for Linux (" + arch + ")...", 'INFO');
     try {
-        execSync(`powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('${url}', '${cfPath}')"`, { stdio: 'ignore' });
-        return fs.existsSync(cfPath) && fs.statSync(cfPath).size > 20 * 1024 * 1024;
-    } catch (e) { return false; }
+        execSync("curl -L " + url + " -o " + cfPath + " && chmod +x " + cfPath, { stdio: 'ignore' });
+        return fs.existsSync(cfPath);
+    } catch (e) { 
+        try {
+            execSync("wget -O " + cfPath + " " + url + " && chmod +x " + cfPath, { stdio: 'ignore' });
+            return fs.existsSync(cfPath);
+        } catch(e2) { return false; }
+    }
 }
 
 async function ensureUpnpc() {
-    const upnpcPath = path.join(__dirname, 'upnpc-static.exe');
-    if (fs.existsSync(upnpcPath)) return true;
-    
-    log('UPnP: upnpc-static.exe missing, downloading...', 'INFO');
-    const url = 'https://raw.githubusercontent.com/miniupnp/miniupnp/master/miniupnpc/upnpc.exe'; // Placeholder, using a reliable static source
-    const psCmd = `powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('https://github.com/lucas-m-m/miniupnp-static/releases/download/v2.2.3/upnpc-static.exe', 'upnpc-static.exe')"`;
-    
     try {
-        execSync(psCmd, { stdio: 'ignore' });
-        return fs.existsSync(upnpcPath);
+        execSync('upnpc -h', { stdio: 'ignore' });
+        return true;
     } catch (e) {
-        return false;
+        log('UPnP: upnpc not found, attempting auto-install...', 'INFO');
+        try {
+            // Try Alpine (apk)
+            execSync('apk add miniupnpc', { stdio: 'ignore' });
+            return true;
+        } catch (e2) {
+            try {
+                // Try Debian/Ubuntu (apt)
+                execSync('sudo apt update && sudo apt install -y miniupnpc', { stdio: 'ignore' });
+                return true;
+            } catch (e3) {
+                return false;
+            }
+        }
     }
 }
 
@@ -725,24 +698,33 @@ server.listen(PORT, '0.0.0.0', async () => {
     const blue = '\x1b[34m'; const reset = '\x1b[0m'; const bold = '\x1b[1m';
     const underline = '\x1b[4m';
 
-    console.log(`${bold}${cyan}   +------------------------------------------------------+`);
-    console.log(`   |             BMM_LW_V2 SERVER v${VERSION}                  |`);
-    console.log(`   +------------------------------------------------------+${reset}\n`);
-    console.log(`  ${bold}${green}[STATUS]${reset}  SERVER ONLINE`);
-    console.log(`  ${bold}${cyan}[LAN]${reset}     http://${LOCAL_IP}:${PORT}/`);
-    console.log(`  ${bold}${magenta}[ADMIN]${reset}   Password: ${underline}${ADMIN_PASSWORD}${reset}`);
-    console.log(`  ${bold}${blue}[DASH]${reset}    http://${LOCAL_IP}:${PORT}/dashboard\n`);
+    console.log(bold + cyan + "   +------------------------------------------------------+" + reset);
+    console.log("   |             BMM_LW_V2 LINUX SERVER v" + VERSION + "            |");
+    console.log("   +------------------------------------------------------+" + reset + "\n");
+    console.log("  " + bold + green + "[STATUS]" + reset + "  SERVER ONLINE");
+    console.log("  " + bold + cyan + "[LAN]" + reset + "     http://" + LOCAL_IP + ":" + PORT + "/");
+    console.log("  " + bold + magenta + "[ADMIN]" + reset + "   Password: " + underline + ADMIN_PASSWORD + reset);
+    console.log("  " + bold + blue + "[DASH]" + reset + "    http://" + LOCAL_IP + ":" + PORT + "/dashboard\n");
 
     if (USE_UPNP) {
-        const psCmd = `$n=New-Object -Com HNetCfg.NATUPnP;$m=$n.StaticPortMappingCollection;if($m){try{$m.Remove(${PORT},'TCP')}catch{};$m.Add(${PORT},'TCP',${PORT},'${LOCAL_IP}',$true,'BMM');Write-Output 'OK'}else{Write-Output 'FAIL'}`;
-        try { execSync(`powershell -Command "${psCmd}"`, { stdio: 'ignore' }); log('UPnP: Mapped', 'OK'); } catch (e) {}
+        if (await ensureUpnpc()) {
+            try {
+                log('UPnP: Attempting port mapping...', 'INFO');
+                execSync('upnpc -a ' + LOCAL_IP + ' ' + PORT + ' ' + PORT + ' TCP', { stdio: 'ignore' });
+                log('UPnP: Port ' + PORT + ' mapped successfully', 'OK');
+            } catch (e) {
+                log('UPnP: Failed to map port (router may not support it)', 'WARN');
+            }
+        } else {
+            log('UPnP: upnpc not found and auto-install failed', 'WARN');
+        }
     }
 
     if (USE_CLOUDFLARE) {
-        const cfExe = CLOUDFLARE_PATH === 'AUTO' ? path.join(__dirname, 'cloudflared.exe') : CLOUDFLARE_PATH;
+        const cfExe = CLOUDFLARE_PATH === 'AUTO' ? path.join(__dirname, 'cloudflared') : CLOUDFLARE_PATH;
         if (await ensureCloudflared(cfExe)) {
             if (fs.existsSync('cf.log')) { try { fs.unlinkSync('cf.log'); } catch(e) {} }
-            const cf = spawn(cfExe, ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${PORT}`, '--logfile', 'cf.log'], { detached: true, stdio: 'ignore', windowsHide: true });
+            const cf = spawn(cfExe, ['tunnel', '--no-autoupdate', '--url', "http://127.0.0.1:" + PORT, '--logfile', 'cf.log'], { detached: true, stdio: 'ignore' });
             cf.unref();
             log('Tunnel: Starting...', 'INFO');
             const checkLog = setInterval(() => {
@@ -750,13 +732,15 @@ server.listen(PORT, '0.0.0.0', async () => {
                     const content = fs.readFileSync('cf.log', 'utf8');
                     const match = content.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
                     if (match) {
-                        console.log(`  ${bold}${magenta}[PUBLIC]${reset}  ${match[0]}`);
-                        log(`Public URL: ${match[0]}`, 'OK', false);
+                        console.log("  " + bold + magenta + "[PUBLIC]" + reset + "  " + match[0]);
+                        log("Public URL: " + match[0], 'OK', false);
                         clearInterval(checkLog);
                     }
                 }
             }, 1000);
             setTimeout(() => clearInterval(checkLog), 30000);
+        } else {
+            log('Tunnel: Failed to download cloudflared binary', 'ERROR');
         }
     }
 });

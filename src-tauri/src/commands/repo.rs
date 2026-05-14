@@ -366,11 +366,28 @@ fn generate_mini_server_files(
     hybrid_content = hybrid_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
     hybrid_content = hybrid_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
 
-    // 3. Write Single Executable Batch File
+    // 3. Write Windows Batch File
     let main_bat_path = output_path.join("BMM-Standalone-Server.bat");
-    fs::write(&main_bat_path, hybrid_content).map_err(|_| "repo.errWriteScript".to_string())?;
+    fs::write(&main_bat_path, &hybrid_content).map_err(|_| "repo.errWriteScript".to_string())?;
 
-    // 4. Copy Bans if exists
+    // 4. Write Linux Shell File
+    let linux_template = if server_version == 2 {
+        include_str!("../templates/mini-server/server.v2.sh.template")
+    } else {
+        include_str!("../templates/mini-server/server.hybrid.sh.template")
+    };
+    
+    let mut linux_content = linux_template.replace("PORT_PLACEHOLDER", &port.to_string());
+    linux_content = linux_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "true" } else { "false" });
+    linux_content = linux_content.replace("USE_UPNP_PLACE_HOLDER", if use_upnp { "true" } else { "false" });
+    linux_content = linux_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
+    linux_content = linux_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
+    linux_content = linux_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+
+    let main_sh_path = output_path.join("BMM-Standalone-Server.sh");
+    fs::write(&main_sh_path, linux_content).map_err(|_| "repo.errWriteScript".to_string())?;
+
+    // 5. Copy Bans if exists
     if let Ok(ban_path) = ban_manager::get_ban_file_path(handle) {
         if ban_path.exists() {
             let _ = fs::copy(ban_path, output_path.join("bans.json"));
