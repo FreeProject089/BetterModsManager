@@ -93,6 +93,10 @@ pub struct BmmModEntry {
     pub last_scan_mtime: u64,
     #[serde(default)]
     pub file_hashes: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub file_hashes_timestamp: Option<String>,
+    #[serde(default)]
+    pub file_hashes_invalid: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -110,15 +114,41 @@ pub struct BmmSettings {
     #[serde(default)]
     pub github_token: String,
     #[serde(default)]
+    pub shortcuts: HashMap<String, String>,
+    #[serde(default)]
     pub onboarding_shown: bool,
+    #[serde(default)]
+    pub last_seen_crash: Option<String>,
     #[serde(default)]
     pub auto_io_calibration: bool,
     #[serde(default)]
     pub storage_alert_enabled: bool,
     #[serde(default)]
+    pub storage_warning_space_pct: u32,
+    #[serde(default)]
+    pub storage_critical_space_pct: u32,
+    #[serde(default)]
+    pub current_filter: String,
+    #[serde(default)]
+    pub current_sort_by: String,
+    #[serde(default)]
+    pub last_session_clean: bool,
+    #[serde(default)]
+    pub auto_fill_metadata: bool,
+    #[serde(default)]
+    pub cloudflared_path: Option<String>,
+    #[serde(default)]
     pub discord_rpc_enabled: bool,
     #[serde(default)]
     pub fs_security_mode: Option<String>,
+    #[serde(default)]
+    pub require_valid_sha: bool,
+    #[serde(default)]
+    pub show_sha_loading_animation: bool,
+    #[serde(default)]
+    pub enable_lazy_sha_calculation: bool,
+    #[serde(default)]
+    pub history_retention_days: u32,
 }
 
 fn default_lang() -> String { "fr".to_string() }
@@ -128,11 +158,24 @@ impl Default for BmmSettings {
         Self {
             language: default_lang(),
             github_token: String::new(),
+            shortcuts: HashMap::new(),
             onboarding_shown: false,
+            last_seen_crash: None,
             auto_io_calibration: false,
             storage_alert_enabled: false,
+            storage_warning_space_pct: 40,
+            storage_critical_space_pct: 30,
+            current_filter: "all".to_string(),
+            current_sort_by: "name_asc".to_string(),
+            last_session_clean: true,
+            auto_fill_metadata: false,
+            cloudflared_path: None,
             discord_rpc_enabled: true,
             fs_security_mode: None,
+            require_valid_sha: false,
+            show_sha_loading_animation: true,
+            enable_lazy_sha_calculation: true,
+            history_retention_days: 30,
         }
     }
 }

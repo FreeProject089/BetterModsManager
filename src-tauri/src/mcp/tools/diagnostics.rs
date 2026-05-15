@@ -35,6 +35,9 @@ pub struct CrashAnalysis {
     pub warning_lines: Vec<String>,
     pub full_logs: String,
     pub stacktrace: Option<String>,
+    pub dxdiag: Option<String>,
+    pub state_snapshot: Option<String>,
+    pub frontend_dump: Option<String>,
 }
 
 /// Get overall statistics about the BMM installation
@@ -141,6 +144,9 @@ pub fn analyze_crash_report(report_path: &str) -> Result<CrashAnalysis, String> 
         warning_lines,
         full_logs: content.logs,
         stacktrace: content.stacktrace,
+        dxdiag: content.dxdiag,
+        state_snapshot: content.state_snapshot,
+        frontend_dump: content.frontend_dump,
     })
 }
 
