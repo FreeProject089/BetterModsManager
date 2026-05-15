@@ -166,6 +166,7 @@ fn main() {
             commands::mods::remove_mod,
             commands::mods::enable_mod,
             commands::mods::disable_mod,
+            commands::mods::disable_mods_for_profiles,
             commands::mods::update_mod_meta,
             commands::mods::scan_mods_folder,
             commands::mods::download_mod,

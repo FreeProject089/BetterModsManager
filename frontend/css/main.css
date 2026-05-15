@@ -1987,6 +1987,17 @@ body.is-maximized .titlebar-spacer {
     opacity: 1;
 }
 
+.profile-card.selected-profile {
+    border-color: var(--warning);
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.2);
+    transform: translateY(-2px);
+}
+
+.profile-card.selected-profile::before {
+    opacity: 0.15;
+    background: var(--warning);
+}
+
 .profile-card-header {
     display: flex;
     align-items: center;
@@ -2763,13 +2774,12 @@ body.is-maximized .titlebar-spacer {
 }
 
 @keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
 
-    to {
-        transform: rotate(360deg);
-    }
+.spin {
+    animation: spin 1s linear infinite;
 }
 
 /* ═══════════════════════════════════

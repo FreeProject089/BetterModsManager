@@ -1694,6 +1694,104 @@ pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable:
 }
 
 #[tauri::command]
+pub async fn disable_mods_for_profiles(_window: Window, state: State<'_, AppState>, profile_ids: Vec<String>) -> Result<(), String> {
+    log_line(format!("[MOD] Bulk disabling mods for {} profile(s)", profile_ids.len()));
+    
+    // 1. Group mods by (game_path, backup_path) to minimize physical IO
+    let mut tasks: HashMap<(PathBuf, PathBuf), HashSet<String>> = HashMap::new();
+
+    {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        for p_id in &profile_ids {
+            if let Some(p) = data.profiles.iter().find(|prof| &prof.id == p_id) {
+                if p.active_mods.is_empty() { continue; }
+                let key = (p.game_path.clone(), p.backup_path.clone());
+                let entry = tasks.entry(key).or_default();
+                for mid in &p.active_mods {
+                    entry.insert(mid.clone());
+                }
+            }
+        }
+    }
+
+    if tasks.is_empty() { 
+        return Ok(()); 
+    }
+
+    for ((game_path, backup_path), mod_ids) in tasks {
+        let game_path_limit = crate::commands::disk::get_limit_for_path(&state, &game_path);
+        
+        for mod_id in mod_ids {
+            let (files_to_remove, other_active_mods) = {
+                let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+                let m = match data.mods.iter().find(|m| m.id == mod_id) {
+                    Some(m) => m.clone(),
+                    None => continue,
+                };
+                
+                let mut others = Vec::new();
+                let mut seen_others = HashSet::new();
+                
+                for p in &data.profiles {
+                    if p.game_path == game_path {
+                        for mid in &p.active_mods {
+                            if mid != &mod_id && !seen_others.contains(mid) {
+                                if let Some(om) = data.mods.iter().find(|o| &o.id == mid) {
+                                    others.push((om.id.clone(), om.mod_folder_path.clone()));
+                                    seen_others.insert(mid.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let mut unique_files = m.installed_files.clone();
+                if let Ok(scanned) = fs_utils::list_mod_files(&m.mod_folder_path) {
+                    for s in scanned { unique_files.push(s.to_string_lossy().to_string()); }
+                }
+                unique_files.sort();
+                unique_files.dedup();
+                
+                (unique_files, others)
+            };
+
+            let gp = game_path.clone();
+            let bp = backup_path.clone();
+            
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+                fs_utils::unapply_mod_stacked(&gp, &bp, files_to_remove, &other_active_mods, game_path_limit)
+            }).await.map_err(|e| e.to_string())?;
+        }
+    }
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        for p_id in &profile_ids {
+            if let Some(p) = data.profiles.iter_mut().find(|prof| &prof.id == p_id) {
+                p.active_mods.clear();
+            }
+        }
+        
+        let all_active_mod_ids: HashSet<String> = data.profiles.iter()
+            .flat_map(|p| p.active_mods.iter().cloned())
+            .collect();
+
+        for m in data.mods.iter_mut() {
+            if !all_active_mod_ids.contains(&m.id) {
+                m.enabled = false;
+                m.status = ModStatus::Disabled;
+                m.installed_files.clear();
+            }
+        }
+    }
+
+    let _ = state.save();
+    invalidate_cache(&state);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn check_conflicts(state: State<'_, AppState>, mod_id: String) -> Result<Vec<String>, String> {
     let (mod_folder, active_mods_data) = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
