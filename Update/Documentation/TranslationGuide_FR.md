@@ -27,11 +27,31 @@ BMM convertira automatiquement les codes ISO en icônes de drapeaux de haute qua
 ## 3. Détection automatique
 Dès que vous sauvegardez votre fichier dans le dossier `Lang`, BMM le détectera au prochain démarrage et l'ajoutera automatiquement au sélecteur de langue en bas à gauche !
 
-## 4. Tutoriels Vidéo Localisés (v0.9.9)
+## 4. Synonymes Sémantiques (`_synonyms`)
+
+BMM intègre un moteur de recherche sémantique dans l'onglet Documentation. Pour aider le moteur à trouver des résultats quelle que soit la langue, chaque fichier de traduction peut définir une liste de groupes de synonymes.
+
+*   **Fonctionnement** : BMM fusionne les groupes de synonymes de *tous* les fichiers de langue chargés au démarrage.
+*   **Format** : Un objet dont chaque clé est un **terme canonique** (le pivot) et la valeur est un **tableau de chaînes** (les synonymes).
+*   **Création de groupes** : Vous pouvez créer n'importe quelle nouvelle clé. Si un autre fichier de langue utilise la même clé, BMM combinera automatiquement les deux listes de mots.
+
+```json
+"_synonyms": {
+  "mon_concept": ["mot1", "mot2", "mot3"],
+  "activation": ["activer", "installer", "allumer"]
+}
+```
+
+## 5. Tutoriels Vidéo Localisés (v0.9.9)
 BMM supporte les tutoriels vidéo localisés. Vous pouvez définir des liens YouTube spécifiques et des chemins MP4 locaux pour votre langue via les clés `docs.videos`.
 Pour plus de détails, consultez le [Guide des Vidéos Localisées](../Guides/video_localization_FR.md).
 
-## 5. Partage
+## 6. Validation
+- Assurez-vous que le JSON reste valide (utilisez un validateur si besoin).
+- Vérifiez l'absence de virgules traînantes ou de clés en double.
+- Relancez BMM pour voir vos changements appliqués.
+
+## 7. Partage
 N'hésitez pas à partager vos fichiers de traduction sur notre Discord afin qu'ils puissent être officiellement intégrés dans les prochaines mises à jour.
 
 ---

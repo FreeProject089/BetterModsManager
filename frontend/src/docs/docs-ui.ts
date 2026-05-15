@@ -1,4 +1,4 @@
-import { t, getLang } from '../core/i18n.js';
+import { t, getLang, getSynonyms } from '../core/i18n.js';
 import { diagrams, openDiagram } from './interactive-docs.js';
 
 interface DiagramIndexItem {
@@ -6,12 +6,59 @@ interface DiagramIndexItem {
     diagramId: string;
     nodeId: string;
     diagramTitle: string;
+    weight: number; // 1.0=title, 0.8=main node, 0.6=secondary, 0.4=edge
 }
 
 let diagramSearchIndex: DiagramIndexItem[] = [];
 
+/** Active synonym lookup map — rebuilt on each lang change */
+let SYNONYM_MAP = new Map<string, string[]>();
+
+/** Rebuild the synonym lookup map from the current lang JSON files */
+function rebuildSynonymMap(): void {
+    SYNONYM_MAP = new Map<string, string[]>();
+    const groups = getSynonyms(); // from all loaded lang files
+    for (const [canonical, syns] of Object.entries(groups)) {
+        const all = Array.from(new Set([canonical, ...syns].map(normStr)));
+        for (const word of all) {
+            if (!SYNONYM_MAP.has(word)) SYNONYM_MAP.set(word, []);
+            const existing = SYNONYM_MAP.get(word)!;
+            all.forEach(w => { if (!existing.includes(w)) existing.push(w); });
+        }
+    }
+    console.log(`[Docs] Synonym map rebuilt: ${SYNONYM_MAP.size} entries.`);
+}
+
+function normStr(s: string): string {
+    return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function expandWord(word: string): string[] {
+    const n = normStr(word);
+    const syns = SYNONYM_MAP.get(n);
+    return syns ? Array.from(new Set([n, ...syns])) : [n];
+}
+
+/** Levenshtein distance, capped at 3 for performance */
+function levenshtein(a: string, b: string): number {
+    if (Math.abs(a.length - b.length) > 3) return 4;
+    const dp: number[][] = Array.from({ length: a.length + 1 }, (_, i) =>
+        Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+    );
+    for (let i = 1; i <= a.length; i++) {
+        for (let j = 1; j <= b.length; j++) {
+            dp[i][j] = a[i - 1] === b[j - 1]
+                ? dp[i - 1][j - 1]
+                : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+        }
+    }
+    return dp[a.length][b.length];
+}
+
+// ─────────────────────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────────────────────
 export function initDocsUI() {
-    // Inject Enhanced Glow CSS
     const dgStyle = document.createElement('style');
     dgStyle.textContent = `
         .docs-tab-content .glass-card, 
@@ -30,20 +77,17 @@ export function initDocsUI() {
             animation: node-glow-pulse 1.5s infinite alternate ease-in-out !important;
             paint-order: markers stroke fill !important;
         }
-        
         @keyframes node-glow-pulse {
-            0% { 
-                filter: drop-shadow(0 0 4px var(--accent)); 
-                stroke-width: 3px;
-                opacity: 0.85;
-            }
-            100% { 
-                filter: drop-shadow(0 0 12px var(--accent)); 
-                stroke-width: 5px;
-                opacity: 1;
-            }
+            0% { filter: drop-shadow(0 0 4px var(--accent)); stroke-width: 3px; opacity: 0.85; }
+            100% { filter: drop-shadow(0 0 12px var(--accent)); stroke-width: 5px; opacity: 1; }
         }
         #mermaid-diagram-container svg { overflow: visible !important; }
+        .docs-search-no-results {
+            padding: 16px; text-align: center; color: var(--text-muted);
+            font-size: 12px; display: flex; flex-direction: column;
+            align-items: center; gap: 8px;
+        }
+        .docs-search-no-results svg { opacity: 0.4; }
     `;
     document.head.appendChild(dgStyle);
 
@@ -51,79 +95,98 @@ export function initDocsUI() {
     setupVideoPlayers();
     buildDiagramIndex();
     setupSearch();
-    
+
     window.addEventListener('online', setupVideoPlayers);
     window.addEventListener('offline', setupVideoPlayers);
     document.addEventListener('langChanged', () => {
         setupVideoPlayers();
-        buildDiagramIndex(); // Rebuild index on language change
+        buildDiagramIndex(); // rebuildSynonymMap() is called inside
     });
 }
 
-/**
- * Builds a searchable index of all text inside diagrams
- */
+// ─────────────────────────────────────────────────────────────
+// Index building — weighted by content type
+// ─────────────────────────────────────────────────────────────
 function buildDiagramIndex() {
+    // Always rebuild synonym map before indexing (syncs with current lang files)
+    rebuildSynonymMap();
     diagramSearchIndex = [];
     console.log('[Docs] Building diagram search index...');
-    
+
     for (const [id, diagram] of Object.entries(diagrams)) {
         const title = t(diagram.titleKey);
-        
-        // 1. Process Nodes from definition
-        // Flexible regex to catch various div attributes and quote styles
+
+        // Weight 1.0 — Diagram title
+        if (title && title !== diagram.titleKey) {
+            diagramSearchIndex.push({ text: title, diagramId: id, nodeId: '', diagramTitle: title, weight: 1.0 });
+        }
+
+        // Weight 0.8 — Main nodes from definition HTML labels
         const nodeRegex = /([A-Z0-9_]+)\[['"]?<div[^>]*>.*?\{\{([a-zA-Z0-9._-]+)\}\}.*?<\/div>['"]?\]/g;
         let match;
-        const processedNodes = new Map();
+        const processedNodes = new Map<string, string>();
 
         while ((match = nodeRegex.exec(diagram.definition)) !== null) {
             const nodeId = match[1];
             const labelKey = match[2];
             const label = t(labelKey);
-            
-            // Look for associated description
             const descKey = diagram.explanationPrefix ? diagram.explanationPrefix + nodeId + '.desc' : null;
             const desc = descKey ? t(descKey) : '';
-            
+
             if (label && label !== labelKey) {
                 diagramSearchIndex.push({
                     text: `${label} ${desc}`.trim(),
-                    diagramId: id,
-                    nodeId: nodeId,
-                    diagramTitle: title
+                    diagramId: id, nodeId, diagramTitle: title, weight: 0.8
                 });
                 processedNodes.set(nodeId, label);
             }
         }
 
-        // 2. Index remaining Tasky help nodes that might not be in the primary definition regex
+        // Weight 0.6 — Secondary nodes via explanationPrefix
         if (diagram.explanationPrefix) {
-            const allPossibleNodeIds = Array.from(diagram.definition.matchAll(/([A-Z0-9_]+)(?:\[|\{|\|)/g)).map(m => m[1]);
+            const allPossibleNodeIds = Array.from(
+                diagram.definition.matchAll(/([A-Z0-9_]+)(?:\[|\{|\|)/g)
+            ).map(m => m[1]);
             const uniqueNodes = Array.from(new Set(allPossibleNodeIds));
 
             uniqueNodes.forEach(nodeId => {
                 if (processedNodes.has(nodeId)) return;
-
                 const expKey = diagram.explanationPrefix + nodeId;
                 const expDescKey = expKey + '.desc';
-                
                 const label = t(expKey) !== expKey ? t(expKey) : nodeId;
                 const desc = t(expDescKey) !== expDescKey ? t(expDescKey) : '';
-                
                 if (desc || (label && label !== nodeId)) {
                     diagramSearchIndex.push({
                         text: `${label} ${desc}`.trim(),
-                        diagramId: id,
-                        nodeId: nodeId,
-                        diagramTitle: title
+                        diagramId: id, nodeId, diagramTitle: title, weight: 0.6
                     });
                 }
             });
         }
+
+        // Weight 0.4 — Edge labels
+        const edgeRegex = /--\s*"([^"]+)"\s*-->/g;
+        let edgeMatch;
+        while ((edgeMatch = edgeRegex.exec(diagram.definition)) !== null) {
+            const raw = edgeMatch[1];
+            const translated = raw.includes('{{')
+                ? raw.replace(/\{\{([a-zA-Z0-9._-]+)\}\}/g, (_, k) => t(k))
+                : raw;
+            if (translated && translated.length > 2) {
+                diagramSearchIndex.push({
+                    text: translated, diagramId: id, nodeId: '',
+                    diagramTitle: title, weight: 0.4
+                });
+            }
+        }
     }
+
     console.log(`[Docs] Index built: ${diagramSearchIndex.length} items.`);
 }
 
+// ─────────────────────────────────────────────────────────────
+// Tab management
+// ─────────────────────────────────────────────────────────────
 function setupTabs() {
     const tabBtns = document.querySelectorAll('.btn-docs-tab');
     const tabContents = document.querySelectorAll('.docs-tab-content');
@@ -133,7 +196,6 @@ function setupTabs() {
             const target = e.currentTarget as HTMLElement;
             const tabId = target.getAttribute('data-tab');
 
-            // Update active state on buttons
             tabBtns.forEach(b => {
                 b.classList.remove('active');
                 (b as HTMLElement).style.background = 'transparent';
@@ -146,27 +208,23 @@ function setupTabs() {
             target.style.color = 'white';
             target.style.border = 'none';
 
-            // Show corresponding content, hide others
             tabContents.forEach(content => {
                 const c = content as HTMLElement;
-                if (c.id === `docs-tab-${tabId}`) {
-                    c.style.display = 'block';
-                } else {
-                    c.style.display = 'none';
-                }
+                c.style.display = (c.id === `docs-tab-${tabId}`) ? 'block' : 'none';
             });
         });
     });
 }
 
+// ─────────────────────────────────────────────────────────────
+// Video players
+// ─────────────────────────────────────────────────────────────
 function setupVideoPlayers() {
     const isOnline = navigator.onLine;
     const player1 = document.getElementById('docs-video-player-1');
     const player2 = document.getElementById('docs-video-player-2');
-
     if (!player1 || !player2) return;
 
-    // Fetch localized sources
     const vid1Online = t('docs.videos.tuto1.online');
     const vid1Offline = t('docs.videos.tuto1.offline');
     const vid2Online = t('docs.videos.tuto2.online');
@@ -176,7 +234,6 @@ function setupVideoPlayers() {
         if (isOnline && onlineUrl && onlineUrl.includes('youtube.com')) {
             container.innerHTML = `<iframe width="100%" height="100%" src="${onlineUrl}?rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute; inset:0;"></iframe>`;
         } else {
-            // Fallback to local MP4
             container.innerHTML = `<video src="${offlineUrl}" controls style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;"></video>`;
         }
     };
@@ -185,24 +242,29 @@ function setupVideoPlayers() {
     renderPlayer(player2, vid2Online, vid2Offline);
 }
 
+// ─────────────────────────────────────────────────────────────
+// Search setup + debounce
+// ─────────────────────────────────────────────────────────────
+let _searchDebounce: number | null = null;
+
 function setupSearch() {
     const searchInput = document.getElementById('docs-search-input') as HTMLInputElement;
     const modeToggle = document.getElementById('btn-toggle-search-mode');
     const modePills = document.querySelectorAll('.search-mode-pill');
     const diagResultsContainer = document.getElementById('docs-search-results-diagrams');
     const diagResultsList = document.getElementById('docs-diagram-results-list');
-    
+
     let searchMode = 'classic';
 
     if (!searchInput || !modeToggle || !diagResultsContainer || !diagResultsList) return;
 
     modeToggle.addEventListener('click', () => {
         searchMode = searchMode === 'classic' ? 'semantic' : 'classic';
-        
+
         modePills.forEach(pill => {
             const p = pill as HTMLElement;
             const betaBadge = p.querySelector('span:last-child') as HTMLElement;
-            
+
             if (p.getAttribute('data-mode') === searchMode) {
                 p.classList.add('active');
                 p.style.background = 'var(--accent)';
@@ -227,160 +289,190 @@ function setupSearch() {
     });
 
     searchInput.addEventListener('input', (e) => {
-        const query = (e.target as HTMLInputElement).value.toLowerCase().trim();
-        const advancedTabBtn = document.querySelector('.btn-docs-tab[data-tab="advanced"]') as HTMLElement;
-        
-        if (query.length === 0) {
-            diagResultsContainer.style.display = 'none';
-            diagResultsList.innerHTML = '';
-        }
-
-        if (query.length > 0) {
-            document.querySelectorAll('.docs-tab-content').forEach(t => (t as HTMLElement).style.display = 'block');
-            const nav = document.querySelector('.docs-tabs-nav') as HTMLElement;
-            if(nav) nav.style.opacity = '0.5';
-        } else {
-            const activeTabBtn = document.querySelector('.btn-docs-tab.active') as HTMLElement;
-            if (activeTabBtn) activeTabBtn.click();
-            const nav = document.querySelector('.docs-tabs-nav') as HTMLElement;
-            if(nav) nav.style.opacity = '1';
-        }
-
-        // 1. Filter Glass Cards
-        const cards = document.querySelectorAll('.docs-tab-content .glass-card:not(.faq-accordion)');
-        cards.forEach(card => {
-            const content = card.textContent?.toLowerCase() || "";
-            const match = checkMatch(content, query, searchMode);
-            animateVisibility(card as HTMLElement, match);
-        });
-
-        // 2. Filter FAQ Accordions
-        const faqs = document.querySelectorAll('.docs-tab-content details.faq-accordion:not(.glass-card)');
-        faqs.forEach(faq => {
-            const faqContent = faq.textContent?.toLowerCase() || "";
-            const match = checkMatch(faqContent, query, searchMode);
-            if (query !== '' && match) (faq as HTMLDetailsElement).open = true;
-            else if (query === '') (faq as HTMLDetailsElement).open = false;
-            animateVisibility(faq as HTMLElement, match);
-        });
-
-        // 3. Filter Diagram Gallery Buttons
-        const galleryButtons = document.querySelectorAll('.docs-gallery-grid button, .docs-tab-content .glass-card button');
-        galleryButtons.forEach(btn => {
-            if (btn.getAttribute('onclick')?.includes('openDiagram')) {
-                const btnText = btn.textContent?.toLowerCase() || "";
-                const match = checkMatch(btnText, query, searchMode);
-                (btn as HTMLElement).style.display = match !== false || query === '' ? 'inline-flex' : 'none';
-                (btn as HTMLElement).style.opacity = match !== false || query === '' ? '1' : '0';
-            }
-        });
-
-        // 4. Advanced Diagram Content Search
-        if (query.length > 2) {
-            const diagramMatches = diagramSearchIndex
-                .map(item => ({ ...item, score: checkMatch(item.text, query, searchMode) }))
-                .filter(item => item.score !== false);
-            
-            if (diagramMatches.length > 0) {
-                diagResultsContainer.style.display = 'block';
-                diagResultsList.innerHTML = '';
-                
-                diagramMatches.sort((a, b) => {
-                    const scoreA = typeof a.score === 'number' ? a.score : 1;
-                    const scoreB = typeof b.score === 'number' ? b.score : 1;
-                    return scoreB - scoreA;
-                }).slice(0, 10).forEach(match => {
-                    const el = document.createElement('div');
-                    el.className = 'diagram-reco-item';
-                    const scorePercent = Math.round((match.score as number || 1) * 100);
-                    
-                    el.style.cssText = `
-                        padding: 10px 14px;
-                        background: rgba(255,255,255,0.05);
-                        border: 1px solid ${searchMode === 'semantic' ? 'rgba(188,116,255, 0.3)' : 'rgba(255,255,255,0.1)'};
-                        border-radius: 8px;
-                        cursor: pointer;
-                        transition: all 0.2s;
-                        display: flex;
-                        flex-direction: column;
-                        gap: 4px;
-                        position: relative;
-                        overflow: hidden;
-                    `;
-                    
-                    const badgeColor = scorePercent > 90 ? 'var(--success)' : (scorePercent > 70 ? 'var(--accent)' : 'var(--warning)');
-                    const scoreBadge = (searchMode === 'semantic') 
-                        ? `<div style="position:absolute; top:0; right:0; font-size:9px; background:${badgeColor}; color:white; padding:2px 7px; border-bottom-left-radius:8px; font-weight:800; font-family:var(--font-mono); box-shadow: -2px 2px 10px rgba(0,0,0,0.3); z-index:2;">${scorePercent}%</div>` 
-                        : '';
-
-                    el.innerHTML = `
-                        ${scoreBadge}
-                        <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); line-height: 1.2;">${match.text.length > 80 ? match.text.substring(0, 80) + '...' : match.text}</div>
-                        <div style="font-size: 10px; color: var(--accent); opacity: 0.9; display: flex; align-items: center; gap: 4px;">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                            ${match.diagramTitle}
-                        </div>
-                    `;
-                    el.addEventListener('mouseenter', () => { el.style.background = 'rgba(255,255,255,0.08)'; el.style.borderColor = 'var(--accent)'; el.style.transform = 'translateX(4px)'; });
-                    el.addEventListener('mouseleave', () => { el.style.background = 'rgba(255,255,255,0.05)'; el.style.borderColor = searchMode === 'semantic' ? 'rgba(188,116,255, 0.3)' : 'rgba(255,255,255,0.1)'; el.style.transform = 'translateX(0)'; });
-                    el.addEventListener('click', () => {
-                        (openDiagram as any)(match.diagramId, match.nodeId);
-                    });
-                    diagResultsList.appendChild(el);
-                });
-            } else {
-                diagResultsContainer.style.display = 'none';
-            }
-        } else {
-            diagResultsContainer.style.display = 'none';
-        }
+        if (_searchDebounce) clearTimeout(_searchDebounce);
+        _searchDebounce = window.setTimeout(() => {
+            _runSearch(
+                (e.target as HTMLInputElement).value.toLowerCase().trim(),
+                searchMode, diagResultsContainer!, diagResultsList!
+            );
+        }, 150);
     });
 }
 
+function _runSearch(
+    query: string,
+    searchMode: string,
+    diagResultsContainer: HTMLElement,
+    diagResultsList: HTMLElement
+) {
+    if (query.length === 0) {
+        diagResultsContainer.style.display = 'none';
+        diagResultsList.innerHTML = '';
+    }
+
+    if (query.length > 0) {
+        document.querySelectorAll('.docs-tab-content').forEach(el => (el as HTMLElement).style.display = 'block');
+        const nav = document.querySelector('.docs-tabs-nav') as HTMLElement;
+        if (nav) nav.style.opacity = '0.5';
+    } else {
+        const activeTabBtn = document.querySelector('.btn-docs-tab.active') as HTMLElement;
+        if (activeTabBtn) activeTabBtn.click();
+        const nav = document.querySelector('.docs-tabs-nav') as HTMLElement;
+        if (nav) nav.style.opacity = '1';
+    }
+
+    // 1. Filter Glass Cards
+    document.querySelectorAll('.docs-tab-content .glass-card:not(.faq-accordion)').forEach(card => {
+        animateVisibility(card as HTMLElement, checkMatch(card.textContent?.toLowerCase() || '', query, searchMode));
+    });
+
+    // 2. Filter FAQ Accordions
+    document.querySelectorAll('.docs-tab-content details.faq-accordion:not(.glass-card)').forEach(faq => {
+        const match = checkMatch(faq.textContent?.toLowerCase() || '', query, searchMode);
+        if (query !== '' && match) (faq as HTMLDetailsElement).open = true;
+        else if (query === '') (faq as HTMLDetailsElement).open = false;
+        animateVisibility(faq as HTMLElement, match);
+    });
+
+    // 3. Filter Diagram Gallery Buttons
+    document.querySelectorAll('.docs-gallery-grid button, .docs-tab-content .glass-card button').forEach(btn => {
+        if (btn.getAttribute('onclick')?.includes('openDiagram')) {
+            const match = checkMatch(btn.textContent?.toLowerCase() || '', query, searchMode);
+            (btn as HTMLElement).style.display = match !== false || query === '' ? 'inline-flex' : 'none';
+            (btn as HTMLElement).style.opacity = match !== false || query === '' ? '1' : '0';
+        }
+    });
+
+    // 4. Advanced Diagram Content Search
+    if (query.length > 2) {
+        const scoredMatches = diagramSearchIndex
+            .map(item => {
+                const raw = checkMatch(item.text, query, searchMode);
+                if (raw === false) return null;
+                return { ...item, score: (typeof raw === 'number' ? raw : 1) * item.weight };
+            })
+            .filter((item): item is NonNullable<typeof item> => item !== null);
+
+        // Deduplicate: best score per diagram+node
+        const dedupMap = new Map<string, typeof scoredMatches[0]>();
+        scoredMatches.forEach(item => {
+            const key = `${item.diagramId}::${item.nodeId}`;
+            const existing = dedupMap.get(key);
+            if (!existing || item.score > existing.score) dedupMap.set(key, item);
+        });
+
+        const finalMatches = Array.from(dedupMap.values()).sort((a, b) => b.score - a.score).slice(0, 12);
+
+        if (finalMatches.length > 0) {
+            diagResultsContainer.style.display = 'block';
+            diagResultsList.innerHTML = '';
+
+            finalMatches.forEach(match => {
+                const el = document.createElement('div');
+                el.className = 'diagram-reco-item';
+                const scorePercent = Math.min(100, Math.round(match.score * 100));
+                const badgeColor = scorePercent > 85 ? 'var(--success)' : (scorePercent > 65 ? 'var(--accent)' : 'var(--warning)');
+                const contextLabel = match.weight >= 1.0 ? '📌 Title' : match.weight >= 0.8 ? '● Node' : match.weight >= 0.6 ? '○ Detail' : '→ Edge';
+
+                const scoreBadge = (searchMode === 'semantic')
+                    ? `<div style="position:absolute;top:0;right:0;font-size:9px;background:${badgeColor};color:white;padding:2px 7px;border-bottom-left-radius:8px;font-weight:800;font-family:var(--font-mono);z-index:2;">${scorePercent}%</div>`
+                    : '';
+
+                el.style.cssText = `padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid ${searchMode === 'semantic' ? 'rgba(188,116,255,0.3)' : 'rgba(255,255,255,0.1)'};border-radius:8px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;gap:4px;position:relative;overflow:hidden;`;
+                el.innerHTML = `
+                    ${scoreBadge}
+                    <div style="font-size:13px;font-weight:600;color:var(--text-primary);line-height:1.2;">${match.text.length > 80 ? match.text.substring(0, 80) + '…' : match.text}</div>
+                    <div style="font-size:10px;color:var(--accent);opacity:0.9;display:flex;align-items:center;gap:6px;">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                        ${match.diagramTitle}
+                        <span style="font-size:9px;opacity:0.5;margin-left:auto;">${contextLabel}</span>
+                    </div>
+                `;
+                const borderColor = searchMode === 'semantic' ? 'rgba(188,116,255,0.3)' : 'rgba(255,255,255,0.1)';
+                el.addEventListener('mouseenter', () => { el.style.background = 'rgba(255,255,255,0.08)'; el.style.borderColor = 'var(--accent)'; el.style.transform = 'translateX(4px)'; });
+                el.addEventListener('mouseleave', () => { el.style.background = 'rgba(255,255,255,0.05)'; el.style.borderColor = borderColor; el.style.transform = 'translateX(0)'; });
+                el.addEventListener('click', () => {
+                    (openDiagram as any)(match.diagramId, match.nodeId || undefined);
+                });
+                diagResultsList.appendChild(el);
+            });
+        } else {
+            // Informative "no results" state
+            diagResultsContainer.style.display = 'block';
+            diagResultsList.innerHTML = `
+                <div class="docs-search-no-results">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        <line x1="8" y1="11" x2="14" y2="11"/>
+                    </svg>
+                    <span>${t('docs.search.noResults') || 'No diagrams found for this query.'}</span>
+                    ${searchMode === 'classic' ? `<span style="font-size:10px;color:var(--accent);cursor:pointer;" onclick="document.getElementById('btn-toggle-search-mode').click()">${t('docs.search.trySemantic') || 'Try Semantic mode →'}</span>` : ''}
+                </div>
+            `;
+        }
+    } else {
+        diagResultsContainer.style.display = 'none';
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Core match engine
+// ─────────────────────────────────────────────────────────────
 function checkMatch(text: string, query: string, mode: string): boolean | number {
     if (query === '') return true;
-    
-    const normText = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    const normQuery = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-    // 1. Exact or anchored match (Premium)
+    const normText = normStr(text);
+    const normQuery = normStr(query);
+
     if (normText === normQuery) return 1.0;
     if (normText.startsWith(normQuery)) return 0.95;
 
     if (mode === 'classic') {
-        const index = normText.indexOf(normQuery);
-        if (index === -1) return false;
-        
-        // Standard substring match (Scoring based on proximity to start and coverage)
+        if (normText.indexOf(normQuery) === -1) return false;
         const coverage = normQuery.length / normText.length;
-        return 0.7 + (coverage * 0.2); 
+        return 0.7 + (coverage * 0.2);
     } else {
+        // Semantic: word-level with synonym expansion + fuzzy
         const queryWords = normQuery.split(/\s+/).filter(w => w.length > 2);
         if (queryWords.length === 0) return normText.includes(normQuery) ? 0.6 : false;
-        
+
+        const textWords = normText.split(/\s+/);
         let matchCount = 0;
         let weightedScore = 0;
-        
-        queryWords.forEach(word => {
-            if (normText.includes(word)) {
-                matchCount++;
-                // Exact word match bonus (boundaries)
-                const isExactWord = new RegExp(`\\b${word}\\b`, 'i').test(normText);
-                weightedScore += isExactWord ? 1.0 : 0.7;
+
+        queryWords.forEach(qWord => {
+            const expansions = expandWord(qWord);
+            let bestScore = 0;
+
+            for (const exp of expansions) {
+                if (normText.includes(exp)) {
+                    const isExact = new RegExp(`\\b${exp}\\b`, 'i').test(normText);
+                    bestScore = Math.max(bestScore, isExact ? 1.0 : 0.75);
+                }
+                // Light fuzzy match for longer words
+                if (bestScore < 0.5 && exp.length >= 5) {
+                    for (const tw of textWords) {
+                        if (tw.length >= 4) {
+                            const dist = levenshtein(exp, tw);
+                            if (dist === 1) bestScore = Math.max(bestScore, 0.7);
+                            else if (dist === 2) bestScore = Math.max(bestScore, 0.45);
+                        }
+                    }
+                }
             }
+
+            if (bestScore > 0) { matchCount++; weightedScore += bestScore; }
         });
 
         if (matchCount === 0) return false;
 
-        // Calculate final score
         const wordRatio = matchCount / queryWords.length;
         const avgWeight = weightedScore / queryWords.length;
-        
-        // Substring bonus
-        const exactSubstringBonus = normText.includes(normQuery) ? 0.2 : 0;
-        
-        const finalScore = (wordRatio * 0.4) + (avgWeight * 0.4) + exactSubstringBonus;
-        return finalScore >= 0.35 ? finalScore : false;
+        const substringBonus = normText.includes(normQuery) ? 0.2 : 0;
+        // Adaptive threshold: single words need higher precision
+        const threshold = queryWords.length === 1 ? 0.45 : 0.32;
+        const finalScore = (wordRatio * 0.35) + (avgWeight * 0.45) + substringBonus;
+        return finalScore >= threshold ? finalScore : false;
     }
 }
 
@@ -395,7 +487,3 @@ function animateVisibility(el: HTMLElement, match: boolean | number) {
         setTimeout(() => { if (el.style.opacity === '0') el.style.display = 'none'; }, 300);
     }
 }
-
-// Cleanup: remove the old style injection listener at the bottom
-
-

@@ -2225,16 +2225,28 @@
                                     </svg>
                                     <span style="color:#22c55e" data-i18n="docs.integrityReport">Rapport
                                         d'intégrité</span>
-                                    <button class="btn btn-xs btn-ghost" onclick="openDiagram('mod-sync')"
-                                        style="margin-left:auto; font-size:10px; color:#22c55e; border:1px dashed rgba(34,197,94,0.3); padding: 2px 8px;">
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2" style="margin-right:4px">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                            <path d="M2 17l10 5 10-5" />
-                                            <path d="M2 12l10 5 10-5" />
-                                        </svg>
-                                        <span data-i18n="docs.exploreSync">EXPLORER LA SYNC</span>
-                                    </button>
+                                    <div style="margin-left:auto; display:flex; gap:6px;">
+                                        <button class="btn btn-xs btn-ghost" onclick="openDiagram('integrity-engine')"
+                                            style="font-size:10px; color:#22c55e; border:1px dashed rgba(34,197,94,0.3); padding: 2px 8px;">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2" style="margin-right:4px">
+                                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                                <path d="M2 17l10 5 10-5" />
+                                                <path d="M2 12l10 5 10-5" />
+                                            </svg>
+                                            <span data-i18n="docs.exploreIntegrity">INTEGRITY ENGINE</span>
+                                        </button>
+                                        <button class="btn btn-xs btn-ghost" onclick="openDiagram('mod-sync')"
+                                            style="font-size:10px; color:#4ade80; border:1px dashed rgba(34,197,94,0.2); padding: 2px 8px;">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2" style="margin-right:4px">
+                                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                                <path d="M2 17l10 5 10-5" />
+                                                <path d="M2 12l10 5 10-5" />
+                                            </svg>
+                                            <span data-i18n="docs.exploreSync">SYNC FLOW</span>
+                                        </button>
+                                    </div>
                                 </h3>
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
@@ -2834,6 +2846,164 @@
                                         </div>
                                     </div>
 
+                                </div>
+                            </div>
+
+                            <!-- Launch Packs -->
+                            <div class="glass-card" style="border-left: 3px solid #f97316;">
+                                <h3 class="card-title">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f97316"
+                                        stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                        <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>
+                                    </svg>
+                                    <span style="color:#f97316" data-i18n="docs.launchPacks.title">Launch Packs</span>
+                                    <button class="btn btn-xs btn-ghost" onclick="openDiagram('launch-packs')"
+                                        style="margin-left:auto; font-size:10px; color:#f97316; border:1px dashed rgba(249,115,22,0.3); padding: 2px 8px;">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" style="margin-right:4px">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                                        </svg>
+                                        <span data-i18n="docs.exploreLaunchPacks">VOIR LE DIAGRAMME</span>
+                                    </button>
+                                </h3>
+                                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
+                                    <div style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#fb923c;margin-bottom:4px"
+                                            data-i18n="docs.launchPacks.q1">Lancement silencieux</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.launchPacks.a1">Exécute vos .exe et .bat sans fenêtre console, via un moteur VBScript/PowerShell invisible.</div>
+                                    </div>
+                                    <div style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#fb923c;margin-bottom:4px"
+                                            data-i18n="docs.launchPacks.q2">Icônes & Raccourcis</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.launchPacks.a2">Pipeline d'icônes intégré (filtre Lanczos3 256×256) et création automatique de raccourcis .lnk sur le Bureau.</div>
+                                    </div>
+                                    <div style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#fb923c;margin-bottom:4px"
+                                            data-i18n="docs.launchPacks.q3">Gestion par l'IA (MCP)</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.launchPacks.a3">Les Launch Packs sont entièrement gérables via le serveur MCP de BMM par votre agent IA.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- MCP Server & CLI -->
+                            <div class="glass-card" style="border-left: 3px solid #06b6d4;">
+                                <h3 class="card-title">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#06b6d4"
+                                        stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                        <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                        <path d="M8 21h8M12 17v4"/><path d="m6 8 2 2-2 2"/><path d="M11 12h4"/>
+                                    </svg>
+                                    <span style="color:#06b6d4" data-i18n="docs.mcp.title">MCP Server &amp; CLI (v1.0.0)</span>
+                                    <button class="btn btn-xs btn-ghost" onclick="openDiagram('mcp-server')"
+                                        style="margin-left:auto; font-size:10px; color:#06b6d4; border:1px dashed rgba(6,182,212,0.3); padding: 2px 8px;">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" style="margin-right:4px">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                                        </svg>
+                                        <span data-i18n="docs.exploreMcp">VOIR LE DIAGRAMME</span>
+                                    </button>
+                                </h3>
+                                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
+                                    <div style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#22d3ee;margin-bottom:4px"
+                                            data-i18n="docs.mcp.q1">Intégration IA</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.mcp.a1">Protocole JSON-RPC 2.0 sur stdio. Plus de 25 outils exposés permettant à votre agent IA de gérer BMM sans interface graphique.</div>
+                                    </div>
+                                    <div style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#22d3ee;margin-bottom:4px"
+                                            data-i18n="docs.mcp.q2">CLI Unifié</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.mcp.a2">Interface terminal basée sur <code>clap</code>, avec affichage coloré, tableaux structurés et ASCII art de démarrage.</div>
+                                    </div>
+                                    <div style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#22d3ee;margin-bottom:4px"
+                                            data-i18n="docs.mcp.q3">State Bridge</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.mcp.a3">Le binaire MCP initialise son propre moteur AppState pour accéder aux données locales sans que l'UI soit ouverte.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Security System -->
+                            <div class="glass-card" style="border-left: 3px solid #ef4444;">
+                                <h3 class="card-title">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444"
+                                        stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                    </svg>
+                                    <span style="color:#ef4444" data-i18n="docs.security.title">Système de Sécurité Filesystem</span>
+                                    <button class="btn btn-xs btn-ghost" onclick="openDiagram('security-access')"
+                                        style="margin-left:auto; font-size:10px; color:#ef4444; border:1px dashed rgba(239,68,68,0.3); padding: 2px 8px;">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" style="margin-right:4px">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                                        </svg>
+                                        <span data-i18n="docs.exploreSecurity">VOIR LE DIAGRAMME</span>
+                                    </button>
+                                </h3>
+                                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
+                                    <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
+                                            data-i18n="docs.security.q1">Mode Accès Complet</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.security.a1">Accès filesystem non restreint sur tous les lecteurs. Recommandé pour les utilisateurs avancés.</div>
+                                    </div>
+                                    <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
+                                            data-i18n="docs.security.q2">Mode Accès Limité</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.security.a2">L'interface JS est restreinte aux dossiers définis dans les profils. Idéal pour une sécurité maximale.</div>
+                                    </div>
+                                    <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
+                                            data-i18n="docs.security.q3">Choix au premier lancement</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.security.a3">Une modale glassmorphique guidée s'affiche au premier démarrage pour configurer le niveau d'accès.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Crash Reporting -->
+                            <div class="glass-card" style="border-left: 3px solid #dc2626;">
+                                <h3 class="card-title">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626"
+                                        stroke-width="2" style="margin-right:8px;vertical-align:middle">
+                                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+                                        <path d="M12 9v4"/><path d="M12 17h.01"/>
+                                    </svg>
+                                    <span style="color:#dc2626" data-i18n="docs.crashReport.title">Rapports de Crash</span>
+                                    <button class="btn btn-xs btn-ghost" onclick="openDiagram('crash-report')"
+                                        style="margin-left:auto; font-size:10px; color:#dc2626; border:1px dashed rgba(220,38,38,0.3); padding: 2px 8px;">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" style="margin-right:4px">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                                        </svg>
+                                        <span data-i18n="docs.exploreCrash">VOIR LE DIAGRAMME</span>
+                                    </button>
+                                </h3>
+                                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
+                                    <div style="background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
+                                            data-i18n="docs.crashReport.q1">Buffer circulaire</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.crashReport.a1">Un LOG_BUFFER thread-safe en mémoire capture les événements en temps réel pour les inclure dans chaque rapport.</div>
+                                    </div>
+                                    <div style="background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
+                                            data-i18n="docs.crashReport.q2">Panic Hook</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.crashReport.a2">En cas de panic Rust, un hook capture la backtrace complète et génère automatiquement un rapport ZIP.</div>
+                                    </div>
+                                    <div style="background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.15);border-radius:10px;padding:12px">
+                                        <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
+                                            data-i18n="docs.crashReport.q3">Intégration BetaHub</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
+                                            data-i18n="docs.crashReport.a3">La détection de crash ouvre directement la modale de rapport BetaHub avec le fichier ZIP pré-attaché.</div>
+                                    </div>
                                 </div>
                             </div>
 

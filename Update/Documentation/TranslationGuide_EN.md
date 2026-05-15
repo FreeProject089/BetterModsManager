@@ -31,8 +31,25 @@ As soon as you save your file in the `Lang` folder, BMM will detect it at the ne
 BMM supports localized video tutorials. You can define specific YouTube links and local MP4 paths for your language using the `docs.videos` keys.
 For more details, see the [Localized Video Tutorials Guide](../Guides/video_localization_EN.md).
 
-## 5. Sharing
-Feel free to share your translation files on our Discord so they can be officially integrated into future updates.
+## 5. **Semantic Synonyms (`_synonyms`)**
+
+BMM uses a semantic search engine in the Documentation tab. To help the engine find results across languages, each language file can define a list of synonym groups.
+
+*   **How it works**: BMM merges synonym groups from *all* loaded language files at runtime.
+*   **Format**: An object where each key is a **canonical term** (used as the anchor) and the value is an **array of strings** (synonyms).
+*   **Adding new groups**: You can create any new key you want. If another language file uses the same key, BMM will combine the two lists automatically.
+
+```json
+"_synonyms": {
+  "my_concept": ["term1", "term2", "term3"],
+  "activation": ["enable", "install", "power on"]
+}
+```
+
+6. **Validation**
+   - Ensure the JSON remains valid (run it through a validator if unsure).
+   - Check for missing trailing commas or duplicate keys.
+   - Restart BMM to see your changes applied.
 
 ---
 *Tip: Use the "Copy Template" button in Settings to get all the keys to translate at once!*

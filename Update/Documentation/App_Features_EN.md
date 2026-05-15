@@ -465,16 +465,39 @@ BMM v1.0.0 introduces professional-grade automation through the Model Context Pr
 
 ---
 
-## 36. Help & other Center (v1.0.0)
+## 36. Help & Other Center (v1.0.0)
 
-The Documentation view has been expanded and rebranded as "Help & other" to serve as a comprehensive resource hub.
+The Documentation view has been expanded and rebranded as **"Help & Other"** to serve as a comprehensive resource hub for all skill levels.
+
+### Tab Structure
+
+| Tab | Content |
+| :--- | :--- |
+| **Basic** | Getting started guides, video tutorials, download link types, .MM format, dedicated hosting, mod mapper basics |
+| **Advanced** | Deep-dive technical cards with diagram links: Integrity Engine, I/O Limiter, Conflicts, Performance Monitor, Launch Packs, MCP/CLI, Security System, Crash Reporting, App Updates, BetaHub, Tech Stack |
+| **FAQ** | Frequently asked questions with embedded diagram shortcuts |
+
+### Dual-Mode Semantic Search
 
 | Feature | Description |
 | :--- | :--- |
-| **Unified Hub** | Combines user guides, technical analysis, FAQs, and interactive diagrams in one location. |
-| **Interactive Diagrams** | High-fidelity Mermaid.js visualizations of BMM's internal logic with pan/zoom support. |
-| **Searchable Resources** | All help articles and FAQs are searchable with weighted relevance scoring. |
-| **Legal & EULA** | Access to terms of service and license agreements directly within the application. |
+| **Classic Mode** | Fast substring-based search across all visible cards, FAQ entries, and gallery buttons. |
+| **Semantic Mode** | Full NLP-style search with FR/EN synonym expansion (~25 canonical synonym groups), word-boundary matching, and Levenshtein fuzzy matching (distance ≤ 2 for words ≥ 5 chars). |
+| **Weighted Index** | Diagram titles score 1.0×, main node labels 0.8×, secondary nodes 0.6×, edge labels 0.4×. |
+| **Score Badges** | In Semantic mode, each result displays a relevance % badge (green >85%, blue >65%, amber otherwise). |
+| **Context Labels** | Each result card indicates its source tier: 📌 Title, ● Node, ○ Detail, or → Edge. |
+| **Debounce** | 150ms input debounce to prevent excess computation during fast typing. |
+| **No-Results State** | Informative empty state with a one-click shortcut to switch to Semantic mode. |
+| **Result Cap** | Top 12 results after deduplication per `diagramId + nodeId`. |
+
+### Interactive Diagrams
+
+| Feature | Description |
+| :--- | :--- |
+| **35+ Diagrams** | Every major feature has a linked interactive Mermaid.js diagram with pan/zoom. |
+| **Live Node Highlighting** | Search results that link to a specific node trigger a "pulsing glow" animation on that node. |
+| **Language Sync** | All node labels and cluster names are fully translated via `{{i18n.key}}` substitution. |
+| **Gallery** | A scrollable gallery groups all diagrams by category for direct access. |
 
 ---
 

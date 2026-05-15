@@ -6,6 +6,8 @@ let translations = {};
 let langInfo = {};
 let currentLang = localStorage.getItem('bmm-lang') || 'fr';
 let loaded = false;
+/** Synonym groups per language: { lang: { canonical: [synonyms] } } */
+let synonymsStore = {};
 async function loadLang(lang) {
     try {
         const { invoke } = await import('./api.js');
@@ -13,6 +15,11 @@ async function loadLang(lang) {
         const data = JSON.parse(jsonStr);
         const info = data._info || { name: lang, flag: '⚪' };
         delete data._info;
+        // Extract synonyms if provided by the language file
+        if (data._synonyms && typeof data._synonyms === 'object') {
+            synonymsStore[lang] = data._synonyms;
+            delete data._synonyms;
+        }
         translations[lang] = data;
         langInfo[lang] = info;
         console.log(`[i18n] Successfully loaded: Lang/${lang}.json`);
@@ -73,6 +80,28 @@ export function getLanguages() {
         flag: info.flag,
         active: code === currentLang,
     }));
+}
+/**
+ * Returns merged synonym groups from all loaded languages.
+ * Each key is a canonical term; the value is the deduplicated list of synonyms.
+ * Language files contribute via their `_synonyms` object.
+ */
+export function getSynonyms() {
+    const merged = {};
+    for (const langSynonyms of Object.values(synonymsStore)) {
+        for (const [canonical, syns] of Object.entries(langSynonyms)) {
+            if (!merged[canonical])
+                merged[canonical] = [];
+            syns.forEach(s => {
+                if (!merged[canonical].includes(s))
+                    merged[canonical].push(s);
+            });
+            // Also ensure canonical itself is in its own list
+            if (!merged[canonical].includes(canonical))
+                merged[canonical].unshift(canonical);
+        }
+    }
+    return merged;
 }
 export function applyTranslations(root = document) {
     if (!loaded)

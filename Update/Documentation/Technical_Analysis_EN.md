@@ -310,7 +310,54 @@ Complete transition to Strictly Typed ESM for structural stability and IPC safet
 
 ## 23. Semantic Search Algorithm & Weighted Scoring
 
-Weighted intersection matching (Perfect, Anchored, Keyword Ratio) with Match % badges.
+BMM's interactive documentation engine features a dual-mode search system with full semantic expansion capabilities.
+
+### 23.1. Index Architecture
+
+The search index is built at startup (and on every language change) via `buildDiagramIndex()` in `docs-ui.ts`. Each index entry carries a **weight tier**:
+
+| Weight | Source | Example |
+| :--- | :--- | :--- |
+| **1.0** | Diagram title | "Mod Activation Flow" |
+| **0.8** | Main node label + description | `APPLY_MOD`: "Apply Mod" + desc |
+| **0.6** | Secondary node (via `explanationPrefix`) | Detail nodes |
+| **0.4** | Edge labels | "Conflict detected" |
+
+The final relevance score for a result is: `raw_score × weight_tier`. Results are deduplicated per `diagramId + nodeId`, keeping only the highest score.
+
+### 23.2. Classic Mode
+
+A fast substring-based engine. If the normalized query string appears in the normalized text, a score is computed:
+```
+score = 0.7 + (queryLength / textLength) × 0.2
+```
+Results are shown/hidden without synonym expansion.
+
+### 23.3. Semantic Mode
+
+A full word-level engine with three phases:
+
+1. **Synonym Expansion**: Every query word is expanded via a bidirectional FR/EN synonym dictionary (~25 canonical groups covering: activation, backup, conflict, integrity, performance, security, launch, etc.). Each expansion is pre-built into a flat lookup `Map<string, string[]>`.
+
+2. **Matching Pipeline** (per query word):
+   - **Exact boundary match** (`\bword\b`) → score `1.0`
+   - **Substring match** → score `0.75`
+   - **Levenshtein ≤ 1** (for words ≥ 5 chars) → score `0.7`
+   - **Levenshtein = 2** → score `0.45`
+
+3. **Final Score Composition**:
+```
+finalScore = (matchRatio × 0.35) + (avgWordScore × 0.45) + substringBonus(0.2)
+```
+Adaptive threshold: `0.45` for single-word queries, `0.32` for multi-word.
+
+### 23.4. UX Details
+
+- **Debounce**: 150ms delay prevents thrashing during fast typing.
+- **Score badges**: % badge on each result card (green >85%, blue >65%, amber otherwise), visible only in Semantic mode.
+- **Context labels**: Each result shows its tier (`📌 Title`, `● Node`, `○ Detail`, `→ Edge`).
+- **No-results state**: Informative empty state with a "Try Semantic mode →" shortcut when in Classic mode.
+- **Result cap**: Top 12 results displayed after deduplication.
 
 ---
 
