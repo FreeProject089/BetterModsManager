@@ -241,6 +241,9 @@ export function initRepo() {
         inputServerUploadLimit: document.getElementById('repo-server-upload-limit'),
         serverTools: document.getElementById('repo-server-tools'),
         inputMiniServerUploadLimit: document.getElementById('repo-mini-server-upload-limit'),
+        statsContainer: document.getElementById('repo-server-stats-container'),
+        statDls: document.getElementById('repo-server-stat-dls'),
+        statBytes: document.getElementById('repo-server-stat-bytes'),
 
         // --- Advanced ---
         advancedToggle: document.getElementById('repo-server-advanced-toggle'),
@@ -380,7 +383,9 @@ export function initRepo() {
             errorEl.style.display = 'none';
 
             try {
-                const response = await fetch(REPO_LIST_URL);
+                // Bypass browser and GitHub caching to get the absolute latest list
+                const bustUrl = `${REPO_LIST_URL}?t=${Date.now()}`;
+                const response = await fetch(bustUrl, { cache: 'no-store' });
                 if (!response.ok) throw new Error('Failed to fetch');
                 repoList = await response.json();
                 renderRepoList();
@@ -453,18 +458,18 @@ export function initRepo() {
                             </svg>
                             <span style="font-size:11px; color:var(--text-muted);">${escHtml(repo.last_update || 'Unknown')}</span>
                         </div>
-                        ${repo.ping ? `
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${repo.ping < 100 ? '#10b981' : repo.ping < 200 ? '#f59e0b' : '#ef4444'}" stroke-width="2">
+                        <div style="display:flex; align-items:center; gap:6px;" class="repo-ping-container" data-url="${escAttr(repo.url)}">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" class="repo-ping-icon">
                                 <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
                             </svg>
-                            <span style="font-size:11px; color:${repo.ping < 100 ? '#10b981' : repo.ping < 200 ? '#f59e0b' : '#ef4444'}; font-weight:600;">${repo.ping}ms</span>
+                            <span style="font-size:11px; color:var(--text-muted); font-weight:600;" class="repo-ping-text">Pinging...</span>
                         </div>
-                        ` : ''}
                     </div>
-                    ${repo.changelog_link ? `
-                    <div style="margin-top:8px;">
-                        <a href="${escAttr(repo.changelog_link)}" target="_blank" style="font-size:10px; color:var(--accent); text-decoration:none; display:flex; align-items:center; gap:4px;">
+                    
+                    ${(repo.changelog_link || repo.website || repo.discord) ? `
+                    <div style="margin-top:12px; display:flex; gap:12px; flex-wrap:wrap;">
+                        ${repo.changelog_link ? `
+                        <a href="${escAttr(repo.changelog_link)}" target="_blank" style="font-size:10px; color:var(--accent); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 8px; background:rgba(59,130,246,0.1); border-radius:4px;">
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                                 <polyline points="14 2 14 8 20 8"/>
@@ -472,8 +477,27 @@ export function initRepo() {
                                 <line x1="16" y1="17" x2="8" y2="17"/>
                                 <polyline points="10 9 9 9 8 9"/>
                             </svg>
-                            View Changelog
+                            Changelog
                         </a>
+                        ` : ''}
+                        ${repo.website ? `
+                        <a href="${escAttr(repo.website)}" target="_blank" style="font-size:10px; color:var(--cyan); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 8px; background:rgba(6,182,212,0.1); border-radius:4px;">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="2" y1="12" x2="22" y2="12"/>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                            </svg>
+                            Website
+                        </a>
+                        ` : ''}
+                        ${repo.discord ? `
+                        <a href="${escAttr(repo.discord)}" target="_blank" style="font-size:10px; color:#5865F2; text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 8px; background:rgba(88,101,242,0.1); border-radius:4px;">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            Discord
+                        </a>
+                        ` : ''}
                     </div>
                     ` : ''}
                 </div>
@@ -502,6 +526,51 @@ export function initRepo() {
                     item.style.borderColor = 'rgba(255,255,255,0.08)';
                 });
             });
+
+            // Dynamically ping repos
+            const checkRepo = async (url) => {
+                const start = performance.now();
+                try {
+                    const target = url.trim().endsWith('repo.json') ? url.trim() : (url.trim().endsWith('/') ? url.trim() + 'repo.json' : url.trim() + '/repo.json');
+                    let finalUrl = target;
+                    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+                        finalUrl = 'https://' + finalUrl;
+                    }
+                    
+                    // Use Rust backend to completely bypass browser CORS restrictions
+                    const { invoke } = await import('../../core/api.js');
+                    await invoke('fetch_repo_info', { url: finalUrl });
+                    return Math.round(performance.now() - start);
+                } catch(e) {}
+                return -1;
+            };
+
+            // Process pinging sequentially or in small batches to avoid network saturation
+            const updatePings = async () => {
+                const pingContainers = listEl.querySelectorAll('.repo-ping-container');
+                for (const container of pingContainers) {
+                    const url = container.dataset.url;
+                    if (!url) continue;
+                    
+                    const ping = await checkRepo(url);
+                    const icon = container.querySelector('.repo-ping-icon');
+                    const text = container.querySelector('.repo-ping-text');
+                    
+                    if (ping >= 0) {
+                        const color = ping < 100 ? '#10b981' : ping < 250 ? '#f59e0b' : '#ef4444';
+                        icon.setAttribute('stroke', color);
+                        text.style.color = color;
+                        text.textContent = ping + 'ms';
+                    } else {
+                        icon.setAttribute('stroke', '#ef4444');
+                        text.style.color = '#ef4444';
+                        text.textContent = 'Offline';
+                    }
+                }
+            };
+            
+            // Start the background ping task
+            updatePings();
         };
 
         if (btnBrowse) {

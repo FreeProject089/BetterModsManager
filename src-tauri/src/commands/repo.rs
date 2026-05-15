@@ -687,7 +687,11 @@ pub async fn generate_standalone_server(
 
 #[tauri::command]
 pub async fn fetch_repo_info(url: String, creator_id: Option<String>) -> Result<ServerRepo, String> {
-    let mut target_url = url;
+    let mut target_url = url.trim().to_string();
+    if !target_url.starts_with("http://") && !target_url.starts_with("https://") {
+        target_url = format!("http://{}", target_url);
+    }
+    
     if !target_url.ends_with("repo.json") {
         if target_url.ends_with('/') {
             target_url.push_str("repo.json");

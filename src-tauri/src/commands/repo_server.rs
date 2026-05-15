@@ -280,6 +280,49 @@ pub async fn start_repo_server(
                     return Err(warp::reject::not_found());
                 }
 
+                if rel_path == "monitoring.json" {
+                    let dl_path = serve_dir.join("downloads.json");
+                    let content = tokio::fs::read_to_string(&dl_path).await.unwrap_or_else(|_| "{}".to_string());
+                    let json_val: serde_json::Value = serde_json::from_str(&content).unwrap_or(serde_json::json!({}));
+                    
+                    let total_dls = json_val["totalDownloads"].as_u64().unwrap_or(0);
+                    let total_bytes = json_val["totalBytesSent"].as_u64().unwrap_or(0);
+                    let mods_dl = json_val["mods"].clone();
+                    
+                    let active_dls: Vec<serde_json::Value> = {
+                        let active = active_downloads.lock().unwrap_or_else(|p| p.into_inner());
+                        active.values().map(|dl| {
+                            serde_json::json!({
+                                "ip": dl.ip,
+                                "creatorId": dl.creator_id,
+                                "file": dl.file,
+                                "downloaded": dl.downloaded_size,
+                                "total": dl.total_size,
+                                "speed": 0 // Mocked for integrated server
+                            })
+                        }).collect()
+                    };
+
+                    let response = serde_json::json!({
+                        "server": {
+                            "version": "1.0",
+                            "uptime": 0,
+                            "totalBytes": total_bytes,
+                            "totalDls": total_dls,
+                            "modsDownloads": mods_dl
+                        },
+                        "active": active_dls,
+                        "sessions": [],
+                        "history": []
+                    });
+                    
+                    return Ok(warp::Reply::into_response(warp::reply::json(&response)));
+                }
+
+                if rel_path.starts_with("admin/") || rel_path == "dashboard" {
+                    return Ok(warp::Reply::into_response(warp::reply::with_status(warp::reply::json(&serde_json::json!({})), warp::hyper::StatusCode::UNAUTHORIZED)));
+                }
+
                 if !full_path.is_file() {
                     println!("[Server] File Not Found: {} (decoded: {}) -> {:?}", rel_path_encoded, rel_path, full_path);
                     return Err(warp::reject::not_found());
@@ -456,6 +499,7 @@ pub async fn start_repo_server(
                     let proto_fin = protocol_finish.clone();
                     let total = total_size;
                     let session_completed = session_download_completed.clone();
+                    let serve_dir_fin = serve_dir.clone();
                     let stream_with_end = final_stream.chain(futures::stream::once(async move {
                         // Check if this is the last download for this client
                         let client_key = format!("{}|{}", ip_fin, key_fin.as_deref().unwrap_or(""));
@@ -481,12 +525,37 @@ pub async fn start_repo_server(
                             let _ = handle_fin.emit_all("bmm://server-download-finished", ServerDownloadFinishedPayload {
                                 ip: ip_fin,
                                 creator_id: key_fin,
-                                file: file_fin,
+                                file: file_fin.clone(),
                                 total_size: total,
                                 protocol: proto_fin,
                             });
                         }
                         
+                        // Update downloads.json stats
+                        let downloads_path = serve_dir_fin.join("downloads.json");
+                        let content = tokio::fs::read_to_string(&downloads_path).await.unwrap_or_else(|_| "{}".to_string());
+                        if let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&content) {
+                            let total_dl = json["totalDownloads"].as_u64().unwrap_or(0);
+                            json["totalDownloads"] = serde_json::json!(total_dl + 1);
+                            
+                            let bytes_sent = json["totalBytesSent"].as_u64().unwrap_or(0);
+                            json["totalBytesSent"] = serde_json::json!(bytes_sent + total);
+
+                            if file_fin.starts_with("mods/") || file_fin.starts_with("mods\\") {
+                                let parts: Vec<&str> = file_fin.split(|c| c == '/' || c == '\\').collect();
+                                if parts.len() > 1 {
+                                    let mod_id = parts[1];
+                                    let mut mods = json["mods"].as_object().cloned().unwrap_or_default();
+                                    let mod_total = mods.get(mod_id).and_then(|v| v.as_u64()).unwrap_or(0);
+                                    mods.insert(mod_id.to_string(), serde_json::json!(mod_total + 1));
+                                    json["mods"] = serde_json::Value::Object(mods);
+                                }
+                            }
+                            if let Ok(new_content) = serde_json::to_string(&json) {
+                                let _ = tokio::fs::write(&downloads_path, new_content).await;
+                            }
+                        }
+
                         // Signal end-of-stream with an empty Ok chunk
                         Ok::<Bytes, std::io::Error>(Bytes::new())
                     }));
@@ -515,8 +584,8 @@ pub async fn start_repo_server(
 
     let cors = warp::cors()
         .allow_any_origin()
-        .allow_methods(vec!["GET"])
-        .allow_headers(vec!["*", "x-creator-key", "x-creator-id"]);
+        .allow_methods(vec!["GET", "OPTIONS"])
+        .allow_headers(vec!["*", "x-creator-key", "x-creator-id", "range", "content-type", "accept"]);
     
     // file_route handles all files including repo.json with connection notifications
     let routes = file_route.with(cors);
@@ -678,6 +747,7 @@ pub fn get_repo_server_status(state: tauri::State<'_, RepoServerState>) -> Resul
         seed: state.seed.lock().unwrap_or_else(|p| p.into_inner()).clone(),
     }))
 }
+
 
 #[tauri::command]
 pub async fn stop_repo_server(state: tauri::State<'_, RepoServerState>) -> Result<(), String> {

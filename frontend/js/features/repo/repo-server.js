@@ -5,8 +5,9 @@ import { t } from '../../core/i18n.js';
 import { copyToClipboard } from './repo.js';
 import { formatBytes } from '../../core/utils.js';
 export function initRepoServer(elements) {
-    const { btnToggleServer, urlContainerServer, urlInputServer, btnCopyUrlServer, serverStatusDot, serverStatusLabel, publicSection, publicUrlInput, btnCopyPublicUrl, upnpBadgeStatus, publicHintBox, repoCreatorIdContainer, repoCreatorIdValue, tunnelSection, tunnelUrlInput, btnCopyTunnelUrl, inputServerPort, inputServerUploadLimit, serverTools, btnGenMiniServer, btnPickMiniRepo, btnPickMiniFolder, inputMiniRepoPath, cbAutoStart, inputMiniServerUploadLimit, inputExportPath } = elements;
+    const { btnToggleServer, urlContainerServer, urlInputServer, btnCopyUrlServer, serverStatusDot, serverStatusLabel, publicSection, publicUrlInput, btnCopyPublicUrl, upnpBadgeStatus, publicHintBox, repoCreatorIdContainer, repoCreatorIdValue, tunnelSection, tunnelUrlInput, btnCopyTunnelUrl, inputServerPort, inputServerUploadLimit, serverTools, btnGenMiniServer, btnPickMiniRepo, btnPickMiniFolder, inputMiniRepoPath, cbAutoStart, inputMiniServerUploadLimit, inputExportPath, statsContainer, statDls, statBytes } = elements;
     let isServerRunning = false;
+    let statsInterval = null;
     /** Cleanup functions for Tauri event listeners */
     let _unlistenConnected = null;
     let _unlistenDlStarted = null;
@@ -48,6 +49,33 @@ export function initRepoServer(elements) {
             _unlistenDlFinished = null;
         }
     }
+    function startStatsPolling(port) {
+        if (statsInterval)
+            clearInterval(statsInterval);
+        const updateStats = async () => {
+            if (!isServerRunning) {
+                if (statsInterval)
+                    clearInterval(statsInterval);
+                return;
+            }
+            try {
+                const res = await fetch(`http://127.0.0.1:${port}/monitoring.json`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (statsContainer) {
+                        statsContainer.style.display = 'flex';
+                        if (statDls)
+                            statDls.textContent = data.server.totalDls || 0;
+                        if (statBytes)
+                            statBytes.textContent = formatBytes(data.server.totalBytes || 0);
+                    }
+                }
+            }
+            catch (e) { }
+        };
+        updateStats();
+        statsInterval = setInterval(updateStats, 2000);
+    }
     // --- Host Server toggle ---
     if (btnToggleServer) {
         btnToggleServer.addEventListener('click', async () => {
@@ -73,6 +101,8 @@ export function initRepoServer(elements) {
                         inputServerPort.disabled = false;
                     if (serverTools)
                         serverTools.style.display = 'none';
+                    if (statsContainer)
+                        statsContainer.style.display = 'none';
                     if (repoCreatorIdContainer)
                         repoCreatorIdContainer.style.display = 'none';
                     toast(t('repo.hostServerStopped'), "success");
@@ -154,7 +184,7 @@ export function initRepoServer(elements) {
                         if (publicHintBox)
                             publicHintBox.style.display = 'block';
                     }
-                    if (result.tunnel_url) {
+                    if (tunnelSection) {
                         tunnelUrlInput.value = result.tunnel_url;
                         tunnelSection.style.display = 'block';
                     }
@@ -165,6 +195,7 @@ export function initRepoServer(elements) {
                     urlContainerServer.style.display = "flex";
                     if (serverTools)
                         serverTools.style.display = 'flex';
+                    startStatsPolling(port);
                     toast(t('repo.hostServerStarted'), "success");
                 }
                 catch (err) {
@@ -244,11 +275,14 @@ export function initRepoServer(elements) {
                 }
                 if (status.tunnel_url) {
                     tunnelUrlInput.value = status.tunnel_url;
-                    tunnelSection.style.display = 'block';
+                    if (tunnelSection)
+                        tunnelSection.style.display = 'block';
                 }
                 urlContainerServer.style.display = "flex";
                 if (serverTools)
                     serverTools.style.display = 'flex';
+                const port = parseInt(inputServerPort ? inputServerPort.value : "8000") || 8000;
+                startStatsPolling(port);
             }
         }
         catch (err) {

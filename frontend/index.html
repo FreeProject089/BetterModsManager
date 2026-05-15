@@ -1091,6 +1091,18 @@
                                     </div>
                                 </div>
 
+                                <div id="repo-server-stats-container"
+                                    style="display:none; flex-wrap:wrap; gap:12px; margin-bottom:12px; padding:10px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:8px;">
+                                    <div style="flex:1; display:flex; flex-direction:column;">
+                                        <span style="font-size:10px; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Téléchargements</span>
+                                        <span id="repo-server-stat-dls" style="font-size:16px; font-weight:800; color:var(--accent);">0</span>
+                                    </div>
+                                    <div style="flex:1; display:flex; flex-direction:column;">
+                                        <span style="font-size:10px; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Données Envoyées</span>
+                                        <span id="repo-server-stat-bytes" style="font-size:16px; font-weight:800; color:var(--cyan);">0 B</span>
+                                    </div>
+                                </div>
+
                                 <div id="public-ip-hint-box"
                                     style="display:none; margin-bottom:12px; padding:10px; background:rgba(245,158,11,0.05); border:1px dashed rgba(245,158,11,0.2); border-radius:8px; font-size:11px; color:var(--text-secondary);">
                                     <div

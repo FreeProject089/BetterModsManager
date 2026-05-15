@@ -32,10 +32,14 @@ export function initRepoServer(elements) {
         inputMiniRepoPath,
         cbAutoStart,
         inputMiniServerUploadLimit,
-        inputExportPath
+        inputExportPath,
+        statsContainer,
+        statDls,
+        statBytes
     } = elements;
 
     let isServerRunning = false;
+    let statsInterval = null;
     /** Cleanup functions for Tauri event listeners */
     let _unlistenConnected = null;
     let _unlistenDlStarted = null;
@@ -85,6 +89,29 @@ export function initRepoServer(elements) {
         if (_unlistenDlFinished) { _unlistenDlFinished(); _unlistenDlFinished = null; }
     }
 
+    function startStatsPolling(port) {
+        if (statsInterval) clearInterval(statsInterval);
+        const updateStats = async () => {
+            if (!isServerRunning) {
+                if (statsInterval) clearInterval(statsInterval);
+                return;
+            }
+            try {
+                const res = await fetch(`http://127.0.0.1:${port}/monitoring.json`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (statsContainer) {
+                        statsContainer.style.display = 'flex';
+                        if (statDls) statDls.textContent = data.server.totalDls || 0;
+                        if (statBytes) statBytes.textContent = formatBytes(data.server.totalBytes || 0);
+                    }
+                }
+            } catch(e) {}
+        };
+        updateStats();
+        statsInterval = setInterval(updateStats, 2000);
+    }
+
     // --- Host Server toggle ---
     if (btnToggleServer) {
         btnToggleServer.addEventListener('click', async () => {
@@ -107,6 +134,7 @@ export function initRepoServer(elements) {
                     if (serverStatusLabel) serverStatusLabel.textContent = t('repo.serverOffline') || 'Serveur hors ligne';
                     if (inputServerPort) inputServerPort.disabled = false;
                     if (serverTools) serverTools.style.display = 'none';
+                    if (statsContainer) statsContainer.style.display = 'none';
                     if (repoCreatorIdContainer) repoCreatorIdContainer.style.display = 'none';
                     toast(t('repo.hostServerStopped'), "success");
                 } catch (err) {
@@ -183,7 +211,7 @@ export function initRepoServer(elements) {
                         if (publicHintBox) publicHintBox.style.display = 'block';
                     }
 
-                    if (result.tunnel_url) {
+                    if (tunnelSection) {
                         tunnelUrlInput.value = result.tunnel_url;
                         tunnelSection.style.display = 'block';
                     } else {
@@ -192,6 +220,7 @@ export function initRepoServer(elements) {
 
                     urlContainerServer.style.display = "flex";
                     if (serverTools) serverTools.style.display = 'flex';
+                    startStatsPolling(port);
                     toast(t('repo.hostServerStarted'), "success");
                 } catch (err) {
                     const errMsg = String(err);
@@ -267,10 +296,13 @@ export function initRepoServer(elements) {
                 }
                 if (status.tunnel_url) {
                     tunnelUrlInput.value = status.tunnel_url;
-                    tunnelSection.style.display = 'block';
+                    if (tunnelSection) tunnelSection.style.display = 'block';
                 }
                 urlContainerServer.style.display = "flex";
                 if (serverTools) serverTools.style.display = 'flex';
+                
+                const port = parseInt(inputServerPort ? inputServerPort.value : "8000") || 8000;
+                startStatsPolling(port);
             }
         } catch (err) {
             console.error("[BMM] restoreServerStatus error:", err);

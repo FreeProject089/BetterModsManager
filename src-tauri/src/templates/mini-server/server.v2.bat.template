@@ -63,8 +63,18 @@ const bansFile = path.join(__dirname, 'bans.json');
 const whitelistFile = path.join(__dirname, 'whitelist.json');
 const repoFile = path.join(__dirname, 'repo.json');
 const historyFile = path.join(__dirname, 'history.json');
+const downloadsFile = path.join(__dirname, 'downloads.json');
 
-const stats = { uptime: Date.now(), totalDownloads: 0, totalBytesSent: 0 };
+const stats = { uptime: Date.now(), totalDownloads: 0, totalBytesSent: 0, mods: {} };
+if (fs.existsSync(downloadsFile)) {
+    try { 
+        const saved = JSON.parse(fs.readFileSync(downloadsFile, 'utf8')); 
+        stats.totalDownloads = saved.totalDownloads || 0;
+        stats.totalBytesSent = saved.totalBytesSent || 0;
+        stats.mods = saved.mods || {};
+    } catch(e) {}
+}
+
 const sessions = new Map(); 
 const history = [];
 
@@ -132,7 +142,7 @@ function getMonitoringReport() {
     });
 
     return {
-        server: { version: VERSION, uptime: Date.now() - stats.uptime, totalBytes: stats.totalBytesSent, totalDls: stats.totalDownloads, totalRepoSize },
+        server: { version: VERSION, uptime: Date.now() - stats.uptime, totalBytes: stats.totalBytesSent, totalDls: stats.totalDownloads, totalRepoSize, modsDownloads: stats.mods },
         active: Array.from(activeDownloads.values()).map(dl => ({
             ...dl,
             speed: dl.downloaded / ((Math.max(1, Date.now() - dl.startTime))/1000)
@@ -550,6 +560,15 @@ const DASHBOARD_HTML = `
 //  SERVER CORE
 // ────────────────────────────────────────────────────────────
 const server = http.createServer((req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Range, x-creator-key, x-creator-id, Authorization');
+    if (req.method === 'OPTIONS') {
+        res.statusCode = 204;
+        res.end();
+        return;
+    }
+
     const xff = req.headers['x-forwarded-for'];
     const ip = (xff ? xff.split(',')[0].trim() : req.socket.remoteAddress || '127.0.0.1').replace('::ffff:', '');
     const isAuthorized = () => req.headers['authorization'] === ADMIN_PASSWORD;
@@ -677,9 +696,30 @@ const server = http.createServer((req, res) => {
             } else if (elapsed >= 1000) { bytesSentInInterval = 0; intervalStart = now; }
         }
     });
+    
+    // Periodically save stats
+    let saveTimeout = null;
+    const saveStats = () => {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            try { fs.writeFileSync(downloadsFile, JSON.stringify({ totalDownloads: stats.totalDownloads, totalBytesSent: stats.totalBytesSent, mods: stats.mods })); } catch(e) {}
+        }, 5000);
+    };
+
     stream.on('end', () => { 
         activeDownloads.delete(dlId);
         addToHistory(ip, key, "DL_FINISH", urlPath);
+        // Track per-mod downloads if it's a mod file
+        if (urlPath.includes('/mods/')) {
+            const parts = urlPath.split('/mods/')[1].split('/');
+            if (parts.length > 0) {
+                const modId = parts[0];
+                stats.mods[modId] = (stats.mods[modId] || 0) + 1;
+                saveStats();
+            }
+        } else {
+            saveStats();
+        }
     });
     res.on('close', () => { stream.destroy(); activeDownloads.delete(dlId); });
     stream.pipe(res);
