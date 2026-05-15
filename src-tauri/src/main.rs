@@ -138,6 +138,9 @@ fn main() {
                 api.prevent_close();
                 let window = event.window().clone();
                 let state = window.state::<AppState>();
+                
+                // Add this marker so the crash logger knows it was a clean exit even if the thread is killed
+                commands::crash::log_line("[SHUTDOWN] Clean exit requested via window manager (Alt+F4/Close).");
                 commands::crash::set_shutting_down();
 
                 let state_snapshot = {

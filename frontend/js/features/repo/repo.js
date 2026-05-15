@@ -506,9 +506,17 @@ export function initRepo() {
                     if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
                         finalUrl = 'https://' + finalUrl;
                     }
-                    // Use Rust backend to completely bypass browser CORS restrictions
-                    const { invoke } = await import('../../core/api.js');
-                    await invoke('fetch_repo_info', { url: finalUrl });
+                    // Use native Tauri invoke to completely bypass browser CORS restrictions 
+                    // and avoid api.ts wrapper that logs console.error spam on failure
+                    let rawInvoke;
+                    if (window.__TAURI__) {
+                        rawInvoke = window.__TAURI__.invoke;
+                    }
+                    else {
+                        const tauriApi = await import('https://unpkg.com/@tauri-apps/api@1/tauri.js');
+                        rawInvoke = tauriApi.invoke;
+                    }
+                    await rawInvoke('fetch_repo_info', { url: finalUrl });
                     return Math.round(performance.now() - start);
                 }
                 catch (e) { }
