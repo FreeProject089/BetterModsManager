@@ -538,6 +538,8 @@ async function main() {
     await initMods();
     await updateProfileChip();
     await updateLibraryProfileSelector();
+    // Load contributors before initializing credits
+    await fetchContributors();
     initCredits();
     // Force an explicit initial scan at startup so we don't rely on the debounced focus event
     setTimeout(() => { refreshMods(true); }, 500);
@@ -783,95 +785,8 @@ window.applyTaskySettings = function () {
     // Sidebar logo fallback - removed as per request to look like original
 })();
 // ── Credits & Contributors ──────────────────────────────
-const CONTRIBUTORS = [
-    {
-        id: 'freeproject',
-        username: 'FreeProject089',
-        pfp: 'assets/pfp.webp',
-        role: 'contributor.freeproject.role',
-        description: 'contributor.freeproject.msg',
-        github: 'https://github.com/FreeProject089',
-        website: 'https://freeproject089.github.io/BMM_Web/',
-        category: 'staff',
-        subcategory: 'dev'
-    },
-    {
-        id: 'c0c0_1er',
-        username: 'c0c0_1er',
-        pfp: 'assets/pfpc0c0.png',
-        role: 'contributor.c0c0_1er.role',
-        description: 'contributor.c0c0_1er.msg',
-        github: 'https://github.com/WarGameRP',
-        category: 'staff',
-        subcategory: 'community_support'
-    },
-    {
-        id: 'charger',
-        username: 'madbomber8526',
-        display_name: 'Charger',
-        discord_id: '485056947477938188',
-        pfp: 'assets/userpfp/charger.png',
-        role: 'contributor.charger.role',
-        description: 'contributor.charger.msg',
-        category: 'kofi'
-    },
-    {
-        id: 'jarjar',
-        username: 'banksfam_',
-        display_name: 'JAR JAR',
-        discord_id: '449591271175225355',
-        pfp: 'assets/userpfp/JarJar.png',
-        role: 'contributor.jarjar.role',
-        description: 'contributor.jarjar.msg',
-        category: 'tester',
-        subcategory: 'early_access'
-    },
-    {
-        id: 'captain_pug',
-        username: 'unclesneep',
-        display_name: 'Captain_Pug',
-        discord_id: '761967053791297536',
-        pfp: 'assets/userpfp/CaptainPug.png',
-        role: 'contributor.captain_pug.role',
-        description: 'contributor.captain_pug.msg',
-        category: 'tester',
-        subcategory: 'ptb'
-    },
-    {
-        id: 'machinegun',
-        username: 'machinegun',
-        display_name: 'Machinegun',
-        discord_id: '162362221475659778',
-        pfp: 'assets/userpfp/machinegun.png',
-        role: 'contributor.machinegun.role',
-        description: 'contributor.machinegun.msg',
-        category: 'tester',
-        subcategory: 'ptb'
-    },
-    {
-        id: 'rayak',
-        username: 'rayak_71_cef',
-        display_name: 'RAYAK_71_CEF',
-        discord_id: '312342647924588545',
-        pfp: 'assets/userpfp/rayak71cef.png',
-        role: 'contributor.rayak.role',
-        description: 'contributor.rayak.msg',
-        category: 'tester',
-        subcategory: 'ptb'
-    },
-    {
-        id: 'max_husky',
-        username: 'max_trymtube',
-        display_name: 'Max-Husky',
-        discord_id: '694296582455165069',
-        pfp: 'assets/userpfp/maxtrymtube.png',
-        role: 'contributor.max_husky.role',
-        description: 'contributor.max_husky.msg',
-        category: 'tester',
-        subcategory: 'early_access'
-    }
-];
-const CREDITS_MESSAGES = [
+let CONTRIBUTORS = [];
+let CREDITS_MESSAGES = [
     'credits.msg1',
     'credits.msg2',
     'credits.msg3',
@@ -880,6 +795,44 @@ const CREDITS_MESSAGES = [
     'credits.msg6',
     'credits.msg7'
 ];
+const CONTRIBUTORS_REMOTE_URL = 'https://raw.githubusercontent.com/BetterDCS/BMM_Contributors/refs/heads/main/contributors.json';
+const CONTRIBUTORS_LOCAL_FALLBACK = 'assets/contributors.json';
+async function fetchContributors() {
+    const applyData = (data) => {
+        if (data.contributors)
+            CONTRIBUTORS = data.contributors;
+        else if (Array.isArray(data))
+            CONTRIBUTORS = data; // Backward compatibility
+        if (data.messages && Array.isArray(data.messages)) {
+            CREDITS_MESSAGES = data.messages;
+        }
+    };
+    try {
+        console.log("[BMM] Fetching contributors from remote...");
+        const response = await fetch(CONTRIBUTORS_REMOTE_URL, { cache: 'no-cache' });
+        if (response.ok) {
+            const data = await response.json();
+            applyData(data);
+            console.log("[BMM] Successfully loaded remote contributors.");
+            return;
+        }
+    }
+    catch (e) {
+        console.warn("[BMM] Remote contributors fetch failed, using local fallback:", e);
+    }
+    try {
+        const response = await fetch(CONTRIBUTORS_LOCAL_FALLBACK);
+        if (response.ok) {
+            const data = await response.json();
+            applyData(data);
+            console.log("[BMM] Successfully loaded local fallback contributors.");
+        }
+    }
+    catch (e) {
+        console.error("[BMM] CRITICAL: Failed to load any contributors:", e);
+    }
+}
+// Messages will be updated by fetchContributors()
 function initCredits() {
     const marqueeContainer = document.getElementById('credits-marquee-container');
     const contributorsGrid = document.getElementById('contributors-grid');
@@ -929,16 +882,16 @@ function initCredits() {
                     <div class="sub-contributors-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px;">
                         ${members.map(c => {
                 const sub = c.subcategory;
-                // Use custom role if it exists (e.g., "Main Dev / Creator"), otherwise use subcategory mapping
-                const hasCustomRole = c.role && !c.role.startsWith('credits.subcategory.');
-                const roleKey = hasCustomRole ? c.role : (sub && subcategoryRoleMap[sub] ? subcategoryRoleMap[sub] : c.role);
+                // Check if role is a translation key or a literal string
+                const isKey = c.role && c.role.includes('.');
+                const roleText = isKey ? t(c.role) : c.role;
                 return `
                                 <div class="contributor-card glass-card" onclick="openContributorModal('${c.id}')">
                                     <div class="contributor-pfp-box">
                                         <img src="${c.pfp}" class="contributor-pfp" alt="${c.display_name || c.username}">
                                     </div>
                                     <div class="contributor-name">${c.display_name || c.username}</div>
-                                    <div class="contributor-role" data-i18n="${roleKey}">${t(roleKey)}</div>
+                                    <div class="contributor-role" ${isKey ? `data-i18n="${c.role}"` : ''}>${roleText}</div>
                                 </div>
                             `;
             }).join('')}
@@ -1044,11 +997,13 @@ window.openContributorModal = (id) => {
             <img src="${c.pfp}" class="contributor-modal-pfp">
             <div class="contributor-modal-info">
                 <h2>${c.display_name || c.username}</h2>
-                <p data-i18n="${c.role}">${t(c.role)}</p>
+                <p ${c.role && c.role.includes('.') ? `data-i18n="${c.role}"` : ''}>
+                    ${c.role && c.role.includes('.') ? t(c.role) : c.role}
+                </p>
             </div>
         </div>
-        <div class="contributor-modal-bio" data-i18n="${c.description}">
-            ${t(c.description)}
+        <div class="contributor-modal-bio" ${c.description && c.description.includes('.') ? `data-i18n="${c.description}"` : ''}>
+            ${c.description && c.description.includes('.') ? t(c.description) : c.description}
         </div>
         <div class="contributor-modal-links">
             ${c.github ? `

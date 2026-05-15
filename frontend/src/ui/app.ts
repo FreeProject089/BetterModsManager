@@ -31,38 +31,38 @@ import { escHtml, escAttr, formatBytes } from '../core/utils.js';
 import { initMapper } from '../features/mapper/mapper.js';
 import { openAdvancedPerfModal } from '../features/bench/benchmark.js';
 
- async function waitForModalClosed(id: string): Promise<void> {
-     const el = document.getElementById(id);
-     if (!el) return;
-     if (!el.classList.contains('open')) return;
+async function waitForModalClosed(id: string): Promise<void> {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!el.classList.contains('open')) return;
 
-     await new Promise<void>((resolve) => {
-         // Observer 1: class change (modal hidden via classList.remove('open'))
-         const classObs = new MutationObserver(() => {
-             if (!el.classList.contains('open')) {
-                 classObs.disconnect();
-                 domObs.disconnect();
-                 resolve();
-             }
-         });
-         classObs.observe(el, { attributes: true, attributeFilter: ['class'] });
+    await new Promise<void>((resolve) => {
+        // Observer 1: class change (modal hidden via classList.remove('open'))
+        const classObs = new MutationObserver(() => {
+            if (!el.classList.contains('open')) {
+                classObs.disconnect();
+                domObs.disconnect();
+                resolve();
+            }
+        });
+        classObs.observe(el, { attributes: true, attributeFilter: ['class'] });
 
-         // Observer 2: element removal from DOM (modal closed via .remove())
-         const domObs = new MutationObserver((mutations) => {
-             for (const m of mutations) {
-                 for (const node of Array.from(m.removedNodes)) {
-                     if (node === el || (node as Element).contains?.(el)) {
-                         classObs.disconnect();
-                         domObs.disconnect();
-                         resolve();
-                         return;
-                     }
-                 }
-             }
-         });
-         domObs.observe(document.body, { childList: true, subtree: true });
-     });
- }
+        // Observer 2: element removal from DOM (modal closed via .remove())
+        const domObs = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+                for (const node of Array.from(m.removedNodes)) {
+                    if (node === el || (node as Element).contains?.(el)) {
+                        classObs.disconnect();
+                        domObs.disconnect();
+                        resolve();
+                        return;
+                    }
+                }
+            }
+        });
+        domObs.observe(document.body, { childList: true, subtree: true });
+    });
+}
 
 // ── Tauri bridge ──────────────────────────────────────────
 import { loadTauri, invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification } from '../core/api.js';
@@ -74,12 +74,12 @@ export function toast(message, type = 'info', duration = 3000) {
     const container = document.getElementById('toast-container');
     const el = document.createElement('div');
     el.className = `toast ${type}`;
-    
+
     const dot = document.createElement('div');
     dot.className = 'toast-dot';
     const textSpan = document.createElement('span');
     textSpan.textContent = message;
-    
+
     el.appendChild(dot);
     el.appendChild(textSpan);
     container.appendChild(el);
@@ -123,7 +123,7 @@ export function stopTaskyLoader() {
     const startTime = parseInt(mascotContainer.dataset.spinStartTime);
     const elapsed = Date.now() - startTime;
     let timeToWait = 1000 - (elapsed % 1000);
-    
+
     if (timeToWait < 300) timeToWait += 1000; // Add full spin if <300ms remaining
 
     (mascotContainer as any)._spinTimeout = setTimeout(() => {
@@ -204,16 +204,16 @@ function initNavigation() {
             await listen('sha-status-changed', async (event: any) => {
                 const payload = event.payload; // { mod_id, status, is_manual }
                 console.log(`[SHA] Status changed for mod ${payload.mod_id}: ${payload.status}`);
-                
+
                 if (payload.status === 'calculating') {
                     const isLazy = !payload.is_manual;
                     const { getSettings } = await import('../core/api.js');
                     const settings = await getSettings();
-                    
+
                     if (payload.is_manual && settings.show_sha_loading_animation !== false) {
                         startTaskyLoader(); // Added Tasky mascot animation
                     }
-                    
+
                     // Show spinner on mod card (both manual and lazy)
                     const modCard = document.querySelector(`.mod-card[data-id="${payload.mod_id}"]`);
                     if (modCard) {
@@ -243,7 +243,7 @@ function initNavigation() {
                     if (payload.is_manual && payload.status !== 'missing') {
                         stopTaskyLoader(); // Stop Tasky mascot animation
                     }
-                    
+
                     // Explicitly remove loading spinners to ensure they don't get stuck before list refresh
                     const modCard = document.querySelector(`.mod-card[data-id="${payload.mod_id}"]`);
                     if (modCard) {
@@ -268,7 +268,7 @@ function initNavigation() {
                         const { applyTranslations } = await import('../core/i18n.js');
                         applyTranslations(btn);
                     }
-                    
+
                     if (payload.status === 'error' && payload.is_manual) {
                         const { toast } = await import('../ui/app.js');
                         toast('Failed to hash mod ' + payload.mod_id, 'error');
@@ -276,10 +276,10 @@ function initNavigation() {
                         const { toast } = await import('../ui/app.js');
                         toast('Hash calculation completed', 'success');
                     }
-                    
+
                     // Refresh main mod list
                     if (window._refreshModsFn) window._refreshModsFn();
-                    
+
                     // Refresh detail panel if it's the same mod
                     const detailContainer = document.getElementById('mod-detail-container');
                     if (detailContainer && (detailContainer as any)._currentModId === payload.mod_id) {
@@ -439,10 +439,10 @@ export async function updateLibraryProfileSelector() {
             select.addEventListener('change', async () => {
                 const id = select.value;
                 if (!id) return;
-                
+
                 // Trigger mascot loading
                 startTaskyLoader();
-                
+
                 try {
                     await invoke('set_active_profile', { profileId: id });
                     await updateProfileChip();
@@ -541,7 +541,7 @@ async function main() {
     await loadTauri();
     try {
         await invoke('log_frontend_line', { line: '[BMM] App started from generated TypeScript!' });
-    } catch(e) {}
+    } catch (e) { }
     await initI18n();
 
     initNavigation();
@@ -585,6 +585,9 @@ async function main() {
     await initMods();
     await updateProfileChip();
     await updateLibraryProfileSelector();
+
+    // Load contributors before initializing credits
+    await fetchContributors();
     initCredits();
 
     // Force an explicit initial scan at startup so we don't rely on the debounced focus event
@@ -650,7 +653,7 @@ async function main() {
                 console.log("[BMM] Auto-Calibration enabled, running boot optimization...");
                 const disks = await invoke('get_system_disks');
                 // Run benchmarks asynchronously without awaiting to avoid blocking other startup tasks
-                runAutoBenchmarks(disks, true); 
+                runAutoBenchmarks(disks, true);
             }
         } catch (e) {
             console.error("[BMM] Auto-Calibration startup failed:", e);
@@ -695,7 +698,7 @@ async function main() {
 }
 
 // ── Tasky mascot settings ────────────────────────────────
-window.applyTaskySettings = function() {
+window.applyTaskySettings = function () {
     const visibleToggle = document.getElementById('toggle-tasky-visible') as HTMLInputElement;
     const animToggle = document.getElementById('toggle-tasky-animation') as HTMLInputElement;
     const tooltipToggle = document.getElementById('toggle-tasky-tooltip') as HTMLInputElement;
@@ -717,7 +720,7 @@ window.applyTaskySettings = function() {
 
     // Apply visibility - when hidden, show text logo in sidebar like fullscreen
     if (container) container.style.display = isVisible ? '' : 'none';
-    
+
     // Toggle class on body for global styling adjustments (like sidebar logo)
     if (isVisible) document.body.classList.remove('tasky-hidden');
     else document.body.classList.add('tasky-hidden');
@@ -763,7 +766,7 @@ window.applyTaskySettings = function() {
         // If e is null, use last coordinates (for manual calls)
         const clientX = e ? e.clientX : lastX;
         const clientY = e ? e.clientY : lastY;
-        
+
         if (e && e.clientX !== undefined) {
             lastX = e.clientX;
             lastY = e.clientY;
@@ -776,19 +779,19 @@ window.applyTaskySettings = function() {
 
         const vw = window.innerWidth;
         const vh = window.innerHeight;
-        
+
         const tw = container.offsetWidth || 350;
         const th = container.offsetHeight || 100;
 
         const target = (e && e.target) ? e.target : document.elementFromPoint(lastX, lastY);
         const isDropdown = target && !!(target as HTMLElement).closest('#global-dropdown-portal, .mod-actions-dropdown-content, .dropdown-menu, .dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod, .btn-open-source-folder');
-        
+
         const OFFSET = 20;
         const MARGIN = 15;
 
         let targetX = clientX + OFFSET;
         let targetY = clientY + OFFSET;
-        
+
         let isFlippedX = false;
         let isFlippedY = false;
 
@@ -811,14 +814,14 @@ window.applyTaskySettings = function() {
         let finalY = Math.max(MARGIN, Math.min(targetY, vh - th - MARGIN));
 
         container.style.flexDirection = isFlippedX ? 'row-reverse' : 'row';
-        
+
         container.style.position = 'fixed';
         container.style.left = finalX + 'px';
         container.style.top = finalY + 'px';
         container.style.bottom = 'auto';
         container.style.right = 'auto';
         container.style.transform = 'none';
-        container.style.zIndex = '999999999'; 
+        container.style.zIndex = '999999999';
     };
 
     document.addEventListener('mousemove', (e) => window.updateTaskyPosition(e));
@@ -866,96 +869,8 @@ window.applyTaskySettings = function() {
 })();
 
 // ── Credits & Contributors ──────────────────────────────
-const CONTRIBUTORS = [
-    {
-        id: 'freeproject',
-        username: 'FreeProject089',
-        pfp: 'assets/pfp.webp',
-        role: 'contributor.freeproject.role',
-        description: 'contributor.freeproject.msg',
-        github: 'https://github.com/FreeProject089',
-        website: 'https://freeproject089.github.io/BMM_Web/',
-        category: 'staff',
-        subcategory: 'dev'
-    },
-    {
-        id: 'c0c0_1er',
-        username: 'c0c0_1er',
-        pfp: 'assets/pfpc0c0.png',
-        role: 'contributor.c0c0_1er.role',
-        description: 'contributor.c0c0_1er.msg',
-        github: 'https://github.com/WarGameRP',
-        category: 'staff',
-        subcategory: 'community_support'
-    },
-    {
-        id: 'charger',
-        username: 'madbomber8526',
-        display_name: 'Charger',
-        discord_id: '485056947477938188',
-        pfp: 'assets/userpfp/charger.png',
-        role: 'contributor.charger.role',
-        description: 'contributor.charger.msg',
-        category: 'kofi'
-    },
-    {
-        id: 'jarjar',
-        username: 'banksfam_',
-        display_name: 'JAR JAR',
-        discord_id: '449591271175225355',
-        pfp: 'assets/userpfp/JarJar.png',
-        role: 'contributor.jarjar.role',
-        description: 'contributor.jarjar.msg',
-        category: 'tester',
-        subcategory: 'early_access'
-    },
-    {
-        id: 'captain_pug',
-        username: 'unclesneep',
-        display_name: 'Captain_Pug',
-        discord_id: '761967053791297536',
-        pfp: 'assets/userpfp/CaptainPug.png',
-        role: 'contributor.captain_pug.role',
-        description: 'contributor.captain_pug.msg',
-        category: 'tester',
-        subcategory: 'ptb'
-    },
-    {
-        id: 'machinegun',
-        username: 'machinegun',
-        display_name: 'Machinegun',
-        discord_id: '162362221475659778',
-        pfp: 'assets/userpfp/machinegun.png',
-        role: 'contributor.machinegun.role',
-        description: 'contributor.machinegun.msg',
-        category: 'tester',
-        subcategory: 'ptb'
-    },
-    {
-        id: 'rayak',
-        username: 'rayak_71_cef',
-        display_name: 'RAYAK_71_CEF',
-        discord_id: '312342647924588545',
-        pfp: 'assets/userpfp/rayak71cef.png',
-        role: 'contributor.rayak.role',
-        description: 'contributor.rayak.msg',
-        category: 'tester',
-        subcategory: 'ptb'
-    },
-    {
-        id: 'max_husky',
-        username: 'max_trymtube',
-        display_name: 'Max-Husky',
-        discord_id: '694296582455165069',
-        pfp: 'assets/userpfp/maxtrymtube.png',
-        role: 'contributor.max_husky.role',
-        description: 'contributor.max_husky.msg',
-        category: 'tester',
-        subcategory: 'early_access'
-    }
-];
-
-const CREDITS_MESSAGES = [
+let CONTRIBUTORS: any[] = [];
+let CREDITS_MESSAGES: string[] = [
     'credits.msg1',
     'credits.msg2',
     'credits.msg3',
@@ -964,6 +879,45 @@ const CREDITS_MESSAGES = [
     'credits.msg6',
     'credits.msg7'
 ];
+const CONTRIBUTORS_REMOTE_URL = 'https://raw.githubusercontent.com/BetterDCS/BMM_Contributors/refs/heads/main/contributors.json';
+const CONTRIBUTORS_LOCAL_FALLBACK = 'assets/contributors.json';
+
+async function fetchContributors() {
+    const applyData = (data: any) => {
+        if (data.contributors) CONTRIBUTORS = data.contributors;
+        else if (Array.isArray(data)) CONTRIBUTORS = data; // Backward compatibility
+
+        if (data.messages && Array.isArray(data.messages)) {
+            CREDITS_MESSAGES = data.messages;
+        }
+    };
+
+    try {
+        console.log("[BMM] Fetching contributors from remote...");
+        const response = await fetch(CONTRIBUTORS_REMOTE_URL, { cache: 'no-cache' });
+        if (response.ok) {
+            const data = await response.json();
+            applyData(data);
+            console.log("[BMM] Successfully loaded remote contributors.");
+            return;
+        }
+    } catch (e) {
+        console.warn("[BMM] Remote contributors fetch failed, using local fallback:", e);
+    }
+
+    try {
+        const response = await fetch(CONTRIBUTORS_LOCAL_FALLBACK);
+        if (response.ok) {
+            const data = await response.json();
+            applyData(data);
+            console.log("[BMM] Successfully loaded local fallback contributors.");
+        }
+    } catch (e) {
+        console.error("[BMM] CRITICAL: Failed to load any contributors:", e);
+    }
+}
+
+// Messages will be updated by fetchContributors()
 
 function initCredits() {
     const marqueeContainer = document.getElementById('credits-marquee-container');
@@ -993,7 +947,7 @@ function initCredits() {
             { id: 'kofi', title: 'credits.sections.kofi' },
             { id: 'testers', title: 'credits.sections.testers' }
         ];
-        
+
         // Subcategory role mapping
         const subcategoryRoleMap: Record<string, string> = {
             'dev': 'credits.subcategory.dev',
@@ -1002,12 +956,12 @@ function initCredits() {
             'ptb': 'credits.subcategory.ptbTester',
             'early_access': 'credits.subcategory.earlyAccessTester'
         };
-        
+
         contributorsGrid.style.display = 'block';
         contributorsGrid.innerHTML = sections.map(section => {
             const members = CONTRIBUTORS.filter(c => (c as any).category === section.id || (section.id === 'testers' && (c as any).category === 'tester'));
             if (members.length === 0) return '';
-            
+
             return `
                 <div class="credits-category-section" style="margin-bottom: 24px;">
                     <div class="credits-category-title" data-i18n="${section.title}" style="margin-bottom:12px; font-size:0.8rem; opacity:0.5; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:6px;">
@@ -1015,20 +969,21 @@ function initCredits() {
                     </div>
                     <div class="sub-contributors-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px;">
                         ${members.map(c => {
-                            const sub = (c as any).subcategory;
-                            // Use custom role if it exists (e.g., "Main Dev / Creator"), otherwise use subcategory mapping
-                            const hasCustomRole = c.role && !c.role.startsWith('credits.subcategory.');
-                            const roleKey = hasCustomRole ? c.role : (sub && subcategoryRoleMap[sub] ? subcategoryRoleMap[sub] : c.role);
-                            return `
+                const sub = (c as any).subcategory;
+                // Check if role is a translation key or a literal string
+                const isKey = c.role && c.role.includes('.');
+                const roleText = isKey ? t(c.role) : c.role;
+
+                return `
                                 <div class="contributor-card glass-card" onclick="openContributorModal('${c.id}')">
                                     <div class="contributor-pfp-box">
                                         <img src="${c.pfp}" class="contributor-pfp" alt="${(c as any).display_name || c.username}">
                                     </div>
                                     <div class="contributor-name">${(c as any).display_name || c.username}</div>
-                                    <div class="contributor-role" data-i18n="${roleKey}">${t(roleKey)}</div>
+                                    <div class="contributor-role" ${isKey ? `data-i18n="${c.role}"` : ''}>${roleText}</div>
                                 </div>
                             `;
-                        }).join('')}
+            }).join('')}
                     </div>
                 </div>
             `;
@@ -1131,11 +1086,13 @@ function initCredits() {
             <img src="${c.pfp}" class="contributor-modal-pfp">
             <div class="contributor-modal-info">
                 <h2>${(c as any).display_name || c.username}</h2>
-                <p data-i18n="${c.role}">${t(c.role)}</p>
+                <p ${c.role && c.role.includes('.') ? `data-i18n="${c.role}"` : ''}>
+                    ${c.role && c.role.includes('.') ? t(c.role) : c.role}
+                </p>
             </div>
         </div>
-        <div class="contributor-modal-bio" data-i18n="${c.description}">
-            ${t(c.description)}
+        <div class="contributor-modal-bio" ${c.description && c.description.includes('.') ? `data-i18n="${c.description}"` : ''}>
+            ${c.description && c.description.includes('.') ? t(c.description) : c.description}
         </div>
         <div class="contributor-modal-links">
             ${c.github ? `
