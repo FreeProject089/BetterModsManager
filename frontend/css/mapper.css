@@ -319,6 +319,7 @@
     padding: 16px;
     border-bottom: 1px solid var(--border-color);
     background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px 12px 0 0;
 }
 
 .panel-title {

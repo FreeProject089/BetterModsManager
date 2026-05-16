@@ -7,7 +7,7 @@ import { showConfirm, copyToClipboard } from './repo.js';
 let currentBans = { banned_ips: [], banned_keys: [] };
 let currentWhitelist = { enabled: false, ips: [], keys: [] };
 export function initRepoAdmin(elements) {
-    const { banListContainer, inputBanSearch, selectBanFilter, modalBans, btnOpenBans, btnUnbanAll, btnExportBans, btnAddManualBan, manualBanIp, manualBanKey, whitelistListContainer, whitelistToggle, whitelistSearch, btnClearWhitelist, modalWhitelist, btnOpenWhitelist, btnAddManualWhitelist, manualWhitelistIp, manualWhitelistKey } = elements;
+    const { banListContainer, inputBanSearch, selectBanFilter, modalBans, btnOpenBans, btnUnbanAll, btnExportBans, btnAddManualBan, manualBanIp, manualBanKey, whitelistListContainer, whitelistToggle, whitelistSearch, btnClearWhitelist, btnExportWhitelist, modalWhitelist, btnOpenWhitelist, whitelistToggleBtn, btnAddManualWhitelist, manualWhitelistIp, manualWhitelistKey } = elements;
     // --- Ban Logic ---
     const renderBanItem = (val, type) => {
         const dataAttr = type === 'IP' ? `data-ip="${escAttr(val)}"` : `data-key="${escAttr(val)}"`;
@@ -18,7 +18,7 @@ export function initRepoAdmin(elements) {
                     <div class="item-type">${type}</div>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <button class="btn btn-ghost btn-xs copy-ban-val" data-val="${escAttr(val)}" style="padding:0; min-width:32px; height:32px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05);">
+                    <button class="btn btn-ghost btn-xs copy-ban-val" data-val="${escAttr(val)}" style="padding:0; min-width:32px; height:32px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>
                     <button class="btn btn-ghost btn-xs btn-unban" ${dataAttr} style="color:var(--danger); font-size:11px; font-weight:800; padding: 0 12px; height:32px; border-radius:10px; background:rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.1);">
@@ -145,7 +145,7 @@ export function initRepoAdmin(elements) {
                     <div class="item-type">${type}</div>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <button class="btn btn-ghost btn-xs copy-whitelist-val" data-val="${escAttr(val)}" style="padding:0; min-width:32px; height:32px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05);">
+                    <button class="btn btn-ghost btn-xs copy-whitelist-val" data-val="${escAttr(val)}" style="padding:0; min-width:32px; height:32px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>
                     <button class="btn btn-ghost btn-xs btn-remove-whitelist" ${dataAttr} style="color:var(--danger); font-size:11px; font-weight:800; padding: 0 12px; height:32px; border-radius:10px; background:rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.1);">
@@ -198,6 +198,14 @@ export function initRepoAdmin(elements) {
     };
     if (whitelistSearch)
         whitelistSearch.oninput = updateWhitelistUI;
+    if (whitelistToggleBtn) {
+        whitelistToggleBtn.addEventListener('click', () => {
+            if (whitelistToggle) {
+                whitelistToggle.checked = !whitelistToggle.checked;
+                whitelistToggle.dispatchEvent(new Event('change'));
+            }
+        });
+    }
     if (whitelistToggle) {
         whitelistToggle.addEventListener('change', async () => {
             try {
@@ -244,6 +252,16 @@ export function initRepoAdmin(elements) {
             catch (e) {
                 toast(String(e), 'error');
             }
+        });
+    }
+    if (btnExportWhitelist) {
+        btnExportWhitelist.addEventListener('click', () => {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentWhitelist, null, 2));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", "bmm_whitelist_export.json");
+            dlAnchorElem.click();
+            toast(t('repo.exportSuccess'), 'success');
         });
     }
     if (btnOpenWhitelist) {
