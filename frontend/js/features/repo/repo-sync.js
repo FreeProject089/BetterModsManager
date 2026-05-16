@@ -55,7 +55,7 @@ export function initRepoSync(elements) {
                     repo = await invoke('fetch_repo_info', { url, creatorId: saltedCreatorId });
                 }
                 if (window.saveClientHistory)
-                    window.saveClientHistory(url);
+                    window.saveClientHistory(url, repo);
                 lastFetchedRepo = repo;
                 const isVerified = await invoke('verify_repo_signature', { repo });
                 syncInfoCard.style.display = 'block';

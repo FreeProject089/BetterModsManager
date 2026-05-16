@@ -200,6 +200,7 @@ export function initRepo() {
         syncTotalSizeEl: document.getElementById('repo-sync-total-size'),
         syncUrlCard: document.getElementById('repo-sync-url-card'),
         syncPathsSection: document.getElementById('repo-sync-paths-section'),
+        btnRepoHistory: document.getElementById('btn-repo-history'),
         // --- Host Server elements ---
         profilesListEl: document.getElementById('repo-export-profiles-list'),
         modpacksListEl: document.getElementById('repo-export-modpacks-list'),
@@ -276,9 +277,7 @@ export function initRepo() {
         // --- History & Previews ---
         hostHistorySelect: document.getElementById('repo-host-history-select'),
         hostHistoryContainer: document.getElementById('repo-host-history-container'),
-        hostMetadataPreview: document.getElementById('repo-host-metadata-preview'),
-        syncHistoryContainer: document.getElementById('repo-sync-history-container'),
-        syncHistoryList: document.getElementById('repo-sync-history-list')
+        hostMetadataPreview: document.getElementById('repo-host-metadata-preview')
     };
     // Initialize Sub-Modules
     initRepoServer(elements);
@@ -327,18 +326,210 @@ export function initRepo() {
         });
     }
     // ── History Helpers ──
-    window.saveClientHistory = (url) => {
+    window.saveClientHistory = (url, repoInfo = null) => {
         try {
-            let urls = JSON.parse(localStorage.getItem('bmm_repo_history_client') || '[]');
-            urls = urls.filter(u => u !== url);
-            urls.unshift(url);
-            if (urls.length > 10)
-                urls.length = 10;
-            localStorage.setItem('bmm_repo_history_client', JSON.stringify(urls));
-            loadRepoHistories();
+            let history = JSON.parse(localStorage.getItem('bmm_repo_history_client') || '[]');
+            history = history.filter(h => h.url !== url);
+            const entry = {
+                url: url,
+                date: new Date().toISOString(),
+                name: repoInfo?.name || '',
+                author: repoInfo?.author || '',
+                game: repoInfo?.game_name || '',
+                description: repoInfo?.description || '',
+                category: repoInfo?.category || 'private'
+            };
+            history.unshift(entry);
+            if (history.length > 20)
+                history.length = 20;
+            localStorage.setItem('bmm_repo_history_client', JSON.stringify(history));
         }
         catch (e) { }
     };
+    // ── Repo History Modal ──
+    const initRepoHistory = () => {
+        const btnHistory = document.getElementById('btn-repo-history');
+        const modal = document.getElementById('modal-repo-history');
+        const historyList = document.getElementById('repo-history-list');
+        const emptyState = document.getElementById('repo-history-empty');
+        const btnClear = document.getElementById('btn-clear-repo-history');
+        const checkRepo = async (url) => {
+            const start = performance.now();
+            try {
+                const target = url.trim().endsWith('repo.json') ? url.trim() : (url.trim().endsWith('/') ? url.trim() + 'repo.json' : url.trim() + '/repo.json');
+                let finalUrl = target;
+                if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+                    finalUrl = 'https://' + finalUrl;
+                }
+                let rawInvoke;
+                if (window.__TAURI__) {
+                    rawInvoke = window.__TAURI__.invoke;
+                }
+                else {
+                    const tauriApi = await import('https://unpkg.com/@tauri-apps/api@1/tauri.js');
+                    rawInvoke = tauriApi.invoke;
+                }
+                await rawInvoke('fetch_repo_info', { url: finalUrl });
+                return Math.round(performance.now() - start);
+            }
+            catch (e) { }
+            return -1;
+        };
+        const renderHistory = () => {
+            try {
+                const history = JSON.parse(localStorage.getItem('bmm_repo_history_client') || '[]');
+                if (history.length === 0) {
+                    historyList.style.display = 'none';
+                    emptyState.style.display = 'block';
+                    return;
+                }
+                historyList.style.display = 'flex';
+                emptyState.style.display = 'none';
+                historyList.innerHTML = history.map((entry, idx) => {
+                    const date = new Date(entry.date);
+                    const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const categoryColor = entry.category === 'official' ? '#2ecc71' : entry.category === 'partner' ? '#bc74ff' : '#fb923c';
+                    const categoryLabel = entry.category === 'official' ? 'Official' : entry.category === 'partner' ? 'Partner' : 'Private';
+                    return `
+                        <div class="repo-history-item" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:12px; display:flex; gap:12px; align-items:flex-start;">
+                            <div style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:rgba(251,146,60,0.1); border-radius:6px; flex-shrink:0;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                            </div>
+                            <div style="flex:1; min-width:0;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                    <span style="font-size:13px; font-weight:600; color:var(--text-primary);">${escHtml(entry.name || 'Unknown')}</span>
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <div style="display:flex; align-items:center; gap:4px;" class="repo-history-ping-container" data-url="${escAttr(entry.url)}">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" class="repo-history-ping-icon">
+                                                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                                            </svg>
+                                            <span style="font-size:10px; color:var(--text-muted); font-weight:600;" class="repo-history-ping-text">Pinging...</span>
+                                        </div>
+                                        <span style="font-size:10px; color:var(--text-muted);">${dateStr}</span>
+                                    </div>
+                                </div>
+                                <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
+                                    <span style="font-size:10px; padding:2px 8px; background:${categoryColor}20; color:${categoryColor}; border-radius:100px; font-weight:600;">${categoryLabel}</span>
+                                    ${entry.game ? `
+                                        <span style="font-size:10px; color:var(--text-muted); display:flex; align-items:center; gap:4px; background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:100px;">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.7;">
+                                                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                                <path d="M8 21h8M12 17v4"/>
+                                            </svg>
+                                            ${escHtml(entry.game)}
+                                        </span>
+                                    ` : ''}
+                                </div>
+                                ${entry.author ? `
+                                    <div style="font-size:11px; color:var(--text-secondary); margin-bottom:4px; display:flex; align-items:center; gap:6px; background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:100px; width:fit-content;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.7;">
+                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                            <circle cx="12" cy="7" r="4"/>
+                                        </svg>
+                                        ${escHtml(entry.author)}
+                                    </div>
+                                ` : ''}
+                                ${entry.description ? `<div style="font-size:11px; color:var(--text-muted); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${escHtml(entry.description)}</div>` : ''}
+                                <div style="margin-top:8px; display:flex; gap:8px;">
+                                    <button class="btn-history-connect" data-url="${escAttr(entry.url)}" style="font-size:11px; padding:4px 12px; background:rgba(59,130,246,0.15); color:var(--accent); border:1px solid rgba(59,130,246,0.3); border-radius:4px; cursor:pointer;">${t('repo.historyConnect')}</button>
+                                    <button class="btn-history-delete" data-idx="${idx}" style="font-size:11px; padding:4px 8px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); border-radius:4px; cursor:pointer;">${t('repo.historyDelete')}</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                historyList.querySelectorAll('.btn-history-connect').forEach(btn => {
+                    btn.onclick = () => {
+                        if (elements.inputSyncUrl)
+                            elements.inputSyncUrl.value = btn.dataset.url;
+                        if (elements.btnFetchInfo)
+                            elements.btnFetchInfo.click();
+                        modal.classList.remove('open');
+                    };
+                });
+                historyList.querySelectorAll('.btn-history-delete').forEach(btn => {
+                    btn.onclick = () => {
+                        const idx = parseInt(btn.dataset.idx);
+                        let history = JSON.parse(localStorage.getItem('bmm_repo_history_client') || '[]');
+                        history.splice(idx, 1);
+                        localStorage.setItem('bmm_repo_history_client', JSON.stringify(history));
+                        renderHistory();
+                    };
+                });
+                // Ping history repos
+                const updateHistoryPings = async () => {
+                    const pingContainers = historyList.querySelectorAll('.repo-history-ping-container');
+                    for (const container of pingContainers) {
+                        const url = container.dataset.url;
+                        if (!url)
+                            continue;
+                        const ping = await checkRepo(url);
+                        const icon = container.querySelector('.repo-history-ping-icon');
+                        const text = container.querySelector('.repo-history-ping-text');
+                        if (ping >= 0) {
+                            const color = ping < 100 ? '#10b981' : ping < 250 ? '#f59e0b' : '#ef4444';
+                            icon.setAttribute('stroke', color);
+                            text.style.color = color;
+                            text.textContent = ping + 'ms';
+                        }
+                        else {
+                            icon.setAttribute('stroke', '#ef4444');
+                            text.style.color = '#ef4444';
+                            text.textContent = 'Offline';
+                        }
+                    }
+                };
+                updateHistoryPings();
+                // Add click handler for manual ping refresh
+                historyList.querySelectorAll('.repo-history-ping-container').forEach(container => {
+                    container.style.cursor = 'pointer';
+                    container.onclick = async () => {
+                        const url = container.dataset.url;
+                        if (!url)
+                            return;
+                        const icon = container.querySelector('.repo-history-ping-icon');
+                        const text = container.querySelector('.repo-history-ping-text');
+                        text.textContent = 'Pinging...';
+                        icon.setAttribute('stroke', 'var(--text-muted)');
+                        text.style.color = 'var(--text-muted)';
+                        const ping = await checkRepo(url);
+                        if (ping >= 0) {
+                            const color = ping < 100 ? '#10b981' : ping < 250 ? '#f59e0b' : '#ef4444';
+                            icon.setAttribute('stroke', color);
+                            text.style.color = color;
+                            text.textContent = ping + 'ms';
+                        }
+                        else {
+                            icon.setAttribute('stroke', '#ef4444');
+                            text.style.color = '#ef4444';
+                            text.textContent = 'Offline';
+                        }
+                    };
+                });
+            }
+            catch (e) {
+                console.error('Error loading repo history:', e);
+            }
+        };
+        if (btnHistory) {
+            btnHistory.onclick = () => {
+                renderHistory();
+                modal.classList.add('open');
+            };
+        }
+        if (btnClear) {
+            btnClear.onclick = () => {
+                if (confirm(t('repo.historyConfirmClear'))) {
+                    localStorage.removeItem('bmm_repo_history_client');
+                    renderHistory();
+                }
+            };
+        }
+    };
+    initRepoHistory();
     // ── Repo Browser ──
     const initRepoBrowser = () => {
         const btnBrowse = document.getElementById('btn-browse-repos');
@@ -570,6 +761,39 @@ export function initRepo() {
                         text.textContent = 'Offline';
                     }
                 }
+                // Add click handler for manual ping refresh
+                listEl.querySelectorAll('.repo-ping-container').forEach(container => {
+                    container.style.cursor = 'pointer';
+                    container.onclick = async (e) => {
+                        e.stopPropagation();
+                        const url = container.dataset.url;
+                        if (!url)
+                            return;
+                        const icon = container.querySelector('.repo-ping-icon');
+                        const text = container.querySelector('.repo-ping-text');
+                        text.textContent = 'Pinging...';
+                        icon.setAttribute('stroke', 'var(--text-muted)');
+                        text.style.color = 'var(--text-muted)';
+                        const ping = await checkRepo(url);
+                        // Store ping data for online filter
+                        repoPingData.set(url, { online: ping >= 0, ping });
+                        if (ping >= 0) {
+                            const color = ping < 100 ? '#10b981' : ping < 250 ? '#f59e0b' : '#ef4444';
+                            icon.setAttribute('stroke', color);
+                            text.style.color = color;
+                            text.textContent = ping + 'ms';
+                        }
+                        else {
+                            icon.setAttribute('stroke', '#ef4444');
+                            text.style.color = '#ef4444';
+                            text.textContent = 'Offline';
+                        }
+                        // Re-render if online filter is active (debounced to avoid infinite loop)
+                        if (onlineFilter?.checked) {
+                            setTimeout(() => renderRepoList(), 100);
+                        }
+                    };
+                });
                 // Re-render if online filter is active (debounced to avoid infinite loop)
                 if (onlineFilter?.checked) {
                     setTimeout(() => renderRepoList(), 100);
@@ -615,55 +839,11 @@ export function initRepo() {
             if (paths.length > 10)
                 paths.length = 10;
             localStorage.setItem('bmm_repo_history_host', JSON.stringify(paths));
-            loadRepoHistories();
+            loadHostHistory();
         }
         catch (e) { }
     };
-    const loadRepoHistories = () => {
-        try {
-            const urls = JSON.parse(localStorage.getItem('bmm_repo_history_client') || '[]');
-            if (elements.syncHistoryContainer && elements.syncHistoryList) {
-                if (urls.length > 0) {
-                    elements.syncHistoryContainer.style.display = 'block';
-                    // Show all items without expand button
-                    elements.syncHistoryList.innerHTML = urls.map((u, idx) => `
-                        <div class="sync-history-item" style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 10px;" data-index="${idx}">
-                            <div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;" title="${escAttr(u)}">
-                                ${escHtml(u)}
-                            </div>
-                            <div style="display:flex;gap:4px;">
-                                <button class="btn btn-secondary btn-sm sync-hist-connect" data-url="${escAttr(u)}" style="padding:2px 8px;font-size:10px;background:rgba(59,130,246,0.15);color:var(--accent);border:none;">
-                                    ${t('repo.connectBtn')}
-                                </button>
-                                <button class="btn btn-secondary btn-sm sync-hist-delete" data-url="${escAttr(u)}" style="padding:2px 6px;background:rgba(231,76,60,0.1);color:#e74c3c;border:none;">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                                </button>
-                            </div>
-                        </div>
-                    `).join('');
-                    elements.syncHistoryList.querySelectorAll('.sync-hist-connect').forEach(btn => {
-                        btn.onclick = () => {
-                            if (elements.inputSyncUrl)
-                                elements.inputSyncUrl.value = btn.dataset.url;
-                            if (elements.btnFetchInfo)
-                                elements.btnFetchInfo.click();
-                        };
-                    });
-                    elements.syncHistoryList.querySelectorAll('.sync-hist-delete').forEach(btn => {
-                        btn.onclick = () => {
-                            let current = JSON.parse(localStorage.getItem('bmm_repo_history_client') || '[]');
-                            current = current.filter(url => url !== btn.dataset.url);
-                            localStorage.setItem('bmm_repo_history_client', JSON.stringify(current));
-                            loadRepoHistories();
-                        };
-                    });
-                }
-                else {
-                    elements.syncHistoryContainer.style.display = 'none';
-                }
-            }
-        }
-        catch (e) { }
+    const loadHostHistory = () => {
         try {
             const paths = JSON.parse(localStorage.getItem('bmm_repo_history_host') || '[]');
             if (elements.hostHistorySelect) {
@@ -680,7 +860,7 @@ export function initRepo() {
         }
         catch (e) { }
     };
-    loadRepoHistories();
+    loadHostHistory();
     const previewHostRepo = async (path) => {
         if (!path) {
             if (elements.hostMetadataPreview)
