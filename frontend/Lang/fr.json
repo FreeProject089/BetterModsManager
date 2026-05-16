@@ -2027,6 +2027,7 @@
   "repo.upnpFail": "UPnP ÉCHEC",
   "repo.upnpOk": "UPnP OK",
   "repo.url": "URL du repo.json",
+  "repo.urlPlaceholder": "https://exemple.com/repo.json",
   "repo.urlCopied": "URL copiée dans le presse-papier",
   "repo.urlCopyError": "Erreur lors de la copie de l'URL",
   "repo.verified": "Vérifié ✔️",

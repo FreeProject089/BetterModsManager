@@ -2009,6 +2009,7 @@
   "repo.upnpFail": "UPnP FAIL",
   "repo.upnpOk": "UPnP OK",
   "repo.url": "repo.json URL",
+  "repo.urlPlaceholder": "https://example.com/repo.json",
   "repo.urlCopied": "URL copied to clipboard",
   "repo.urlCopyError": "Error copying URL",
   "repo.verified": "Verified",
