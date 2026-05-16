@@ -1,10 +1,10 @@
 {
   "lastUpdate": {
-    "en": "April 29th 2026",
-    "fr": "29 Avril 2026"
+    "en": "May 16th 2026",
+    "fr": "16 Mai 2026"
   },
-  "art": 70,
-  "code": 85,
+  "art": 80,
+  "code": 80,
   "categories": [
     {
       "name": {
@@ -18,7 +18,7 @@
             "fr": "Système de Plugins C"
           },
           "status": "progress",
-          "percent": 10
+          "percent": 20
         },
         {
           "label": {
@@ -26,7 +26,7 @@
             "fr": "Interface Commande (CLI)"
           },
           "status": "progress",
-          "percent": 75
+          "percent": 85
         },
         {
           "label": {
@@ -34,7 +34,7 @@
             "fr": "Intégration MCP (Model Context Protocol)"
           },
           "status": "progress",
-          "percent": 90
+          "percent": 95
         },
         {
           "label": {
@@ -42,7 +42,7 @@
             "fr": "Système P2P Sync"
           },
           "status": "progress",
-          "percent": 9
+          "percent": 5
         }
       ]
     },
@@ -58,7 +58,7 @@
             "fr": "Refonte Complète de la Doc"
           },
           "status": "progress",
-          "percent": 50
+          "percent": 70
         },
         {
           "label": {
@@ -66,7 +66,7 @@
             "fr": "Série de Vidéos Tutoriels"
           },
           "status": "progress",
-          "percent": 40
+          "percent": 30
         }
       ]
     },
@@ -82,7 +82,7 @@
             "fr": "Interface Glassmorphism v2"
           },
           "status": "progress",
-          "percent": 40
+          "percent": 70
         },
         {
           "label": {
@@ -90,7 +90,7 @@
             "fr": "Optimisation Performances Rust"
           },
           "status": "progress",
-          "percent": 76
+          "percent": 80
         }
       ]
     }
