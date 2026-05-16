@@ -7,6 +7,7 @@ import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
 import { pickFile, convertFileSrc } from '../../core/api.js';
 import { refreshMods } from '../mods/mods.js';
 import { t, applyTranslations } from '../../core/i18n.js';
+import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 
 window.pendingBgState = { action: null, tmpPath: null }; // Tracks 'apply', 'remove', or null
 let selectedGlobalModIds = new Set();
@@ -437,6 +438,7 @@ async function confirmCreateProfile() {
         const profile = await invoke('create_profile', { payload: { name, gameName, gamePath, modsPath, backupPath, color, icon } });
         document.getElementById('modal-new-profile').classList.remove('open');
         toast(t('prof.created').replace('{name}', profile.name), 'success');
+        dispatchBmmAction(BMM_ACTIONS.PROFILE_CREATED, { profileId: profile.id, name: profile.name });
         await renderProfiles();
         updateProfileChip();
         updateLibraryProfileSelector();

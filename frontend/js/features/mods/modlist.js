@@ -5,6 +5,7 @@
 import { invoke, pickFolder, pickFile, saveFile } from '../../core/api.js';
 import { appState } from '../../core/state.js';
 import { t } from '../../core/i18n.js';
+import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { refreshMods } from './mods.js';
 import { renderProfiles } from '../profiles/profiles.js';
 import { getGithubPat } from '../settings/settings.js';
@@ -37,6 +38,7 @@ export function initModlist() {
         try {
             await invoke('export_modlist', { listName, description, author, outputPath: path });
             toast(t('mm.exportSuccess'), 'success');
+            dispatchBmmAction(BMM_ACTIONS.MODLIST_EXPORTED, { name: listName });
             exportCard.style.display = 'none';
         }
         catch (err) {

@@ -4,6 +4,7 @@ import { invoke, pickFolder, sendOsNotification } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { updateDiscordStatus } from '../settings/settings.js';
 import { t } from '../../core/i18n.js';
+import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { escHtml } from '../../core/utils.js';
 import { refreshMods, closeModDetail } from './mods.js';
 import { setModLoading } from './mods-list.js';
@@ -213,6 +214,7 @@ export async function scanModsFolder() {
       toast(msg, 'success');
       await refreshMods();
     }
+    dispatchBmmAction(BMM_ACTIONS.MODS_SCANNED, { added: result.added, removed: result.removed });
   } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
 }
 
@@ -235,5 +237,6 @@ export async function verifyIntegrity() {
       content.innerHTML = html;
     }
     modal.classList.add('open');
+    dispatchBmmAction(BMM_ACTIONS.INTEGRITY_CHECK);
   } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
 }

@@ -7,6 +7,7 @@ import { toast } from '../../ui/app.js';
 import { updateDiscordStatus } from '../settings/settings.js';
 import { refreshMods, selectMod, closeModDetail } from './mods.js';
 import { escHtml, escAttr, escJs, truncate } from '../../core/utils.js';
+import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
     set(target, prop, value) { appState.set(prop, value); return true; }
@@ -234,6 +235,7 @@ export function createModCard(mod) {
                             sendOsNotification('Better Mod Manager', t('mod.activated', { name: mod.name }));
                     }
                     catch (e) { }
+                    dispatchBmmAction(BMM_ACTIONS.MOD_ACTIVATED, { modId: mod.id, name: mod.name });
                 }
             }
             else {
@@ -267,6 +269,7 @@ export function createModCard(mod) {
                         sendOsNotification('Better Mod Manager', t('mod.deactivated', { name: mod.name }));
                 }
                 catch (e) { }
+                dispatchBmmAction(BMM_ACTIONS.MOD_DEACTIVATED, { modId: mod.id, name: mod.name });
             }
         }
         catch (err) {

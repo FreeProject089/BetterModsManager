@@ -8,6 +8,7 @@
 import { invoke } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
+import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { formatBytes, escHtml } from '../../core/utils.js';
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -385,6 +386,7 @@ async function _openEditor(container, pack) {
             btn.textContent = t('modpack.saving');
             await invoke('save_modpack', { modpack: payload });
             toast(t('modpack.savedOk') || 'Modpack sauvegardé !', 'success');
+            dispatchBmmAction(BMM_ACTIONS.MODPACK_CREATED, { name: payload.name });
             await _loadData();
             _renderModpackList(container);
 

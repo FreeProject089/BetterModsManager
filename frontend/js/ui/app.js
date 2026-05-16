@@ -8,6 +8,7 @@ import { initMods, refreshMods } from '../features/mods/mods.js';
 import { initI18n, applyTranslations, t } from '../core/i18n.js';
 import { initBenchmark } from '../features/bench/benchmark.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
+import { openTutorialHub } from './tutorial-hub.js';
 import { initRepo } from '../features/repo/repo.js';
 import { appState } from '../core/state.js';
 import { initInteractiveDocs, openDiagram } from '../docs/interactive-docs.js';
@@ -529,7 +530,7 @@ async function main() {
     initUpdateNotes();
     initMapper();
     document.getElementById('btn-restart-onboarding')?.addEventListener('click', () => {
-        startOnboarding();
+        openTutorialHub();
     });
     applyTranslations();
     // Call this after translations to ensure it's not overwritten and elements are ready
