@@ -349,8 +349,12 @@ export function initRepo() {
         const listEl = document.getElementById('repo-browser-list');
         const btnRetry = document.getElementById('btn-retry-repo-browser');
         const filterBtns = document.querySelectorAll('.repo-browser-filter');
+        const searchInput = document.getElementById('repo-browser-search');
+        const regionFilter = document.getElementById('repo-browser-region-filter');
+        const onlineFilter = document.getElementById('repo-browser-online-filter');
         let currentFilter = 'all';
         let repoList = [];
+        let repoPingData = new Map();
         const REPO_LIST_URL = 'https://raw.githubusercontent.com/BetterDCS/Better_ModManager_ServerBrowse/main/repos.json';
         const fetchRepoList = async () => {
             loadingEl.style.display = 'block';
@@ -386,9 +390,31 @@ export function initRepo() {
             }
         };
         const renderRepoList = () => {
-            const filtered = currentFilter === 'all'
-                ? repoList
-                : repoList.filter(r => r.category === currentFilter);
+            const searchTerm = searchInput?.value?.toLowerCase() || '';
+            const regionValue = regionFilter?.value || 'all';
+            const onlineOnly = onlineFilter?.checked || false;
+            let filtered = repoList;
+            // Filter by category
+            if (currentFilter !== 'all') {
+                filtered = filtered.filter(r => r.category === currentFilter);
+            }
+            // Filter by search term
+            if (searchTerm) {
+                filtered = filtered.filter(r => r.name?.toLowerCase().includes(searchTerm) ||
+                    r.description?.toLowerCase().includes(searchTerm) ||
+                    r.tags?.some(tag => tag.toLowerCase().includes(searchTerm)));
+            }
+            // Filter by region
+            if (regionValue !== 'all') {
+                filtered = filtered.filter(r => r.region === regionValue);
+            }
+            // Filter by online status
+            if (onlineOnly) {
+                filtered = filtered.filter(r => {
+                    const pingData = repoPingData.get(r.url);
+                    return pingData && pingData.online;
+                });
+            }
             listEl.innerHTML = filtered.map(repo => `
                 <div class="repo-browser-item" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s ease;" data-url="${escAttr(repo.url)}">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
@@ -438,12 +464,29 @@ export function initRepo() {
                             </svg>
                             <span style="font-size:11px; color:var(--text-muted); font-weight:600;" class="repo-ping-text">Pinging...</span>
                         </div>
+                        <div style="display:flex; gap:4px; margin-left:auto;">
+                            ${repo.website_link ? `
+                            <a href="${escAttr(repo.website_link)}" target="_blank" style="width:20px; height:20px; display:flex; align-items:center; justify-content:center; background:rgba(6,182,212,0.15); border:1px solid rgba(6,182,212,0.3); border-radius:4px; text-decoration:none; color:var(--cyan);" >
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <line x1="2" y1="12" x2="22" y2="12"/>
+                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                                </svg>
+                            </a>
+                            ` : ''}
+                            ${repo.discord_link ? `
+                            <a href="${escAttr(repo.discord_link)}" target="_blank" style="width:20px; height:20px; display:flex; align-items:center; justify-content:center; background:rgba(88,101,242,0.15); border:1px solid rgba(88,101,242,0.3); border-radius:4px; text-decoration:none; color:#5865F2;" >
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                                </svg>
+                            </a>
+                            ` : ''}
+                        </div>
                     </div>
                     
-                    ${(repo.changelog_link || repo.website || repo.discord) ? `
-                    <div style="margin-top:12px; display:flex; gap:12px; flex-wrap:wrap;">
-                        ${repo.changelog_link ? `
-                        <a href="${escAttr(repo.changelog_link)}" target="_blank" style="font-size:10px; color:var(--accent); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 8px; background:rgba(59,130,246,0.1); border-radius:4px;">
+                    ${repo.changelog_link ? `
+                    <div style="margin-top:8px;">
+                        <a href="${escAttr(repo.changelog_link)}" target="_blank" style="font-size:10px; color:var(--accent); text-decoration:none; display:flex; align-items:center; gap:4px; padding:3px 8px; background:rgba(59,130,246,0.1); border-radius:4px; width:fit-content;">
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                                 <polyline points="14 2 14 8 20 8"/>
@@ -453,25 +496,6 @@ export function initRepo() {
                             </svg>
                             Changelog
                         </a>
-                        ` : ''}
-                        ${repo.website ? `
-                        <a href="${escAttr(repo.website)}" target="_blank" style="font-size:10px; color:var(--cyan); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 8px; background:rgba(6,182,212,0.1); border-radius:4px;">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"/>
-                                <line x1="2" y1="12" x2="22" y2="12"/>
-                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                            </svg>
-                            Website
-                        </a>
-                        ` : ''}
-                        ${repo.discord ? `
-                        <a href="${escAttr(repo.discord)}" target="_blank" style="font-size:10px; color:#5865F2; text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 8px; background:rgba(88,101,242,0.1); border-radius:4px;">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                            </svg>
-                            Discord
-                        </a>
-                        ` : ''}
                     </div>
                     ` : ''}
                 </div>
@@ -532,6 +556,8 @@ export function initRepo() {
                     const ping = await checkRepo(url);
                     const icon = container.querySelector('.repo-ping-icon');
                     const text = container.querySelector('.repo-ping-text');
+                    // Store ping data for online filter
+                    repoPingData.set(url, { online: ping >= 0, ping });
                     if (ping >= 0) {
                         const color = ping < 100 ? '#10b981' : ping < 250 ? '#f59e0b' : '#ef4444';
                         icon.setAttribute('stroke', color);
@@ -543,6 +569,10 @@ export function initRepo() {
                         text.style.color = '#ef4444';
                         text.textContent = 'Offline';
                     }
+                }
+                // Re-render if online filter is active (debounced to avoid infinite loop)
+                if (onlineFilter?.checked) {
+                    setTimeout(() => renderRepoList(), 100);
                 }
             };
             // Start the background ping task
@@ -565,6 +595,16 @@ export function initRepo() {
                 renderRepoList();
             });
         });
+        // Add event listeners for new filters
+        if (searchInput) {
+            searchInput.addEventListener('input', renderRepoList);
+        }
+        if (regionFilter) {
+            regionFilter.addEventListener('change', renderRepoList);
+        }
+        if (onlineFilter) {
+            onlineFilter.addEventListener('change', renderRepoList);
+        }
     };
     initRepoBrowser();
     const saveHostHistory = (path) => {
@@ -585,11 +625,9 @@ export function initRepo() {
             if (elements.syncHistoryContainer && elements.syncHistoryList) {
                 if (urls.length > 0) {
                     elements.syncHistoryContainer.style.display = 'block';
-                    // Show only first 3 by default, with expand button
-                    const displayUrls = urls.slice(0, 3);
-                    const hasMore = urls.length > 3;
-                    elements.syncHistoryList.innerHTML = displayUrls.map((u, idx) => `
-                        <div class="sync-history-item" style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 10px; ${idx >= 3 ? 'display:none;' : ''}" data-index="${idx}">
+                    // Show all items without expand button
+                    elements.syncHistoryList.innerHTML = urls.map((u, idx) => `
+                        <div class="sync-history-item" style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 10px;" data-index="${idx}">
                             <div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;" title="${escAttr(u)}">
                                 ${escHtml(u)}
                             </div>
@@ -602,11 +640,7 @@ export function initRepo() {
                                 </button>
                             </div>
                         </div>
-                    `).join('') + (hasMore ? `
-                        <button id="sync-history-expand" style="width:100%;padding:6px;font-size:10px;color:var(--text-muted);background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:6px;cursor:pointer;margin-top:4px;">
-                            Show ${urls.length - 3} more...
-                        </button>
-                    ` : '');
+                    `).join('');
                     elements.syncHistoryList.querySelectorAll('.sync-hist-connect').forEach(btn => {
                         btn.onclick = () => {
                             if (elements.inputSyncUrl)
@@ -623,16 +657,6 @@ export function initRepo() {
                             loadRepoHistories();
                         };
                     });
-                    if (hasMore) {
-                        const expandBtn = document.getElementById('sync-history-expand');
-                        if (expandBtn) {
-                            expandBtn.onclick = () => {
-                                const allItems = elements.syncHistoryList.querySelectorAll('.sync-history-item');
-                                allItems.forEach(item => item.style.display = 'flex');
-                                expandBtn.style.display = 'none';
-                            };
-                        }
-                    }
                 }
                 else {
                     elements.syncHistoryContainer.style.display = 'none';

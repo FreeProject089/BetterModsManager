@@ -267,7 +267,7 @@ function renderOnboarding() {
           ${currentStep > 0 ? `<button class="btn btn-secondary onboarding-prev" id="btn-onboarding-prev" style="padding:6px 12px">←</button>` : ''}
           <button class="btn btn-primary onboarding-next" id="btn-onboarding-next">${t('onboard.next')}</button>
           <button class="btn btn-ghost onboarding-skip" id="btn-onboarding-skip">${t('onboard.skip')}</button>
-          ${currentStep === totalSteps - 1 ? `<button class="btn btn-ghost" onclick="window.openDiagram('app-architecture')" style="padding:4px 8px; font-size:16px; margin-left:auto" title="Besoin d'aide technique ?">?</button>` : ''}
+          ${currentStep === totalSteps - 1 ? `<button class="btn btn-ghost" onclick="window.openDiagram('code-stack')" style="padding:4px 8px; font-size:16px; margin-left:auto" title="Besoin d'aide technique ?">?</button>` : ''}
         </div>
       </div>
     </div>

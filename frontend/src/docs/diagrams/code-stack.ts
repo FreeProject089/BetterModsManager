@@ -2,36 +2,43 @@ export const codeStack = {
     titleKey: 'docs.diagram.codeStack.title',
     definition: `
 flowchart TD
-    LEGACY["<div class='node-content'><i class='icon-trash'></i> {{docs.diagram.codeStack.node.LEGACY}}</div>"]
-    MIGRATION["<div class='node-content'><i class='icon-arrow-right'></i> {{docs.diagram.codeStack.node.MIGRATION}}</div>"]
-    
-    subgraph MODERN ["Modern Architecture (v0.9+)"]
+    subgraph FRONTEND ["FRONTEND LAYER"]
+        UI["<div class='node-content'><i class='icon-layout'></i> {{docs.diagram.codeStack.node.UI}}</div>"]
         TS["<div class='node-content'><i class='icon-code'></i> {{docs.diagram.codeStack.node.TS}}</div>"]
-        ESM["<div class='node-content'><i class='icon-flow'></i> {{docs.diagram.codeStack.node.ESM}}</div>"]
-        IMPORT["<div class='node-content'><i class='icon-link'></i> {{docs.diagram.codeStack.node.IMPORT}}</div>"]
-    end
-    
-    subgraph COMPILE ["Build Pipeline"]
         TSC["<div class='node-content'><i class='icon-command'></i> {{docs.diagram.codeStack.node.TSC}}</div>"]
-        JS_OUT["<div class='node-content'><i class='icon-file-text'></i> {{docs.diagram.codeStack.node.JS_OUT}}</div>"]
+        BRIDGE["<div class='node-content'><i class='icon-message'></i> {{docs.diagram.codeStack.node.BRIDGE}}</div>"]
     end
     
-    LEGACY --> MIGRATION
-    MIGRATION --> TS
-    TS --> ESM
-    ESM --> IMPORT
+    subgraph BACKEND ["BACKEND LAYER (Rust)"]
+        CORE["<div class='node-content'><i class='icon-build'></i> {{docs.diagram.codeStack.node.CORE}}</div>"]
+        TOKIO["<div class='node-content'><i class='icon-flow'></i> {{docs.diagram.codeStack.node.TOKIO}}</div>"]
+        WARP["<div class='node-content'><i class='icon-network'></i> {{docs.diagram.codeStack.node.WARP}}</div>"]
+        REQWEST["<div class='node-content'><i class='icon-globe'></i> {{docs.diagram.codeStack.node.REQWEST}}</div>"]
+    end
+    
+    subgraph STORAGE ["DATA LAYER"]
+        SQLITE["<div class='node-content'><i class='icon-database'></i> {{docs.diagram.codeStack.node.SQLITE}}</div>"]
+        FS["<div class='node-content'><i class='icon-folder'></i> {{docs.diagram.codeStack.node.FS}}</div>"]
+    end
+    
+    UI --> TS
     TS --> TSC
-    TSC --> JS_OUT
-    JS_OUT -- Import --> IMPORT
+    TSC --> BRIDGE
+    BRIDGE -- IPC --> CORE
+    CORE --> TOKIO
+    TOKIO -- Async I/O --> FS
+    TOKIO -- HTTP --> WARP
+    TOKIO -- Client --> REQWEST
+    CORE --> SQLITE
     
     %% Styles
-    classDef legacy fill:#ef44441A,stroke:#ef4444,color:#ef4444;
-    classDef modern fill:#3b82f61A,stroke:#3b82f6,color:#3b82f6;
-    classDef compile fill:#a855f71A,stroke:#a855f7,color:#a855f7;
+    classDef frontend fill:#f59e0b1A,stroke:#f59e0b,color:#f59e0b;
+    classDef backend fill:#3b82f61A,stroke:#3b82f6,color:#3b82f6;
+    classDef storage fill:#22c55e1A,stroke:#22c55e,color:#22c55e;
     
-    class LEGACY,MIGRATION legacy;
-    class TS,ESM,IMPORT modern;
-    class TSC,JS_OUT compile;
+    class UI,TS,TSC,BRIDGE frontend;
+    class CORE,TOKIO,WARP,REQWEST backend;
+    class SQLITE,FS storage;
 `,
     explanationPrefix: 'docs.diagram.codeStack.node.'
 };

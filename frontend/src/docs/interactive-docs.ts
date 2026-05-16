@@ -7,7 +7,6 @@ import { conflictManagement } from './diagrams/conflict-management.js';
 import { appUpdate } from './diagrams/app-update.js';
 import { modImport } from './diagrams/mod-import.js';
 import { backupSystem } from './diagrams/backup-system.js';
-import { appArchitecture } from './diagrams/app-architecture.js';
 import { perfMonitoring } from './diagrams/perf-monitoring.js';
 import { serverMode } from './diagrams/server-mode.js';
 import { profileCustomization } from './diagrams/profile-customization.js';
@@ -35,6 +34,8 @@ import { betahubReporting } from './diagrams/betahub-reporting.js';
 import { modpackFlow } from './diagrams/modpack-flow.js';
 import { securitySystem } from './diagrams/security-system.js';
 import { modMapper } from './diagrams/mod-mapper.js';
+import { launchPacks } from './diagrams/launch-packs.js';
+import { mcpServer } from './diagrams/mcp-server.js';
 
 
 // Diagram Registry
@@ -46,7 +47,6 @@ export const diagrams = {
     'app-update': appUpdate,
     'mod-import': modImport,
     'backup-system': backupSystem,
-    'app-architecture': appArchitecture,
     'perf-monitoring': perfMonitoring,
     'server-mode': serverMode,
     'profile-customization': profileCustomization,
@@ -67,12 +67,15 @@ export const diagrams = {
     'engine-threads': engineThreads,
     'code-stack': codeStack,
     'semantic-search': semanticSearch,
+    'integrity-engine': integrityEngine,
     'mtime-cache': mtimeCache,
     'premium-interactions': premiumInteractions,
     'betahub-reporting': betahubReporting,
     'modpack-flow': modpackFlow,
     'security-system': securitySystem,
-    'mod-mapper': modMapper
+    'mod-mapper': modMapper,
+    'launch-packs': launchPacks,
+    'mcp-server': mcpServer,
 };
 
 
