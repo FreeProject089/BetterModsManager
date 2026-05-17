@@ -286,6 +286,9 @@ export function initRepo() {
         btnPickMiniFolder: document.getElementById('btn-pick-mini-folder'),
         inputMiniRepoPath: document.getElementById('repo-mini-server-json-path'),
         cbAutoStart: document.getElementById('repo-mini-server-autostart'),
+        cbDocker: document.getElementById('repo-mini-server-docker'),
+        dockerOptions: document.getElementById('repo-mini-server-docker-options'),
+        dockerHostSelect: document.getElementById('repo-mini-server-docker-host'),
 
         // --- Distribution ZIP ---
         cbZipEnable: document.getElementById('repo-export-zip-enable'),
@@ -296,6 +299,9 @@ export function initRepo() {
         selectZipVersion: document.getElementById('repo-export-server-version'),
         cbZipCloudflare: document.getElementById('repo-export-server-cloudflare'),
         cbZipUpnp: document.getElementById('repo-export-server-upnp'),
+        cbZipDocker: document.getElementById('repo-export-server-docker'),
+        zipDockerOptions: document.getElementById('repo-export-server-docker-options'),
+        zipDockerHostSelect: document.getElementById('repo-export-server-docker-host'),
         btnToggleZipPass: document.getElementById('toggle-repo-export-pass'),
 
         // --- History & Previews ---
@@ -1081,7 +1087,9 @@ export function initRepo() {
                         admin_password: elements.inputZipPass.value || "admin",
                         server_version: parseInt(elements.selectZipVersion.value) || 2,
                         use_cloudflare: elements.cbZipCloudflare.checked,
-                        use_upnp: elements.cbZipUpnp.checked
+                        use_upnp: elements.cbZipUpnp.checked,
+                        enable_docker: elements.cbZipDocker ? elements.cbZipDocker.checked : false,
+                        docker_host_type: elements.zipDockerHostSelect ? elements.zipDockerHostSelect.value : "linux"
                     };
                 }
 
@@ -1138,9 +1146,18 @@ export function initRepo() {
         elements.btnToggleZipPass.addEventListener('click', () => {
             const isPass = elements.inputZipPass.type === 'password';
             elements.inputZipPass.type = isPass ? 'text' : 'password';
-            elements.btnToggleZipPass.innerHTML = isPass 
+            elements.btnToggleZipPass.innerHTML = isPass
                 ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>'
                 : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+        });
+    }
+
+    // ZIP Docker toggle
+    if (elements.cbZipDocker) {
+        elements.cbZipDocker.addEventListener('change', () => {
+            if (elements.zipDockerOptions) {
+                elements.zipDockerOptions.style.display = elements.cbZipDocker.checked ? 'block' : 'none';
+            }
         });
     }
 

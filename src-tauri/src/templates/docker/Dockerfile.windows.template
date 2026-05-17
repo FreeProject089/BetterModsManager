@@ -1,0 +1,23 @@
+# BMM Repository Server - Docker Image (Windows)
+FROM mcr.microsoft.com/windows/nanoserver:ltsc2022
+
+# Create app directory
+WORKDIR /app
+
+# Copy repository files
+COPY mods/ ./mods/
+COPY repo.json ./
+COPY Info.json ./
+
+# Copy server script (Windows batch file)
+COPY BMM-Standalone-Server.bat ./server.bat
+
+# Expose default port (can be overridden)
+EXPOSE PORT_PLACEHOLDER
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD powershell -Command "try { (Invoke-WebRequest -Uri 'http://localhost:PORT_PLACEHOLDER/repo.json' -UseBasicParsing).StatusCode -eq 200 } catch { $false }"
+
+# Start the server
+CMD ["cmd", "/c", "server.bat"]

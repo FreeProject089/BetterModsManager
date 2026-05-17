@@ -1,0 +1,40 @@
+# BMM Repository Server - Docker Image (Linux)
+FROM node:20-alpine
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Create app directory
+WORKDIR /app
+
+# Copy repository files
+COPY mods/ ./mods/
+COPY repo.json ./
+COPY Info.json ./
+
+# Copy server script
+COPY BMM-Standalone-Server.sh ./server.sh
+RUN chmod +x ./server.sh
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S bmm && \
+    adduser -S bmm -u 1001 -G bmm
+
+# Change ownership
+RUN chown -R bmm:bmm /app
+
+# Switch to non-root user
+USER bmm
+
+# Expose default port (can be overridden)
+EXPOSE PORT_PLACEHOLDER
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:PORT_PLACEHOLDER/repo.json', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) })"
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the server
+CMD ["sh", "./server.sh"]

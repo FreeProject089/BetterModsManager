@@ -42,6 +42,8 @@ pub struct MiniServerExportOptions {
     pub server_version: u8,
     pub use_cloudflare: bool,
     pub use_upnp: bool,
+    pub enable_docker: Option<bool>,
+    pub docker_host_type: Option<String>,
 }
 
 const CHUNK_SIZE: usize = 4 * 1024 * 1024; // 4MB
@@ -428,6 +430,8 @@ pub async fn export_server_repo(
     // 13. Generate Mini Server if requested
     if let Some(opt) = server_options {
         println!("[REPO] Generating integrated mini-server...");
+        let enable_docker = opt.enable_docker.unwrap_or(false);
+        let docker_host_type = opt.docker_host_type.unwrap_or_else(|| "linux".to_string());
         generate_mini_server_files(
             &handle,
             &output_path,
@@ -438,7 +442,9 @@ pub async fn export_server_repo(
             "en",
             opt.upload_limit,
             opt.server_version,
-            &opt.admin_password
+            &opt.admin_password,
+            enable_docker,
+            &docker_host_type
         )?;
     }
 
@@ -536,6 +542,8 @@ fn generate_mini_server_files(
     upload_limit: u32,
     server_version: u8,
     admin_password: &str,
+    enable_docker: bool,
+    docker_host_type: &str,
 ) -> Result<(), String> {
     // 1. Get custom cloudflared path or "AUTO"
     let state = handle.state::<crate::state::AppState>();
@@ -593,7 +601,30 @@ fn generate_mini_server_files(
         }
     }
 
-    // 6. Auto-start logic
+    // 6. Generate Docker files if enabled
+    if enable_docker {
+        let dockerfile_content = if docker_host_type == "windows" {
+            include_str!("../templates/docker/Dockerfile.windows.template")
+        } else {
+            include_str!("../templates/docker/Dockerfile.linux.template")
+        };
+
+        let dockerfile_path = output_path.join("Dockerfile");
+        let mut dockerfile_content = dockerfile_content.replace("PORT_PLACEHOLDER", &port.to_string());
+        dockerfile_content = dockerfile_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+        fs::write(&dockerfile_path, dockerfile_content).map_err(|_| "repo.errWriteDockerfile".to_string())?;
+
+        // Generate docker-compose.yml
+        let compose_template = include_str!("../templates/docker/docker-compose.yml.template");
+        let mut compose_content = compose_template.replace("PORT_PLACEHOLDER", &port.to_string());
+        compose_content = compose_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+        let compose_path = output_path.join("docker-compose.yml");
+        fs::write(&compose_path, compose_content).map_err(|_| "repo.errWriteCompose".to_string())?;
+
+        println!("[DOCKER] Docker files generated at: {:?}, {:?}", dockerfile_path, compose_path);
+    }
+
+    // 7. Auto-start logic
     if auto_start {
         #[cfg(target_os = "windows")]
         {
@@ -649,6 +680,8 @@ pub struct StandaloneServerConfig {
     pub upload_limit: u32,
     pub server_version: Option<u8>,
     pub admin_password: Option<String>,
+    pub enable_docker: Option<bool>,
+    pub docker_host_type: Option<String>,
 }
 
 #[tauri::command]
@@ -666,6 +699,8 @@ pub async fn generate_standalone_server(
         upload_limit,
         server_version,
         admin_password,
+        enable_docker,
+        docker_host_type,
     } = payload;
     let mut repo_json = PathBuf::from(&repo_path);
     
@@ -682,7 +717,9 @@ pub async fn generate_standalone_server(
 
     let version = server_version.unwrap_or(1);
     let pw = admin_password.unwrap_or_else(|| "admin".to_string());
-    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang, upload_limit, version, &pw)
+    let enable_docker = enable_docker.unwrap_or(false);
+    let docker_host_type = docker_host_type.unwrap_or_else(|| "linux".to_string());
+    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang, upload_limit, version, &pw, enable_docker, &docker_host_type)
 }
 
 #[tauri::command]

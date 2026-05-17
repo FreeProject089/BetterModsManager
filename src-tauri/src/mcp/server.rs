@@ -396,7 +396,9 @@ impl ServerHandler for BmmMcpServer {
                         "use_upnp": { "type": "boolean" },
                         "upload_limit": { "type": "integer" },
                         "server_version": { "type": "integer" },
-                        "admin_password": { "type": "string" }
+                        "admin_password": { "type": "string" },
+                        "enable_docker": { "type": "boolean" },
+                        "docker_host_type": { "type": "string" }
                     },
                     "required": ["repo_path", "port", "auto_start", "use_cloudflare", "use_upnp", "upload_limit", "server_version", "admin_password"]
                 })).unwrap()),
@@ -578,9 +580,11 @@ impl ServerHandler for BmmMcpServer {
             let upload_limit = args.get("upload_limit").and_then(|v| v.as_u64()).map(|n| n as u32).unwrap_or(0);
             let server_version = args.get("server_version").and_then(|v| v.as_u64()).map(|n| n as u8).unwrap_or(2);
             let admin_password = args.get("admin_password").and_then(|v| v.as_str()).unwrap_or("admin");
+            let enable_docker = args.get("enable_docker").and_then(|v| v.as_bool()).unwrap_or(false);
+            let docker_host_type = args.get("docker_host_type").and_then(|v| v.as_str()).unwrap_or("linux");
 
             match mods::generate_lightweight_server(
-                repo_path, port, auto_start, use_cloudflare, use_upnp, upload_limit, server_version, admin_password
+                repo_path, port, auto_start, use_cloudflare, use_upnp, upload_limit, server_version, admin_password, enable_docker, docker_host_type
             ) {
                 Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
                 Err(e) => err_result(&e),

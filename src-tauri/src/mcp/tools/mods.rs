@@ -497,8 +497,10 @@ pub fn generate_lightweight_server(
     upload_limit: u32,
     server_version: u8,
     admin_password: &str,
+    enable_docker: bool,
+    docker_host_type: &str,
 ) -> Result<String, String> {
     state_bridge::generate_lightweight_server(
-        repo_path, port, auto_start, use_cloudflare, use_upnp, upload_limit, server_version, admin_password
+        repo_path, port, auto_start, use_cloudflare, use_upnp, upload_limit, server_version, admin_password, enable_docker, docker_host_type
     ).map_err(|e| e.to_string())
 }

@@ -744,6 +744,7 @@
   "repo.miniServerTitle": "Standalone Server (Lightweight)",
   "repo.miniServerUseCloudflare": "Use Cloudflare Tunnel (Public URL)",
   "repo.miniServerUseUPnP": "Auto Port Forwarding (UPnP)",
+  "repo.miniServerDocker": "Docker Support",
   "repo.miniServerVersion": "Version",
   "repo.modeInfo": "This mode works like a traditional web server: you export your profiles to a folder, then host it from your PC or a VPS. Your friends enter the URL to automatically download and sync mods.",
   "repo.monAction": "Action",

@@ -1016,6 +1016,19 @@
                                                 <span class="checkmark" style="height:14px; width:14px;"></span>
                                                 <span data-i18n="repo.enableUPnP">Enable UPnP Auto-Mapping</span>
                                             </label>
+                                            <div style="border-top:1px solid rgba(255,255,255,0.1); margin:6px 0;"></div>
+                                            <label class="checkbox-container" style="font-size: 11px;">
+                                                <input type="checkbox" id="repo-export-server-docker" />
+                                                <span class="checkmark" style="height:14px; width:14px;"></span>
+                                                <span data-i18n="repo.miniServerDocker">Docker Support</span>
+                                            </label>
+                                            <div id="repo-export-server-docker-options" style="display:none; margin-top:6px; margin-left:20px;">
+                                                <select id="repo-export-server-docker-host" class="form-input"
+                                                    style="width:100%; height:24px; font-size:11px; padding:0 4px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text); font-weight:700; cursor:pointer;">
+                                                    <option value="linux">Linux Host</option>
+                                                    <option value="windows">Windows Host</option>
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1667,6 +1680,19 @@
                                             <input type="checkbox" id="repo-mini-server-upnp" checked style="margin:0;">
                                             <span data-i18n="repo.miniServerUseUPnP">UPnP (Port Forwarding)</span>
                                         </label>
+                                        <div style="border-top:1px solid rgba(255,255,255,0.1); margin:8px 0;"></div>
+                                        <label
+                                            style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary);">
+                                            <input type="checkbox" id="repo-mini-server-docker" style="margin:0;">
+                                            <span data-i18n="repo.miniServerDocker">Docker Support</span>
+                                        </label>
+                                        <div id="repo-mini-server-docker-options" style="display:none; margin-top:8px;">
+                                            <select id="repo-mini-server-docker-host" class="form-input"
+                                                style="width:100%; height:24px; font-size:11px; padding:0 4px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text); font-weight:700; cursor:pointer;">
+                                                <option value="linux">Linux Host</option>
+                                                <option value="windows">Windows Host</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
 

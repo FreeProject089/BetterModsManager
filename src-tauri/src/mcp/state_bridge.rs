@@ -856,6 +856,8 @@ pub fn generate_lightweight_server(
     upload_limit: u32,
     server_version: u8,
     admin_password: &str,
+    enable_docker: bool,
+    docker_host_type: &str,
 ) -> anyhow::Result<String> {
     let output_path = std::path::PathBuf::from(repo_path);
     if !output_path.exists() {
@@ -894,6 +896,30 @@ pub fn generate_lightweight_server(
     }
 
     let mut msg = format!("Standalone Lightweight Server script generated successfully at: {:?}", main_bat_path);
+
+    // Generate Docker files if enabled
+    if enable_docker {
+        let dockerfile_content = if docker_host_type == "windows" {
+            include_str!("../templates/docker/Dockerfile.windows.template")
+        } else {
+            include_str!("../templates/docker/Dockerfile.linux.template")
+        };
+
+        let dockerfile_path = output_path.join("Dockerfile");
+        let mut dockerfile_content = dockerfile_content.replace("PORT_PLACEHOLDER", &port.to_string());
+        dockerfile_content = dockerfile_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+        std::fs::write(&dockerfile_path, dockerfile_content)?;
+
+        // Generate docker-compose.yml
+        let compose_template = include_str!("../templates/docker/docker-compose.yml.template");
+        let mut compose_content = compose_template.replace("PORT_PLACEHOLDER", &port.to_string());
+        compose_content = compose_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+        let compose_path = output_path.join("docker-compose.yml");
+        std::fs::write(&compose_path, compose_content)?;
+
+        msg.push_str(&format!("\n[DOCKER] Docker files generated at: {:?}, {:?}", dockerfile_path, compose_path));
+        msg.push_str(&format!("\n[DOCKER] To run: docker-compose up -d"));
+    }
 
     if auto_start {
         #[cfg(target_os = "windows")]

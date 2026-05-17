@@ -5,7 +5,7 @@ import { t } from '../../core/i18n.js';
 import { copyToClipboard } from './repo.js';
 import { formatBytes } from '../../core/utils.js';
 export function initRepoServer(elements) {
-    const { btnToggleServer, urlContainerServer, urlInputServer, btnCopyUrlServer, serverStatusDot, serverStatusLabel, publicSection, publicUrlInput, btnCopyPublicUrl, upnpBadgeStatus, publicHintBox, repoCreatorIdContainer, repoCreatorIdValue, tunnelSection, tunnelUrlInput, btnCopyTunnelUrl, inputServerPort, inputServerUploadLimit, serverTools, btnGenMiniServer, btnPickMiniRepo, btnPickMiniFolder, inputMiniRepoPath, cbAutoStart, inputMiniServerUploadLimit, inputExportPath, statsContainer, statDls, statBytes } = elements;
+    const { btnToggleServer, urlContainerServer, urlInputServer, btnCopyUrlServer, serverStatusDot, serverStatusLabel, publicSection, publicUrlInput, btnCopyPublicUrl, upnpBadgeStatus, publicHintBox, repoCreatorIdContainer, repoCreatorIdValue, tunnelSection, tunnelUrlInput, btnCopyTunnelUrl, inputServerPort, inputServerUploadLimit, serverTools, btnGenMiniServer, btnPickMiniRepo, btnPickMiniFolder, inputMiniRepoPath, cbAutoStart, cbDocker, dockerOptions, dockerHostSelect, inputMiniServerUploadLimit, inputExportPath, statsContainer, statDls, statBytes } = elements;
     let isServerRunning = false;
     let statsInterval = null;
     /** Cleanup functions for Tauri event listeners */
@@ -317,6 +317,14 @@ export function initRepoServer(elements) {
         if (last)
             inputMiniRepoPath.value = last;
     }
+    // Docker toggle
+    if (cbDocker) {
+        cbDocker.addEventListener('change', () => {
+            if (dockerOptions) {
+                dockerOptions.style.display = cbDocker.checked ? 'block' : 'none';
+            }
+        });
+    }
     const inputVersion = document.getElementById('repo-mini-server-version');
     if (inputVersion) {
         const lastVersion = localStorage.getItem('bmm_last_mini_server_version');
@@ -343,13 +351,15 @@ export function initRepoServer(elements) {
             const serverVersion = parseInt(document.getElementById('repo-mini-server-version')?.value || "1");
             const lang = localStorage.getItem('bmm-lang') || 'en';
             const adminPassword = document.getElementById('repo-mini-server-password')?.value || "admin";
+            const enableDocker = cbDocker ? cbDocker.checked : false;
+            const dockerHostType = dockerHostSelect ? dockerHostSelect.value : "linux";
             try {
                 btnGenMiniServer.disabled = true;
                 const uploadLimit = parseInt(inputMiniServerUploadLimit ? inputMiniServerUploadLimit.value : "0") || 0;
                 localStorage.setItem('bmm_last_mini_server_version', serverVersion.toString());
                 await invoke('generate_standalone_server', {
                     payload: {
-                        repoPath: jsonPath, port, autoStart, useCloudflare, useUpnp, lang, uploadLimit, serverVersion, adminPassword
+                        repoPath: jsonPath, port, autoStart, useCloudflare, useUpnp, lang, uploadLimit, serverVersion, adminPassword, enableDocker, dockerHostType
                     }
                 });
                 toast(t('repo.miniServerSuccess'), "success");
