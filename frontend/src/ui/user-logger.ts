@@ -30,7 +30,7 @@ export function initInteractionLogging(): void {
     }, true);
 
     document.addEventListener('keydown', (e: KeyboardEvent) => {
-        const key = e.key.toLowerCase();
+        const key = e.key?.toLowerCase() || '';
 
         if (e.ctrlKey && e.altKey && key === 'd') {
             e.preventDefault();
