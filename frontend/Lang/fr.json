@@ -1761,7 +1761,7 @@
   "hub.parts": "parties",
   "hub.stepsLabel": "étapes faites",
   "hub.showParts": "Voir les parties...",
-  "hub.footer": "Vous pouvez revenir au hub à tout moment depuis les paramètres.",
+  "hub.footer": "Vous pouvez revenir au hub à tout moment depuis le menu latéral.",
   "hub.step": "Étape {current}/{total}",
   "hub.badge.pending": "Non commencé",
   "hub.badge.complete": "Complété",
@@ -3043,31 +3043,197 @@
   "docs.diagram.launchPacks.title": "Flux d'exécution des Launch Packs",
   "docs.diagram.mcpServer.title": "Architecture du Serveur MCP",
   "_synonyms": {
-    "mod": ["mods", "module", "extension", "plugin", "addon", "modification"],
-    "activation": ["activer", "activation", "installation", "installer", "appliquer", "deployer"],
-    "desactivation": ["desactiver", "desinstallation", "supprimer", "retirer", "enlever", "desactive"],
-    "fichier": ["fichier", "fichiers", "document", "ressource", "element"],
-    "dossier": ["dossier", "repertoire", "chemin", "emplacement", "source"],
-    "copie": ["copier", "sauvegarde", "restaurer", "restauration", "copie"],
-    "synchronisation": ["synchro", "synchronisation", "mise a jour", "appliquer", "actualiser"],
-    "serveur": ["serveur", "depot", "hebergement", "distant", "repository"],
-    "telechargement": ["telecharger", "recuperer", "obtenir", "telechargement"],
-    "performance": ["vitesse", "rapide", "optimisation", "optimiser", "efficacite", "perf"],
-    "disque": ["disque", "stockage", "espace", "memoire", "lecteur"],
-    "conflit": ["conflit", "collision", "ecrasement", "chevauchement", "priorite"],
-    "integrite": ["integrite", "empreinte", "verification", "verifier", "controle", "signature"],
-    "profil": ["profil", "jeu", "environnement", "configuration", "reglage"],
-    "crash": ["plantage", "erreur", "bug", "rapport", "panique", "echec"],
-    "recherche": ["chercher", "trouver", "filtrer", "requete", "recherche"],
-    "import": ["importer", "charger", "ouvrir", "ajouter", "import"],
-    "export": ["exporter", "partager", "sauvegarder", "empaqueter", "export"],
-    "securite": ["securite", "protection", "acces", "access", "permission", "verrou", "bouclier"],
-    "lancement": ["lancement", "demarrer", "lancer", "executer", "ouvrir", "boot"],
-    "mapper": ["carte", "arborescence", "structure", "explorateur", "visuel", "mapper"],
-    "historique": ["historique", "journal", "audit", "trace", "chronologie", "evenements"],
-    "signature": ["empreinte", "signature", "cryptographie", "certificat", "hash"],
-    "modpack": ["pack", "paquet", "collection", "bundle", "snapshot"],
-    "compression": ["zip", "archive", "extraire", "extraction", "compresser"],
-    "automatique": ["auto", "automatique", "automatise", "planifie", "arriere-plan"]
+    "mod": [
+      "mods",
+      "module",
+      "extension",
+      "plugin",
+      "addon",
+      "modification"
+    ],
+    "activation": [
+      "activer",
+      "activation",
+      "installation",
+      "installer",
+      "appliquer",
+      "deployer"
+    ],
+    "desactivation": [
+      "desactiver",
+      "desinstallation",
+      "supprimer",
+      "retirer",
+      "enlever",
+      "desactive"
+    ],
+    "fichier": [
+      "fichier",
+      "fichiers",
+      "document",
+      "ressource",
+      "element"
+    ],
+    "dossier": [
+      "dossier",
+      "repertoire",
+      "chemin",
+      "emplacement",
+      "source"
+    ],
+    "copie": [
+      "copier",
+      "sauvegarde",
+      "restaurer",
+      "restauration",
+      "copie"
+    ],
+    "synchronisation": [
+      "synchro",
+      "synchronisation",
+      "mise a jour",
+      "appliquer",
+      "actualiser"
+    ],
+    "serveur": [
+      "serveur",
+      "depot",
+      "hebergement",
+      "distant",
+      "repository"
+    ],
+    "telechargement": [
+      "telecharger",
+      "recuperer",
+      "obtenir",
+      "telechargement"
+    ],
+    "performance": [
+      "vitesse",
+      "rapide",
+      "optimisation",
+      "optimiser",
+      "efficacite",
+      "perf"
+    ],
+    "disque": [
+      "disque",
+      "stockage",
+      "espace",
+      "memoire",
+      "lecteur"
+    ],
+    "conflit": [
+      "conflit",
+      "collision",
+      "ecrasement",
+      "chevauchement",
+      "priorite"
+    ],
+    "integrite": [
+      "integrite",
+      "empreinte",
+      "verification",
+      "verifier",
+      "controle",
+      "signature"
+    ],
+    "profil": [
+      "profil",
+      "jeu",
+      "environnement",
+      "configuration",
+      "reglage"
+    ],
+    "crash": [
+      "plantage",
+      "erreur",
+      "bug",
+      "rapport",
+      "panique",
+      "echec"
+    ],
+    "recherche": [
+      "chercher",
+      "trouver",
+      "filtrer",
+      "requete",
+      "recherche"
+    ],
+    "import": [
+      "importer",
+      "charger",
+      "ouvrir",
+      "ajouter",
+      "import"
+    ],
+    "export": [
+      "exporter",
+      "partager",
+      "sauvegarder",
+      "empaqueter",
+      "export"
+    ],
+    "securite": [
+      "securite",
+      "protection",
+      "acces",
+      "access",
+      "permission",
+      "verrou",
+      "bouclier"
+    ],
+    "lancement": [
+      "lancement",
+      "demarrer",
+      "lancer",
+      "executer",
+      "ouvrir",
+      "boot"
+    ],
+    "mapper": [
+      "carte",
+      "arborescence",
+      "structure",
+      "explorateur",
+      "visuel",
+      "mapper"
+    ],
+    "historique": [
+      "historique",
+      "journal",
+      "audit",
+      "trace",
+      "chronologie",
+      "evenements"
+    ],
+    "signature": [
+      "empreinte",
+      "signature",
+      "cryptographie",
+      "certificat",
+      "hash"
+    ],
+    "modpack": [
+      "pack",
+      "paquet",
+      "collection",
+      "bundle",
+      "snapshot"
+    ],
+    "compression": [
+      "zip",
+      "archive",
+      "extraire",
+      "extraction",
+      "compresser"
+    ],
+    "automatique": [
+      "auto",
+      "automatique",
+      "automatise",
+      "planifie",
+      "arriere-plan"
+    ]
   }
 }
