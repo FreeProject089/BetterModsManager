@@ -167,6 +167,15 @@ BMM propose une suite d'outils de diagnostic et d'optimisation haut de gamme pou
 
 Transformez BMM en serveur web pour héberger vos mods et permettre la synchronisation intelligente (Smart Sync) basée sur des manifestes SHA-256.
 
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Serveur HTTP intégré** | BMM peut agir comme un serveur web, hébergeant vos profils directement depuis votre PC. |
+| **Manifeste repo.json** | Génération automatique d'un manifeste contenant tous les fichiers, tailles et hachages SHA-256. |
+| **Synchronisation Intelligente** | Les clients comparent leur état local avec le serveur et ne téléchargent que les fichiers manquants ou modifiés. |
+| **Vérification de Sécurité** | Chaque fichier téléchargé est vérifié par rapport à son hachage cryptographique avant l'installation. |
+| **Support Tunnels** | Support intégré pour le partage local (LAN) et public via UPnP ou redirection de port manuelle. |
+| **Browse des serveurs vérifiés** | Le navigateur public de serveurs n'affiche que les dépôts portant un champ `hash` validé dans `repos.json`. Chaque serveur listé affiche un badge vert "Verified". |
+
 ---
 
 ## 17. Suite d'administration serveur (v0.9.8)
@@ -418,7 +427,50 @@ Le Mapper Visuel offre une analyse structurelle approfondie de votre collection 
 
 ---
 
-## 39. Historique des Modifications (v1.0.0)
+## 39. Espace disque par profil (v1.0.0)
+
+Chaque carte de profil affiche l'espace disque total occupé par son dossier de mods.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Chargement asynchrone** | La taille du disque est calculée en arrière-plan après le rendu de la grille de profils, avec un spinner affiché pendant le calcul. |
+| **Affichage formaté** | La taille est affichée en unités lisibles (B, Ko, Mo, Go, To) à côté d'une icône disque sur la carte du profil. |
+| **Propulsé par Rust** | Basé sur une commande Tauri récursive `get_folder_size` qui parcourt l'arborescence sans bloquer l'interface. |
+| **Par profil** | Chaque dossier de mods de profil est mesuré indépendamment. Les profils dont les chemins sont inaccessibles n'affichent rien. |
+
+---
+
+## 40. Annulation de l'export .MM (v1.0.0)
+
+L'opération d'export .MM peut désormais être annulée en cours de progression sans corrompre la sortie ni bloquer l'interface.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Annulation en cours** | Un bouton "Annuler" dans l'overlay de progression appelle la commande Tauri `cancel_export_modlist`. |
+| **Flag AtomicBool** | Un flag dédié `export_cancelled` dans `AppState` est vérifié par la boucle d'export Rust à chaque itération de fichier. |
+| **Remise à zéro propre** | Après l'annulation, l'overlay se ferme, les boutons se réactivent et un toast "Export annulé" s'affiche. |
+| **Sécurité des fichiers partiels** | Le fichier d'export annulé est écarté ; aucun fichier `.mm` incomplet n'est laissé sur le disque. |
+
+---
+
+## 41. Bibliothèque d'icônes de profil étendue (v1.0.0)
+
+Le sélecteur d'icônes de profil propose désormais plus de 110 icônes réparties en 15 catégories thématiques.
+
+| Catégorie | Exemples |
+| :--- | :--- |
+| **Tech** | monitor, server, code, keyboard, mouse, printer, bluetooth, satellite, router, cloud |
+| **Transport** | bus, truck, ship, bicycle, train, helicopter |
+| **Médias** | film, tv, speaker, mic, clapperboard, disc |
+| **Sport** | trophy, medal, dumbbell, bike, swords |
+| **Nature** | tree, leaf, flower, bird, fish, bug |
+| **Lieux** | home, building, flag, castle, tent |
+| **Symboles** | infinity, diamond, hexagon, fingerprint, sparkles, atom, crown, layers |
+| **Outils** | pen, ruler, compass, scissors, book, bookmark, lock, search, filter |
+
+---
+
+## 42. Historique des Modifications (v1.0.0)
 
 Le système d'Historique des Modifications fournit un journal d'audit détaillé de tous les changements apportés aux métadonnées de votre collection de mods.
 

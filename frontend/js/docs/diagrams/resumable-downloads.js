@@ -11,8 +11,8 @@ flowchart TD
     end
     
     STREAM["<div class='node-content'><i class='icon-refresh'></i> {{docs.diagram.resumableDownloads.node.STREAM}}</div>"]
-    VERIFY["<div class='node-content'><i class='icon-check'></i> {{docs.diagram.resumableDownloads.node.VERIFY}}</div>"]
-    DONE["<div class='node-content'><i class='icon-heart'></i> {{docs.diagram.resumableDownloads.node.DONE}}</div>"]
+    VERIFY["<div class='node-content'><i class='icon-search'></i> {{docs.diagram.resumableDownloads.node.VERIFY}}</div>"]
+    DONE["<div class='node-content'><i class='icon-check'></i> {{docs.diagram.resumableDownloads.node.DONE}}</div>"]
     
     START --> CHECK
     CHECK -- "<span class='label-info'>{{docs.diagram.edge.Existing}}</span>" --> PARTIAL

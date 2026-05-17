@@ -69,5 +69,30 @@ Cette version marque la transition vers l'étape 1.0, en se concentrant sur l'ut
 - Élimination de toutes les chaînes codées en dur restantes dans les modules Mapper, Paramètres et Launch Pack.
 - Mise à jour de l'aide i18n du frontend pour supporter l'injection de paramètres et le contenu HTML dynamique dans les chaînes traduites.
 
+## [NOUVEAU] Affichage de l'espace disque par profil
+- Chaque carte de profil affiche désormais l'espace disque total occupé par son dossier de mods (ex: `1,4 Go`), chargé de manière asynchrone en arrière-plan après le rendu de la vue Profils.
+- Un spinner de chargement s'affiche pendant le calcul ; une icône disque accompagne la taille formatée finale.
+- Implémenté via une nouvelle commande Rust `get_folder_size` (parcours récursif de répertoire) enregistrée dans le gestionnaire d'invocation Tauri.
+
+## [CORRIGÉ] Annulation de l'export .MM
+- Le bouton "Annuler" dans l'overlay de progression de l'export annule désormais réellement l'opération d'export en cours.
+- Un champ dédié `export_cancelled: AtomicBool` a été ajouté à `AppState`. La commande Rust `export_modlist` vérifie ce flag à chaque itération de fichier et émet un événement `cancelled: true` lorsqu'il est déclenché.
+- Une commande Tauri séparée `cancel_export_modlist` positionne le flag depuis le frontend.
+- L'interface affiche correctement un toast "Export annulé" et revient à l'état inactif après l'annulation.
+
+## [AMÉLIORÉ] Icônes de profil — Bibliothèque étendue
+- Le sélecteur d'icônes lors de la création et de l'édition d'un profil propose désormais plus de 110 icônes organisées en 15 catégories : Tech, Transport, Médias, Sport, Nature, Lieux, Symboles et plus encore.
+- Nouveaux cas SVG ajoutés dans `getProfileIconSvg` : `code`, `monitor`, `server`, `printer`, `keyboard`, `bluetooth`, `satellite`, `router`, `cloud`, `bus`, `truck`, `ship`, `bicycle`, `train`, `helicopter`, `film`, `tv`, `speaker`, `mic`, `trophy`, `medal`, `dumbbell`, `swords`, `shield-check`, `tree`, `leaf`, `flower`, `bird`, `fish`, `home`, `building`, `flag`, `castle`, `infinity`, `diamond`, `hexagon`, `fingerprint`, `sparkles`, `atom`, `crown` et bien d'autres.
+
+## [NOUVEAU] Help & Other — Documentation Docker
+- Ajout d'une carte de déploiement Docker complète dans l'onglet Avancé : qu'est-ce que Docker, comparaison avantages/inconvénients, exemple `docker-compose.yml`, explication du tunnel ngrok avec diagramme de flux visuel, et blocs de code pour la mise à jour du serveur Docker.
+- Ajout d'une nouvelle section "Docker & Infrastructure" dans la FAQ avec 4 nouvelles entrées : Qu'est-ce que Docker, Qu'est-ce que ngrok, VPS vs. PC à la maison, et Comment mettre à jour un serveur Docker.
+- Ajout d'une entrée FAQ expliquant la nouvelle fonctionnalité d'affichage de l'espace disque par profil.
+- Tout le nouveau contenu est entièrement bilingue (EN/FR) avec les clés i18n ajoutées dans `en.json` et `fr.json`.
+
+## [NOUVEAU] Browse des serveurs — Serveurs vérifiés uniquement
+- Le navigateur de dépôts n'affiche désormais que les serveurs portant un champ `hash` dans `repos.json`, garantissant que seuls les dépôts validés par l'équipe BMM apparaissent dans la liste publique.
+- Un badge vert "Verified" avec une icône de coche est affiché sur chaque carte de serveur listé.
+
 ---
 *La version 1.0.0 représente la consolidation finale de l'ensemble des fonctionnalités de base.*

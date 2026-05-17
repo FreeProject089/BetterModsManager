@@ -93,13 +93,16 @@ export async function toggleAllMods(forcedEnable = null) {
         S.processingMods.add(m.id);
         setModLoading(m.id, true);
     });
-    const btn = document.getElementById('btn-enable-all');
-    const altBtn = document.getElementById('btn-disable-all-alt');
-    const originalHtml = btn.innerHTML;
-    btn.disabled = true;
+    // Use the button that corresponds to the current action as the "active" loading button
+    const btn = document.getElementById(enable ? 'btn-enable-all' : 'btn-disable-all-alt');
+    const altBtn = document.getElementById(enable ? 'btn-disable-all-alt' : 'btn-enable-all');
+    const originalHtml = btn?.innerHTML ?? '';
+    if (btn)
+        btn.disabled = true;
     if (altBtn)
         altBtn.disabled = true;
-    btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${enable ? t('common.enabling') : t('common.disabling')}`;
+    if (btn)
+        btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${enable ? t('common.enabling') : t('common.disabling')}`;
     try {
         await invoke('toggle_all_mods', { enable, bypassSha: false });
         await refreshMods();
@@ -114,10 +117,12 @@ export async function toggleAllMods(forcedEnable = null) {
         await new Promise(r => setTimeout(r, 250));
         targetMods.forEach(m => S.processingMods.delete(m.id));
         S.isGlobalProcessing = false;
-        btn.disabled = false;
+        if (btn)
+            btn.disabled = false;
         if (altBtn)
             altBtn.disabled = false;
-        btn.innerHTML = originalHtml;
+        if (btn)
+            btn.innerHTML = originalHtml;
         await refreshMods();
         await updateDiscordStatus();
     }

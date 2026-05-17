@@ -209,6 +209,7 @@ Server Mode is the premium synchronization system for large-scale mod sharing.
 | **Smart Synchronization** | Clients compare their local state with the server and only download missing or changed files. |
 | **Security Verification** | Every downloaded file is verified against its cryptographic hash before installation. |
 | **Tunneling Support** | Integrated support for local sharing (LAN) and public sharing via UPnP or manual port forwarding. |
+| **Verified Server Browse** | The public server browser only displays repositories carrying a validated `hash` field in `repos.json`. Each listed server shows a green "Verified" badge. |
 
 ---
 
@@ -474,8 +475,8 @@ The Documentation view has been expanded and rebranded as **"Help & Other"** to 
 | Tab | Content |
 | :--- | :--- |
 | **Basic** | Getting started guides, video tutorials, download link types, .MM format, dedicated hosting, mod mapper basics |
-| **Advanced** | Deep-dive technical cards with diagram links: Integrity Engine, I/O Limiter, Conflicts, Performance Monitor, Launch Packs, MCP/CLI, Security System, Crash Reporting, App Updates, BetaHub, Tech Stack |
-| **FAQ** | Frequently asked questions with embedded diagram shortcuts |
+| **Advanced** | Deep-dive technical cards with diagram links: Integrity Engine, I/O Limiter, Conflicts, Performance Monitor, Launch Packs, MCP/CLI, Security System, Crash Reporting, App Updates, BetaHub, Tech Stack, **Docker deployment guide with ngrok tunnel** |
+| **FAQ** | Frequently asked questions with embedded diagram shortcuts — includes Docker & Infrastructure section, VPS vs. home PC, ngrok tunnel, Docker update procedure, and profile disk usage |
 
 ### Dual-Mode Semantic Search
 
@@ -530,7 +531,50 @@ The Visual Mapper provides a deep structural analysis of your mod collection, en
 
 ---
 
-## 39. Updates History (v1.0.0)
+## 39. Profile Disk Usage (v1.0.0)
+
+Each profile card in the Profiles view displays the total disk space consumed by its mod folder.
+
+| Feature | Description |
+| :--- | :--- |
+| **Asynchronous Loading** | Disk size is calculated in the background after the profile grid renders, with a spinner shown during calculation. |
+| **Formatted Display** | Size is displayed in human-readable units (B, KB, MB, GB, TB) next to a database icon on the profile card. |
+| **Rust-Powered** | Backed by a recursive `get_folder_size` Tauri command that walks the directory tree without blocking the UI. |
+| **Per-Profile** | Each profile's mods folder is measured independently. Profiles with inaccessible paths silently show nothing. |
+
+---
+
+## 40. .MM Export Cancellation (v1.0.0)
+
+The .MM export operation can now be cancelled mid-progress without corrupting the output or leaving the UI stuck.
+
+| Feature | Description |
+| :--- | :--- |
+| **In-Progress Cancel** | An "Annuler" button inside the export progress overlay calls the `cancel_export_modlist` Tauri command. |
+| **AtomicBool Flag** | A dedicated `export_cancelled` flag in `AppState` is checked by the Rust export loop on each file iteration. |
+| **Clean State Reset** | After cancellation, the overlay closes, buttons re-enable, and a "Export cancelled" toast is displayed. |
+| **Partial File Safety** | The cancelled export file is discarded; no incomplete `.mm` file is left behind. |
+
+---
+
+## 41. Expanded Profile Icon Library (v1.0.0)
+
+The profile icon picker now offers over 110 icons across 15 thematic categories.
+
+| Category | Examples |
+| :--- | :--- |
+| **Tech** | monitor, server, code, keyboard, mouse, printer, bluetooth, satellite, router, cloud |
+| **Transport** | bus, truck, ship, bicycle, train, helicopter |
+| **Media** | film, tv, speaker, mic, clapperboard, disc |
+| **Sport** | trophy, medal, dumbbell, bike, swords |
+| **Nature** | tree, leaf, flower, bird, fish, bug |
+| **Places** | home, building, flag, castle, tent |
+| **Symbols** | infinity, diamond, hexagon, fingerprint, sparkles, atom, crown, layers |
+| **Tools** | pen, ruler, compass, scissors, book, bookmark, lock, search, filter |
+
+---
+
+## 42. Updates History (v1.0.0)
 
 The Updates History system provides a detailed audit log of all changes made to your mod collection's metadata.
 

@@ -45,6 +45,8 @@ export async function initMods() {
     const scrollContainer = document.querySelector('.content-area'); // Fixed selector typo (Issue 21)
     if (S.isCompact && modlist)
         modlist.classList.add('compact');
+    if (S.isCompact && viewBtn)
+        viewBtn.classList.add('is-compact');
     // React to state changes with debouncing
     let stateChangeTimeout = null;
     const debouncedRender = () => {
@@ -59,6 +61,8 @@ export async function initMods() {
     appState.subscribe('isCompact', (val) => {
         if (modlist)
             modlist.classList.toggle('compact', val);
+        if (viewBtn)
+            viewBtn.classList.toggle('is-compact', val);
         debouncedRender();
     });
     appState.subscribe('currentFilter', debouncedRender);
@@ -67,6 +71,34 @@ export async function initMods() {
         S.isCompact = !S.isCompact;
         localStorage.setItem('bmm-view-compact', S.isCompact);
     });
+    // Mod-action dropdown (enable-all / disable-all)
+    const modActionTrigger = document.getElementById('btn-mod-actions');
+    const modActionMenu = document.getElementById('mod-action-menu');
+    const modActionContainer = document.getElementById('enable-all-container');
+    modActionTrigger?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = modActionMenu?.style.display !== 'none';
+        if (modActionMenu)
+            modActionMenu.style.display = isOpen ? 'none' : 'flex';
+        modActionContainer?.classList.toggle('open', !isOpen);
+    });
+    document.addEventListener('click', (e) => {
+        if (modActionMenu && !modActionContainer?.contains(e.target)) {
+            modActionMenu.style.display = 'none';
+            modActionContainer?.classList.remove('open');
+        }
+    });
+    // Close dropdown after an action is chosen
+    document.getElementById('btn-enable-all')?.addEventListener('click', () => {
+        if (modActionMenu)
+            modActionMenu.style.display = 'none';
+        modActionContainer?.classList.remove('open');
+    }, true);
+    document.getElementById('btn-disable-all-alt')?.addEventListener('click', () => {
+        if (modActionMenu)
+            modActionMenu.style.display = 'none';
+        modActionContainer?.classList.remove('open');
+    }, true);
     if (scrollContainer) {
         let scrollTimeout = null;
         scrollContainer.addEventListener('scroll', () => {

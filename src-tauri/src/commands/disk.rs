@@ -338,6 +338,28 @@ pub fn check_disk_space(path: String) -> Result<DiskSpaceInfo, String> {
         Err(format!("Impossible de trouver le disque pour: {}", path))
     }
 }
+
+/// Recursively sum all file sizes inside a directory (non-blocking, returns bytes).
+#[tauri::command]
+pub fn get_folder_size(path: String) -> u64 {
+    fn recurse(dir: &std::path::Path) -> u64 {
+        let mut total = 0u64;
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                if let Ok(meta) = entry.metadata() {
+                    if meta.is_dir() {
+                        total += recurse(&entry.path());
+                    } else {
+                        total += meta.len();
+                    }
+                }
+            }
+        }
+        total
+    }
+    recurse(std::path::Path::new(&path))
+}
+
 #[tauri::command]
 pub fn read_file_base64(path: String) -> Result<String, String> {
     use base64::{Engine as _, engine::general_purpose};

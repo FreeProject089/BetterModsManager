@@ -78,5 +78,30 @@ This version represents the transition to the 1.0 milestone, focusing on cross-p
 - Eliminated all remaining hardcoded strings in the Mapper, Settings, and Launch Pack modules.
 - Upgraded the frontend i18n helper to support parameter injection and dynamic HTML content within translated strings.
 
+## [NEW] Profile Disk Usage Display
+- Each profile card now shows the total disk space consumed by its mod folder (e.g. `1.4 GB`), loaded asynchronously in the background after the Profiles view renders.
+- A spinning loader is shown during calculation; a database icon accompanies the final formatted size.
+- Implemented via a new Rust command `get_folder_size` (recursive directory walker) registered in the Tauri invoke handler.
+
+## [FIXED] .MM Export Cancellation
+- The "Cancel" button inside the export progress overlay now actually cancels the running export operation.
+- A dedicated `export_cancelled: AtomicBool` field was added to `AppState`. The `export_modlist` Rust command checks this flag on each file iteration and emits a `cancelled: true` event when triggered.
+- A separate `cancel_export_modlist` Tauri command sets the flag from the frontend.
+- The UI correctly shows a "Export cancelled" toast and resets to its idle state after cancellation.
+
+## [IMPROVED] Profile Icons — Expanded Library
+- The icon picker in profile creation and editing now offers 110+ icons organized across 15 categories: Tech, Transport, Media, Sport, Nature, Places, Symbols, and more.
+- New SVG icon cases added to `getProfileIconSvg`: `code`, `monitor`, `server`, `printer`, `keyboard`, `bluetooth`, `satellite`, `router`, `cloud`, `bus`, `truck`, `ship`, `bicycle`, `train`, `helicopter`, `film`, `tv`, `speaker`, `mic`, `trophy`, `medal`, `dumbbell`, `swords`, `shield-check`, `tree`, `leaf`, `flower`, `bird`, `fish`, `home`, `building`, `flag`, `castle`, `infinity`, `diamond`, `hexagon`, `fingerprint`, `sparkles`, `atom`, `crown`, and many more.
+
+## [NEW] Help & Other — Docker Documentation
+- Added a comprehensive Docker deployment card to the Advanced tab: What is Docker, pros/cons comparison, `docker-compose.yml` example, ngrok tunnel explanation with visual flow diagram, and code blocks for updating the Docker server.
+- Added a new "Docker & Infrastructure" section to the FAQ with 4 new entries: What is Docker, What is ngrok, VPS vs. home PC, and How to update a Docker server.
+- Added FAQ entry explaining the new profile disk usage feature.
+- All new content is fully bilingual (EN/FR) with i18n keys added to both `en.json` and `fr.json`.
+
+## [NEW] Server Browse — Verified Servers Only
+- The repo browser now exclusively displays servers that carry a `hash` field in `repos.json`, guaranteeing that only BMM-team-validated repositories appear in the public listing.
+- A green "Verified" badge with a checkmark icon is displayed on every listed server card.
+
 ---
 *Release 1.0.0 represents the final consolidation of the core feature set.*

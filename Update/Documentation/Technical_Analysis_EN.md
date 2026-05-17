@@ -572,5 +572,45 @@ BMM v1.0.0 introduces a persistent tracking system for all mod metadata mutation
 
 ---
 
+## 39. Export Cancellation Architecture (v1.0.0)
+
+BMM implements a cooperative cancellation pattern for the `.MM` export operation.
+
+| Component | Implementation |
+| :--- | :--- |
+| **AtomicBool Flag** | `export_cancelled: Arc<AtomicBool>` added to `AppState`. Reset to `false` at the start of every `export_modlist` invocation. |
+| **Check Point** | The Rust export loop inspects `state.export_cancelled.load(Ordering::SeqCst)` before processing each mod entry. |
+| **Cancel Command** | `cancel_export_modlist` Tauri command sets the flag to `true` via `state.export_cancelled.store(true, Ordering::SeqCst)`. |
+| **Event Protocol** | When the flag is detected, the loop emits `bmm://export-progress` with `cancelled: true`, then returns an `AppError::LockError`. |
+| **Frontend Handling** | The JS `wasCancelled` flag is set on abort button click. The `finally` block checks it to decide between "Export cancelled" and "Export complete" toasts. |
+
+---
+
+## 40. Folder Size Command (v1.0.0)
+
+A dedicated Tauri command provides recursive disk usage measurement for arbitrary directories.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Command** | `get_folder_size(path: String) -> u64` in `commands/disk.rs` |
+| **Algorithm** | Depth-first `std::fs::read_dir` recursion. Each regular file contributes `metadata().len()` bytes. Errors (permissions, broken symlinks) are silently skipped. |
+| **Frontend Usage** | `profiles.js` calls this for each profile's `mods_path` after the card grid renders. Results are formatted via `formatBytes()` and injected into `.profile-disk-usage` spans. |
+| **Performance** | Runs synchronously in the Tauri command thread. For very large libraries (>50 GB), the async IIFE isolates the blocking call, keeping the grid responsive during measurement. |
+
+---
+
+## 41. Server Browse Verification (v1.0.0)
+
+The public repository browser enforces a `hash` field gate.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Gate Filter** | `renderRepoList()` applies `filtered.filter(r => r.hash && r.hash.length > 0)` before all other filters. |
+| **Schema Contract** | `repos.json` entries must carry a `hash` string field (set by the BMM team when validating a server). Entries without it are silently excluded. |
+| **Verified Badge** | Each displayed card renders a green "Verified" badge with a checkmark SVG in the name row. |
+| **Fallback** | If the remote `repos.json` is unreachable, the browser shows its existing error/empty state — no unverified servers leak through. |
+
+---
+
 *Better Mod Manager is developed by FreeProject089 — Engineered for uncompromising performance, file safety, and modern mod management.*
 

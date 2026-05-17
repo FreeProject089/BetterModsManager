@@ -6,6 +6,7 @@ use crate::error::AppError;
 use sha2::{Digest, Sha256};
 use std::io::Read;
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 
 /// Lightweight snapshot of a mod's fields — collected while holding the lock,
 /// then used after releasing it so the heavy file I/O never blocks AppState.
@@ -77,7 +78,19 @@ pub async fn export_modlist(
     modlist.description = Some(description);
     modlist.author = Some(author);
 
+    // Reset the cancel flag before starting
+    state.export_cancelled.store(false, Ordering::SeqCst);
+
     for (i, snap) in snapshots.into_iter().enumerate() {
+        // Check for cancellation before each mod
+        if state.export_cancelled.load(Ordering::SeqCst) {
+            state.export_cancelled.store(false, Ordering::SeqCst);
+            let _ = window.emit("bmm://mm-export-progress", serde_json::json!({
+                "current": i, "total": total, "cancelled": true,
+            }));
+            return Err(AppError::LockError("Export cancelled by user".to_string()));
+        }
+
         let _ = window.emit("bmm://mm-export-progress", serde_json::json!({
             "current": i,
             "total": total,
@@ -114,6 +127,12 @@ pub async fn export_modlist(
         .await
         .map_err(|e| AppError::LockError(e.to_string()))??;
     Ok(())
+}
+
+/// Cancel an in-progress export — sets the atomic flag checked each iteration.
+#[tauri::command]
+pub fn cancel_export_modlist(state: State<'_, AppState>) {
+    state.export_cancelled.store(true, Ordering::SeqCst);
 }
 
 /// Walk a mod folder and record each file's relative path, size, and optional SHA-256.

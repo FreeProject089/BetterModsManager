@@ -629,6 +629,10 @@ export function initRepo() {
 
             let filtered = repoList;
 
+            // Only show repos with a valid verified hash (hash field must be present and non-empty)
+            // This filters out online but invalid servers
+            filtered = filtered.filter(r => r.hash && r.hash.length > 0);
+
             // Filter by category
             if (currentFilter !== 'all') {
                 filtered = filtered.filter(r => r.category === currentFilter);
@@ -636,7 +640,7 @@ export function initRepo() {
 
             // Filter by search term
             if (searchTerm) {
-                filtered = filtered.filter(r => 
+                filtered = filtered.filter(r =>
                     r.name?.toLowerCase().includes(searchTerm) ||
                     r.description?.toLowerCase().includes(searchTerm) ||
                     r.tags?.some(tag => tag.toLowerCase().includes(searchTerm))
@@ -648,7 +652,8 @@ export function initRepo() {
                 filtered = filtered.filter(r => r.region === regionValue);
             }
 
-            // Filter by online status
+            // Filter by online status - only apply if checkbox is checked
+            // Offline servers are still displayed by default
             if (onlineOnly) {
                 filtered = filtered.filter(r => {
                     const pingData = repoPingData.get(r.url);
@@ -663,6 +668,7 @@ export function initRepo() {
                             <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
                                 <span style="font-size:14px; font-weight:700; color:var(--text-primary);">${escHtml(repo.name)}</span>
                                 <span class="repo-badge" style="font-size:9px; font-weight:800; padding:2px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; ${repo.category === 'official' ? 'background:rgba(16,185,129,0.15); color:#10b981;' : 'background:rgba(59,130,246,0.15); color:#3b82f6;'}">${escHtml(repo.category)}</span>
+                                <span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.25); display:flex; align-items:center; gap:3px;" title="Verified server — hash validated by the BMM team"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Verified</span>
                             </div>
                             <p style="font-size:12px; color:var(--text-secondary); margin:0; line-height:1.5;">${escHtml(repo.description || '')}</p>
                         </div>

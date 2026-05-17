@@ -499,5 +499,45 @@ BMM v1.0.0 introduit un système de suivi persistant pour toutes les mutations d
 
 ---
 
+## 39. Architecture d'annulation d'export (v1.0.0)
+
+BMM implémente un pattern d'annulation coopérative pour l'opération d'export `.MM`.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Flag AtomicBool** | `export_cancelled: Arc<AtomicBool>` ajouté à `AppState`. Réinitialisé à `false` au démarrage de chaque invocation de `export_modlist`. |
+| **Point de contrôle** | La boucle d'export Rust inspecte `state.export_cancelled.load(Ordering::SeqCst)` avant de traiter chaque entrée de mod. |
+| **Commande d'annulation** | La commande Tauri `cancel_export_modlist` positionne le flag à `true` via `state.export_cancelled.store(true, Ordering::SeqCst)`. |
+| **Protocole d'événement** | Lorsque le flag est détecté, la boucle émet `bmm://export-progress` avec `cancelled: true`, puis retourne une `AppError::LockError`. |
+| **Gestion Frontend** | Le flag JS `wasCancelled` est positionné lors du clic sur le bouton d'abandon. Le bloc `finally` le vérifie pour décider entre les toasts "Export annulé" et "Export terminé". |
+
+---
+
+## 40. Commande de taille de dossier (v1.0.0)
+
+Une commande Tauri dédiée fournit une mesure récursive de l'utilisation du disque pour des répertoires arbitraires.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Commande** | `get_folder_size(path: String) -> u64` dans `commands/disk.rs` |
+| **Algorithme** | Récursion `std::fs::read_dir` en profondeur d'abord. Chaque fichier régulier contribue `metadata().len()` octets. Les erreurs (permissions, liens symboliques cassés) sont ignorées silencieusement. |
+| **Utilisation Frontend** | `profiles.js` appelle cette fonction pour chaque `mods_path` de profil après le rendu de la grille de cartes. Les résultats sont formatés via `formatBytes()` et injectés dans les spans `.profile-disk-usage`. |
+| **Performance** | S'exécute de manière synchrone dans le thread de commande Tauri. Pour les très grandes bibliothèques (>50 Go), l'IIFE asynchrone isole l'appel bloquant, maintenant la grille réactive pendant la mesure. |
+
+---
+
+## 41. Vérification du Browse de serveurs (v1.0.0)
+
+Le navigateur public de dépôts applique un filtre sur le champ `hash`.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Filtre de porte** | `renderRepoList()` applique `filtered.filter(r => r.hash && r.hash.length > 0)` avant tous les autres filtres. |
+| **Contrat de schéma** | Les entrées de `repos.json` doivent porter un champ `hash` (défini par l'équipe BMM lors de la validation d'un serveur). Les entrées sans ce champ sont exclues silencieusement. |
+| **Badge Vérifié** | Chaque carte affichée rend un badge vert "Verified" avec un SVG de coche dans la ligne du nom. |
+| **Comportement de repli** | Si le `repos.json` distant est inaccessible, le navigateur affiche son état d'erreur/vide habituel — aucun serveur non vérifié ne passe. |
+
+---
+
 *Better Mod Manager est développé par FreeProject089 — Conçu pour une performance sans compromis, la sécurité des fichiers et une gestion moderne des mods.*
 

@@ -27,7 +27,10 @@ export function initModlist() {
         exportCard.style.display = exportCard.style.display === 'none' ? '' : 'none';
         previewCard.style.display = 'none';
     });
-    cancelExport.addEventListener('click', () => { exportCard.style.display = 'none'; });
+    // Top cancel button — only works when export is NOT yet running (form is visible)
+    cancelExport.addEventListener('click', () => {
+        exportCard.style.display = 'none';
+    });
     // Dim the SHA badge when toggle is off
     const hashToggle = document.getElementById('mm-include-hashes');
     const hashesBadge = document.getElementById('mm-hashes-badge');
@@ -35,6 +38,7 @@ export function initModlist() {
         if (hashesBadge)
             hashesBadge.style.opacity = hashToggle.checked ? '1' : '0.3';
     });
+    const abortExportBtn = document.getElementById('btn-abort-export');
     confirmExportBtn.addEventListener('click', async () => {
         const listName = document.getElementById('mm-list-name').value.trim() || 'Ma liste';
         const description = document.getElementById('mm-description').value.trim();
@@ -49,30 +53,12 @@ export function initModlist() {
         const progressLabel = document.getElementById('export-progress-label');
         if (progressOverlay)
             progressOverlay.style.display = '';
+        // Hide the top-level form buttons while export runs so only the in-overlay cancel is shown
+        cancelExport.style.display = 'none';
         confirmExportBtn.disabled = true;
-        let unlisten = null;
-        try {
-            unlisten = await window.__TAURI__.event.listen('bmm://mm-export-progress', (e) => {
-                const { current, total, mod_name, done } = e.payload;
-                const pct = total > 0 ? Math.round((current / total) * 100) : 0;
-                if (progressBar)
-                    progressBar.style.width = pct + '%';
-                if (progressCount)
-                    progressCount.textContent = `${current}/${total}`;
-                if (progressLabel)
-                    progressLabel.textContent = done ? '' : (mod_name || '');
-            });
-            await invoke('export_modlist', { listName, description, author, outputPath: path, includeHashes });
-            toast(t('mm.exportSuccess'), 'success');
-            dispatchBmmAction(BMM_ACTIONS.MODLIST_EXPORTED, { name: listName });
-            exportCard.style.display = 'none';
-        }
-        catch (err) {
-            toast(t('mm.exportError').replace('{err}', err), 'error');
-        }
-        finally {
-            unlisten?.();
+        const resetUI = () => {
             confirmExportBtn.disabled = false;
+            cancelExport.style.display = '';
             if (progressOverlay) {
                 progressOverlay.style.display = 'none';
                 if (progressBar)
@@ -82,6 +68,54 @@ export function initModlist() {
                 if (progressLabel)
                     progressLabel.textContent = '';
             }
+        };
+        let unlisten = null;
+        let wasCancelled = false;
+        // In-overlay abort button calls the Rust cancel command
+        const onAbort = async () => {
+            wasCancelled = true;
+            try {
+                await invoke('cancel_export_modlist');
+            }
+            catch { /* ignore */ }
+        };
+        abortExportBtn?.addEventListener('click', onAbort, { once: true });
+        try {
+            unlisten = await window.__TAURI__.event.listen('bmm://mm-export-progress', (e) => {
+                const { current, total, mod_name, done, cancelled } = e.payload;
+                if (cancelled) {
+                    wasCancelled = true;
+                    return;
+                }
+                const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+                if (progressBar)
+                    progressBar.style.width = pct + '%';
+                if (progressCount)
+                    progressCount.textContent = `${current}/${total}`;
+                if (progressLabel)
+                    progressLabel.textContent = done ? '' : (mod_name || '');
+            });
+            await invoke('export_modlist', { listName, description, author, outputPath: path, includeHashes });
+            if (wasCancelled) {
+                toast(t('mm.exportCancelled') || 'Export annulé', 'info');
+            }
+            else {
+                toast(t('mm.exportSuccess'), 'success');
+                dispatchBmmAction(BMM_ACTIONS.MODLIST_EXPORTED, { name: listName });
+                exportCard.style.display = 'none';
+            }
+        }
+        catch (err) {
+            if (wasCancelled) {
+                toast(t('mm.exportCancelled') || 'Export annulé', 'info');
+            }
+            else {
+                toast(t('mm.exportError').replace('{err}', err), 'error');
+            }
+        }
+        finally {
+            unlisten?.();
+            resetUI();
         }
     });
     importBtn.addEventListener('click', async () => {

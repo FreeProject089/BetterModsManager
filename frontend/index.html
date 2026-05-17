@@ -348,21 +348,30 @@
                                 </svg>
                                 <span data-i18n="modpack.quickApplyTitle">Activer un Modpack</span>
                             </button>
-                            <div class="split-btn-group" id="enable-all-container">
-                                <button class="btn btn-primary btn-split-main" id="btn-enable-all">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2.2">
-                                        <path d="m5 12 5 5L20 7" />
-                                        <circle cx="12" cy="12" r="10" />
+                            <div class="mod-action-dropdown" id="enable-all-container">
+                                <button class="btn btn-secondary mod-action-dropdown-trigger" id="btn-mod-actions">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.5" stroke-linecap="round">
+                                        <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/>
+                                        <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+                                        <circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/>
                                     </svg>
-                                    <span data-i18n="lib.enableAll">Tout activer</span>
+                                    <svg class="mod-action-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 12 15 18 9"/>
+                                    </svg>
                                 </button>
-                                <div class="split-btn-dropdown">
-                                    <button class="btn btn-ghost btn-split-alt" id="btn-disable-all-alt">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2.2">
-                                            <path d="M18 6L6 18M6 6l12 12" />
-                                            <circle cx="12" cy="12" r="10" />
+                                <div class="mod-action-dropdown-menu" id="mod-action-menu" style="display:none;">
+                                    <button class="mod-action-item" id="btn-enable-all">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                            <path d="m5 12 5 5L20 7"/>
+                                            <circle cx="12" cy="12" r="10"/>
+                                        </svg>
+                                        <span data-i18n="lib.enableAll">Tout activer</span>
+                                    </button>
+                                    <button class="mod-action-item mod-action-item--danger" id="btn-disable-all-alt">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                            <path d="M18 6L6 18M6 6l12 12"/>
+                                            <circle cx="12" cy="12" r="10"/>
                                         </svg>
                                         <span data-i18n="lib.disableAll">Tout désactiver</span>
                                     </button>
@@ -385,15 +394,14 @@
                                     style="width:100%;min-width:140px;" data-i18n-placeholder="lib.search" />
                             </div>
                             <div class="filter-buttons">
-                                <button id="btn-view-mode" class="btn btn-icon btn-ghost"
+                                <button id="btn-view-mode" class="btn btn-icon btn-ghost btn-compact-toggle"
                                     onmouseenter="window.showTaskyHelp('lib.toggleViewTip', 'icon-layers')"
                                     onmouseleave="window.hideTaskyHelp()">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                                        <line x1="3" y1="9" x2="21" y2="9" />
-                                        <line x1="3" y1="15" x2="21" y2="15" />
-                                        <line x1="9" y1="3" x2="9" y2="21" />
+                                        stroke-width="2.5" stroke-linecap="round">
+                                        <line x1="3" y1="6" x2="21" y2="6" />
+                                        <line x1="3" y1="12" x2="21" y2="12" />
+                                        <line x1="3" y1="18" x2="21" y2="18" />
                                     </svg>
                                 </button>
                                 <button class="filter-btn active" data-filter="all"
@@ -802,7 +810,8 @@
                             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 1s linear infinite;flex-shrink:0"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                                 <span style="font-size:12px;font-weight:700;color:var(--text-primary)" data-i18n="mm.exportProcessing">Building mod list...</span>
-                                <span id="export-progress-count" style="margin-left:auto;font-size:10px;font-family:var(--font-mono);color:var(--accent)"></span>
+                                <span id="export-progress-count" style="font-size:10px;font-family:var(--font-mono);color:var(--accent)"></span>
+                                <button id="btn-abort-export" class="btn btn-danger btn-xs" style="margin-left:auto;font-size:10px;padding:2px 10px;border-radius:6px;" data-i18n="common.cancel">Annuler</button>
                             </div>
                             <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden">
                                 <div id="export-progress-bar" style="height:100%;background:var(--accent);width:0%;transition:width 0.25s ease;box-shadow:0 0 8px var(--accent)"></div>
@@ -3329,6 +3338,126 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- ═══════════════════════════════════════════════════ -->
+                            <!-- DOCKER DOCUMENTATION -->
+                            <!-- ═══════════════════════════════════════════════════ -->
+                            <div id="docker-doc-card" style="background:rgba(6,182,212,0.04);border:1px solid rgba(6,182,212,0.18);border-radius:14px;padding:20px 24px;margin-top:8px">
+                                <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+                                    <div style="background:rgba(6,182,212,0.12);border:1px solid rgba(6,182,212,0.25);border-radius:10px;padding:10px;display:flex;align-items:center;justify-content:center">
+                                        <!-- Docker logo icon (whale) -->
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.8">
+                                            <rect x="2" y="10" width="3" height="3" rx="0.5"/>
+                                            <rect x="6" y="10" width="3" height="3" rx="0.5"/>
+                                            <rect x="10" y="10" width="3" height="3" rx="0.5"/>
+                                            <rect x="6" y="6" width="3" height="3" rx="0.5"/>
+                                            <rect x="10" y="6" width="3" height="3" rx="0.5"/>
+                                            <path d="M14 13c0 3-2.5 5-7 5H4a2 2 0 0 1-2-2v-1h17a4 4 0 0 0 4-4v-1c-1 0-2 .5-2 1.5"/>
+                                            <path d="M20 7s-1-1-3-1"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div style="font-size:16px;font-weight:700;color:var(--cyan)" data-i18n="docs.docker.title">Docker — Déploiement du serveur BMM</div>
+                                        <div style="font-size:12px;color:var(--text-muted);margin-top:2px" data-i18n="docs.docker.subtitle">Containerisation et tunnel ngrok pour exposer votre serveur</div>
+                                    </div>
+                                </div>
+
+                                <!-- What is Docker -->
+                                <div style="margin-bottom:16px">
+                                    <div style="font-size:12px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px" data-i18n="docs.docker.whatTitle">C'est quoi Docker ?</div>
+                                    <p style="font-size:13px;color:var(--text-secondary);line-height:1.65;margin:0" data-i18n="docs.docker.whatDesc">Docker est une plateforme de <strong style="color:var(--text-primary)">conteneurisation</strong> qui emballe le serveur BMM et toutes ses dépendances dans une boîte isolée appelée <em>conteneur</em>. Le serveur fonctionne de façon identique sur n'importe quel système — Windows, Linux, macOS — sans installation manuelle.</p>
+                                </div>
+
+                                <!-- Diagram: Docker vs manual -->
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+                                    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:14px">
+                                        <div style="font-size:11px;font-weight:700;color:var(--cyan);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">✅ Avec Docker</div>
+                                        <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--text-secondary)">
+                                            <li>▸ Une seule commande pour démarrer</li>
+                                            <li>▸ Isolation totale du système hôte</li>
+                                            <li>▸ Mises à jour faciles (pull + restart)</li>
+                                            <li>▸ Même comportement sur tout OS</li>
+                                            <li>▸ Pas de conflits de dépendances</li>
+                                        </ul>
+                                    </div>
+                                    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px">
+                                        <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">⚠ Sans Docker</div>
+                                        <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--text-muted)">
+                                            <li>▸ Installation manuelle des dépendances</li>
+                                            <li>▸ Conflits de versions possibles</li>
+                                            <li>▸ Comportement différent par OS</li>
+                                            <li>▸ Mises à jour complexes</li>
+                                            <li>▸ Configuration réseau manuelle</li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <!-- docker-compose example -->
+                                <div style="margin-bottom:16px">
+                                    <div style="font-size:12px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px" data-i18n="docs.docker.composeTitle">Démarrage rapide (docker-compose)</div>
+                                    <div style="background:#0d1117;border:1px solid rgba(6,182,212,0.2);border-radius:10px;padding:14px;font-family:var(--font-mono);font-size:12px;line-height:1.7;color:#e6edf3;position:relative">
+                                        <div style="position:absolute;top:8px;right:10px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">docker-compose.yml</div>
+                                        <span style="color:#8b949e"># docker-compose.yml</span><br>
+                                        <span style="color:#7ee787">version</span><span style="color:#e6edf3">: </span><span style="color:#a5d6ff">'3.8'</span><br>
+                                        <span style="color:#7ee787">services</span><span style="color:#e6edf3">:</span><br>
+                                        <span style="color:#e6edf3">  </span><span style="color:#7ee787">bmm-server</span><span style="color:#e6edf3">:</span><br>
+                                        <span style="color:#e6edf3">    </span><span style="color:#7ee787">image</span><span style="color:#e6edf3">: </span><span style="color:#a5d6ff">ghcr.io/bmm/server:latest</span><br>
+                                        <span style="color:#e6edf3">    </span><span style="color:#7ee787">ports</span><span style="color:#e6edf3">:</span><br>
+                                        <span style="color:#e6edf3">      - </span><span style="color:#a5d6ff">"8080:8080"</span><br>
+                                        <span style="color:#e6edf3">    </span><span style="color:#7ee787">volumes</span><span style="color:#e6edf3">:</span><br>
+                                        <span style="color:#e6edf3">      - </span><span style="color:#a5d6ff">./data:/app/data</span><br>
+                                        <span style="color:#e6edf3">    </span><span style="color:#7ee787">environment</span><span style="color:#e6edf3">:</span><br>
+                                        <span style="color:#e6edf3">      - </span><span style="color:#a5d6ff">BMM_PORT=8080</span><br>
+                                        <span style="color:#e6edf3">      - </span><span style="color:#a5d6ff">BMM_SEED=votre_seed_secret</span><br>
+                                        <span style="color:#e6edf3">    </span><span style="color:#7ee787">restart</span><span style="color:#e6edf3">: </span><span style="color:#a5d6ff">unless-stopped</span><br>
+                                        <br>
+                                        <span style="color:#8b949e"># Démarrer :</span><br>
+                                        <span style="color:#f78166">docker compose up -d</span>
+                                    </div>
+                                </div>
+
+                                <!-- Tunnel ngrok -->
+                                <div style="margin-bottom:0">
+                                    <div style="font-size:12px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px" data-i18n="docs.docker.tunnelTitle">Tunnel ngrok — Exposer son serveur sans ouvrir de ports</div>
+                                    <p style="font-size:13px;color:var(--text-secondary);line-height:1.65;margin:0 0 10px 0" data-i18n="docs.docker.tunnelDesc">Si vous hébergez chez vous (sans IP fixe ou sans accès à votre box), <strong style="color:var(--text-primary)">ngrok</strong> crée un tunnel chiffré entre votre machine locale et Internet. Vos joueurs se connectent sur une URL publique (ex: <code style="font-family:var(--font-mono);background:rgba(6,182,212,0.1);padding:1px 5px;border-radius:4px">https://abc123.ngrok.io</code>) et le trafic est redirigé vers votre serveur.</p>
+
+                                    <!-- Flow diagram -->
+                                    <div style="display:flex;align-items:center;gap:8px;padding:14px;background:rgba(0,0,0,0.2);border-radius:10px;border:1px solid rgba(6,182,212,0.12);flex-wrap:wrap;justify-content:center">
+                                        <div style="text-align:center;padding:8px 14px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:8px">
+                                            <div style="font-size:11px;font-weight:700;color:#3b82f6">CLIENT</div>
+                                            <div style="font-size:10px;color:var(--text-muted)">BMM App</div>
+                                        </div>
+                                        <div style="color:var(--cyan);font-size:18px">→</div>
+                                        <div style="text-align:center;padding:8px 14px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px">
+                                            <div style="font-size:11px;font-weight:700;color:var(--cyan)">NGROK CLOUD</div>
+                                            <div style="font-size:10px;color:var(--text-muted)">HTTPS public</div>
+                                        </div>
+                                        <div style="color:var(--cyan);font-size:18px">→</div>
+                                        <div style="text-align:center;padding:8px 14px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px">
+                                            <div style="font-size:11px;font-weight:700;color:var(--cyan)">TUNNEL</div>
+                                            <div style="font-size:10px;color:var(--text-muted)">Agent local</div>
+                                        </div>
+                                        <div style="color:var(--cyan);font-size:18px">→</div>
+                                        <div style="text-align:center;padding:8px 14px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px">
+                                            <div style="font-size:11px;font-weight:700;color:#22c55e">DOCKER BMM</div>
+                                            <div style="font-size:10px;color:var(--text-muted)">:8080 local</div>
+                                        </div>
+                                    </div>
+
+                                    <div style="background:#0d1117;border:1px solid rgba(6,182,212,0.2);border-radius:10px;padding:14px;font-family:var(--font-mono);font-size:12px;line-height:1.7;color:#e6edf3;margin-top:12px">
+                                        <span style="color:#8b949e"># Installer ngrok puis exposer le port 8080</span><br>
+                                        <span style="color:#f78166">ngrok http 8080</span><br>
+                                        <br>
+                                        <span style="color:#8b949e"># L'URL générée (ex) :</span><br>
+                                        <span style="color:#a5d6ff">https://abc123.ngrok-free.app  →  localhost:8080</span>
+                                    </div>
+
+                                    <div style="margin-top:12px;padding:10px 14px;background:rgba(234,179,8,0.06);border:1px solid rgba(234,179,8,0.18);border-radius:8px;font-size:12px;color:rgba(234,179,8,0.85)">
+                                        ⚡ <span data-i18n="docs.docker.tunnelWarn">L'URL ngrok change à chaque redémarrage sur le plan gratuit. Utilisez un plan payant ou un nom de domaine pour une URL fixe.</span>
+                                    </div>
+                                </div>
+                            </div>
+
                             </div> <!-- End of settings-sections -->
                         </div> <!-- End of docs-tab-advanced -->
 
@@ -3442,6 +3571,21 @@
                                         </svg>
                                         <span data-i18n="docs.gallery.btn.diskIoLimiter">VOIR LA LOGIQUE</span>
                                     </button>
+                                </div>
+                            </details>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+                                            <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                                        </svg>
+                                        <span data-i18n="faq.qDiskUsage">Comment voir la taille de mes mods par profil ?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.aDiskUsage">
+                                    La taille occupée par le dossier de mods de chaque profil est affichée directement sur la carte du profil (icône disque, en bas à droite de la ligne de compteur de mods). L'information se charge en arrière-plan quelques secondes après l'ouverture de l'onglet Profils.
                                 </div>
                             </details>
 
@@ -3628,6 +3772,112 @@
                                         </svg>
                                         <span data-i18n="docs.gallery.btn.resumableDownloads">VOIR LA LOGIQUE</span>
                                     </button>
+                                </div>
+                            </details>
+
+                            <!-- DOCKER / INFRASTRUCTURE (Cyan) -->
+                            <h3 style="margin: 24px 0 12px 0; font-size: 14px; color: var(--cyan); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Docker & Infrastructure</h3>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.2">
+                                            <rect x="2" y="10" width="3" height="3" rx="0.5"/><rect x="6" y="10" width="3" height="3" rx="0.5"/><rect x="10" y="10" width="3" height="3" rx="0.5"/><rect x="6" y="6" width="3" height="3" rx="0.5"/><rect x="10" y="6" width="3" height="3" rx="0.5"/><path d="M14 13c0 3-2.5 5-7 5H4a2 2 0 0 1-2-2v-1h17a4 4 0 0 0 4-4v-1c-1 0-2 .5-2 1.5"/>
+                                        </svg>
+                                        <span data-i18n="faq.qDocker">C'est quoi Docker et pourquoi BMM l'utilise ?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content">
+                                    <p style="line-height:1.65;margin-bottom:10px" data-i18n="faq.aDocker">Docker est un système de <strong>conteneurisation</strong> : il emballe le serveur BMM et toutes ses dépendances dans une boîte isolée. Résultat — une seule commande pour démarrer le serveur, peu importe l'OS (Windows, Linux, macOS), sans rien installer manuellement.</p>
+                                    <div style="display:flex;gap:10px;flex-wrap:wrap">
+                                        <div style="flex:1;min-width:180px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:8px;padding:10px;font-size:12px;color:var(--text-secondary)">
+                                            <div style="font-weight:700;color:var(--cyan);margin-bottom:4px">✅ Avantages</div>
+                                            <div>▸ Démarrage en 1 commande</div><div>▸ Isolation totale</div><div>▸ Mises à jour ultra simples</div><div>▸ Comportement identique partout</div>
+                                        </div>
+                                        <div style="flex:1;min-width:180px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;color:var(--text-muted)">
+                                            <div style="font-weight:700;margin-bottom:4px">⚠ Sans Docker</div>
+                                            <div>▸ Installation manuelle</div><div>▸ Conflits de versions</div><div>▸ Config réseau à la main</div><div>▸ Difficile à migrer</div>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-sm btn-ghost" onclick="document.querySelector('.btn-docs-tab[data-tab=\'advanced\']').click(); setTimeout(() => document.getElementById('docker-doc-card')?.scrollIntoView({behavior:'smooth'}), 100);" style="font-size:11px; color:var(--cyan); border:1px dashed rgba(6,182,212,0.3); padding:4px 10px; border-radius:8px; margin-top:12px;">
+                                        <span data-i18n="faq.aDocker.guide">VOIR LE GUIDE COMPLET</span>
+                                    </button>
+                                </div>
+                            </details>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.2">
+                                            <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="M13 13l6 6"/>
+                                        </svg>
+                                        <span data-i18n="faq.qNgrok">C'est quoi un tunnel ngrok ?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content">
+                                    <p style="line-height:1.65;margin-bottom:10px" data-i18n="faq.aNgrok">ngrok crée un <strong>tunnel chiffré</strong> entre votre machine locale et Internet. Sans ouvrir de ports sur votre box, vos joueurs accèdent à votre serveur via une URL publique HTTPS (ex: <code style="font-family:var(--font-mono);background:rgba(6,182,212,0.1);padding:1px 6px;border-radius:4px">https://abc123.ngrok-free.app</code>). Idéal pour héberger depuis chez soi.</p>
+                                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;padding:12px;background:rgba(0,0,0,0.15);border-radius:8px;border:1px solid rgba(6,182,212,0.1);font-size:11px">
+                                        <span style="padding:4px 10px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);border-radius:6px;font-weight:700;color:#3b82f6">BMM App</span>
+                                        <span style="color:var(--cyan)">→</span>
+                                        <span style="padding:4px 10px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:6px;font-weight:700;color:var(--cyan)">ngrok Cloud</span>
+                                        <span style="color:var(--cyan)">→</span>
+                                        <span style="padding:4px 10px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:6px;font-weight:700;color:var(--cyan)">Tunnel local</span>
+                                        <span style="color:var(--cyan)">→</span>
+                                        <span style="padding:4px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;font-weight:700;color:#22c55e">Docker BMM</span>
+                                    </div>
+                                    <div style="margin-top:10px;padding:8px 12px;background:rgba(234,179,8,0.06);border:1px solid rgba(234,179,8,0.18);border-radius:8px;font-size:12px;color:rgba(234,179,8,0.85)">
+                                        ⚡ <span data-i18n="faq.aNgrok.warn">Sur le plan gratuit, l'URL change à chaque redémarrage de ngrok. Utilisez un domaine fixe (plan payant) pour un partage stable.</span>
+                                    </div>
+                                </div>
+                            </details>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.2">
+                                            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                                            <line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+                                        </svg>
+                                        <span data-i18n="faq.qVps">VPS ou PC à la maison — quelles différences ?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content">
+                                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+                                        <div style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:8px;padding:10px">
+                                            <div style="font-weight:700;color:var(--cyan);margin-bottom:6px">🖥 VPS Linux</div>
+                                            <div style="color:var(--text-secondary);line-height:1.6">▸ IP fixe publique<br>▸ Allumé 24h/24<br>▸ Bande passante dédiée<br>▸ ~3–10€/mois<br>▸ Pas besoin de ngrok</div>
+                                        </div>
+                                        <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;padding:10px">
+                                            <div style="font-weight:700;color:var(--text-secondary);margin-bottom:6px">🏠 PC à la maison</div>
+                                            <div style="color:var(--text-muted);line-height:1.6">▸ IP dynamique (box)<br>▸ Dépend de votre uptime<br>▸ Bande passante limitée<br>▸ Gratuit<br>▸ Nécessite ngrok ou UPnP</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.2">
+                                            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                                        </svg>
+                                        <span data-i18n="faq.qDockerUpdate">Comment mettre à jour le serveur Docker ?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content">
+                                    <p style="line-height:1.65;margin-bottom:10px" data-i18n="faq.aDockerUpdate">Mettre à jour le serveur BMM avec Docker se fait en 3 commandes. Vos données (mods, bans, config) sont conservées dans le volume <code style="font-family:var(--font-mono);background:rgba(6,182,212,0.1);padding:1px 5px;border-radius:4px">./data</code> et ne sont pas affectées.</p>
+                                    <div style="background:#0d1117;border:1px solid rgba(6,182,212,0.2);border-radius:10px;padding:12px;font-family:var(--font-mono);font-size:12px;line-height:1.8;color:#e6edf3">
+                                        <span style="color:#8b949e"># 1. Télécharger la nouvelle image</span><br>
+                                        <span style="color:#f78166">docker compose pull</span><br>
+                                        <span style="color:#8b949e"># 2. Redémarrer avec la nouvelle version</span><br>
+                                        <span style="color:#f78166">docker compose up -d</span><br>
+                                        <span style="color:#8b949e"># 3. (Optionnel) Nettoyer les vieilles images</span><br>
+                                        <span style="color:#f78166">docker image prune -f</span>
+                                    </div>
                                 </div>
                             </details>
 

@@ -122,6 +122,7 @@ pub struct AppState {
     pub sha_queue_priority: std::sync::Arc<Mutex<std::collections::VecDeque<String>>>,
     pub sha_calculation_active: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub current_sha_mod_id: std::sync::Arc<Mutex<Option<String>>>,
+    pub export_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl AppState {
@@ -158,6 +159,7 @@ impl AppState {
             sha_queue_priority: std::sync::Arc::new(Mutex::new(std::collections::VecDeque::new())),
             sha_calculation_active: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             current_sha_mod_id: std::sync::Arc::new(Mutex::new(None)),
+            export_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
