@@ -31,6 +31,9 @@ pub struct ModFileEntry {
     pub is_directory: bool,
     /// File size in bytes (0 for dirs)
     pub size: u64,
+    /// SHA-256 hex digest of the file contents (None for directories)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

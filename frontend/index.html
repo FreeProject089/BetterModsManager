@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://app.betahub.io 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://app.betahub.io; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: asset: asset.localhost/ http://asset.localhost/ blob: https://* https://betahub.io https://i.ytimg.com https://*.youtube.com https://flagcdn.com; frame-src 'self' https://www.youtube.com https://*.youtube.com https://*.youtube-nocookie.com; connect-src 'self' https://* tauri://* ws://localhost:*;">
+        content="default-src 'self'; script-src 'self' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://app.betahub.io 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://app.betahub.io; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: asset: asset.localhost/ http://asset.localhost/ blob: https://* https://betahub.io https://i.ytimg.com https://*.youtube.com https://flagcdn.com; frame-src 'self' https://www.youtube.com https://*.youtube.com https://*.youtube-nocookie.com; connect-src 'self' https://* tauri://* ipc://* ipc://localhost https://tauri.localhost ws://localhost:* wss://localhost:* http://localhost:* http://127.0.0.1:*;">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Better Mod Manager</title>
     <meta name="description" content="Modern universal mod manager" />
@@ -678,116 +678,153 @@
                 <section class="view" id="view-modlist">
                     <div class="view-header">
                         <div>
-                            <h1 class="view-title" data-i18n="mm.title">Listes de Mods <span class="tag-mono">.MM</span>
-                            </h1>
-                            <p class="view-subtitle" data-i18n="mm.subtitle">Partagez et importez des configurations
-                                complètes</p>
+                            <h1 class="view-title" data-i18n="mm.title">Mod Lists <span class="tag-mono" style="font-size:0.7em;vertical-align:middle;opacity:0.7;margin-left:4px;">.MM</span></h1>
+                            <p class="view-subtitle" data-i18n="mm.subtitle">Share and import complete configurations</p>
                         </div>
                         <div class="view-actions">
-                            <button class="btn btn-secondary" id="btn-import-mm">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2.2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="7 10 12 15 17 10" />
-                                    <line x1="12" y1="15" x2="12" y2="3" />
+                            <button class="btn btn-secondary" id="btn-import-mm"
+                                onmouseenter="window.showTaskyHelp('mm.importTip', 'list')"
+                                onmouseleave="window.hideTaskyHelp()">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
                                 </svg>
-                                <span data-i18n="mm.import">Importer .MM</span>
+                                <span data-i18n="mm.import">Import .MM</span>
                             </button>
-                            <button class="btn btn-primary" id="btn-export-mm">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2.2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="17 8 12 3 7 8" />
-                                    <line x1="12" y1="3" x2="12" y2="15" />
+                            <button class="btn btn-primary" id="btn-export-mm"
+                                onmouseenter="window.showTaskyHelp('mm.exportTip', 'list')"
+                                onmouseleave="window.hideTaskyHelp()">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
                                 </svg>
-                                <span data-i18n="mm.export">Exporter .MM</span>
+                                <span data-i18n="mm.export">Export .MM</span>
                             </button>
                         </div>
                     </div>
 
-                    <div class="modlist-info-cards">
-                        <div class="info-card glass">
+                    <!-- Info cards row -->
+                    <div class="modlist-info-cards" style="margin-bottom:20px;">
+                        <div class="info-card glass" onmouseenter="window.showTaskyHelp('mm.formatTip', 'icon-info')" onmouseleave="window.hideTaskyHelp()">
                             <div class="info-card-icon accent">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="1.8">
-                                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-                                    <path d="M12 11h4" />
-                                    <path d="M12 16h4" />
-                                    <path d="M8 11h.01" />
-                                    <path d="M8 16h.01" />
-                                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                                    <path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>
+                                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
                                 </svg>
                             </div>
                             <div>
-                                <p class="info-card-title" data-i18n="mm.formatTitle">Format .MM</p>
-                                <p class="info-card-desc" data-i18n="mm.formatDesc">Un fichier JSON contenant la liste
-                                    complète de vos mods, liens de
-                                    téléchargement, ordre d'installation et configuration.</p>
+                                <p class="info-card-title" data-i18n="mm.formatTitle">.MM Format</p>
+                                <p class="info-card-desc" data-i18n="mm.formatDesc">A JSON file containing your complete list of mods, download links, install order and config.</p>
                             </div>
                         </div>
-                        <div class="info-card glass">
+                        <div class="info-card glass" onmouseenter="window.showTaskyHelp('mm.shareTip', 'icon-info')" onmouseleave="window.hideTaskyHelp()">
                             <div class="info-card-icon cyan">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="1.8">
-                                    <line x1="22" y1="2" x2="11" y2="13" />
-                                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                    <line x1="22" y1="2" x2="11" y2="13"/>
+                                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
                                 </svg>
                             </div>
                             <div>
-                                <p class="info-card-title" data-i18n="mm.shareTitle">Partage facile</p>
-                                <p class="info-card-desc" data-i18n="mm.shareDesc">Envoyez votre fichier .MM à d'autres
-                                    utilisateurs pour reproduire
-                                    exactement votre configuration.</p>
+                                <p class="info-card-title" data-i18n="mm.shareTitle">Easy Sharing</p>
+                                <p class="info-card-desc" data-i18n="mm.shareDesc">Send your .MM file to other users to exactly reproduce your configuration.</p>
+                            </div>
+                        </div>
+                        <div class="info-card glass" onmouseenter="window.showTaskyHelp('mm.priorityTip', 'icon-info')" onmouseleave="window.hideTaskyHelp()">
+                            <div class="info-card-icon" style="background:rgba(168,85,247,0.15);color:rgba(168,85,247,0.9);">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                    <polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="info-card-title" data-i18n="mm.priorityTitle">Priority Order</p>
+                                <p class="info-card-desc" data-i18n="mm.priorityDesc">Mods are installed in list order. Higher priority mods overwrite lower ones on conflict.</p>
                             </div>
                         </div>
                     </div>
 
                     <!-- Export form -->
-                    <div class="glass-card" id="export-form-card" style="display:none">
-                        <h3 class="card-title" data-i18n="mm.exportCurrentList">Exporter la liste actuelle</h3>
+                    <div class="glass-card" id="export-form-card" style="display:none;border:1px solid rgba(var(--accent-rgb,59,130,246),0.18);">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+                            <div style="width:32px;height:32px;background:var(--accent-dim);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2"><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>
+                            </div>
+                            <h3 class="card-title" style="margin:0;" data-i18n="mm.exportCurrentList">Export Current List</h3>
+                        </div>
                         <div class="form-grid">
                             <div class="form-group">
-                                <label class="form-label" data-i18n="mod.listName">Nom de la liste</label>
-                                <input type="text" class="form-input" id="mm-list-name"
-                                    placeholder="Ma config DCS..." data-i18n-placeholder="mm.listNamePlaceholder" />
+                                <label class="form-label" style="display:flex;align-items:center;gap:6px;">
+                                    <span data-i18n="mod.listName">List Name</span>
+                                    <span class="help-icon" onmouseenter="window.showTaskyHelp('mm.listNameTip', 'icon-info')" onmouseleave="window.hideTaskyHelp()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+                                </label>
+                                <input type="text" class="form-input" id="mm-list-name" data-i18n-placeholder="mm.listNamePlaceholder"/>
                             </div>
                             <div class="form-group">
-                                <label class="form-label" data-i18n="detail.author">Auteur</label>
-                                <input type="text" class="form-input" id="mm-author" placeholder="Votre pseudo..." data-i18n-placeholder="mm.authorPlaceholder" />
+                                <label class="form-label" data-i18n="detail.author">Author</label>
+                                <input type="text" class="form-input" id="mm-author" data-i18n-placeholder="mm.authorPlaceholder"/>
                             </div>
                             <div class="form-group full-width">
-                                <label class="form-label" data-i18n="detail.description">Description</label>
-                                <input type="text" class="form-input" id="mm-description"
-                                    placeholder="Description de la liste..." data-i18n-placeholder="mm.descriptionPlaceholder" />
+                                <label class="form-label" style="display:flex;align-items:center;gap:6px;">
+                                    <span data-i18n="detail.description">Description</span>
+                                    <span class="help-icon" onmouseenter="window.showTaskyHelp('mm.descTip', 'icon-info')" onmouseleave="window.hideTaskyHelp()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+                                </label>
+                                <input type="text" class="form-input" id="mm-description" data-i18n-placeholder="mm.descriptionPlaceholder"/>
                             </div>
                         </div>
+                        <!-- SHA-256 toggle -->
+                        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border);margin-bottom:12px">
+                            <label class="switch" style="flex-shrink:0">
+                                <input type="checkbox" id="mm-include-hashes" checked>
+                                <span class="slider round"></span>
+                            </label>
+                            <div style="flex:1">
+                                <div style="font-size:12px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:6px">
+                                    <span data-i18n="mm.includeHashes">Include SHA-256 hashes</span>
+                                    <span class="help-icon" onmouseenter="window.showTaskyHelp('mm.includeHashesTip', 'icon-integrity')" onmouseleave="window.hideTaskyHelp()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+                                </div>
+                                <div style="font-size:10px;color:var(--text-muted)" data-i18n="mm.includeHashesDesc">Verifiable by recipients — slower for large mods</div>
+                            </div>
+                            <span id="mm-hashes-badge" style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.25)">SHA-256</span>
+                        </div>
                         <div class="form-actions">
-                            <button class="btn btn-ghost" id="btn-cancel-export"
-                                data-i18n="prof.cancel">Annuler</button>
-                            <button class="btn btn-primary" id="btn-confirm-export">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2.2">
-                                    <polyline points="17 8 12 3 7 8" />
-                                    <line x1="12" y1="3" x2="12" y2="15" />
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                </svg>
-                                <span data-i18n="mm.export">Sauvegarder .MM</span>
+                            <button class="btn btn-ghost" id="btn-cancel-export" data-i18n="prof.cancel">Cancel</button>
+                            <button class="btn btn-primary" id="btn-confirm-export"
+                                onmouseenter="window.showTaskyHelp('mm.exportConfirmTip', 'list')"
+                                onmouseleave="window.hideTaskyHelp()">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>
+                                <span data-i18n="mm.export">Save .MM</span>
                             </button>
+                        </div>
+                        <!-- Export progress — shown while Rust processes mod folders -->
+                        <div id="export-progress-overlay" style="display:none;margin-top:16px;padding:14px;background:rgba(0,0,0,0.25);border-radius:10px;border:1px solid rgba(var(--accent-rgb,59,130,246),0.15)">
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" style="animation:spin 1s linear infinite;flex-shrink:0"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                                <span style="font-size:12px;font-weight:700;color:var(--text-primary)" data-i18n="mm.exportProcessing">Building mod list...</span>
+                                <span id="export-progress-count" style="margin-left:auto;font-size:10px;font-family:var(--font-mono);color:var(--accent)"></span>
+                            </div>
+                            <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden">
+                                <div id="export-progress-bar" style="height:100%;background:var(--accent);width:0%;transition:width 0.25s ease;box-shadow:0 0 8px var(--accent)"></div>
+                            </div>
+                            <div id="export-progress-label" style="font-size:10px;color:var(--text-muted);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
                         </div>
                     </div>
 
                     <!-- Imported modlist preview -->
-                    <div class="glass-card" id="imported-preview" style="display:none">
-                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-                            <h3 class="card-title" style="margin:0" data-i18n="mm.importedTitle">Liste importée</h3>
-                            <button class="btn btn-primary btn-sm" id="btn-install-from-mm">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2.2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="7 10 12 15 17 10" />
-                                    <line x1="12" y1="15" x2="12" y2="3" />
-                                </svg>
-                                <span data-i18n="mm.installAll">Tout installer</span>
+                    <div class="glass-card" id="imported-preview" style="display:none;border:1px solid rgba(255,255,255,0.07);">
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                            <div style="display:flex;align-items:center;gap:10px;">
+                                <div style="width:30px;height:30px;background:rgba(var(--accent-rgb,59,130,246),0.12);border-radius:8px;display:flex;align-items:center;justify-content:center;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                </div>
+                                <h3 class="card-title" style="margin:0;" data-i18n="mm.importedTitle">Imported List</h3>
+                            </div>
+                            <button class="btn btn-primary btn-sm" id="btn-install-from-mm"
+                                onmouseenter="window.showTaskyHelp('mm.installTip', 'list')"
+                                onmouseleave="window.hideTaskyHelp()">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                <span data-i18n="mm.installAll">Install All</span>
                             </button>
                         </div>
                         <div id="imported-content"></div>
@@ -2184,6 +2221,90 @@
                                         <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px" data-i18n="docs.mapper.q2">Mapping Intelligent</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5" data-i18n="docs.mapper.a2">Sélectionnez vos fichiers à gauche, puis double-cliquez sur le dossier de destination à droite.</div>
                                     </div>
+                                </div>
+                            </div>
+
+                            <!-- Server Repository & Creator ID -->
+                            <div class="glass-card" style="border-left:3px solid var(--cyan);margin-top:20px;">
+                                <h3 class="card-title" style="display:flex;align-items:center;gap:10px;text-transform:uppercase;font-size:15px;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                                    </svg>
+                                    <span style="color:var(--cyan);" data-i18n="docs.serverRepo.title">Server Repository</span>
+                                    <button class="btn btn-xs btn-ghost" onclick="openDiagram('server-mode')"
+                                        style="font-size:9px;padding:1px 8px;border:1px dashed rgba(0,194,255,0.4);color:var(--cyan);text-transform:uppercase;letter-spacing:.05em;font-weight:800;border-radius:12px;height:18px;background:rgba(0,194,255,0.05);">
+                                        <span data-i18n="docs.viewDiagram">VIEW DIAGRAM</span>
+                                    </button>
+                                    <button class="btn btn-xs btn-ghost" onclick="openDiagram('hosting-flow')"
+                                        style="font-size:9px;padding:1px 8px;border:1px solid rgba(0,194,255,0.25);color:var(--cyan);text-transform:uppercase;letter-spacing:.05em;font-weight:800;border-radius:12px;height:18px;background:rgba(0,194,255,0.04);">
+                                        <span data-i18n="docs.viewDeployment">HOSTING FLOW</span>
+                                    </button>
+                                </h3>
+
+                                <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px;" data-i18n="docs.serverRepo.intro">
+                                    The Server Repository lets you host your mod collection on a local or remote server so that your team can download and sync mods in one click — no manual file sharing needed.
+                                </p>
+
+                                <!-- Concepts grid -->
+                                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:16px;">
+                                    <div style="background:rgba(0,194,255,0.07);border:1px solid rgba(0,194,255,0.18);border-radius:10px;padding:14px;">
+                                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+                                            <div style="font-size:12px;font-weight:800;color:var(--cyan);" data-i18n="docs.serverRepo.creatorIdTitle">Creator ID</div>
+                                        </div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;" data-i18n="docs.serverRepo.creatorIdDesc">
+                                            A unique fingerprint generated from your machine's hardware IDs. It identifies you across sessions without a login — used by the server to track who downloaded what, and by the admin to manage bans and whitelists per-user rather than per-IP.
+                                        </div>
+                                    </div>
+                                    <div style="background:rgba(0,194,255,0.07);border:1px solid rgba(0,194,255,0.18);border-radius:10px;padding:14px;">
+                                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                            <div style="font-size:12px;font-weight:800;color:var(--cyan);" data-i18n="docs.serverRepo.seedTitle">Server Seed</div>
+                                        </div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;" data-i18n="docs.serverRepo.seedDesc">
+                                            A persistent secret that defines your server's identity. Ban lists, whitelists and access rules are keyed to this seed — so restarting the server doesn't reset your admin settings. Leave it empty at export to auto-generate one; copy it from your first export if you want to reuse it on a new server build.
+                                        </div>
+                                    </div>
+                                    <div style="background:rgba(0,194,255,0.07);border:1px solid rgba(0,194,255,0.18);border-radius:10px;padding:14px;">
+                                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                                            <div style="font-size:12px;font-weight:800;color:var(--cyan);" data-i18n="docs.serverRepo.interServerTitle">Inter-Server Sync</div>
+                                        </div>
+                                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;" data-i18n="docs.serverRepo.interServerDesc">
+                                            Clients can connect to multiple servers simultaneously. Each server has its own URL (IP:Port). BMM's Server Repo view lets clients browse and download from any connected server — useful for squadrons sharing mods across different hosts.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- How it works steps -->
+                                <div style="background:rgba(0,0,0,0.2);border-radius:10px;border:1px solid rgba(255,255,255,0.06);padding:14px;">
+                                    <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;" data-i18n="docs.serverRepo.howItWorks">How It Works</div>
+                                    <div style="display:flex;flex-direction:column;gap:8px;">
+                                        <div style="display:flex;align-items:flex-start;gap:10px;">
+                                            <span style="min-width:20px;height:20px;background:var(--accent);color:#fff;border-radius:50%;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">1</span>
+                                            <span style="font-size:12px;color:var(--text-secondary);line-height:1.5;" data-i18n="docs.serverRepo.step1">Generate a repo with your mods in the <strong style="color:var(--text-primary);">Server Repo</strong> tab. Choose ZIP (standalone server) or folder export.</span>
+                                        </div>
+                                        <div style="display:flex;align-items:flex-start;gap:10px;">
+                                            <span style="min-width:20px;height:20px;background:var(--accent);color:#fff;border-radius:50%;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">2</span>
+                                            <span style="font-size:12px;color:var(--text-secondary);line-height:1.5;" data-i18n="docs.serverRepo.step2">Host it: run the included server executable (or start the built-in server) and note your <strong style="color:var(--cyan);">IP:Port</strong>.</span>
+                                        </div>
+                                        <div style="display:flex;align-items:flex-start;gap:10px;">
+                                            <span style="min-width:20px;height:20px;background:var(--accent);color:#fff;border-radius:50%;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">3</span>
+                                            <span style="font-size:12px;color:var(--text-secondary);line-height:1.5;" data-i18n="docs.serverRepo.step3">Share the server URL with your team. They enter it in their BMM Server Repo view and see all available mods.</span>
+                                        </div>
+                                        <div style="display:flex;align-items:flex-start;gap:10px;">
+                                            <span style="min-width:20px;height:20px;background:var(--accent);color:#fff;border-radius:50%;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">4</span>
+                                            <span style="font-size:12px;color:var(--text-secondary);line-height:1.5;" data-i18n="docs.serverRepo.step4">Clients click <strong style="color:var(--text-primary);">Sync</strong> — BMM compares local vs remote mod hashes, downloads only what changed, and updates their library automatically.</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Admin tip -->
+                                <div style="margin-top:12px;padding:10px 14px;background:rgba(234,179,8,0.07);border:1px solid rgba(234,179,8,0.2);border-radius:8px;display:flex;align-items:flex-start;gap:10px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2.5" style="flex-shrink:0;margin-top:1px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                    <span style="font-size:12px;color:var(--text-secondary);line-height:1.5;" data-i18n="docs.serverRepo.adminNote">
+                                        <strong style="color:#fbbf24;">Admin note:</strong> The Creator ID shown in the monitoring dashboard comes from the client's BMM. It's a hardware fingerprint — not a password. Use it to whitelist trusted users or ban abusers across sessions, even if their IP changes.
+                                    </span>
                                 </div>
                             </div>
 
@@ -3653,6 +3774,32 @@
                                     </svg>
                                 </summary>
                                 <div class="faq-content" data-i18n="faq.aRepoHosting">...</div>
+                            </details>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#bc74ff" stroke-width="2.2">
+                                            <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+                                        </svg>
+                                        <span data-i18n="faq.qCreatorId">What is the Creator ID?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.aCreatorId">The Creator ID is a unique hardware fingerprint generated by BMM from your machine. It identifies your client to the server without requiring a login — the server admin can use it to whitelist or ban users persistently, even if their IP address changes.</div>
+                            </details>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#bc74ff" stroke-width="2.2">
+                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                        </svg>
+                                        <span data-i18n="faq.qServerSeed">What is the Server Seed?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.aServerSeed">The Server Seed is a secret string that defines your server's persistent identity. Ban lists and whitelist rules are tied to it — so restarting or redeploying the server keeps all your admin settings intact. Leave the field empty when exporting to auto-generate one, or paste a previous seed to reuse an existing identity.</div>
                             </details>
 
                             <details class="faq-accordion">
@@ -6571,74 +6718,81 @@
         <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
         <!-- Modal: Conflict Warning with Tree -->
         <div class="modal-overlay" id="modal-conflict-tree">
-            <div class="modal glass" style="max-width: 600px; width: 90%;">
-                <div class="modal-header">
-                    <h3 class="modal-title" style="color:var(--danger);display:flex;align-items:center;gap:10px">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
-                            <path
-                                d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                            <line x1="12" y1="9" x2="12" y2="13" />
-                            <line x1="12" y1="17" x2="12.01" y2="17" />
+            <div class="modal glass" style="max-width:640px;width:90%;border:1px solid rgba(239,68,68,0.25);overflow:hidden;">
+                <!-- Danger banner header -->
+                <div style="background:linear-gradient(135deg,rgba(239,68,68,0.18) 0%,rgba(239,68,68,0.06) 100%);border-bottom:1px solid rgba(239,68,68,0.2);padding:20px 24px;display:flex;align-items:flex-start;gap:16px;">
+                    <div style="flex-shrink:0;width:44px;height:44px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:12px;display:flex;align-items:center;justify-content:center;">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                            <line x1="12" y1="9" x2="12" y2="13"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
                         </svg>
-                        <span data-i18n="conflict.criticalWarningTitle">Alerte de Conflit Critique</span>
-                    </h3>
-                </div>
-                <div class="modal-body">
-                    <p style="margin-bottom:16px; font-size:14px; color:var(--text-secondary); line-height:1.5"
-                        data-i18n="conflict.warningDesc">
-                        L'activation de ce mod va écraser les fichiers des mods suivants.
-                    </p>
-                    <div id="conflict-tree-container"
-                        style="background:rgba(0,0,0,0.3); border-radius:10px; border:1px solid var(--border); padding:12px; max-height:300px; overflow-y:auto; font-family:var(--font-mono); font-size:12px;">
-                        <!-- Tree content injected by JS -->
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:16px;font-weight:800;color:#ef4444;letter-spacing:-0.02em;margin-bottom:4px;" data-i18n="conflict.criticalWarningTitle">Critical Conflict Alert</div>
+                        <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin:0;" data-i18n="conflict.warningDesc">Activating this mod will overwrite files from the mods listed below.</p>
                     </div>
                 </div>
-                <div class="modal-footer"
-                    style="padding: 16px 24px; display: flex; justify-content: flex-end; gap: 12px;">
-                    <button class="btn btn-ghost modal-close" style="min-width: 100px;"
-                        data-i18n="common.close">Fermer</button>
-                    <button class="btn btn-danger" id="btn-confirm-conflict-tree" style="min-width: 160px;">Activer
-                        quand même</button>
+                <div class="modal-body" style="padding:20px 24px;">
+                    <!-- File count badge injected by JS if needed -->
+                    <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;" data-i18n="conflict.sharedFilesTitle">Shared / Overwritten Files</div>
+                    <div id="conflict-tree-container"
+                        style="background:rgba(0,0,0,0.35);border-radius:10px;border:1px solid rgba(239,68,68,0.15);padding:10px 12px;max-height:280px;overflow-y:auto;font-family:var(--font-mono);font-size:11.5px;display:flex;flex-direction:column;gap:2px;">
+                    </div>
+                </div>
+                <div style="padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.15);">
+                    <span style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                        <span data-i18n="conflict.lastWins">Last activated mod wins</span>
+                    </span>
+                    <div style="display:flex;gap:10px;">
+                        <button class="btn btn-ghost modal-close" style="min-width:90px;" data-i18n="common.close">Close</button>
+                        <button class="btn btn-danger" id="btn-confirm-conflict-tree" style="min-width:150px;display:none;gap:6px;">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            <span data-i18n="conflict.activateAnyway">Activate Anyway</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Modal: Activation Warning (Conflicts) -->
         <div class="modal-overlay" id="modal-activation-warning">
-            <div class="modal glass" style="max-width: 520px; width: 90%;">
-                <div class="modal-header">
-                    <h3 class="modal-title" style="display:flex;align-items:center;gap:10px;color:var(--danger)">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
-                            <path
-                                d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                            <line x1="12" y1="9" x2="12" y2="13" />
-                            <line x1="12" y1="17" x2="12.01" y2="17" />
+            <div class="modal glass" style="max-width:540px;width:90%;border:1px solid rgba(239,68,68,0.2);overflow:hidden;">
+                <!-- Header -->
+                <div style="background:linear-gradient(135deg,rgba(239,68,68,0.15) 0%,rgba(239,68,68,0.04) 100%);border-bottom:1px solid rgba(239,68,68,0.18);padding:18px 22px;display:flex;align-items:center;gap:14px;">
+                    <div style="flex-shrink:0;width:38px;height:38px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.28);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                            <line x1="12" y1="9" x2="12" y2="13"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
                         </svg>
-                        <span data-i18n="conflict.warningTitle">Alerte de Conflit</span>
-                    </h3>
+                    </div>
+                    <div>
+                        <div style="font-size:15px;font-weight:800;color:#ef4444;margin-bottom:2px;" data-i18n="conflict.warningTitle">Conflict Warning</div>
+                        <div style="font-size:11px;color:var(--text-muted);" data-i18n="conflict.warningDesc">Activating this mod will overwrite files from the following mods.</div>
+                    </div>
                 </div>
-                <div class="modal-body" style="padding: 24px;">
-                    <p data-i18n="conflict.warningDesc"
-                        style="margin-bottom: 16px; line-height: 1.6; color: var(--text-muted);">L'activation de ce mod
-                        va écraser les fichiers des mods suivants.</p>
+                <div class="modal-body" style="padding:18px 22px;">
+                    <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;" data-i18n="conflict.conflictingMods">Conflicting Mods</div>
                     <div id="activation-warning-list"
-                        style="max-height: 220px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px; border: 1px solid var(--border); display:flex;flex-direction:column;gap:6px;">
+                        style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;">
                     </div>
                     <!-- Activation order -->
-                    <div id="activation-order-panel" style="margin-top:16px;display:none">
-                        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px"
-                            data-i18n="conflict.activationOrderTitle">Ordre d'Activation des Conflits Actifs</div>
-                        <div id="activation-order-list" style="display:flex;flex-direction:column;gap:4px"></div>
+                    <div id="activation-order-panel" style="margin-top:14px;display:none;background:rgba(0,0,0,0.2);border-radius:8px;padding:10px 12px;border:1px solid rgba(255,255,255,0.06);">
+                        <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                            <span data-i18n="conflict.activationOrderTitle">Active Conflict Order</span>
+                        </div>
+                        <div id="activation-order-list" style="display:flex;flex-direction:column;gap:4px;"></div>
                     </div>
                 </div>
-                <div class="modal-footer"
-                    style="padding: 16px 24px; display: flex; justify-content: flex-end; gap: 12px;">
-                    <button class="btn btn-ghost modal-close" id="btn-cancel-activation-warning"
-                        data-i18n="common.close">Fermer</button>
-                    <button class="btn btn-danger" id="btn-confirm-activation-anyway"
-                        data-i18n="conflict.activateAnyway">Activer quand même</button>
+                <div style="padding:12px 22px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.12);">
+                    <button class="btn btn-ghost" id="btn-cancel-activation-warning" data-i18n="common.close">Close</button>
+                    <button class="btn btn-danger" id="btn-confirm-activation-anyway" style="display:flex;align-items:center;gap:6px;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <span data-i18n="conflict.activateAnyway">Activate Anyway</span>
+                    </button>
                 </div>
             </div>
         </div>

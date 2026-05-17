@@ -6,7 +6,7 @@
 import { invoke } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
-import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
+import { dispatchBmmAction, BMM_ACTIONS, onBmmAction } from '../../ui/tutorial-events.js';
 import type { Profile, ModEntry, FileTreeNode, EnrichedMod } from '../../types/models.js';
 
 let selectedModId: string | null = null;
@@ -149,6 +149,17 @@ export async function initMapper(): Promise<void> {
         if (menu && menu.style.display === 'block') {
             if (!menu.contains(e.target as Node)) hideContextMenu();
         }
+    });
+
+    // Auto-refresh mapper profiles/mods when a profile is created or mods are scanned
+    onBmmAction(BMM_ACTIONS.PROFILE_CREATED, async () => {
+        await refreshMapperData();
+        await refreshGameTree(true);
+        if (selectedModId) await refreshModTree(true);
+    });
+
+    onBmmAction(BMM_ACTIONS.MODS_SCANNED, async () => {
+        await refreshMapperData();
     });
 }
 

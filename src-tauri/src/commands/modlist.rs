@@ -1,89 +1,152 @@
 use crate::fs_utils;
-use crate::models::mod_entry::ModEntry;
 use crate::models::modlist::{DownloadLink, ModFileEntry, ModList, ModListEntry};
 use crate::state::AppState;
 use tauri::State;
 use crate::error::AppError;
+use sha2::{Digest, Sha256};
+use std::io::Read;
+use std::path::PathBuf;
+
+/// Lightweight snapshot of a mod's fields — collected while holding the lock,
+/// then used after releasing it so the heavy file I/O never blocks AppState.
+struct ModSnapshot {
+    folder: PathBuf,
+    name: String,
+    version: String,
+    author: Option<String>,
+    description: Option<String>,
+    download_links: Vec<DownloadLink>,
+    sort_priority: u32,
+    tags: Vec<String>,
+}
 
 #[tauri::command]
-pub fn export_modlist(
-    state: State<AppState>,
+pub async fn export_modlist(
+    state: tauri::State<'_, AppState>,
+    window: tauri::Window,
     list_name: String,
     description: String,
     author: String,
     output_path: String,
+    include_hashes: bool,
 ) -> Result<(), AppError> {
-    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    // ── Phase 1: hold lock only long enough to read in-memory state ──────────
+    let (game_name, game_path_hint, snapshots) = {
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
 
-    let active_profile = if let Some(ref id) = data.active_profile_id {
-        data.profiles.iter().find(|p| &p.id == id)
-    } else {
-        None
+        let active_profile = if let Some(ref id) = data.active_profile_id {
+            data.profiles.iter().find(|p| &p.id == id)
+        } else {
+            None
+        };
+
+        let (game_name, game_path_hint, mods_path) = match active_profile {
+            Some(p) => (p.game_name.clone(), p.game_path.to_string_lossy().to_string(), Some(p.mods_path.clone())),
+            None => (String::new(), String::new(), None),
+        };
+
+        let snapshots: Vec<ModSnapshot> = data.mods.iter().enumerate().filter_map(|(i, m)| {
+            if let Some(ref mp) = mods_path {
+                if !m.mod_folder_path.starts_with(mp) {
+                    return None;
+                }
+            }
+            Some(ModSnapshot {
+                folder: m.mod_folder_path.clone(),
+                name: m.name.clone(),
+                version: m.version.clone(),
+                author: m.author.clone(),
+                description: m.description.clone(),
+                download_links: m.download_links.iter().map(|dl| DownloadLink {
+                    url: dl.url.clone(),
+                    link_type: dl.link_type.clone(),
+                    label: dl.label.clone(),
+                }).collect(),
+                sort_priority: if m.enabled { (i as u32) * 10 } else { 9999 },
+                tags: m.tags.clone(),
+            })
+        }).collect();
+
+        (game_name, game_path_hint, snapshots)
+        // lock dropped here
     };
 
-    let (game_name, game_path_hint, mods_path) = match active_profile {
-        Some(p) => (p.game_name.clone(), p.game_path.to_string_lossy().to_string(), Some(p.mods_path.clone())),
-        None => (String::new(), String::new(), None)
-    };
-
+    // ── Phase 2: process each mod off the async thread, emit progress ─────────
+    let total = snapshots.len();
     let mut modlist = ModList::new(list_name, game_name, game_path_hint);
     modlist.description = Some(description);
     modlist.author = Some(author);
 
-    for (i, m) in data.mods.iter().enumerate() {
-        // Filter: Only mods from the active profile's path
-        if let Some(ref mp) = mods_path {
-            if !m.mod_folder_path.starts_with(mp) {
-                continue;
-            }
-        }
+    for (i, snap) in snapshots.into_iter().enumerate() {
+        let _ = window.emit("bmm://mm-export-progress", serde_json::json!({
+            "current": i,
+            "total": total,
+            "mod_name": &snap.name,
+        }));
 
-        // Build the file tree for this mod
-        let file_tree = build_file_tree(m);
-
-        // Convert download links from ModEntry
-        let download_links: Vec<DownloadLink> = m.download_links.iter().map(|dl| {
-            DownloadLink {
-                url: dl.url.clone(),
-                link_type: dl.link_type.clone(),
-                label: dl.label.clone(),
-            }
-        }).collect();
+        // spawn_blocking keeps the file walk off the async runtime thread
+        let folder = snap.folder.clone();
+        let file_tree = tokio::task::spawn_blocking(move || build_file_tree(&folder, include_hashes))
+            .await
+            .unwrap_or_default();
 
         modlist.mods.push(ModListEntry {
-            name: m.name.clone(),
-            version: m.version.clone(),
-            author: m.author.clone(),
-            description: m.description.clone(),
-            download_links,
-            sort_priority: if m.enabled { (i as u32) * 10 } else { 9999 },
+            name: snap.name,
+            version: snap.version,
+            author: snap.author,
+            description: snap.description,
+            download_links: snap.download_links,
+            sort_priority: snap.sort_priority,
             file_tree,
             install_notes: String::new(),
-            tags: m.tags.clone(),
+            tags: snap.tags,
         });
     }
 
+    let _ = window.emit("bmm://mm-export-progress", serde_json::json!({
+        "current": total,
+        "total": total,
+        "done": true,
+    }));
+
     let json = serde_json::to_string_pretty(&modlist)?;
-    std::fs::write(&output_path, json)?;
+    tokio::task::spawn_blocking(move || std::fs::write(&output_path, json))
+        .await
+        .map_err(|e| AppError::LockError(e.to_string()))??;
     Ok(())
 }
 
-/// Build the file tree arborescence for a mod by walking its folder
-fn build_file_tree(m: &ModEntry) -> Vec<ModFileEntry> {
+/// Walk a mod folder and record each file's relative path, size, and optional SHA-256.
+fn build_file_tree(folder: &PathBuf, include_hashes: bool) -> Vec<ModFileEntry> {
     let mut entries = Vec::new();
-    if let Ok(files) = fs_utils::list_mod_files(&m.mod_folder_path) {
+    if let Ok(files) = fs_utils::list_mod_files(folder) {
         for rel in files {
-            let full = m.mod_folder_path.join(&rel);
-            // unwrap_or(0) is safe here — missing metadata just means we report 0 bytes
+            let full = folder.join(&rel);
             let size = std::fs::metadata(&full).map(|md| md.len()).unwrap_or(0);
+            let sha256 = if include_hashes { hash_file_streaming(&full) } else { None };
             entries.push(ModFileEntry {
                 relative_path: rel.to_string_lossy().to_string(),
                 is_directory: false,
                 size,
+                sha256,
             });
         }
     }
     entries
+}
+
+/// SHA-256 of a file read in 64 KiB chunks — safe for large files.
+fn hash_file_streaming(path: &PathBuf) -> Option<String> {
+    let file = std::fs::File::open(path).ok()?;
+    let mut reader = std::io::BufReader::with_capacity(65536, file);
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 65536];
+    loop {
+        let n = reader.read(&mut buf).ok()?;
+        if n == 0 { break; }
+        hasher.update(&buf[..n]);
+    }
+    Some(hex::encode(hasher.finalize()))
 }
 
 #[tauri::command]

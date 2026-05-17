@@ -28,21 +28,60 @@ export function initModlist() {
         previewCard.style.display = 'none';
     });
     cancelExport.addEventListener('click', () => { exportCard.style.display = 'none'; });
+    // Dim the SHA badge when toggle is off
+    const hashToggle = document.getElementById('mm-include-hashes');
+    const hashesBadge = document.getElementById('mm-hashes-badge');
+    hashToggle?.addEventListener('change', () => {
+        if (hashesBadge)
+            hashesBadge.style.opacity = hashToggle.checked ? '1' : '0.3';
+    });
     confirmExportBtn.addEventListener('click', async () => {
         const listName = document.getElementById('mm-list-name').value.trim() || 'Ma liste';
         const description = document.getElementById('mm-description').value.trim();
         const author = document.getElementById('mm-author').value.trim();
+        const includeHashes = document.getElementById('mm-include-hashes')?.checked ?? true;
         const path = await saveFile([{ name: 'Mod List', extensions: ['mm', 'json'] }]);
         if (!path)
             return;
+        const progressOverlay = document.getElementById('export-progress-overlay');
+        const progressBar = document.getElementById('export-progress-bar');
+        const progressCount = document.getElementById('export-progress-count');
+        const progressLabel = document.getElementById('export-progress-label');
+        if (progressOverlay)
+            progressOverlay.style.display = '';
+        confirmExportBtn.disabled = true;
+        let unlisten = null;
         try {
-            await invoke('export_modlist', { listName, description, author, outputPath: path });
+            unlisten = await window.__TAURI__.event.listen('bmm://mm-export-progress', (e) => {
+                const { current, total, mod_name, done } = e.payload;
+                const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+                if (progressBar)
+                    progressBar.style.width = pct + '%';
+                if (progressCount)
+                    progressCount.textContent = `${current}/${total}`;
+                if (progressLabel)
+                    progressLabel.textContent = done ? '' : (mod_name || '');
+            });
+            await invoke('export_modlist', { listName, description, author, outputPath: path, includeHashes });
             toast(t('mm.exportSuccess'), 'success');
             dispatchBmmAction(BMM_ACTIONS.MODLIST_EXPORTED, { name: listName });
             exportCard.style.display = 'none';
         }
         catch (err) {
             toast(t('mm.exportError').replace('{err}', err), 'error');
+        }
+        finally {
+            unlisten?.();
+            confirmExportBtn.disabled = false;
+            if (progressOverlay) {
+                progressOverlay.style.display = 'none';
+                if (progressBar)
+                    progressBar.style.width = '0%';
+                if (progressCount)
+                    progressCount.textContent = '';
+                if (progressLabel)
+                    progressLabel.textContent = '';
+            }
         }
     });
     importBtn.addEventListener('click', async () => {
@@ -213,32 +252,30 @@ export function initModlist() {
         }
     });
     // Listen for progress events
-    import('https://unpkg.com/@tauri-apps/api@1/event.js').then(({ listen }) => {
-        listen('bmm://mod-download-progress', (e) => {
-            const data = e.payload; // { mod_index, total_mods, mod_name, progress, status }
-            const container = document.getElementById('imported-progress-list');
-            if (!container)
-                return;
-            let row = document.getElementById(`dl-progress-${data.mod_index}`);
-            if (!row) {
-                row = document.createElement('div');
-                row.id = `dl-progress-${data.mod_index}`;
-                row.style.cssText = 'margin-bottom:10px; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05)';
-                container.appendChild(row);
-            }
-            row.innerHTML = `
-                <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px">
-                    <span style="font-weight:600; color:var(--text-primary)">${escHtml(data.mod_name)}</span>
-                    <span style="color:var(--accent); font-family:var(--font-mono)">${Math.round(data.progress)}%</span>
-                </div>
-                <div style="height:4px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden">
-                    <div style="height:100%; background:var(--accent); width:${data.progress}%; transition:width 0.2s ease; box-shadow:0 0 8px var(--accent)"></div>
-                </div>
-                <div style="font-size:9px; color:var(--text-muted); margin-top:4px; text-transform:uppercase">${escHtml(data.status)}</div>
-            `;
-            // Auto scroll progress list
-            container.scrollTop = container.scrollHeight;
-        });
+    window.__TAURI__.event.listen('bmm://mod-download-progress', (e) => {
+        const data = e.payload; // { mod_index, total_mods, mod_name, progress, status }
+        const container = document.getElementById('imported-progress-list');
+        if (!container)
+            return;
+        let row = document.getElementById(`dl-progress-${data.mod_index}`);
+        if (!row) {
+            row = document.createElement('div');
+            row.id = `dl-progress-${data.mod_index}`;
+            row.style.cssText = 'margin-bottom:10px; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05)';
+            container.appendChild(row);
+        }
+        row.innerHTML = `
+            <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px">
+                <span style="font-weight:600; color:var(--text-primary)">${escHtml(data.mod_name)}</span>
+                <span style="color:var(--accent); font-family:var(--font-mono)">${Math.round(data.progress)}%</span>
+            </div>
+            <div style="height:4px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden">
+                <div style="height:100%; background:var(--accent); width:${data.progress}%; transition:width 0.2s ease; box-shadow:0 0 8px var(--accent)"></div>
+            </div>
+            <div style="font-size:9px; color:var(--text-muted); margin-top:4px; text-transform:uppercase">${escHtml(data.status)}</div>
+        `;
+        // Auto scroll progress list
+        container.scrollTop = container.scrollHeight;
     });
     // Handle path override button
     previewCard.addEventListener('click', async (e) => {
@@ -343,18 +380,30 @@ export function renderImportedModlist(modlist) {
         const modSize = m.file_tree ? m.file_tree.reduce((acc, f) => acc + (f.size || 0), 0) : 0;
         // Presence check
         const isAlreadyPresent = currentMods.some(cm => cm.name === m.name);
+        // Hash integrity summary
+        const fileEntries = m.file_tree ? m.file_tree.filter(f => !f.is_directory) : [];
+        const hashedFiles = fileEntries.filter(f => f.sha256).length;
+        const hashBadge = fileEntries.length === 0 ? '' :
+            hashedFiles === fileEntries.length
+                ? `<span style="font-size:9px;font-weight:700;color:#10b981;background:rgba(16,185,129,0.12);padding:2px 6px;border-radius:4px;border:1px solid rgba(16,185,129,0.25);flex-shrink:0;white-space:nowrap" title="${t('mm.hashVerifiedAll')} (${hashedFiles} ${t('mm.hashFiles')})">SHA-256 ✓</span>`
+                : hashedFiles > 0
+                    ? `<span style="font-size:9px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(245,158,11,0.25);flex-shrink:0;white-space:nowrap" title="${t('mm.hashPartial')}">${hashedFiles}/${fileEntries.length} SHA</span>`
+                    : `<span style="font-size:9px;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:2px 6px;border-radius:4px;border:1px solid var(--border);flex-shrink:0;white-space:nowrap" title="${t('mm.hashNone')}">${t('mm.noHashes')}</span>`;
         return `
         <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; flex-direction:column; gap:8px; position:relative; overflow:hidden; ${isAlreadyPresent ? 'opacity: 0.7;' : ''}">
           <div style="position:absolute; left:0; top:0; bottom:0; width:3px; background:${isAlreadyPresent ? 'var(--success)' : 'var(--accent)'}"></div>
           
-          <div style="display:flex; align-items:center; justify-content:space-between">
-            <div style="display:flex; align-items:center; gap:12px">
-                <span style="font-weight:700; font-size:14px; color:var(--text-primary)">${escHtml(m.name)}</span>
-                <span style="font-family:var(--font-mono); font-size:10px; color:var(--cyan); background:rgba(6,182,212,0.1); padding:1px 6px; border-radius:4px; border:1px solid rgba(6,182,212,0.2)">v${escHtml(m.version)}</span>
-                <span style="font-size:10px; color:var(--text-muted); font-family:var(--font-mono)">${formatBytes(modSize)}</span>
-                ${isAlreadyPresent ? `<span style="font-size:9px; font-weight:800; color:#10b981; background:rgba(16,185,129,0.15); padding:2px 6px; border-radius:4px; border:1px solid rgba(16,185,129,0.3)">${t('mm.modPresent')}</span>` : `<span style="font-size:9px; font-weight:800; color:var(--accent); background:var(--accent-dim); padding:2px 6px; border-radius:4px; border:1px solid var(--border-accent)">${t('mm.modNew')}</span>`}
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+            <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0; flex-wrap:wrap">
+                <span style="font-weight:700; font-size:14px; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px">${escHtml(m.name)}</span>
+                <span style="font-family:var(--font-mono); font-size:10px; color:var(--cyan); background:rgba(6,182,212,0.1); padding:1px 6px; border-radius:4px; border:1px solid rgba(6,182,212,0.2); white-space:nowrap">v${escHtml(m.version || '?')}</span>
+                <span style="font-size:10px; color:var(--text-muted); font-family:var(--font-mono); white-space:nowrap">${formatBytes(modSize)}</span>
+                ${isAlreadyPresent ? `<span style="font-size:9px; font-weight:800; color:#10b981; background:rgba(16,185,129,0.15); padding:2px 6px; border-radius:4px; border:1px solid rgba(16,185,129,0.3); white-space:nowrap">${t('mm.modPresent')}</span>` : `<span style="font-size:9px; font-weight:800; color:var(--accent); background:var(--accent-dim); padding:2px 6px; border-radius:4px; border:1px solid var(--border-accent); white-space:nowrap">${t('mm.modNew')}</span>`}
+                ${hashBadge}
             </div>
-            <div style="font-size:10px; font-weight:700; font-family:var(--font-mono); padding:2px 6px; border-radius:4px; ${(() => {
+            <div style="display:flex; align-items:center; gap:8px; flex-shrink:0">
+                <div
+                    style="font-size:10px; font-weight:700; font-family:var(--font-mono); padding:2px 6px; border-radius:4px; cursor:help; ${(() => {
             const p = m.sort_priority || 0;
             if (p >= 1000) {
                 const alpha = Math.min(0.8, 0.15 + (p - 1000) / 10000);
@@ -368,13 +417,18 @@ export function renderImportedModlist(modlist) {
                 const alpha = Math.min(0.4, 0.05 + p / 100);
                 return `background:rgba(255,255,255,${alpha}); color:var(--text-muted); border:1px solid rgba(255,255,255,${alpha + 0.05})`;
             }
-        })()}" title="PRIO: ${m.sort_priority}">
-                ${m.sort_priority >= 1000 ? 'MAX' : m.sort_priority >= 100 ? 'MED' : 'LOW'}
+        })()}"
+                    onmouseenter="window.showTaskyHelp('mm.priorityTip', 'icon-priority')"
+                    onmouseleave="window.hideTaskyHelp()"
+                    title="PRIO: ${m.sort_priority}">
+                    ${m.sort_priority >= 1000 ? 'MAX' : m.sort_priority >= 100 ? 'MED' : 'LOW'} <span style="opacity:0.55">#${m.sort_priority}</span>
+                </div>
+                <input type="checkbox" class="mm-mod-checkbox" data-index="${idx}" ${isAlreadyPresent ? '' : 'checked'} style="width:18px; height:18px; cursor:pointer; flex-shrink:0" title="${isAlreadyPresent ? t('mm.alreadyPresent') : ''}">
             </div>
           </div>
-          
+
           ${m.description ? `<p style="font-size:12px; color:var(--text-secondary); margin:0; opacity:0.8">${escHtml(m.description)}</p>` : ''}
-          
+
           ${m.install_notes ? `
             <div style="background:rgba(245,158,11,0.08); border:1px dashed rgba(245,158,11,0.3); border-radius:8px; padding:10px; margin-top:4px">
                 <div style="font-size:10px; font-weight:800; color:#fbbf24; text-transform:uppercase; margin-bottom:4px; display:flex; align-items:center; gap:6px">
@@ -384,10 +438,10 @@ export function renderImportedModlist(modlist) {
                 <p style="font-size:11.5px; color:var(--text-secondary); margin:0; line-height:1.5">${escHtml(m.install_notes)}</p>
             </div>
           ` : ''}
-          
+
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
             ${m.tags && m.tags.length > 0 ? m.tags.map(tag => `<span style="font-size:9px; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; color:var(--text-secondary); border:1px solid var(--border)">${escHtml(tag)}</span>`).join('') : ''}
-            
+
             ${m.download_links && m.download_links.length > 0 ? m.download_links.map(l => `
                 <a href="${l.url}" target="_blank" class="btn btn-sm btn-ghost" style="padding:2px 8px; font-size:10px; height:22px; gap:4px; text-decoration:none; color:var(--accent)">
                     ${getLinkIcon(l.link_type)} ${escHtml(l.label || t('common.link'))}
@@ -395,28 +449,41 @@ export function renderImportedModlist(modlist) {
             `).join('') : ''}
           </div>
 
-          <!-- Mod Selection Checkbox -->
-          <div style="position:absolute; right:16px; top:50%; transform:translateY(-50%); display:flex; align-items:center; gap:10px">
-              <input type="checkbox" class="mm-mod-checkbox" data-index="${idx}" ${isAlreadyPresent ? '' : 'checked'} style="width:18px; height:18px; cursor:pointer" title="${isAlreadyPresent ? t('mm.alreadyPresent') : ''}">
-          </div>
-
-          ${fileCount > 0 ? `
+          ${fileCount > 0 ? (() => {
+            const hashedCount = m.file_tree.filter(f => !f.is_directory && f.sha256).length;
+            const fileCount2 = m.file_tree.filter(f => !f.is_directory).length;
+            const allHashed = hashedCount === fileCount2 && fileCount2 > 0;
+            return `
             <details style="margin-top:4px">
               <summary style="font-size:11px; color:var(--text-muted); cursor:pointer; font-family:var(--font-mono); display:flex; align-items:center; gap:6px; user-select:none">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
                 ${t('mm.fileTree').replace('{count}', fileCount)}
+                ${allHashed
+                ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);font-family:var(--font-sans);letter-spacing:0.03em" title="${t('mm.hashVerifiedAll')}">SHA-256 ✓</span>`
+                : hashedCount > 0
+                    ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);font-family:var(--font-sans)" title="${t('mm.hashPartial')}">${hashedCount}/${fileCount2} SHA-256</span>`
+                    : `<span style="margin-left:4px;font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.04);color:var(--text-muted);border:1px solid var(--border);font-family:var(--font-sans)" title="${t('mm.hashNone')}">${t('mm.noHashes')}</span>`}
               </summary>
-              <div style="max-height:150px; overflow-y:auto; margin-top:8px; padding:8px; background:rgba(0,0,0,0.2); border-radius:6px; font-size:10.5px; font-family:var(--font-mono); color:var(--text-muted); border:1px solid rgba(255,255,255,0.03)">
+              <div style="max-height:180px; overflow-y:auto; margin-top:8px; padding:8px; background:rgba(0,0,0,0.2); border-radius:6px; font-size:10.5px; font-family:var(--font-mono); color:var(--text-muted); border:1px solid rgba(255,255,255,0.03)">
                 ${m.file_tree.map(f => `
-                    <div style="padding:2px 0; display:flex; align-items:center; gap:6px; border-bottom:1px solid rgba(255,255,255,0.02)">
-                        <span style="opacity:0.6">${f.is_directory ? '📁' : '📄'}</span> 
+                    <div style="padding:3px 0; display:flex; align-items:center; gap:6px; border-bottom:1px solid rgba(255,255,255,0.02)">
+                        <span style="opacity:0.6">${f.is_directory ? '📁' : '📄'}</span>
                         <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${escAttr(f.relative_path)}">${escHtml(f.relative_path)}</span>
-                        ${!f.is_directory ? `<span style="opacity:0.4; font-size:9px">${formatBytes(f.size)}</span>` : ''}
+                        ${!f.is_directory ? `<span style="opacity:0.4; font-size:9px; flex-shrink:0">${formatBytes(f.size)}</span>` : ''}
+                        ${f.sha256 ? `
+                            <span
+                                style="font-size:9px; color:rgba(16,185,129,0.7); flex-shrink:0; cursor:pointer; padding:1px 4px; border-radius:3px; border:1px solid rgba(16,185,129,0.2); background:rgba(16,185,129,0.05); transition:background 0.15s"
+                                title="${escAttr(f.sha256)}"
+                                onclick="navigator.clipboard.writeText('${escAttr(f.sha256)}').then(()=>{this.style.background='rgba(16,185,129,0.2)';setTimeout(()=>this.style.background='rgba(16,185,129,0.05)',800)})"
+                                onmouseenter="this.style.background='rgba(16,185,129,0.12)'"
+                                onmouseleave="this.style.background='rgba(16,185,129,0.05)'"
+                            >${f.sha256.substring(0, 8)}…</span>
+                        ` : ''}
                     </div>
                 `).join('')}
               </div>
-            </details>
-          ` : ''}
+            </details>`;
+        })() : ''}
         </div>
         `;
     }).join('');

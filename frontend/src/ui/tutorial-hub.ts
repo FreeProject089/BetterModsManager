@@ -321,7 +321,10 @@ export function openAssetsPanel(tutId: string, onContinue?: () => void): void {
             <p class="tut-assets-desc">${t('hub.assets.desc')}</p>
             <div class="tut-asset-list">${items}</div>
             <div class="tut-assets-actions">
-                <button class="btn btn-ghost" id="btn-assets-open-folder">${t('hub.assets.openFolderBtn')}</button>
+                <button class="btn btn-ghost tut-assets-download-btn" id="btn-assets-download">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    ${t('hub.assets.downloadBtn')}
+                </button>
                 ${continueBtnHtml}
             </div>
             <p class="tut-assets-path">assets/tutorial-assets/</p>
@@ -330,15 +333,23 @@ export function openAssetsPanel(tutId: string, onContinue?: () => void): void {
 
     document.getElementById('app-window-outer')?.appendChild(overlay);
     document.getElementById('btn-assets-close')?.addEventListener('click', () => overlay.remove());
-    document.getElementById('btn-assets-open-folder')?.addEventListener('click', async () => {
+    document.getElementById('btn-assets-download')?.addEventListener('click', async () => {
+        const btn = document.getElementById('btn-assets-download') as HTMLButtonElement | null;
         try {
             const tauri = (window as any).__TAURI__;
             if (tauri?.core?.invoke) {
-                await tauri.core.invoke('open_path', { path: 'frontend/assets/tutorial-assets' });
+                if (btn) { btn.disabled = true; btn.textContent = t('hub.assets.downloading'); }
+                await tauri.core.invoke('open_path', { path: 'assets/tutorial-assets' });
             } else {
-                await navigator.clipboard.writeText('frontend/assets/tutorial-assets/');
+                await navigator.clipboard.writeText('assets/tutorial-assets/');
             }
-        } catch (_) {}
+        } catch (_) {
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${t('hub.assets.downloadBtn')}`;
+            }
+        }
     });
     document.getElementById('btn-assets-continue')?.addEventListener('click', () => {
         overlay.remove();

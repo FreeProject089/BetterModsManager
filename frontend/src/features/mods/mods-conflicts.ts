@@ -151,6 +151,10 @@ export async function openGlobalConflictModal(preselectModId = null) {
       }
 
       let html = '';
+      let totalActive = 0;
+      let totalPotential = 0;
+      const rendered = [];
+
       allConflicts.forEach(item => {
         let filteredReports = item.reports;
         if (tFilter !== 'all') {
@@ -160,7 +164,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
            const pName = profiles.find(pr => pr.id === p)?.name || '';
            filteredReports = filteredReports.filter(r => r.other_profile_name === pName);
         }
-        
+
         if (q) {
            const sourceMatch = item.sourceModName.toLowerCase().includes(q);
            if (!sourceMatch) {
@@ -170,6 +174,19 @@ export async function openGlobalConflictModal(preselectModId = null) {
 
         if (filteredReports.length === 0) return;
 
+        const activeCount = filteredReports.filter(r => r.status === 'Active').length;
+        const potentialCount = filteredReports.filter(r => r.status === 'Potential').length;
+        totalActive += activeCount;
+        totalPotential += potentialCount;
+
+        const hasIntra = filteredReports.some(r => r.category === 'Intra');
+        const hasInter = filteredReports.some(r => r.category === 'Inter');
+
+        const typeBadges = [
+          hasIntra ? `<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3)">INTRA</span>` : '',
+          hasInter ? `<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;background:rgba(59,130,246,0.15);color:var(--accent);border:1px solid rgba(59,130,246,0.3)">INTER</span>` : '',
+        ].filter(Boolean).join('');
+
         const groups = {};
         filteredReports.forEach(r => {
            if (!groups[r.other_profile_name]) groups[r.other_profile_name] = [];
@@ -178,45 +195,69 @@ export async function openGlobalConflictModal(preselectModId = null) {
 
         const targetsHtml = Object.keys(groups).map(pName => {
            const grps = groups[pName];
-           grps.sort((a,b) => a.activation_order - b.activation_order);
-           
+           grps.sort((a, b) => a.activation_order - b.activation_order);
+
            return `
-             <div style="margin-top:6px">
-               <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:600">${escHtml(pName)}</div>
-               <div style="display:flex;flex-direction:column;gap:4px">
-                 ${grps.map(r => `
-                   <div style="display:flex;align-items:center;background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:6px;border-left:3px solid ${r.status === 'Active' ? 'var(--danger)' : 'var(--warning)'};justify-content:space-between">
-                     <span style="font-size:12px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;cursor:help" 
+             <div style="margin-bottom:8px">
+               <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:6px">
+                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                 <span style="font-size:10px;color:var(--text-secondary);font-weight:700;text-transform:uppercase;letter-spacing:0.04em">${escHtml(pName)}</span>
+                 <span style="font-size:9px;color:var(--text-muted);background:rgba(255,255,255,0.05);padding:1px 5px;border-radius:4px;margin-left:auto">${grps.length} ${grps.length > 1 ? (t('conflict.conflicts')||'conflicts') : (t('conflict.conflict')||'conflict')}</span>
+               </div>
+               <div style="display:flex;flex-direction:column;gap:3px;padding-left:4px">
+                 ${grps.map(r => {
+                   const isActive = r.status === 'Active';
+                   const statusColor = isActive ? 'var(--danger)' : 'var(--warning)';
+                   const statusBg = isActive ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)';
+                   return `
+                   <div style="display:flex;align-items:center;background:${statusBg};padding:7px 10px;border-radius:6px;border-left:2px solid ${statusColor};gap:8px">
+                     <span style="font-size:11.5px;font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help"
                            title="${escAttr(r.other_mod_name)}"
                            onmouseenter="window.showTaskyHelp('${escAttr(escJs(r.other_mod_name))}', 'package', true)"
                            onmouseleave="window.hideTaskyHelp()">${escHtml(r.other_mod_name)}</span>
-                     <div style="display:flex;align-items:center;gap:10px">
-                       ${r.status === 'Active' ? `<span style="font-size:9px;background:rgba(255,255,255,0.1);color:var(--text-primary);padding:2px 5px;border-radius:4px" title="Ordre d activation">#${r.activation_order}</span>` : ''}
-                       <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted);cursor:pointer;text-decoration:underline" onclick="window.showConflictContextMenu(event, '${item.sourceModId}', '${r.other_mod_id}')">${r.file_count} f.</span>
-                       <span style="font-size:9px;font-weight:900;padding:2px 6px;border-radius:12px;text-transform:uppercase;color:${r.status==='Active'?'var(--danger)':'var(--warning)'};border:1px solid ${r.status==='Active'?'var(--danger)':'var(--warning)'}">${r.status === 'Active' ? (t('conflict.active')||'ACTIF') : (t('conflict.potential')||'POTENTIEL')}</span>
-                     </div>
-                   </div>
-                 `).join('')}
+                     ${isActive ? `<span style="font-size:10px;background:rgba(255,255,255,0.08);color:var(--text-secondary);padding:1px 6px;border-radius:4px;font-family:var(--font-mono);flex-shrink:0" title="${t('conflict.activationOrder')||'Activation order'}">#${r.activation_order}</span>` : ''}
+                     <button style="font-size:10px;font-family:var(--font-mono);color:var(--accent);background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);padding:2px 7px;border-radius:5px;cursor:pointer;flex-shrink:0" onclick="window.showConflictContextMenu(event,'${item.sourceModId}','${r.other_mod_id}')">${r.file_count} ${t('conflict.files')||'files'}</button>
+                     <span style="font-size:9px;font-weight:900;padding:2px 7px;border-radius:10px;text-transform:uppercase;color:${statusColor};border:1px solid ${statusColor};background:${statusBg};flex-shrink:0">${isActive ? (t('conflict.active')||'ACTIVE') : (t('conflict.potential')||'POTENTIAL')}</span>
+                   </div>`;
+                 }).join('')}
                </div>
              </div>
            `;
         }).join('');
 
-        html += `
-          <div class="conflict-group-card" style="display:flex;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px;min-height:95px;height:auto">
-             <div style="flex:0 0 160px;padding:10px 12px;border-right:1px solid var(--border);background:rgba(255,255,255,0.02);display:flex;flex-direction:column;justify-content:center">
-               <div style="font-weight:600;font-size:12px;color:var(--text-primary);margin-bottom:2px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all;overflow-wrap:anywhere;cursor:help"
-                    onmouseenter="window.showTaskyHelp('${escAttr(escJs(item.sourceModName))}', 'package', true)"
-                    onmouseleave="window.hideTaskyHelp()">${escHtml(item.sourceModName)}</div>
-               <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">${t('conflict.modSource') || 'Mod Source'}</div>
+        rendered.push(`
+          <div class="conflict-group-card" style="background:rgba(0,0,0,0.22);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:10px">
+             <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border)">
+               <div style="width:6px;height:6px;border-radius:50%;background:${activeCount > 0 ? 'var(--danger)' : 'var(--warning)'};flex-shrink:0;box-shadow:0 0 6px ${activeCount > 0 ? 'var(--danger)' : 'var(--warning)'}"></div>
+               <span style="font-weight:700;font-size:12.5px;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help"
+                     title="${escAttr(item.sourceModName)}"
+                     onmouseenter="window.showTaskyHelp('${escAttr(escJs(item.sourceModName))}', 'package', true)"
+                     onmouseleave="window.hideTaskyHelp()">${escHtml(item.sourceModName)}</span>
+               <div style="display:flex;align-items:center;gap:5px">${typeBadges}</div>
+               ${activeCount > 0 ? `<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:10px;color:var(--danger);border:1px solid var(--danger);background:rgba(239,68,68,0.1)">${activeCount} ${t('conflict.active')||'ACTIVE'}</span>` : ''}
+               ${potentialCount > 0 ? `<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:10px;color:var(--warning);border:1px solid var(--warning);background:rgba(245,158,11,0.1)">${potentialCount} ${t('conflict.potential')||'POTENTIAL'}</span>` : ''}
              </div>
-             <div style="flex:2;padding:8px 12px;overflow-y:auto;background:rgba(0,0,0,0.1)">
+             <div style="padding:10px 14px;overflow-y:auto;max-height:280px">
                ${targetsHtml}
              </div>
           </div>
-        `;
+        `);
       });
-      container.innerHTML = html || `<div style="padding:40px;text-align:center;color:var(--text-muted)">${t('conflict.empty') || 'None conflit.'}</div>`;
+
+      if (rendered.length > 0) {
+        const summaryBar = `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;margin-bottom:12px;background:rgba(0,0,0,0.2);border-radius:8px;border:1px solid var(--border)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${totalActive > 0 ? 'var(--danger)' : 'var(--warning)'}" stroke-width="2.5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <span style="font-size:12px;font-weight:700;color:var(--text-primary)">${rendered.length} ${t('conflict.modsInConflict')||'mods in conflict'}</span>
+          ${totalActive > 0 ? `<span style="font-size:11px;color:var(--danger);font-weight:600">— ${totalActive} ${t('conflict.active')||'active'}</span>` : ''}
+          ${totalPotential > 0 ? `<span style="font-size:11px;color:var(--warning);font-weight:600">— ${totalPotential} ${t('conflict.potential')||'potential'}</span>` : ''}
+        </div>`;
+        container.innerHTML = summaryBar + rendered.join('');
+      } else {
+        container.innerHTML = `<div style="padding:48px;text-align:center;color:var(--text-muted)">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.25;margin-bottom:12px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <div>${t('conflict.empty')||'No conflicts detected.'}</div>
+        </div>`;
+      }
     };
 
     renderList(true);

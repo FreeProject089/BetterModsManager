@@ -39,6 +39,7 @@ export async function initModpackCreator(container) {
                 toast(t('modpack.importSuccess') || 'Modpack importé avec succès', 'success');
                 await _loadData();
                 _renderModpackList(container);
+                window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
             } catch (err) {
                 if (String(err) !== 'repo.errCancel') toast(String(err), 'error');
             }

@@ -4010,6 +4010,25 @@ select.input-field option {
     transform: translateY(-1px);
 }
 
+.tut-skip-all-btn {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+
+.tut-skip-all-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
 .tut-next-btn:disabled {
     opacity: 0.38;
     cursor: not-allowed;

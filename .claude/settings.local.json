@@ -3,7 +3,11 @@
     "allow": [
       "Bash(npx tsc *)",
       "Bash(Get-Item \"E:\\\\Travaille\\\\CodageAutres\\\\Better Project\\\\BetterModsManager\\\\frontend\\\\js\\\\ui\\\\tutorial-hub.js\")",
-      "Bash(Select-Object LastWriteTime)"
+      "Bash(Select-Object LastWriteTime)",
+      "Bash(git checkout *)",
+      "Bash(node scripts/reorganize-json.js)",
+      "Bash(node --input-type=commonjs -e ' *)",
+      "Bash(cargo check *)"
     ]
   }
 }

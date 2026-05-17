@@ -401,7 +401,10 @@ function _renderStep(): void {
                 ${!isFirst
                     ? `<button class="tut-prev-btn" id="btn-tut-prev">← ${t('hub.prev')}</button>`
                     : `<span></span>`}
-                <button class="tut-next-btn" id="btn-tut-next" ${step.action ? 'disabled' : ''} style="background:${tut.color};border-color:${tut.color}">${nextLabel}</button>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <button class="tut-skip-all-btn" id="btn-tut-skip-all" title="${t('tut.skip.title')}">${t('tut.skip')}</button>
+                    <button class="tut-next-btn" id="btn-tut-next" ${step.action ? 'disabled' : ''} style="background:${tut.color};border-color:${tut.color}">${nextLabel}</button>
+                </div>
             </div>
         </div>
     `;
@@ -432,6 +435,9 @@ function _renderStep(): void {
 
     /* ── Clickable nav hint ── */
     document.getElementById('btn-tut-nav-hint')?.addEventListener('click', () => _navigate(step.nav));
+
+    /* ── Skip all (quit tutorial + hub) ── */
+    document.getElementById('btn-tut-skip-all')?.addEventListener('click', () => _skipTutorial());
 
     /* ── Skip action ── */
     document.getElementById('btn-tut-skip-action')?.addEventListener('click', () => {
@@ -539,6 +545,18 @@ function _renderStep(): void {
             if (nextBtn) nextBtn.disabled = false;
         });
     }
+}
+
+function _skipTutorial(): void {
+    _cleanup();
+    _unregisterLangListener();
+    _isMinimized = false;
+    const panel = document.getElementById('tut-engine-panel');
+    if (panel) {
+        panel.classList.add('closing');
+        panel.addEventListener('animationend', () => { panel.remove(); _panelLeft = null; _panelTop = null; }, { once: true });
+    }
+    // Intentionally skip _onClose so the hub does not reopen
 }
 
 function _prevStep(): void {
