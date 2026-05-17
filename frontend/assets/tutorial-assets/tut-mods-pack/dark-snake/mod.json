@@ -1,0 +1,7 @@
+{
+  "name": "Dark Snake",
+  "target": "snake-game",
+  "version": "1.0.0",
+  "main": "dark.js",
+  "description": "Removes the background grid and applies a clean monochrome palette."
+}

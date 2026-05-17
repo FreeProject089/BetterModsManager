@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flappy Tasky</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b1220; color: #fff; font-family: system-ui, sans-serif; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; flex-direction: column; }
+  canvas { background: linear-gradient(#1e3a8a, #60a5fa); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+  h1 { margin: 0 0 8px; font-size: 18px; letter-spacing: 0.05em; }
+  .info { margin-top: 8px; font-size: 12px; opacity: 0.7; }
+</style>
+</head>
+<body>
+<h1>FLAPPY TASKY</h1>
+<canvas id="g" width="400" height="500"></canvas>
+<div class="info">Click or press Space to flap</div>
+<script>
+// ── Game state ────────────────────────────────────────────────────────────
+const G = {
+  canvas: document.getElementById('g'),
+  ctx:    document.getElementById('g').getContext('2d'),
+  bird:   { x: 80, y: 250, vy: 0, r: 14 },
+  pipes:  [],
+  gravity: 0.45,
+  jump:    -7.5,
+  pipeGap: 130,
+  speed:   2.2,
+  score:   0,
+  best:    +(localStorage.getItem('flappy.best') || 0),
+  alive:   true,
+  birdColor: '#fbbf24',
+  pipeColor: '#22c55e',
+};
+
+// ── Mod hooks (mods can override these) ───────────────────────────────────
+window.MODS = window.MODS || {};
+window.GAME = G;
+
+function spawnPipe() {
+  const top = 40 + Math.random() * 220;
+  G.pipes.push({ x: G.canvas.width, top, bottom: top + G.pipeGap, scored: false });
+}
+
+function reset() {
+  G.bird.y = 250; G.bird.vy = 0;
+  G.pipes = []; G.score = 0; G.alive = true;
+}
+
+function flap() {
+  if (!G.alive) { reset(); return; }
+  G.bird.vy = G.jump;
+}
+
+document.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); flap(); } });
+G.canvas.addEventListener('click', flap);
+
+let frame = 0;
+function tick() {
+  const { ctx, canvas, bird } = G;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (G.alive) {
+    bird.vy += G.gravity;
+    bird.y  += bird.vy;
+    if (frame % 90 === 0) spawnPipe();
+    G.pipes.forEach(p => p.x -= G.speed);
+    G.pipes = G.pipes.filter(p => p.x > -60);
+
+    // Collisions
+    if (bird.y > canvas.height - bird.r || bird.y < bird.r) G.alive = false;
+    G.pipes.forEach(p => {
+      if (bird.x + bird.r > p.x && bird.x - bird.r < p.x + 50) {
+        if (bird.y - bird.r < p.top || bird.y + bird.r > p.bottom) G.alive = false;
+      }
+      if (!p.scored && p.x + 50 < bird.x) {
+        p.scored = true; G.score++;
+        if (G.score > G.best) { G.best = G.score; localStorage.setItem('flappy.best', G.best); }
+      }
+    });
+  }
+
+  // Draw pipes
+  ctx.fillStyle = G.pipeColor;
+  G.pipes.forEach(p => {
+    ctx.fillRect(p.x, 0, 50, p.top);
+    ctx.fillRect(p.x, p.bottom, 50, canvas.height - p.bottom);
+  });
+
+  // Draw bird
+  ctx.fillStyle = G.birdColor;
+  ctx.beginPath();
+  ctx.arc(bird.x, bird.y, bird.r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Score
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 28px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(G.score, canvas.width / 2, 50);
+  ctx.font = '12px sans-serif';
+  ctx.fillText('Best: ' + G.best, canvas.width / 2, 70);
+
+  if (!G.alive) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 180, canvas.width, 140);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillText('GAME OVER', canvas.width / 2, 230);
+    ctx.font = '13px sans-serif';
+    ctx.fillText('Click or press Space to restart', canvas.width / 2, 270);
+  }
+
+  // Mod hook
+  if (window.MODS.onTick) window.MODS.onTick(G, ctx);
+
+  frame++;
+  requestAnimationFrame(tick);
+}
+
+// ── Mod loader (plug-and-play) ────────────────────────────────────────────
+// Drop a folder into ./mods/ — the loader will discover it via the HTTP
+// directory listing, read its mod.json, and inject the main script.
+// Works with any static server that serves directory indexes (Python
+// http.server, Node serve, nginx autoindex, etc.).
+async function loadMods() {
+  let folders = [];
+  try {
+    const res = await fetch('mods/');
+    if (!res.ok) return;
+    const html = await res.text();
+    const doc  = new DOMParser().parseFromString(html, 'text/html');
+    folders = [...doc.querySelectorAll('a')]
+      .map(a => a.getAttribute('href') || '')
+      .filter(h => h.endsWith('/') && h !== '../' && h !== './' && !h.startsWith('/') && !h.startsWith('?'))
+      .map(h => decodeURIComponent(h.replace(/\/$/, '')));
+  } catch (_) { return; }
+
+  for (const folder of folders) {
+    let entry = 'main.js';
+    try {
+      const mj = await fetch(`mods/${folder}/mod.json`);
+      if (mj.ok) {
+        const data = await mj.json();
+        entry = data.main || (Array.isArray(data.files) && data.files[0]) || entry;
+      }
+    } catch (_) {}
+    await new Promise(resolve => {
+      const s = document.createElement('script');
+      s.src   = `mods/${folder}/${entry}`;
+      s.onload = s.onerror = resolve;
+      document.head.appendChild(s);
+    });
+  }
+}
+
+loadMods().then(tick);
+</script>
+</body>
+</html>

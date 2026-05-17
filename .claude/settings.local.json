@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(Get-Item \"E:\\\\Travaille\\\\CodageAutres\\\\Better Project\\\\BetterModsManager\\\\frontend\\\\js\\\\ui\\\\tutorial-hub.js\")",
+      "Bash(Select-Object LastWriteTime)"
+    ]
+  }
+}

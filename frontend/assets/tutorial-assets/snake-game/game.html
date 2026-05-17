@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Snake Tasky</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b1220; color: #fff; font-family: system-ui, sans-serif; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; flex-direction: column; }
+  canvas { background: #0f1a30; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+  h1 { margin: 0 0 8px; font-size: 18px; letter-spacing: 0.05em; }
+  .info { margin-top: 8px; font-size: 12px; opacity: 0.7; }
+</style>
+</head>
+<body>
+<h1>SNAKE TASKY</h1>
+<canvas id="g" width="400" height="400"></canvas>
+<div class="info">Arrow keys or WASD to move</div>
+<script>
+// ── Game state ────────────────────────────────────────────────────────────
+const G = {
+  canvas: document.getElementById('g'),
+  ctx:    document.getElementById('g').getContext('2d'),
+  cell:   20,
+  snake:  [{ x: 10, y: 10 }],
+  dir:    { x: 1, y: 0 },
+  food:   { x: 15, y: 10 },
+  score:  0,
+  best:   +(localStorage.getItem('snake.best') || 0),
+  alive:  true,
+  speed:  120, // ms per move
+  snakeColor: '#22c55e',
+  foodColor:  '#ef4444',
+  bgGrid:     true,
+};
+
+window.MODS = window.MODS || {};
+window.GAME = G;
+
+function reset() {
+  G.snake = [{ x: 10, y: 10 }];
+  G.dir   = { x: 1, y: 0 };
+  G.score = 0; G.alive = true;
+  placeFood();
+}
+
+function placeFood() {
+  const cols = G.canvas.width  / G.cell;
+  const rows = G.canvas.height / G.cell;
+  while (true) {
+    const x = Math.floor(Math.random() * cols);
+    const y = Math.floor(Math.random() * rows);
+    if (!G.snake.some(s => s.x === x && s.y === y)) { G.food = { x, y }; return; }
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (!G.alive) { reset(); return; }
+  const k = e.key.toLowerCase();
+  if ((k === 'arrowup'    || k === 'w') && G.dir.y === 0) G.dir = { x:  0, y: -1 };
+  if ((k === 'arrowdown'  || k === 's') && G.dir.y === 0) G.dir = { x:  0, y:  1 };
+  if ((k === 'arrowleft'  || k === 'a') && G.dir.x === 0) G.dir = { x: -1, y:  0 };
+  if ((k === 'arrowright' || k === 'd') && G.dir.x === 0) G.dir = { x:  1, y:  0 };
+});
+
+function step() {
+  if (!G.alive) return;
+  const head = { x: G.snake[0].x + G.dir.x, y: G.snake[0].y + G.dir.y };
+  const cols = G.canvas.width  / G.cell;
+  const rows = G.canvas.height / G.cell;
+  if (head.x < 0 || head.y < 0 || head.x >= cols || head.y >= rows) { G.alive = false; return; }
+  if (G.snake.some(s => s.x === head.x && s.y === head.y))          { G.alive = false; return; }
+  G.snake.unshift(head);
+  if (head.x === G.food.x && head.y === G.food.y) {
+    G.score++;
+    if (G.score > G.best) { G.best = G.score; localStorage.setItem('snake.best', G.best); }
+    placeFood();
+  } else {
+    G.snake.pop();
+  }
+  if (window.MODS.onStep) window.MODS.onStep(G);
+}
+
+function draw() {
+  const { ctx, canvas, cell } = G;
+  ctx.fillStyle = '#0f1a30';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (G.bgGrid) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    for (let i = 0; i <= canvas.width; i += cell) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+    }
+    for (let j = 0; j <= canvas.height; j += cell) {
+      ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(canvas.width, j); ctx.stroke();
+    }
+  }
+
+  ctx.fillStyle = G.foodColor;
+  ctx.fillRect(G.food.x * cell + 2, G.food.y * cell + 2, cell - 4, cell - 4);
+
+  ctx.fillStyle = G.snakeColor;
+  G.snake.forEach((s, i) => {
+    ctx.globalAlpha = i === 0 ? 1 : 0.85;
+    ctx.fillRect(s.x * cell + 1, s.y * cell + 1, cell - 2, cell - 2);
+  });
+  ctx.globalAlpha = 1;
+
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 16px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('Score: ' + G.score, 10, 22);
+  ctx.textAlign = 'right';
+  ctx.fillText('Best: '  + G.best,  canvas.width - 10, 22);
+
+  if (!G.alive) {
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(0, 150, canvas.width, 110);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillText('GAME OVER', canvas.width / 2, 195);
+    ctx.font = '13px sans-serif';
+    ctx.fillText('Press any key to restart', canvas.width / 2, 230);
+  }
+
+  if (window.MODS.onDraw) window.MODS.onDraw(G, ctx);
+}
+
+let lastStep = 0;
+function loop(ts) {
+  if (ts - lastStep > G.speed) { step(); lastStep = ts; }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// Plug-and-play mod loader — drop a folder into ./mods/ and it loads.
+// Uses the HTTP directory listing (works with python -m http.server, etc.).
+async function loadMods() {
+  let folders = [];
+  try {
+    const res = await fetch('mods/');
+    if (!res.ok) return;
+    const html = await res.text();
+    const doc  = new DOMParser().parseFromString(html, 'text/html');
+    folders = [...doc.querySelectorAll('a')]
+      .map(a => a.getAttribute('href') || '')
+      .filter(h => h.endsWith('/') && h !== '../' && h !== './' && !h.startsWith('/') && !h.startsWith('?'))
+      .map(h => decodeURIComponent(h.replace(/\/$/, '')));
+  } catch (_) { return; }
+
+  for (const folder of folders) {
+    let entry = 'main.js';
+    try {
+      const mj = await fetch(`mods/${folder}/mod.json`);
+      if (mj.ok) {
+        const data = await mj.json();
+        entry = data.main || (Array.isArray(data.files) && data.files[0]) || entry;
+      }
+    } catch (_) {}
+    await new Promise(resolve => {
+      const s = document.createElement('script');
+      s.src   = `mods/${folder}/${entry}`;
+      s.onload = s.onerror = resolve;
+      document.head.appendChild(s);
+    });
+  }
+}
+
+placeFood();
+loadMods().then(() => requestAnimationFrame(loop));
+</script>
+</body>
+</html>

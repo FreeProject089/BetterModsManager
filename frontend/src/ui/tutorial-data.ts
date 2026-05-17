@@ -39,7 +39,7 @@ const BASICS: TutorialDef = {
     id: 'basics',
     title_key: 'tut.basics.meta.title',
     desc_key:  'tut.basics.meta.desc',
-    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`,
+    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`,
     color: 'var(--accent)',
     assets: [
         {
@@ -84,6 +84,7 @@ const BASICS: TutorialDef = {
                     img: 'assets/Tasky.png',
                     nav: 'profiles',
                     selector: 'btn-new-profile',
+                    modal_selector: 'btn-confirm-profile',
                     action: { event: BMM_ACTIONS.PROFILE_CREATED, desc_key: 'tut.basics.profiles.s2.action' },
                 },
                 {
@@ -108,6 +109,14 @@ const BASICS: TutorialDef = {
             id: 'scan',
             title_key: 'tut.basics.scan.title',
             steps: [
+                {
+                    id: 's0',
+                    title_key: 'tut.basics.scan.s0.title',
+                    text_key:  'tut.basics.scan.s0.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'profiles',
+                    icon: ICON.profile,
+                },
                 {
                     id: 's1',
                     title_key: 'tut.basics.scan.s1.title',
@@ -155,6 +164,24 @@ const BASICS: TutorialDef = {
                     text_key:  'tut.basics.map.s2.text',
                     img: 'assets/Tasky.png',
                     nav: 'mapper',
+                    selector: 'mapper-profile-select',
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.basics.map.s3.title',
+                    text_key:  'tut.basics.map.s3.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'mapper',
+                    selector: 'mapper-mod-select',
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.basics.map.s4.title',
+                    text_key:  'tut.basics.map.s4.text',
+                    img: 'assets/Tasky_Happy.png',
+                    nav: 'mapper',
+                    selector: 'btn-mapper-preview',
+                    action: { event: BMM_ACTIONS.MAPPER_OPENED, desc_key: 'tut.basics.map.s4.action' },
                 },
             ],
         },
@@ -177,6 +204,8 @@ const BASICS: TutorialDef = {
                     text_key:  'tut.basics.modpacks.s2.text',
                     img: 'assets/Tasky.png',
                     nav: 'modpacks',
+                    selector: 'modpack-create-btn',
+                    modal_selector: 'editor-save',
                     action: { event: BMM_ACTIONS.MODPACK_CREATED, desc_key: 'tut.basics.modpacks.s2.action' },
                 },
             ],
@@ -297,7 +326,7 @@ const ADVANCED: TutorialDef = {
     id: 'advanced',
     title_key: 'tut.advanced.meta.title',
     desc_key:  'tut.advanced.meta.desc',
-    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><path d="M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"/></svg>`,
     color: '#f59e0b',
     parts: [
         // ── Part 1 : .MM Lists ─────────────────────────────────────
@@ -427,7 +456,7 @@ const OTHER: TutorialDef = {
     id: 'other',
     title_key: 'tut.other.meta.title',
     desc_key:  'tut.other.meta.desc',
-    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>`,
+    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8z"/><path d="M5 16l.6 1.6L7 18l-1.4.4L5 20l-.6-1.6L3 18l1.4-.4z"/></svg>`,
     color: '#22c55e',
     parts: [
         // ── Part 1 : BMM Launchpack ────────────────────────────────

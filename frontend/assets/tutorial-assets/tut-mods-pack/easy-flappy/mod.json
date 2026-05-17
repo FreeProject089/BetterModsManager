@@ -1,0 +1,7 @@
+{
+  "name": "Easy Flappy",
+  "target": "flappy-game",
+  "version": "1.0.0",
+  "main": "easy.js",
+  "description": "Reduces gravity, widens the pipe gap, and paints Tasky purple. A gentler ride."
+}

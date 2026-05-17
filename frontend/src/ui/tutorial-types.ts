@@ -31,6 +31,10 @@ export interface TutorialStep {
   nav?: string;
   /** CSS selector or element ID to highlight */
   selector?: string;
+  /** Multiple selectors to highlight simultaneously (all are shown, removed on action complete) */
+  selectors?: string[];
+  /** After the primary selector is interacted with (e.g. modal opens), highlight this element */
+  modal_selector?: string;
   /** Inline SVG icon HTML to show next to the title */
   icon?: string;
   /** If set, the step waits for this BMM action before allowing Next */

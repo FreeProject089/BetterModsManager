@@ -6,6 +6,7 @@
 import { invoke } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
+import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import type { Profile, ModEntry, FileTreeNode, EnrichedMod } from '../../types/models.js';
 
 let selectedModId: string | null = null;
@@ -1046,6 +1047,7 @@ async function showMapperPreview(): Promise<void> {
     if (!selectedModId) { toast(t("mapper.selectModHint"), 'warning'); return; }
     try {
         const files: string[] = await invoke('list_mod_files_recursive', { modId: selectedModId });
+        dispatchBmmAction(BMM_ACTIONS.MAPPER_OPENED);
         
         let html = `
         <div class="mapper-preview-container">
