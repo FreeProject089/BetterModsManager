@@ -1,5 +1,6 @@
 import { t, getLang, getSynonyms } from '../core/i18n.js';
 import { diagrams, openDiagram } from './interactive-docs.js';
+import { invoke } from '../core/api.js';
 
 interface DiagramIndexItem {
     text: string;
@@ -95,6 +96,7 @@ export function initDocsUI() {
     setupVideoPlayers();
     buildDiagramIndex();
     setupSearch();
+    initQuickLinks();
 
     window.addEventListener('online', setupVideoPlayers);
     window.addEventListener('offline', setupVideoPlayers);
@@ -102,6 +104,36 @@ export function initDocsUI() {
         setupVideoPlayers();
         buildDiagramIndex(); // rebuildSynonymMap() is called inside
     });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Quick-link cards (app.cfg controlled)
+// ─────────────────────────────────────────────────────────────
+async function initQuickLinks() {
+    const card1 = document.getElementById('quicklink-card-1');
+    const card2 = document.getElementById('quicklink-card-2');
+    const strip = document.getElementById('quicklinks-strip');
+    if (!card1 && !card2) return;
+
+    try {
+        const cfg: { card1_disabled: boolean; card2_disabled: boolean } =
+            await invoke('get_quicklinks_config');
+
+        let anyVisible = false;
+        if (!cfg.card1_disabled && card1) {
+            card1.style.display = 'flex';
+            anyVisible = true;
+        }
+        if (!cfg.card2_disabled && card2) {
+            card2.style.display = 'flex';
+            anyVisible = true;
+        }
+        if (!anyVisible && strip) strip.style.display = 'none';
+    } catch {
+        // If command fails (e.g. dev/browser env), show both by default
+        if (card1) card1.style.display = 'flex';
+        if (card2) card2.style.display = 'flex';
+    }
 }
 
 // ─────────────────────────────────────────────────────────────

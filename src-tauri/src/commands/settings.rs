@@ -185,6 +185,25 @@ pub fn is_auto_eula_enabled(app_handle: tauri::AppHandle) -> bool {
 }
 
 
+#[derive(serde::Serialize)]
+pub struct QuickLinksConfig {
+    pub card1_disabled: bool,
+    pub card2_disabled: bool,
+}
+
+#[tauri::command]
+pub fn get_quicklinks_config(app_handle: tauri::AppHandle) -> QuickLinksConfig {
+    let mut cfg = QuickLinksConfig { card1_disabled: false, card2_disabled: false };
+    if let Some(path) = resolve_path(&app_handle, "app.cfg") {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let normalized = content.to_lowercase();
+            cfg.card1_disabled = normalized.contains("quicklink1_disabled=true");
+            cfg.card2_disabled = normalized.contains("quicklink2_disabled=true");
+        }
+    }
+    cfg
+}
+
 #[tauri::command]
 pub fn get_available_languages(app_handle: tauri::AppHandle) -> Vec<String> {
     let lang_dir = get_lang_dir(&app_handle);

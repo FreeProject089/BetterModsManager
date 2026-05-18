@@ -551,7 +551,9 @@ export function initRepo() {
         const searchInput = document.getElementById('repo-browser-search');
         const regionFilter = document.getElementById('repo-browser-region-filter');
         const onlineFilter = document.getElementById('repo-browser-online-filter');
+        const whitelistFilterEl = document.getElementById('repo-browser-whitelist-filter');
         let currentFilter = 'all';
+        let whitelistFilter = 'all'; // 'all' | 'whitelist' | 'no-whitelist'
         let repoList = [];
         let repoPingData = new Map();
         const REPO_LIST_URL = 'https://raw.githubusercontent.com/BetterDCS/Better_ModManager_ServerBrowse/main/repos.json';
@@ -592,6 +594,7 @@ export function initRepo() {
             const searchTerm = searchInput?.value?.toLowerCase() || '';
             const regionValue = regionFilter?.value || 'all';
             const onlineOnly = onlineFilter?.checked || false;
+            whitelistFilter = whitelistFilterEl?.value || 'all';
             let filtered = repoList;
             // Only show repos with a valid verified hash (hash field must be present and non-empty)
             // This filters out online but invalid servers
@@ -618,6 +621,13 @@ export function initRepo() {
                     return pingData && pingData.online;
                 });
             }
+            // Filter by whitelist
+            if (whitelistFilter === 'whitelist') {
+                filtered = filtered.filter(r => r.whitelist_enabled === true);
+            }
+            else if (whitelistFilter === 'no-whitelist') {
+                filtered = filtered.filter(r => !r.whitelist_enabled);
+            }
             listEl.innerHTML = filtered.map(repo => `
                 <div class="repo-browser-item" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s ease;" data-url="${escAttr(repo.url)}">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
@@ -626,6 +636,11 @@ export function initRepo() {
                                 <span style="font-size:14px; font-weight:700; color:var(--text-primary);">${escHtml(repo.name)}</span>
                                 <span class="repo-badge" style="font-size:9px; font-weight:800; padding:2px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; ${repo.category === 'official' ? 'background:rgba(16,185,129,0.15); color:#10b981;' : 'background:rgba(59,130,246,0.15); color:#3b82f6;'}">${escHtml(repo.category)}</span>
                                 <span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.25); display:flex; align-items:center; gap:3px;" title="Verified server — hash validated by the BMM team"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Verified</span>
+                                ${repo.whitelist_enabled === true
+                ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(34,197,94,0.12); color:#22c55e; border:1px solid rgba(34,197,94,0.3); display:flex; align-items:center; gap:3px;" title="This server uses a whitelist — access is restricted"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Whitelist</span>`
+                : repo.whitelist_enabled === false
+                    ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(239,68,68,0.08); color:#f87171; border:1px solid rgba(239,68,68,0.2); display:flex; align-items:center; gap:3px;" title="This server has no whitelist — open access"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg> Open</span>`
+                    : ''}
                             </div>
                             <p style="font-size:12px; color:var(--text-secondary); margin:0; line-height:1.5;">${escHtml(repo.description || '')}</p>
                         </div>
@@ -841,6 +856,9 @@ export function initRepo() {
         }
         if (onlineFilter) {
             onlineFilter.addEventListener('change', renderRepoList);
+        }
+        if (whitelistFilterEl) {
+            whitelistFilterEl.addEventListener('change', renderRepoList);
         }
     };
     initRepoBrowser();

@@ -648,18 +648,40 @@ function showUpdateAvailableModal(info) {
                 </div>
             ` : ''}
 
-            <div style="display:flex;gap:10px">
-                <button class="btn btn-ghost" id="btn-update-later" style="flex:1">
-                    ${t('settings.later') || 'Later'}
-                </button>
-                <button class="btn btn-primary" id="btn-download-install-update" style="flex:2;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px">
+            <!-- Incremental update progress bar (hidden initially) -->
+            <div id="incremental-progress-section" style="display:none;margin-bottom:16px;padding:12px;background:rgba(0,0,0,0.2);border-radius:10px;border:1px solid rgba(99,102,241,0.2)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <span style="font-size:12px;color:var(--text-secondary);font-weight:600" id="incremental-progress-label">Applying update...</span>
+                    <span style="font-size:11px;color:var(--text-muted)" id="incremental-progress-count">0 / 0</span>
+                </div>
+                <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+                    <div id="incremental-progress-bar" style="height:100%;background:var(--accent);width:0%;transition:width 0.3s ease;border-radius:4px"></div>
+                </div>
+                <div style="font-size:10px;color:var(--text-muted);margin-top:6px;font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="incremental-progress-file"></div>
+            </div>
+
+            <div style="display:flex;gap:10px;flex-direction:column">
+                ${info.manifest_url ? `
+                <button class="btn btn-primary" id="btn-incremental-update" style="text-align:center;display:flex;align-items:center;justify-content:center;gap:8px">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="7 10 12 15 17 10"/>
-                        <line x1="12" y1="15" x2="12" y2="3"/>
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                     </svg>
-                    ${t('settings.downloadUpdate') || 'Download Update'}
+                    ${t('update.quickUpdate') || 'Quick Update (incremental)'}
                 </button>
+                ` : ''}
+                <div style="display:flex;gap:10px">
+                    <button class="btn btn-ghost" id="btn-update-later" style="flex:1">
+                        ${t('settings.later') || 'Later'}
+                    </button>
+                    <button class="btn ${info.manifest_url ? 'btn-secondary' : 'btn-primary'}" id="btn-download-install-update" style="flex:2;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        ${t('update.fullInstaller') || 'Full Installer'}
+                    </button>
+                </div>
             </div>
 
             <div style="text-align:center;margin-top:12px">
@@ -670,6 +692,65 @@ function showUpdateAvailableModal(info) {
         </div>
     `;
     document.getElementById('app-window-outer').appendChild(modal);
+    // Incremental update button
+    const incrementalBtn = modal.querySelector('#btn-incremental-update');
+    if (incrementalBtn && info.manifest_url) {
+        incrementalBtn.addEventListener('click', async () => {
+            const progressSection = modal.querySelector('#incremental-progress-section');
+            const progressBar = modal.querySelector('#incremental-progress-bar');
+            const progressLabel = modal.querySelector('#incremental-progress-label');
+            const progressCount = modal.querySelector('#incremental-progress-count');
+            const progressFile = modal.querySelector('#incremental-progress-file');
+            incrementalBtn.disabled = true;
+            const fullBtn = modal.querySelector('#btn-download-install-update');
+            if (fullBtn)
+                fullBtn.disabled = true;
+            progressSection.style.display = 'block';
+            progressLabel.textContent = t('update.fetchingManifest') || 'Fetching manifest...';
+            try {
+                // Fetch the manifest
+                const manifest = await invoke('fetch_update_manifest', { url: info.manifest_url });
+                progressLabel.textContent = t('update.applyingUpdate') || 'Applying update...';
+                // Listen to progress events
+                const { listen } = await import('../../node_modules/@tauri-apps/api/event.js').catch(() => window.__TAURI__?.event);
+                let unlisten = null;
+                if (listen) {
+                    unlisten = await listen('update-progress', (evt) => {
+                        const d = evt.payload;
+                        const pct = Math.round(((d.index + 1) / d.total) * 100);
+                        progressBar.style.width = pct + '%';
+                        progressCount.textContent = `${d.index + 1} / ${d.total}`;
+                        progressFile.textContent = d.file;
+                        progressLabel.textContent = d.status === 'skipped'
+                            ? (t('update.skipped') || 'Skipping unchanged files...')
+                            : (t('update.applyingUpdate') || 'Applying update...');
+                    });
+                }
+                // Apply the update
+                const result = await invoke('apply_incremental_update', { manifest });
+                if (unlisten)
+                    unlisten();
+                progressBar.style.width = '100%';
+                if (result.errors && result.errors.length > 0) {
+                    toast(`Update partial: ${result.applied} applied, ${result.errors.length} errors`, 'warning');
+                }
+                else {
+                    toast(t('update.incrementalSuccess') || `Update applied! ${result.applied} files updated, ${result.skipped} unchanged. Restart BMM to complete.`, 'success');
+                }
+                progressLabel.textContent = t('update.done') || 'Done! Restart BMM to apply changes.';
+                progressSection.style.background = 'rgba(16,185,129,0.06)';
+                progressSection.style.borderColor = 'rgba(16,185,129,0.2)';
+            }
+            catch (err) {
+                toast(t('common.error') + ': ' + String(err), 'error');
+                progressLabel.textContent = 'Error — try the full installer';
+                incrementalBtn.disabled = false;
+                if (modal.querySelector('#btn-download-install-update')) {
+                    modal.querySelector('#btn-download-install-update').disabled = false;
+                }
+            }
+        });
+    }
     const downloadBtn = modal.querySelector('#btn-download-install-update');
     if (downloadBtn) {
         downloadBtn.addEventListener('click', async () => {

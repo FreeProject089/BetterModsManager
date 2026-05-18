@@ -103,5 +103,44 @@ This version represents the transition to the 1.0 milestone, focusing on cross-p
 - The repo browser now exclusively displays servers that carry a `hash` field in `repos.json`, guaranteeing that only BMM-team-validated repositories appear in the public listing.
 - A green "Verified" badge with a checkmark icon is displayed on every listed server card.
 
+## [IMPROVED] Docker Documentation — Complete Rework
+- Converted the Docker documentation card in the Advanced tab from a custom inline layout to the standard `glass-card` format, matching the style of Launch Packs and MCP cards.
+- Added a dedicated Mermaid diagram (`docker-deployment`) visualizing the full Docker + ngrok deployment flow: host machine → Docker container → ngrok agent → cloud tunnel → clients.
+- Added a "View Diagram" button to the Docker card header, opening the new `docker-deployment` diagram in the interactive viewer.
+- Replaced the placeholder Docker icon with a proper Docker whale SVG (containers on back).
+- Added copy-to-clipboard buttons on all code blocks in the Docker FAQ (docker compose update commands).
+- Reduced the card to a clean 3-card grid (What is Docker, Comparison, ngrok) plus a 2-column code block section (compose file + ngrok command), each with an individual copy button.
+
+## [IMPROVED] Mod Library — Modernized Filter Bar
+- Redesigned the filter bar with a glassmorphic container (`backdrop-filter: blur(10px)`, subtle border and background).
+- Modernized filter buttons: smooth hover transitions, `translateY(-1px)` lift on hover, improved active state with glow (`box-shadow: 0 0 10px rgba(99,102,241,0.15)`).
+- Updated the search box: sharper focus state with accent color glow, smooth icon color transition on focus.
+- Modernized the view toggle button (compact/grid) with a matching active state and hover lift.
+- Modernized `profile-select` dropdowns: smooth hover/focus transitions, accent glow on focus, consistent border style with the rest of the bar.
+
+## [NEW] Server Browse — Whitelist Detection
+- The repo browser now reads `whitelist_enabled` from each server's entry in `repos.json`.
+- Servers with `whitelist_enabled: true` display a green "🔒 Whitelist" badge; servers with `whitelist_enabled: false` display a red "Open" badge.
+- Added a whitelist filter dropdown to the browse modal: "All servers", "Whitelist ON", "No whitelist" — instantly filters the displayed list.
+
+## [NEW] Quick-Link Cards (Help & Other)
+- Added two configurable quick-link cards at the top of the Help & Other section (before the documentation tabs), linking to the BMM Discord and GitHub repository.
+- Cards feature brand icons, hover animation (`translateY(-2px)` + glow shadow), and an external link indicator.
+- Each card can be individually disabled via `app.cfg`:
+  - `quicklink1_disabled=true` — hides the Discord card
+  - `quicklink2_disabled=true` — hides the GitHub card
+- Added new Rust command `get_quicklinks_config` that reads both flags from `app.cfg` and returns a JSON struct to the frontend.
+- If both cards are disabled, the entire card strip is hidden.
+
+## [IMPROVED] Incremental Update System
+- Replaced the single "full installer download" update flow with an **incremental delta update** system.
+- `check_for_update` now also looks for an `update-manifest.json` asset in the GitHub release. If found, its URL is returned in the `manifest_url` field.
+- Added two new Rust commands:
+  - `fetch_update_manifest(url)` — downloads and parses the manifest JSON listing changed files with paths, SHA-256 hashes, and download URLs.
+  - `apply_incremental_update(manifest)` — downloads only changed files, verifies each SHA-256 digest, and applies them in-place in the BMM install directory. Emits `update-progress` events for each file.
+- The update modal now shows a **"Quick Update (incremental)"** primary button when a manifest is available, with a real-time progress bar and per-file status. The full installer remains available as a secondary option.
+- Files that already match the expected SHA-256 are skipped without re-downloading.
+- Atomic file replacement: files are written to a temp location first, then moved atomically to their final destination (with a copy fallback for cross-drive scenarios).
+
 ---
 *Release 1.0.0 represents the final consolidation of the core feature set.*

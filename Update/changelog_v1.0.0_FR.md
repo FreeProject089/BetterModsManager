@@ -94,5 +94,31 @@ Cette version marque la transition vers l'étape 1.0, en se concentrant sur l'ut
 - Le navigateur de dépôts n'affiche désormais que les serveurs portant un champ `hash` dans `repos.json`, garantissant que seuls les dépôts validés par l'équipe BMM apparaissent dans la liste publique.
 - Un badge vert "Verified" avec une icône de coche est affiché sur chaque carte de serveur listé.
 
+## [AMÉLIORÉ] Documentation Docker — Refonte complète
+- La carte de documentation Docker dans l'onglet Avancé est passée d'une mise en page inline personnalisée au format standard `glass-card`, identique aux cartes Launch Packs et MCP.
+- Ajout d'un diagramme Mermaid dédié (`docker-deployment`) visualisant le flux complet de déploiement Docker + ngrok.
+- Ajout d'un bouton "Voir le diagramme" dans l'en-tête de la carte Docker.
+- Remplacement de l'icône Docker approximative par un SVG de baleine Docker correct.
+- Ajout de boutons copie-presse-papiers sur tous les blocs de code dans la FAQ Docker.
+
+## [AMÉLIORÉ] Bibliothèque de mods — Barre de filtres modernisée
+- Refonte de la barre de filtres avec un conteneur glassmorphique (backdrop-filter, bordure subtile).
+- Boutons de filtre modernisés : transitions fluides, élévation au survol, état actif avec lueur accent.
+- Boîte de recherche, bouton vue compacte et listes déroulantes tous modernisés pour un look cohérent.
+
+## [NOUVEAU] Browse des serveurs — Détection de la whitelist
+- Badge vert "Whitelist" ou rouge "Open" selon la valeur de `whitelist_enabled` dans `repos.json`.
+- Filtre déroulant "Whitelist ON / Sans whitelist" ajouté à la modale de navigation des serveurs.
+
+## [NOUVEAU] Cartes de liens rapides (Help & Other)
+- Deux cartes de liens rapides (Discord, GitHub) en haut de Help & Other, désactivables individuellement via `quicklink1_disabled=true` / `quicklink2_disabled=true` dans `app.cfg`.
+- Nouvelle commande Rust `get_quicklinks_config`.
+
+## [AMÉLIORÉ] Système de mise à jour incrémentale
+- Remplacement du téléchargement complet de l'installeur par un système de mise à jour delta incrémentale.
+- `check_for_update` retourne désormais `manifest_url` si un `update-manifest.json` est présent dans la release GitHub.
+- Nouvelles commandes Rust : `fetch_update_manifest` et `apply_incremental_update`.
+- La modale de mise à jour affiche un bouton "Mise à jour rapide (incrémentale)" avec barre de progression en temps réel. Les fichiers inchangés (hash SHA-256 identique) sont ignorés.
+
 ---
 *La version 1.0.0 représente la consolidation finale de l'ensemble des fonctionnalités de base.*

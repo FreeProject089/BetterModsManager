@@ -36,6 +36,7 @@ import { securitySystem } from './diagrams/security-system.js';
 import { modMapper } from './diagrams/mod-mapper.js';
 import { launchPacks } from './diagrams/launch-packs.js';
 import { mcpServer } from './diagrams/mcp-server.js';
+import { dockerDeployment } from './diagrams/docker-deployment.js';
 // Diagram Registry
 export const diagrams = {
     'resumable-downloads': resumableDownloads,
@@ -74,6 +75,7 @@ export const diagrams = {
     'mod-mapper': modMapper,
     'launch-packs': launchPacks,
     'mcp-server': mcpServer,
+    'docker-deployment': dockerDeployment,
 };
 // State
 let currentDiagramID = null;
