@@ -1234,8 +1234,8 @@ body.is-maximized .titlebar-spacer {
 .update-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(12px);
     z-index: 9999;
     display: flex;
     align-items: center;
@@ -1244,46 +1244,66 @@ body.is-maximized .titlebar-spacer {
 }
 
 .update-modal-card {
-    background: var(--bg-secondary);
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    background: linear-gradient(160deg, rgba(15, 23, 42, 0.98) 0%, rgba(10, 16, 32, 0.98) 100%);
+    border: 1px solid rgba(16, 185, 129, 0.25);
     border-radius: 20px;
-    padding: 32px;
-    max-width: 650px;
+    padding: 0;
+    max-width: 520px;
     width: 90%;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(16, 185, 129, 0.1);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(16, 185, 129, 0.08), inset 0 1px 0 rgba(255,255,255,0.05);
+    animation: modalIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .update-modal-card::before {
     content: '';
     position: absolute;
-    top: -60px;
-    right: -60px;
-    width: 200px;
-    height: 200px;
-    background: rgba(16, 185, 129, 0.06);
-    border-radius: 50%;
-    filter: blur(40px);
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent 0%, #10b981 40%, #3b82f6 100%);
+    border-radius: 20px 20px 0 0;
     pointer-events: none;
+}
+
+.update-modal-card::after {
+    content: '';
+    position: absolute;
+    top: -80px;
+    right: -80px;
+    width: 240px;
+    height: 240px;
+    background: radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.update-modal-inner {
+    padding: 28px 28px 24px;
 }
 
 .update-modal-close {
     position: absolute;
-    top: 16px;
-    right: 16px;
-    background: none;
-    border: none;
+    top: 14px;
+    right: 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
     color: var(--text-muted);
     cursor: pointer;
-    padding: 4px;
-    border-radius: 6px;
+    padding: 6px;
+    border-radius: 8px;
     transition: var(--transition-fast);
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .update-modal-close:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.1);
     color: var(--text-primary);
+    border-color: rgba(255,255,255,0.15);
 }
 
 /* ── PTB Modal ── */
@@ -1702,6 +1722,71 @@ body.is-maximized .titlebar-spacer {
     padding: 2px 8px;
     border-radius: 6px;
     vertical-align: middle;
+}
+
+/* ── Library title row (above the glass shell) ── */
+.lib-header-title {
+    margin-bottom: 12px;
+}
+
+/* ── Action buttons tab: right-aligned, sits above filter bar (creates notch shape) ── */
+.lib-actions-tab {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: -1px;
+    position: relative;
+    z-index: 2;
+}
+
+.lib-actions-tab .view-actions {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.025);
+    border-radius: 10px 10px 0 0;
+    padding: 6px 12px;
+    backdrop-filter: blur(10px);
+}
+
+/* ── Unified library filter bar shell ── */
+.lib-header-shell {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px 0 14px 14px;
+    backdrop-filter: blur(10px);
+    margin-bottom: 16px;
+    overflow: visible;
+}
+
+.lib-header-shell .filter-bar {
+    margin-bottom: 0;
+    border: none;
+    border-radius: 14px 0 14px 14px;
+    background: transparent;
+    backdrop-filter: none;
+}
+
+/* ── Profile select with icon inside ── */
+.profile-select-icon-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.profile-select-icon-wrap::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    width: 14px;
+    height: 14px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 20c0-4 3.6-7 8-7s8 3 8 7'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.profile-select-icon-wrap .profile-select {
+    padding-left: 30px !important;
 }
 
 /* ── Filter bar ── */
@@ -2471,6 +2556,49 @@ body.is-maximized .titlebar-spacer {
 
 .mod-action-item--danger:hover {
     background: var(--danger-dim, rgba(239,68,68,0.12));
+}
+
+/* ── Enable / Disable-all CSS hover pattern ── */
+.enable-hover-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.disable-hover-panel {
+    position: absolute;
+    top: 100%;       /* flush — no gap so hover stays connected */
+    right: 0;
+    display: none;
+    background: var(--bg-secondary, #1e2030);
+    border: 1px solid var(--border-accent, rgba(255,255,255,0.1));
+    border-radius: 10px;
+    padding: 4px;
+    padding-top: 8px; /* extra top padding so content doesn't hug the trigger */
+    z-index: 300;
+    min-width: 155px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    animation: dropdown-in 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Invisible bridge that fills any remaining gap between trigger and panel */
+.disable-hover-panel::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 0;
+    right: 0;
+    height: 6px;
+}
+
+.enable-hover-wrap:hover .disable-hover-panel {
+    display: block;
+}
+
+.disable-hover-panel .btn {
+    width: 100%;
+    justify-content: flex-start;
+    border-radius: 7px;
 }
 
 /* ── Compact toggle button ── */

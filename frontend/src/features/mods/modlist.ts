@@ -453,25 +453,6 @@ export function renderImportedModlist(modlist) {
                 ${hashBadge}
             </div>
             <div style="display:flex; align-items:center; gap:8px; flex-shrink:0">
-                <div
-                    style="font-size:10px; font-weight:700; font-family:var(--font-mono); padding:2px 6px; border-radius:4px; cursor:help; ${(() => {
-                        const p = m.sort_priority || 0;
-                        if (p >= 1000) {
-                            const alpha = Math.min(0.8, 0.15 + (p - 1000) / 10000);
-                            return `background:rgba(239,68,68,${alpha}); color:${alpha > 0.4 ? 'white' : '#ef4444'}; border:1px solid rgba(239,68,68,${alpha + 0.1})`;
-                        } else if (p >= 100) {
-                            const alpha = Math.min(0.6, 0.15 + (p - 100) / 1000);
-                            return `background:rgba(245,158,11,${alpha}); color:${alpha > 0.4 ? 'white' : '#f59e0b'}; border:1px solid rgba(245,158,11,${alpha + 0.1})`;
-                        } else {
-                            const alpha = Math.min(0.4, 0.05 + p / 100);
-                            return `background:rgba(255,255,255,${alpha}); color:var(--text-muted); border:1px solid rgba(255,255,255,${alpha + 0.05})`;
-                        }
-                    })()}"
-                    onmouseenter="window.showTaskyHelp('mm.priorityTip', 'icon-priority')"
-                    onmouseleave="window.hideTaskyHelp()"
-                    title="PRIO: ${m.sort_priority}">
-                    ${m.sort_priority >= 1000 ? 'MAX' : m.sort_priority >= 100 ? 'MED' : 'LOW'} <span style="opacity:0.55">#${m.sort_priority}</span>
-                </div>
                 <input type="checkbox" class="mm-mod-checkbox" data-index="${idx}" ${isAlreadyPresent ? '' : 'checked'} style="width:18px; height:18px; cursor:pointer; flex-shrink:0" title="${isAlreadyPresent ? t('mm.alreadyPresent') : ''}">
             </div>
           </div>

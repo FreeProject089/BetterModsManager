@@ -44,8 +44,6 @@ pub struct ModListEntry {
     pub description: Option<String>,
     /// Multiple download URLs (GitHub, Google Drive, direct, etc.)
     pub download_links: Vec<DownloadLink>,
-    /// Sort/load priority — lower number = applied first
-    pub sort_priority: u32,
     /// Full file tree of the mod showing what gets copied where
     /// Each path is relative to the mod root (= relative to game root)
     pub file_tree: Vec<ModFileEntry>,

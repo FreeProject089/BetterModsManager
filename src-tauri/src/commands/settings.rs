@@ -313,3 +313,54 @@ pub fn get_resource_debug_info(app_handle: tauri::AppHandle) -> String {
 pub fn exit_app() {
     std::process::exit(0);
 }
+
+/// Resolve the absolute path to the bundled tutorial assets folder.
+/// Uses the same resolve_path mechanism as language files — works in dev and prod.
+#[tauri::command]
+pub fn get_tutorial_assets_path(app_handle: tauri::AppHandle) -> Result<String, String> {
+    if let Some(path) = crate::fs_utils::resolve_path(&app_handle, "assets/tutorial-assets") {
+        Ok(path.to_string_lossy().to_string())
+    } else {
+        Err("Tutorial assets folder not found".to_string())
+    }
+}
+
+/// Copy the tutorial assets folder into a user-chosen destination directory.
+/// Copies `<source>/tutorial-assets` → `<dest>/tutorial-assets`.
+/// Returns the final destination path.
+#[tauri::command]
+pub fn export_tutorial_assets(source: String, destination: String) -> Result<String, String> {
+    let src = std::path::PathBuf::from(&source);
+    let dest = std::path::PathBuf::from(&destination);
+
+    if !src.exists() {
+        return Err(format!("Source folder not found: {}", source));
+    }
+    if !dest.exists() {
+        return Err(format!("Destination folder not found: {}", destination));
+    }
+
+    let folder_name = src.file_name()
+        .ok_or_else(|| "Invalid source path".to_string())?
+        .to_string_lossy()
+        .to_string();
+
+    let final_dest = dest.join(&folder_name);
+
+    // If destination already exists, remove it first to get a clean copy
+    if final_dest.exists() {
+        std::fs::remove_dir_all(&final_dest)
+            .map_err(|e| format!("Failed to remove existing folder: {}", e))?;
+    }
+
+    let options = fs_extra::dir::CopyOptions {
+        overwrite: true,
+        copy_inside: false,
+        ..Default::default()
+    };
+
+    fs_extra::dir::copy(&src, &dest, &options)
+        .map_err(|e| format!("Copy failed: {}", e))?;
+
+    Ok(final_dest.to_string_lossy().to_string())
+}

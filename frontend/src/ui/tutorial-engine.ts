@@ -174,7 +174,13 @@ function _applyDragPosition(panel: HTMLElement): void {
 /** Navigate to a view using the correct .nav-item[data-view] selector */
 function _navigate(nav: string | undefined): void {
     if (!nav) return;
-    const btn = document.querySelector(`.nav-item[data-view="${nav}"]`) as HTMLElement | null;
+    // Normalize aliases — tutorial-data uses plural/alternate forms that differ from actual data-view values
+    const VIEW_ALIAS: Record<string, string> = {
+        modlists: 'modlist',
+        mods:     'library',
+    };
+    const viewKey = VIEW_ALIAS[nav] ?? nav;
+    const btn = document.querySelector(`.nav-item[data-view="${viewKey}"]`) as HTMLElement | null;
     btn?.click();
 }
 

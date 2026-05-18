@@ -210,6 +210,8 @@ fn main() {
             commands::settings::get_language_content,
             commands::settings::import_language,
             commands::settings::get_resource_debug_info,
+            commands::settings::get_tutorial_assets_path,
+            commands::settings::export_tutorial_assets,
             commands::settings::exit_app,
             commands::mods::open_folder,
             commands::mods::open_file,

@@ -73,7 +73,8 @@
                 "../LICENSE.md",
                 "../EULA.md",
                 "../EULA_FR.md",
-                "../frontend/Lang"
+                "../frontend/Lang",
+                "../frontend/assets/tutorial-assets"
             ],
             "externalBin": [
                 "binaries/bmm-mcp-server"

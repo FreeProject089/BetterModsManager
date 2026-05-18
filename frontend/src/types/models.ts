@@ -144,7 +144,6 @@ export interface ModListEntry {
   author: string | null;
   description: string | null;
   download_links: DownloadLink[];
-  sort_priority: number;
   file_tree: ModFileEntry[];
   install_notes: string;
   tags: string[];

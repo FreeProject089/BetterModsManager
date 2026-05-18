@@ -17,7 +17,6 @@ struct ModSnapshot {
     author: Option<String>,
     description: Option<String>,
     download_links: Vec<DownloadLink>,
-    sort_priority: u32,
     tags: Vec<String>,
 }
 
@@ -46,7 +45,7 @@ pub async fn export_modlist(
             None => (String::new(), String::new(), None),
         };
 
-        let snapshots: Vec<ModSnapshot> = data.mods.iter().enumerate().filter_map(|(i, m)| {
+        let snapshots: Vec<ModSnapshot> = data.mods.iter().enumerate().filter_map(|(_i, m)| {
             if let Some(ref mp) = mods_path {
                 if !m.mod_folder_path.starts_with(mp) {
                     return None;
@@ -63,7 +62,6 @@ pub async fn export_modlist(
                     link_type: dl.link_type.clone(),
                     label: dl.label.clone(),
                 }).collect(),
-                sort_priority: if m.enabled { (i as u32) * 10 } else { 9999 },
                 tags: m.tags.clone(),
             })
         }).collect();
@@ -99,7 +97,8 @@ pub async fn export_modlist(
 
         // spawn_blocking keeps the file walk off the async runtime thread
         let folder = snap.folder.clone();
-        let file_tree = tokio::task::spawn_blocking(move || build_file_tree(&folder, include_hashes))
+        let cancel_flag = std::sync::Arc::clone(&state.export_cancelled);
+        let file_tree = tokio::task::spawn_blocking(move || build_file_tree(&folder, include_hashes, &cancel_flag))
             .await
             .unwrap_or_default();
 
@@ -109,7 +108,6 @@ pub async fn export_modlist(
             author: snap.author,
             description: snap.description,
             download_links: snap.download_links,
-            sort_priority: snap.sort_priority,
             file_tree,
             install_notes: String::new(),
             tags: snap.tags,
@@ -136,10 +134,19 @@ pub fn cancel_export_modlist(state: State<'_, AppState>) {
 }
 
 /// Walk a mod folder and record each file's relative path, size, and optional SHA-256.
-fn build_file_tree(folder: &PathBuf, include_hashes: bool) -> Vec<ModFileEntry> {
+/// Checks the cancellation flag after each file when hashing is enabled.
+fn build_file_tree(
+    folder: &PathBuf,
+    include_hashes: bool,
+    cancel_flag: &std::sync::atomic::AtomicBool,
+) -> Vec<ModFileEntry> {
     let mut entries = Vec::new();
     if let Ok(files) = fs_utils::list_mod_files(folder) {
         for rel in files {
+            // Check cancellation before each file when SHA-256 is active
+            if include_hashes && cancel_flag.load(Ordering::Relaxed) {
+                break;
+            }
             let full = folder.join(&rel);
             let size = std::fs::metadata(&full).map(|md| md.len()).unwrap_or(0);
             let sha256 = if include_hashes { hash_file_streaming(&full) } else { None };

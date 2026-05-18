@@ -335,16 +335,43 @@ export function openAssetsPanel(tutId: string, onContinue?: () => void): void {
     document.getElementById('btn-assets-close')?.addEventListener('click', () => overlay.remove());
     document.getElementById('btn-assets-download')?.addEventListener('click', async () => {
         const btn = document.getElementById('btn-assets-download') as HTMLButtonElement | null;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;animation:spin 1s linear infinite"><path d="M12 2a10 10 0 0 1 10 10" stroke-opacity="0.8"/><circle cx="12" cy="12" r="10" stroke-opacity="0.2"/></svg>${t('hub.assets.saving')}`;
+        }
         try {
             const tauri = (window as any).__TAURI__;
-            if (tauri?.core?.invoke) {
-                if (btn) { btn.disabled = true; btn.textContent = t('hub.assets.downloading'); }
-                await tauri.core.invoke('open_path', { path: 'assets/tutorial-assets' });
-            } else {
-                await navigator.clipboard.writeText('assets/tutorial-assets/');
+
+            // 1. Get the bundled source path
+            const assetsPath: string = await tauri.invoke('get_tutorial_assets_path');
+
+            // 2. Show folder picker — user chooses where to save
+            const destDir: string | null = await tauri.dialog.open({
+                directory: true,
+                multiple: false,
+                title: t('hub.assets.saveDialogTitle'),
+            });
+
+            if (!destDir) {
+                // User cancelled the dialog
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${t('hub.assets.downloadBtn')}`;
+                }
+                return;
             }
-        } catch (_) {
-        } finally {
+
+            // 3. Copy tutorial-assets folder to chosen destination
+            const finalPath: string = await tauri.invoke('export_tutorial_assets', {
+                source: assetsPath,
+                destination: destDir,
+            });
+
+            // 4. Open the resulting folder so the user can see it, then close overlay
+            await tauri.invoke('open_folder', { path: finalPath });
+            overlay.remove();
+        } catch (err) {
+            console.error('[tutorial-hub] export_tutorial_assets failed:', err);
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${t('hub.assets.downloadBtn')}`;

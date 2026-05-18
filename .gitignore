@@ -14,3 +14,5 @@ frontend/src/features/betahub/betahub-config.local.ts
 .obsidian/
 
 tmp/
+.claude/
+.vscode

@@ -522,7 +522,7 @@ export function updateToggleAllBtn() {
             label.innerHTML = t('lib.disableAll');
         if (svg)
             svg.innerHTML = '<path d="M18 6L6 18M6 6l12 12" /><circle cx="12" cy="12" r="10" />';
-        btn.className = 'btn btn-ghost btn-split-main';
+        btn.className = 'btn btn-ghost view-action-util';
         btn.style.color = 'var(--danger)';
         if (container)
             container.classList.add('all-enabled');
@@ -532,7 +532,7 @@ export function updateToggleAllBtn() {
             label.innerHTML = t('lib.enableAll');
         if (svg)
             svg.innerHTML = '<path d="m5 12 5 5L20 7" /><circle cx="12" cy="12" r="10" />';
-        btn.className = 'btn btn-primary btn-split-main';
+        btn.className = 'btn btn-ghost view-action-util';
         btn.style.color = '';
         if (container)
             container.classList.remove('all-enabled');
