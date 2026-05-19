@@ -1758,7 +1758,7 @@
   "tut.other.launchpack.s2.text": "Go to Settings & Other in the sidebar. Find the BMM Launch Pack section and click New Launch Pack. In the Create a Launch Pack dialog, name your pack, add the executables to launch, optionally set a custom icon, then confirm.",
   "tut.other.launchpack.s2.title": "Creating a Launch Pack",
   "tut.other.launchpack.title": "BMM Launchpack",
-  "tut.other.meta.desc": "Quality-of-life features: BMM Launchpack to deploy multiple games at once, an integrated benchmark dashboard to measure performance impact of mods, and a one-click bug reporting flow with auto-attached logs.",
+  "tut.other.meta.desc": "Comfort features: BMM Launchpack to deploy several games at once, an integrated benchmark dashboard to measure the performance impact when activating mods, and a one-click bug report system with self-attached logs.",
   "tut.other.meta.title": "Extra Tools",
   "tut.skip": "Skip tutorial",
   "tut.skip.title": "Close the tutorial without returning to the hub",
