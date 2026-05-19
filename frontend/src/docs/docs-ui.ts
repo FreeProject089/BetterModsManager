@@ -62,14 +62,14 @@ function levenshtein(a: string, b: string): number {
 export function initDocsUI() {
     const dgStyle = document.createElement('style');
     dgStyle.textContent = `
-        .docs-tab-content .glass-card, 
+        .docs-tab-content .glass-card,
         .docs-tab-content details.faq-accordion {
             transition: opacity 0.3s ease, transform 0.3s ease, display 0.3s allow-discrete;
         }
         .diagram-reco-item:active { transform: scale(0.98); }
-        .node-highlight-glow rect, 
-        .node-highlight-glow polygon, 
-        .node-highlight-glow circle, 
+        .node-highlight-glow rect,
+        .node-highlight-glow polygon,
+        .node-highlight-glow circle,
         .node-highlight-glow ellipse,
         .node-highlight-glow path {
             stroke: var(--accent) !important;
@@ -83,12 +83,6 @@ export function initDocsUI() {
             100% { filter: drop-shadow(0 0 12px var(--accent)); stroke-width: 5px; opacity: 1; }
         }
         #mermaid-diagram-container svg { overflow: visible !important; }
-        .docs-search-no-results {
-            padding: 16px; text-align: center; color: var(--text-muted);
-            font-size: 12px; display: flex; flex-direction: column;
-            align-items: center; gap: 8px;
-        }
-        .docs-search-no-results svg { opacity: 0.4; }
     `;
     document.head.appendChild(dgStyle);
 
@@ -97,12 +91,15 @@ export function initDocsUI() {
     buildDiagramIndex();
     setupSearch();
     initQuickLinks();
+    initDocInfoBlockAccent();
+    initCtxLegendTooltip();
 
     window.addEventListener('online', setupVideoPlayers);
     window.addEventListener('offline', setupVideoPlayers);
     document.addEventListener('langChanged', () => {
         setupVideoPlayers();
         buildDiagramIndex(); // rebuildSynonymMap() is called inside
+        initDocInfoBlockAccent(); // re-apply after possible DOM updates
     });
 }
 
@@ -375,6 +372,15 @@ function _runSearch(
 
         const finalMatches = Array.from(dedupMap.values()).sort((a, b) => b.score - a.score).slice(0, 10);
 
+        // Update mode badge in title
+        const modeBadge = diagResultsContainer.querySelector('.docs-diagram-results-mode-badge') as HTMLElement | null;
+        if (modeBadge) {
+            modeBadge.textContent = searchMode === 'semantic'
+                ? (t('docs.searchMode.semantic') || 'SEMANTIC')
+                : (t('docs.searchMode.classic') || 'CLASSIC');
+            modeBadge.className = `docs-diagram-results-mode-badge ${searchMode}`;
+        }
+
         if (finalMatches.length > 0) {
             diagResultsContainer.style.display = 'block';
             diagResultsList.innerHTML = '';
@@ -385,6 +391,7 @@ function _runSearch(
                 el.className = 'diagram-reco-chip';
                 const scorePercent = Math.min(100, Math.round(match.score * 100));
                 const badgeColor = scorePercent > 85 ? '#22c55e' : (scorePercent > 65 ? 'var(--accent)' : '#f59e0b');
+                const ctxType = match.weight >= 1.0 ? 'title' : match.weight >= 0.8 ? 'main' : match.weight >= 0.6 ? 'secondary' : 'edge';
                 const contextDot = match.weight >= 1.0 ? '◆' : match.weight >= 0.8 ? '●' : match.weight >= 0.6 ? '○' : '›';
                 const truncText = match.text.length > 52 ? match.text.substring(0, 52) + '…' : match.text;
                 const truncDiagram = match.diagramTitle.length > 24 ? match.diagramTitle.substring(0, 24) + '…' : match.diagramTitle;
@@ -393,7 +400,7 @@ function _runSearch(
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;opacity:0.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                     <span class="diagram-reco-text">${truncText}</span>
                     <span class="diagram-reco-diagram">${truncDiagram}</span>
-                    <span class="diagram-reco-ctx">${contextDot}</span>
+                    <span class="diagram-reco-ctx" data-ctx-type="${ctxType}">${contextDot}</span>
                     ${isSemantic ? `<span class="diagram-reco-score" style="background:${badgeColor}">${scorePercent}%</span>` : ''}
                 `;
                 el.addEventListener('click', () => {
@@ -403,14 +410,21 @@ function _runSearch(
             });
         } else {
             diagResultsContainer.style.display = 'block';
+            const trySemBtn = searchMode === 'classic'
+                ? `<button class="docs-search-no-results-try" onclick="document.getElementById('btn-toggle-search-mode').click()">
+                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                       ${t('docs.search.trySemantic') || 'Try Semantic mode →'}
+                   </button>`
+                : '';
             diagResultsList.innerHTML = `
                 <div class="docs-search-no-results">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
                         <line x1="8" y1="11" x2="14" y2="11"/>
                     </svg>
                     <span>${t('docs.search.noResults') || 'No diagrams found.'}</span>
-                    ${searchMode === 'classic' ? `<span style="font-size:10px;color:var(--accent);cursor:pointer;" onclick="document.getElementById('btn-toggle-search-mode').click()">${t('docs.search.trySemantic') || 'Try Semantic →'}</span>` : ''}
+                    ${trySemBtn}
                 </div>
             `;
         }
@@ -490,4 +504,134 @@ function animateVisibility(el: HTMLElement, match: boolean | number) {
         el.style.transform = 'translateY(10px)';
         setTimeout(() => { if (el.style.opacity === '0') el.style.display = 'none'; }, 300);
     }
+}
+
+// ─────────────────────────────────────────────────────────────
+// doc-info-block: adaptive accent color hover
+// ─────────────────────────────────────────────────────────────
+function extractRGBStr(colorStr: string): string | null {
+    if (!colorStr) return null;
+    const rgba = colorStr.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+    if (rgba) return `${rgba[1]},${rgba[2]},${rgba[3]}`;
+    const hex6 = colorStr.match(/#([0-9a-fA-F]{6})/);
+    if (hex6) {
+        const h = hex6[1];
+        return `${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)}`;
+    }
+    const hex3 = colorStr.match(/#([0-9a-fA-F]{3})\b/);
+    if (hex3) {
+        const h = hex3[1];
+        return `${parseInt(h[0]+h[0],16)},${parseInt(h[1]+h[1],16)},${parseInt(h[2]+h[2],16)}`;
+    }
+    return null;
+}
+
+function initDocInfoBlockAccent(): void {
+    document.querySelectorAll<HTMLElement>('#view-docs .doc-info-block').forEach(el => {
+        // Priority 1: own inline background — skip near-white/neutral (255,255,255)
+        let rgb: string | null = null;
+        const selfRgb = extractRGBStr(el.style.background || el.style.backgroundColor || '');
+        if (selfRgb) {
+            const p = selfRgb.split(',').map(Number);
+            if (!(p[0] > 200 && p[1] > 200 && p[2] > 200)) rgb = selfRgb;
+        }
+        // Priority 2: parent glass-card border-left color
+        const fromParent = !rgb;
+        if (!rgb) {
+            const parentCard = el.closest<HTMLElement>('.glass-card');
+            if (parentCard) {
+                rgb = extractRGBStr(parentCard.style.borderLeft || parentCard.style.borderLeftColor || '');
+            }
+        }
+        if (!rgb) return;
+
+        // Set CSS custom properties for the ::before gradient
+        const parts = rgb.split(',');
+        el.style.setProperty('--card-accent-r', parts[0]);
+        el.style.setProperty('--card-accent-g', parts[1]);
+        el.style.setProperty('--card-accent-b', parts[2]);
+
+        // Cards inheriting from parent: apply a subtle default tint at rest
+        if (fromParent) {
+            el.style.background = `rgba(${rgb}, 0.04)`;
+        }
+
+        // Capture state AFTER setting default tint
+        const origBg = el.style.background || '';
+        const origBorder = el.style.border || '';
+        const origBorderColor = el.style.borderColor || '';
+        const origShadow = el.style.boxShadow || '';
+
+        el.addEventListener('mouseenter', () => {
+            el.style.background = `rgba(${rgb!}, 0.08)`;
+            el.style.border = `1px solid rgba(${rgb!}, 0.3)`;
+            el.style.boxShadow = `0 4px 20px rgba(${rgb!}, 0.12)`;
+            el.style.transform = 'translateY(-2px)';
+        });
+        el.addEventListener('mouseleave', () => {
+            el.style.background = origBg;
+            el.style.border = origBorder;
+            el.style.borderColor = origBorderColor;
+            el.style.boxShadow = origShadow;
+            el.style.transform = '';
+        });
+    });
+}
+
+// ─────────────────────────────────────────────────────────────
+// diagram-reco-ctx: rich legend tooltip
+// ─────────────────────────────────────────────────────────────
+function initCtxLegendTooltip(): void {
+    let tooltip = document.getElementById('docs-ctx-legend') as HTMLElement | null;
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'docs-ctx-legend';
+        document.body.appendChild(tooltip);
+    }
+    const tip = tooltip;
+
+    function buildLegend(activeType: string): void {
+        const title = t('docs.search.ctx.title') || 'Match Context';
+        const items = [
+            { sym: '◆', cls: 'ctx-title',     key: 'titleMatch',    type: 'title' },
+            { sym: '●', cls: 'ctx-main',       key: 'mainNode',      type: 'main' },
+            { sym: '○', cls: 'ctx-secondary',  key: 'secondaryNode', type: 'secondary' },
+            { sym: '›', cls: 'ctx-edge',       key: 'edge',          type: 'edge' },
+        ];
+        const rows = items.map(item => {
+            const label = t(`docs.search.ctx.${item.key}`) || item.key;
+            const isActive = item.type === activeType ? ' active' : '';
+            return `<div class="docs-ctx-legend-item${isActive}">
+                <span class="ctx-sym ${item.cls}">${item.sym}</span>
+                <span>${label}</span>
+            </div>`;
+        }).join('');
+        tip.innerHTML = `<div class="docs-ctx-legend-title">${title}</div>${rows}`;
+    }
+
+    const resultsContainer = document.getElementById('docs-search-results-diagrams');
+    if (!resultsContainer) return;
+
+    resultsContainer.addEventListener('mouseover', (e) => {
+        const ctxEl = (e.target as Element).closest<HTMLElement>('.diagram-reco-ctx');
+        if (!ctxEl) return;
+        const activeType = ctxEl.getAttribute('data-ctx-type') || 'edge';
+        buildLegend(activeType);
+        const rect = ctxEl.getBoundingClientRect();
+        const ttW = 240, ttH = 130;
+        let left = rect.left - ttW - 8;
+        let top = rect.top - ttH / 2 + rect.height / 2;
+        if (left < 8) left = rect.right + 8;
+        if (top < 8) top = 8;
+        if (top + ttH > window.innerHeight - 8) top = window.innerHeight - ttH - 8;
+        tip.style.left = `${left}px`;
+        tip.style.top = `${top}px`;
+        tip.classList.add('visible');
+    });
+
+    resultsContainer.addEventListener('mouseout', (e) => {
+        const ctxEl = (e.target as Element).closest<HTMLElement>('.diagram-reco-ctx');
+        if (!ctxEl) return;
+        tip.classList.remove('visible');
+    });
 }

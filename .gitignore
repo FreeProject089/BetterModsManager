@@ -16,3 +16,4 @@ frontend/src/features/betahub/betahub-config.local.ts
 tmp/
 .claude/
 .vscode
+.agent/

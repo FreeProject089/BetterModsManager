@@ -1759,25 +1759,12 @@
                                                 </svg>
                                             </button>
                                         </div>
-                                        <!-- Hardware sources row -->
-                                        <div
-                                            style="margin-top:9px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                                            <span
-                                                style="font-size:9px;color:rgba(188,116,255,0.5);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Sources
-                                                :</span>
-                                            <span
-                                                style="font-size:9px;color:var(--text-muted);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:4px;padding:1px 6px;">CPU</span>
-                                            <span
-                                                style="font-size:9px;color:var(--text-muted);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:4px;padding:1px 6px;">Carte
-                                                mère</span>
-                                            <span
-                                                style="font-size:9px;color:var(--text-muted);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:4px;padding:1px 6px;">Disque</span>
-                                            <span
-                                                style="font-size:9px;color:var(--text-muted);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:4px;padding:1px 6px;">Registre
-                                                Windows</span>
-                                            <span
-                                                style="font-size:9px;color:rgba(239,68,68,0.6);margin-left:4px;font-style:italic;"
-                                                data-i18n="repo.creatorIdFinal">→ Permanent, non-modifiable</span>
+                                        <!-- Fingerprint note -->
+                                        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;">
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(188,116,255,0.45)" stroke-width="2.5" style="flex-shrink:0;">
+                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                            </svg>
+                                            <span style="font-size:9.5px;color:rgba(188,116,255,0.45);font-style:italic;" data-i18n="repo.creatorIdFinal">Empreinte matérielle — permanente &amp; non-modifiable</span>
                                         </div>
                                     </div>
 
@@ -2487,12 +2474,12 @@
                             <h4 class="docs-diagram-results-title">
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2.5">
-                                    <circle cx="12" cy="12" r="10" />
-                                    <circle cx="12" cy="12" r="3" />
-                                    <line x1="12" y1="2" x2="12" y2="22" />
-                                    <line x1="2" y1="12" x2="22" y2="12" />
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                    <path d="M2 17l10 5 10-5" />
+                                    <path d="M2 12l10 5 10-5" />
                                 </svg>
                                 <span data-i18n="docs.search.diagramResults">Found in Diagrams</span>
+                                <span class="docs-diagram-results-mode-badge classic" data-i18n="docs.searchMode.classic">CLASSIC</span>
                             </h4>
                             <div id="docs-diagram-results-list" class="docs-diagram-results-grid"></div>
                         </div>
@@ -2661,7 +2648,7 @@
                             <!-- TL;DR summary — two-column quick reference -->
                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:18px;">
                                 <div
-                                    style="padding:10px 14px; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.15); border-radius:10px; display:flex; align-items:flex-start; gap:10px;">
+                                    class="doc-info-block" style="padding:10px 14px; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.15); border-radius:10px; display:flex; align-items:flex-start; gap:10px;">
                                     <div
                                         style="width:28px;height:28px;flex-shrink:0;border-radius:8px;background:rgba(16,185,129,0.12);display:flex;align-items:center;justify-content:center;margin-top:1px;">
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#10b981"
@@ -2678,7 +2665,7 @@
                                     </div>
                                 </div>
                                 <div
-                                    style="padding:10px 14px; background:rgba(245,158,11,0.06); border:1px solid rgba(245,158,11,0.15); border-radius:10px; display:flex; align-items:flex-start; gap:10px;">
+                                    class="doc-info-block" style="padding:10px 14px; background:rgba(245,158,11,0.06); border:1px solid rgba(245,158,11,0.15); border-radius:10px; display:flex; align-items:flex-start; gap:10px;">
                                     <div
                                         style="width:28px;height:28px;flex-shrink:0;border-radius:8px;background:rgba(245,158,11,0.12);display:flex;align-items:center;justify-content:center;margin-top:1px;">
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b"
@@ -2699,30 +2686,22 @@
                             <!-- Detailed info blocks -->
                             <div
                                 style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:10px;">
-                                <div class="doc-info-block"
-                                    onmouseenter="window.showTaskyHelp('docs.modact.enable.desc','icon-check')"
-                                    onmouseleave="window.hideTaskyHelp()">
+                                <div class="doc-info-block">
                                     <h4 data-i18n="docs.modact.enable.title">Activation</h4>
                                     <p data-i18n="docs.modact.enable.desc">When you enable a mod, BMM copies each of its
                                         files into the game directory...</p>
                                 </div>
-                                <div class="doc-info-block"
-                                    onmouseenter="window.showTaskyHelp('docs.modact.disable.desc','icon-minus')"
-                                    onmouseleave="window.hideTaskyHelp()">
+                                <div class="doc-info-block">
                                     <h4 data-i18n="docs.modact.disable.title">Désactivation</h4>
                                     <p data-i18n="docs.modact.disable.desc">When you disable a mod, BMM checks each
                                         file...</p>
                                 </div>
-                                <div class="doc-info-block"
-                                    onmouseenter="window.showTaskyHelp('docs.modact.conflict.desc','icon-warning')"
-                                    onmouseleave="window.hideTaskyHelp()">
+                                <div class="doc-info-block">
                                     <h4 data-i18n="docs.modact.conflict.title">File Conflicts</h4>
                                     <p data-i18n="docs.modact.conflict.desc">If Mod A and Mod B both modify the same
                                         file...</p>
                                 </div>
-                                <div class="doc-info-block"
-                                    onmouseenter="window.showTaskyHelp('docs.modact.backup.desc','icon-refresh')"
-                                    onmouseleave="window.hideTaskyHelp()">
+                                <div class="doc-info-block">
                                     <h4 data-i18n="docs.modact.backup.title">Automatic Backup</h4>
                                     <p data-i18n="docs.modact.backup.desc">The vanilla backup is created exactly once
                                         per file...</p>
@@ -2756,7 +2735,7 @@
                             <div
                                 style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                 <div
-                                    style="background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.15);border-radius:10px;padding:12px">
+                                    class="doc-info-block" style="background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.15);border-radius:10px;padding:12px">
                                     <div style="font-size:12px;font-weight:700;color:#00c2ff;margin-bottom:4px"
                                         data-i18n="docs.modpacks.sha256">Empreintes SHA-256</div>
                                     <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -2766,7 +2745,7 @@
                                         différents.</div>
                                 </div>
                                 <div
-                                    style="background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.15);border-radius:10px;padding:12px">
+                                    class="doc-info-block" style="background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.15);border-radius:10px;padding:12px">
                                     <div style="font-size:12px;font-weight:700;color:#00c2ff;margin-bottom:4px"
                                         data-i18n="docs.modpacks.multiProf">Multi-Profile Support</div>
                                     <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -2775,7 +2754,7 @@
                                         de plusieurs profils BMM différents en une seule activation.</div>
                                 </div>
                                 <div
-                                    style="background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.15);border-radius:10px;padding:12px">
+                                    class="doc-info-block" style="background:rgba(0,194,255,0.06);border:1px solid rgba(0,194,255,0.15);border-radius:10px;padding:12px">
                                     <div style="font-size:12px;font-weight:700;color:#00c2ff;margin-bottom:4px"
                                         data-i18n="docs.modpacks.portability">Portabilité Totale</div>
                                     <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -2785,8 +2764,7 @@
                                 </div>
                             </div>
 
-                            <div
-                                style="margin-top: 16px; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                            <div class="doc-info-block" style="margin-top: 16px;">
                                 <h4 style="font-size: 13px; color: var(--text-primary); margin-bottom: 8px;"
                                     data-i18n="docs.modpacks.howToCreate">Comment créer un pack ?</h4>
                                 <ol
@@ -2832,7 +2810,7 @@
                             <div
                                 style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                 <div
-                                    style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
+                                    class="doc-info-block" style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
                                     <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
                                         data-i18n="docs.bestPractices.oneProfile">1 Profile = 1 Mod Folder</div>
                                     <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -2841,7 +2819,7 @@
                                         par profil pour éviter les mélanges de fichiers entre jeux.</div>
                                 </div>
                                 <div
-                                    style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
+                                    class="doc-info-block" style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
                                     <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
                                         data-i18n="docs.bestPractices.modStructure">Mod Folder Structure</div>
                                     <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -2851,7 +2829,7 @@
                                     </div>
                                 </div>
                                 <div
-                                    style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:12px">
+                                    class="doc-info-block" style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:12px">
                                     <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
                                         data-i18n="docs.bestPractices.noDelete">Never Delete an Active Mod</div>
                                     <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -2861,7 +2839,7 @@
                                         de le supprimer manuellement de votre disque.</div>
                                 </div>
                                 <div
-                                    style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
+                                    class="doc-info-block" style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:12px">
                                     <div style="font-size:12px;font-weight:700;color:#22c55e;margin-bottom:4px"
                                         data-i18n="docs.bestPractices.noMix">Don't Mix Mod Folders</div>
                                     <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -2895,26 +2873,20 @@
                             </h3>
                             <div
                                 style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
-                                <div
-                                    style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
-                                    <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
-                                        data-i18n="docs.repo.concept">Comment ça marche ?</div>
-                                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                        data-i18n="docs.repo.conceptDesc">...</div>
+                                <div class="doc-info-block"
+                                    style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);">
+                                    <h4 style="color:#bc74ff;" data-i18n="docs.repo.concept">Comment ça marche ?</h4>
+                                    <p data-i18n="docs.repo.conceptDesc">...</p>
                                 </div>
-                                <div
-                                    style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
-                                    <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
-                                        data-i18n="docs.repo.hosting">Héberger</div>
-                                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                        data-i18n="docs.repo.hostingDesc">...</div>
+                                <div class="doc-info-block"
+                                    style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);">
+                                    <h4 style="color:#bc74ff;" data-i18n="docs.repo.hosting">Héberger</h4>
+                                    <p data-i18n="docs.repo.hostingDesc">...</p>
                                 </div>
-                                <div
-                                    style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px; position: relative;">
-                                    <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
-                                        data-i18n="docs.repo.syncing">Synchroniser</div>
-                                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                        data-i18n="docs.repo.syncingDesc">...</div>
+                                <div class="doc-info-block"
+                                    style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);position:relative;">
+                                    <h4 style="color:#bc74ff;" data-i18n="docs.repo.syncing">Synchroniser</h4>
+                                    <p data-i18n="docs.repo.syncingDesc">...</p>
                                     <button class="btn btn-xs btn-ghost" onclick="openDiagram('mod-sync')"
                                         style="margin-top:10px; font-size:10px; color:#bc74ff; border:1px dashed rgba(188,116,255,0.2); display:flex; align-items:center; gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
@@ -2926,12 +2898,10 @@
                                         <span data-i18n="docs.viewDiagram">VOIR LE DIAGRAMME</span>
                                     </button>
                                 </div>
-                                <div
-                                    style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);border-radius:10px;padding:12px">
-                                    <div style="font-size:12px;font-weight:700;color:#bc74ff;margin-bottom:4px"
-                                        data-i18n="docs.repo.security">Sécurité</div>
-                                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                        data-i18n="docs.repo.securityDesc">...</div>
+                                <div class="doc-info-block"
+                                    style="background:rgba(188,116,255,0.06);border:1px solid rgba(188,116,255,0.15);">
+                                    <h4 style="color:#bc74ff;" data-i18n="docs.repo.security">Sécurité</h4>
+                                    <p data-i18n="docs.repo.securityDesc">...</p>
                                 </div>
                             </div>
                         </div>
@@ -2956,21 +2926,17 @@
                             </h3>
                             <div
                                 style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
-                                <div
-                                    style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
-                                    <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px"
-                                        data-i18n="docs.mapper.q1">À quoi ça sert ?</div>
-                                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                        data-i18n="docs.mapper.a1">Le Mapper permet de réorganiser les dossiers d'un mod
-                                        mal structuré sans quitter BMM.</div>
+                                <div class="doc-info-block"
+                                    style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);">
+                                    <h4 style="color:var(--accent);" data-i18n="docs.mapper.q1">À quoi ça sert ?</h4>
+                                    <p data-i18n="docs.mapper.a1">Le Mapper permet de réorganiser les dossiers d'un mod
+                                        mal structuré sans quitter BMM.</p>
                                 </div>
-                                <div
-                                    style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
-                                    <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px"
-                                        data-i18n="docs.mapper.q2">Mapping Intelligent</div>
-                                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
-                                        data-i18n="docs.mapper.a2">Sélectionnez vos fichiers à gauche, puis
-                                        double-cliquez sur le dossier de destination à droite.</div>
+                                <div class="doc-info-block"
+                                    style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);">
+                                    <h4 style="color:var(--accent);" data-i18n="docs.mapper.q2">Mapping Intelligent</h4>
+                                    <p data-i18n="docs.mapper.a2">Sélectionnez vos fichiers à gauche, puis
+                                        double-cliquez sur le dossier de destination à droite.</p>
                                 </div>
                             </div>
                         </div>
@@ -3006,109 +2972,77 @@
                             <!-- Concepts grid -->
                             <div
                                 style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:16px;">
-                                <div
-                                    style="background:rgba(0,194,255,0.07);border:1px solid rgba(0,194,255,0.18);border-radius:10px;padding:14px;">
-                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
-                                            stroke-width="2.5">
-                                            <circle cx="12" cy="12" r="3" />
-                                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+                                <div class="doc-info-block"
+                                    style="background:rgba(0,194,255,0.07);border:1px solid rgba(0,194,255,0.18);">
+                                    <h4 style="color:var(--cyan);display:flex;align-items:center;gap:6px;">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5" style="flex-shrink:0;">
+                                            <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
                                         </svg>
-                                        <div style="font-size:12px;font-weight:800;color:var(--cyan);"
-                                            data-i18n="docs.serverRepo.creatorIdTitle">Creator ID</div>
-                                    </div>
-                                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;"
-                                        data-i18n="docs.serverRepo.creatorIdDesc">
-                                        A unique fingerprint generated from your machine's hardware IDs. It identifies
-                                        you across sessions without a login — used by the server to track who downloaded
-                                        what, and by the admin to manage bans and whitelists per-user rather than
-                                        per-IP.
-                                    </div>
+                                        <span data-i18n="docs.serverRepo.creatorIdTitle">Creator ID</span>
+                                    </h4>
+                                    <p data-i18n="docs.serverRepo.creatorIdDesc">
+                                        Empreinte matérielle unique générée depuis les composants de ta machine. Elle t'identifie d'une session à l'autre sans login — le serveur l'utilise pour tracker les téléchargements et l'admin pour gérer bans et whitelists par utilisateur (et non par IP).
+                                    </p>
                                 </div>
-                                <div
-                                    style="background:rgba(0,194,255,0.07);border:1px solid rgba(0,194,255,0.18);border-radius:10px;padding:14px;">
-                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
-                                            stroke-width="2.5">
-                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                <div class="doc-info-block"
+                                    style="background:rgba(0,194,255,0.07);border:1px solid rgba(0,194,255,0.18);">
+                                    <h4 style="color:var(--cyan);display:flex;align-items:center;gap:6px;">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5" style="flex-shrink:0;">
+                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                                         </svg>
-                                        <div style="font-size:12px;font-weight:800;color:var(--cyan);"
-                                            data-i18n="docs.serverRepo.seedTitle">Server Seed</div>
-                                    </div>
-                                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;"
-                                        data-i18n="docs.serverRepo.seedDesc">
-                                        A persistent secret that defines your server's identity. Ban lists, whitelists
-                                        and access rules are keyed to this seed — so restarting the server doesn't reset
-                                        your admin settings. Leave it empty at export to auto-generate one; copy it from
-                                        your first export if you want to reuse it on a new server build.
-                                    </div>
+                                        <span data-i18n="docs.serverRepo.seedTitle">Server Seed</span>
+                                    </h4>
+                                    <p data-i18n="docs.serverRepo.seedDesc">
+                                        Secret persistant qui définit l'identité du serveur. Bans, whitelists et règles d'accès sont liés à ce seed — redémarrer le serveur ne remet rien à zéro. Laisse vide à l'export pour en générer un automatiquement ; réutilise-le si tu reconstruis le serveur.
+                                    </p>
                                 </div>
-                                <div
-                                    style="background:rgba(0,194,255,0.07);border:1px solid rgba(0,194,255,0.18);border-radius:10px;padding:14px;">
-                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
-                                            stroke-width="2.5">
-                                            <circle cx="12" cy="12" r="10" />
-                                            <line x1="2" y1="12" x2="22" y2="12" />
-                                            <path
-                                                d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                                <div class="doc-info-block"
+                                    style="background:rgba(0,194,255,0.07);border:1px solid rgba(0,194,255,0.18);">
+                                    <h4 style="color:var(--cyan);display:flex;align-items:center;gap:6px;">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5" style="flex-shrink:0;">
+                                            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+                                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
                                         </svg>
-                                        <div style="font-size:12px;font-weight:800;color:var(--cyan);"
-                                            data-i18n="docs.serverRepo.interServerTitle">Inter-Server Sync</div>
-                                    </div>
-                                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;"
-                                        data-i18n="docs.serverRepo.interServerDesc">
-                                        Clients can connect to multiple servers simultaneously. Each server has its own
-                                        URL (IP:Port). BMM's Server Repo view lets clients browse and download from any
-                                        connected server — useful for squadrons sharing mods across different hosts.
-                                    </div>
+                                        <span data-i18n="docs.serverRepo.interServerTitle">Multi-Serveurs</span>
+                                    </h4>
+                                    <p data-i18n="docs.serverRepo.interServerDesc">
+                                        Les clients peuvent se connecter à plusieurs serveurs simultanément. Chaque serveur a sa propre URL. La vue JOIN affiche tous les serveurs ajoutés — idéal pour un escadron dont les mods sont répartis sur plusieurs hosts.
+                                    </p>
                                 </div>
                             </div>
 
                             <!-- How it works steps -->
                             <div
-                                style="background:rgba(0,0,0,0.2);border-radius:10px;border:1px solid rgba(255,255,255,0.06);padding:14px;">
+                                class="doc-info-block" style="background:rgba(0,0,0,0.2);border-radius:10px;border:1px solid rgba(255,255,255,0.06);padding:14px;">
                                 <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;"
-                                    data-i18n="docs.serverRepo.howItWorks">How It Works</div>
+                                    data-i18n="docs.serverRepo.howItWorks">Comment ça fonctionne</div>
                                 <div style="display:flex;flex-direction:column;gap:8px;">
                                     <div style="display:flex;align-items:flex-start;gap:10px;">
-                                        <span
-                                            style="min-width:20px;height:20px;background:var(--accent);color:#fff;border-radius:50%;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">1</span>
+                                        <span style="min-width:20px;height:20px;background:var(--accent);color:#fff;border-radius:50%;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">1</span>
                                         <span style="font-size:12px;color:var(--text-secondary);line-height:1.5;"
-                                            data-i18n="docs.serverRepo.step1">Generate a repo with your mods in the
-                                            <strong style="color:var(--text-primary);">Server Repo</strong> tab. Choose
-                                            ZIP (standalone server) or folder export.</span>
+                                            data-i18n="docs.serverRepo.step1">Dans l'onglet <strong style="color:var(--text-primary);">Server Repo → HOST</strong>, configure ta collection de mods, ton server seed (ou laisse vide pour auto-générer), puis clique sur <strong style="color:var(--cyan);">Générer</strong>. BMM crée le <code style="color:#22d3ee;font-size:10px">repo.json</code> avec les métadonnées et hashes de tous tes mods.</span>
                                     </div>
                                     <div style="display:flex;align-items:flex-start;gap:10px;">
-                                        <span
-                                            style="min-width:20px;height:20px;background:var(--accent);color:#fff;border-radius:50%;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">2</span>
+                                        <span style="min-width:20px;height:20px;background:var(--accent);color:#fff;border-radius:50%;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">2</span>
                                         <span style="font-size:12px;color:var(--text-secondary);line-height:1.5;"
-                                            data-i18n="docs.serverRepo.step2">Host it: run the included server
-                                            executable (or start the built-in server) and note your <strong
-                                                style="color:var(--cyan);">IP:Port</strong>.</span>
+                                            data-i18n="docs.serverRepo.step2">Clique sur <strong style="color:var(--cyan);">Démarrer le serveur</strong> — le Mini Serveur intégré à BMM démarre et sert tes mods directement depuis ta machine sur une URL locale (ex : <code style="color:#22d3ee;font-size:10px">192.168.x.x:7272</code>). Pour un accès public, active Cloudflare Tunnel ou ngrok depuis les options du serveur.</span>
                                     </div>
                                     <div style="display:flex;align-items:flex-start;gap:10px;">
-                                        <span
-                                            style="min-width:20px;height:20px;background:var(--accent);color:#fff;border-radius:50%;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">3</span>
+                                        <span style="min-width:20px;height:20px;background:var(--accent);color:#fff;border-radius:50%;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">3</span>
                                         <span style="font-size:12px;color:var(--text-secondary);line-height:1.5;"
-                                            data-i18n="docs.serverRepo.step3">Share the server URL with your team. They
-                                            enter it in their BMM Server Repo view and see all available mods.</span>
+                                            data-i18n="docs.serverRepo.step3">Partage l'URL du serveur à ton équipe. Chaque membre va dans <strong style="color:var(--text-primary);">Server Repo → JOIN</strong>, colle l'URL et voit instantanément la liste de tous les mods disponibles avec leur statut (à jour, manquant, version différente).</span>
                                     </div>
                                     <div style="display:flex;align-items:flex-start;gap:10px;">
-                                        <span
-                                            style="min-width:20px;height:20px;background:var(--accent);color:#fff;border-radius:50%;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">4</span>
+                                        <span style="min-width:20px;height:20px;background:var(--accent);color:#fff;border-radius:50%;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">4</span>
                                         <span style="font-size:12px;color:var(--text-secondary);line-height:1.5;"
-                                            data-i18n="docs.serverRepo.step4">Clients click <strong
-                                                style="color:var(--text-primary);">Sync</strong> — BMM compares local vs
-                                            remote mod hashes, downloads only what changed, and updates their library
-                                            automatically.</span>
+                                            data-i18n="docs.serverRepo.step4">Le client clique <strong style="color:var(--text-primary);">Sync</strong> — BMM compare les hashes locaux aux hashes du <code style="color:#22d3ee;font-size:10px">repo.json</code> du serveur. Seuls les fichiers manquants ou différents sont téléchargés, avec le Creator ID envoyé en header pour identifier le client auprès de l'admin.</span>
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Admin tip -->
                             <div
-                                style="margin-top:12px;padding:10px 14px;background:rgba(234,179,8,0.07);border:1px solid rgba(234,179,8,0.2);border-radius:8px;display:flex;align-items:flex-start;gap:10px;">
+                                class="doc-info-block" style="margin-top:12px;padding:10px 14px;background:rgba(234,179,8,0.07);border:1px solid rgba(234,179,8,0.2);border-radius:8px;display:flex;align-items:flex-start;gap:10px;">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fbbf24"
                                     stroke-width="2.5" style="flex-shrink:0;margin-top:1px;">
                                     <path
@@ -3380,14 +3314,14 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                     <div
-                                        style="background:rgba(206,138,23,0.06);border:1px solid rgba(206,138,23,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(206,138,23,0.06);border:1px solid rgba(206,138,23,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#ce8a17;margin-bottom:4px"
                                             data-i18n="docs.basic.backup.q1">Sécurité avant tout</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
                                             data-i18n="docs.basic.backup.a1">Si l'activation...</div>
                                     </div>
                                     <div
-                                        style="background:rgba(206,138,23,0.06);border:1px solid rgba(206,138,23,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(206,138,23,0.06);border:1px solid rgba(206,138,23,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#ce8a17;margin-bottom:4px"
                                             data-i18n="docs.basic.backup.q2">Désactivation parfaite</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3432,24 +3366,21 @@
                                 </h3>
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
-                                    <div class="glass-card"
-                                        style="padding:15px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:12px">
+                                    <div class="doc-info-block">
                                         <div style="font-weight:600;margin-bottom:8px;color:var(--text-primary)"
                                             data-i18n="docs.basic.integrity.q1">Deep Comparison</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
                                             data-i18n="docs.basic.integrity.a1">BMM performs a full binary comparison of
                                             your mod files against their original fingerprints (SHA-256).</div>
                                     </div>
-                                    <div class="glass-card"
-                                        style="padding:15px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:12px">
+                                    <div class="doc-info-block">
                                         <div style="font-weight:600;margin-bottom:8px;color:var(--text-primary)"
                                             data-i18n="docs.basic.integrity.q2">Anomaly Detection</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
                                             data-i18n="docs.basic.integrity.a2">The system identifies files that have
                                             been modified, deleted, or added without authorization.</div>
                                     </div>
-                                    <div class="glass-card"
-                                        style="padding:15px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:12px">
+                                    <div class="doc-info-block">
                                         <div style="font-weight:600;margin-bottom:8px;color:var(--text-primary)"
                                             data-i18n="docs.basic.integrity.q3">Diagnostic</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3479,7 +3410,7 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                     <div
-                                        style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:4px"
                                             data-i18n="docs.basic.mm.q1">Partage rapide</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3488,7 +3419,7 @@
 
                                     </div>
                                     <div
-                                        style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:4px"
                                             data-i18n="docs.basic.mm.q2">Standard ouvert</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3497,7 +3428,7 @@
 
                                     </div>
                                     <div
-                                        style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:var(--cyan);margin-bottom:4px"
                                             data-i18n="docs.basic.mm.q3">Installation en 1 clic</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3533,7 +3464,7 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                     <div
-                                        style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px"
                                             data-i18n="docs.basic.links.q1">GitHub</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3542,7 +3473,7 @@
 
                                     </div>
                                     <div
-                                        style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px"
                                             data-i18n="docs.basic.links.q2">Direct</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3552,7 +3483,7 @@
                                     </div>
 
                                     <div
-                                        style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px"
                                             data-i18n="docs.basic.links.q4">Autre</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3589,7 +3520,7 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                     <div
-                                        style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:var(--warning);margin-bottom:4px"
                                             data-i18n="docs.basic.conflict.q1">L'ordre compte</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3598,7 +3529,7 @@
 
                                     </div>
                                     <div
-                                        style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:var(--warning);margin-bottom:4px"
                                             data-i18n="docs.basic.conflict.q2">Copie intelligente</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3607,7 +3538,7 @@
 
                                     </div>
                                     <div
-                                        style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:var(--warning);margin-bottom:4px"
                                             data-i18n="docs.basic.conflict.q3">Multi-Restauration</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3658,7 +3589,7 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                     <div
-                                        style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
                                             data-i18n="docs.profileCustom.q1">Image de fond</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3667,7 +3598,7 @@
                                             image. Outil de crop inclus.</div>
                                     </div>
                                     <div
-                                        style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
                                             data-i18n="docs.profileCustom.q2">Couleurs & Icônes</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3676,7 +3607,7 @@
                                             vos jeux.</div>
                                     </div>
                                     <div
-                                        style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
                                             data-i18n="docs.profileCustom.q3">Double-clic</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3716,28 +3647,28 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                     <div
-                                        style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
                                             data-i18n="docs.ioLimiter.why">Why?</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
                                             data-i18n="docs.ioLimiter.whyDesc">...</div>
                                     </div>
                                     <div
-                                        style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
                                             data-i18n="docs.ioLimiter.how">How?</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
                                             data-i18n="docs.ioLimiter.howDesc">...</div>
                                     </div>
                                     <div
-                                        style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
                                             data-i18n="docs.ioLimiter.benchmark">Benchmark</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
                                             data-i18n="docs.ioLimiter.benchmarkDesc">...</div>
                                     </div>
                                     <div
-                                        style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
                                             data-i18n="docs.ioLimiter.cloud">Cloud / NAS</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3771,28 +3702,28 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                     <div
-                                        style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#fbbf24;margin-bottom:4px"
                                             data-i18n="docs.storageAlerts.warning">Warning</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
                                             data-i18n="docs.storageAlerts.warningDesc">...</div>
                                     </div>
                                     <div
-                                        style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
                                             data-i18n="docs.storageAlerts.critical">Critical</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
                                             data-i18n="docs.storageAlerts.criticalDesc">...</div>
                                     </div>
                                     <div
-                                        style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
                                             data-i18n="docs.storageAlerts.configure">Configure</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
                                             data-i18n="docs.storageAlerts.configureDesc">...</div>
                                     </div>
                                     <div
-                                        style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
                                             data-i18n="docs.storageAlerts.multiDisk">Multi-disk</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3823,28 +3754,28 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                     <div
-                                        style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
                                             data-i18n="docs.benchmark.live">Live Tracking</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
                                             data-i18n="docs.benchmark.liveDesc">...</div>
                                     </div>
                                     <div
-                                        style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
                                             data-i18n="docs.benchmark.pip">Floating Monitor (PiP)</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
                                             data-i18n="docs.benchmark.pipDesc">...</div>
                                     </div>
                                     <div
-                                        style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
                                             data-i18n="docs.benchmark.timeline">Professional Timeline</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
                                             data-i18n="docs.benchmark.timelineDesc">...</div>
                                     </div>
                                     <div
-                                        style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:4px"
                                             data-i18n="docs.benchmark.export">Exports &amp; Auto-Stop</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3890,7 +3821,7 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                     <div
-                                        style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#a78bfa;margin-bottom:4px"
                                             data-i18n="docs.dedicatedHosting.gen">1. Générer le Repo</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3899,7 +3830,7 @@
                                             générer le dépôt.</div>
                                     </div>
                                     <div
-                                        style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#a78bfa;margin-bottom:4px"
                                             data-i18n="docs.dedicatedHosting.transfer">2. Transférer</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3907,7 +3838,7 @@
                                             (pas seulement le .json) sur votre serveur.</div>
                                     </div>
                                     <div
-                                        style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#a78bfa;margin-bottom:4px"
                                             data-i18n="docs.dedicatedHosting.config">3. Configurer</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -3942,7 +3873,7 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:10px">
                                     <div
-                                        style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em"
                                             data-i18n="docs.updates.auto">Automatic Detection</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.55"
@@ -3950,7 +3881,7 @@
                                             available on GitHub. No manual check needed.</div>
                                     </div>
                                     <div
-                                        style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.18);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.18);border-radius:10px;padding:12px">
                                         <div style="font-size:11px;font-weight:700;color:#34d399;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em"
                                             data-i18n="docs.updates.delta">Delta Updates</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.55"
@@ -3959,7 +3890,7 @@
                                         </div>
                                     </div>
                                     <div
-                                        style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.18);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.18);border-radius:10px;padding:12px">
                                         <div style="font-size:11px;font-weight:700;color:#818cf8;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.05em"
                                             data-i18n="docs.updates.silent">Full Installer</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.55">When no
@@ -3969,7 +3900,7 @@
                                 </div>
                                 <!-- Flow strip -->
                                 <div
-                                    style="margin-top:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 14px;background:rgba(59,130,246,0.04);border:1px solid rgba(59,130,246,0.1);border-radius:9px;font-size:11px;">
+                                    class="doc-info-block" style="margin-top:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 14px;background:rgba(59,130,246,0.04);border:1px solid rgba(59,130,246,0.1);border-radius:9px;font-size:11px;">
                                     <span
                                         style="padding:3px 9px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);border-radius:5px;color:#93c5fd;font-weight:600">GitHub
                                         API</span>
@@ -4033,7 +3964,7 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                     <div
-                                        style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#fb923c;margin-bottom:4px"
                                             data-i18n="docs.launchPacks.q1">Lancement silencieux</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -4041,7 +3972,7 @@
                                             console, via un moteur VBScript/PowerShell invisible.</div>
                                     </div>
                                     <div
-                                        style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#fb923c;margin-bottom:4px"
                                             data-i18n="docs.launchPacks.q2">Icônes & Raccourcis</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -4049,7 +3980,7 @@
                                             256×256) et création automatique de raccourcis .lnk sur le Bureau.</div>
                                     </div>
                                     <div
-                                        style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#fb923c;margin-bottom:4px"
                                             data-i18n="docs.launchPacks.q3">Gestion par l'IA (MCP)</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -4085,7 +4016,7 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                     <div
-                                        style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#22d3ee;margin-bottom:4px"
                                             data-i18n="docs.mcp.q1">Intégration IA</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -4094,7 +4025,7 @@
                                         </div>
                                     </div>
                                     <div
-                                        style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#22d3ee;margin-bottom:4px"
                                             data-i18n="docs.mcp.q2">CLI Unifié</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -4102,7 +4033,7 @@
                                             affichage coloré, tableaux structurés et ASCII art de démarrage.</div>
                                     </div>
                                     <div
-                                        style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#22d3ee;margin-bottom:4px"
                                             data-i18n="docs.mcp.q3">State Bridge</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -4136,7 +4067,7 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                     <div
-                                        style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
                                             data-i18n="docs.security.q1">Mode Accès Complet</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -4144,7 +4075,7 @@
                                             lecteurs. Recommandé pour les utilisateurs avancés.</div>
                                     </div>
                                     <div
-                                        style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
                                             data-i18n="docs.security.q2">Mode Accès Limité</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -4152,7 +4083,7 @@
                                             définis dans les profils. Idéal pour une sécurité maximale.</div>
                                     </div>
                                     <div
-                                        style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
                                             data-i18n="docs.security.q3">Choix au premier lancement</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -4188,7 +4119,7 @@
                                     <div
                                         style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px;">
                                         <div
-                                            style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.15); border-radius:10px; padding:12px">
+                                            class="doc-info-block" style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.15); border-radius:10px; padding:12px">
                                             <div style="font-size:12px; font-weight:700; color:#d8b4fe; margin-bottom:4px"
                                                 data-i18n="docs.betahub.benefit1">Spam protection (PoW)</div>
                                             <div style="font-size:12px; color:var(--text-secondary); line-height:1.5"
@@ -4196,7 +4127,7 @@
                                                 verify genuine requests without intrusive captchas.</div>
                                         </div>
                                         <div
-                                            style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.15); border-radius:10px; padding:12px">
+                                            class="doc-info-block" style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.15); border-radius:10px; padding:12px">
                                             <div style="font-size:12px; font-weight:700; color:#d8b4fe; margin-bottom:4px"
                                                 data-i18n="docs.betahub.benefit2">Privacy-First Data Segregation</div>
                                             <div style="font-size:12px; color:var(--text-secondary); line-height:1.5"
@@ -4204,7 +4135,7 @@
                                                 details from your private system logs and contact info.</div>
                                         </div>
                                         <div
-                                            style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.15); border-radius:10px; padding:12px">
+                                            class="doc-info-block" style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.15); border-radius:10px; padding:12px">
                                             <div style="font-size:12px; font-weight:700; color:#d8b4fe; margin-bottom:4px"
                                                 data-i18n="docs.betahub.benefit3">High-Priority Dev Channel</div>
                                             <div style="font-size:12px; color:var(--text-secondary); line-height:1.5"
@@ -4242,7 +4173,7 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                     <div
-                                        style="background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
                                             data-i18n="docs.crashReport.q1">Buffer circulaire</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -4250,7 +4181,7 @@
                                             les événements en temps réel pour les inclure dans chaque rapport.</div>
                                     </div>
                                     <div
-                                        style="background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
                                             data-i18n="docs.crashReport.q2">Panic Hook</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -4258,7 +4189,7 @@
                                             backtrace complète et génère automatiquement un rapport ZIP.</div>
                                     </div>
                                     <div
-                                        style="background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:4px"
                                             data-i18n="docs.crashReport.q3">Intégration BetaHub</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.5"
@@ -4296,14 +4227,14 @@
                                 <div
                                     style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px">
                                     <div
-                                        style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:var(--cyan)">Tauri & Rust</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.4">Cœur
                                             technique
                                             assurant sécurité, rapidité d'exécution et gestion bas-niveau.</div>
                                     </div>
                                     <div
-                                        style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:var(--cyan)">Mermaid.js</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.4">Moteur
                                             de
@@ -4311,7 +4242,7 @@
                                         </div>
                                     </div>
                                     <div
-                                        style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
+                                        class="doc-info-block" style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:10px;padding:12px">
                                         <div style="font-size:12px;font-weight:700;color:var(--cyan)"
                                             data-i18n="docs.techStack.json">JSON & Symlinks</div>
                                         <div style="font-size:12px;color:var(--text-secondary);line-height:1.4"
@@ -4339,7 +4270,7 @@
 
                                 <!-- Info banner -->
                                 <div
-                                    style="display:flex;gap:10px;align-items:flex-start;padding:10px 13px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.18);border-radius:9px;margin-bottom:16px;">
+                                    class="doc-info-block" style="display:flex;gap:10px;align-items:flex-start;padding:10px 13px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.18);border-radius:9px;margin-bottom:16px;">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22d3ee"
                                         stroke-width="2" style="flex-shrink:0;margin-top:2px">
                                         <circle cx="12" cy="12" r="10" />
@@ -4449,7 +4380,7 @@
                                             <span style="color:#e6edf3">}</span>
                                         </div>
                                         <div
-                                            style="margin-top:7px;padding:7px 11px;background:rgba(6,182,212,0.04);border:1px solid rgba(6,182,212,0.09);border-radius:7px;">
+                                            class="doc-info-block" style="margin-top:7px;padding:7px 11px;background:rgba(6,182,212,0.04);border:1px solid rgba(6,182,212,0.09);border-radius:7px;">
                                             <span style="font-size:10px;color:var(--text-muted);line-height:1.6;"
                                                 data-i18n="docs.genFiles.repoNote">
                                                 Le champ <code style="color:#22d3ee;font-size:10px">creator_id</code>
@@ -4574,7 +4505,7 @@
 
                                         <!-- ngrok -->
                                         <div
-                                            style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:12px">
+                                            class="doc-info-block" style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:12px">
                                             <div
                                                 style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
                                                 <span style="font-size:12px;font-weight:700;color:#818cf8">ngrok</span>
@@ -4618,7 +4549,7 @@
 
                                         <!-- Cloudflare Tunnel -->
                                         <div
-                                            style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.2);border-radius:10px;padding:12px">
+                                            class="doc-info-block" style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.2);border-radius:10px;padding:12px">
                                             <div
                                                 style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
                                                 <span style="font-size:12px;font-weight:700;color:#fb923c">Cloudflare
@@ -4790,7 +4721,7 @@
                                         </li>
                                     </ol>
                                     <div
-                                        style="margin-top:12px;padding:10px 14px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);border-radius:8px;font-size:12px;color:rgba(234,179,8,0.9)">
+                                        class="doc-info-block" style="margin-top:12px;padding:10px 14px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);border-radius:8px;font-size:12px;color:rgba(234,179,8,0.9)">
                                         ⚠️ <span data-i18n="faq.aPat_warn">Ne partagez jamais votre token ! Il donne
                                             accès à votre compte GitHub.</span>
                                     </div>
@@ -5146,7 +5077,7 @@
                                         installer manuellement.</p>
                                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
                                         <div
-                                            style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:9px;padding:10px;font-size:12px">
+                                            class="doc-info-block" style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:9px;padding:10px;font-size:12px">
                                             <div style="font-weight:700;color:#22d3ee;margin-bottom:5px;font-size:11px;text-transform:uppercase;letter-spacing:0.04em"
                                                 data-i18n="faq.docker.withTitle">Avec Docker</div>
                                             <div style="color:var(--text-secondary);line-height:1.65">
@@ -5161,7 +5092,7 @@
                                             </div>
                                         </div>
                                         <div
-                                            style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:9px;padding:10px;font-size:12px">
+                                            class="doc-info-block" style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:9px;padding:10px;font-size:12px">
                                             <div style="font-weight:700;color:var(--text-muted);margin-bottom:5px;font-size:11px;text-transform:uppercase;letter-spacing:0.04em"
                                                 data-i18n="faq.docker.withoutTitle">Sans Docker</div>
                                             <div style="color:var(--text-muted);line-height:1.65">
@@ -5208,10 +5139,10 @@
                                         une URL publique HTTPS. Idéal pour héberger depuis chez soi.
                                     </p>
                                     <div
-                                        style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 16px;background:rgba(0,0,0,0.2);border-radius:10px;border:1px solid rgba(6,182,212,0.12);font-size:11px;margin-bottom:10px">
+                                        class="doc-info-block" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 16px;background:rgba(0,0,0,0.2);border-radius:10px;border:1px solid rgba(6,182,212,0.12);font-size:11px;margin-bottom:10px">
                                         <div style="text-align:center">
                                             <div
-                                                style="padding:5px 10px;background:rgba(6,182,212,0.12);border:1px solid rgba(6,182,212,0.25);border-radius:6px;font-weight:700;color:#22d3ee">
+                                                class="doc-info-block" style="padding:5px 10px;background:rgba(6,182,212,0.12);border:1px solid rgba(6,182,212,0.25);border-radius:6px;font-weight:700;color:#22d3ee">
                                                 Docker BMM</div>
                                             <div style="font-size:9px;color:var(--text-muted);margin-top:3px">:8080
                                             </div>
@@ -5222,7 +5153,7 @@
                                         </svg>
                                         <div style="text-align:center">
                                             <div
-                                                style="padding:5px 10px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);border-radius:6px;font-weight:700;color:#818cf8">
+                                                class="doc-info-block" style="padding:5px 10px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);border-radius:6px;font-weight:700;color:#818cf8">
                                                 ngrok Agent</div>
                                             <div style="font-size:9px;color:var(--text-muted);margin-top:3px">local
                                             </div>
@@ -5233,7 +5164,7 @@
                                         </svg>
                                         <div style="text-align:center">
                                             <div
-                                                style="padding:5px 10px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);border-radius:6px;font-weight:700;color:#93c5fd">
+                                                class="doc-info-block" style="padding:5px 10px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);border-radius:6px;font-weight:700;color:#93c5fd">
                                                 ngrok Cloud</div>
                                             <div style="font-size:9px;color:var(--text-muted);margin-top:3px">TLS</div>
                                         </div>
@@ -5249,7 +5180,7 @@
                                         </div>
                                     </div>
                                     <div
-                                        style="display:flex;align-items:flex-start;gap:6px;padding:8px 12px;background:rgba(234,179,8,0.05);border:1px solid rgba(234,179,8,0.15);border-radius:8px;font-size:12px;color:rgba(234,179,8,0.85)">
+                                        class="doc-info-block" style="display:flex;align-items:flex-start;gap:6px;padding:8px 12px;background:rgba(234,179,8,0.05);border:1px solid rgba(234,179,8,0.15);border-radius:8px;font-size:12px;color:rgba(234,179,8,0.85)">
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px">
                                             <path
@@ -5284,7 +5215,7 @@
                                 <div class="faq-content">
                                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
                                         <div
-                                            style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:9px;padding:12px">
+                                            class="doc-info-block" style="background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.15);border-radius:9px;padding:12px">
                                             <div style="font-weight:700;color:var(--cyan);margin-bottom:7px;font-size:11px;text-transform:uppercase;letter-spacing:0.04em"
                                                 data-i18n="faq.vps.vpsTitle">VPS Linux</div>
                                             <div style="color:var(--text-secondary);line-height:1.7">
@@ -5301,7 +5232,7 @@
                                             </div>
                                         </div>
                                         <div
-                                            style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:9px;padding:12px">
+                                            class="doc-info-block" style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:9px;padding:12px">
                                             <div style="font-weight:700;color:var(--text-secondary);margin-bottom:7px;font-size:11px;text-transform:uppercase;letter-spacing:0.04em"
                                                 data-i18n="faq.vps.homeTitle">PC à la maison</div>
                                             <div style="color:var(--text-muted);line-height:1.7">
@@ -5345,7 +5276,7 @@
                                     <div
                                         style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;font-size:12px">
                                         <div
-                                            style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.18);border-radius:9px;padding:10px">
+                                            class="doc-info-block" style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.18);border-radius:9px;padding:10px">
                                             <div
                                                 style="font-weight:700;color:#818cf8;margin-bottom:6px;font-size:11px;text-transform:uppercase">
                                                 ngrok</div>
@@ -5361,7 +5292,7 @@
                                             </div>
                                         </div>
                                         <div
-                                            style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.2);border-radius:9px;padding:10px">
+                                            class="doc-info-block" style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.2);border-radius:9px;padding:10px">
                                             <div
                                                 style="font-weight:700;color:#fb923c;margin-bottom:6px;font-size:11px;text-transform:uppercase">
                                                 Cloudflare Tunnel</div>
@@ -5395,7 +5326,7 @@
                                         </div>
                                     </div>
                                     <div
-                                        style="margin-top:8px;display:flex;align-items:flex-start;gap:6px;padding:8px 12px;background:rgba(234,179,8,0.05);border:1px solid rgba(234,179,8,0.15);border-radius:8px;font-size:12px;color:rgba(234,179,8,0.85)">
+                                        class="doc-info-block" style="margin-top:8px;display:flex;align-items:flex-start;gap:6px;padding:8px 12px;background:rgba(234,179,8,0.05);border:1px solid rgba(234,179,8,0.15);border-radius:8px;font-size:12px;color:rgba(234,179,8,0.85)">
                                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px">
                                             <path
@@ -5502,7 +5433,7 @@
                                     </p>
                                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
                                         <div
-                                            style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.18);border-radius:9px;padding:10px;font-size:12px">
+                                            class="doc-info-block" style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.18);border-radius:9px;padding:10px;font-size:12px">
                                             <div
                                                 style="font-weight:700;color:#34d399;margin-bottom:5px;font-size:11px;text-transform:uppercase;letter-spacing:0.04em">
                                                 Mode Delta (prioritaire)</div>
@@ -5514,7 +5445,7 @@
                                             </div>
                                         </div>
                                         <div
-                                            style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:9px;padding:10px;font-size:12px">
+                                            class="doc-info-block" style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:9px;padding:10px;font-size:12px">
                                             <div
                                                 style="font-weight:700;color:#818cf8;margin-bottom:5px;font-size:11px;text-transform:uppercase;letter-spacing:0.04em">
                                                 Installeur complet (fallback)</div>
@@ -6335,6 +6266,74 @@
 
                     <div class="settings-sections">
 
+                        <div class="glass-card">
+                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
+                                    stroke-width="2.2">
+                                    <path d="M5 8l6 6"></path>
+                                    <path d="M4 14l6-6 2-3"></path>
+                                    <path d="M2 5h12"></path>
+                                    <path d="M7 2h1"></path>
+                                    <path d="M22 22l-5-10-5 10"></path>
+                                    <path d="M14 18h6"></path>
+                                </svg>
+                                <span data-i18n="settings.language">Langue</span>
+                            </h3>
+                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px"
+                                data-i18n="settings.langSubtitle">
+                                Sélectionnez la langue de l'application. La détection des nouveaux fichiers est
+                                automatique.
+                            </p>
+
+                            <div id="settings-lang-container" style="margin-bottom:16px; width: fit-content;">
+                                <!-- Injected from JS -->
+                            </div>
+
+                            <div
+                                style="display:flex;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                                <div style="flex:1">
+                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                        data-i18n="settings.langContribute">Contribuer à la
+                                        traduction</div>
+                                    <div style="font-size:10px;color:var(--text-muted)"
+                                        data-i18n="settings.langContributeDesc">Aidez-nous à traduire BMM dans
+                                        d'autres langues.</div>
+                                </div>
+                                <div style="display:flex;gap:8px">
+                                    <button class="btn btn-ghost btn-sm" id="btn-show-lang-guide"
+                                        style="font-size:11px;gap:6px">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="10" />
+                                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                                            <line x1="12" y1="17" x2="12.01" y2="17" />
+                                        </svg>
+                                        <span data-i18n="settings.langGuide">Guide</span>
+                                    </button>
+                                    <button class="btn btn-secondary btn-sm" id="btn-download-lang-template"
+                                        style="font-size:11px;gap:6px">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4" />
+                                            <polyline points="7 10 12 15 17 10" />
+                                            <line x1="12" y1="15" x2="12" y2="3" />
+                                        </svg>
+                                        <span data-i18n="settings.langDownloadTemplate">Télécharger Modèle</span>
+                                    </button>
+                                    <button class="btn btn-primary btn-sm" id="btn-import-lang"
+                                        style="font-size:11px;gap:6px">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                            <polyline points="17 8 12 3 7 8" />
+                                            <line x1="12" y1="3" x2="12" y2="15" />
+                                        </svg>
+                                        <span data-i18n="settings.langImport">Importer</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- ── Auto Update Toggle ── -->
                         <div class="glass-card" id="settings-auto-update-card"
                             style="border: 1px solid rgba(16, 185, 129, 0.15); position: relative; overflow: hidden;">
@@ -6391,178 +6390,6 @@
                                 </button>
                                 <span id="update-status-msg"
                                     style="font-size:11px;color:var(--text-muted);min-height:16px"></span>
-                            </div>
-                        </div>
-                        <!-- ── END Auto Update ── -->
-                        <!-- ── Discord RPC Toggle ── -->
-                        <div class="glass-card" id="settings-discord-rpc-card"
-                            style="border: 1px solid rgba(114, 137, 218, 0.25); position: relative; overflow: hidden;">
-                            <div
-                                style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(114,137,218,0.1);border-radius:50%;filter:blur(30px);pointer-events:none">
-                            </div>
-                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"
-                                    style="color:#7289da">
-                                    <path
-                                        d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037 19.736 19.736 0 0 0-4.885 1.515.069.069 0 0 0-.032.027C.533 9.048-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.419-2.157 2.419z" />
-                                </svg>
-                                <span data-i18n="settings.discordRpcTitle">Discord Rich Presence</span>
-                            </h3>
-
-                            <div
-                                style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:rgba(114,137,218,0.08);border:1px solid rgba(114,137,218,0.2);border-radius:10px;margin-bottom:16px">
-                                <p style="font-size:12px;line-height:1.6;color:var(--text-secondary);margin:0"
-                                    data-i18n="settings.discordRpcDesc">
-                                    Affiche votre activité BMM sur Discord (profil actif et nombre de mods activés).
-                                </p>
-                            </div>
-
-                            <div
-                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
-                                <div style="flex:1">
-                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
-                                        data-i18n="settings.discordRpcToggle">Enable Rich Presence</div>
-                                    <div style="font-size:10px;color:var(--text-muted)"
-                                        data-i18n="settings.discordRpcToggleDesc">Connect to Discord to show your status
-                                    </div>
-                                </div>
-                                <label class="bmm-switch">
-                                    <input type="checkbox" id="chk-discord-rpc" checked>
-                                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
-                                </label>
-                            </div>
-                        </div>
-                        <!-- ── END Discord RPC ── -->
-
-                        <!-- ── Hashes / SHA ── -->
-                        <div class="glass-card" id="settings-sha-card"
-                            style="border: 1px solid rgba(139, 92, 246, 0.25); position: relative; overflow: hidden;">
-                            <div
-                                style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(139, 92, 246, 0.1);border-radius:50%;filter:blur(30px);pointer-events:none">
-                            </div>
-                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6"
-                                    stroke-width="2.2">
-                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                                    <path d="m9 12 2 2 4-4" />
-                                </svg>
-                                <span data-i18n="settings.shaTitle">Hashes / SHA & Integrity</span>
-                            </h3>
-
-                            <div
-                                style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:rgba(139, 92, 246, 0.08);border:1px solid rgba(139, 92, 246, 0.2);border-radius:10px;margin-bottom:16px">
-                                <p style="font-size:12px;line-height:1.6;color:var(--text-secondary);margin:0"
-                                    data-i18n="settings.shaDesc">
-                                    Manage file integrity verification. Hashing ensures your mod files are not corrupted
-                                    or tampered with.
-                                </p>
-                            </div>
-
-                            <!-- Strict mode toggle -->
-                            <div
-                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
-                                <div style="flex:1">
-                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
-                                        data-i18n="settings.shaStrictMode">Strict Integrity Enforcement</div>
-                                    <div style="font-size:10px;color:var(--text-muted)"
-                                        data-i18n="settings.shaStrictModeDesc">Require valid SHA hash before enabling a
-                                        mod</div>
-                                </div>
-                                <label class="bmm-switch">
-                                    <input type="checkbox" id="chk-sha-strict-mode">
-                                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
-                                </label>
-                            </div>
-
-                            <!-- Enable Lazy SHA toggle -->
-                            <div
-                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
-                                <div style="flex:1">
-                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
-                                        data-i18n="settings.shaEnableLazy">Enable Background Hashing</div>
-                                    <div style="font-size:10px;color:var(--text-muted)"
-                                        data-i18n="settings.shaEnableLazyDesc">Automatically calculate missing hashes in
-                                        the background</div>
-                                </div>
-                                <label class="bmm-switch">
-                                    <input type="checkbox" id="chk-sha-lazy-calc">
-                                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
-                                </label>
-                            </div>
-
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                                <button class="btn btn-secondary btn-sm" onclick="window.showHashingStats()">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
-                                        <path d="M22 12A10 10 0 0 0 12 2v10z" />
-                                    </svg>
-                                    <span data-i18n="settings.shaStatsBtn">Hashing Progress</span>
-                                </button>
-                                <button class="btn btn-secondary btn-sm" onclick="window.recalculateAllHashesPrompt()">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <path d="M23 4v6h-6M1 20v-6h6" />
-                                        <path
-                                            d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                                    </svg>
-                                    <span data-i18n="settings.shaRecalculateAllBtn">Recalculate All</span>
-                                </button>
-                            </div>
-                        </div>
-
-
-                        <div class="glass-card">
-                            <h3 class="card-title" data-i18n="settings.tagsTitle">Gestion des tags personnalisés</h3>
-                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px"
-                                data-i18n="settings.tagsDesc">
-                                Créez des étiquettes (ex: Cockpit, Son) à assigner à vos mods.
-                            </div>
-                            <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
-                                <input type="text" id="setting-tag-name" placeholder="Nom du tag"
-                                    data-i18n-placeholder="settings.tagNamePlaceholder"
-                                    style="flex:1;padding:8px;border-radius:6px;background:rgba(0,0,0,0.2);color:white;border:1px solid var(--border)">
-                                <input type="color" id="setting-tag-color" value="#3b82f6"
-                                    style="width:36px;height:36px;padding:0;border:none;border-radius:6px;cursor:pointer;background:transparent">
-                                <button class="btn btn-primary btn-sm" id="btn-create-tag"><span
-                                        data-i18n="settings.tagCreate">Créer</span></button>
-                            </div>
-                            <div id="settings-tags-list" style="display:flex;flex-wrap:wrap;gap:8px">
-                                <!-- Tags will be rendered here -->
-                            </div>
-                        </div>
-
-                        <div class="glass-card">
-                            <h3 class="card-title" data-i18n="settings.shortcutsTitle">Raccourcis Clavier</h3>
-                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px"
-                                data-i18n="settings.shortcutsDesc">
-                                Modifiez les raccourcis utilisés dans l'application (Touche Ctrl + X).
-                            </div>
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                                <div class="form-group">
-                                    <label style="font-size:11px;color:var(--text-muted)"
-                                        data-i18n="settings.shortcutNewProf">Nouveau Profil (Ctrl +)</label>
-                                    <input type="text" id="sc-new-profile" class="input-field"
-                                        style="width:100%;text-align:center;text-transform:uppercase" readonly />
-                                </div>
-                                <div class="form-group">
-                                    <label style="font-size:11px;color:var(--text-muted)"
-                                        data-i18n="settings.shortcutAddMod">Ajouter un Mod (Ctrl +)</label>
-                                    <input type="text" id="sc-add-mod" class="input-field"
-                                        style="width:100%;text-align:center;text-transform:uppercase" readonly />
-                                </div>
-                                <div class="form-group">
-                                    <label style="font-size:11px;color:var(--text-muted)"
-                                        data-i18n="settings.shortcutExport">Exporter Liste (Ctrl +)</label>
-                                    <input type="text" id="sc-export-mm" class="input-field"
-                                        style="width:100%;text-align:center;text-transform:uppercase" readonly />
-                                </div>
-                                <div class="form-group">
-                                    <label style="font-size:11px;color:var(--text-muted)"
-                                        data-i18n="settings.shortcutImport">Importer Liste (Ctrl +)</label>
-                                    <input type="text" id="sc-import-mm" class="input-field"
-                                        style="width:100%;text-align:center;text-transform:uppercase" readonly />
-                                </div>
                             </div>
                         </div>
 
@@ -6640,6 +6467,176 @@
                                         step="5" oninput="window.applyTaskySettings()"
                                         style="width:100%;accent-color:var(--accent);cursor:pointer" />
                                 </div>
+                            </div>
+                        </div>
+
+
+                        <div class="glass-card">
+                            <h3 class="card-title" data-i18n="settings.tagsTitle">Gestion des tags personnalisés</h3>
+                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px"
+                                data-i18n="settings.tagsDesc">
+                                Créez des étiquettes (ex: Cockpit, Son) à assigner à vos mods.
+                            </div>
+                            <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+                                <input type="text" id="setting-tag-name" placeholder="Nom du tag"
+                                    data-i18n-placeholder="settings.tagNamePlaceholder"
+                                    style="flex:1;padding:8px;border-radius:6px;background:rgba(0,0,0,0.2);color:white;border:1px solid var(--border)">
+                                <input type="color" id="setting-tag-color" value="#3b82f6"
+                                    style="width:36px;height:36px;padding:0;border:none;border-radius:6px;cursor:pointer;background:transparent">
+                                <button class="btn btn-primary btn-sm" id="btn-create-tag"><span
+                                        data-i18n="settings.tagCreate">Créer</span></button>
+                            </div>
+                            <div id="settings-tags-list" style="display:flex;flex-wrap:wrap;gap:8px">
+                                <!-- Tags will be rendered here -->
+                            </div>
+                        </div>
+
+                        <div class="glass-card">
+                            <h3 class="card-title" data-i18n="settings.shortcutsTitle">Raccourcis Clavier</h3>
+                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px"
+                                data-i18n="settings.shortcutsDesc">
+                                Modifiez les raccourcis utilisés dans l'application (Touche Ctrl + X).
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                                <div class="form-group">
+                                    <label style="font-size:11px;color:var(--text-muted)"
+                                        data-i18n="settings.shortcutNewProf">Nouveau Profil (Ctrl +)</label>
+                                    <input type="text" id="sc-new-profile" class="input-field"
+                                        style="width:100%;text-align:center;text-transform:uppercase" readonly />
+                                </div>
+                                <div class="form-group">
+                                    <label style="font-size:11px;color:var(--text-muted)"
+                                        data-i18n="settings.shortcutAddMod">Ajouter un Mod (Ctrl +)</label>
+                                    <input type="text" id="sc-add-mod" class="input-field"
+                                        style="width:100%;text-align:center;text-transform:uppercase" readonly />
+                                </div>
+                                <div class="form-group">
+                                    <label style="font-size:11px;color:var(--text-muted)"
+                                        data-i18n="settings.shortcutExport">Exporter Liste (Ctrl +)</label>
+                                    <input type="text" id="sc-export-mm" class="input-field"
+                                        style="width:100%;text-align:center;text-transform:uppercase" readonly />
+                                </div>
+                                <div class="form-group">
+                                    <label style="font-size:11px;color:var(--text-muted)"
+                                        data-i18n="settings.shortcutImport">Importer Liste (Ctrl +)</label>
+                                    <input type="text" id="sc-import-mm" class="input-field"
+                                        style="width:100%;text-align:center;text-transform:uppercase" readonly />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ── Hashes / SHA ── -->
+                        <div class="glass-card" id="settings-sha-card"
+                            style="border: 1px solid rgba(139, 92, 246, 0.25); position: relative; overflow: hidden;">
+                            <div
+                                style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(139, 92, 246, 0.1);border-radius:50%;filter:blur(30px);pointer-events:none">
+                            </div>
+                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6"
+                                    stroke-width="2.2">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                    <path d="m9 12 2 2 4-4" />
+                                </svg>
+                                <span data-i18n="settings.shaTitle">Hashes / SHA & Integrity</span>
+                            </h3>
+
+                            <div
+                                style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:rgba(139, 92, 246, 0.08);border:1px solid rgba(139, 92, 246, 0.2);border-radius:10px;margin-bottom:16px">
+                                <p style="font-size:12px;line-height:1.6;color:var(--text-secondary);margin:0"
+                                    data-i18n="settings.shaDesc">
+                                    Manage file integrity verification. Hashing ensures your mod files are not corrupted
+                                    or tampered with.
+                                </p>
+                            </div>
+
+                            <!-- Strict mode toggle -->
+                            <div
+                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
+                                <div style="flex:1">
+                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                        data-i18n="settings.shaStrictMode">Strict Integrity Enforcement</div>
+                                    <div style="font-size:10px;color:var(--text-muted)"
+                                        data-i18n="settings.shaStrictModeDesc">Require valid SHA hash before enabling a
+                                        mod</div>
+                                </div>
+                                <label class="bmm-switch">
+                                    <input type="checkbox" id="chk-sha-strict-mode">
+                                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                                </label>
+                            </div>
+
+                            <!-- Enable Lazy SHA toggle -->
+                            <div
+                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
+                                <div style="flex:1">
+                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                        data-i18n="settings.shaEnableLazy">Enable Background Hashing</div>
+                                    <div style="font-size:10px;color:var(--text-muted)"
+                                        data-i18n="settings.shaEnableLazyDesc">Automatically calculate missing hashes in
+                                        the background</div>
+                                </div>
+                                <label class="bmm-switch">
+                                    <input type="checkbox" id="chk-sha-lazy-calc">
+                                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                                </label>
+                            </div>
+
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                                <button class="btn btn-secondary btn-sm" onclick="window.showHashingStats()">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+                                        <path d="M22 12A10 10 0 0 0 12 2v10z" />
+                                    </svg>
+                                    <span data-i18n="settings.shaStatsBtn">Hashing Progress</span>
+                                </button>
+                                <button class="btn btn-secondary btn-sm" onclick="window.recalculateAllHashesPrompt()">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M23 4v6h-6M1 20v-6h6" />
+                                        <path
+                                            d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                                    </svg>
+                                    <span data-i18n="settings.shaRecalculateAllBtn">Recalculate All</span>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- ── Discord RPC Toggle ── -->
+                        <div class="glass-card" id="settings-discord-rpc-card"
+                            style="border: 1px solid rgba(114, 137, 218, 0.25); position: relative; overflow: hidden;">
+                            <div
+                                style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(114,137,218,0.1);border-radius:50%;filter:blur(30px);pointer-events:none">
+                            </div>
+                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"
+                                    style="color:#7289da">
+                                    <path
+                                        d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037 19.736 19.736 0 0 0-4.885 1.515.069.069 0 0 0-.032.027C.533 9.048-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.419-2.157 2.419z" />
+                                </svg>
+                                <span data-i18n="settings.discordRpcTitle">Discord Rich Presence</span>
+                            </h3>
+
+                            <div
+                                style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:rgba(114,137,218,0.08);border:1px solid rgba(114,137,218,0.2);border-radius:10px;margin-bottom:16px">
+                                <p style="font-size:12px;line-height:1.6;color:var(--text-secondary);margin:0"
+                                    data-i18n="settings.discordRpcDesc">
+                                    Affiche votre activité BMM sur Discord (profil actif et nombre de mods activés).
+                                </p>
+                            </div>
+
+                            <div
+                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                                <div style="flex:1">
+                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                        data-i18n="settings.discordRpcToggle">Enable Rich Presence</div>
+                                    <div style="font-size:10px;color:var(--text-muted)"
+                                        data-i18n="settings.discordRpcToggleDesc">Connect to Discord to show your status
+                                    </div>
+                                </div>
+                                <label class="bmm-switch">
+                                    <input type="checkbox" id="chk-discord-rpc" checked>
+                                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                                </label>
                             </div>
                         </div>
 
@@ -6738,101 +6735,53 @@
                                 </button>
                             </div>
                         </div>
-                        <!-- ── END GitHub PAT ── -->
 
-                        <!-- ── Language ── -->
-                        <div class="glass-card">
+
+                        <!-- ── Storage Performance (button-only, opens modal) ── -->
+                        <div class="glass-card" id="settings-storage-section">
                             <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)"
-                                    stroke-width="2.2">
-                                    <path d="M5 8l6 6"></path>
-                                    <path d="M4 14l6-6 2-3"></path>
-                                    <path d="M2 5h12"></path>
-                                    <path d="M7 2h1"></path>
-                                    <path d="M22 22l-5-10-5 10"></path>
-                                    <path d="M14 18h6"></path>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                    fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <path d="M10 16h.01" />
+                                    <path
+                                        d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+                                    <path d="M21.946 12.013H2.054" />
+                                    <path d="M6 16h.01" />
                                 </svg>
-                                <span data-i18n="settings.language">Langue</span>
+                                <span data-i18n="settings.storageTitle">Storage Performance (I/O Limiter)</span>
                             </h3>
-                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px"
-                                data-i18n="settings.langSubtitle">
-                                Sélectionnez la langue de l'application. La détection des nouveaux fichiers est
-                                automatique.
+                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6"
+                                data-i18n="settings.storageDesc">
+                                Limiter la vitesse d'écriture et de lecture sur vos disques pendant l'activation des
+                                mods
+                                pour
+                                éviter les lags du système.
                             </p>
-
-                            <div id="settings-lang-container" style="margin-bottom:16px; width: fit-content;">
-                                <!-- Injected from JS -->
-                            </div>
-
-                            <div
-                                style="display:flex;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
-                                <div style="flex:1">
-                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
-                                        data-i18n="settings.langContribute">Contribuer à la
-                                        traduction</div>
-                                    <div style="font-size:10px;color:var(--text-muted)"
-                                        data-i18n="settings.langContributeDesc">Aidez-nous à traduire BMM dans
-                                        d'autres langues.</div>
-                                </div>
-                                <div style="display:flex;gap:8px">
-                                    <button class="btn btn-ghost btn-sm" id="btn-show-lang-guide"
-                                        style="font-size:11px;gap:6px">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2">
-                                            <circle cx="12" cy="12" r="10" />
-                                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                                            <line x1="12" y1="17" x2="12.01" y2="17" />
-                                        </svg>
-                                        <span data-i18n="settings.langGuide">Guide</span>
-                                    </button>
-                                    <button class="btn btn-secondary btn-sm" id="btn-download-lang-template"
-                                        style="font-size:11px;gap:6px">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2">
-                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4" />
-                                            <polyline points="7 10 12 15 17 10" />
-                                            <line x1="12" y1="15" x2="12" y2="3" />
-                                        </svg>
-                                        <span data-i18n="settings.langDownloadTemplate">Télécharger Modèle</span>
-                                    </button>
-                                    <button class="btn btn-primary btn-sm" id="btn-import-lang"
-                                        style="font-size:11px;gap:6px">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2">
-                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                            <polyline points="17 8 12 3 7 8" />
-                                            <line x1="12" y1="3" x2="12" y2="15" />
-                                        </svg>
-                                        <span data-i18n="settings.langImport">Importer</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="glass-card">
-                            <h3 class="card-title" data-i18n="settings.dataTitle">Gestion des données</h3>
-                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px"
-                                data-i18n="settings.dataDesc">
-                                Sauvegardez ou restaurez toute votre configuration (profils, mods, tags et réglages).
-                            </div>
-                            <div style="display:flex;gap:10px">
-                                <button class="btn btn-secondary btn-sm" id="btn-export-data">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                        <polyline points="7 10 12 15 17 10"></polyline>
-                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                                <button class="btn btn-secondary btn-sm" id="btn-open-storage" style="gap:8px">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round">
+                                        <path d="M10 16h.01" />
+                                        <path
+                                            d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+                                        <path d="M21.946 12.013H2.054" />
+                                        <path d="M6 16h.01" />
                                     </svg>
-                                    <span data-i18n="settings.dataExport">Exporter</span>
+                                    <span data-i18n="storage.openManager">Ouvrir le Gestionnaire de Stockage</span>
                                 </button>
-                                <button class="btn btn-secondary btn-sm" id="btn-import-data">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                        <polyline points="17 8 12 3 7 8"></polyline>
-                                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                                <button class="btn btn-ghost btn-sm" id="btn-storage-faq"
+                                    onmouseenter="window.showTaskyHelp('settings.storageHelpTooltip', 'icon-info')"
+                                    onmouseleave="window.hideTaskyHelp()" onclick="window.openHelpTo('faq.qIo')"
+                                    style="font-size:11px;color:var(--accent);gap:5px;padding:4px 8px">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.5">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                                        <line x1="12" y1="17" x2="12.01" y2="17" />
                                     </svg>
-                                    <span data-i18n="settings.dataImport">Importer</span>
+                                    <span data-i18n="settings.storageHelpBtn">Storage FAQ</span>
                                 </button>
                             </div>
                         </div>
@@ -6890,175 +6839,6 @@
                                     </svg>
                                     <span data-i18n="settings.launchPackCreate">Nouveau Launch Pack</span>
                                 </button>
-                            </div>
-                        </div>
-
-
-                        <!-- ── Storage Performance (button-only, opens modal) ── -->
-                        <div class="glass-card" id="settings-storage-section">
-                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-                                    fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"
-                                    stroke-linejoin="round">
-                                    <path d="M10 16h.01" />
-                                    <path
-                                        d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
-                                    <path d="M21.946 12.013H2.054" />
-                                    <path d="M6 16h.01" />
-                                </svg>
-                                <span data-i18n="settings.storageTitle">Storage Performance (I/O Limiter)</span>
-                            </h3>
-                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6"
-                                data-i18n="settings.storageDesc">
-                                Limiter la vitesse d'écriture et de lecture sur vos disques pendant l'activation des
-                                mods
-                                pour
-                                éviter les lags du système.
-                            </p>
-                            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                                <button class="btn btn-secondary btn-sm" id="btn-open-storage" style="gap:8px">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-                                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                        stroke-linejoin="round">
-                                        <path d="M10 16h.01" />
-                                        <path
-                                            d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
-                                        <path d="M21.946 12.013H2.054" />
-                                        <path d="M6 16h.01" />
-                                    </svg>
-                                    <span data-i18n="storage.openManager">Ouvrir le Gestionnaire de Stockage</span>
-                                </button>
-                                <button class="btn btn-ghost btn-sm" id="btn-storage-faq"
-                                    onmouseenter="window.showTaskyHelp('settings.storageHelpTooltip', 'icon-info')"
-                                    onmouseleave="window.hideTaskyHelp()" onclick="window.openHelpTo('faq.qIo')"
-                                    style="font-size:11px;color:var(--accent);gap:5px;padding:4px 8px">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2.5">
-                                        <circle cx="12" cy="12" r="10" />
-                                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                                        <line x1="12" y1="17" x2="12.01" y2="17" />
-                                    </svg>
-                                    <span data-i18n="settings.storageHelpBtn">Storage FAQ</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- ── Crash Reports ── -->
-                        <div class="glass-card"
-                            style="border:1px solid rgba(239,68,68,0.15);position:relative;overflow:hidden">
-                            <div
-                                style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;background:rgba(239,68,68,0.05);border-radius:50%;filter:blur(25px);pointer-events:none">
-                            </div>
-                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171"
-                                    stroke-width="2.2">
-                                    <path
-                                        d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                    <line x1="12" y1="9" x2="12" y2="13" />
-                                    <line x1="12" y1="17" x2="12.01" y2="17" />
-                                </svg>
-                                <span data-i18n="settings.crashTitle">Crash Reports</span>
-                            </h3>
-                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6"
-                                data-i18n="settings.crashDesc">Upon each crash or forced quit, BMM generates a .zip file
-                                containing dxdiag output, app logs, and state snapshot to help diagnose issues.</p>
-                            <button class="btn btn-secondary btn-sm" id="btn-open-crash-folder">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path
-                                        d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                                </svg>
-                                <span data-i18n="settings.crashOpenFolder">Open Crash Reports Folder</span>
-                            </button>
-                        </div>
-
-                        <!-- ── END Crash Reports ── -->
-
-                        <!-- ── BetaHub — Feedback & Bug Reports ── -->
-                        <div class="glass-card"
-                            style="border:1px solid rgba(99,102,241,0.25); background: rgba(99,102,241,0.04);">
-                            <div
-                                style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px">
-                                <h3 class="card-title"
-                                    style="margin-bottom:0; color:#a5b4fc; display:flex; align-items:center; gap:8px">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                                    </svg>
-                                    <span data-i18n="betahub.cardTitle">Feedback &amp; Bug Reports</span>
-                                </h3>
-                                <span
-                                    style="font-size:10px; padding:2px 6px; background:rgba(99,102,241,0.15); color:#c7d2fe; border-radius:4px; font-weight:700">BETAHUB</span>
-                            </div>
-                            <p style="font-size:12px; color:var(--text-muted); margin-bottom:14px; line-height:1.5"
-                                data-i18n="betahub.cardDesc">
-                                Help improve BMM by reporting bugs or submitting suggestions.
-                            </p>
-                            <div style="display:flex; flex-wrap:wrap; gap:10px">
-                                <!-- Bug Report -->
-                                <button class="btn btn-secondary btn-sm" id="btn-settings-betahub-bugreport"
-                                    style="border-color:rgba(239,68,68,0.2); color:#f87171; background:rgba(239,68,68,0.05); gap:8px">
-                                    <img src="https://betahub.io/assets/img/chat/betahub.webp"
-                                        style="width:16px;height:16px;border-radius:3px" alt="BetaHub">
-                                    <span data-i18n="betahub.btnBugReport">Report a Bug</span>
-                                </button>
-                                <!-- Feedback -->
-                                <button class="btn btn-ghost btn-sm" id="btn-settings-betahub-feedback"
-                                    style="gap:8px; border:1px solid rgba(99,102,241,0.25); color:#c7d2fe">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2.2">
-                                        <circle cx="12" cy="12" r="10" />
-                                        <line x1="12" y1="8" x2="12" y2="12" />
-                                        <line x1="12" y1="16" x2="12.01" y2="16" />
-                                    </svg>
-                                    <span data-i18n="betahub.btnFeedback">Suggestion / Feedback</span>
-                                </button>
-                            </div>
-
-                            <!-- My Reports History -->
-                            <div id="bh-history-section"
-                                style="margin-top:20px; border-top:1px solid rgba(99,102,241,0.15); padding-top:16px; display:none;">
-                                <div
-                                    style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-                                    <div style="font-size:11px; font-weight:800; color:#818cf8; letter-spacing:0.1em; text-transform:uppercase"
-                                        data-i18n="docs.betahub.history">MY RECENT REPORTS</div>
-                                    <div style="display:flex; gap:6px;">
-                                        <button id="bh-history-clear" class="btn btn-xs btn-ghost"
-                                            style="font-size:9px; height:20px; color:#ef4444"
-                                            onmouseenter="window.showTaskyHelp('betahub.clearHistoryHelp', 'warning')"
-                                            onmouseleave="window.hideTaskyHelp()">
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2.5" style="margin-right:4px">
-                                                <path
-                                                    d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />
-                                            </svg>
-                                            <span data-i18n="betahub.clearHistory">CLEAR</span>
-                                        </button>
-                                        <button id="bh-history-refresh" class="btn btn-xs btn-ghost"
-                                            style="font-size:9px; height:20px; color:#a5b4fc">
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2.5" style="margin-right:4px">
-                                                <path
-                                                    d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                                            </svg>
-                                            <span data-i18n="common.refresh">REFRESH</span>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="bh-explorer-tabs" style="margin-bottom:12px; font-size:10px">
-                                    <button type="button" class="bh-tab active" data-bh-tab="history-bug"
-                                        style="padding:4px 8px" data-i18n="betahub.tabBugs">Bugs</button>
-                                    <button type="button" class="bh-tab" data-bh-tab="history-feedback"
-                                        style="padding:4px 8px" data-i18n="betahub.tabSuggestions">Suggestions</button>
-                                </div>
-                                <div id="bh-history-list" style="display:flex; flex-direction:column; gap:8px;">
-                                    <!-- Populated via script -->
-                                </div>
-                                <div style="display:flex; justify-content:center; margin-top:10px">
-                                    <button id="bh-history-view-older" class="btn btn-xs btn-ghost"
-                                        style="font-size:10px; color:var(--text-secondary); display:none"
-                                        data-i18n="betahub.viewOlder">View Older</button>
-                                </div>
                             </div>
                         </div>
 
@@ -7146,6 +6926,152 @@
                                 </button>
                             </div>
 
+                        </div>
+
+                        <div class="glass-card">
+                            <h3 class="card-title" data-i18n="settings.dataTitle">Gestion des données</h3>
+                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px"
+                                data-i18n="settings.dataDesc">
+                                Sauvegardez ou restaurez toute votre configuration (profils, mods, tags et réglages).
+                            </div>
+                            <div style="display:flex;gap:10px">
+                                <button class="btn btn-secondary btn-sm" id="btn-export-data">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                    <span data-i18n="settings.dataExport">Exporter</span>
+                                </button>
+                                <button class="btn btn-secondary btn-sm" id="btn-import-data">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="17 8 12 3 7 8"></polyline>
+                                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                                    </svg>
+                                    <span data-i18n="settings.dataImport">Importer</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- ── Crash Reports ── -->
+                        <div class="glass-card"
+                            style="border:1px solid rgba(239,68,68,0.15);position:relative;overflow:hidden">
+                            <div
+                                style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;background:rgba(239,68,68,0.05);border-radius:50%;filter:blur(25px);pointer-events:none">
+                            </div>
+                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171"
+                                    stroke-width="2.2">
+                                    <path
+                                        d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                    <line x1="12" y1="9" x2="12" y2="13" />
+                                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                                </svg>
+                                <span data-i18n="settings.crashTitle">Crash Reports</span>
+                            </h3>
+                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6"
+                                data-i18n="settings.crashDesc">Upon each crash or forced quit, BMM generates a .zip file
+                                containing dxdiag output, app logs, and state snapshot to help diagnose issues.</p>
+                            <button class="btn btn-secondary btn-sm" id="btn-open-crash-folder">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path
+                                        d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                </svg>
+                                <span data-i18n="settings.crashOpenFolder">Open Crash Reports Folder</span>
+                            </button>
+                        </div>
+
+
+                        <!-- ── BetaHub — Feedback & Bug Reports ── -->
+                        <div class="glass-card"
+                            style="border:1px solid rgba(99,102,241,0.25); background: rgba(99,102,241,0.04);">
+                            <div
+                                style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px">
+                                <h3 class="card-title"
+                                    style="margin-bottom:0; color:#a5b4fc; display:flex; align-items:center; gap:8px">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                    </svg>
+                                    <span data-i18n="betahub.cardTitle">Feedback &amp; Bug Reports</span>
+                                </h3>
+                                <span
+                                    style="font-size:10px; padding:2px 6px; background:rgba(99,102,241,0.15); color:#c7d2fe; border-radius:4px; font-weight:700">BETAHUB</span>
+                            </div>
+                            <p style="font-size:12px; color:var(--text-muted); margin-bottom:14px; line-height:1.5"
+                                data-i18n="betahub.cardDesc">
+                                Help improve BMM by reporting bugs or submitting suggestions.
+                            </p>
+                            <div style="display:flex; flex-wrap:wrap; gap:10px">
+                                <!-- Bug Report -->
+                                <button class="btn btn-secondary btn-sm" id="btn-settings-betahub-bugreport"
+                                    style="border-color:rgba(239,68,68,0.2); color:#f87171; background:rgba(239,68,68,0.05); gap:8px">
+                                    <img src="https://betahub.io/assets/img/chat/betahub.webp"
+                                        style="width:16px;height:16px;border-radius:3px" alt="BetaHub">
+                                    <span data-i18n="betahub.btnBugReport">Report a Bug</span>
+                                </button>
+                                <!-- Feedback -->
+                                <button class="btn btn-ghost btn-sm" id="btn-settings-betahub-feedback"
+                                    style="gap:8px; border:1px solid rgba(99,102,241,0.25); color:#c7d2fe">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.2">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <line x1="12" y1="8" x2="12" y2="12" />
+                                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                                    </svg>
+                                    <span data-i18n="betahub.btnFeedback">Suggestion / Feedback</span>
+                                </button>
+                            </div>
+
+                            <!-- My Reports History -->
+                            <div id="bh-history-section"
+                                style="margin-top:20px; border-top:1px solid rgba(99,102,241,0.15); padding-top:16px; display:none;">
+                                <div
+                                    style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                                    <div style="font-size:11px; font-weight:800; color:#818cf8; letter-spacing:0.1em; text-transform:uppercase"
+                                        data-i18n="docs.betahub.history">MY RECENT REPORTS</div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button id="bh-history-clear" class="btn btn-xs btn-ghost"
+                                            style="font-size:9px; height:20px; color:#ef4444"
+                                            onmouseenter="window.showTaskyHelp('betahub.clearHistoryHelp', 'warning')"
+                                            onmouseleave="window.hideTaskyHelp()">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2.5" style="margin-right:4px">
+                                                <path
+                                                    d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />
+                                            </svg>
+                                            <span data-i18n="betahub.clearHistory">CLEAR</span>
+                                        </button>
+                                        <button id="bh-history-refresh" class="btn btn-xs btn-ghost"
+                                            style="font-size:9px; height:20px; color:#a5b4fc">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2.5" style="margin-right:4px">
+                                                <path
+                                                    d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                                            </svg>
+                                            <span data-i18n="common.refresh">REFRESH</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="bh-explorer-tabs" style="margin-bottom:12px; font-size:10px">
+                                    <button type="button" class="bh-tab active" data-bh-tab="history-bug"
+                                        style="padding:4px 8px" data-i18n="betahub.tabBugs">Bugs</button>
+                                    <button type="button" class="bh-tab" data-bh-tab="history-feedback"
+                                        style="padding:4px 8px" data-i18n="betahub.tabSuggestions">Suggestions</button>
+                                </div>
+                                <div id="bh-history-list" style="display:flex; flex-direction:column; gap:8px;">
+                                    <!-- Populated via script -->
+                                </div>
+                                <div style="display:flex; justify-content:center; margin-top:10px">
+                                    <button id="bh-history-view-older" class="btn btn-xs btn-ghost"
+                                        style="font-size:10px; color:var(--text-secondary); display:none"
+                                        data-i18n="betahub.viewOlder">View Older</button>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- ── Debug Menu ── -->
