@@ -8898,3 +8898,315 @@ body.tasky-hidden .titlebar-left .titlebar-version {
         box-shadow: 0 0 12px 2px rgba(239, 68, 68, 0.2);
     }
 }
+
+/* ─────────────────────────────────────────────────
+   REPO VIEW — Redesign
+───────────────────────────────────────────────── */
+.repo-info-banner {
+    background: rgba(0,194,255,0.06);
+    border: 1px solid rgba(0,194,255,0.15);
+    border-left: 3px solid var(--cyan);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+.repo-info-banner p {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin: 0;
+}
+
+.repo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    align-items: start;
+}
+
+.repo-column {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.repo-column-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    margin-bottom: 2px;
+}
+.repo-column-label .col-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.repo-column-label--host { color: var(--cyan); }
+.repo-column-label--host .col-dot {
+    background: var(--cyan);
+    box-shadow: 0 0 6px var(--cyan);
+}
+.repo-column-label--join { color: var(--accent); }
+.repo-column-label--join .col-dot {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+}
+
+/* Repo Cards */
+.repo-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.repo-card:hover {
+    border-color: rgba(255,255,255,0.13);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+}
+.repo-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.repo-card-header h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex: 1;
+    line-height: 1;
+    border: none;
+    padding: 0;
+    text-transform: none;
+    letter-spacing: normal;
+    opacity: 1;
+    color: inherit;
+}
+.repo-card-step {
+    font-size: 10px;
+    font-weight: 800;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    letter-spacing: 0;
+}
+.repo-card-body {
+    padding: 18px;
+}
+
+/* Color variants */
+.repo-card--cyan { border-top: 2px solid var(--cyan); }
+.repo-card--cyan .repo-card-header {
+    background: linear-gradient(135deg, rgba(0,194,255,0.07) 0%, transparent 60%);
+}
+.repo-card--cyan .repo-card-header h3 { color: var(--cyan); }
+.repo-card--cyan .repo-card-step {
+    background: rgba(0,194,255,0.15);
+    color: var(--cyan);
+}
+
+.repo-card--green { border-top: 2px solid #2ecc71; }
+.repo-card--green .repo-card-header {
+    background: linear-gradient(135deg, rgba(46,204,113,0.07) 0%, transparent 60%);
+}
+.repo-card--green .repo-card-header h3 { color: #2ecc71; }
+.repo-card--green .repo-card-step {
+    background: rgba(46,204,113,0.15);
+    color: #2ecc71;
+}
+
+.repo-card--accent { border-top: 2px solid var(--accent); }
+.repo-card--accent .repo-card-header {
+    background: linear-gradient(135deg, rgba(59,130,246,0.07) 0%, transparent 60%);
+}
+.repo-card--accent .repo-card-header h3 { color: var(--accent); }
+
+.repo-card--optional { border-top: 2px solid rgba(138,152,173,0.4); }
+.repo-card--optional .repo-card-header { background: rgba(255,255,255,0.015); }
+.repo-card--optional .repo-card-header h3 { color: var(--text-secondary); }
+
+/* Repo status bar */
+.repo-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0,0,0,0.25);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    border: 1px solid rgba(255,255,255,0.07);
+}
+
+/* Badge server tag (repo optional card) */
+.badge-server-tag {
+    font-size: 10px;
+    background: rgba(255,255,255,0.06);
+    padding: 3px 8px;
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-weight: 700;
+    border: 1px solid rgba(255,255,255,0.08);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: default;
+    flex-shrink: 0;
+}
+
+/* ── Repo section intros (column role headers) ── */
+.repo-grid {
+    position: relative; /* for the separator pseudo-element */
+}
+.repo-grid::after {
+    content: '';
+    position: absolute;
+    left: calc(50% - 1px);
+    top: 56px;
+    bottom: 0;
+    width: 1px;
+    background: linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.07) 8%, rgba(255,255,255,0.07) 92%, transparent 100%);
+    pointer-events: none;
+}
+
+.repo-section-intro {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.05);
+    margin-bottom: 2px;
+}
+.repo-section-intro-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.repo-section-intro-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1;
+}
+.repo-section-intro-desc {
+    display: block;
+    font-size: 11px;
+    margin-top: 3px;
+    opacity: 0.65;
+    line-height: 1.4;
+}
+
+.repo-section-intro--host {
+    background: linear-gradient(135deg, rgba(0,194,255,0.07) 0%, rgba(0,194,255,0.02) 100%);
+    border-color: rgba(0,194,255,0.13);
+}
+.repo-section-intro--host .repo-section-intro-icon {
+    background: rgba(0,194,255,0.13);
+    color: var(--cyan);
+    border: 1px solid rgba(0,194,255,0.2);
+}
+.repo-section-intro--host .repo-section-intro-label { color: var(--cyan); }
+.repo-section-intro--host .repo-section-intro-desc { color: var(--text-secondary); }
+
+.repo-section-intro--join {
+    background: linear-gradient(135deg, rgba(59,130,246,0.07) 0%, rgba(59,130,246,0.02) 100%);
+    border-color: rgba(59,130,246,0.13);
+}
+.repo-section-intro--join .repo-section-intro-icon {
+    background: rgba(59,130,246,0.13);
+    color: var(--accent);
+    border: 1px solid rgba(59,130,246,0.2);
+}
+.repo-section-intro--join .repo-section-intro-label { color: var(--accent); }
+.repo-section-intro--join .repo-section-intro-desc { color: var(--text-secondary); }
+
+/* ── Monitoring modal stats bar ── */
+.monitoring-stats-bar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 10px 24px;
+    background: rgba(0,0,0,0.2);
+    border-bottom: 1px solid rgba(6,182,212,0.08);
+    flex-shrink: 0;
+}
+.monitoring-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 20px;
+    border-right: 1px solid rgba(255,255,255,0.06);
+}
+.monitoring-stat:first-child { padding-left: 0; }
+.monitoring-stat-label {
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+}
+.monitoring-stat-value {
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1;
+}
+.monitoring-live-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+    font-size: 9px;
+    font-weight: 800;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+}
+.monitoring-live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--success);
+    animation: pulse 2s infinite;
+}
+
+/* ── Admin modal (bans/whitelist) counter badge ── */
+.admin-modal-counter {
+    font-size: 10px;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.05em;
+}
+.admin-modal-counter--danger {
+    background: rgba(239,68,68,0.15);
+    color: var(--danger);
+    border: 1px solid rgba(239,68,68,0.25);
+}
+.admin-modal-counter--accent {
+    background: rgba(59,130,246,0.15);
+    color: var(--accent);
+    border: 1px solid rgba(59,130,246,0.25);
+}
