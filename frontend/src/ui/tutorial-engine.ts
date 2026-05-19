@@ -289,6 +289,21 @@ function _renderStep(): void {
     panel.classList.remove('minimized');
     _applyDragPosition(panel);
 
+    /* ── Apply tutorial color CSS vars for avatar glow + top border ── */
+    const colorMatch = tut.color.match(/#([0-9a-fA-F]{6})/);
+    if (colorMatch) {
+        const hex = colorMatch[1];
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        panel.style.setProperty('--tut-panel-color', tut.color);
+        panel.style.setProperty('--tut-panel-r', String(r));
+        panel.style.setProperty('--tut-panel-g', String(g));
+        panel.style.setProperty('--tut-panel-b', String(b));
+    } else if (tut.color.startsWith('var(')) {
+        panel.style.setProperty('--tut-panel-color', tut.color);
+    }
+
     _navigate(step.nav);
     savePosition(tut.id, part.id, step.id);
     if (step.action) markStepPartial(tut.id, part.id, step.id);
@@ -298,7 +313,8 @@ function _renderStep(): void {
         const done     = p.steps.filter(s => getStepStatus(tut.id, p.id, s.id).state === 'complete').length;
         const isActive = i === _partIndex;
         const isDone   = done === p.steps.length;
-        return `<button class="tut-part-chip ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}" data-pi="${i}" title="${t(p.title_key)}">
+        const chipStyle = isActive ? `background:${tut.color}1a;border-color:${tut.color}55;color:${tut.color}` : '';
+        return `<button class="tut-part-chip ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}" data-pi="${i}" title="${t(p.title_key)}" ${chipStyle ? `style="${chipStyle}"` : ''}>
             ${isDone ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
             <span class="tut-part-chip-label">${t(p.title_key)}</span>
         </button>`;
@@ -307,7 +323,9 @@ function _renderStep(): void {
     /* ── Step badges (current part only) ── */
     const badges = part.steps.map((s, i) => {
         const st = getStepStatus(tut.id, part.id, s.id);
-        return `<span class="tut-step-badge tut-badge-${st.state}${i === _stepIndex ? ' current' : ''}" title="${t(`hub.badge.${st.state}`)}"></span>`;
+        const isCurrent = i === _stepIndex;
+        const currentStyle = isCurrent && st.state === 'pending' ? `style="background:${tut.color};box-shadow:0 0 8px ${tut.color}88;outline-color:${tut.color}44"` : '';
+        return `<span class="tut-step-badge tut-badge-${st.state}${isCurrent ? ' current' : ''}" ${currentStyle} title="${t(`hub.badge.${st.state}`)}"></span>`;
     }).join('');
 
     /* ── Global progress ── */
@@ -332,10 +350,10 @@ function _renderStep(): void {
 
     /* ── Action box ── */
     const actionHtml = step.action ? `
-        <div class="tut-action-box" id="tut-action-box">
-            <div class="tut-action-pulse"></div>
+        <div class="tut-action-box" id="tut-action-box" style="border-left-color:${tut.color};border-color:${tut.color}33;background:${tut.color}0d">
+            <div class="tut-action-pulse" style="background:${tut.color}"></div>
             <div class="tut-action-text">
-                <span class="tut-action-label">${t('hub.action.waiting')}</span>
+                <span class="tut-action-label" style="color:${tut.color}">${t('hub.action.waiting')}</span>
                 <p class="tut-action-desc">${t(step.action.desc_key)}</p>
             </div>
             ${step.optional ? `<button class="tut-action-skip-btn" id="btn-tut-skip-action">${t('hub.action.skip')}</button>` : ''}
@@ -614,12 +632,24 @@ function _finishTutorial(): void {
 function _startTypewriter(text: string): void {
     const el = document.getElementById('tut-typewriter');
     if (!el) return;
+
+    // If the text contains HTML tags, use instant render with fade-in
+    if (/<[a-z]/i.test(text)) {
+        el.innerHTML = text;
+        el.classList.remove('fade-in');
+        void el.offsetWidth; // force reflow
+        el.classList.add('fade-in');
+        return;
+    }
+
+    // Plain text: character-by-character typewriter
     el.textContent = '';
+    el.classList.remove('fade-in');
     let i = 0;
     _typeInterval = setInterval(() => {
         if (i < text.length) { el.textContent += text[i++]; }
         else { clearInterval(_typeInterval!); _typeInterval = null; }
-    }, 12);
+    }, 11);
 }
 
 // ── Modal polling — highlights a secondary element once it becomes visible ───
@@ -665,6 +695,9 @@ function _highlightElement(selector: string, idx: number = 0): void {
     const baseRadius = parseFloat(cs.borderTopLeftRadius) || 8;
 
     const pad = 4;
+    // Use tutorial color for highlights if available
+    const tutColor = _tutorial?.color ?? 'var(--accent)';
+    const tutColorHex = tutColor.startsWith('#') ? tutColor : '#3b82f6';
     const hl = document.createElement('div');
     hl.className     = 'tut-highlight';
     hl.dataset.hlIdx = String(idx);
@@ -674,9 +707,9 @@ function _highlightElement(selector: string, idx: number = 0): void {
         left:${r.left - pad}px;
         width:${r.width + pad * 2}px;
         height:${r.height + pad * 2}px;
-        border:2px solid var(--accent);
+        border:2px solid ${tutColor};
         border-radius:${baseRadius + pad}px;
-        box-shadow:0 0 0 3px rgba(59,130,246,0.18), 0 0 28px rgba(59,130,246,0.45);
+        box-shadow:0 0 0 3px ${tutColorHex}2e, 0 0 28px ${tutColorHex}72;
         z-index:99990;
         pointer-events:none;
         transition:top 0.18s ease, left 0.18s ease, width 0.18s ease, height 0.18s ease, border-radius 0.18s ease;
@@ -690,10 +723,10 @@ function _highlightElement(selector: string, idx: number = 0): void {
         label.style.cssText = `
             position:absolute; top:-9px; right:-9px;
             width:17px; height:17px; border-radius:50%;
-            background:var(--accent); color:#fff;
+            background:${tutColor}; color:#fff;
             font-size:9px; font-weight:800;
             display:flex; align-items:center; justify-content:center;
-            box-shadow:0 2px 6px rgba(59,130,246,0.5);
+            box-shadow:0 2px 6px ${tutColorHex}80;
         `;
         label.textContent = String(idx + 1);
         hl.appendChild(label);

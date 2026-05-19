@@ -3825,20 +3825,21 @@ select.input-field option {
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    width: min(680px, calc(100% - 32px));
+    width: min(720px, calc(100% - 32px));
     z-index: 9800;
     pointer-events: all;
 
-    background: rgba(9, 14, 27, 0.98);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 22px;
+    background: rgba(8, 12, 24, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 2.5px solid var(--tut-panel-color, var(--accent));
+    border-radius: 20px;
     box-shadow:
-        0 -2px 0 0 var(--accent),
-        0 12px 48px -6px rgba(0, 0, 0, 0.7),
-        0 0 0 1px rgba(59, 130, 246, 0.1),
-        inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(32px) saturate(180%);
-    -webkit-backdrop-filter: blur(32px) saturate(180%);
+        0 0 0 1px rgba(59, 130, 246, 0.08),
+        0 16px 60px -8px rgba(0, 0, 0, 0.8),
+        0 4px 20px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
     overflow: hidden;
     animation: tutCardUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     display: flex;
@@ -3867,6 +3868,9 @@ select.input-field option {
     gap: 8px;
     padding: 10px 14px 8px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    background: linear-gradient(180deg,
+        rgba(var(--tut-panel-r, 59), var(--tut-panel-g, 130), var(--tut-panel-b, 246), 0.05) 0%,
+        transparent 100%);
     flex-shrink: 0;
     cursor: grab;
     user-select: none;
@@ -4060,7 +4064,25 @@ select.input-field option {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    position: relative;
 }
+
+/* Subtle accent glow in top-right of body */
+.tut-card-body::before {
+    content: '';
+    position: absolute;
+    top: -30px;
+    right: -20px;
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--tut-panel-color, var(--accent)) 0%, transparent 70%);
+    opacity: 0.06;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.tut-card-body > * { position: relative; z-index: 1; }
 
 /* Header row: avatar + label/title */
 .tut-step-header {
@@ -4071,22 +4093,24 @@ select.input-field option {
 }
 
 .tut-avatar {
-    width: 48px;
-    height: 48px;
+    width: 52px;
+    height: 52px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     border: none !important;
-    background: transparent !important;
-    box-shadow: none !important;
+    background: rgba(var(--tut-panel-r, 59), var(--tut-panel-g, 130), var(--tut-panel-b, 246), 0.1) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 0 18px rgba(var(--tut-panel-r, 59), var(--tut-panel-g, 130), var(--tut-panel-b, 246), 0.2) !important;
+    overflow: hidden;
 }
 
 .tut-avatar img {
-    width: 100%;
-    height: 100%;
+    width: 82%;
+    height: 82%;
     object-fit: contain;
-    filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.45));
+    filter: drop-shadow(0 4px 12px rgba(var(--tut-panel-r, 59), var(--tut-panel-g, 130), var(--tut-panel-b, 246), 0.5));
     animation: float 3s ease-in-out infinite;
 }
 
@@ -4156,7 +4180,7 @@ select.input-field option {
 
 /* Step title */
 .tut-step-title {
-    font-size: 15px;
+    font-size: 15.5px;
     font-weight: 700;
     color: var(--text-primary);
     margin: 0;
@@ -4165,7 +4189,7 @@ select.input-field option {
     gap: 6px;
     line-height: 1.2;
     flex-shrink: 0;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
 }
 
 .tut-step-icon {
@@ -4182,7 +4206,8 @@ select.input-field option {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding-right: 4px;
+    padding-right: 6px;
+    min-height: 60px;
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.08) transparent;
 }
@@ -4197,6 +4222,133 @@ select.input-field option {
     color: var(--text-secondary);
     line-height: 1.65;
     margin: 0;
+}
+
+/* Rich content in step text */
+.tut-step-text strong, .tut-step-text b {
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+.tut-step-text code {
+    font-family: 'Cascadia Code', 'Consolas', 'SF Mono', monospace;
+    font-size: 11.5px;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 5px;
+    padding: 1px 5px;
+    color: #93c5fd;
+    white-space: nowrap;
+}
+
+.tut-step-text ul {
+    margin: 8px 0 4px;
+    padding-left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.tut-step-text li {
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+.tut-step-text li::marker {
+    color: var(--accent);
+}
+
+/* Tip callout box inside step text */
+.tut-tip-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 11px;
+    background: rgba(234, 179, 8, 0.07);
+    border: 1px solid rgba(234, 179, 8, 0.22);
+    border-left: 3px solid #eab308;
+    border-radius: 9px;
+    margin-top: 10px;
+}
+
+.tut-tip-box-icon {
+    font-size: 14px;
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+
+.tut-tip-box-text {
+    font-size: 12px;
+    color: rgba(234, 179, 8, 0.85);
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* Path display box */
+.tut-path-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 11px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 8px;
+    margin-top: 8px;
+    font-family: 'Cascadia Code', 'Consolas', 'SF Mono', monospace;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.7);
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.tut-path-box::-webkit-scrollbar { display: none; }
+
+.tut-path-box-label {
+    font-family: inherit;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    font-weight: 700;
+}
+
+.tut-path-box-value {
+    color: #a5f3fc;
+    white-space: nowrap;
+}
+
+/* Info row (key → value) */
+.tut-info-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 12px;
+    padding: 3px 0;
+}
+
+.tut-info-row dt {
+    color: var(--text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+    min-width: 110px;
+    flex-shrink: 0;
+}
+
+.tut-info-row dd {
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Step text fade-in animation (for HTML-rich steps) */
+@keyframes tutTextFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.tut-step-text.fade-in {
+    animation: tutTextFadeIn 0.35s ease forwards;
 }
 
 /* ── Action box ── */
