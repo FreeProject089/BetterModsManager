@@ -29,6 +29,15 @@ export function initRepoMonitoring(elements) {
         modalMonitoring?.classList.remove('open');
     };
 
+    const _updateStatBar = (clientCount: number, totalSpeed: number, activeFiles: number) => {
+        const elClients = document.getElementById('monitoring-stat-clients');
+        const elSpeed   = document.getElementById('monitoring-stat-speed');
+        const elFiles   = document.getElementById('monitoring-stat-files');
+        if (elClients) elClients.textContent = String(clientCount);
+        if (elSpeed)   elSpeed.textContent   = totalSpeed > 0 ? formatBytes(totalSpeed) + '/s' : '0 KB/s';
+        if (elFiles)   elFiles.textContent   = String(activeFiles);
+    };
+
     const updateMonitoring = async () => {
         try {
             const [clients, downloads] = await Promise.all([
@@ -74,10 +83,16 @@ export function initRepoMonitoring(elements) {
             const mergedClients = Array.from(allClients.values());
 
             if (!mergedClients || mergedClients.length === 0) {
+                _updateStatBar(0, 0, 0);
                 if (monitoringListBody) monitoringListBody.innerHTML = '';
                 if (monitoringEmptyHint) monitoringEmptyHint.style.display = 'block';
                 return;
             }
+
+            // Compute stats for the bar
+            const totalSpeed   = mergedClients.reduce((sum, d) => sum + (d.status === 'downloading' ? (d.speed || 0) : 0), 0);
+            const activeFiles  = mergedClients.filter(d => d.status === 'downloading').length;
+            _updateStatBar(mergedClients.length, totalSpeed, activeFiles);
 
             if (monitoringEmptyHint) monitoringEmptyHint.style.display = 'none';
             if (monitoringListBody) {

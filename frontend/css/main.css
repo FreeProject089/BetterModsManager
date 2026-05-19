@@ -9481,6 +9481,32 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     animation: pulse 2s infinite;
 }
 
+/* ── Repo verification detail modal ── */
+.repo-vd-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.repo-vd-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    min-width: 90px;
+    flex-shrink: 0;
+}
+
+.repo-vd-value {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+}
+
 /* ── Admin modal (bans/whitelist) counter badge ── */
 .admin-modal-counter {
     font-size: 10px;

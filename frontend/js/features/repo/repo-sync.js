@@ -6,6 +6,57 @@ import { renderProfiles } from '../profiles/profiles.js';
 import { formatBytes } from '../../core/utils.js';
 let lastFetchedRepo = null;
 let lastFetchedRepoSaltedId = null;
+// ── Repo verification detail modal ───────────────────────────────────────────
+function _openRepoVerifyDetail(repo, isVerified) {
+    const modal = document.getElementById('modal-repo-verify-detail');
+    if (!modal)
+        return;
+    const totalMods = repo.profiles ? repo.profiles.reduce((n, p) => n + (p.mods?.length || 0), 0) : 0;
+    const totalProfs = repo.profiles ? repo.profiles.length : 0;
+    // Status icon & label
+    const statusIcon = document.getElementById('repo-vd-status-icon');
+    const statusLabel = document.getElementById('repo-vd-status-label');
+    if (statusIcon) {
+        statusIcon.style.background = isVerified ? 'rgba(46,204,113,0.15)' : 'rgba(231,76,60,0.15)';
+        statusIcon.style.border = isVerified ? '1px solid rgba(46,204,113,0.3)' : '1px solid rgba(231,76,60,0.3)';
+        statusIcon.innerHTML = isVerified
+            ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`
+            : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+    }
+    if (statusLabel) {
+        statusLabel.textContent = isVerified ? (t('repo.verified') || 'Vérifié') : (t('repo.unverified') || 'Non vérifié');
+        statusLabel.style.color = isVerified ? '#2ecc71' : '#e74c3c';
+    }
+    // Fields
+    const set = (id, val) => { const el = document.getElementById(id); if (el)
+        el.textContent = val || '—'; };
+    set('repo-vd-name', repo.name || '—');
+    set('repo-vd-author', repo.author || t('common.unknown') || 'Inconnu');
+    set('repo-vd-game', repo.game_name || '—');
+    set('repo-vd-profiles', String(totalProfs));
+    set('repo-vd-mods', String(totalMods));
+    set('repo-vd-desc', repo.description || '—');
+    // Signature box
+    const sigBox = document.getElementById('repo-vd-sig-box');
+    const sigIcon = document.getElementById('repo-vd-sig-icon');
+    const sigTitle = document.getElementById('repo-vd-sig-title');
+    const sigDesc = document.getElementById('repo-vd-sig-desc');
+    if (sigBox && sigIcon && sigTitle && sigDesc) {
+        sigBox.style.borderColor = isVerified ? 'rgba(46,204,113,0.25)' : 'rgba(231,76,60,0.2)';
+        sigBox.style.background = isVerified ? 'rgba(46,204,113,0.06)' : 'rgba(231,76,60,0.06)';
+        sigIcon.innerHTML = isVerified
+            ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>`
+            : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+        sigTitle.textContent = isVerified
+            ? (t('repo.verifyDetail.sigOk') || 'Signature Ed25519 valide')
+            : (t('repo.verifyDetail.sigFail') || 'Signature invalide ou absente');
+        sigTitle.style.color = isVerified ? '#2ecc71' : '#e74c3c';
+        sigDesc.textContent = isVerified
+            ? (t('repo.verifyDetail.sigOkDesc') || "Le contenu de ce dépôt a été signé par l'auteur et n'a pas été altéré.")
+            : (t('repo.verifyDetail.sigFailDesc') || "La signature n'a pas pu être vérifiée. Le dépôt peut être non signé ou potentiellement modifié.");
+    }
+    modal.classList.add('open');
+}
 export function initRepoSync(elements) {
     const { inputSyncUrl, inputSyncGamePath, inputSyncModsPath, inputSyncBackupPath, btnStartSync, syncProgressContainer, syncStatus, syncPercent, syncFill, syncDetails, btnPauseSync, btnCancelSync, pauseText, pausedBadge, inputSyncDownloadLimit, btnFetchInfo, syncInfoCard, syncBadge, syncGameBadge, syncNameDisplay, syncAuthorDisplay, syncDescDisplay, btnClearFetchedRepo, profilesSelectionEl, syncPathsSection, syncUrlCard } = elements;
     const updateSyncPathsVisibility = () => {
@@ -67,12 +118,21 @@ export function initRepoSync(elements) {
                     syncBadge.textContent = t('repo.verified');
                     syncBadge.style.background = 'rgba(46, 204, 113, 0.2)';
                     syncBadge.style.color = '#2ecc71';
+                    syncBadge.style.border = '1px solid rgba(46, 204, 113, 0.3)';
                 }
                 else {
                     syncBadge.textContent = t('repo.unverified');
                     syncBadge.style.background = 'rgba(231, 76, 60, 0.2)';
                     syncBadge.style.color = '#e74c3c';
+                    syncBadge.style.border = '1px solid rgba(231, 76, 60, 0.3)';
                 }
+                syncBadge.style.cursor = 'pointer';
+                syncBadge.style.borderRadius = '100px';
+                syncBadge.style.padding = '2px 8px';
+                syncBadge.title = t('repo.verifyDetail.clickHint') || 'Cliquer pour les détails';
+                // Cache repo + verification state for the detail modal
+                syncBadge.dataset.isVerified = isVerified ? '1' : '0';
+                syncBadge._repoRef = repo;
                 if (profilesSelectionEl && repo.profiles) {
                     profilesSelectionEl.innerHTML = `<div style="font-size:11px; font-weight:700; color:var(--text-secondary); margin-bottom:10px; opacity:0.8;">${t('repo.selectSyncTasks')}</div>`;
                     const localProfiles = await invoke('get_profiles');
@@ -470,6 +530,25 @@ export function initRepoSync(elements) {
             }
         });
     }
+    // ── Verification badge → detail modal ──────────────────────────────────
+    if (syncBadge) {
+        syncBadge.addEventListener('click', () => {
+            const repo = syncBadge._repoRef;
+            if (!repo)
+                return;
+            const isVerified = syncBadge.dataset.isVerified === '1';
+            _openRepoVerifyDetail(repo, isVerified);
+        });
+    }
+    // Close verification modal
+    document.getElementById('btn-close-repo-verify-detail')?.addEventListener('click', () => {
+        document.getElementById('modal-repo-verify-detail')?.classList.remove('open');
+    });
+    document.getElementById('modal-repo-verify-detail')?.addEventListener('click', (e) => {
+        if (e.target === document.getElementById('modal-repo-verify-detail')) {
+            document.getElementById('modal-repo-verify-detail')?.classList.remove('open');
+        }
+    });
     return {
         updateSyncTotalSize,
         updateSyncPathsVisibility

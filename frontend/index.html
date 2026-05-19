@@ -1731,8 +1731,6 @@
                                                     <label class="form-label"
                                                         style="font-size:11px;margin:0;color:#bc74ff;text-transform:uppercase;letter-spacing:0.07em;font-weight:800;"
                                                         data-i18n="repo.creatorId">Creator ID</label>
-                                                    <span
-                                                        style="font-size:9px;font-weight:700;padding:1px 7px;background:rgba(188,116,255,0.12);color:rgba(188,116,255,0.7);border:1px solid rgba(188,116,255,0.2);border-radius:20px;text-transform:uppercase;letter-spacing:0.06em;flex-shrink:0;">PC-LOCKED</span>
                                                 </div>
                                                 <div style="font-size:9.5px;color:var(--text-muted);margin-top:1px;"
                                                     data-i18n="repo.creatorIdHint">Lié à ce PC pour toujours — immuable
@@ -9055,6 +9053,57 @@
             </div>
         </div>
 
+        <!-- Repo Verification Detail Modal -->
+        <div class="modal-overlay" id="modal-repo-verify-detail" style="z-index:1150;">
+            <div class="modal glass" style="max-width:480px;width:92%;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
+                <div style="padding:18px 20px 14px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div id="repo-vd-status-icon" style="width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"></div>
+                        <div>
+                            <div style="font-size:13px;font-weight:700;color:var(--text-primary);" data-i18n="repo.verifyDetail.title">Informations du Dépôt</div>
+                            <div id="repo-vd-status-label" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;margin-top:1px;"></div>
+                        </div>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" id="btn-close-repo-verify-detail" style="padding:0;width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:8px;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <div style="padding:18px 20px 20px;display:flex;flex-direction:column;gap:13px;">
+                    <div class="repo-vd-row">
+                        <span class="repo-vd-label" data-i18n="repo.verifyDetail.name">Nom</span>
+                        <span class="repo-vd-value" id="repo-vd-name">—</span>
+                    </div>
+                    <div class="repo-vd-row">
+                        <span class="repo-vd-label" data-i18n="repo.verifyDetail.author">Auteur</span>
+                        <span class="repo-vd-value" id="repo-vd-author">—</span>
+                    </div>
+                    <div class="repo-vd-row">
+                        <span class="repo-vd-label" data-i18n="repo.verifyDetail.game">Jeu</span>
+                        <span class="repo-vd-value" id="repo-vd-game">—</span>
+                    </div>
+                    <div class="repo-vd-row">
+                        <span class="repo-vd-label" data-i18n="repo.verifyDetail.profiles">Profils</span>
+                        <span class="repo-vd-value" id="repo-vd-profiles">—</span>
+                    </div>
+                    <div class="repo-vd-row">
+                        <span class="repo-vd-label" data-i18n="repo.verifyDetail.mods">Mods</span>
+                        <span class="repo-vd-value" id="repo-vd-mods">—</span>
+                    </div>
+                    <div id="repo-vd-desc-row" class="repo-vd-row" style="align-items:flex-start;">
+                        <span class="repo-vd-label" data-i18n="repo.verifyDetail.desc">Description</span>
+                        <span class="repo-vd-value" id="repo-vd-desc" style="line-height:1.5;opacity:0.8;">—</span>
+                    </div>
+                    <div id="repo-vd-sig-box" style="margin-top:4px;padding:10px 12px;border-radius:10px;border:1px solid;display:flex;align-items:flex-start;gap:9px;">
+                        <div id="repo-vd-sig-icon" style="flex-shrink:0;margin-top:1px;"></div>
+                        <div>
+                            <div id="repo-vd-sig-title" style="font-size:11px;font-weight:700;margin-bottom:3px;"></div>
+                            <div id="repo-vd-sig-desc" style="font-size:11px;line-height:1.45;opacity:0.75;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Monitoring Modal -->
         <div class="modal-overlay" id="modal-monitoring" style="z-index: 1100;">
             <div class="modal glass"
@@ -9106,7 +9155,6 @@
                     </div>
                     <div class="monitoring-live-badge">
                         <div class="monitoring-live-dot"></div>
-                        <span>LIVE</span>
                     </div>
                 </div>
                 <div class="modal-body"
