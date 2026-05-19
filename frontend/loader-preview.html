@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>BMM — Loader Preview</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #08080f;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: Inter, system-ui, -apple-system, sans-serif;
+        }
+
+        /* ── chars hidden until GSAP reveals at t=1.0s ── */
+        .ld-char {
+            display: inline-block;
+            opacity: 0;
+            will-change: transform, opacity;
+        }
+
+        .ld-w1 {
+            font-family: 'Helvetica Now Text', Helvetica, Arial, system-ui, sans-serif;
+            font-size: 15px;
+            font-weight: 300;
+            letter-spacing: 0.17em;
+            color: rgba(248, 250, 252, 0.88);
+        }
+
+        .ld-w2 {
+            font-family: 'Helvetica Now Text', Helvetica, Arial, system-ui, sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.09em;
+            background: linear-gradient(110deg, #fbbf24 0%, #f59e0b 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* ── replay ── */
+        #replay-btn {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 7px 22px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.35);
+            font-family: inherit;
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            border-radius: 6px;
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+            z-index: 100;
+        }
+
+        #replay-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.65);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        #replay-btn.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #rec-hint {
+            position: fixed;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 9.5px;
+            color: rgba(255, 255, 255, 0.1);
+            letter-spacing: 0.06em;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Mouse-reactive background glow -->
+    <div id="ld-bg-glow"
+        style="position:absolute;width:520px;height:520px;border-radius:50%;background:radial-gradient(circle,rgba(0,194,255,0.06) 0%,rgba(59,130,246,0.03) 45%,transparent 68%);filter:blur(32px);pointer-events:none;opacity:0;">
+    </div>
+
+    <!-- Impact flash (full-screen) -->
+    <div id="ld-flash" style="position:absolute;inset:0;background:rgba(0,194,255,0.15);opacity:0;pointer-events:none;">
+    </div>
+
+    <!-- Center stage (parallax target) -->
+    <div id="ld-stage" style="position:relative;display:flex;flex-direction:column;align-items:center;z-index:2;">
+
+        <!-- ══ Logo wrap — ALL orbs/wave/halo live here so they track the logo ══ -->
+        <div id="ld-logo-wrap"
+            style="position:relative;display:flex;align-items:center;justify-content:center;width:100px;height:100px;cursor:default;overflow:visible;">
+
+            <!-- Diffuse ambient glow (large, blurred) -->
+            <div id="ld-logo-glow"
+                style="position:absolute;inset:-28px;border-radius:50%;background:radial-gradient(circle,rgba(0,194,255,0.28) 0%,rgba(59,130,246,0.12) 45%,transparent 70%);filter:blur(18px);opacity:0;pointer-events:none;">
+            </div>
+
+            <!-- Sharp halo ring (tight, crisp) -->
+            <div id="ld-halo"
+                style="position:absolute;inset:-10px;border-radius:50%;border:1.5px solid rgba(0,194,255,0.55);box-shadow:0 0 22px rgba(0,194,255,0.4),0 0 6px rgba(0,194,255,0.2) inset;opacity:0;pointer-events:none;">
+            </div>
+
+            <!-- Outer accent ring (blue tint, slightly larger) -->
+            <div id="ld-halo2"
+                style="position:absolute;inset:-22px;border-radius:50%;border:1px solid rgba(59,130,246,0.2);box-shadow:0 0 14px rgba(59,130,246,0.15);opacity:0;pointer-events:none;">
+            </div>
+
+            <!-- Periodic pulse ring (expands outward, repeating) -->
+            <div id="ld-pulse"
+                style="position:absolute;inset:-10px;border-radius:50%;border:1px solid rgba(0,194,255,0.6);opacity:0;pointer-events:none;">
+            </div>
+
+            <!-- Shockwave (inside logo-wrap → always centered on logo) -->
+            <div id="ld-wave"
+                style="position:absolute;left:50%;top:50%;width:6px;height:6px;margin-left:-3px;margin-top:-3px;border-radius:50%;border:1.5px solid rgba(0,194,255,0.95);box-shadow:0 0 18px rgba(0,194,255,0.6);opacity:0;pointer-events:none;">
+            </div>
+
+            <!-- 3 orbiting particles (JS sets start coords via getBoundingClientRect) -->
+            <div id="ld-orb-0"
+                style="position:absolute;left:50%;top:50%;width:9px;height:9px;margin-left:-4.5px;margin-top:-4.5px;border-radius:50%;background:#00c2ff;box-shadow:0 0 14px 3px rgba(0,194,255,0.8);opacity:0;pointer-events:none;z-index:4;">
+            </div>
+            <div id="ld-orb-1"
+                style="position:absolute;left:50%;top:50%;width:7px;height:7px;margin-left:-3.5px;margin-top:-3.5px;border-radius:50%;background:#3b82f6;box-shadow:0 0 12px 3px rgba(59,130,246,0.8);opacity:0;pointer-events:none;z-index:4;">
+            </div>
+            <div id="ld-orb-2"
+                style="position:absolute;left:50%;top:50%;width:6px;height:6px;margin-left:-3px;margin-top:-3px;border-radius:50%;background:#fbbf24;box-shadow:0 0 11px 3px rgba(251,191,36,0.8);opacity:0;pointer-events:none;z-index:4;">
+            </div>
+
+            <!-- Logo (on top) -->
+            <img id="ld-logo" src="assets/Tasky.png" alt="BMM"
+                style="width:80px;height:auto;position:relative;z-index:3;opacity:0;will-change:transform,filter;"
+                onerror="this.style.display='none';document.getElementById('ld-logo-fallback').style.display='flex';">
+
+            <!-- Fallback if image missing (dev mode) -->
+            <div id="ld-logo-fallback"
+                style="display:none;width:80px;height:80px;border-radius:20px;background:linear-gradient(135deg,rgba(0,194,255,0.15),rgba(59,130,246,0.08));border:1.5px solid rgba(0,194,255,0.25);align-items:center;justify-content:center;position:relative;z-index:3;opacity:0;">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(0,194,255,0.7)"
+                    stroke-width="1.5">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                    <path d="M2 17l10 5 10-5" />
+                    <path d="M2 12l10 5 10-5" />
+                </svg>
+            </div>
+        </div>
+
+        <!-- Brand name — chars injected by JS -->
+        <div id="ld-brand" style="margin-top:16px;display:flex;align-items:baseline;gap:6px;perspective:400px;"></div>
+
+        <!-- Version + FTB -->
+        <div id="ld-ver"
+            style="margin-top:9px;font-family:'JetBrains Mono','Consolas',monospace;font-size:10px;color:rgba(255,255,255,0.22);letter-spacing:0.12em;opacity:0;">
+            V1.0.0 — FAB</div>
+    </div>
+
+    <!-- Bottom progress bar -->
+    <div id="ld-track" style="position:fixed;bottom:0;left:0;width:100%;height:2px;background:rgba(255,255,255,0.05);">
+        <div id="ld-prog"
+            style="height:100%;width:0%;background:linear-gradient(90deg,#00c2ff 0%,#3b82f6 55%,#fbbf24 100%);opacity:0;border-radius:0 1px 1px 0;">
+        </div>
+    </div>
+
+    <!-- <button id="replay-btn" onclick="replay()">↺ Replay</button> -->
+    <!-- <p id="rec-hint">Resize to 1280 × 720 · screen-record · click anywhere for ripple</p> -->
+
+    <script>
+        let _orbActive = false, _orbT0 = 0;
+        let _masterTl = null;
+        let _quickBx, _quickBy, _quickSx, _quickSy;
+        let _doPulseTimer = null;
+        let _vscale = 1;
+
+        /* ── build brand char spans ── */
+        function buildBrand() {
+            const wrap = document.getElementById('ld-brand');
+            wrap.innerHTML = '';
+            [{ text: 'Better', cls: 'ld-w1' }, { text: 'Mod.Manager', cls: 'ld-w2' }].forEach(part => {
+                const word = document.createElement('div');
+                word.style.cssText = 'display:flex;align-items:baseline;overflow:visible;';
+                [...part.text].forEach(ch => {
+                    const s = document.createElement('span');
+                    s.textContent = ch; s.className = 'ld-char ' + part.cls;
+                    word.appendChild(s);
+                });
+                wrap.appendChild(word);
+            });
+        }
+
+        /* ── elliptical orbit via ticker ── */
+        function startOrbit(defs) {
+            _orbActive = true; _orbT0 = gsap.ticker.time;
+            const BLEND = 0.55; // seconds to grow radius from 0→full
+            gsap.ticker.add(() => {
+                if (!_orbActive) return;
+                const t = gsap.ticker.time - _orbT0;
+                const blend = Math.min(t / BLEND, 1);
+                const s = blend * blend * (3 - 2 * blend); // smoothstep
+                defs.forEach(d => {
+                    const a = d.off + t * d.spd;
+                    gsap.set('#' + d.id, { x: Math.cos(a) * d.r * s, y: Math.sin(a) * d.r * 0.38 * s });
+                });
+            });
+        }
+
+        /* ── main animation ── */
+        function startAnimation() {
+            buildBrand();
+
+            /* Compute logo center in screen coords → correct orb start positions */
+            const wrap = document.getElementById('ld-logo-wrap');
+            const rect = wrap ? wrap.getBoundingClientRect() : { left: 0, top: 0, width: 100, height: 100 };
+            const lx = rect.left + rect.width / 2;
+            const ly = rect.top + rect.height / 2;
+            const W = window.innerWidth, H = window.innerHeight;
+
+            /* Orbs live INSIDE logo-wrap → divide by _vscale to convert screen→local coords */
+            const orbDefs = [
+                { id: 'ld-orb-0', sx: (30 - lx) / _vscale, sy: (30 - ly) / _vscale, r: 52, spd: 0.85, off: 0 },
+                { id: 'ld-orb-1', sx: (W - lx - 30) / _vscale, sy: (H - ly - 30) / _vscale, r: 64, spd: -0.58, off: Math.PI * 0.65 },
+                { id: 'ld-orb-2', sx: (W - lx - 30) / _vscale, sy: (30 - ly) / _vscale, r: 56, spd: 0.42, off: Math.PI * 1.4 },
+            ];
+            orbDefs.forEach(d => gsap.set('#' + d.id, { x: d.sx, y: d.sy, opacity: 0 }));
+            gsap.set('#ld-stage', { x: 0, y: 0, scale: _vscale, transformOrigin: 'center center' });
+
+            const tl = _masterTl = gsap.timeline({
+                defaults: { ease: 'power3.out' },
+                onComplete: () => setTimeout(() => document.getElementById('replay-btn').classList.add('visible'), 500)
+            });
+
+            /* 0.0 — ambient bg glow */
+            tl.to('#ld-bg-glow', { opacity: 1, duration: 1.2, ease: 'power2.out' }, 0);
+
+            /* 0.15 — orbs fly from corners toward logo */
+            orbDefs.forEach((d, i) => {
+                tl.to('#' + d.id, { opacity: 1, duration: 0.12 }, 0.15 + i * 0.05);
+                tl.to('#' + d.id, { x: 0, y: 0, duration: 0.52, ease: 'power3.in' }, 0.15 + i * 0.05);
+            });
+
+            /* 0.68 — IMPACT */
+            tl.to('#ld-flash', { opacity: 1, duration: 0.04, yoyo: true, repeat: 1, ease: 'none' }, 0.68);
+            tl.fromTo('#ld-wave',
+                { opacity: 0.9, scale: 0 },
+                { opacity: 0, scale: 40, duration: 0.7, ease: 'power2.out' },
+                0.69);
+
+            /* 0.71 — halo rings pop in then fade out */
+            tl.fromTo('#ld-halo',
+                { opacity: 0, scale: 0.6 },
+                { opacity: 1, scale: 1, duration: 0.35, ease: 'back.out(2.5)' },
+                0.71);
+            tl.to('#ld-halo', { opacity: 0, scale: 1.5, duration: 0.55, ease: 'power2.in' }, 1.1);
+
+            tl.fromTo('#ld-halo2',
+                { opacity: 0, scale: 0.5 },
+                { opacity: 1, scale: 1, duration: 0.45, ease: 'back.out(1.8)' },
+                0.74);
+            tl.to('#ld-halo2', { opacity: 0, scale: 1.8, duration: 0.6, ease: 'power2.in' }, 1.2);
+
+            /* 0.72 — diffuse glow expands */
+            tl.fromTo('#ld-logo-glow', { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.5 }, 0.72);
+
+            /* 0.69 — logo opacity snaps on early so the spin is visible */
+            tl.fromTo('#ld-logo, #ld-logo-fallback',
+                { opacity: 0, scale: 0.85, filter: 'brightness(4) blur(6px)', rotateY: 0, transformPerspective: 500 },
+                { opacity: 1, duration: 0.12, ease: 'none' },
+                0.69);
+            /* spin + settle continues after opacity is already up */
+            tl.to('#ld-logo, #ld-logo-fallback',
+                { scale: 1, filter: 'brightness(1) blur(0px)', rotateY: 720, transformPerspective: 500, duration: 0.65, ease: 'power2.out' },
+                0.69);
+
+            /* 0.78 — orbs begin orbiting */
+            tl.call(() => startOrbit(orbDefs), null, 0.78);
+
+            /* 1.0 — brand chars stagger in */
+            tl.call(() => {
+                gsap.fromTo('.ld-char',
+                    { opacity: 0, y: 22, rotateX: -60, scale: 0.82 },
+                    {
+                        opacity: 1, y: 0, rotateX: 0, scale: 1,
+                        duration: 0.5, stagger: { each: 0.033, ease: 'power2.out' }, ease: 'back.out(2)'
+                    }
+                );
+            }, null, 1.0);
+
+            /* 1.4 — version */
+            tl.fromTo('#ld-ver', { opacity: 0, x: 6 }, { opacity: 1, x: 0, duration: 0.4 }, 1.4);
+
+            /* 1.55 — progress bar */
+            tl.to('#ld-prog', { opacity: 1, duration: 0.3 }, 1.55);
+            tl.to('#ld-prog', { width: '100%', duration: 2.0, ease: 'power1.inOut' }, 1.6);
+
+            /* ── continuous animations after settle ── */
+
+            /* diffuse glow breathes */
+            gsap.to('#ld-logo-glow', {
+                scale: 1.2, opacity: 0.7, duration: 2.8,
+                ease: 'sine.inOut', yoyo: true, repeat: -1, delay: 1.35
+            });
+
+            /* logo bob */
+            gsap.to('#ld-logo, #ld-logo-fallback', {
+                y: -4, duration: 2.2, ease: 'sine.inOut', yoyo: true, repeat: -1, delay: 1.0
+            });
+
+            /* periodic outward pulse ring */
+            function doPulse() {
+                gsap.fromTo('#ld-pulse',
+                    { scale: 0.95, opacity: 0.55 },
+                    {
+                        scale: 2.6, opacity: 0, duration: 1.5, ease: 'power2.out',
+                        onComplete: () => { _doPulseTimer = gsap.delayedCall(1.8, doPulse); }
+                    }
+                );
+            }
+            _doPulseTimer = gsap.delayedCall(1.4, doPulse);
+
+            /* ── mouse parallax (quickTo) ── */
+            _quickBx = gsap.quickTo('#ld-bg-glow', 'x', { duration: 1.0, ease: 'power2.out' });
+            _quickBy = gsap.quickTo('#ld-bg-glow', 'y', { duration: 1.0, ease: 'power2.out' });
+            _quickSx = gsap.quickTo('#ld-stage', 'x', { duration: 0.7, ease: 'power2.out' });
+            _quickSy = gsap.quickTo('#ld-stage', 'y', { duration: 0.7, ease: 'power2.out' });
+        }
+
+        /* ── replay ── */
+        function replay() {
+            document.getElementById('replay-btn').classList.remove('visible');
+
+            /* stop orbit */
+            _orbActive = false;
+
+            /* kill all running tweens */
+            if (_masterTl) _masterTl.kill();
+            if (_doPulseTimer) _doPulseTimer.kill();
+            gsap.killTweensOf([
+                '#ld-logo-glow', '#ld-logo', '#ld-logo-fallback',
+                '#ld-halo', '#ld-halo2', '#ld-pulse'
+            ]);
+
+            /* reset everything */
+            gsap.set(['#ld-bg-glow', '#ld-flash', '#ld-wave'], { clearProps: 'all', opacity: 0 });
+            gsap.set(['#ld-orb-0', '#ld-orb-1', '#ld-orb-2'], { clearProps: 'all', opacity: 0 });
+            gsap.set(['#ld-logo-glow', '#ld-logo', '#ld-logo-fallback'], { clearProps: 'all', opacity: 0 });
+            gsap.set(['#ld-halo', '#ld-halo2', '#ld-pulse'], { clearProps: 'all', opacity: 0 });
+            gsap.set('#ld-ver', { clearProps: 'all', opacity: 0 });
+            gsap.set('#ld-prog', { clearProps: 'all', opacity: 0, width: '0%' });
+            gsap.set('#ld-stage', { x: 0, y: 0, scale: _vscale, transformOrigin: 'center center' });
+            gsap.set('.ld-char', { clearProps: 'all', opacity: 0 });
+
+            /* slight delay so resets flush before new run */
+            setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() => startAnimation())), 80);
+        }
+
+        /* ── click → ripple at cursor ── */
+        document.body.addEventListener('click', e => {
+            const r = document.createElement('div');
+            r.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;
+            width:6px;height:6px;margin:-3px;border-radius:50%;pointer-events:none;z-index:50;
+            border:1.5px solid rgba(0,194,255,0.8);box-shadow:0 0 10px rgba(0,194,255,0.4);`;
+            document.body.appendChild(r);
+            gsap.fromTo(r,
+                { opacity: 0.9, scale: 0 },
+                { opacity: 0, scale: 18, duration: 0.55, ease: 'power2.out', onComplete: () => r.remove() }
+            );
+        });
+
+        /* ── mouse parallax ── */
+        document.body.addEventListener('mousemove', e => {
+            if (!_quickBx) return;
+            const dx = (e.clientX - innerWidth / 2) / (innerWidth / 2);
+            const dy = (e.clientY - innerHeight / 2) / (innerHeight / 2);
+            _quickBx(dx * 90); _quickBy(dy * 90);
+            _quickSx(dx * 10); _quickSy(dy * 10);
+        });
+
+        /* ── logo hover ── */
+        document.getElementById('ld-logo-wrap').addEventListener('mouseenter', () =>
+            gsap.to('#ld-logo, #ld-logo-fallback', { scale: 1.1, duration: 0.3, ease: 'back.out(2)' }));
+        document.getElementById('ld-logo-wrap').addEventListener('mouseleave', () =>
+            gsap.to('#ld-logo, #ld-logo-fallback', { scale: 1, duration: 0.5, ease: 'elastic.out(1,0.35)' }));
+
+        /* ── boot: compute scale → apply → 2 rAF so layout is stable before measuring ── */
+        window.addEventListener('DOMContentLoaded', () => {
+            _vscale = Math.min(window.innerWidth / 900, window.innerHeight / 600) * 0.85;
+            /* Pre-scale stage via GSAP so getBoundingClientRect reflects final position */
+            gsap.set('#ld-stage', { scale: _vscale, transformOrigin: 'center center' });
+            /* Scale bg-glow to match */
+            const gs = Math.round(520 * _vscale);
+            const glowEl = document.getElementById('ld-bg-glow');
+            glowEl.style.width = glowEl.style.height = gs + 'px';
+            requestAnimationFrame(() => requestAnimationFrame(() => startAnimation()));
+        });
+    </script>
+</body>
+
+</html>

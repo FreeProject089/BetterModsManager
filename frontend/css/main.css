@@ -2335,10 +2335,15 @@ body.is-maximized .titlebar-spacer {
     border-bottom: 1px solid var(--border);
 }
 
-/* Title text stretches to fill available space */
-.card-title > span {
+/* Title text stretches to fill available space — only the first span (the label), not badges */
+.card-title > span:first-of-type {
     flex: 1 1 0;
     min-width: 0;
+}
+/* Badge spans after the title must NOT stretch */
+.card-title > span + span {
+    flex-shrink: 0;
+    flex-grow: 0;
 }
 
 /* Direct buttons and button-group divs never shrink */
