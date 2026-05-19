@@ -230,15 +230,9 @@ function setupTabs() {
 
             tabBtns.forEach(b => {
                 b.classList.remove('active');
-                (b as HTMLElement).style.background = 'transparent';
-                (b as HTMLElement).style.color = 'var(--text-secondary)';
-                (b as HTMLElement).style.border = '1px solid rgba(255,255,255,0.1)';
             });
 
             target.classList.add('active');
-            target.style.background = 'var(--accent)';
-            target.style.color = 'white';
-            target.style.border = 'none';
 
             tabContents.forEach(content => {
                 const c = content as HTMLElement;
@@ -295,24 +289,10 @@ function setupSearch() {
 
         modePills.forEach(pill => {
             const p = pill as HTMLElement;
-            const betaBadge = p.querySelector('span:last-child') as HTMLElement;
-
             if (p.getAttribute('data-mode') === searchMode) {
                 p.classList.add('active');
-                p.style.background = 'var(--accent)';
-                p.style.color = 'white';
-                if (betaBadge && p.getAttribute('data-mode') === 'semantic') {
-                    betaBadge.style.background = 'white';
-                    betaBadge.style.color = 'var(--accent)';
-                }
             } else {
                 p.classList.remove('active');
-                p.style.background = 'transparent';
-                p.style.color = 'var(--text-secondary)';
-                if (betaBadge && p.getAttribute('data-mode') === 'semantic') {
-                    betaBadge.style.background = 'var(--accent)';
-                    betaBadge.style.color = 'white';
-                }
             }
         });
 
@@ -393,52 +373,44 @@ function _runSearch(
             if (!existing || item.score > existing.score) dedupMap.set(key, item);
         });
 
-        const finalMatches = Array.from(dedupMap.values()).sort((a, b) => b.score - a.score).slice(0, 12);
+        const finalMatches = Array.from(dedupMap.values()).sort((a, b) => b.score - a.score).slice(0, 10);
 
         if (finalMatches.length > 0) {
             diagResultsContainer.style.display = 'block';
             diagResultsList.innerHTML = '';
+            const isSemantic = searchMode === 'semantic';
 
             finalMatches.forEach(match => {
-                const el = document.createElement('div');
-                el.className = 'diagram-reco-item';
+                const el = document.createElement('button');
+                el.className = 'diagram-reco-chip';
                 const scorePercent = Math.min(100, Math.round(match.score * 100));
-                const badgeColor = scorePercent > 85 ? 'var(--success)' : (scorePercent > 65 ? 'var(--accent)' : 'var(--warning)');
-                const contextLabel = match.weight >= 1.0 ? '📌 Title' : match.weight >= 0.8 ? '● Node' : match.weight >= 0.6 ? '○ Detail' : '→ Edge';
+                const badgeColor = scorePercent > 85 ? '#22c55e' : (scorePercent > 65 ? 'var(--accent)' : '#f59e0b');
+                const contextDot = match.weight >= 1.0 ? '◆' : match.weight >= 0.8 ? '●' : match.weight >= 0.6 ? '○' : '›';
+                const truncText = match.text.length > 52 ? match.text.substring(0, 52) + '…' : match.text;
+                const truncDiagram = match.diagramTitle.length > 24 ? match.diagramTitle.substring(0, 24) + '…' : match.diagramTitle;
 
-                const scoreBadge = (searchMode === 'semantic')
-                    ? `<div style="position:absolute;top:0;right:0;font-size:9px;background:${badgeColor};color:white;padding:2px 7px;border-bottom-left-radius:8px;font-weight:800;font-family:var(--font-mono);z-index:2;">${scorePercent}%</div>`
-                    : '';
-
-                el.style.cssText = `padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid ${searchMode === 'semantic' ? 'rgba(188,116,255,0.3)' : 'rgba(255,255,255,0.1)'};border-radius:8px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;gap:4px;position:relative;overflow:hidden;`;
                 el.innerHTML = `
-                    ${scoreBadge}
-                    <div style="font-size:13px;font-weight:600;color:var(--text-primary);line-height:1.2;">${match.text.length > 80 ? match.text.substring(0, 80) + '…' : match.text}</div>
-                    <div style="font-size:10px;color:var(--accent);opacity:0.9;display:flex;align-items:center;gap:6px;">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                        ${match.diagramTitle}
-                        <span style="font-size:9px;opacity:0.5;margin-left:auto;">${contextLabel}</span>
-                    </div>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;opacity:0.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                    <span class="diagram-reco-text">${truncText}</span>
+                    <span class="diagram-reco-diagram">${truncDiagram}</span>
+                    <span class="diagram-reco-ctx">${contextDot}</span>
+                    ${isSemantic ? `<span class="diagram-reco-score" style="background:${badgeColor}">${scorePercent}%</span>` : ''}
                 `;
-                const borderColor = searchMode === 'semantic' ? 'rgba(188,116,255,0.3)' : 'rgba(255,255,255,0.1)';
-                el.addEventListener('mouseenter', () => { el.style.background = 'rgba(255,255,255,0.08)'; el.style.borderColor = 'var(--accent)'; el.style.transform = 'translateX(4px)'; });
-                el.addEventListener('mouseleave', () => { el.style.background = 'rgba(255,255,255,0.05)'; el.style.borderColor = borderColor; el.style.transform = 'translateX(0)'; });
                 el.addEventListener('click', () => {
                     (openDiagram as any)(match.diagramId, match.nodeId || undefined);
                 });
                 diagResultsList.appendChild(el);
             });
         } else {
-            // Informative "no results" state
             diagResultsContainer.style.display = 'block';
             diagResultsList.innerHTML = `
                 <div class="docs-search-no-results">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                         <line x1="8" y1="11" x2="14" y2="11"/>
                     </svg>
-                    <span>${t('docs.search.noResults') || 'No diagrams found for this query.'}</span>
-                    ${searchMode === 'classic' ? `<span style="font-size:10px;color:var(--accent);cursor:pointer;" onclick="document.getElementById('btn-toggle-search-mode').click()">${t('docs.search.trySemantic') || 'Try Semantic mode →'}</span>` : ''}
+                    <span>${t('docs.search.noResults') || 'No diagrams found.'}</span>
+                    ${searchMode === 'classic' ? `<span style="font-size:10px;color:var(--accent);cursor:pointer;" onclick="document.getElementById('btn-toggle-search-mode').click()">${t('docs.search.trySemantic') || 'Try Semantic →'}</span>` : ''}
                 </div>
             `;
         }

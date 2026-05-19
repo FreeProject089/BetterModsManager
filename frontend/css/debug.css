@@ -62,6 +62,17 @@
     visibility: visible;
 }
 
+/* ── Production mode: hide dev-only tabs ── */
+#bmm-debug-overlay.debug-prod-mode .debug-tab[data-tab="playground"],
+#bmm-debug-overlay.debug-prod-mode .debug-tab[data-tab="sources"] {
+    display: none !important;
+}
+
+/* Hide JS debugger sub-tab in prod (not useful without PTB access) */
+#bmm-debug-overlay.debug-prod-mode .debug-subtab[data-sub="js"] {
+    display: none !important;
+}
+
 /* Header */
 .debug-header {
     padding: 10px 14px;

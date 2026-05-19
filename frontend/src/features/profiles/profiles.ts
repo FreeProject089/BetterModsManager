@@ -554,6 +554,12 @@ export async function renderProfiles() {
     // Clear old cards (keep empty-state)
     Array.from(grid.children).forEach(c => { if (!c.id.startsWith('empty')) grid.removeChild(c); });
 
+    // Show/hide the Active Mods (Global) panel based on whether profiles exist
+    const activeModsPanel = document.getElementById('profiles-active-mods-container');
+    if (activeModsPanel) {
+        activeModsPanel.style.display = count > 0 ? '' : 'none';
+    }
+
     if (count === 0) {
         emptyEl.style.display = 'flex';
         emptyEl.style.width = '100%';

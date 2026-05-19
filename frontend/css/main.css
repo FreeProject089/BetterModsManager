@@ -1772,17 +1772,24 @@ body.is-maximized .titlebar-spacer {
     align-items: center;
 }
 
-.profile-select-icon-wrap::before {
-    content: '';
+.profile-icon-display {
     position: absolute;
     left: 10px;
     width: 14px;
     height: 14px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 20c0-4 3.6-7 8-7s8 3 8 7'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     pointer-events: none;
     z-index: 1;
+    color: var(--text-muted, #6b7280);
+    flex-shrink: 0;
+}
+
+.profile-icon-display svg {
+    width: 14px;
+    height: 14px;
+    display: block;
 }
 
 .profile-select-icon-wrap .profile-select {
@@ -2314,6 +2321,10 @@ body.is-maximized .titlebar-spacer {
 }
 
 .card-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0;
     font-size: 14px;
     font-weight: 600;
     color: var(--text-secondary);
@@ -2322,6 +2333,18 @@ body.is-maximized .titlebar-spacer {
     margin-bottom: 16px;
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border);
+}
+
+/* Title text stretches to fill available space */
+.card-title > span {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* Direct buttons and button-group divs never shrink */
+.card-title > .btn,
+.card-title > div {
+    flex-shrink: 0;
 }
 
 /* ═══════════════════════════════════
@@ -4989,6 +5012,477 @@ select:focus {
     margin-top: -2px;
 }
 
+/* ══════════════════════════════════════
+   Help & Other — View Header
+══════════════════════════════════════ */
+.docs-view-header {
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.docs-header-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+}
+
+.docs-header-title-block {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* ── Search Bar ── */
+.docs-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.docs-search-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 0 12px 0 34px;
+    height: 36px;
+    min-width: 220px;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    backdrop-filter: blur(4px);
+}
+
+.docs-search-field:focus-within {
+    border-color: var(--accent);
+    background: rgba(59, 130, 246, 0.06);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12), 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.docs-search-icon {
+    position: absolute;
+    left: 10px;
+    color: var(--text-muted);
+    pointer-events: none;
+    flex-shrink: 0;
+    transition: color 0.2s;
+}
+
+.docs-search-field:focus-within .docs-search-icon {
+    color: var(--accent);
+}
+
+.docs-search-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    width: 100%;
+    padding: 0;
+    font-family: var(--font-ui, inherit);
+}
+
+.docs-search-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+.docs-search-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 5px;
+    font-family: var(--font-mono, monospace);
+    font-size: 10px;
+    color: var(--text-muted);
+    padding: 2px 5px;
+    letter-spacing: 0.03em;
+    flex-shrink: 0;
+    user-select: none;
+    pointer-events: none;
+    transition: opacity 0.2s;
+}
+
+.docs-search-field:focus-within .docs-search-kbd {
+    opacity: 0;
+}
+
+/* ── Search Mode Toggle ── */
+.docs-search-mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 8px;
+    padding: 3px;
+    height: 36px;
+}
+
+.search-mode-pill {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.search-mode-pill:hover {
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.search-mode-pill.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 1px 6px rgba(59, 130, 246, 0.35);
+}
+
+.docs-beta-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 5px;
+    background: rgba(168, 85, 247, 0.2);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 800;
+    color: #c084fc;
+    letter-spacing: 0.06em;
+}
+
+/* ── Diagram Search Results ── */
+.docs-diagram-results {
+    background: rgba(59, 130, 246, 0.04);
+    border: 1px solid rgba(59, 130, 246, 0.14);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+}
+
+.docs-diagram-results-title {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 8px;
+    opacity: 0.7;
+}
+
+.docs-diagram-results-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+/* Compact chip rows for diagram search results */
+.diagram-reco-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 7px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s, border-color 0.15s;
+    font-family: inherit;
+    min-height: 0;
+}
+
+.diagram-reco-chip:hover {
+    background: rgba(59, 130, 246, 0.08);
+    border-color: rgba(59, 130, 246, 0.25);
+}
+
+.diagram-reco-text {
+    flex: 1 1 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.diagram-reco-diagram {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--accent);
+    opacity: 0.75;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 130px;
+}
+
+.diagram-reco-ctx {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+.diagram-reco-score {
+    flex-shrink: 0;
+    font-size: 9px;
+    font-weight: 800;
+    font-family: var(--font-mono, monospace);
+    color: #fff;
+    padding: 1px 5px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+}
+
+/* ── Tabs Navigation ── */
+.docs-tabs-nav {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+    margin-top: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.docs-tabs-nav::-webkit-scrollbar {
+    display: none;
+}
+
+.docs-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 16px 11px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    border-radius: 0;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+}
+
+.docs-tab-btn svg {
+    opacity: 0.6;
+    transition: opacity 0.15s;
+}
+
+.docs-tab-btn:hover {
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px 8px 0 0;
+}
+
+.docs-tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.docs-tab-btn.active svg {
+    opacity: 1;
+}
+
+/* ── Docs Tab Content ── */
+.docs-tab-content {
+    display: none;
+}
+
+.docs-tab-content.active {
+    display: block;
+}
+
+/* ══════════════════════════════════════
+   FAQ Page — Header & Categories
+══════════════════════════════════════ */
+.faq-page-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 20px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.06) 0%, rgba(168, 85, 247, 0.04) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.14);
+    border-radius: 14px;
+    margin-bottom: 24px;
+}
+
+.faq-page-icon {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 12px;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.faq-page-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 3px;
+}
+
+.faq-page-subtitle {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+/* ── FAQ Category Wrapper ── */
+.faq-category {
+    margin-bottom: 24px;
+}
+
+.faq-category-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    border-left: 3px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Default accent = blue */
+.faq-category-header {
+    border-left-color: var(--accent);
+    color: var(--text-secondary);
+}
+
+.faq-category-header svg {
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+/* Cyan variant (Technique) */
+.faq-category-header--cyan {
+    border-left-color: #22d3ee;
+    color: var(--text-secondary);
+}
+
+.faq-category-header--cyan svg {
+    color: #22d3ee;
+}
+
+/* Danger / red variant (Critique) */
+.faq-category-header--danger {
+    border-left-color: #f87171;
+    color: var(--text-secondary);
+}
+
+.faq-category-header--danger svg {
+    color: #f87171;
+}
+
+/* Green variant (Updates) */
+.faq-category-header--green {
+    border-left-color: #34d399;
+    color: var(--text-secondary);
+}
+
+.faq-category-header--green svg {
+    color: #34d399;
+}
+
+/* Purple variant (Other) */
+.faq-category-header--purple {
+    border-left-color: #c084fc;
+    color: var(--text-secondary);
+}
+
+.faq-category-header--purple svg {
+    color: #c084fc;
+}
+
+/* ══════════════════════════════════════
+   Documentation Cards — Enhanced
+══════════════════════════════════════ */
+.doc-info-block {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 16px;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.doc-info-block::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 0.25s;
+}
+
+.doc-info-block:hover {
+    background: rgba(59, 130, 246, 0.05);
+    border-color: rgba(59, 130, 246, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
+}
+
+.doc-info-block:hover::before {
+    opacity: 1;
+}
+
+.doc-info-block h4 {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 7px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.doc-info-block p {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.65;
+}
+
 /* ── App Loader Animations ── */
 @keyframes pulse-tasky {
 
@@ -7374,6 +7868,21 @@ select:focus {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
+/* -- Missing icon definitions used in the mod-activation diagram -- */
+/* icon-plus, icon-minus, icon-x were undefined → solid white square bug */
+.icon-plus {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5'%3E%3Cline x1='12' y1='5' x2='12' y2='19'/%3E%3Cline x1='5' y1='12' x2='19' y2='12'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5'%3E%3Cline x1='12' y1='5' x2='12' y2='19'/%3E%3Cline x1='5' y1='12' x2='19' y2='12'/%3E%3C/svg%3E");
+}
+.icon-minus {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5'%3E%3Cline x1='5' y1='12' x2='19' y2='12'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5'%3E%3Cline x1='5' y1='12' x2='19' y2='12'/%3E%3C/svg%3E");
+}
+.icon-x {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E");
+}
+
 /* Subgraph Group Styles */
 .mermaid-container .cluster rect {
     rx: 16px;
@@ -7786,36 +8295,6 @@ select:focus {
 .node-highlight-glow path {
     stroke: var(--accent) !important;
     stroke-width: 3px !important;
-}
-
-/* ── Documentation Blocks ── */
-.doc-info-block {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    padding: 16px;
-    transition: var(--transition);
-}
-
-.doc-info-block:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.15);
-    transform: translateY(-2px);
-}
-
-.doc-info-block h4 {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin-bottom: 8px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.doc-info-block p {
-    font-size: 12.5px;
-    color: var(--text-secondary);
-    line-height: 1.6;
 }
 
 /* ── FAQ Styling ── */

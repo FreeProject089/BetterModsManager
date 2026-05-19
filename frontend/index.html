@@ -420,8 +420,11 @@
                                 </div>
                             </div>
 
-                            <!-- Profile selector: icon inside via CSS wrapper, no external SVG -->
+                            <!-- Profile selector: dynamic icon (user icon by default, updated via JS to active profile's icon) -->
                             <div class="profile-select-icon-wrap" style="flex-shrink:0;">
+                                <span class="profile-icon-display">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                </span>
                                 <select id="lib-profile-select" class="profile-select" style="width:210px;">
                                     <option value="" data-i18n="lib.selectProfile">— Sélectionnez un profil —</option>
                                 </select>
@@ -652,7 +655,7 @@
                         </div>
 
                         <!-- Right side: Activated Mods List -->
-                        <div class="profiles-active-mods glass-card" id="profiles-active-mods-container">
+                        <div class="profiles-active-mods glass-card" id="profiles-active-mods-container" style="display:none;">
                             <div class="profiles-active-mods-header-actions" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
                                 <h3 class="card-title" data-i18n="prof.allActiveMods" style="margin: 0; font-size: 14px; font-weight: 600;">Mods Activés (Global)</h3>
                                 <button id="btn-disable-all-global" class="btn btn-danger btn-xs" style="font-size: 10px; padding: 4px 8px; border-radius: 6px; display: none;" onmouseenter="window.showTaskyHelp('prof.disableAllTip', 'trash')" onmouseleave="window.hideTaskyHelp()">
@@ -1825,79 +1828,59 @@
                 </section>
 
                 <section class="view" id="view-docs">
-                    <div class="view-header" style="flex-direction: column; align-items: flex-start; gap: 16px;">
-                        <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
-                            <div>
+                    <div class="docs-view-header">
+                        <!-- Title + search row -->
+                        <div class="docs-header-top">
+                            <div class="docs-header-title-block">
                                 <h1 class="view-title" data-i18n="docs.title">Help & other</h1>
-                                <p class="view-subtitle" data-i18n="docs.subtitle">Guide d'utilisation de Better Mod
-                                    Manager</p>
+                                <p class="view-subtitle" data-i18n="docs.subtitle">Guide d'utilisation de Better Mod Manager</p>
                             </div>
-                            <div class="docs-search-container"
-                                style="position: relative; width: 400px; z-index: 10; display: flex; gap: 10px; align-items: center;">
-                                <div style="position: relative; flex: 1;">
-                                    <input type="text" id="docs-search-input" placeholder="Rechercher..."
-                                        data-i18n-placeholder="docs.searchPlaceholder"
-                                        class="bmm-input input-bordered"
-                                        style="width: 100%; padding: 8px 12px 8px 36px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: var(--text-primary); font-family: 'Inter', sans-serif; transition: all 0.3s ease;">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                        stroke="var(--text-secondary)" stroke-width="2"
-                                        style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none;">
-                                        <circle cx="11" cy="11" r="8"></circle>
-                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            <div class="docs-search-wrap" id="docs-search-outer">
+                                <div class="docs-search-field">
+                                    <svg class="docs-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                                     </svg>
+                                    <input type="text" id="docs-search-input"
+                                        data-i18n-placeholder="docs.searchPlaceholder"
+                                        placeholder="Search documentation…"
+                                        class="docs-search-input" />
                                 </div>
-                                <div class="docs-search-mode-toggle"
-                                    style="display: flex; align-items: center; background: rgba(0,0,0,0.2); border-radius: 20px; padding: 2px; border: 1px solid rgba(255,255,255,0.05); cursor: pointer;"
-                                    id="btn-toggle-search-mode">
-                                    <div class="search-mode-pill active" data-mode="classic"
-                                        data-i18n="docs.searchMode.classic"
-                                        onmouseenter="window.showTaskyHelp('docs.search.classicTip', 'search')"
-                                        onmouseleave="window.hideTaskyHelp()"
-                                        style="padding: 4px 10px; border-radius: 15px; font-size: 10px; font-weight: 700; color: white; background: var(--accent); transition: all 0.3s;">
-                                        CLASSIQUE</div>
+                                <div class="docs-search-mode-toggle" id="btn-toggle-search-mode"
+                                    onmouseenter="window.showTaskyHelp('docs.search.classicTip','search')"
+                                    onmouseleave="window.hideTaskyHelp()">
+                                    <div class="search-mode-pill active" data-mode="classic" data-i18n="docs.searchMode.classic">CLASSIC</div>
                                     <div class="search-mode-pill" data-mode="semantic"
-                                        onmouseenter="window.showTaskyHelp('docs.search.semanticTip', 'layers')"
-                                        onmouseleave="window.hideTaskyHelp()"
-                                        style="padding: 4px 10px; border-radius: 15px; font-size: 10px; font-weight: 700; color: var(--text-secondary); transition: all 0.3s; display: flex; align-items: center; gap: 4px;">
-                                        <span data-i18n="docs.searchMode.semantic">SÉMANTIQUE</span>
-                                        <span style="font-size: 8px; background: var(--accent); color: white; padding: 1px 4px; border-radius: 4px; opacity: 0.8;">BETA</span>
+                                        onmouseenter="window.showTaskyHelp('docs.search.semanticTip','layers')"
+                                        onmouseleave="window.hideTaskyHelp()">
+                                        <span data-i18n="docs.searchMode.semantic">SEMANTIC</span>
+                                        <span class="docs-beta-tag">BETA</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <!-- Dynamic Search Results for Diagrams -->
-                        <div id="docs-search-results-diagrams"
-                            style="display: none; width: 100%; margin-top: -10px; margin-bottom: 10px; background: rgba(0,0,0,0.6); border: 1px solid var(--accent); border-radius: 8px; padding: 12px; backdrop-filter: blur(20px); z-index: 100; box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
-                            <h4
-                                style="font-size: 10px; color: var(--accent); margin-bottom: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em; display: flex; align-items: center; gap: 6px;">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <circle cx="12" cy="12" r="3"></circle>
-                                    <line x1="12" y1="2" x2="12" y2="22"></line>
-                                    <line x1="2" y1="12" x2="22" y2="12"></line>
-                                </svg>
+
+                        <!-- Dynamic search results -->
+                        <div id="docs-search-results-diagrams" class="docs-diagram-results" style="display:none;">
+                            <h4 class="docs-diagram-results-title">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
                                 <span data-i18n="docs.search.diagramResults">Found in Diagrams</span>
                             </h4>
-                            <div id="docs-diagram-results-list"
-                                style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;">
-                            </div>
+                            <div id="docs-diagram-results-list" class="docs-diagram-results-grid"></div>
                         </div>
 
-                        <!-- Documentation Tabs Navigation -->
-                        <div class="docs-tabs-nav"
-                            style="display: flex; gap: 8px; width: 100%; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">
-                            <button class="btn btn-docs-tab active" data-tab="basique"
-                                style="padding: 6px 16px; border-radius: 6px; background: var(--accent); color: white; border: none; font-weight: 600; cursor: pointer; transition: all 0.2s;" data-i18n="docs.tab.basic">
-                                Basique
+                        <!-- Tabs navigation -->
+                        <div class="docs-tabs-nav">
+                            <button class="docs-tab-btn btn-docs-tab active" data-tab="basique">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                                <span data-i18n="docs.tab.basic">Basique</span>
                             </button>
-                            <button class="btn btn-docs-tab" data-tab="advanced"
-                                style="padding: 6px 16px; border-radius: 6px; background: transparent; color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.1); font-weight: 600; cursor: pointer; transition: all 0.2s;" data-i18n="docs.tab.advanced">
-                                Documentation
+                            <button class="docs-tab-btn btn-docs-tab" data-tab="advanced">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                <span data-i18n="docs.tab.advanced">Documentation</span>
                             </button>
-                            <button class="btn btn-docs-tab" data-tab="faq"
-                                style="padding: 6px 16px; border-radius: 6px; background: transparent; color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.1); font-weight: 600; cursor: pointer; transition: all 0.2s;" data-i18n="docs.tab.faq">
-                                FAQ
+                            <button class="docs-tab-btn btn-docs-tab" data-tab="faq">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                <span data-i18n="docs.tab.faq">FAQ</span>
                             </button>
                         </div>
                     </div>
@@ -3533,12 +3516,22 @@
                     <!-- TAB: FAQ -->
                     <div id="docs-tab-faq" class="docs-tab-content" style="display: none; padding: 24px 0;">
 
-                            <h2 style="margin-top:28px;font-size:18px;color:var(--text-primary)" data-i18n="faq.title">
-                                Questions
-                                fréquentes (FAQ)</h2>
+                        <div class="faq-page-header">
+                            <div class="faq-page-icon">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            </div>
+                            <div>
+                                <h2 class="faq-page-title" data-i18n="faq.title">FAQ &amp; Help</h2>
+                                <p class="faq-page-subtitle" data-i18n="faq.subtitle">Réponses aux questions les plus fréquentes sur Better Mod Manager.</p>
+                            </div>
+                        </div>
 
-                            <!-- GENERAL QUESTIONS (Blue) -->
-                            <h3 style="margin: 24px 0 12px 0; font-size: 14px; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Général</h3>
+                        <!-- GENERAL QUESTIONS -->
+                        <div class="faq-category">
+                            <div class="faq-category-header">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                <span data-i18n="faq.category.general">Général</span>
+                            </div>
 
                             <details class="faq-accordion">
                                 <summary class="faq-summary">
@@ -3790,8 +3783,14 @@
                                 </div>
                             </details>
 
-                            <!-- TECHNICAL QUESTIONS (Cyan) -->
-                            <h3 style="margin: 24px 0 12px 0; font-size: 14px; color: var(--cyan); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Technique</h3>
+                        </div><!-- /faq-category général -->
+
+                        <!-- TECHNICAL QUESTIONS -->
+                        <div class="faq-category">
+                            <div class="faq-category-header faq-category-header--cyan">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                <span data-i18n="faq.category.tech">Technique</span>
+                            </div>
 
                             <details class="faq-accordion">
                                 <summary class="faq-summary">
@@ -4048,8 +4047,14 @@
                                 </div>
                             </details>
 
-                            <!-- APPLICATION UPDATES -->
-                            <h3 style="margin: 24px 0 12px 0; font-size: 14px; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;" data-i18n="docs.updates.title">Application Updates</h3>
+                        </div><!-- /faq-category technique -->
+
+                        <!-- APPLICATION UPDATES -->
+                        <div class="faq-category">
+                            <div class="faq-category-header faq-category-header--green">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                                <span data-i18n="faq.category.updates">Application Updates</span>
+                            </div>
 
                             <details class="faq-accordion">
                                 <summary class="faq-summary">
@@ -4091,7 +4096,14 @@
                             </details>
 
                             <!-- CRITICAL/WARNING QUESTIONS (Red/Orange) -->
-                            <h3 style="margin: 24px 0 12px 0; font-size: 14px; color: #f87171; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Critique & Avertissements</h3>
+                        </div><!-- /faq-category updates -->
+
+                        <!-- CRITICAL & WARNINGS -->
+                        <div class="faq-category">
+                            <div class="faq-category-header faq-category-header--danger">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                                <span data-i18n="faq.category.critical">Critique &amp; Avertissements</span>
+                            </div>
 
                             <details class="faq-accordion">
                                 <summary class="faq-summary">
@@ -4175,8 +4187,14 @@
                                 <div class="faq-content" data-i18n="faq.a9">Non, le blocage en cas de disque saturé est vital pour protéger vos données.</div>
                             </details>
 
-                            <!-- OTHER QUESTIONS (Purple) -->
-                            <h3 style="margin: 24px 0 12px 0; font-size: 14px; color: #bc74ff; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Other</h3>
+                        </div><!-- /faq-category critique -->
+
+                        <!-- OTHER QUESTIONS -->
+                        <div class="faq-category">
+                            <div class="faq-category-header faq-category-header--purple">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                <span data-i18n="faq.category.other">Other</span>
+                            </div>
 
                             <details class="faq-accordion" id="faq-lux-std">
                                 <summary class="faq-summary">
@@ -4378,133 +4396,99 @@
                                 </div>
                             </details>
 
-                            <!-- Security & Access FAQ -->
-                            <div style="margin-top:20px; border-top:1px solid rgba(59,130,246,0.1); padding-top:20px;">
-                                <h4
-                                    style="font-size:11px; font-weight:800; color:#3b82f6; letter-spacing:0.1em; margin-bottom:12px; text-transform:uppercase">
-                                    Sécurité & Accès Système</h4>
+                        </div><!-- /faq-category other -->
 
-                                <details class="faq-accordion">
-                                    <summary class="faq-summary">
-                                        <span style="display:flex;align-items:center;gap:8px">
-                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3b82f6"
-                                                stroke-width="2.2">
-                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                                            </svg>
-                                            <span data-i18n="faq.security.qModes">Différence entre Accès Complet et
-                                                Limité ?</span>
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2.5"
-                                                style="opacity: 0.5; margin-left: auto;" title="Diagram available">
-                                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                                <path d="M2 17l10 5 10-5" />
-                                                <path d="M2 12l10 5 10-5" />
-                                            </svg>
-                                        </span>
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2">
-                                            <polyline points="6 9 12 15 18 9"></polyline>
-                                        </svg>
-                                    </summary>
-                                    <div class="faq-content">
-                                        <p data-i18n="faq.security.aModes"
-                                            style="line-height:1.6; margin-bottom: 10px;">L'Accès Complet permet à BMM
-                                            de gérer vos fichiers sans restrictions (nécessaire pour le Storage
-                                            Manager). L'Accès Limité restreint BMM aux seuls dossiers définis dans vos
-                                            profils pour une sécurité maximale.</p>
-                                        <button class="btn btn-sm btn-ghost" onclick="openDiagram('security-system')"
-                                            style="color:#3b82f6; border:1px dashed rgba(59,130,246,0.3); font-size:11px; display:inline-flex; align-items:center; gap:6px;">
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2">
-                                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                                <path d="M2 17l10 5 10-5" />
-                                                <path d="M2 12l10 5 10-5" />
-                                            </svg>
-                                            <span data-i18n="docs.gallery.btn.securitySystem">VOIR LE SYSTÈME DE
-                                                SÉCURITÉ</span>
-                                        </button>
-                                    </div>
-                                </details>
+                        <!-- SECURITY & ACCESS -->
+                        <div class="faq-category">
+                            <div class="faq-category-header faq-category-header--cyan">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                <span data-i18n="faq.category.security">Sécurité &amp; Accès</span>
                             </div>
 
-                            <!-- BetaHub Specific FAQ -->
-                            <div style="margin-top:20px; border-top:1px solid rgba(168,85,247,0.1); padding-top:20px;">
-                                <h4
-                                    style="font-size:11px; font-weight:800; color:#a855f7; letter-spacing:0.1em; margin-bottom:12px; text-transform:uppercase">
-                                    BetaHub & Reporting</h4>
-
-                                <details class="faq-accordion">
-                                    <summary class="faq-summary">
-                                        <span style="display:flex;align-items:center;gap:8px">
-                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a855f7"
-                                                stroke-width="2.2">
-                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                                            </svg>
-                                            <span data-i18n="faq.betahub.q1">Quelles données sont envoyées lors d'un
-                                                rapport BetaHub ?</span>
-                                        </span>
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2">
-                                            <polyline points="6 9 12 15 18 9"></polyline>
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2.2">
+                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                                         </svg>
-                                    </summary>
-                                    <div class="faq-content" data-i18n="faq.betahub.a1">...</div>
-                                </details>
-
-                                <details class="faq-accordion">
-                                    <summary class="faq-summary">
-                                        <span style="display:flex;align-items:center;gap:8px">
-                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a855f7"
-                                                stroke-width="2.2">
-                                                <path d="M3 12h3L9 3l6 18 3-9h3" />
-                                            </svg>
-                                            <span data-i18n="faq.betahub.q2">Pourquoi l'envoi utilise-t-il le CPU en
-                                                arrière-plan ?</span>
-                                        </span>
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2">
-                                            <polyline points="6 9 12 15 18 9"></polyline>
+                                        <span data-i18n="faq.security.qModes">Différence entre Accès Complet et Limité ?</span>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.5;margin-left:auto;" title="Diagram available">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
                                         </svg>
-                                    </summary>
-                                    <div class="faq-content" data-i18n="faq.betahub.a2">...</div>
-                                </details>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content">
+                                    <p data-i18n="faq.security.aModes" style="line-height:1.6; margin-bottom:10px;">L'Accès Complet permet à BMM de gérer vos fichiers sans restrictions (nécessaire pour le Storage Manager). L'Accès Limité restreint BMM aux seuls dossiers définis dans vos profils pour une sécurité maximale.</p>
+                                    <button class="btn btn-sm btn-ghost" onclick="openDiagram('security-system')" style="color:#22d3ee; border:1px dashed rgba(34,211,238,0.3); font-size:11px; display:inline-flex; align-items:center; gap:6px;">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                                        <span data-i18n="docs.gallery.btn.securitySystem">VOIR LE SYSTÈME DE SÉCURITÉ</span>
+                                    </button>
+                                </div>
+                            </details>
+                        </div><!-- /faq-category security -->
 
-                                <details class="faq-accordion">
-                                    <summary class="faq-summary">
-                                        <span style="display:flex;align-items:center;gap:8px">
-                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a855f7"
-                                                stroke-width="2.2">
-                                                <path
-                                                    d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                                            </svg>
-                                            <span data-i18n="faq.betahub.q3">Comment puis-je suivre l'état de mon
-                                                rapport ?</span>
-                                        </span>
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2">
-                                            <polyline points="6 9 12 15 18 9"></polyline>
-                                        </svg>
-                                    </summary>
-                                    <div class="faq-content">
-                                        <p data-i18n="faq.betahub.a3" style="line-height:1.6; margin-bottom: 10px;">...
-                                        </p>
-                                        <button class="btn btn-sm btn-ghost"
-                                            onclick="document.getElementById('nav-settings').click(); setTimeout(() => document.getElementById('bh-history-section').scrollIntoView({behavior:'smooth'}), 300)"
-                                            style="color:#818cf8; border:1px dashed rgba(129,140,248,0.3); font-size:11px; display:inline-flex; align-items:center; gap:6px;">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2.5">
-                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                                <polyline points="14 2 14 8 20 8" />
-                                                <line x1="16" y1="13" x2="8" y2="13" />
-                                                <line x1="16" y1="17" x2="8" y2="17" />
-                                                <polyline points="10 9 9 9 8 9" />
-                                            </svg>
-                                            <span data-i18n="docs.betahub.history">MY RECENT REPORTS</span>
-                                        </button>
-                                    </div>
-                                </details>
+                        <!-- BETAHUB & REPORTING -->
+                        <div class="faq-category">
+                            <div class="faq-category-header faq-category-header--purple">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                <span data-i18n="faq.category.betahub">BetaHub &amp; Reporting</span>
                             </div>
-                    </div>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2.2">
+                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                        </svg>
+                                        <span data-i18n="faq.betahub.q1">Quelles données sont envoyées lors d'un rapport BetaHub ?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.betahub.a1">...</div>
+                            </details>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2.2">
+                                            <path d="M3 12h3L9 3l6 18 3-9h3" />
+                                        </svg>
+                                        <span data-i18n="faq.betahub.q2">Pourquoi l'envoi utilise-t-il le CPU en arrière-plan ?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.betahub.a2">...</div>
+                            </details>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2.2">
+                                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                        </svg>
+                                        <span data-i18n="faq.betahub.q3">Comment puis-je suivre l'état de mon rapport ?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content">
+                                    <p data-i18n="faq.betahub.a3" style="line-height:1.6; margin-bottom:10px;">...</p>
+                                    <button class="btn btn-sm btn-ghost"
+                                        onclick="document.getElementById('nav-settings').click(); setTimeout(() => document.getElementById('bh-history-section').scrollIntoView({behavior:'smooth'}), 300)"
+                                        style="color:#818cf8; border:1px dashed rgba(129,140,248,0.3); font-size:11px; display:inline-flex; align-items:center; gap:6px;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                            <polyline points="14 2 14 8 20 8"/>
+                                            <line x1="16" y1="13" x2="8" y2="13"/>
+                                            <line x1="16" y1="17" x2="8" y2="17"/>
+                                            <polyline points="10 9 9 9 8 9"/>
+                                        </svg>
+                                        <span data-i18n="docs.betahub.history">MY RECENT REPORTS</span>
+                                    </button>
+                                </div>
+                            </details>
+                        </div><!-- /faq-category betahub -->
+                    </div><!-- /docs-tab-faq -->
                 </section>
 
                 <!-- ══ CREDITS VIEW ══ -->

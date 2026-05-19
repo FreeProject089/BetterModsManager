@@ -41,12 +41,21 @@ class DebugUI {
 
     init() {
         if (this.container) return; // Already initialized
-        
+
         // Ensure no leftover overlay from previous failed init or duplicate call
         const existing = document.getElementById('bmm-debug-overlay');
         if (existing) existing.remove();
 
         this.createContainer();
+
+        // Fire-and-forget: disable prod-only tabs when not in PTB/dev mode.
+        // Resolves before the user can interact with the overlay.
+        invoke('is_ptb_mode').then((isPtb: boolean) => {
+            if (!isPtb && this.container) {
+                this.container.classList.add('debug-prod-mode');
+            }
+        }).catch(() => { /* silent — default to showing all tabs */ });
+
         this.createContextMenu();
         this.attachListeners();
         this.translateUI();

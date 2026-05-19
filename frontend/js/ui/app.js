@@ -3,7 +3,7 @@
  * app.js — Main application controller
  * Entry point for Better Mod Manager frontend
  */
-import { initProfiles, updateProfileChip, openNewProfileModal } from '../features/profiles/profiles.js';
+import { initProfiles, updateProfileChip, openNewProfileModal, getProfileIconSvg } from '../features/profiles/profiles.js';
 import { initMods, refreshMods } from '../features/mods/mods.js';
 import { initI18n, applyTranslations, t } from '../core/i18n.js';
 import { initBenchmark } from '../features/bench/benchmark.js';
@@ -401,6 +401,19 @@ export async function updateLibraryProfileSelector() {
                 opt.selected = true;
             select.appendChild(opt);
         });
+        // Update the dynamic profile icon in the wrapper
+        const wrapper = select.closest('.profile-select-icon-wrap');
+        if (wrapper) {
+            let iconEl = wrapper.querySelector('.profile-icon-display');
+            if (!iconEl) {
+                iconEl = document.createElement('span');
+                iconEl.className = 'profile-icon-display';
+                wrapper.insertBefore(iconEl, select);
+            }
+            const activeProfile = profiles.find(p => p.id === activeId);
+            const iconName = activeProfile?.icon || 'user';
+            iconEl.innerHTML = getProfileIconSvg(iconName, 'width:14px;height:14px;vertical-align:middle');
+        }
         // Add change listener only once
         if (!select._hasListener) {
             select.addEventListener('change', async () => {
