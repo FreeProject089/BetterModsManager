@@ -1,5 +1,5 @@
 use crate::fs_utils;
-use crate::models::mod_entry::{ModEntry, ModStatus, ConflictReport, ConflictCategory, ConflictStatus};
+use crate::models::mod_entry::{ModEntry, ModStatus, ConflictReport, ConflictCategory, ConflictStatus, derive_content_id, update_content_id_from_hashes};
 use crate::commands::crash::log_line;
 use crate::state::AppState;
 use std::path::PathBuf;
@@ -172,8 +172,9 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), AppError> {
                             }
                         }
                         m.file_hashes = Some(new_hashes);
+                        update_content_id_from_hashes(m);
                     }
-                    
+
                     m.last_scan_mtime = current_mtime;
                     needs_save = true;
                     f_strings
@@ -402,6 +403,7 @@ pub async fn add_mod(
     }).await.map_err(|e| e.to_string())??;
 
     let mut entry = ModEntry::new(final_name, target_dir);
+    entry.content_id = derive_content_id(&entry.mod_folder_path);
     entry.author = Some(author);
     entry.description = Some(description);
     entry.version = version;
@@ -1117,9 +1119,7 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
 
             let mut entry = ModEntry::new(mod_name.clone(), path.clone());
             let _has_meta = entry.load_metadata();
-            
-            // If no metadata file and it's a folder, create one with default info
-            // REMOVED: let _ = save_mod_metadata_file(&path, &entry);
+            entry.content_id = derive_content_id(&path);
 
             discovered.push(entry);
         }
@@ -1202,7 +1202,8 @@ pub async fn download_mod(
         Ok(())
     }).await.map_err(|e| e.to_string())??;
 
-    let entry = ModEntry::new(final_name, target_dir);
+    let mut entry = ModEntry::new(final_name, target_dir);
+    entry.content_id = derive_content_id(&entry.mod_folder_path);
     let result = entry.clone();
     {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
@@ -1362,6 +1363,7 @@ pub async fn install_from_modlist(
             if res.is_ok() {
                 let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
                 let mut new_mod = ModEntry::new(safe_name.clone(), target_dir.clone());
+                new_mod.content_id = derive_content_id(&target_dir);
                 new_mod.name = entry.name.clone();
                 new_mod.version = entry.version.clone();
                 new_mod.author = entry.author.clone();
@@ -1369,7 +1371,7 @@ pub async fn install_from_modlist(
                 new_mod.install_notes = entry.install_notes.clone();
                 let mid = new_mod.id.clone();
                 data.mods.push(new_mod);
-                
+
                 newly_added_mod_ids.push(mid);
                 results.push(format!("✅ {} — Copié localement", entry.name));
                 success = true;
@@ -1470,6 +1472,7 @@ pub async fn install_from_modlist(
                 if let Ok(_) = res {
                     let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
                     let mut new_mod = ModEntry::new(safe_name.clone(), target_dir.clone());
+                    new_mod.content_id = derive_content_id(&target_dir);
                     new_mod.name = entry.name.clone();
                     new_mod.version = entry.version.clone();
                     new_mod.author = entry.author.clone();
@@ -2016,6 +2019,7 @@ pub async fn get_mod_integrity(state: State<'_, AppState>, mod_id: String) -> Re
             let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
                 m.file_hashes = Some(new_hashes.clone());
+                update_content_id_from_hashes(m);
             }
         }
         let _ = state.save();
@@ -2102,9 +2106,10 @@ pub async fn update_mod_hashes(state: State<'_, AppState>, mod_id: String) -> Re
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
             m.file_hashes = Some(new_hashes);
+            update_content_id_from_hashes(m);
         }
     }
-    
+
     let _ = state.save();
     Ok(())
 }
@@ -2474,6 +2479,7 @@ fn process_single_mod_hashing(
                     m.file_hashes = Some(new_hashes);
                     m.file_hashes_timestamp = Some(timestamp);
                     m.file_hashes_invalid = Some(false);
+                    update_content_id_from_hashes(m);
                 }
                 
                 if is_manual {
@@ -2543,4 +2549,58 @@ pub fn recalculate_mod_sha(app_handle: tauri::AppHandle, state: tauri::State<'_,
 #[tauri::command]
 pub fn trigger_sha_background_population(state: tauri::State<'_, AppState>) {
     populate_sha_queue(state);
+}
+
+/// Background worker that lazily fills `content_id` for mods that still have `None`.
+/// Processes one mod at a time with a 200ms pause between each to stay non-intrusive.
+pub fn start_content_id_background(app_handle: tauri::AppHandle) {
+    let data_shared = app_handle.state::<AppState>().data.clone();
+    let data_path   = app_handle.state::<AppState>().data_path.clone();
+
+    std::thread::spawn(move || {
+        log_line("[CONTENT-ID] Background fill thread started");
+        // Let the app fully settle before starting
+        std::thread::sleep(std::time::Duration::from_secs(8));
+
+        loop {
+            // Find one mod that needs a content_id (lock held briefly, read-only)
+            let target = {
+                let data = data_shared.lock().unwrap_or_else(|p| p.into_inner());
+                data.mods.iter()
+                    .find(|m| m.content_id.is_none() && m.mod_folder_path.exists())
+                    .map(|m| (m.id.clone(), m.mod_folder_path.clone()))
+            };
+
+            match target {
+                None => {
+                    // Nothing left to fill — check again in 60s in case new mods were added
+                    std::thread::sleep(std::time::Duration::from_secs(60));
+                }
+                Some((id, folder_path)) => {
+                    // Compute outside the lock (file walk, no content reads)
+                    let cid = crate::models::mod_entry::derive_content_id(&folder_path);
+
+                    // Write back, lock held only for the map update
+                    {
+                        let mut data = data_shared.lock().unwrap_or_else(|p| p.into_inner());
+                        if let Some(m) = data.mods.iter_mut().find(|m| m.id == id) {
+                            m.content_id = cid;
+                        }
+                    }
+
+                    // Save outside the lock
+                    {
+                        let data = data_shared.lock().unwrap_or_else(|p| p.into_inner());
+                        if let Ok(json) = serde_json::to_string_pretty(&*data) {
+                            let _ = std::fs::write(&*data_path, json);
+                        }
+                    }
+
+                    log_line(format!("[CONTENT-ID] Filled content_id for mod {}", id));
+                    // Lazy: 200ms between each mod
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                }
+            }
+        }
+    });
 }

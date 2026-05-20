@@ -120,6 +120,7 @@ fn main() {
             let state_handle = app.state::<AppState>();
             commands::mods::start_sha_calculation_background(app.handle());
             commands::mods::populate_sha_queue(state_handle);
+            commands::mods::start_content_id_background(app.handle());
             
             let _ = commands::ban_manager::load_bans(&app.handle());
             let _ = commands::whitelist_manager::load_whitelist(&app.handle());

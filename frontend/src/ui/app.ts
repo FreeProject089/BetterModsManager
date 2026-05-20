@@ -242,6 +242,23 @@ function initNavigation() {
                             btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 1s linear infinite;display:inline-block;"></span>';
                         }
                     }
+
+                    // Content ID section animation
+                    const cidBox = document.getElementById('content-id-box');
+                    const cidLabel = document.getElementById('content-id-status-label');
+                    const cidDot = document.getElementById('content-id-dot');
+                    const cidHint = document.getElementById('content-id-hint');
+                    const cidBtn = document.getElementById('btn-compute-content-id');
+                    if (cidBox) {
+                        cidBox.style.borderColor = 'rgba(139,92,246,0.4)';
+                        cidBox.style.boxShadow = 'inset 0 0 10px rgba(0,0,0,0.1), 0 0 8px rgba(139,92,246,0.15)';
+                    }
+                    if (cidLabel) {
+                        cidLabel.style.color = 'var(--accent)';
+                        cidLabel.innerHTML = `<span class="spinner" style="width:8px;height:8px;border:1.5px solid rgba(139,92,246,0.3);border-top-color:#8b5cf6;border-radius:50%;animation:spin 0.9s linear infinite;display:inline-block;flex-shrink:0"></span> COMPUTING...`;
+                    }
+                    if (cidHint) cidHint.textContent = 'Hashing file content...';
+                    if (cidBtn) cidBtn.style.opacity = '0.4';
                 } else if (payload.status === 'done' || payload.status === 'error' || payload.status === 'missing') {
                     if (payload.is_manual && payload.status !== 'missing') {
                         stopTaskyLoader(); // Stop Tasky mascot animation
@@ -271,6 +288,15 @@ function initNavigation() {
                         const { applyTranslations } = await import('../core/i18n.js');
                         applyTranslations(btn);
                     }
+
+                    // Reset Content ID section (re-render via list refresh will update values)
+                    const cidBoxDone = document.getElementById('content-id-box');
+                    const cidBtnDone = document.getElementById('btn-compute-content-id');
+                    if (cidBoxDone) {
+                        cidBoxDone.style.borderColor = '';
+                        cidBoxDone.style.boxShadow = '';
+                    }
+                    if (cidBtnDone) cidBtnDone.style.opacity = '';
 
                     if (payload.status === 'error' && payload.is_manual) {
                         const { toast } = await import('../ui/app.js');

@@ -181,6 +181,13 @@ export function getModCardHTML(mod, ctx) {
 export function getModDetailHTML(mod, ctx) {
     const isShaInvalid = mod.file_hashes_invalid;
     const isMissing = !mod.file_hashes || Object.keys(mod.file_hashes).length === 0;
+    const hasContentId = !!mod.content_id;
+    const isBmmDeclared = hasContentId && !/^[0-9a-f]{32}$/.test(mod.content_id);
+    const hasFileHashes = !isMissing;
+    const contentIdStatus = !hasContentId ? 'missing' : isBmmDeclared ? 'declared' : hasFileHashes ? 'precise' : 'approximate';
+    const contentIdColor = contentIdStatus === 'missing' ? 'var(--text-muted)' : contentIdStatus === 'approximate' ? 'var(--warning)' : 'var(--success)';
+    const contentIdLabel = contentIdStatus === 'missing' ? 'NOT COMPUTED' : contentIdStatus === 'declared' ? 'DECLARED' : contentIdStatus === 'precise' ? 'PRECISE' : 'APPROXIMATE';
+    const contentIdHint = contentIdStatus === 'missing' ? 'Click ↻ SHA to compute' : contentIdStatus === 'declared' ? 'From bmm.json' : contentIdStatus === 'precise' ? 'Content hash (reliable)' : 'Path+size only — click ↻ SHA for precise';
     // Helper for collapsible sections
     const renderSection = (id, title, icon, content, defaultExpanded = false) => {
         const storageKey = `bmm_section_${id}_expanded`;
@@ -290,6 +297,29 @@ export function getModDetailHTML(mod, ctx) {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                 </button>
             </div>
+        </div>
+      </div>
+
+      <div class="detail-section" style="margin-top:10px">
+        <label class="detail-label" style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          <span style="font-weight:700; color:var(--text-primary); font-size:11px; text-transform:uppercase; letter-spacing:0.5px">Content ID</span>
+        </label>
+        <div id="content-id-box" style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.03); padding:10px 14px; border-radius:10px; border:1px solid var(--border); box-shadow:inset 0 0 10px rgba(0,0,0,0.1); transition:border-color 0.2s">
+          <div style="flex:1; display:flex; flex-direction:column; gap:2px; min-width:0">
+            <div id="content-id-status-label" style="font-size:11px; color:${contentIdColor}; font-weight:700; display:flex; align-items:center; gap:6px">
+              <div id="content-id-dot" style="width:6px; height:6px; border-radius:50%; background:currentColor; box-shadow:0 0 6px currentColor; flex-shrink:0"></div>
+              ${contentIdLabel}
+            </div>
+            <div id="content-id-value" style="font-size:9px; color:var(--text-muted); font-family:var(--font-mono); opacity:0.7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="${mod.content_id || ''}">
+              ${hasContentId ? mod.content_id : '—'}
+            </div>
+            <div id="content-id-hint" style="font-size:9px; color:var(--text-muted); font-style:italic; opacity:0.6">${contentIdHint}</div>
+          </div>
+          ${contentIdStatus === 'missing' || contentIdStatus === 'approximate' ? `
+          <button id="btn-compute-content-id" class="btn btn-sm btn-icon" onclick="window.recalculateModSha('${mod.id}')" title="Compute precise content ID" style="background:rgba(59,130,246,0.15); color:var(--accent); border:1px solid rgba(59,130,246,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </button>` : ''}
         </div>
       </div>
   `;
