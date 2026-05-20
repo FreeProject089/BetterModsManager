@@ -31,6 +31,9 @@ let lastGamePath: string | null = null;
 let lastModFolderPath: string | null = null;
 let lastProfileId: string | null = null;
 
+// Expand-all cancellation tokens — incremented on collapse to stop a running doExpandAll
+const _expandTokens = new Map<string, number>();
+
 /**
  * Initializes the Mod Mapper UI and event listeners
  */
@@ -304,12 +307,52 @@ function setupFilters(): void {
 function toggleAll(containerId: string, expand: boolean): void {
     const container = document.getElementById(containerId);
     if (!container) return;
-    const children = container.querySelectorAll('.tree-children');
-    children.forEach((c) => {
-        (c as HTMLElement).style.display = expand ? 'block' : 'none';
-        const item = c.previousElementSibling as HTMLElement;
-        if (item) item.style.opacity = expand ? '1' : '0.7';
-    });
+
+    // Bump token — any running doExpandAll for this container will see the mismatch and abort
+    const myToken = (_expandTokens.get(containerId) ?? 0) + 1;
+    _expandTokens.set(containerId, myToken);
+
+    if (!expand) {
+        // Collapse all: hide everything immediately (cancels any ongoing expansion)
+        container.querySelectorAll('.tree-children').forEach((c) => {
+            (c as HTMLElement).style.display = 'none';
+            const item = c.previousElementSibling as HTMLElement;
+            if (item) { item.style.opacity = '0.7'; item.classList.remove('expanded'); }
+        });
+        return;
+    }
+
+    // Expand: use _expandFn with cancellation support.
+    // Process in batches with requestAnimationFrame yields to keep UI responsive.
+    const BATCH = 6;
+    const doExpandAll = async () => {
+        let round = 0;
+        while (round++ < 10) {
+            if (_expandTokens.get(containerId) !== myToken) return; // cancelled by collapse
+
+            const toExpand = Array.from(container.querySelectorAll('.folder'))
+                .filter(el => {
+                    const next = (el as HTMLElement).nextElementSibling as HTMLElement;
+                    return next?.classList.contains('tree-children') &&
+                           next.style.display !== 'block';
+                }) as HTMLElement[];
+
+            if (toExpand.length === 0) break;
+
+            // Process in small batches, yielding to the browser between each
+            for (let i = 0; i < toExpand.length; i += BATCH) {
+                if (_expandTokens.get(containerId) !== myToken) return; // cancelled
+                const batch = toExpand.slice(i, i + BATCH);
+                for (const folderItem of batch) {
+                    if ((folderItem as any)._expandFn) {
+                        await (folderItem as any)._expandFn();
+                    }
+                }
+                await new Promise(r => requestAnimationFrame(r));
+            }
+        }
+    };
+    doExpandAll();
 }
 
 /**
@@ -660,6 +703,19 @@ async function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSi
                     toggleFolder(e as any);
                 }
             });
+
+            // Direct expand function for toggleAll — avoids click-event race conditions
+            (item as any)._expandFn = async () => {
+                if (childrenContainer.style.display === 'block') return; // already open
+                if (childrenContainer.children.length === 0 && node.children && node.children.length > 0) {
+                    await renderTree(node.children, childrenContainer, isModSide);
+                }
+                childrenContainer.style.display = 'block';
+                const ch = item.querySelector('.tree-item-chevron') as HTMLElement;
+                if (ch) ch.style.transform = 'rotate(0deg)';
+                item.style.opacity = '1';
+                item.classList.add('expanded');
+            };
         }
     }
 

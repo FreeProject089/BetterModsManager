@@ -214,6 +214,8 @@ export async function scanModsFolder() {
       if (result.removed > 0) msg += `${result.removed} ${t('mod.scanRemoved')}`;
       toast(msg, 'success');
       await refreshMods();
+      // Kick-off background SHA hashing for newly discovered mods
+      if (result.added > 0) invoke('trigger_sha_background_population').catch(() => {});
     }
     dispatchBmmAction(BMM_ACTIONS.MODS_SCANNED, { added: result.added, removed: result.removed });
   } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }

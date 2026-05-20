@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <title>BMM — VHS Exit</title>
+    <!-- Stub out api.js so titlebar.js can be imported without the full app chain -->
+    <script type="importmap">
+    {
+        "imports": {
+            "./js/core/api.js": "./js/core/api-stub.js"
+        }
+    }
+    </script>
+    <!-- Real BMM CSS — exact same styles as the live app -->
+    <link rel="stylesheet" href="css/main.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { width: 100vw; height: 100vh; overflow: hidden; }
+        /* Visible background so the closing black bars have contrast */
+        body {
+            background:
+                radial-gradient(ellipse at 55% 45%, rgba(0,194,255,0.10) 0%, transparent 55%),
+                radial-gradient(ellipse at 30% 65%, rgba(139,92,246,0.07) 0%, transparent 45%),
+                radial-gradient(ellipse at 75% 70%, rgba(245,158,11,0.06) 0%, transparent 40%),
+                #0e0e1c;
+        }
+        body::before {
+            content: '';
+            position: fixed; inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Exact same overlay markup as index.html -->
+    <div id="vhs-close-overlay" aria-hidden="true">
+        <div id="vhs-top"></div>
+        <div id="vhs-bottom"></div>
+        <div id="vhs-vignette"></div>
+        <div id="vhs-line"></div>
+        <div id="vhs-tasky-wrap">
+            <img id="vhs-tasky-img" src="assets/Tasky.png" alt="">
+        </div>
+        <div id="vhs-scanlines"></div>
+        <div id="vhs-flash"></div>
+    </div>
+
+    <script type="module">
+        // Import the REAL function from the real titlebar.js — zero divergence
+        import { playVhsCloseAnimation } from './js/ui/titlebar.js';
+        window.addEventListener('load', () => playVhsCloseAnimation());
+    </script>
+</body>
+</html>

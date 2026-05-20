@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "files": [
+    {
+      "path": "_up_/frontend/Lang/en.json",
+      "sha256": "c922ab8b102f6f7a337b81b4c961109dc112aed37e60e8381e3e8d56b3c32445",
+      "download_url": "https://github.com/FreeProject089/BetterModsManager/releases/download/v1.0.0/lang-en.json",
+      "size": 243072
+    },
+    {
+      "path": "_up_/frontend/Lang/fr.json",
+      "sha256": "5029f697fc497dcbfee6c9cc3b1c3299177690863654f552d99d3bc9b4d72ac7",
+      "download_url": "https://github.com/FreeProject089/BetterModsManager/releases/download/v1.0.0/lang-fr.json",
+      "size": 271001
+    },
+    {
+      "path": "_up_/frontend/Lang/template.json",
+      "sha256": "9295a8ca5d31ba7530b660e59368bfb2263e8a8d525c1666c3d9327b6388c06f",
+      "download_url": "https://github.com/FreeProject089/BetterModsManager/releases/download/v1.0.0/lang-template.json",
+      "size": 210903
+    }
+  ]
+}

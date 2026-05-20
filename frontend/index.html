@@ -304,11 +304,14 @@
 
                     /* periodic outward pulse ring */
                     function doPulse() {
+                        if (!document.getElementById('app-loader')) return; // loader removed — stop
                         gsap.fromTo('#ld-pulse',
                             { scale: 0.95, opacity: 0.55 },
                             {
                                 scale: 2.6, opacity: 0, duration: 1.5, ease: 'power2.out',
-                                onComplete: () => gsap.delayedCall(1.8, doPulse)
+                                onComplete: () => {
+                                    if (document.getElementById('app-loader')) gsap.delayedCall(1.8, doPulse);
+                                }
                             }
                         );
                     }
@@ -326,12 +329,16 @@
                     const BLEND = 0.55; // seconds to grow radius from 0→full
                     gsap.ticker.add(() => {
                         if (!_orbActive) return;
+                        // Stop if loader was removed from DOM (prevents "target not found" warnings)
+                        if (!document.getElementById('app-loader')) { _orbActive = false; return; }
                         const t = gsap.ticker.time - _orbT0;
                         const blend = Math.min(t / BLEND, 1);
                         const s = blend * blend * (3 - 2 * blend); // smoothstep
                         defs.forEach(d => {
+                            const el = document.getElementById(d.id);
+                            if (!el) return;
                             const a = d.off + t * d.spd;
-                            gsap.set('#' + d.id, { x: Math.cos(a) * d.r * s, y: Math.sin(a) * d.r * 0.38 * s });
+                            gsap.set(el, { x: Math.cos(a) * d.r * s, y: Math.sin(a) * d.r * 0.38 * s });
                         });
                     });
                 }
@@ -376,6 +383,19 @@
                 tryInit();
             })();
         </script>
+
+        <!-- VHS / CRT TV Turn-Off Close Animation Overlay -->
+        <div id="vhs-close-overlay" aria-hidden="true">
+            <div id="vhs-top"></div>
+            <div id="vhs-bottom"></div>
+            <div id="vhs-vignette"></div>
+            <div id="vhs-line"></div>
+            <div id="vhs-tasky-wrap">
+                <img id="vhs-tasky-img" src="assets/Tasky.png" alt="">
+            </div>
+            <div id="vhs-scanlines"></div>
+            <div id="vhs-flash"></div>
+        </div>
 
         <!-- Custom Titlebar -->
         <div class="titlebar" data-tauri-drag-region>

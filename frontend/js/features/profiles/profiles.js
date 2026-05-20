@@ -42,6 +42,8 @@ export async function initProfiles() {
                     await renderProfiles();
                     updateProfileChip();
                     updateLibraryProfileSelector();
+                    // Kick-off background SHA hashing for newly imported mods
+                    invoke('trigger_sha_background_population').catch(() => { });
                     // Refresh repo export profiles list
                     const profilesListEl = document.getElementById('repo-export-profiles-list');
                     if (profilesListEl) {
@@ -76,6 +78,8 @@ export async function initProfiles() {
                     await renderProfiles();
                     updateProfileChip();
                     updateLibraryProfileSelector();
+                    // Kick-off background SHA hashing for newly imported mods
+                    invoke('trigger_sha_background_population').catch(() => { });
                 }
                 else {
                     toast(t('prof.importNone'), 'info');
@@ -108,6 +112,8 @@ export async function initProfiles() {
                     await renderProfiles();
                     updateProfileChip();
                     updateLibraryProfileSelector();
+                    // Kick-off background SHA hashing for newly imported mods
+                    invoke('trigger_sha_background_population').catch(() => { });
                     // Refresh repo export profiles list
                     const profilesListEl = document.getElementById('repo-export-profiles-list');
                     if (profilesListEl) {

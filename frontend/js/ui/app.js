@@ -177,6 +177,8 @@ function initNavigation() {
     (async () => {
         try {
             const { listen } = await import('../core/api.js');
+            // Debounce timer for background (non-manual) SHA refresh — prevents 100 rapid refreshes
+            let _shaRefreshDebounce = null;
             await listen('sha-status-changed', async (event) => {
                 const payload = event.payload; // { mod_id, status, is_manual }
                 console.log(`[SHA] Status changed for mod ${payload.mod_id}: ${payload.status}`);
@@ -252,9 +254,20 @@ function initNavigation() {
                         const { toast } = await import('../ui/app.js');
                         toast('Hash calculation completed', 'success');
                     }
-                    // Refresh main mod list
-                    if (window._refreshModsFn)
-                        window._refreshModsFn();
+                    // Refresh main mod list — debounce background SHA refreshes to avoid 100+ rapid re-renders
+                    if (window._refreshModsFn) {
+                        if (payload.is_manual) {
+                            window._refreshModsFn();
+                        }
+                        else {
+                            if (_shaRefreshDebounce)
+                                clearTimeout(_shaRefreshDebounce);
+                            _shaRefreshDebounce = setTimeout(() => {
+                                window._refreshModsFn?.();
+                                _shaRefreshDebounce = null;
+                            }, 1500);
+                        }
+                    }
                     // Refresh detail panel if it's the same mod
                     const detailContainer = document.getElementById('mod-detail-container');
                     if (detailContainer && detailContainer._currentModId === payload.mod_id) {
@@ -570,7 +583,16 @@ async function main() {
         setTimeout(() => {
             loader.style.opacity = '0';
             loader.style.visibility = 'hidden';
-            setTimeout(() => loader.remove(), 600);
+            setTimeout(() => {
+                // Kill all GSAP tweens on loader elements before removing to prevent "target not found" warnings
+                const gsapInst = window.gsap;
+                if (gsapInst) {
+                    const targets = Array.from(loader.querySelectorAll('[id], .ld-char, .ld-word'));
+                    targets.push(loader);
+                    gsapInst.killTweensOf(targets);
+                }
+                loader.remove();
+            }, 600);
         }, 800);
     }
     await initSettings();
