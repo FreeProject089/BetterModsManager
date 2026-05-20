@@ -18,7 +18,7 @@
             "fr": "Système de Plugins C"
           },
           "status": "progress",
-          "percent": 20
+          "percent": 60
         },
         {
           "label": {
@@ -26,7 +26,7 @@
             "fr": "Interface Commande (CLI)"
           },
           "status": "progress",
-          "percent": 85
+          "percent": 90
         },
         {
           "label": {
@@ -58,7 +58,7 @@
             "fr": "Refonte Complète de la Doc"
           },
           "status": "progress",
-          "percent": 70
+          "percent": 87
         },
         {
           "label": {
@@ -66,7 +66,7 @@
             "fr": "Série de Vidéos Tutoriels"
           },
           "status": "progress",
-          "percent": 30
+          "percent": 40
         }
       ]
     },
@@ -82,7 +82,7 @@
             "fr": "Interface Glassmorphism v2"
           },
           "status": "progress",
-          "percent": 70
+          "percent": 80
         },
         {
           "label": {
@@ -90,7 +90,7 @@
             "fr": "Optimisation Performances Rust"
           },
           "status": "progress",
-          "percent": 80
+          "percent": 90
         }
       ]
     }
