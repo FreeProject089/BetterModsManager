@@ -724,15 +724,32 @@ pub fn get_app_exe_path() -> Result<String, String> {
 #[tauri::command]
 pub fn create_local_plugin(
     state: State<'_, AppState>,
+    handle: tauri::AppHandle,
     manifest: PluginManifest,
+    icon_src_path: Option<String>,
 ) -> Result<InstalledPlugin, String> {
     if manifest.id.is_empty() || manifest.name.is_empty() {
         return Err("Plugin id and name are required".to_string());
     }
 
+    let app_dir = handle.path_resolver().app_data_dir()
+        .ok_or_else(|| "Cannot resolve app data dir".to_string())?;
+    let plugin_dir = app_dir.join("plugins").join(&manifest.id);
+    std::fs::create_dir_all(&plugin_dir).map_err(|e| e.to_string())?;
+
+    // Copy icon if a source path is provided
+    let icon_path = if let Some(ref src) = icon_src_path {
+        let dest = plugin_dir.join("icon.png");
+        let _ = std::fs::copy(src, &dest);
+        if dest.exists() { Some(dest.to_string_lossy().to_string()) } else { None }
+    } else {
+        let existing = plugin_dir.join("icon.png");
+        if existing.exists() { Some(existing.to_string_lossy().to_string()) } else { None }
+    };
+
     let installed = InstalledPlugin {
-        install_dir: String::new(),
-        icon_path: None,
+        install_dir: plugin_dir.to_string_lossy().to_string(),
+        icon_path,
         installed_at: chrono::Utc::now().to_rfc3339(),
         enabled: true,
         manifest: manifest.clone(),

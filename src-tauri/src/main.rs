@@ -130,13 +130,16 @@ fn main() {
             // Start local HTTP Plugin API on port 51274
             {
                 let data_arc = app.state::<AppState>().data.clone();
+                let creator_id = std::sync::Arc::new(
+                    commands::security::get_creator_id(app.handle()).unwrap_or_default()
+                );
                 let (tx, rx) = tokio::sync::oneshot::channel::<()>();
                 {
                     let state = app.state::<AppState>();
                     *state.api_shutdown_tx.lock().unwrap() = Some(tx);
                 }
                 tauri::async_runtime::spawn(async move {
-                    crate::api::start_api_server(data_arc, rx).await;
+                    crate::api::start_api_server(data_arc, creator_id, rx).await;
                 });
             }
 

@@ -34,6 +34,18 @@ struct ApplyPluginBody {
     force_strict: bool,
 }
 
+#[derive(Deserialize)]
+struct EnableDisableModpackBody {
+    profile_id: String,
+}
+
+#[derive(Deserialize)]
+struct ServerRepoConnectBody {
+    url: String,
+    #[serde(default)]
+    name: String,
+}
+
 fn with_data(
     data: Arc<std::sync::Mutex<AppData>>,
 ) -> impl Filter<Extract = (Arc<std::sync::Mutex<AppData>>,), Error = std::convert::Infallible> + Clone {
@@ -64,6 +76,7 @@ impl warp::reject::Reject for Unauthorized {}
 
 pub async fn start_api_server(
     data: Arc<std::sync::Mutex<AppData>>,
+    creator_id: Arc<String>,
     shutdown_rx: oneshot::Receiver<()>,
 ) {
     let token = {
@@ -357,6 +370,102 @@ pub async fn start_api_server(
             )
         });
 
+    // GET /api/creator-id — returns this user's BMM creator ID (public key hex)
+    let cid_val = creator_id.clone();
+    let get_creator_id_route = warp::path!("api" / "creator-id")
+        .and(warp::get())
+        .map(move || {
+            warp::reply::json(&serde_json::json!({
+                "ok": true,
+                "creator_id": cid_val.as_str(),
+            }))
+        });
+
+    // POST /api/modpacks/enable  (requires token) — enables all mods belonging to a profile/modpack
+    let data_mp_enable = data.clone();
+    let tok_mp_enable = token.clone();
+    let enable_modpack = warp::path!("api" / "modpacks" / "enable")
+        .and(warp::post())
+        .and(require_token(tok_mp_enable))
+        .and(warp::body::json::<EnableDisableModpackBody>())
+        .and(with_data(data_mp_enable))
+        .map(|body: EnableDisableModpackBody, d: Arc<std::sync::Mutex<AppData>>| {
+            let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
+            let profile = match data.profiles.iter().find(|p| p.id == body.profile_id) {
+                Some(p) => p.clone(),
+                None => return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: format!("Profile '{}' not found", body.profile_id) }),
+                    StatusCode::NOT_FOUND,
+                ),
+            };
+            let mod_ids = profile.active_mods.clone();
+            let count = mod_ids.len();
+            for m in data.mods.iter_mut() {
+                if mod_ids.contains(&m.id) {
+                    m.enabled = true;
+                }
+            }
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({ "ok": true, "profile_id": body.profile_id, "enabled_count": count })),
+                StatusCode::OK,
+            )
+        });
+
+    // POST /api/modpacks/disable  (requires token) — disables all mods belonging to a profile/modpack
+    let data_mp_disable = data.clone();
+    let tok_mp_disable = token.clone();
+    let disable_modpack = warp::path!("api" / "modpacks" / "disable")
+        .and(warp::post())
+        .and(require_token(tok_mp_disable))
+        .and(warp::body::json::<EnableDisableModpackBody>())
+        .and(with_data(data_mp_disable))
+        .map(|body: EnableDisableModpackBody, d: Arc<std::sync::Mutex<AppData>>| {
+            let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
+            let profile = match data.profiles.iter().find(|p| p.id == body.profile_id) {
+                Some(p) => p.clone(),
+                None => return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: format!("Profile '{}' not found", body.profile_id) }),
+                    StatusCode::NOT_FOUND,
+                ),
+            };
+            let mod_ids = profile.active_mods.clone();
+            let count = mod_ids.len();
+            for m in data.mods.iter_mut() {
+                if mod_ids.contains(&m.id) {
+                    m.enabled = false;
+                }
+            }
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({ "ok": true, "profile_id": body.profile_id, "disabled_count": count })),
+                StatusCode::OK,
+            )
+        });
+
+    // POST /api/server-repo/connect  (requires token) — initiate connection to a Server Depot repo
+    let tok_srv_repo = token.clone();
+    let server_repo_connect = warp::path!("api" / "server-repo" / "connect")
+        .and(warp::post())
+        .and(require_token(tok_srv_repo))
+        .and(warp::body::json::<ServerRepoConnectBody>())
+        .map(|body: ServerRepoConnectBody| {
+            if body.url.is_empty() {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "url field is required".into() }),
+                    StatusCode::BAD_REQUEST,
+                );
+            }
+            let display_name = if body.name.is_empty() { body.url.clone() } else { body.name.clone() };
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({
+                    "ok": true,
+                    "url": body.url,
+                    "name": display_name,
+                    "message": "Server Repo connection initiated — open the Server Depot tab to confirm."
+                })),
+                StatusCode::OK,
+            )
+        });
+
     // CORS headers — allow any origin (local-only, Bearer token required)
     let cors = warp::cors()
         .allow_any_origin()
@@ -369,11 +478,15 @@ pub async fn start_api_server(
         .or(get_active_mods)
         .or(get_profiles)
         .or(get_plugins)
+        .or(get_creator_id_route)
         .or(enable_mod)
         .or(disable_mod)
         .or(activate_profile)
         .or(compare_plugin)
         .or(apply_plugin)
+        .or(enable_modpack)
+        .or(disable_modpack)
+        .or(server_repo_connect)
         .with(cors)
         .recover(handle_rejection);
 

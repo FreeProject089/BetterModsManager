@@ -2,6 +2,62 @@ import { t, getLang, getSynonyms } from '../core/i18n.js';
 import { diagrams, openDiagram } from './interactive-docs.js';
 import { invoke } from '../core/api.js';
 
+// ── Syntax highlight static code blocks in Plugins & API docs tab ─────────
+let _docsApiTabHighlighted = false;
+function highlightDocsPluginsApiTab() {
+    if (_docsApiTabHighlighted) return;
+    _docsApiTabHighlighted = true;
+    const tab = document.getElementById('docs-tab-plugins-api');
+    if (!tab) return;
+    const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    // Simple keyword highlight for static blocks
+    const hlStatic = (raw: string, lang: string): string => {
+        let h = esc(raw);
+        if (lang === 'json' || lang === 'JSON') {
+            h = h
+                .replace(/("(?:[^"\\]|\\.)*")(\s*:)/g, '<span class="hlj-key">$1</span>$2')
+                .replace(/:\s*("(?:[^"\\]|\\.)*")/g, ': <span class="hlj-str">$1</span>')
+                .replace(/:\s*(true|false)\b/g, ': <span class="hlj-bool">$1</span>')
+                .replace(/:\s*(null)\b/g, ': <span class="hlj-null">$1</span>')
+                .replace(/:\s*(-?\d+(?:\.\d+)?)/g, ': <span class="hlj-num">$1</span>');
+        } else if (lang === 'BAT') {
+            h = h
+                .replace(/(^REM\b[^\n]*)/gm, '<span class="hlc-comment">$1</span>')
+                .replace(/\b(start|call|set|if|echo|pause|exit)\b/gi, '<span class="hlc-kw">$1</span>')
+                .replace(/(bmm:\/\/[^\s"]+)/g, '<span class="hlc-url">$1</span>')
+                .replace(/("[^"]*")/g, '<span class="hlc-str">$1</span>');
+        } else if (lang === 'PowerShell' || lang === 'PS1') {
+            h = h
+                .replace(/(#[^\n]*)/g, '<span class="hlc-comment">$1</span>')
+                .replace(/\b(Invoke-RestMethod|Start-Process|Invoke-WebRequest|ConvertTo-Json)\b/g, '<span class="hlc-kw">$1</span>')
+                .replace(/(\$[A-Za-z_][A-Za-z0-9_]*)/g, '<span class="hlc-var">$1</span>')
+                .replace(/(https?:\/\/[^\s"'\\)]+)/g, '<span class="hlc-url">$1</span>')
+                .replace(/("(?:[^"\\]|\\.)*")/g, '<span class="hlc-str">$1</span>');
+        } else if (lang === 'cURL') {
+            h = h
+                .replace(/\b(curl)\b/g, '<span class="hlc-kw">$1</span>')
+                .replace(/(#[^\n]*)/g, '<span class="hlc-comment">$1</span>')
+                .replace(/\s(-X|-H|-d|--data|--header)\b/g, ' <span class="hlc-flag">$1</span>')
+                .replace(/(https?:\/\/[^\s"'\\]+)/g, '<span class="hlc-url">$1</span>')
+                .replace(/("[^"]*")/g, '<span class="hlc-str">$1</span>');
+        } else if (lang === 'Header') {
+            h = h.replace(/(Authorization:)/g, '<span class="hlc-kw">$1</span>')
+                 .replace(/(Bearer\s+\S+)/g, '<span class="hlc-str">$1</span>');
+        } else if (lang === 'ZIP') {
+            h = h.replace(/(\.bmmplug|\.json|\.png)/g, '<span class="hlc-url">$1</span>');
+        }
+        return h;
+    };
+    tab.querySelectorAll('.plug-doc-code-wrap').forEach(wrap => {
+        const langEl = wrap.querySelector('.plug-doc-code-lang');
+        const pre = wrap.querySelector('.plug-code-pre');
+        if (!langEl || !pre) return;
+        const lang = langEl.textContent?.trim() || '';
+        const raw = pre.textContent || '';
+        (pre as HTMLElement).innerHTML = hlStatic(raw, lang);
+    });
+}
+
 interface DiagramIndexItem {
     text: string;
     diagramId: string;
@@ -235,6 +291,11 @@ function setupTabs() {
                 const c = content as HTMLElement;
                 c.style.display = (c.id === `docs-tab-${tabId}`) ? 'block' : 'none';
             });
+
+            // Syntax-highlight code blocks in Plugins & API tab on first show
+            if (tabId === 'plugins-api') {
+                highlightDocsPluginsApiTab();
+            }
         });
     });
 }

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { invoke, pickFile, saveFile } from '../../core/api.js';
+import { invoke, pickFile, saveFile, convertFileSrc } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { escHtml } from '../../core/utils.js';
@@ -7,7 +7,10 @@ import { escHtml } from '../../core/utils.js';
 // ── SVG Icons (no unicode emoji) ───────────────────────────────────────────
 
 const IC = {
-  puzzle:      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/></svg>`,
+  puzzle:      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
+  editIcon:    `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+  duplicate:   `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+  inspect:     `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>`,
   download:    `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
   trash:       `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`,
   alert:       `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
@@ -45,6 +48,11 @@ let _allMods = [];
 let _allProfiles = [];
 let _apiToken = '';
 let _exePath = '';
+
+// Prevents event-listener accumulation when switching back to the Scripts tab
+let _scriptClickHandler: EventListener | null = null;
+// Endpoint def cache for on-demand code generation in all language tabs
+const _epCodeCache = new Map<string, EndpointDef>();
 
 // ── Init ───────────────────────────────────────────────────────────────────
 
@@ -89,7 +97,6 @@ function renderPluginsView() {
             <button class="plug-tab" data-tab="create">${IC.list} ${t('plugins.tabCreate')}</button>
             <button class="plug-tab" data-tab="scripts">${IC.terminal} ${t('plugins.tabScripts')}</button>
             <button class="plug-tab" data-tab="perms">${IC.shield} ${t('plugins.tabPerms')}</button>
-            <button class="plug-tab" data-tab="docs">${IC.info} ${t('plugins.tabDocs')}</button>
         </div>
         <div id="plug-tab-content" class="plug-tab-content"></div>
     `;
@@ -98,6 +105,36 @@ function renderPluginsView() {
 function setupPluginTabs() {
     const view = document.getElementById('view-plugins');
     if (!view) return;
+
+    // Tasky hover tooltips on tabs
+    const TAB_TIPS: Record<string, [string, string]> = {
+        installed: ['plugins.tooltipTabInstalled', 'puzzle'],
+        catalog:   ['plugins.tooltipTabCatalog',   'globe'],
+        create:    ['plugins.tooltipTabCreate',     'list'],
+        scripts:   ['plugins.tooltipTabScripts',    'terminal'],
+        perms:     ['plugins.tooltipTabPerms',      'shield'],
+    };
+    view.querySelectorAll('.plug-tab').forEach(tab => {
+        const id = (tab as HTMLElement).dataset.tab || '';
+        const tip = TAB_TIPS[id];
+        if (tip) {
+            tab.addEventListener('mouseenter', () => (window as any).showTaskyHelp?.(tip[0], tip[1]));
+            tab.addEventListener('mouseleave', () => (window as any).hideTaskyHelp?.());
+        }
+    });
+
+    // Intercept ALL [data-tooltip] elements inside view-plugins → use Tasky instead of CSS tooltip
+    view.addEventListener('mouseover', (e) => {
+        const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
+        if (!el) return;
+        const tip = el.getAttribute('data-tooltip') || '';
+        if (tip) (window as any).showTaskyHelp?.(tip, 'info', true);
+    });
+    view.addEventListener('mouseout', (e) => {
+        const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
+        if (el) (window as any).hideTaskyHelp?.();
+    });
+
     view.addEventListener('click', (e) => {
         const tab = (e.target as HTMLElement).closest('[data-tab]') as HTMLElement;
         if (!tab || !tab.classList.contains('plug-tab')) return;
@@ -119,7 +156,6 @@ function renderTab(tabId: string) {
         case 'create':    renderCreate(container); break;
         case 'scripts':   renderScripts(container); break;
         case 'perms':     renderPerms(container); break;
-        case 'docs':      renderDocs(container); break;
     }
 }
 
@@ -171,7 +207,7 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
         <div class="plug-card-header">
             <div class="plug-card-icon-wrap">
                 ${plugin.icon_path
-                    ? `<img src="asset://localhost/${plugin.icon_path}" class="plug-card-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+                    ? `<img src="${convertFileSrc(plugin.icon_path)}" class="plug-card-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
                     : ''}
                 <div class="plug-card-icon-default" ${plugin.icon_path ? 'style="display:none"' : ''}>${IC.puzzle}</div>
             </div>
@@ -200,17 +236,26 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
         <div class="plug-card-actions">
             ${source === 'installed' ? `
                 ${hasModlist ? `
-                    <button class="btn btn-sm btn-accent plug-btn-compare" data-id="${escHtml(manifest.id)}" title="${t('plugins.compare')}">
+                    <button class="btn btn-sm btn-accent plug-btn-compare" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.compareTip')}">
                         ${IC.search} ${t('plugins.compare')}
                     </button>
-                    <button class="btn btn-sm btn-secondary plug-btn-apply" data-id="${escHtml(manifest.id)}" title="${t('plugins.apply')}">
+                    <button class="btn btn-sm btn-secondary plug-btn-apply" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.applyTip')}">
                         ${IC.play} ${t('plugins.apply')}
                     </button>` : ''}
                 <div class="plug-card-actions-right">
-                    <button class="btn btn-xs btn-ghost plug-btn-export" data-id="${escHtml(manifest.id)}" title="${t('common.export')}">
+                    <button class="btn btn-xs btn-ghost plug-btn-inspect" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.inspect')}">
+                        ${IC.eye}
+                    </button>
+                    <button class="btn btn-xs btn-ghost plug-btn-edit" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.editPlugin')}">
+                        ${IC.editIcon}
+                    </button>
+                    <button class="btn btn-xs btn-ghost plug-btn-duplicate" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.duplicate')}">
+                        ${IC.duplicate}
+                    </button>
+                    <button class="btn btn-xs btn-ghost plug-btn-export" data-id="${escHtml(manifest.id)}" data-tooltip="${t('common.export')}">
                         ${IC.exportIcon}
                     </button>
-                    <button class="btn btn-xs btn-danger plug-btn-uninstall" data-id="${escHtml(manifest.id)}" title="${t('plugins.uninstall')}">
+                    <button class="btn btn-xs btn-danger plug-btn-uninstall" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.uninstall')}">
                         ${IC.trash}
                     </button>
                 </div>
@@ -232,6 +277,9 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
     card.querySelector('.plug-btn-apply')?.addEventListener('click', () => handleApply(manifest.id));
     card.querySelector('.plug-btn-export')?.addEventListener('click', () => handleExport(manifest.id, manifest.name));
     card.querySelector('.plug-btn-uninstall')?.addEventListener('click', () => handleUninstall(manifest.id, manifest.name));
+    card.querySelector('.plug-btn-inspect')?.addEventListener('click', () => handleInspect(plugin));
+    card.querySelector('.plug-btn-edit')?.addEventListener('click', () => handleEditPlugin(manifest));
+    card.querySelector('.plug-btn-duplicate')?.addEventListener('click', () => handleDuplicatePlugin(manifest));
     card.querySelector('.plug-btn-install')?.addEventListener('click', (e) => {
         const btn = (e.target as HTMLElement).closest('.plug-btn-install') as HTMLButtonElement;
         handleInstall(btn?.dataset.url, btn?.dataset.name);
@@ -333,11 +381,16 @@ function createOverlay(html: string): HTMLElement {
     return ov;
 }
 
-function buildCompareContent(result: any, pluginName?: string): string {
+function buildCompareContent(result: any, pluginName?: string, mode: 'compare' | 'apply' = 'apply'): string {
     const name = pluginName ?? result.plugin_name ?? '';
-    const allOk = result.all_required_active && !(result.strict_extra?.length);
+    const required = result.required || [];
 
-    const rows = (result.required || []).map((entry: any) => {
+    const nActive   = required.filter(e => e.found && e.active).length;
+    const nInactive = required.filter(e => e.found && !e.active && !e.optional).length;
+    const nMissing  = required.filter(e => !e.found && !e.optional).length;
+    const nExtra    = (result.strict_extra || []).length;
+
+    const rows = required.map((entry: any) => {
         let icon = IC.check, cls = 'plug-cmp-ok', st = t('plugins.cmpActive');
         if (!entry.found && !entry.optional) { icon = IC.x;   cls = 'plug-cmp-missing';  st = t('plugins.cmpMissing'); }
         else if (!entry.found && entry.optional) { icon = IC.check; cls = 'plug-cmp-optional'; st = t('plugins.optional'); }
@@ -359,15 +412,25 @@ function buildCompareContent(result: any, pluginName?: string): string {
         </div>`
     ).join('');
 
+    const statsChips = [
+        nActive   ? `<span class="plug-cmp-stat plug-cmp-stat-ok">${IC.check} ${nActive} ${t('plugins.cmpStatActive')}</span>` : '',
+        nInactive ? `<span class="plug-cmp-stat plug-cmp-stat-warn">${IC.zap} ${nInactive} ${t('plugins.cmpStatInactive')}</span>` : '',
+        nMissing  ? `<span class="plug-cmp-stat plug-cmp-stat-err">${IC.x} ${nMissing} ${t('plugins.cmpStatMissing')}</span>` : '',
+        nExtra    ? `<span class="plug-cmp-stat plug-cmp-stat-extra">${IC.alert} ${nExtra} ${t('plugins.cmpStatExtra')}</span>` : '',
+    ].filter(Boolean).join('');
+
+    const headerCls = mode === 'apply' ? 'plug-ov-header-apply' : '';
+    const headerIcon = mode === 'apply' ? IC.play : IC.search;
+
     return `
-        <div class="plug-ov-header">
-            <span class="plug-ov-title">${IC.search} <strong>${escHtml(name)}</strong></span>
-            <button class="btn btn-xs btn-ghost plug-ov-close-btn">${IC.x}</button>
+        <div class="plug-ov-header ${headerCls}">
+            <span class="plug-ov-title">${headerIcon} <strong>${escHtml(name)}</strong></span>
+            <button class="btn btn-xs btn-ghost plug-ov-close-btn" data-tooltip="${t('common.close')}">${IC.x}</button>
         </div>
         <div class="plug-ov-body">
-            <div class="plug-cmp-banner ${allOk ? 'plug-cmp-banner-ok' : 'plug-cmp-banner-warn'}">
-                ${allOk ? IC.checkCircle : IC.alert}
-                <strong>${allOk ? t('plugins.canJoin') : t('plugins.cannotJoin', { n: result.missing_required ?? 0 })}</strong>
+            <div class="plug-cmp-stats-bar">
+                ${statsChips || `<span class="plug-cmp-stat plug-cmp-stat-ok">${IC.checkCircle} ${t('plugins.cmpAllOk')}</span>`}
+                ${result.strict ? `<span class="plug-cmp-stat plug-cmp-stat-strict">${IC.lock} ${t('plugins.strict')}</span>` : ''}
             </div>
             <div class="plug-cmp-list">${rows}</div>
             ${extraRows ? `<div class="plug-cmp-extra-section">
@@ -376,9 +439,75 @@ function buildCompareContent(result: any, pluginName?: string): string {
             </div>` : ''}
         </div>
         <div class="plug-ov-footer">
-            <button class="btn btn-accent" id="plug-ov-apply">${IC.play} ${t('plugins.applyNow')}</button>
+            ${mode === 'apply' ? `<button class="btn btn-accent" id="plug-ov-apply">${IC.play} ${t('plugins.applyNow')}</button>` : ''}
             <button class="btn btn-ghost plug-ov-close-btn">${t('common.close')}</button>
         </div>`;
+}
+
+// ── Syntax highlighting ────────────────────────────────────────────────────
+
+function highlightScript(code: string, format: string): string {
+    const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    if (format === 'bat') {
+        return code.split('\n').map(line => {
+            const trimmed = line.trim().toLowerCase();
+            if (trimmed.startsWith('::') || trimmed.startsWith('rem ') || trimmed === 'rem') {
+                return `<span class="sh-comment">${esc(line)}</span>`;
+            }
+            let out = esc(line);
+            out = out.replace(/\b(start|call|set|if|else|goto|for|do|in|echo|@echo|exit|pause|timeout|taskkill|cmd|powershell|where|pushd|popd|mkdir|del|copy|move)\b/gi,
+                '<span class="sh-keyword">$1</span>');
+            out = out.replace(/%[^%\s]+%/g, m => `<span class="sh-var">${m}</span>`);
+            out = out.replace(/"([^"]*)"/g, '<span class="sh-string">"$1"</span>');
+            out = out.replace(/(bmm:\/\/[^\s&<>"]+)/g, '<span class="sh-url">$1</span>');
+            out = out.replace(/\b(\d+)\b/g, '<span class="sh-num">$1</span>');
+            return out;
+        }).join('\n');
+    }
+
+    if (format === 'ps1') {
+        return code.split('\n').map(line => {
+            if (line.trim().startsWith('#')) {
+                return `<span class="sh-comment">${esc(line)}</span>`;
+            }
+            let out = esc(line);
+            out = out.replace(/\b(Invoke-RestMethod|Invoke-WebRequest|Start-Process|Start-Sleep|Write-Output|Write-Host|Write-Error|param|function|if|else|elseif|foreach|for|while|return|exit|try|catch|finally|throw|New-Item|Remove-Item|Get-Content|Set-Content)\b/g,
+                '<span class="sh-keyword">$1</span>');
+            out = out.replace(/\$[A-Za-z_][A-Za-z0-9_]*/g, m => `<span class="sh-var">${m}</span>`);
+            out = out.replace(/"([^"]*)"/g, '<span class="sh-string">"$1"</span>');
+            out = out.replace(/'([^']*)'/g, `<span class="sh-string">'$1'</span>`);
+            out = out.replace(/(bmm:\/\/[^\s&<>"']+)/g, '<span class="sh-url">$1</span>');
+            return out;
+        }).join('\n');
+    }
+
+    if (format === 'vbs') {
+        return code.split('\n').map(line => {
+            if (line.trim().startsWith("'")) {
+                return `<span class="sh-comment">${esc(line)}</span>`;
+            }
+            let out = esc(line);
+            out = out.replace(/\b(Dim|Set|WScript|Shell|Run|CreateObject|MsgBox|If|Then|Else|End|For|Next|Do|Loop|While|Wend|Sub|Function|Exit|True|False|Nothing|Option Explicit)\b/gi,
+                '<span class="sh-keyword">$1</span>');
+            out = out.replace(/"([^"]*)"/g, '<span class="sh-string">"$1"</span>');
+            out = out.replace(/(bmm:\/\/[^\s&<>"]+)/g, '<span class="sh-url">$1</span>');
+            out = out.replace(/\b(\d+)\b/g, '<span class="sh-num">$1</span>');
+            return out;
+        }).join('\n');
+    }
+
+    return esc(code);
+}
+
+function hlJson(raw: string): string {
+    const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return esc(raw)
+        .replace(/("(?:[^"\\]|\\.)*")(\s*:)/g, '<span class="hlj-key">$1</span>$2')
+        .replace(/:\s*("(?:[^"\\]|\\.)*")/g, ': <span class="hlj-str">$1</span>')
+        .replace(/:\s*(true|false)\b/g, ': <span class="hlj-bool">$1</span>')
+        .replace(/:\s*(null)\b/g, ': <span class="hlj-null">$1</span>')
+        .replace(/:\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g, ': <span class="hlj-num">$1</span>');
 }
 
 async function handleQuickTest(method: string, path: string) {
@@ -392,7 +521,7 @@ async function handleQuickTest(method: string, path: string) {
     statusEl.textContent = '...';
     statusEl.className = 'plug-tester-status';
     if (pathEl) pathEl.textContent = `${method} ${path}`;
-    bodyEl.textContent = t('common.loading');
+    bodyEl.innerHTML = `<span style="color:var(--text-muted)">${t('common.loading')}</span>`;
 
     try {
         const res = await fetch(`http://127.0.0.1:51274${path}`, {
@@ -402,7 +531,8 @@ async function handleQuickTest(method: string, path: string) {
         const json = await res.json().catch(() => null);
         statusEl.textContent = `${res.status} ${res.statusText}`;
         statusEl.className = `plug-tester-status ${res.ok ? 'plug-status-ok' : 'plug-status-err'}`;
-        bodyEl.textContent = json !== null ? JSON.stringify(json, null, 2) : '';
+        const pretty = json !== null ? JSON.stringify(json, null, 2) : '';
+        bodyEl.innerHTML = hlJson(pretty);
     } catch (e) {
         statusEl.textContent = t('common.error');
         statusEl.className = 'plug-tester-status plug-status-err';
@@ -437,6 +567,29 @@ function renderCreate(container: HTMLElement) {
                     <div class="plug-form-row">
                         <label class="plug-form-label">${t('plugins.createDesc')}</label>
                         <textarea id="pc-desc" class="input" rows="2" style="resize:vertical"></textarea>
+                    </div>
+                    <div class="plug-form-row">
+                        <label class="plug-form-label">${t('plugins.customIconLabel')}</label>
+                        <div class="plug-icon-picker">
+                            <div class="plug-icon-preview" id="pc-icon-preview">
+                                <div class="plug-card-icon-default">${IC.puzzle}</div>
+                            </div>
+                            <div class="plug-icon-actions">
+                                <div class="plug-icon-tabs">
+                                    <button class="plug-icon-tab-btn active" data-itab="file">${t('plugins.iconTabFile')}</button>
+                                    <button class="plug-icon-tab-btn" data-itab="builtin">${t('plugins.iconTabBuiltin')}</button>
+                                </div>
+                                <div id="pc-icon-tab-file">
+                                    <button class="btn btn-xs btn-ghost" id="pc-pick-icon">${IC.upload} ${t('plugins.pickIcon')}</button>
+                                    <button class="btn btn-xs btn-ghost" id="pc-clear-icon" style="display:none;">${IC.x} ${t('plugins.removeIcon')}</button>
+                                </div>
+                                <div id="pc-icon-tab-builtin" style="display:none;">
+                                    <div class="plug-icon-builtin-grid">
+                                        ${Object.entries(IC).map(([k, svg]) => `<button class="plug-icon-builtin-btn" data-ickey="${k}" title="${k}">${svg}</button>`).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="plug-form-row" style="flex-direction:row;align-items:center;gap:12px;">
                         <label class="plug-form-label" style="margin:0;">${t('plugins.strictMode')}</label>
@@ -492,6 +645,48 @@ function renderCreate(container: HTMLElement) {
     `;
 
     const selectedMods: Map<string, { name: string; optional: boolean }> = new Map();
+    let iconSrcPath = '';
+
+    // Icon tab switching
+    container.querySelectorAll('.plug-icon-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            container.querySelectorAll('.plug-icon-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const tab = (btn as HTMLElement).dataset.itab;
+            (document.getElementById('pc-icon-tab-file') as HTMLElement).style.display = tab === 'file' ? '' : 'none';
+            (document.getElementById('pc-icon-tab-builtin') as HTMLElement).style.display = tab === 'builtin' ? '' : 'none';
+        });
+    });
+
+    // File icon picker
+    container.querySelector('#pc-pick-icon')?.addEventListener('click', async () => {
+        const p = await pickFile({ filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] });
+        if (!p) return;
+        iconSrcPath = p;
+        const preview = document.getElementById('pc-icon-preview') as HTMLElement;
+        if (preview) preview.innerHTML = `<img src="${convertFileSrc(p)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">`;
+        (document.getElementById('pc-clear-icon') as HTMLElement).style.display = '';
+    });
+    container.querySelector('#pc-clear-icon')?.addEventListener('click', () => {
+        iconSrcPath = '';
+        const preview = document.getElementById('pc-icon-preview') as HTMLElement;
+        if (preview) preview.innerHTML = `<div class="plug-card-icon-default">${IC.puzzle}</div>`;
+        (document.getElementById('pc-clear-icon') as HTMLElement).style.display = 'none';
+    });
+
+    // Builtin icon picker
+    container.querySelectorAll('.plug-icon-builtin-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const key = (btn as HTMLElement).dataset.ickey as string;
+            const svg = (IC as Record<string, string>)[key];
+            if (!svg) return;
+            iconSrcPath = ''; // Clear file path when using builtin
+            const preview = document.getElementById('pc-icon-preview') as HTMLElement;
+            if (preview) preview.innerHTML = `<div class="plug-card-icon-default" style="color:var(--accent);">${svg}</div>`;
+            container.querySelectorAll('.plug-icon-builtin-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
 
     function updateCount() {
         const el = document.getElementById('pc-mod-count');
@@ -585,7 +780,7 @@ function renderCreate(container: HTMLElement) {
         const manifest = buildManifest();
         if (!manifest) return;
         try {
-            const plugin = await invoke('create_local_plugin', { manifest });
+            const plugin = await invoke('create_local_plugin', { manifest, iconSrcPath: iconSrcPath || null });
             _installedPlugins = _installedPlugins.filter(p => p.manifest.id !== manifest.id);
             _installedPlugins.push(plugin);
             toast(t('plugins.createSaved', { name: manifest.name }), 'success');
@@ -598,7 +793,7 @@ function renderCreate(container: HTMLElement) {
         const path = await saveFile({ defaultPath: `${manifest.id}.bmmplug`, filters: [{ name: 'BMM Plugin', extensions: ['bmmplug'] }] });
         if (!path) return;
         try {
-            await invoke('create_local_plugin', { manifest });
+            await invoke('create_local_plugin', { manifest, iconSrcPath: iconSrcPath || null });
             await invoke('export_plugin', { pluginId: manifest.id, destPath: path });
             toast(t('plugins.exportSuccess', { name: manifest.name }), 'success');
         } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
@@ -624,77 +819,69 @@ function renderScripts(container: HTMLElement) {
             <div class="plug-section-card plug-token-card">
                 <div class="plug-token-card-top">
                     <h3 class="plug-section-title" style="margin:0;">${IC.lock} ${t('plugins.apiToken')}</h3>
-                    <span class="plug-api-hint">${IC.info} ${t('plugins.apiHint')} <code>http://127.0.0.1:51274/api/</code></span>
+                    <span class="plug-api-hint">${IC.info} ${t('plugins.apiHint')} <code id="plug-api-base-url" class="plug-api-url-copy" title="${t('plugins.copyApiUrl')}">http://127.0.0.1:51274/api/</code></span>
                 </div>
                 <div class="plug-token-row">
                     <input type="password" id="plug-token-display" class="input plug-token-input" readonly value="${escHtml(_apiToken)}">
-                    <button class="btn btn-xs btn-ghost" id="plug-token-eye" title="${t('plugins.showToken')}">${IC.eye}</button>
+                    <button class="btn btn-xs btn-ghost" id="plug-token-eye" data-tooltip="${t('plugins.showToken')}">${IC.eye}</button>
                     <button class="btn btn-sm btn-ghost" id="plug-copy-token">${IC.copy} ${t('common.copy')}</button>
                     <button class="btn btn-sm btn-danger" id="plug-reset-token">${IC.refresh} ${t('plugins.resetToken')}</button>
                 </div>
             </div>
 
-            <div class="plug-scripts-cols">
-
-                <!-- Left: Quick test + endpoints -->
-                <div class="plug-section-card">
-                    <h3 class="plug-section-title">${IC.zap} ${t('plugins.quickTest')}</h3>
-                    <div class="plug-qt-grid">
-                        ${QT_ENDPOINTS.map(e =>
-                            `<button class="btn btn-sm btn-ghost plug-qt-btn" data-method="${e.m}" data-path="${e.p}" title="${e.m} ${e.p}">
-                                ${e.icon} ${e.l}
-                            </button>`
-                        ).join('')}
+            <!-- Quick test + endpoints (full width) -->
+            <div class="plug-section-card">
+                <h3 class="plug-section-title">${IC.zap} ${t('plugins.quickTest')}</h3>
+                <div class="plug-qt-grid">
+                    ${QT_ENDPOINTS.map(e =>
+                        `<button class="plug-qt-btn" data-method="${e.m}" data-path="${e.p}" data-tooltip="${e.m} ${e.p}">
+                            ${e.icon} <span>${e.l}</span>
+                        </button>`
+                    ).join('')}
+                </div>
+                <div id="plug-qt-result" class="plug-qt-result" style="display:none;">
+                    <div class="plug-qt-result-header">
+                        <span id="plug-qt-status" class="plug-tester-status"></span>
+                        <code id="plug-qt-path" class="plug-qt-path-label"></code>
+                        <span style="flex:1;"></span>
+                        <button class="btn btn-xs btn-ghost" id="plug-qt-copy" data-tooltip="${t('plugins.epCopy')}">${IC.copy}</button>
                     </div>
-                    <div id="plug-qt-result" class="plug-qt-result" style="display:none;">
-                        <div class="plug-qt-result-header">
-                            <span id="plug-qt-status" class="plug-tester-status"></span>
-                            <span id="plug-qt-path" class="plug-qt-path-label"></span>
-                            <button class="btn btn-xs btn-ghost" id="plug-qt-copy">${IC.copy}</button>
-                        </div>
-                        <pre id="plug-qt-body" class="plug-code-pre" style="max-height:220px;overflow:auto;"></pre>
-                    </div>
-
-                    <details class="plug-details-section" id="plug-custom-tester">
-                        <summary class="plug-details-summary">${IC.terminal} ${t('plugins.customRequest')}</summary>
-                        <div class="plug-tester" style="margin: 10px;">
-                            <div class="plug-tester-row">
-                                <select id="pt-method" class="select select-sm" style="width:80px;">
-                                    <option>GET</option><option>POST</option>
-                                </select>
-                                <input type="text" id="pt-path" class="input input-sm" value="/api/health" style="flex:1;">
-                                <button class="btn btn-sm btn-accent" id="pt-run">${IC.play} ${t('plugins.run')}</button>
-                            </div>
-                            <textarea id="pt-body" class="input plug-tester-body" placeholder='{"key": "value"}  (POST only)'></textarea>
-                            <div class="plug-tester-resp" id="pt-response" style="display:none;">
-                                <div class="plug-tester-resp-header">
-                                    <span id="pt-status-badge" class="plug-tester-status"></span>
-                                    <button class="btn btn-xs btn-ghost" id="pt-copy-resp">${IC.copy}</button>
-                                </div>
-                                <pre id="pt-resp-body" class="plug-code-pre"></pre>
-                            </div>
-                        </div>
-                    </details>
-
-                    <h3 class="plug-section-title" style="margin-top:18px;">${IC.list} ${t('plugins.apiEndpoints')}</h3>
-                    <div class="plug-endpoint-list">
-                        ${buildEndpointRow('GET',  '/api/health',             t('plugins.endpointHealth'),          false)}
-                        ${buildEndpointRow('GET',  '/api/status',             t('plugins.endpointStatus'),          false)}
-                        ${buildEndpointRow('GET',  '/api/mods',               t('plugins.endpointMods'),            false)}
-                        ${buildEndpointRow('GET',  '/api/mods/active',        t('plugins.endpointModsActive'),      false)}
-                        ${buildEndpointRow('GET',  '/api/profiles',           t('plugins.endpointProfiles'),        false)}
-                        ${buildEndpointRow('GET',  '/api/plugins',            t('plugins.endpointPlugins'),         false)}
-                        ${buildEndpointRow('POST', '/api/mods/enable',        t('plugins.endpointEnableMod'),       true)}
-                        ${buildEndpointRow('POST', '/api/mods/disable',       t('plugins.endpointDisableMod'),      true)}
-                        ${buildEndpointRow('POST', '/api/profiles/activate',  t('plugins.endpointActivateProfile'), true)}
-                        ${buildEndpointRow('POST', '/api/plugins/compare',    t('plugins.endpointCompare'),         true)}
-                        ${buildEndpointRow('POST', '/api/plugins/apply',      t('plugins.endpointApply'),           true)}
-                    </div>
+                    <pre id="plug-qt-body" class="plug-code-pre plug-qt-pre"></pre>
                 </div>
 
-                <!-- Right: Script generator -->
-                <div class="plug-section-card">
-                    <h3 class="plug-section-title">${IC.terminal} ${t('plugins.scriptGenerator')}</h3>
+                <details class="plug-details-section" id="plug-custom-tester" style="margin-top:12px;">
+                    <summary class="plug-details-summary">${IC.terminal} ${t('plugins.customRequest')}</summary>
+                    <div class="plug-tester">
+                        <div class="plug-tester-row">
+                            <select id="pt-method" class="select select-sm" style="width:80px;">
+                                <option>GET</option><option>POST</option>
+                            </select>
+                            <input type="text" id="pt-path" class="input input-sm" value="/api/health" style="flex:1;">
+                            <button class="btn btn-sm btn-accent" id="pt-run">${IC.play} ${t('plugins.run')}</button>
+                        </div>
+                        <textarea id="pt-body" class="input plug-tester-body" placeholder='{"key": "value"}  — POST only'></textarea>
+                        <div class="plug-tester-resp" id="pt-response" style="display:none;">
+                            <div class="plug-tester-resp-header">
+                                <span id="pt-status-badge" class="plug-tester-status"></span>
+                                <span style="flex:1;"></span>
+                                <button class="btn btn-xs btn-ghost" id="pt-copy-resp" data-tooltip="${t('plugins.epCopy')}">${IC.copy}</button>
+                            </div>
+                            <pre id="pt-resp-body" class="plug-code-pre plug-qt-pre"></pre>
+                        </div>
+                    </div>
+                </details>
+
+                <h3 class="plug-section-title" style="margin-top:18px;">${IC.list} ${t('plugins.apiEndpoints')}</h3>
+                <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px;">${t('plugins.epHint')}</p>
+                <div class="plug-endpoint-list" id="plug-ep-list">
+                    ${(() => { const defs = getEndpointDefs(); defs.forEach(ep => { const sid = ep.path.replace(/\//g,'_').replace(/^_/,''); _epCodeCache.set(sid, ep); }); return defs.map(ep => buildEndpointRow(ep)).join(''); })()}
+                </div>
+            </div>
+
+            <!-- Script generator (full width) -->
+            <div class="plug-section-card">
+                <h3 class="plug-section-title">${IC.terminal} ${t('plugins.scriptGenerator')}</h3>
+                <div class="plug-gen-two-col">
                     <div class="plug-gen-form">
                         <div class="plug-gen-row2">
                             <div class="plug-form-row">
@@ -711,6 +898,7 @@ function renderScripts(container: HTMLElement) {
                                     <option value="deeplink">${t('plugins.genModeDeeplink')}</option>
                                     <option value="api">${t('plugins.genModeApi')}</option>
                                 </select>
+                                <p id="plug-mode-hint" class="plug-mode-hint-txt">${t('plugins.modeDeeplinkHint')}</p>
                             </div>
                         </div>
                         <div class="plug-form-row" style="flex-direction:row;align-items:center;gap:12px;">
@@ -732,15 +920,20 @@ function renderScripts(container: HTMLElement) {
                             <button class="btn btn-accent" id="plug-gen-save">${IC.save} ${t('plugins.saveScript')}</button>
                         </div>
                     </div>
-                    <div id="plug-gen-output" class="plug-gen-output" style="display:none;">
-                        <div class="plug-gen-output-header">
-                            <span class="plug-form-label" style="margin:0;">${t('plugins.preview')}</span>
-                            <button class="btn btn-xs btn-ghost" id="plug-copy-script">${IC.copy} ${t('common.copy')}</button>
+                    <div class="plug-gen-output-col">
+                        <div class="plug-gen-output-placeholder" id="plug-gen-placeholder">
+                            <span>${IC.terminal}</span>
+                            <p>${t('plugins.preview')}</p>
                         </div>
-                        <pre id="plug-gen-code" class="plug-code-pre"></pre>
+                        <div id="plug-gen-output" class="plug-gen-output" style="display:none;">
+                            <div class="plug-gen-output-header">
+                                <span class="plug-form-label" style="margin:0;">${t('plugins.preview')}</span>
+                                <button class="btn btn-xs btn-ghost" id="plug-copy-script">${IC.copy} ${t('common.copy')}</button>
+                            </div>
+                            <pre id="plug-gen-code" class="plug-code-pre" style="flex:1;overflow:auto;"></pre>
+                        </div>
                     </div>
                 </div>
-
             </div>
         </div>
     `;
@@ -755,6 +948,12 @@ function renderScripts(container: HTMLElement) {
         toast(t('plugins.tokenCopied'), 'success');
     });
     container.querySelector('#plug-reset-token')?.addEventListener('click', handleResetToken);
+
+    // API base URL copy on click
+    container.querySelector('#plug-api-base-url')?.addEventListener('click', async () => {
+        await navigator.clipboard.writeText('http://127.0.0.1:51274/api/').catch(() => {});
+        toast(t('plugins.epCopyDone'), 'success');
+    });
 
     // Quick test
     container.querySelectorAll('.plug-qt-btn').forEach(btn => {
@@ -777,24 +976,103 @@ function renderScripts(container: HTMLElement) {
         toast(t('common.copy'), 'success');
     });
 
-    // Endpoint click → prefill custom tester
-    container.querySelectorAll('.plug-endpoint-row[data-method]').forEach(row => {
-        row.addEventListener('click', () => {
-            const method = (row as HTMLElement).dataset.method!;
-            const path   = (row as HTMLElement).dataset.path!;
-            const details = document.getElementById('plug-custom-tester') as HTMLDetailsElement;
-            if (details) details.open = true;
-            (document.getElementById('pt-method') as HTMLSelectElement).value = method;
-            (document.getElementById('pt-path') as HTMLInputElement).value = path;
-            const bodyHints: Record<string,string> = {
-                '/api/mods/enable':        '{"mod_id": ""}',
-                '/api/mods/disable':       '{"mod_id": ""}',
-                '/api/profiles/activate':  '{"profile_id": ""}',
-                '/api/plugins/compare':    '{"plugin_id": ""}',
-                '/api/plugins/apply':      '{"plugin_id": "", "force_strict": false}',
-            };
-            if (method === 'POST') (document.getElementById('pt-body') as HTMLTextAreaElement).value = bodyHints[path] || '';
+    // Helper: prefill custom tester from endpoint
+    function prefillTester(method: string, path: string) {
+        const details = document.getElementById('plug-custom-tester') as HTMLDetailsElement;
+        if (details) details.open = true;
+        (document.getElementById('pt-method') as HTMLSelectElement).value = method;
+        (document.getElementById('pt-path') as HTMLInputElement).value = path;
+        const bodyHints: Record<string, string> = {
+            '/api/mods/enable':           '{"mod_id": ""}',
+            '/api/mods/disable':          '{"mod_id": ""}',
+            '/api/profiles/activate':     '{"profile_id": ""}',
+            '/api/plugins/compare':       '{"plugin_id": ""}',
+            '/api/plugins/apply':         '{"plugin_id": "", "force_strict": false}',
+            '/api/modpacks/enable':       '{"profile_id": ""}',
+            '/api/modpacks/disable':      '{"profile_id": ""}',
+            '/api/server-repo/connect':   '{"url": "https://", "name": ""}',
+        };
+        if (method === 'POST') (document.getElementById('pt-body') as HTMLTextAreaElement).value = bodyHints[path] || '';
+        details.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // ── Endpoint area click handler — stored to prevent accumulation on re-render ──
+    if (_scriptClickHandler) container.removeEventListener('click', _scriptClickHandler);
+    _scriptClickHandler = (e: Event) => {
+        const tgt = (e as MouseEvent).target as HTMLElement;
+        // Test button → prefill tester
+        const testBtn = tgt.closest('.plug-ep-test-btn') as HTMLElement | null;
+        if (testBtn) {
+            e.stopPropagation();
+            prefillTester(testBtn.dataset.method || 'GET', testBtn.dataset.path || '');
+            return;
+        }
+        // Copy URL button (handled by its own listener below)
+        if (tgt.closest('.plug-ep-copy-btn')) return;
+        // Copy code button
+        const copyCodeBtn = tgt.closest('.plug-ep-copy-code-btn') as HTMLElement | null;
+        if (copyCodeBtn) {
+            e.stopPropagation();
+            const epid = copyCodeBtn.dataset.epid || '';
+            const pre = document.getElementById(`epc-${epid}`);
+            const activeTab = copyCodeBtn.closest('.plug-ep-code-tabs')?.querySelector('.plug-ep-code-tab.active') as HTMLElement | null;
+            const lang = activeTab?.dataset.lang || 'curl';
+            const ep = _epCodeCache.get(epid);
+            const text = ep ? (() => {
+                const div = document.createElement('div');
+                div.innerHTML = _genCode(ep, lang);
+                return div.textContent || '';
+            })() : (pre?.textContent || '');
+            navigator.clipboard.writeText(text).catch(() => {});
+            toast(t('plugins.epCopyDone'), 'success');
+            return;
+        }
+        // Language tab switch
+        const codeTab = tgt.closest('.plug-ep-code-tab') as HTMLElement | null;
+        if (codeTab && codeTab.dataset.lang) {
+            e.stopPropagation();
+            const epid = codeTab.closest('.plug-ep-code-tabs')?.getAttribute('data-epid') || '';
+            codeTab.closest('.plug-ep-lang-tabs-scroll')?.querySelectorAll('.plug-ep-code-tab').forEach(t2 => t2.classList.remove('active'));
+            codeTab.classList.add('active');
+            const lang = codeTab.dataset.lang;
+            const pre = document.getElementById(`epc-${epid}`);
+            if (pre) {
+                const ep = _epCodeCache.get(epid);
+                if (ep) pre.innerHTML = _genCode(ep, lang);
+            }
+            return;
+        }
+        // Chevron or row → toggle expand
+        const row = tgt.closest('.plug-endpoint-row') as HTMLElement | null;
+        if (!row) return;
+        const epId = row.dataset.epId || '';
+        const wrap = document.getElementById(`epw-${epId}`);
+        const detail = document.getElementById(`epd-${epId}`);
+        const chev  = document.getElementById(`epchev-${epId}`);
+        if (!wrap || !detail) return;
+        const isOpen = wrap.classList.contains('expanded');
+        wrap.classList.toggle('expanded', !isOpen);
+        detail.style.display = isOpen ? 'none' : 'grid';
+        if (chev) chev.classList.toggle('rotated', !isOpen);
+    };
+    container.addEventListener('click', _scriptClickHandler);
+
+    // Endpoint URL copy buttons (url path copy)
+    container.querySelectorAll('.plug-ep-copy-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const path = (btn as HTMLElement).dataset.copy || '';
+            const full = `http://127.0.0.1:51274${path}`;
+            await navigator.clipboard.writeText(full).catch(() => {});
+            toast(t('plugins.epCopyDone'), 'success');
         });
+    });
+
+    // Mode hint update
+    container.querySelector('#plug-gen-mode')?.addEventListener('change', (e) => {
+        const mode = (e.target as HTMLSelectElement).value;
+        const hint = document.getElementById('plug-mode-hint');
+        if (hint) hint.textContent = t(mode === 'api' ? 'plugins.modeApiHint' : 'plugins.modeDeeplinkHint');
     });
 
     // Script gen
@@ -802,23 +1080,452 @@ function renderScripts(container: HTMLElement) {
     container.querySelector('#plug-gen-preview')?.addEventListener('click', handlePreviewScript);
     container.querySelector('#plug-gen-save')?.addEventListener('click', handleSaveScript);
     container.querySelector('#plug-copy-script')?.addEventListener('click', async () => {
-        const code = document.getElementById('plug-gen-code')?.textContent || '';
-        await navigator.clipboard.writeText(code).catch(() => {});
+        const codeEl = document.getElementById('plug-gen-code');
+        const raw = codeEl?.dataset.raw || codeEl?.textContent || '';
+        await navigator.clipboard.writeText(raw).catch(() => {});
         toast(t('common.copy'), 'success');
     });
 
     addActionRow();
 }
 
-function buildEndpointRow(method: string, path: string, desc: string, needsAuth: boolean) {
-    const cls = method === 'GET' ? 'plug-method-get' : 'plug-method-post';
+interface FieldDef { name: string; type: string; required: boolean; desc: string; }
+interface RespStatus { code: number; label: string; body: string; }
+interface EndpointDef {
+    method: string;
+    path: string;
+    desc: string;
+    auth: boolean;
+    about: string;
+    fields: FieldDef[] | null;
+    responseStatuses: RespStatus[];
+}
+
+// ── Code syntax highlighter (multi-language, placeholder-safe) ───────────
+// Uses a placeholder approach: strings/comments are extracted first as \x00N\x00
+// tokens so that keyword/URL regexes never accidentally match inside HTML attribute
+// values added by earlier passes. Tokens are restored last as styled spans.
+function hlCode(raw: string, lang: string): string {
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    let h = esc(raw);
+
+    const slots: string[] = [];
+    const slot = (html: string) => { const i = slots.length; slots.push(html); return `\x00${i}\x00`; };
+    const unslot = (s: string) => s.replace(/\x00(\d+)\x00/g, (_, i) => slots[+i]);
+
+    switch (lang) {
+        case 'curl':
+            // Strings first (protects quotes from being matched later)
+            h = h.replace(/("(?:[^"\\]|\\.)*")/g, m => slot(`<span class="hlc-str">${m}</span>`));
+            // Bare URLs not inside strings
+            h = h.replace(/(https?:\/\/[^\s\x00"'\\)]+)/g, m => slot(`<span class="hlc-url">${m}</span>`));
+            h = h.replace(/\b(curl)\b/g, '<span class="hlc-kw">$1</span>');
+            h = h.replace(/(^|\s)(-X|-H|-d|-G|-L|-s|-S|-o|-v|-u|--data|--header)\b/g, '$1<span class="hlc-flag">$2</span>');
+            h = h.replace(/(\$[A-Z_][A-Z0-9_]*)/g, '<span class="hlc-var">$1</span>');
+            h = unslot(h);
+            break;
+
+        case 'ps1':
+            h = h.replace(/(#[^\n]*)/g, m => slot(`<span class="hlc-comment">${m}</span>`));
+            h = h.replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => slot(`<span class="hlc-str">${m}</span>`));
+            h = h.replace(/(https?:\/\/[^\s\x00"'\\)]+)/g, m => slot(`<span class="hlc-url">${m}</span>`));
+            h = h.replace(/\b(Invoke-RestMethod|Invoke-WebRequest|ConvertTo-Json|Start-Process|Write-Host|param|function|if|else|foreach|while|return|try|catch|finally)\b/g, '<span class="hlc-kw">$1</span>');
+            h = h.replace(/(^|\s)(-Uri|-Method|-Headers|-Body|-ContentType|-Bearer)\b/g, '$1<span class="hlc-flag">$2</span>');
+            h = h.replace(/(\$[A-Za-z_][A-Za-z0-9_]*)/g, '<span class="hlc-var">$1</span>');
+            h = unslot(h);
+            break;
+
+        case 'js':
+            h = h.replace(/(\/\/[^\n]*)/g, m => slot(`<span class="hlc-comment">${m}</span>`));
+            h = h.replace(/(`(?:[^`\\]|\\.)*`|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => slot(`<span class="hlc-str">${m}</span>`));
+            h = h.replace(/\b(const|let|var|async|await|function|return|if|else|try|catch|for|while|new|class|import|from|export|default|true|false|null|undefined|typeof|instanceof)\b/g, '<span class="hlc-kw">$1</span>');
+            h = h.replace(/\b(\d+)\b/g, '<span class="hlc-num">$1</span>');
+            h = unslot(h);
+            break;
+
+        case 'python':
+            h = h.replace(/(#[^\n]*)/g, m => slot(`<span class="hlc-comment">${m}</span>`));
+            h = h.replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => slot(`<span class="hlc-str">${m}</span>`));
+            h = h.replace(/\b(import|from|def|class|return|if|elif|else|for|while|try|except|finally|with|as|True|False|None|print|async|await|and|or|not|in|is)\b/g, '<span class="hlc-kw">$1</span>');
+            h = h.replace(/\b(\d+)\b/g, '<span class="hlc-num">$1</span>');
+            h = unslot(h);
+            break;
+
+        case 'lua':
+            h = h.replace(/(--[^\n]*)/g, m => slot(`<span class="hlc-comment">${m}</span>`));
+            h = h.replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => slot(`<span class="hlc-str">${m}</span>`));
+            h = h.replace(/\b(local|require|function|return|if|then|else|elseif|end|for|while|do|repeat|until|true|false|nil|and|or|not|print)\b/g, '<span class="hlc-kw">$1</span>');
+            h = h.replace(/\b(\d+)\b/g, '<span class="hlc-num">$1</span>');
+            h = unslot(h);
+            break;
+
+        case 'go':
+            h = h.replace(/(\/\/[^\n]*)/g, m => slot(`<span class="hlc-comment">${m}</span>`));
+            h = h.replace(/(`(?:[^`])*`|"(?:[^"\\]|\\.)*")/g, m => slot(`<span class="hlc-str">${m}</span>`));
+            h = h.replace(/\b(package|import|func|var|const|type|struct|interface|return|if|else|for|range|defer|go|chan|select|switch|case|default|break|continue|map|new|make|nil|true|false|fmt|http|io|bytes|errors)\b/g, '<span class="hlc-kw">$1</span>');
+            h = h.replace(/\b(\d+)\b/g, '<span class="hlc-num">$1</span>');
+            h = unslot(h);
+            break;
+
+        case 'rust':
+            h = h.replace(/(\/\/[^\n]*)/g, m => slot(`<span class="hlc-comment">${m}</span>`));
+            h = h.replace(/("(?:[^"\\]|\\.)*")/g, m => slot(`<span class="hlc-str">${m}</span>`));
+            h = h.replace(/\b(use|let|mut|fn|async|await|pub|struct|impl|trait|enum|match|if|else|for|while|loop|return|Ok|Err|Some|None|true|false|println|reqwest|serde_json)\b/g, '<span class="hlc-kw">$1</span>');
+            h = h.replace(/\b(\d+)\b/g, '<span class="hlc-num">$1</span>');
+            h = unslot(h);
+            break;
+
+        case 'java':
+            h = h.replace(/(\/\/[^\n]*)/g, m => slot(`<span class="hlc-comment">${m}</span>`));
+            h = h.replace(/("(?:[^"\\]|\\.)*")/g, m => slot(`<span class="hlc-str">${m}</span>`));
+            h = h.replace(/\b(import|public|private|class|void|static|new|return|if|else|try|catch|finally|for|while|String|var|HttpClient|HttpRequest|HttpResponse|URI|System|BodyHandlers|BodyPublishers)\b/g, '<span class="hlc-kw">$1</span>');
+            h = h.replace(/\b(\d+)\b/g, '<span class="hlc-num">$1</span>');
+            h = unslot(h);
+            break;
+
+        case 'cs':
+            h = h.replace(/(\/\/[^\n]*)/g, m => slot(`<span class="hlc-comment">${m}</span>`));
+            h = h.replace(/("(?:[^"\\]|\\.)*")/g, m => slot(`<span class="hlc-str">${m}</span>`));
+            h = h.replace(/\b(using|var|new|await|async|string|bool|int|void|class|public|private|static|return|if|else|try|catch|Console|HttpClient|JsonContent|HttpResponseMessage)\b/g, '<span class="hlc-kw">$1</span>');
+            h = h.replace(/\b(\d+)\b/g, '<span class="hlc-num">$1</span>');
+            h = unslot(h);
+            break;
+
+        case 'php':
+            h = h.replace(/(\/\/[^\n]*|#[^\n]*)/g, m => slot(`<span class="hlc-comment">${m}</span>`));
+            h = h.replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => slot(`<span class="hlc-str">${m}</span>`));
+            h = h.replace(/\b(require|include|echo|print|return|if|else|foreach|while|function|class|new|true|false|null|curl_init|curl_setopt|curl_exec|json_encode|json_decode)\b/g, '<span class="hlc-kw">$1</span>');
+            // $variables are not inside string slots, so this is safe
+            h = h.replace(/(\$[A-Za-z_][A-Za-z0-9_]*)/g, '<span class="hlc-var">$1</span>');
+            h = h.replace(/\b(\d+)\b/g, '<span class="hlc-num">$1</span>');
+            h = unslot(h);
+            break;
+
+        case 'ruby':
+            h = h.replace(/(#[^\n]*)/g, m => slot(`<span class="hlc-comment">${m}</span>`));
+            h = h.replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, m => slot(`<span class="hlc-str">${m}</span>`));
+            h = h.replace(/\b(require|def|end|class|module|return|if|elsif|else|unless|while|until|do|for|in|begin|rescue|puts|print|true|false|nil|Net|URI|JSON)\b/g, '<span class="hlc-kw">$1</span>');
+            h = h.replace(/\b(\d+)\b/g, '<span class="hlc-num">$1</span>');
+            h = unslot(h);
+            break;
+    }
+    return h;
+}
+
+// Generate code example for any language/endpoint combination
+function _genCode(ep: EndpointDef, lang: string): string {
+    const url = `http://127.0.0.1:51274${ep.path}`;
+    const isGet = ep.method === 'GET';
+    const bodyObj = ep.fields
+        ? Object.fromEntries(ep.fields.map(f => [f.name, f.type === 'boolean' ? false : f.type === 'number' ? 0 : '']))
+        : {};
+    const bodyJson = JSON.stringify(bodyObj, null, 2);
+    const authToken = 'YOUR_TOKEN';
+
+    let code = '';
+    switch (lang) {
+        case 'curl': code = _curlEx(ep); break;
+        case 'ps1':  code = _ps1Ex(ep);  break;
+        case 'js':
+            if (isGet) {
+                code = `const resp = await fetch("${url}"${ep.auth ? `,\n  { headers: { Authorization: "Bearer ${authToken}" } }` : ''});\nconst data = await resp.json();\nconsole.log(data);`;
+            } else {
+                code = `const resp = await fetch("${url}", {\n  method: "POST",\n  headers: {\n    "Content-Type": "application/json"${ep.auth ? `,\n    Authorization: "Bearer ${authToken}"` : ''}\n  },\n  body: JSON.stringify(${bodyJson})\n});\nconst data = await resp.json();\nconsole.log(data);`;
+            }
+            break;
+        case 'python':
+            if (isGet) {
+                code = `import requests\n\n${ep.auth ? `headers = {"Authorization": "Bearer ${authToken}"}\n` : ''}resp = requests.get("${url}"${ep.auth ? ', headers=headers' : ''})\nprint(resp.json())`;
+            } else {
+                const pyBody = bodyJson.replace(/true/g,'True').replace(/false/g,'False').replace(/null/g,'None');
+                code = `import requests\n\nbody = ${pyBody}\nheaders = {"Content-Type": "application/json"${ep.auth ? `, "Authorization": "Bearer ${authToken}"` : ''}}\nresp = requests.post("${url}", json=body, headers=headers)\nprint(resp.json())`;
+            }
+            break;
+        case 'lua':
+            if (isGet) {
+                code = `local http = require("socket.http")\nlocal body, code = http.request("${url}")\nprint(code, body)`;
+            } else {
+                code = `local http  = require("socket.http")\nlocal ltn12 = require("ltn12")\nlocal payload = '${bodyJson.replace(/\n/g,'').replace(/'/g,"\\'")}'
+local t = {}\nhttp.request({\n  url    = "${url}",\n  method = "POST",\n  headers = {\n    ["Content-Type"] = "application/json"${ep.auth ? `,\n    Authorization = "Bearer ${authToken}"` : ''},\n    ["Content-Length"] = #payload\n  },\n  source = ltn12.source.string(payload),\n  sink   = ltn12.sink.table(t)\n})\nprint(table.concat(t))`;
+            }
+            break;
+        case 'go':
+            if (isGet) {
+                code = `resp, _ := http.Get("${url}")\ndefer resp.Body.Close()\nbody, _ := io.ReadAll(resp.Body)\nfmt.Println(string(body))`;
+            } else {
+                code = `payload := []byte(\`${bodyJson}\`)\nreq, _ := http.NewRequest("POST", "${url}", bytes.NewBuffer(payload))\nreq.Header.Set("Content-Type", "application/json")${ep.auth ? `\nreq.Header.Set("Authorization", "Bearer ${authToken}")` : ''}\nclient := &http.Client{}\nresp, _ := client.Do(req)\nbody, _ := io.ReadAll(resp.Body)\nfmt.Println(string(body))`;
+            }
+            break;
+        case 'rust':
+            if (isGet) {
+                code = `let resp = reqwest::get("${url}").await?;\nlet json: serde_json::Value = resp.json().await?;\nprintln!("{:#?}", json);`;
+            } else {
+                code = `let client = reqwest::Client::new();\nlet resp = client.post("${url}")\n    .header("Content-Type", "application/json")${ep.auth ? `\n    .bearer_auth("${authToken}")` : ''}\n    .json(&serde_json::json!(${bodyJson}))\n    .send().await?;\nprintln!("{}", resp.text().await?);`;
+            }
+            break;
+        case 'java':
+            if (isGet) {
+                code = `HttpClient client = HttpClient.newHttpClient();\nHttpRequest req = HttpRequest.newBuilder()\n    .uri(URI.create("${url}"))${ep.auth ? `\n    .header("Authorization", "Bearer ${authToken}")` : ''}\n    .GET().build();\nHttpResponse<String> resp =\n    client.send(req, BodyHandlers.ofString());\nSystem.out.println(resp.body());`;
+            } else {
+                const jBody = bodyJson.replace(/"/g, '\\"').replace(/\n/g,'\\n');
+                code = `HttpClient client = HttpClient.newHttpClient();\nString body = "${jBody}";\nHttpRequest req = HttpRequest.newBuilder()\n    .uri(URI.create("${url}"))\n    .header("Content-Type", "application/json")${ep.auth ? `\n    .header("Authorization", "Bearer ${authToken}")` : ''}\n    .POST(BodyPublishers.ofString(body))\n    .build();\nHttpResponse<String> resp =\n    client.send(req, BodyHandlers.ofString());\nSystem.out.println(resp.body());`;
+            }
+            break;
+        case 'cs':
+            if (isGet) {
+                code = `using var client = new HttpClient();\n${ep.auth ? `client.DefaultRequestHeaders.Add(\n    "Authorization", "Bearer ${authToken}");\n` : ''}var resp = await client.GetStringAsync(\n    "${url}");\nConsole.WriteLine(resp);`;
+            } else {
+                const fields = ep.fields?.map(f => `${f.name} = ${f.type === 'boolean' ? 'false' : f.type === 'number' ? '0' : '""'}`).join(', ') || '';
+                code = `using var client = new HttpClient();\n${ep.auth ? `client.DefaultRequestHeaders.Add(\n    "Authorization", "Bearer ${authToken}");\n` : ''}var body = JsonContent.Create(new { ${fields} });\nvar resp = await client.PostAsync(\n    "${url}", body);\nConsole.WriteLine(\n    await resp.Content.ReadAsStringAsync());`;
+            }
+            break;
+        case 'php':
+            if (isGet) {
+                code = `<?php\n$ch = curl_init("${url}");\ncurl_setopt($ch, CURLOPT_RETURNTRANSFER, true);${ep.auth ? `\ncurl_setopt($ch, CURLOPT_HTTPHEADER,\n    ["Authorization: Bearer ${authToken}"]);` : ''}\n$resp = curl_exec($ch);\necho $resp;`;
+            } else {
+                code = `<?php\n$body = json_encode(${JSON.stringify(bodyObj)});\n$ch = curl_init("${url}");\ncurl_setopt($ch, CURLOPT_POST, true);\ncurl_setopt($ch, CURLOPT_POSTFIELDS, $body);\ncurl_setopt($ch, CURLOPT_RETURNTRANSFER, true);\ncurl_setopt($ch, CURLOPT_HTTPHEADER, [\n    "Content-Type: application/json"${ep.auth ? `,\n    "Authorization: Bearer ${authToken}"` : ''}\n]);\n$resp = curl_exec($ch);\necho $resp;`;
+            }
+            break;
+        case 'ruby':
+            if (isGet) {
+                code = `require "net/http"\n\nuri = URI("${url}")\nreq = Net::HTTP::Get.new(uri)${ep.auth ? `\nreq["Authorization"] = "Bearer ${authToken}"` : ''}\nputs Net::HTTP.start(uri.host, uri.port) { |h|\n  h.request(req).body\n}`;
+            } else {
+                code = `require "net/http"\nrequire "json"\n\nuri = URI("${url}")\nreq = Net::HTTP::Post.new(uri)\nreq["Content-Type"] = "application/json"${ep.auth ? `\nreq["Authorization"] = "Bearer ${authToken}"` : ''}\nreq.body = ${JSON.stringify(bodyObj)}.to_json\nputs Net::HTTP.start(uri.host, uri.port) { |h|\n  h.request(req).body\n}`;
+            }
+            break;
+        default: code = _curlEx(ep);
+    }
+    return hlCode(code, lang);
+}
+
+function _curlEx(ep: EndpointDef): string {
+    const url = `http://127.0.0.1:51274${ep.path}`;
+    const authH = ep.auth ? `\n  -H "Authorization: Bearer $TOKEN" \\` : '';
+    if (ep.method === 'GET') {
+        return `curl${ep.auth ? ` \\\n  -H "Authorization: Bearer $TOKEN"` : ''} \\\n  "${url}"`;
+    }
+    const body = ep.fields
+        ? JSON.stringify(Object.fromEntries(ep.fields.map(f => [f.name, f.type === 'boolean' ? false : f.type === 'number' ? 0 : ''])), null, 2)
+        : '{}';
+    return `curl -X POST \\\n  -H "Content-Type: application/json" \\${authH}\n  -d '${body}' \\\n  "${url}"`;
+}
+
+function _ps1Ex(ep: EndpointDef): string {
+    const url = `http://127.0.0.1:51274${ep.path}`;
+    if (ep.method === 'GET') {
+        const auth = ep.auth ? `\n  -Headers @{Authorization="Bearer $TOKEN"} \\` : '';
+        return `Invoke-RestMethod \\\n  -Uri "${url}" \\${auth}\n  -Method GET`;
+    }
+    const body = ep.fields
+        ? JSON.stringify(Object.fromEntries(ep.fields.map(f => [f.name, f.type === 'boolean' ? false : f.type === 'number' ? 0 : ''])), null, 2)
+        : '{}';
+    return `Invoke-RestMethod \\\n  -Uri "${url}" \\\n  -Method POST \\\n  -Headers @{Authorization="Bearer $TOKEN"; "Content-Type"="application/json"} \\\n  -Body '${body}'`;
+}
+
+function buildEndpointRow(ep: EndpointDef): string {
+    const cls = ep.method === 'GET' ? 'plug-method-get' : 'plug-method-post';
+    const safeId = ep.path.replace(/\//g, '_').replace(/^_/, '');
+
+    const fieldsHtml = ep.fields ? `
+        <div class="plug-ep-fields">
+            <div class="plug-ep-section-lbl">${t('plugins.epRequestBody')}</div>
+            <table class="plug-ep-fields-table">
+                <thead><tr><th>Field</th><th>Type</th><th></th><th>Description</th></tr></thead>
+                <tbody>
+                    ${ep.fields.map(f => `<tr>
+                        <td><code class="plug-ep-fname">${escHtml(f.name)}</code></td>
+                        <td><span class="plug-type-tag plug-type-${f.type}">${f.type}</span></td>
+                        <td>${f.required ? '<span class="plug-req-star">*</span>' : '<span style="color:var(--text-muted)">—</span>'}</td>
+                        <td class="plug-ep-fdesc">${escHtml(f.desc)}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>` : '';
+
+    const statusesHtml = ep.responseStatuses.map(s => {
+        const scls = s.code < 300 ? 'plug-resp-ok' : s.code < 400 ? 'plug-resp-warn' : 'plug-resp-err';
+        return `<details class="plug-ep-resp-item">
+            <summary><span class="plug-resp-code ${scls}">${s.code}</span> <span class="plug-resp-label">${escHtml(s.label)}</span></summary>
+            <pre class="plug-ep-resp-body">${escHtml(s.body)}</pre>
+        </details>`;
+    }).join('');
+
+    const curlRaw = _curlEx(ep);
+    const ps1Raw  = _ps1Ex(ep);
+
     return `
-        <div class="plug-endpoint-row" data-method="${method}" data-path="${path}" style="cursor:pointer;" title="${t('plugins.clickToTest')}">
-            <span class="plug-method ${cls}">${method}</span>
-            <code class="plug-path">${path}</code>
-            <span class="plug-endpoint-desc">${desc}</span>
-            ${needsAuth ? `<span class="plug-auth-badge" title="${t('plugins.requiresToken')}">${IC.lock}</span>` : ''}
+        <div class="plug-ep-wrap" id="epw-${safeId}">
+            <div class="plug-endpoint-row" data-method="${ep.method}" data-path="${ep.path}" data-ep-id="${safeId}">
+                <button class="plug-ep-chevron" id="epchev-${safeId}" aria-label="expand" data-tooltip="${t('plugins.epExpandTip')}">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <span class="plug-method ${cls}">${ep.method}</span>
+                <code class="plug-path">${ep.path}</code>
+                <span class="plug-endpoint-desc">${ep.desc}</span>
+                <div class="plug-ep-row-actions">
+                    <button class="btn btn-xs btn-ghost plug-ep-test-btn" data-method="${ep.method}" data-path="${ep.path}" data-tooltip="${t('plugins.clickToTest')}">${IC.play}</button>
+                    <button class="btn btn-xs btn-ghost plug-ep-copy-btn" data-copy="${ep.path}" data-tooltip="${t('plugins.epCopy')}">${IC.copy}</button>
+                    ${ep.auth ? `<span class="plug-auth-badge" data-tooltip="${t('plugins.requiresToken')}">${IC.lock}</span>` : ''}
+                </div>
+            </div>
+            <div class="plug-ep-detail plug-ep-swagger" id="epd-${safeId}" style="display:none;">
+                <div class="plug-ep-swagger-left">
+                    <p class="plug-ep-about">${escHtml(ep.about)}</p>
+                    ${fieldsHtml}
+                </div>
+                <div class="plug-ep-swagger-right">
+                    <div class="plug-ep-code-tabs" data-epid="${safeId}">
+                        <div class="plug-ep-lang-tabs-scroll">
+                            <button class="plug-ep-code-tab active" data-lang="curl">cURL</button>
+                            <button class="plug-ep-code-tab" data-lang="ps1">PS1</button>
+                            <button class="plug-ep-code-tab" data-lang="js">JS</button>
+                            <button class="plug-ep-code-tab" data-lang="python">Python</button>
+                            <button class="plug-ep-code-tab" data-lang="lua">Lua</button>
+                            <button class="plug-ep-code-tab" data-lang="go">Go</button>
+                            <button class="plug-ep-code-tab" data-lang="rust">Rust</button>
+                            <button class="plug-ep-code-tab" data-lang="java">Java</button>
+                            <button class="plug-ep-code-tab" data-lang="cs">C#</button>
+                            <button class="plug-ep-code-tab" data-lang="php">PHP</button>
+                            <button class="plug-ep-code-tab" data-lang="ruby">Ruby</button>
+                        </div>
+                        <button class="btn btn-xs btn-ghost plug-ep-copy-code-btn" data-epid="${safeId}" data-tooltip="${t('plugins.epCopy')}">${IC.copy}</button>
+                    </div>
+                    <pre class="plug-ep-code-block" id="epc-${safeId}">${hlCode(curlRaw, 'curl')}</pre>
+                    <div class="plug-ep-responses">
+                        <div class="plug-ep-section-lbl">${t('plugins.epResponses')}</div>
+                        ${statusesHtml}
+                    </div>
+                </div>
+            </div>
         </div>`;
+}
+
+function getEndpointDefs(): EndpointDef[] {
+    const e401 = { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' };
+    const e404 = { code: 404, label: 'Not Found', body: '{ "error": "Not found" }' };
+    const e400 = { code: 400, label: 'Bad Request', body: '{ "error": "..." }' };
+    return [
+        {
+            method: 'GET', path: '/api/health', auth: false,
+            desc: t('plugins.endpointHealth'), about: t('plugins.epAboutHealth'),
+            fields: null,
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "service": "BMM Plugin API", "port": 51274 }' }],
+        },
+        {
+            method: 'GET', path: '/api/status', auth: false,
+            desc: t('plugins.endpointStatus'), about: t('plugins.epAboutStatus'),
+            fields: null,
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "version": "1.0.0", "active_profile": { "id": "...", "name": "..." }, "mod_count": 42, "profile_count": 3, "plugin_count": 1 }' }],
+        },
+        {
+            method: 'GET', path: '/api/mods', auth: false,
+            desc: t('plugins.endpointMods'), about: t('plugins.epAboutMods'),
+            fields: null,
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "id": "...", "name": "...", "active": true, "enabled": true, "path": "..." }] }' }],
+        },
+        {
+            method: 'GET', path: '/api/mods/active', auth: false,
+            desc: t('plugins.endpointModsActive'), about: t('plugins.epAboutModsActive'),
+            fields: null,
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "id": "...", "name": "...", "active": true }] }' }],
+        },
+        {
+            method: 'GET', path: '/api/profiles', auth: false,
+            desc: t('plugins.endpointProfiles'), about: t('plugins.epAboutProfiles'),
+            fields: null,
+            responseStatuses: [{ code: 200, label: 'OK', body: '[{ "id": "...", "name": "...", "active_mods": ["mod-id-1", "mod-id-2"] }]' }],
+        },
+        {
+            method: 'GET', path: '/api/plugins', auth: false,
+            desc: t('plugins.endpointPlugins'), about: t('plugins.epAboutPlugins'),
+            fields: null,
+            responseStatuses: [{ code: 200, label: 'OK', body: '[{ "manifest": { "id": "...", "name": "...", "version": "1.0.0" }, "enabled": true }]' }],
+        },
+        {
+            method: 'GET', path: '/api/creator-id', auth: false,
+            desc: t('plugins.endpointCreatorId'), about: t('plugins.epAboutCreatorId'),
+            fields: null,
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "creator_id": "a1b2c3d4e5f6..." }' }],
+        },
+        {
+            method: 'POST', path: '/api/mods/enable', auth: true,
+            desc: t('plugins.endpointEnableMod'), about: t('plugins.epAboutEnableMod'),
+            fields: [{ name: 'mod_id', type: 'string', required: true, desc: t('plugins.fieldModId') }],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "mod_id": "your-mod-id" }' },
+                e401, e404,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/mods/disable', auth: true,
+            desc: t('plugins.endpointDisableMod'), about: t('plugins.epAboutDisableMod'),
+            fields: [{ name: 'mod_id', type: 'string', required: true, desc: t('plugins.fieldModId') }],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "mod_id": "your-mod-id" }' },
+                e401, e404,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/profiles/activate', auth: true,
+            desc: t('plugins.endpointActivateProfile'), about: t('plugins.epAboutActivateProfile'),
+            fields: [{ name: 'profile_id', type: 'string', required: true, desc: t('plugins.fieldProfileId') }],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "profile_id": "your-profile-id" }' },
+                e401, e404,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/plugins/compare', auth: true,
+            desc: t('plugins.endpointCompare'), about: t('plugins.epAboutCompare'),
+            fields: [{ name: 'plugin_id', type: 'string', required: true, desc: t('plugins.fieldPluginId') }],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "plugin_id": "...", "all_required_active": false, "missing_required": 2, "required": [...], "strict_extra": [...] }' },
+                e401, e404,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/plugins/apply', auth: true,
+            desc: t('plugins.endpointApply'), about: t('plugins.epAboutApply'),
+            fields: [
+                { name: 'plugin_id', type: 'string', required: true, desc: t('plugins.fieldPluginId') },
+                { name: 'force_strict', type: 'boolean', required: false, desc: t('plugins.fieldForceStrict') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "enabled": 3, "not_found": [], "strict": false }' },
+                e400, e401, e404,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/modpacks/enable', auth: true,
+            desc: t('plugins.endpointEnableModpack'), about: t('plugins.epAboutEnableModpack'),
+            fields: [{ name: 'profile_id', type: 'string', required: true, desc: t('plugins.fieldModpackProfileId') }],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "profile_id": "your-profile-id", "enabled_count": 5 }' },
+                e401, e404,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/modpacks/disable', auth: true,
+            desc: t('plugins.endpointDisableModpack'), about: t('plugins.epAboutDisableModpack'),
+            fields: [{ name: 'profile_id', type: 'string', required: true, desc: t('plugins.fieldModpackProfileId') }],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "profile_id": "your-profile-id", "disabled_count": 5 }' },
+                e401, e404,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/server-repo/connect', auth: true,
+            desc: t('plugins.endpointServerRepoConnect'), about: t('plugins.epAboutServerRepoConnect'),
+            fields: [
+                { name: 'url', type: 'string', required: true, desc: t('plugins.fieldServerRepoUrl') },
+                { name: 'name', type: 'string', required: false, desc: t('plugins.fieldServerRepoName') },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "url": "https://...", "name": "My Server" }' },
+                e400, e401,
+            ],
+        },
+    ];
 }
 
 async function handleApiTest() {
@@ -841,7 +1548,8 @@ async function handleApiTest() {
         const json = await res.json().catch(() => null);
         statusBadge.textContent = `${res.status} ${res.statusText}`;
         statusBadge.className = `plug-tester-status ${res.ok ? 'plug-status-ok' : 'plug-status-err'}`;
-        respPre.textContent = json !== null ? JSON.stringify(json, null, 2) : '';
+        const pretty = json !== null ? JSON.stringify(json, null, 2) : '';
+        respPre.innerHTML = hlJson(pretty);
     } catch (e) {
         statusBadge.textContent = t('common.error');
         statusBadge.className = 'plug-tester-status plug-status-err';
@@ -874,15 +1582,15 @@ function addActionRow() {
                 <button class="btn btn-xs btn-ghost plug-row-up">${IC.arrowUp}</button>
                 <button class="btn btn-xs btn-ghost plug-row-down">${IC.arrowDown}</button>
             </div>
-            <select class="select select-sm plug-action-type" style="min-width:148px;">
-                <optgroup label="BMM">
+            <select class="select select-sm plug-action-type" style="min-width:148px;" data-tooltip="${t('plugins.actionTypeTip')}">
+                <optgroup label="${t('plugins.actionGroupBmm')}">
                     <option value="enable_mod">${t('plugins.actionEnableMod')}</option>
                     <option value="disable_mod">${t('plugins.actionDisableMod')}</option>
                     <option value="activate_profile">${t('plugins.actionActivateProfile')}</option>
                     <option value="apply_plugin">${t('plugins.actionApplyPlugin')}</option>
                     <option value="compare_plugin">${t('plugins.actionComparePlugin')}</option>
                 </optgroup>
-                <optgroup label="System">
+                <optgroup label="${t('plugins.actionGroupSystem')}">
                     <option value="wait">${t('plugins.actionWait')}</option>
                     <option value="close_process">${t('plugins.actionCloseProcess')}</option>
                     <option value="open_url">${t('plugins.actionOpenUrl')}</option>
@@ -943,11 +1651,15 @@ function addActionRow() {
 async function handlePreviewScript() {
     const script = await buildScript();
     if (script == null) return;
-    const output = document.getElementById('plug-gen-output') as HTMLElement;
-    const code   = document.getElementById('plug-gen-code') as HTMLElement;
-    output.style.display = 'block';
-    code.textContent = script;
-    output.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const format      = (document.getElementById('plug-gen-format') as HTMLSelectElement)?.value || 'bat';
+    const output      = document.getElementById('plug-gen-output') as HTMLElement;
+    const placeholder = document.getElementById('plug-gen-placeholder') as HTMLElement;
+    const code        = document.getElementById('plug-gen-code') as HTMLElement;
+    if (placeholder) placeholder.style.display = 'none';
+    output.style.display = 'flex';
+    code.innerHTML = highlightScript(script, format);
+    // Store raw text for copy
+    code.dataset.raw = script;
 }
 
 async function handleSaveScript() {
@@ -1170,12 +1882,9 @@ async function handleCompare(pluginId: string) {
     try {
         const result = await invoke('compare_plugin_mods', { pluginId });
         const plugin = _installedPlugins.find(p => p.manifest.id === pluginId);
-        const ov = createOverlay(buildCompareContent(result, plugin?.manifest?.name));
+        // Compare mode: informational only — no Apply button
+        const ov = createOverlay(buildCompareContent(result, plugin?.manifest?.name, 'compare'));
         ov.querySelectorAll('.plug-ov-close-btn').forEach(b => b.addEventListener('click', () => ov.remove()));
-        ov.querySelector('#plug-ov-apply')?.addEventListener('click', async () => {
-            ov.remove();
-            await doApply(pluginId, result);
-        });
     } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
 }
 
@@ -1185,7 +1894,16 @@ async function handleApply(pluginId: string) {
         toast(t('plugins.noModlist'), 'warning');
         return;
     }
-    await handleCompare(pluginId);
+    try {
+        const result = await invoke('compare_plugin_mods', { pluginId });
+        // Apply mode: shows same compare info but WITH the Apply Now button
+        const ov = createOverlay(buildCompareContent(result, plugin?.manifest?.name, 'apply'));
+        ov.querySelectorAll('.plug-ov-close-btn').forEach(b => b.addEventListener('click', () => ov.remove()));
+        ov.querySelector('#plug-ov-apply')?.addEventListener('click', async () => {
+            ov.remove();
+            await doApply(pluginId, result);
+        });
+    } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
 }
 
 async function doApply(pluginId: string, cmp?: any) {
@@ -1240,6 +1958,79 @@ async function handleExport(pluginId: string, name: string) {
     } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
 }
 
+function handleInspect(plugin: any) {
+    const manifest = plugin.manifest ?? plugin;
+    const json = JSON.stringify(manifest, null, 2);
+    const ov = createOverlay(`
+        <div class="plug-ov-header">
+            <span class="plug-ov-title">${IC.eye} <strong>${escHtml(manifest.name)}</strong></span>
+            <button class="btn btn-xs btn-ghost plug-ov-close-btn">${IC.x}</button>
+        </div>
+        <div class="plug-ov-body" style="padding:14px 16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <span style="font-size:11px;color:var(--text-muted);">plugin.json</span>
+                <button class="btn btn-xs btn-ghost" id="plug-inspect-copy">${IC.copy} ${t('common.copy')}</button>
+            </div>
+            <pre class="plug-code-pre" style="max-height:55vh;overflow:auto;font-size:11px;">${hlJson(json)}</pre>
+        </div>
+        <div class="plug-ov-footer">
+            <button class="btn btn-ghost plug-ov-close-btn">${t('common.close')}</button>
+        </div>`);
+    ov.querySelector('#plug-inspect-copy')?.addEventListener('click', async () => {
+        await navigator.clipboard.writeText(json).catch(() => {});
+        toast(t('common.copy'), 'success');
+    });
+    ov.querySelectorAll('.plug-ov-close-btn').forEach(b => b.addEventListener('click', () => ov.remove()));
+}
+
+function handleEditPlugin(manifest: any) {
+    // Navigate to Create tab with pre-filled data
+    const tab = document.querySelector('.plug-tab[data-tab="create"]') as HTMLElement;
+    if (tab) tab.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    // Pre-fill after render
+    setTimeout(() => prefillCreateTab(manifest), 60);
+}
+
+function handleDuplicatePlugin(manifest: any) {
+    const copy = JSON.parse(JSON.stringify(manifest));
+    copy.id = `${copy.id}-copy`;
+    copy.name = `${copy.name} (Copy)`;
+    const tab = document.querySelector('.plug-tab[data-tab="create"]') as HTMLElement;
+    if (tab) tab.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    setTimeout(() => prefillCreateTab(copy), 60);
+}
+
+function prefillCreateTab(manifest: any) {
+    const setVal = (id: string, val: string) => {
+        const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null;
+        if (el) el.value = val ?? '';
+    };
+    setVal('pc-id', manifest.id || '');
+    setVal('pc-name', manifest.name || '');
+    setVal('pc-version', manifest.version || '1.0.0');
+    setVal('pc-game', manifest.game || '');
+    setVal('pc-desc', manifest.description || '');
+    const strictCb = document.getElementById('pc-strict') as HTMLInputElement | null;
+    if (strictCb) {
+        strictCb.checked = !!(manifest.modlist?.strict);
+        strictCb.dispatchEvent(new Event('change'));
+    }
+    // Pre-select mods
+    const mods: { name: string; optional: boolean }[] = manifest.modlist?.required_mods || [];
+    for (const mod of mods) {
+        // Find mod item by name and click add
+        const items = document.querySelectorAll('.plug-mod-item');
+        for (const item of Array.from(items) as HTMLElement[]) {
+            if ((item.dataset.name || '').toLowerCase() === mod.name.toLowerCase()) {
+                const optCb = item.querySelector('.plug-mod-optional-cb') as HTMLInputElement | null;
+                if (optCb) optCb.checked = mod.optional;
+                (item.querySelector('.plug-mod-add-btn') as HTMLElement)?.click();
+                break;
+            }
+        }
+    }
+}
+
 async function handleResetToken() {
     const ok = await window.confirmCustom!(
         t('plugins.resetTokenTitle'),
@@ -1256,146 +2047,44 @@ async function handleResetToken() {
     } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
 }
 
-// ── Tab: Docs ──────────────────────────────────────────────────────────────
+// ── Tab: Docs (redirect to Help & Other > Plugins & API) ──────────────────
 
 function renderDocs(container: HTMLElement) {
-    const S = (title: string, icon: string, body: string) => `
-        <details class="plug-doc-section" open>
-            <summary class="plug-doc-summary">${icon} <strong>${title}</strong></summary>
-            <div class="plug-doc-body">${body}</div>
-        </details>`;
-
-    const CODE = (c: string) => `<code class="plug-doc-code">${escHtml(c)}</code>`;
-    const PRE  = (c: string) => `<pre class="plug-code-pre" style="margin-top:8px;font-size:11px;">${escHtml(c)}</pre>`;
-    const H    = (txt: string) => `<p class="plug-doc-h">${txt}</p>`;
-    const P    = (txt: string) => `<p class="plug-doc-p">${txt}</p>`;
-    const UL   = (items: string[]) => `<ul class="plug-doc-ul">${items.map(i=>`<li>${i}</li>`).join('')}</ul>`;
-
     container.innerHTML = `
-        <div class="plug-docs-root">
-
-            ${S(t('docs.pluginFormatTitle'), IC.puzzle, `
-                ${P(t('docs.pluginFormatDesc'))}
-                ${H(t('docs.pluginJsonTitle'))}
-                ${PRE(`{
-  "id": "my-server",
-  "name": "My Server Modlist",
-  "version": "1.0.0",
-  "author": "YourName",
-  "game": "DCS World",
-  "description": "Required mods for My Server",
-  "official": false,
-  "permissions": ["read_mods", "enable_mods"],
-  "modlist": {
-    "strict": false,
-    "required_mods": [
-      { "name": "Mod Folder Name", "optional": false },
-      { "name": "Optional Mod",    "optional": true  }
-    ]
-  }
-}`)}
-                ${UL([
-                    `${CODE('id')} — ${t('docs.fieldId')}`,
-                    `${CODE('name')} — ${t('docs.fieldName')}`,
-                    `${CODE('modlist.strict')} — ${t('docs.fieldStrict')}`,
-                    `${CODE('required_mods[].name')} — ${t('docs.fieldModName')}`,
-                    `${CODE('required_mods[].optional')} — ${t('docs.fieldOptional')}`,
-                ])}
-                ${H(t('docs.bmmplugTitle'))}
-                ${P(t('docs.bmmplugDesc'))}
-                ${PRE(`my-plugin.bmmplug  (ZIP file containing)
-├── plugin.json     ← required
-└── icon.png        ← optional (40×40 recommended)`)}
-            `)}
-
-            ${S(t('docs.deepLinkTitle'), IC.globe, `
-                ${P(t('docs.deepLinkDesc'))}
-                ${UL([
-                    `${CODE('bmm://plugin/activate?id=my-server')} — ${t('docs.dlActivate')}`,
-                    `${CODE('bmm://plugin/compare?id=my-server')}  — ${t('docs.dlCompare')}`,
-                    `${CODE('bmm://mod/enable?id=mod-id')}          — ${t('docs.dlEnableMod')}`,
-                    `${CODE('bmm://mod/disable?id=mod-id')}         — ${t('docs.dlDisableMod')}`,
-                    `${CODE('bmm://profile/activate?id=prof-id')}   — ${t('docs.dlProfile')}`,
-                    `${CODE('bmm://install?url=https://...&name=ModName')} — ${t('docs.dlInstall')}`,
-                ])}
-                ${H(t('docs.dlScriptTitle'))}
-                ${PRE(`start "" "bmm://plugin/activate?id=my-server"`)}
-            `)}
-
-            ${S(t('docs.apiTitle'), IC.zap, `
-                ${P(t('docs.apiDesc'))} ${CODE('http://127.0.0.1:51274')}
-                ${H(t('docs.apiAuth'))}
-                ${PRE(`Authorization: Bearer <your-token>`)}
-                ${H('GET endpoints (no auth required)')}
-                ${UL([
-                    `${CODE('GET /api/health')} — ${t('plugins.endpointHealth')}`,
-                    `${CODE('GET /api/status')} — ${t('plugins.endpointStatus')}`,
-                    `${CODE('GET /api/mods')} — ${t('plugins.endpointMods')}`,
-                    `${CODE('GET /api/mods/active')} — ${t('plugins.endpointModsActive')}`,
-                    `${CODE('GET /api/profiles')} — ${t('plugins.endpointProfiles')}`,
-                    `${CODE('GET /api/plugins')} — ${t('plugins.endpointPlugins')}`,
-                ])}
-                ${H('POST endpoints (Bearer token required)')}
-                ${PRE(`# Enable a mod
-curl -X POST http://127.0.0.1:51274/api/mods/enable \\
-  -H "Authorization: Bearer TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d '{"mod_id":"my-mod-id"}'
-
-# Apply plugin modlist
-curl -X POST http://127.0.0.1:51274/api/plugins/apply \\
-  -H "Authorization: Bearer TOKEN" \\
-  -d '{"plugin_id":"my-server","force_strict":false}'`)}
-                ${H('PowerShell example')}
-                ${PRE(`Invoke-RestMethod -Method POST \\
-  -Uri "http://127.0.0.1:51274/api/mods/enable" \\
-  -Headers @{Authorization="Bearer $TOKEN"} \\
-  -Body '{"mod_id":"my-mod-id"}' \\
-  -ContentType "application/json"`)}
-            `)}
-
-            ${S(t('docs.scriptGenTitle'), IC.terminal, `
-                ${P(t('docs.scriptGenDesc'))}
-                ${H(t('docs.scriptGenFormats'))}
-                ${UL([
-                    `${CODE('.bat')} — Windows CMD, works on all Windows versions`,
-                    `${CODE('.ps1')} — PowerShell, more reliable, supports long paths`,
-                    `${CODE('.vbs')} — VBScript, silent execution (no console window)`,
-                ])}
-                ${H(t('docs.scriptGenModes'))}
-                ${UL([
-                    `<strong>Deep links</strong> — ${t('docs.modeDeeplink')}`,
-                    `<strong>HTTP API</strong> — ${t('docs.modeApi')}`,
-                ])}
-                ${H(t('docs.scriptGenActions'))}
-                ${UL([
-                    `${CODE('enable_mod')} / ${CODE('disable_mod')} — ${t('docs.actEnableDisable')}`,
-                    `${CODE('activate_profile')} — ${t('docs.actProfile')}`,
-                    `${CODE('apply_plugin')} — ${t('docs.actApply')}`,
-                    `${CODE('compare_plugin')} — ${t('docs.actCompare')}`,
-                    `${CODE('wait')} — ${t('docs.actWait')}`,
-                    `${CODE('close_process')} — ${t('docs.actClose')}`,
-                    `${CODE('open_url')} — ${t('docs.actUrl')}`,
-                    `${CODE('show_message')} — ${t('docs.actMsg')}`,
-                    `${CODE('launch_game')} — ${t('docs.actLaunch')}`,
-                ])}
-            `)}
-
-            ${S(t('docs.publishTitle'), IC.upload, `
-                ${P(t('docs.publishDesc'))}
-                ${UL([
-                    t('docs.publishStep1'),
-                    t('docs.publishStep2'),
-                    t('docs.publishStep3'),
-                    t('docs.publishStep4'),
-                ])}
-                <div style="margin-top:12px;">
-                    <a class="btn btn-sm btn-ghost" href="https://github.com/BetterDCS/BetterModsManager_Plugins" target="_blank">${IC.globe} BetterDCS/BetterModsManager_Plugins</a>
-                    <a class="btn btn-sm btn-ghost" href="https://github.com/FreeProject089/BetterModsManager" target="_blank">${IC.globe} BMM GitHub</a>
-                </div>
-            `)}
-
+        <div class="plug-docs-redirect">
+            <div class="plug-docs-redirect-icon">${IC.info}</div>
+            <h3 class="plug-docs-redirect-title">${t('plugins.docsMovedTitle')}</h3>
+            <p class="plug-docs-redirect-desc">${t('plugins.docsMovedDesc')}</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-accent" id="plug-goto-helpdocs">
+                    ${IC.info} ${t('plugins.docsMovedBtn')}
+                </button>
+                <button class="btn btn-sm btn-ghost" id="doc-guide-en">${IC.info} ${t('plugins.guideENBtn')}</button>
+                <button class="btn btn-sm btn-ghost" id="doc-guide-fr">${IC.info} ${t('plugins.guideFRBtn')}</button>
+                <button class="btn btn-sm btn-ghost" id="doc-catalog-guide">${IC.list} ${t('plugins.catalogGuideBtn')}</button>
+            </div>
         </div>`;
+
+    container.querySelector('#plug-goto-helpdocs')?.addEventListener('click', () => {
+        // Navigate to Help & Other, then activate the plugins-api tab
+        const navBtn = document.querySelector('.nav-item[data-view="docs"], .nav-btn[data-view="docs"]') as HTMLElement;
+        if (navBtn) {
+            navBtn.click();
+            setTimeout(() => {
+                const tabBtn = document.querySelector('.docs-tab-btn[data-tab="plugins-api"]') as HTMLElement;
+                if (tabBtn) tabBtn.click();
+            }, 80);
+        }
+    });
+    container.querySelector('#doc-guide-en')?.addEventListener('click', () => {
+        invoke('open_file', { path: 'Update\\Guides\\Mod_Identity_Guide_EN.md' }).catch(() => {});
+    });
+    container.querySelector('#doc-guide-fr')?.addEventListener('click', () => {
+        invoke('open_file', { path: 'Update\\Guides\\Mod_Identity_Guide_FR.md' }).catch(() => {});
+    });
+    container.querySelector('#doc-catalog-guide')?.addEventListener('click', () => {
+        invoke('open_file', { path: 'Update\\Guides\\Plugin_Catalog_Guide_EN.md' }).catch(() => {});
+    });
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -1410,5 +2099,5 @@ export async function handleApplyViaDeepLink(pluginId: string): Promise<void> {
     const plugin = plugins.find(p => p.manifest.id === pluginId);
     if (!plugin) { toast(t('plugins.deepLinkNotFound', { id: pluginId }), 'error'); return; }
     _installedPlugins = plugins;
-    await handleCompare(pluginId);
+    await handleApply(pluginId);
 }

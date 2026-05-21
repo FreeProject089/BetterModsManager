@@ -2541,6 +2541,15 @@
                                 </svg>
                                 <span data-i18n="docs.tab.faq">FAQ</span>
                             </button>
+                            <button class="docs-tab-btn btn-docs-tab" data-tab="plugins-api"
+                                onmouseenter="window.showTaskyHelp('docs.tab.pluginsApiTip','zap')"
+                                onmouseleave="window.hideTaskyHelp()">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.2">
+                                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                                </svg>
+                                <span data-i18n="docs.tab.pluginsApi">Plugins & API</span>
+                            </button>
                         </div>
                     </div>
 
@@ -6004,6 +6013,322 @@
                             </details>
                         </div><!-- /faq-category betahub -->
                     </div><!-- /docs-tab-faq -->
+
+                    <!-- TAB: PLUGINS & API -->
+                    <div id="docs-tab-plugins-api" class="docs-tab-content" style="display: none; padding: 20px 0 40px;">
+
+                        <!-- Hero header -->
+                        <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:22px;padding:18px 20px;background:linear-gradient(135deg,rgba(96,165,250,0.07),rgba(139,92,246,0.05));border:1px solid rgba(96,165,250,0.18);border-radius:12px;">
+                            <div style="width:38px;height:38px;border-radius:10px;background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                            </div>
+                            <div>
+                                <h2 style="font-size:16px;color:var(--text-primary);margin:0 0 4px;font-weight:600;" data-i18n="docs.pluginsApi.title">Plugin &amp; API System</h2>
+                                <p style="color:var(--text-secondary);font-size:12.5px;margin:0;line-height:1.5;" data-i18n="docs.pluginsApi.desc">Create, share and automate mod management via the BMM plugin system and local HTTP API.</p>
+                            </div>
+                        </div>
+
+                        <div style="display:flex;flex-direction:column;gap:10px;">
+
+                        <!-- .bmmplug format -->
+                        <details class="plug-doc-section" open>
+                            <summary class="plug-doc-summary">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/></svg>
+                                <strong data-i18n="docs.pluginFormatTitle">Plugin Format (.bmmplug)</strong>
+                                <svg class="plug-doc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                            </summary>
+                            <div class="plug-doc-body">
+                                <p class="plug-doc-p" data-i18n="docs.pluginFormatDesc">A <code>.bmmplug</code> file is a <strong>ZIP archive</strong> renamed with the <code>.bmmplug</code> extension. It contains a manifest and an optional icon.</p>
+
+                                <div class="plug-doc-tip">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                    <span data-i18n="docs.pluginFormatTip">The <code>required_mods[].name</code> must match the <strong>exact folder name</strong> of the mod as it appears in BMM's library (case-insensitive).</span>
+                                </div>
+
+                                <p class="plug-doc-h" data-i18n="docs.bmmplugTitle">Archive structure</p>
+                                <div class="plug-doc-code-wrap">
+                                    <span class="plug-doc-code-lang">ZIP</span>
+                                    <pre class="plug-code-pre">my-plugin.bmmplug
+├── plugin.json     ← required — the manifest
+└── icon.png        ← optional  (40×40 px recommended)</pre>
+                                </div>
+
+                                <p class="plug-doc-h" data-i18n="docs.pluginJsonTitle">plugin.json — full structure</p>
+                                <div class="plug-doc-code-wrap">
+                                    <span class="plug-doc-code-lang">JSON</span>
+                                    <pre class="plug-code-pre">{
+  "id":          "my-server-pack",
+  "name":        "My Server Modpack",
+  "version":     "1.2.0",
+  "author":      "YourName",
+  "game":        "DCS World",
+  "description": "Required mods for My Server",
+  "official":    false,
+  "permissions": ["read_mods", "enable_mods"],
+  "tags":        ["dcs", "multiplayer"],
+  "website":     "https://myserver.example.com",
+  "modlist": {
+    "strict": false,
+    "required_mods": [
+      { "name": "ExactModFolderName", "optional": false },
+      { "name": "OptionalMod",        "optional": true  }
+    ]
+  }
+}</pre>
+                                </div>
+
+                                <p class="plug-doc-h" data-i18n="docs.strictModeTitle">Strict vs Non-Strict mode</p>
+                                <ul class="plug-doc-ul">
+                                    <li><code>"strict": false</code> — <span data-i18n="docs.strictFalse">Only enables required mods. Does not touch other active mods.</span></li>
+                                    <li><code>"strict": true</code>  — <span data-i18n="docs.strictTrue">Enables required mods AND disables all other active mods not in the list.</span></li>
+                                </ul>
+                            </div>
+                        </details>
+
+                        <!-- Deep links -->
+                        <details class="plug-doc-section" open>
+                            <summary class="plug-doc-summary">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                <strong data-i18n="docs.deepLinkTitle">bmm:// Deep Links</strong>
+                                <svg class="plug-doc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                            </summary>
+                            <div class="plug-doc-body">
+                                <p class="plug-doc-p" data-i18n="docs.deepLinkDesc">Trigger BMM actions from any external script, bat file, or application by opening a <code>bmm://</code> URL. No authentication needed.</p>
+
+                                <p class="plug-doc-h" data-i18n="docs.dlUrlsTitle">Available URLs</p>
+                                <ul class="plug-doc-ul">
+                                    <li><code>bmm://plugin/activate?id=my-server</code> &nbsp;— <span data-i18n="docs.dlActivate">Apply plugin modlist</span></li>
+                                    <li><code>bmm://plugin/compare?id=my-server</code>  &nbsp;— <span data-i18n="docs.dlCompare">Compare modlist</span></li>
+                                    <li><code>bmm://mod/enable?id=mod-id</code>          &nbsp;— <span data-i18n="docs.dlEnableMod">Enable a specific mod</span></li>
+                                    <li><code>bmm://mod/disable?id=mod-id</code>         &nbsp;— <span data-i18n="docs.dlDisableMod">Disable a specific mod</span></li>
+                                    <li><code>bmm://profile/activate?id=prof-id</code>   &nbsp;— <span data-i18n="docs.dlProfile">Activate a profile</span></li>
+                                    <li><code>bmm://install?url=https://...&amp;name=ModName</code> &nbsp;— <span data-i18n="docs.dlInstall">Install a mod from URL</span></li>
+                                </ul>
+
+                                <p class="plug-doc-h" data-i18n="docs.dlScriptTitle">Script examples</p>
+                                <div class="plug-doc-code-wrap">
+                                    <span class="plug-doc-code-lang">BAT</span>
+                                    <pre class="plug-code-pre">REM Apply a plugin modlist
+start "" "bmm://plugin/activate?id=my-server"
+
+REM Enable a single mod
+start "" "bmm://mod/enable?id=my-mod-folder"</pre>
+                                </div>
+                                <div class="plug-doc-code-wrap" style="margin-top:6px;">
+                                    <span class="plug-doc-code-lang">PowerShell</span>
+                                    <pre class="plug-code-pre">Start-Process "bmm://plugin/activate?id=my-server"</pre>
+                                </div>
+
+                                <div class="plug-doc-tip" style="margin-top:10px;">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                    <span data-i18n="docs.dlNote">BMM must already be running for deep links to work. Links open the app if it is already in the tray.</span>
+                                </div>
+                            </div>
+                        </details>
+
+                        <!-- HTTP API -->
+                        <details class="plug-doc-section" open>
+                            <summary class="plug-doc-summary">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                                <strong data-i18n="docs.apiTitle">HTTP API (port 51274)</strong>
+                                <svg class="plug-doc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                            </summary>
+                            <div class="plug-doc-body">
+                                <p class="plug-doc-p" data-i18n="docs.apiDesc">BMM exposes a local REST API on <code>http://127.0.0.1:51274</code>. GET endpoints are public — POST endpoints require a Bearer token found in BMM's settings.</p>
+
+                                <p class="plug-doc-h" data-i18n="docs.apiAuth">Authentication (POST endpoints)</p>
+                                <div class="plug-doc-code-wrap">
+                                    <span class="plug-doc-code-lang">Header</span>
+                                    <pre class="plug-code-pre">Authorization: Bearer YOUR_API_TOKEN</pre>
+                                </div>
+
+                                <p class="plug-doc-h" data-i18n="docs.apiEndpoints">Endpoints</p>
+                                <div class="plug-doc-grid2">
+                                    <div class="plug-doc-ep-col get">
+                                        <h4>GET — no auth</h4>
+                                        <ul>
+                                            <li><code>GET /api/health</code></li>
+                                            <li><code>GET /api/status</code></li>
+                                            <li><code>GET /api/mods</code></li>
+                                            <li><code>GET /api/mods/active</code></li>
+                                            <li><code>GET /api/profiles</code></li>
+                                            <li><code>GET /api/plugins</code></li>
+                                            <li><code>GET /api/creator-id</code></li>
+                                        </ul>
+                                    </div>
+                                    <div class="plug-doc-ep-col post">
+                                        <h4>POST — Bearer token</h4>
+                                        <ul>
+                                            <li><code>POST /api/mods/enable</code></li>
+                                            <li><code>POST /api/mods/disable</code></li>
+                                            <li><code>POST /api/profiles/activate</code></li>
+                                            <li><code>POST /api/plugins/compare</code></li>
+                                            <li><code>POST /api/plugins/apply</code></li>
+                                            <li><code>POST /api/modpacks/enable</code></li>
+                                            <li><code>POST /api/modpacks/disable</code></li>
+                                            <li><code>POST /api/server-repo/connect</code></li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <p class="plug-doc-h">cURL examples</p>
+                                <div class="plug-doc-code-wrap">
+                                    <span class="plug-doc-code-lang">cURL</span>
+                                    <pre class="plug-code-pre"># Check API is running
+curl http://127.0.0.1:51274/api/health
+
+# Get your creator ID (no auth needed)
+curl http://127.0.0.1:51274/api/creator-id
+
+# Enable a mod (requires token)
+curl -X POST http://127.0.0.1:51274/api/mods/enable \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"mod_id":"my-mod-folder-name"}'
+
+# Apply plugin modlist
+curl -X POST http://127.0.0.1:51274/api/plugins/apply \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"plugin_id":"my-server","force_strict":false}'
+
+# Enable a full modpack (all mods in a profile)
+curl -X POST http://127.0.0.1:51274/api/modpacks/enable \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"profile_id":"my-profile-id"}'
+
+# Connect to a Server Repo / Depot
+curl -X POST http://127.0.0.1:51274/api/server-repo/connect \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://repo.example.com/depot.json","name":"My Server"}'</pre>
+                                </div>
+
+                                <p class="plug-doc-h">PowerShell example</p>
+                                <div class="plug-doc-code-wrap">
+                                    <span class="plug-doc-code-lang">PS1</span>
+                                    <pre class="plug-code-pre">$token = "YOUR_TOKEN"
+
+# Apply a plugin modlist
+$body = @{ plugin_id = "my-server"; force_strict = $false } | ConvertTo-Json
+Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/plugins/apply" `
+    -Method POST `
+    -Headers @{ Authorization = "Bearer $token"; "Content-Type" = "application/json" } `
+    -Body $body
+
+# Enable an entire modpack
+$body2 = @{ profile_id = "my-profile-id" } | ConvertTo-Json
+Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/modpacks/enable" `
+    -Method POST `
+    -Headers @{ Authorization = "Bearer $token"; "Content-Type" = "application/json" } `
+    -Body $body2
+
+# Connect to a Server Repo
+$body3 = @{ url = "https://repo.example.com/depot.json"; name = "My Server" } | ConvertTo-Json
+Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
+    -Method POST `
+    -Headers @{ Authorization = "Bearer $token"; "Content-Type" = "application/json" } `
+    -Body $body3</pre>
+                                </div>
+
+                                <div class="plug-doc-tip">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                    <span data-i18n="docs.apiNote">The full interactive API reference with request/response details is available in the <strong>Plugins page → API Reference</strong> tab.</span>
+                                </div>
+                            </div>
+                        </details>
+
+                        <!-- Permissions -->
+                        <details class="plug-doc-section">
+                            <summary class="plug-doc-summary">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                <strong data-i18n="docs.permsTitle">Permissions Reference</strong>
+                                <svg class="plug-doc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                            </summary>
+                            <div class="plug-doc-body">
+                                <p class="plug-doc-p" data-i18n="docs.permsDesc">Declare permissions in <code>plugin.json</code> — BMM will prompt the user to grant them on first use.</p>
+                                <table class="plug-doc-perm-table">
+                                    <thead>
+                                        <tr>
+                                            <th data-i18n="docs.permColPerm">Permission</th>
+                                            <th data-i18n="docs.permColDesc">What it allows</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td>read_mods</td><td data-i18n="docs.perm.readMods">Read the list of installed mods</td></tr>
+                                        <tr><td>enable_mods</td><td data-i18n="docs.perm.enableMods">Enable mods via deep link / API</td></tr>
+                                        <tr><td>disable_mods</td><td data-i18n="docs.perm.disableMods">Disable mods via deep link / API</td></tr>
+                                        <tr><td>switch_profile</td><td data-i18n="docs.perm.switchProfile">Activate a profile</td></tr>
+                                        <tr><td>apply_modlist</td><td data-i18n="docs.perm.applyModlist">Apply the full plugin modlist</td></tr>
+                                        <tr><td>compare_modlist</td><td data-i18n="docs.perm.compareModlist">Run a modlist comparison check</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </details>
+
+                        <!-- Publishing -->
+                        <details class="plug-doc-section">
+                            <summary class="plug-doc-summary">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                <strong data-i18n="docs.publishTitle">Publishing to the Catalog</strong>
+                                <svg class="plug-doc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                            </summary>
+                            <div class="plug-doc-body">
+                                <p class="plug-doc-p" data-i18n="docs.publishDesc">Share your plugin with all BMM users by submitting it to the community catalog on GitHub.</p>
+
+                                <p class="plug-doc-h" data-i18n="docs.publishStepsTitle">Steps</p>
+                                <div class="plug-doc-steps">
+                                    <div class="plug-doc-step">
+                                        <span class="plug-doc-step-num">1</span>
+                                        <span class="plug-doc-step-txt" data-i18n="docs.publishStep1">Create your plugin in BMM's <strong>Create</strong> tab and export it as <code>.bmmplug</code></span>
+                                    </div>
+                                    <div class="plug-doc-step">
+                                        <span class="plug-doc-step-num">2</span>
+                                        <span class="plug-doc-step-txt" data-i18n="docs.publishStep2">Test it: import the file back into BMM, run Compare and Apply to verify</span>
+                                    </div>
+                                    <div class="plug-doc-step">
+                                        <span class="plug-doc-step-num">3</span>
+                                        <span class="plug-doc-step-txt" data-i18n="docs.publishStep3">Fork <strong>BetterDCS/BetterModsManager_Plugins</strong> and add your <code>.bmmplug</code> under <code>plugins/your-id/</code></span>
+                                    </div>
+                                    <div class="plug-doc-step">
+                                        <span class="plug-doc-step-num">4</span>
+                                        <span class="plug-doc-step-txt" data-i18n="docs.publishStep4">Update <code>catalog.json</code> with your plugin entry, then open a Pull Request — it will be reviewed and merged</span>
+                                    </div>
+                                </div>
+
+                                <p class="plug-doc-h" data-i18n="docs.publishCatalogFmt">catalog.json entry format</p>
+                                <div class="plug-doc-code-wrap">
+                                    <span class="plug-doc-code-lang">JSON</span>
+                                    <pre class="plug-code-pre">{
+  "id":           "my-server-pack",
+  "name":         "My Server Modpack",
+  "version":      "1.2.0",
+  "author":       "YourGitHubName",
+  "game":         "DCS World",
+  "description":  "Required mods for My Server — updated for v2.9",
+  "official":     false,
+  "tags":         ["dcs", "multiplayer", "server"],
+  "download_url": "https://github.com/BetterDCS/.../my-server-pack.bmmplug",
+  "icon_url":     "https://raw.githubusercontent.com/BetterDCS/.../icon.png"
+}</pre>
+                                </div>
+
+                                <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+                                    <a class="btn btn-sm btn-ghost" href="https://github.com/BetterDCS/BetterModsManager_Plugins" target="_blank">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                                        BetterModsManager_Plugins
+                                    </a>
+                                    <a class="btn btn-sm btn-ghost" href="https://github.com/FreeProject089/BetterModsManager" target="_blank">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                                        BMM GitHub
+                                    </a>
+                                </div>
+                            </div>
+                        </details>
+
+                        </div><!-- /sections wrapper -->
+                    </div><!-- /docs-tab-plugins-api -->
                 </section>
 
                 <!-- ══ CREDITS VIEW ══ -->
