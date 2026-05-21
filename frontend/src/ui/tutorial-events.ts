@@ -45,5 +45,8 @@ export const BMM_ACTIONS = {
     INTEGRITY_CHECK: 'bmm:action:integrity-checked',
     MODLIST_IMPORTED:'bmm:action:modlist-imported',
     MODLIST_EXPORTED:'bmm:action:modlist-exported',
-    MAPPER_OPENED:   'bmm:action:mapper-opened',
+    MAPPER_OPENED:     'bmm:action:mapper-opened',
+    PLUGIN_INSTALLED:  'bmm:action:plugin-installed',
+    SCRIPT_GENERATED:  'bmm:action:script-generated',
+    API_TOKEN_COPIED:  'bmm:action:api-token-copied',
 } as const;

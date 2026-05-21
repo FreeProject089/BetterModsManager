@@ -399,6 +399,15 @@ export function createModCard(mod) {
             return;
         selectMod(mod.id);
     });
+    card.addEventListener('dblclick', (e) => {
+        if (e.target.closest('.btn-remove-mod') || e.target.closest('.btn-edit-mod') || e.target.closest('.btn-open-folder'))
+            return;
+        const toggle = card.querySelector('.mod-toggle-input');
+        if (toggle && !S.isGlobalProcessing && !S.processingMods.has(mod.id)) {
+            toggle.checked = !toggle.checked;
+            toggle.dispatchEvent(new Event('change'));
+        }
+    });
     return card;
 }
 export function updateCardState(card, mod) {

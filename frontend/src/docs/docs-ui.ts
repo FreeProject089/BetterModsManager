@@ -149,6 +149,7 @@ export function initDocsUI() {
     initQuickLinks();
     initDocInfoBlockAccent();
     initCtxLegendTooltip();
+    initDocTooltips();
 
     window.addEventListener('online', setupVideoPlayers);
     window.addEventListener('offline', setupVideoPlayers);
@@ -156,6 +157,25 @@ export function initDocsUI() {
         setupVideoPlayers();
         buildDiagramIndex(); // rebuildSynonymMap() is called inside
         initDocInfoBlockAccent(); // re-apply after possible DOM updates
+    });
+}
+
+// ─────────────────────────────────────────────────────────────
+// data-tooltip support for static HTML doc-info-block elements
+// Translates i18n keys stored in data-tooltip → Tasky help
+// ─────────────────────────────────────────────────────────────
+function initDocTooltips(): void {
+    const view = document.getElementById('view-docs');
+    if (!view) return;
+    view.addEventListener('mouseover', (e) => {
+        const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
+        if (!el) return;
+        const tip = el.getAttribute('data-tooltip') || '';
+        if (tip) (window as any).showTaskyHelp?.(tip, 'info');
+    });
+    view.addEventListener('mouseout', (e) => {
+        const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
+        if (el) (window as any).hideTaskyHelp?.();
     });
 }
 

@@ -3,6 +3,7 @@ import { invoke, pickFile, saveFile, convertFileSrc } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { escHtml } from '../../core/utils.js';
+import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 
 // ── SVG Icons (no unicode emoji) ───────────────────────────────────────────
 
@@ -37,6 +38,8 @@ const IC = {
   info:        `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
   exportIcon:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
   settings:    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  folder:      `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
+  hash:        `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>`,
 };
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -62,6 +65,12 @@ export async function initPlugins() {
     renderPluginsView();
     setupPluginTabs();
     await loadInitialData();
+    // Re-render when user switches language — no full-page refresh needed
+    document.addEventListener('langChanged', () => {
+        renderPluginsView();
+        setupPluginTabs();
+        renderTab(_tab);
+    });
 }
 
 async function loadInitialData() {
@@ -243,6 +252,13 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
                         ${IC.play} ${t('plugins.apply')}
                     </button>` : ''}
                 <div class="plug-card-actions-right">
+                    ${plugin.install_dir ? `
+                    <span class="plug-sha-badge plug-sha-badge--pending plug-btn-sha" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.checksumTitle')}">
+                        ${IC.hash} SHA
+                    </span>` : ''}
+                    <button class="btn btn-xs btn-ghost plug-btn-folder" data-id="${escHtml(manifest.id)}" data-dir="${escHtml(plugin.install_dir || '')}" data-tooltip="${t('plugins.openFolder')}">
+                        ${IC.folder}
+                    </button>
                     <button class="btn btn-xs btn-ghost plug-btn-inspect" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.inspect')}">
                         ${IC.eye}
                     </button>
@@ -280,6 +296,23 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
     card.querySelector('.plug-btn-inspect')?.addEventListener('click', () => handleInspect(plugin));
     card.querySelector('.plug-btn-edit')?.addEventListener('click', () => handleEditPlugin(manifest));
     card.querySelector('.plug-btn-duplicate')?.addEventListener('click', () => handleDuplicatePlugin(manifest));
+    card.querySelector('.plug-btn-folder')?.addEventListener('click', () => {
+        const dir = (card.querySelector('.plug-btn-folder') as HTMLElement)?.dataset.dir || plugin.install_dir || '';
+        if (dir) invoke('open_folder', { path: dir }).catch(() => {});
+    });
+    const shaBadge = card.querySelector('.plug-btn-sha') as HTMLElement | null;
+    if (shaBadge) {
+        // Load existing checksum or compute on demand
+        invoke('compute_plugin_checksum', { pluginId: manifest.id }).then((hash: string) => {
+            shaBadge.innerHTML = `${IC.hash} ${hash.substring(0, 8)}…`;
+            shaBadge.classList.remove('plug-sha-badge--pending');
+            shaBadge.dataset.full = hash;
+        }).catch(() => {});
+        shaBadge.addEventListener('click', () => {
+            const hash = shaBadge.dataset.full || '';
+            if (hash) handlePluginChecksumModal(manifest, plugin.install_dir, hash);
+        });
+    }
     card.querySelector('.plug-btn-install')?.addEventListener('click', (e) => {
         const btn = (e.target as HTMLElement).closest('.plug-btn-install') as HTMLButtonElement;
         handleInstall(btn?.dataset.url, btn?.dataset.name);
@@ -497,6 +530,119 @@ function highlightScript(code: string, format: string): string {
         }).join('\n');
     }
 
+    if (format === 'py') {
+        return code.split('\n').map(line => {
+            if (line.trim().startsWith('#')) return `<span class="sh-comment">${esc(line)}</span>`;
+            let out = esc(line);
+            out = out.replace(/\b(import|from|def|class|if|elif|else|for|while|in|return|try|except|finally|raise|with|as|pass|break|continue|and|or|not|is|None|True|False|lambda|yield|async|await|print|open|os|subprocess|time|webbrowser|requests)\b/g,
+                '<span class="sh-keyword">$1</span>');
+            out = out.replace(/f?"([^"]*)"/g, '<span class="sh-string">"$1"</span>');
+            out = out.replace(/f?'([^']*)'/g, `<span class="sh-string">'$1'</span>`);
+            out = out.replace(/\b(\d+\.?\d*)\b/g, '<span class="sh-num">$1</span>');
+            out = out.replace(/(bmm:\/\/[^\s&<>"']+)/g, '<span class="sh-url">$1</span>');
+            return out;
+        }).join('\n');
+    }
+
+    if (format === 'lua') {
+        return code.split('\n').map(line => {
+            if (line.trim().startsWith('--')) return `<span class="sh-comment">${esc(line)}</span>`;
+            let out = esc(line);
+            out = out.replace(/\b(local|function|end|if|then|else|elseif|for|while|do|repeat|until|return|break|in|not|and|or|nil|true|false|print|require|io|os|string|table|math)\b/g,
+                '<span class="sh-keyword">$1</span>');
+            out = out.replace(/"([^"]*)"/g, '<span class="sh-string">"$1"</span>');
+            out = out.replace(/'([^']*)'/g, `<span class="sh-string">'$1'</span>`);
+            out = out.replace(/\b(\d+\.?\d*)\b/g, '<span class="sh-num">$1</span>');
+            out = out.replace(/(bmm:\/\/[^\s&<>"']+)/g, '<span class="sh-url">$1</span>');
+            return out;
+        }).join('\n');
+    }
+
+    if (format === 'js') {
+        return code.split('\n').map(line => {
+            if (line.trim().startsWith('//')) return `<span class="sh-comment">${esc(line)}</span>`;
+            let out = esc(line);
+            out = out.replace(/\b(const|let|var|function|async|await|return|if|else|for|while|do|break|continue|new|typeof|instanceof|class|extends|import|require|module|exports|try|catch|finally|throw|true|false|null|undefined)\b/g,
+                '<span class="sh-keyword">$1</span>');
+            out = out.replace(/"([^"]*)"/g, '<span class="sh-string">"$1"</span>');
+            out = out.replace(/'([^']*)'/g, `<span class="sh-string">'$1'</span>`);
+            out = out.replace(/`([^`]*)`/g, `<span class="sh-string">\`$1\`</span>`);
+            out = out.replace(/\b(\d+\.?\d*)\b/g, '<span class="sh-num">$1</span>');
+            out = out.replace(/(bmm:\/\/[^\s&<>"']+)/g, '<span class="sh-url">$1</span>');
+            return out;
+        }).join('\n');
+    }
+
+    if (format === 'rb') {
+        return code.split('\n').map(line => {
+            if (line.trim().startsWith('#')) return `<span class="sh-comment">${esc(line)}</span>`;
+            let out = esc(line);
+            out = out.replace(/\b(require|def|end|do|if|elsif|else|unless|while|for|in|return|puts|print|sleep|system|nil|true|false|class|module|begin|rescue|ensure)\b/g,
+                '<span class="sh-keyword">$1</span>');
+            out = out.replace(/"([^"]*)"/g, '<span class="sh-string">"$1"</span>');
+            out = out.replace(/'([^']*)'/g, `<span class="sh-string">'$1'</span>`);
+            out = out.replace(/\b(\d+\.?\d*)\b/g, '<span class="sh-num">$1</span>');
+            out = out.replace(/(bmm:\/\/[^\s&<>"']+)/g, '<span class="sh-url">$1</span>');
+            return out;
+        }).join('\n');
+    }
+
+    if (format === 'php') {
+        return code.split('\n').map(line => {
+            if (line.trim().startsWith('//') || line.trim().startsWith('#')) return `<span class="sh-comment">${esc(line)}</span>`;
+            let out = esc(line);
+            out = out.replace(/\b(function|if|else|while|for|foreach|return|echo|print|sleep|new|class|use|namespace|true|false|null|isset|empty)\b/g,
+                '<span class="sh-keyword">$1</span>');
+            out = out.replace(/\$[A-Za-z_][A-Za-z0-9_]*/g, m => `<span class="sh-var">${m}</span>`);
+            out = out.replace(/"([^"]*)"/g, '<span class="sh-string">"$1"</span>');
+            out = out.replace(/'([^']*)'/g, `<span class="sh-string">'$1'</span>`);
+            out = out.replace(/\b(\d+\.?\d*)\b/g, '<span class="sh-num">$1</span>');
+            out = out.replace(/(bmm:\/\/[^\s&<>"']+)/g, '<span class="sh-url">$1</span>');
+            return out;
+        }).join('\n');
+    }
+
+    if (format === 'go') {
+        return code.split('\n').map(line => {
+            if (line.trim().startsWith('//')) return `<span class="sh-comment">${esc(line)}</span>`;
+            let out = esc(line);
+            out = out.replace(/\b(package|import|func|var|const|type|struct|interface|if|else|for|range|return|go|defer|chan|map|make|new|nil|true|false|error|string|int|bool|byte|fmt)\b/g,
+                '<span class="sh-keyword">$1</span>');
+            out = out.replace(/"([^"]*)"/g, '<span class="sh-string">"$1"</span>');
+            out = out.replace(/`([^`]*)`/g, `<span class="sh-string">\`$1\`</span>`);
+            out = out.replace(/\b(\d+\.?\d*)\b/g, '<span class="sh-num">$1</span>');
+            out = out.replace(/(bmm:\/\/[^\s&<>"']+)/g, '<span class="sh-url">$1</span>');
+            return out;
+        }).join('\n');
+    }
+
+    if (format === 'java' || format === 'cs') {
+        return code.split('\n').map(line => {
+            if (line.trim().startsWith('//')) return `<span class="sh-comment">${esc(line)}</span>`;
+            let out = esc(line);
+            out = out.replace(/\b(public|private|static|class|void|new|if|else|for|while|return|import|using|async|await|var|string|int|bool|true|false|null|System|Task|Thread|Process|Console|Runtime|File|String|HttpClient|HttpRequest)\b/g,
+                '<span class="sh-keyword">$1</span>');
+            out = out.replace(/"([^"]*)"/g, '<span class="sh-string">"$1"</span>');
+            out = out.replace(/\b(\d+\.?\d*)\b/g, '<span class="sh-num">$1</span>');
+            out = out.replace(/(bmm:\/\/[^\s&<>"']+)/g, '<span class="sh-url">$1</span>');
+            return out;
+        }).join('\n');
+    }
+
+    if (format === 'rs') {
+        return code.split('\n').map(line => {
+            if (line.trim().startsWith('//')) return `<span class="sh-comment">${esc(line)}</span>`;
+            let out = esc(line);
+            out = out.replace(/\b(use|fn|let|const|mut|struct|impl|trait|if|else|for|while|return|match|Some|None|Ok|Err|pub|mod|async|await|move|Box|Vec|String|str|i32|u64|bool|true|false|println|format)\b/g,
+                '<span class="sh-keyword">$1</span>');
+            out = out.replace(/"([^"]*)"/g, '<span class="sh-string">"$1"</span>');
+            out = out.replace(/r#"([^"]*)"#/g, '<span class="sh-string">r#"$1"#</span>');
+            out = out.replace(/\b(\d+\.?\d*)\b/g, '<span class="sh-num">$1</span>');
+            out = out.replace(/(bmm:\/\/[^\s&<>"']+)/g, '<span class="sh-url">$1</span>');
+            return out;
+        }).join('\n');
+    }
+
     return esc(code);
 }
 
@@ -606,22 +752,24 @@ function renderCreate(container: HTMLElement) {
                 <h3 class="plug-section-title">${IC.list} ${t('plugins.createModList')}</h3>
                 <div class="plug-mod-selector">
                     <div class="plug-mod-selector-header">
-                        <div class="plug-search-wrap">
-                            ${IC.search}
-                            <input type="text" id="pc-mod-search" class="input plug-search-input" placeholder="${t('plugins.searchMods')}">
+                        <div class="docs-search-field" style="flex:1;min-width:0;min-height:36px;">
+                            <span class="docs-search-icon">${IC.search}</span>
+                            <input type="text" id="pc-mod-search" class="docs-search-input" placeholder="${t('plugins.searchMods')}">
                         </div>
-                        <select id="pc-profile-filter" class="select" style="font-size:11px;padding:4px 8px;height:30px;" title="${t('plugins.filterByProfile')}">
-                            <option value="">${t('plugins.allMods')}</option>
-                            ${_allProfiles.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`).join('')}
-                        </select>
-                        <span class="plug-mod-count-hint" id="pc-mod-count">0 ${t('plugins.modsSelected')}</span>
+                        <div class="plug-mod-selector-filters">
+                            <select id="pc-profile-filter" class="select" style="font-size:11px;padding:4px 8px;height:28px;border-radius:6px;" title="${t('plugins.filterByProfile')}">
+                                <option value="">${t('plugins.allMods')}</option>
+                                ${_allProfiles.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`).join('')}
+                            </select>
+                            <span class="plug-mod-count-hint" id="pc-mod-count">0 ${t('plugins.modsSelected')}</span>
+                        </div>
                     </div>
                     <div class="plug-mod-available" id="pc-available-mods">
                         ${_allMods.length ? _allMods.map(m => `
                             <div class="plug-mod-item" data-id="${escHtml(m.id)}" data-name="${escHtml(m.name || m.id)}">
                                 <span class="plug-mod-item-name">${escHtml(m.name || m.id)}</span>
                                 <span class="plug-mod-profile-badge" style="display:none;" title="${t('plugins.activeInProfile')}">${IC.checkCircle}</span>
-                                <label class="plug-mod-optional-lbl" title="${t('plugins.optional')}">
+                                <label class="plug-mod-optional-lbl" data-tooltip="${t('plugins.optional')}">
                                     <input type="checkbox" class="plug-mod-optional-cb" tabindex="-1"> opt
                                 </label>
                                 <button class="btn btn-xs plug-mod-add-btn">${IC.plus}</button>
@@ -646,6 +794,7 @@ function renderCreate(container: HTMLElement) {
 
     const selectedMods: Map<string, { name: string; optional: boolean }> = new Map();
     let iconSrcPath = '';
+    let iconBuiltinSvg = ''; // SVG string when user picks a builtin icon
 
     // Icon tab switching
     container.querySelectorAll('.plug-icon-tab-btn').forEach(btn => {
@@ -669,6 +818,7 @@ function renderCreate(container: HTMLElement) {
     });
     container.querySelector('#pc-clear-icon')?.addEventListener('click', () => {
         iconSrcPath = '';
+        iconBuiltinSvg = '';
         const preview = document.getElementById('pc-icon-preview') as HTMLElement;
         if (preview) preview.innerHTML = `<div class="plug-card-icon-default">${IC.puzzle}</div>`;
         (document.getElementById('pc-clear-icon') as HTMLElement).style.display = 'none';
@@ -680,7 +830,8 @@ function renderCreate(container: HTMLElement) {
             const key = (btn as HTMLElement).dataset.ickey as string;
             const svg = (IC as Record<string, string>)[key];
             if (!svg) return;
-            iconSrcPath = ''; // Clear file path when using builtin
+            iconSrcPath = '';       // Clear file path when using builtin
+            iconBuiltinSvg = svg;   // Store SVG to send to Rust
             const preview = document.getElementById('pc-icon-preview') as HTMLElement;
             if (preview) preview.innerHTML = `<div class="plug-card-icon-default" style="color:var(--accent);">${svg}</div>`;
             container.querySelectorAll('.plug-icon-builtin-btn').forEach(b => b.classList.remove('active'));
@@ -780,7 +931,11 @@ function renderCreate(container: HTMLElement) {
         const manifest = buildManifest();
         if (!manifest) return;
         try {
-            const plugin = await invoke('create_local_plugin', { manifest, iconSrcPath: iconSrcPath || null });
+            const plugin = await invoke('create_local_plugin', {
+                manifest,
+                iconSrcPath: iconSrcPath || null,
+                iconSvg: iconBuiltinSvg || null,
+            });
             _installedPlugins = _installedPlugins.filter(p => p.manifest.id !== manifest.id);
             _installedPlugins.push(plugin);
             toast(t('plugins.createSaved', { name: manifest.name }), 'success');
@@ -793,7 +948,11 @@ function renderCreate(container: HTMLElement) {
         const path = await saveFile({ defaultPath: `${manifest.id}.bmmplug`, filters: [{ name: 'BMM Plugin', extensions: ['bmmplug'] }] });
         if (!path) return;
         try {
-            await invoke('create_local_plugin', { manifest, iconSrcPath: iconSrcPath || null });
+            await invoke('create_local_plugin', {
+                manifest,
+                iconSrcPath: iconSrcPath || null,
+                iconSvg: iconBuiltinSvg || null,
+            });
             await invoke('export_plugin', { pluginId: manifest.id, destPath: path });
             toast(t('plugins.exportSuccess', { name: manifest.name }), 'success');
         } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
@@ -804,12 +963,13 @@ function renderCreate(container: HTMLElement) {
 
 function renderScripts(container: HTMLElement) {
     const QT_ENDPOINTS = [
-        { m: 'GET',  p: '/api/health',      l: 'Health',      icon: IC.checkCircle },
-        { m: 'GET',  p: '/api/status',      l: 'Status',      icon: IC.info },
-        { m: 'GET',  p: '/api/mods',        l: 'All Mods',    icon: IC.list },
-        { m: 'GET',  p: '/api/mods/active', l: 'Active Mods', icon: IC.check },
-        { m: 'GET',  p: '/api/profiles',    l: 'Profiles',    icon: IC.puzzle },
-        { m: 'GET',  p: '/api/plugins',     l: 'Plugins',     icon: IC.zap },
+        { m: 'GET',  p: '/api/health',       l: 'Health',      icon: IC.checkCircle },
+        { m: 'GET',  p: '/api/status',       l: 'Status',      icon: IC.info },
+        { m: 'GET',  p: '/api/mods',         l: 'All Mods',    icon: IC.list },
+        { m: 'GET',  p: '/api/mods/active',  l: 'Active Mods', icon: IC.check },
+        { m: 'GET',  p: '/api/profiles',     l: 'Profiles',    icon: IC.puzzle },
+        { m: 'GET',  p: '/api/plugins',      l: 'Plugins',     icon: IC.zap },
+        { m: 'GET',  p: '/api/creator-id',   l: 'Creator ID',  icon: IC.shield },
     ];
 
     container.innerHTML = `
@@ -887,9 +1047,24 @@ function renderScripts(container: HTMLElement) {
                             <div class="plug-form-row">
                                 <label class="plug-form-label">${t('plugins.genFormat')}</label>
                                 <select id="plug-gen-format" class="select">
-                                    <option value="bat">.bat — Windows CMD</option>
-                                    <option value="ps1">.ps1 — PowerShell</option>
-                                    <option value="vbs">.vbs — VBScript</option>
+                                    <optgroup label="Windows">
+                                        <option value="bat">.bat — Windows CMD</option>
+                                        <option value="ps1">.ps1 — PowerShell</option>
+                                        <option value="vbs">.vbs — VBScript</option>
+                                    </optgroup>
+                                    <optgroup label="Scripting">
+                                        <option value="py">.py — Python</option>
+                                        <option value="lua">.lua — Lua</option>
+                                        <option value="js">.js — Node.js</option>
+                                        <option value="rb">.rb — Ruby</option>
+                                        <option value="php">.php — PHP</option>
+                                    </optgroup>
+                                    <optgroup label="Compiled">
+                                        <option value="go">.go — Go</option>
+                                        <option value="java">.java — Java</option>
+                                        <option value="cs">.cs — C#</option>
+                                        <option value="rs">.rs — Rust</option>
+                                    </optgroup>
                                 </select>
                             </div>
                             <div class="plug-form-row">
@@ -946,6 +1121,7 @@ function renderScripts(container: HTMLElement) {
     container.querySelector('#plug-copy-token')?.addEventListener('click', async () => {
         await navigator.clipboard.writeText(_apiToken).catch(() => {});
         toast(t('plugins.tokenCopied'), 'success');
+        dispatchBmmAction(BMM_ACTIONS.API_TOKEN_COPIED);
     });
     container.querySelector('#plug-reset-token')?.addEventListener('click', handleResetToken);
 
@@ -1000,6 +1176,18 @@ function renderScripts(container: HTMLElement) {
     if (_scriptClickHandler) container.removeEventListener('click', _scriptClickHandler);
     _scriptClickHandler = (e: Event) => {
         const tgt = (e as MouseEvent).target as HTMLElement;
+        // Scroll arrow buttons for lang tabs
+        const scrollBtn = tgt.closest('.plug-ep-scroll-btn') as HTMLElement | null;
+        if (scrollBtn) {
+            e.stopPropagation();
+            const epid = scrollBtn.dataset.epid || '';
+            const scrollEl = document.getElementById(`epls-${epid}`);
+            if (scrollEl) {
+                const dir = scrollBtn.dataset.scroll === 'left' ? -120 : 120;
+                scrollEl.scrollBy({ left: dir, behavior: 'smooth' });
+            }
+            return;
+        }
         // Test button → prefill tester
         const testBtn = tgt.closest('.plug-ep-test-btn') as HTMLElement | null;
         if (testBtn) {
@@ -1054,6 +1242,16 @@ function renderScripts(container: HTMLElement) {
         wrap.classList.toggle('expanded', !isOpen);
         detail.style.display = isOpen ? 'none' : 'grid';
         if (chev) chev.classList.toggle('rotated', !isOpen);
+        // Show/hide scroll buttons based on actual overflow
+        if (!isOpen) {
+            setTimeout(() => {
+                const scrollEl = document.getElementById(`epls-${epId}`);
+                if (scrollEl) {
+                    const overflows = scrollEl.scrollWidth > scrollEl.clientWidth + 2;
+                    scrollEl.closest('.plug-ep-code-tabs')?.classList.toggle('tabs-overflow', overflows);
+                }
+            }, 30);
+        }
     };
     container.addEventListener('click', _scriptClickHandler);
 
@@ -1330,12 +1528,13 @@ function buildEndpointRow(ep: EndpointDef): string {
         <div class="plug-ep-fields">
             <div class="plug-ep-section-lbl">${t('plugins.epRequestBody')}</div>
             <table class="plug-ep-fields-table">
+                <colgroup><col class="col-field"><col class="col-type"><col class="col-req"><col class="col-desc"></colgroup>
                 <thead><tr><th>Field</th><th>Type</th><th></th><th>Description</th></tr></thead>
                 <tbody>
                     ${ep.fields.map(f => `<tr>
-                        <td><code class="plug-ep-fname">${escHtml(f.name)}</code></td>
-                        <td><span class="plug-type-tag plug-type-${f.type}">${f.type}</span></td>
-                        <td>${f.required ? '<span class="plug-req-star">*</span>' : '<span style="color:var(--text-muted)">—</span>'}</td>
+                        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0;"><code class="plug-ep-fname" title="${escHtml(f.name)}">${escHtml(f.name)}</code></td>
+                        <td style="white-space:nowrap;"><span class="plug-type-tag plug-type-${f.type}">${f.type}</span></td>
+                        <td style="text-align:center;">${f.required ? '<span class="plug-req-star">*</span>' : '<span style="color:var(--text-muted)">—</span>'}</td>
                         <td class="plug-ep-fdesc">${escHtml(f.desc)}</td>
                     </tr>`).join('')}
                 </tbody>
@@ -1346,7 +1545,7 @@ function buildEndpointRow(ep: EndpointDef): string {
         const scls = s.code < 300 ? 'plug-resp-ok' : s.code < 400 ? 'plug-resp-warn' : 'plug-resp-err';
         return `<details class="plug-ep-resp-item">
             <summary><span class="plug-resp-code ${scls}">${s.code}</span> <span class="plug-resp-label">${escHtml(s.label)}</span></summary>
-            <pre class="plug-ep-resp-body">${escHtml(s.body)}</pre>
+            <pre class="plug-ep-resp-body plug-code-pre">${hlJson(s.body)}</pre>
         </details>`;
     }).join('');
 
@@ -1375,7 +1574,8 @@ function buildEndpointRow(ep: EndpointDef): string {
                 </div>
                 <div class="plug-ep-swagger-right">
                     <div class="plug-ep-code-tabs" data-epid="${safeId}">
-                        <div class="plug-ep-lang-tabs-scroll">
+                        <button class="plug-ep-scroll-btn" data-scroll="left" data-epid="${safeId}" aria-label="scroll left">&#8249;</button>
+                        <div class="plug-ep-lang-tabs-scroll" id="epls-${safeId}">
                             <button class="plug-ep-code-tab active" data-lang="curl">cURL</button>
                             <button class="plug-ep-code-tab" data-lang="ps1">PS1</button>
                             <button class="plug-ep-code-tab" data-lang="js">JS</button>
@@ -1388,6 +1588,7 @@ function buildEndpointRow(ep: EndpointDef): string {
                             <button class="plug-ep-code-tab" data-lang="php">PHP</button>
                             <button class="plug-ep-code-tab" data-lang="ruby">Ruby</button>
                         </div>
+                        <button class="plug-ep-scroll-btn" data-scroll="right" data-epid="${safeId}" aria-label="scroll right">&#8250;</button>
                         <button class="btn btn-xs btn-ghost plug-ep-copy-code-btn" data-epid="${safeId}" data-tooltip="${t('plugins.epCopy')}">${IC.copy}</button>
                     </div>
                     <pre class="plug-ep-code-block" id="epc-${safeId}">${hlCode(curlRaw, 'curl')}</pre>
@@ -1550,11 +1751,61 @@ async function handleApiTest() {
         statusBadge.className = `plug-tester-status ${res.ok ? 'plug-status-ok' : 'plug-status-err'}`;
         const pretty = json !== null ? JSON.stringify(json, null, 2) : '';
         respPre.innerHTML = hlJson(pretty);
+
+        // ── Special handling for /api/server-repo/connect ──────────────────
+        if (path === '/api/server-repo/connect') {
+            if (res.status === 401) {
+                _showServerRepoAuthModal();
+            } else if (res.ok && json?.ok) {
+                toast(t('plugins.serverRepoConnected'), 'success');
+                // Pre-fill the repo sync URL input before navigating
+                const repoUrl = json.url || '';
+                setTimeout(() => {
+                    (document.querySelector('.nav-item[data-view="repo"]') as HTMLElement)?.click();
+                    // After tab switch, pre-fill the URL input and trigger fetch
+                    setTimeout(() => {
+                        const urlInput = document.getElementById('repo-sync-url') as HTMLInputElement | null;
+                        if (urlInput && repoUrl) {
+                            urlInput.value = repoUrl;
+                            // Trigger the fetch button if available
+                            const fetchBtn = document.getElementById('btn-fetch-repo-info') as HTMLElement | null;
+                            fetchBtn?.click();
+                        }
+                    }, 400);
+                }, 600);
+            }
+        }
     } catch (e) {
         statusBadge.textContent = t('common.error');
         statusBadge.className = 'plug-tester-status plug-status-err';
         respPre.textContent = String(e);
     }
+}
+
+function _showServerRepoAuthModal() {
+    const ov = createOverlay(`
+        <div class="plug-ov-header">
+            <span class="plug-ov-title">${IC.lock} ${t('plugins.serverRepoAuthTitle')}</span>
+            <button class="btn btn-xs btn-ghost plug-ov-close-btn">${IC.x}</button>
+        </div>
+        <div class="plug-ov-body" style="padding:16px;">
+            <p style="font-size:13px;margin:0 0 12px;">${t('plugins.serverRepoAuthDesc')}</p>
+            <ol style="font-size:12px;color:var(--text-muted);margin:0;padding-left:18px;line-height:1.8;">
+                <li>${t('plugins.serverRepoAuthStep1')}</li>
+                <li>${t('plugins.serverRepoAuthStep2')}</li>
+                <li>${t('plugins.serverRepoAuthStep3')}</li>
+            </ol>
+        </div>
+        <div class="plug-ov-footer">
+            <button class="btn btn-accent" id="plug-sr-goto-settings">${IC.settings} ${t('plugins.serverRepoGotoSettings')}</button>
+            <button class="btn btn-ghost plug-ov-close-btn">${t('common.close')}</button>
+        </div>`);
+
+    ov.querySelector('#plug-sr-goto-settings')?.addEventListener('click', () => {
+        ov.remove();
+        (document.querySelector('.nav-item[data-view="settings"]') as HTMLElement)?.click();
+    });
+    ov.querySelectorAll('.plug-ov-close-btn').forEach(b => b.addEventListener('click', () => ov.remove()));
 }
 
 function addActionRow() {
@@ -1565,13 +1816,20 @@ function addActionRow() {
     const profOpts = _allProfiles.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`).join('');
     const plugOpts = _installedPlugins.map(p => `<option value="${escHtml(p.manifest.id)}">${escHtml(p.manifest.name)}</option>`).join('');
 
-    const EXTRA_TYPES = new Set(['wait','close_process','open_url','show_message','launch_game']);
+    const EXTRA_TYPES = new Set(['wait','close_process','open_url','show_message','launch_game','log','comment','set_variable','if_file_exists','if_var_eq','raw_code']);
+    const NO_INPUT_TYPES = new Set(['else_block','end_block']);
     const EXTRA_PH: Record<string,string> = {
-        wait:          t('plugins.waitDuration'),
-        close_process: t('plugins.processName'),
-        open_url:      t('plugins.urlToOpen'),
-        show_message:  t('plugins.messageText'),
-        launch_game:   t('plugins.gameExePath'),
+        wait:           t('plugins.waitDuration'),
+        close_process:  t('plugins.processName'),
+        open_url:       t('plugins.urlToOpen'),
+        show_message:   t('plugins.messageText'),
+        launch_game:    t('plugins.gameExePath'),
+        log:            t('plugins.logMessage'),
+        comment:        t('plugins.commentText'),
+        set_variable:   t('plugins.varNameValue'),
+        if_file_exists: t('plugins.filePathCheck'),
+        if_var_eq:      'VARNAME=value',
+        raw_code:       t('plugins.rawCodeHint'),
     };
 
     const row = document.createElement('div');
@@ -1596,6 +1854,16 @@ function addActionRow() {
                     <option value="open_url">${t('plugins.actionOpenUrl')}</option>
                     <option value="show_message">${t('plugins.actionShowMessage')}</option>
                     <option value="launch_game">${t('plugins.actionLaunchGame')}</option>
+                    <option value="log">${t('plugins.actionLog')}</option>
+                </optgroup>
+                <optgroup label="${t('plugins.actionGroupControl')}">
+                    <option value="comment">${t('plugins.actionComment')}</option>
+                    <option value="set_variable">${t('plugins.actionSetVariable')}</option>
+                    <option value="if_file_exists">${t('plugins.actionIfFileExists')}</option>
+                    <option value="if_var_eq">${t('plugins.actionIfVarEq')}</option>
+                    <option value="else_block">${t('plugins.actionElse')}</option>
+                    <option value="end_block">${t('plugins.actionEnd')}</option>
+                    <option value="raw_code">${t('plugins.actionRawCode')}</option>
                 </optgroup>
             </select>
             <div class="plug-action-target-wrap" style="flex:1;">
@@ -1618,13 +1886,14 @@ function addActionRow() {
     typeSelect.addEventListener('change', () => {
         const type = typeSelect.value;
         const isExtra = EXTRA_TYPES.has(type);
-        targetWrap.style.display  = isExtra ? 'none' : '';
+        const isNoInput = NO_INPUT_TYPES.has(type);
+        targetWrap.style.display  = (!isExtra && !isNoInput) ? '' : 'none';
         extraWrap.style.display   = isExtra ? '' : 'none';
         extraInput.placeholder    = EXTRA_PH[type] || '';
         extraInput.type           = type === 'wait' ? 'number' : 'text';
         if (type === 'wait' && !extraInput.value) extraInput.value = '3';
 
-        if (!isExtra) {
+        if (!isExtra && !isNoInput) {
             if (type === 'enable_mod' || type === 'disable_mod') {
                 targetSelect.innerHTML = modOpts || `<option value="">${t('plugins.noMods')}</option>`;
             } else if (type === 'activate_profile') {
@@ -1658,8 +1927,8 @@ async function handlePreviewScript() {
     if (placeholder) placeholder.style.display = 'none';
     output.style.display = 'flex';
     code.innerHTML = highlightScript(script, format);
-    // Store raw text for copy
     code.dataset.raw = script;
+    dispatchBmmAction(BMM_ACTIONS.SCRIPT_GENERATED, { format });
 }
 
 async function handleSaveScript() {
@@ -1690,11 +1959,17 @@ async function buildScript(): Promise<string | null> {
         if (extraInp && extraWrap?.style.display !== 'none') {
             const val = extraInp.value.trim();
             switch (type) {
-                case 'wait':          extra.duration_ms = (parseFloat(val) || 1) * 1000; break;
-                case 'close_process': extra.process_name = val; break;
-                case 'open_url':      extra.url = val; break;
-                case 'show_message':  extra.message = val; break;
-                case 'launch_game':   extra.exe_path = val; break;
+                case 'wait':           extra.duration_ms = (parseFloat(val) || 1) * 1000; break;
+                case 'close_process':  extra.process_name = val; break;
+                case 'open_url':       extra.url = val; break;
+                case 'show_message':   extra.message = val; break;
+                case 'launch_game':    extra.exe_path = val; break;
+                case 'log':            extra.message = val; break;
+                case 'comment':        extra.text = val; break;
+                case 'set_variable':   extra.expr = val; break;
+                case 'if_file_exists': extra.path = val; break;
+                case 'if_var_eq':      extra.cond = val; break;
+                case 'raw_code':       extra.code = val; break;
             }
         }
         return {
@@ -1703,6 +1978,12 @@ async function buildScript(): Promise<string | null> {
             extra,
         };
     });
+
+    // TS-side generation for non-native formats
+    const TS_FORMATS = new Set(['py', 'lua', 'js', 'rb', 'php', 'go', 'java', 'cs', 'rs']);
+    if (TS_FORMATS.has(format)) {
+        return genScriptLocal(format, actions, mode === 'api' ? _apiToken : null, mode === 'deeplink', launchBmm, _exePath);
+    }
 
     try {
         return await invoke('generate_script', {
@@ -1714,21 +1995,587 @@ async function buildScript(): Promise<string | null> {
     }
 }
 
+// ── Local script generators (Python / Lua / Node.js) ─────────────────────────
+
+function genScriptLocal(
+    format: string,
+    actions: Array<{ action_type: string; target_id: string; extra: Record<string,any> }>,
+    token: string | null,
+    useDeeplink: boolean,
+    launchBmm: boolean,
+    exePath: string
+): string {
+    const BASE = 'http://127.0.0.1:51274';
+
+    if (format === 'py') {
+        const lines: string[] = [
+            '# Generated by BMM Script Generator',
+            'import subprocess, time, os, webbrowser',
+            'try: import requests',
+            'except ImportError: raise SystemExit("pip install requests")',
+            '',
+        ];
+        if (launchBmm && exePath) {
+            lines.push(`subprocess.Popen(${JSON.stringify(exePath)})`);
+            lines.push('time.sleep(2)');
+            lines.push('');
+        }
+        for (const a of actions) {
+            lines.push(..._pyAction(a, token, useDeeplink, BASE));
+        }
+        return lines.join('\n');
+    }
+
+    if (format === 'lua') {
+        const lines: string[] = [
+            '-- Generated by BMM Script Generator',
+            '-- Requires: lua-http or similar HTTP library (luarocks install http)',
+            '',
+        ];
+        if (launchBmm && exePath) {
+            lines.push(`os.execute(${JSON.stringify(exePath)})`);
+            lines.push('os.execute("ping -n 3 127.0.0.1 > nul")');
+            lines.push('');
+        }
+        for (const a of actions) {
+            lines.push(..._luaAction(a, token, useDeeplink, BASE));
+        }
+        return lines.join('\n');
+    }
+
+    if (format === 'js') {
+        const lines: string[] = [
+            '// Generated by BMM Script Generator',
+            '// Run with: node script.js',
+            "const http = require('http');",
+            "const { execSync, spawn } = require('child_process');",
+            '',
+            'async function post(path, body) {',
+            `  const url = '${BASE}' + path;`,
+            "  const data = JSON.stringify(body);",
+            "  return new Promise((res, rej) => {",
+            "    const req = http.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json'" + (token ? `, 'Authorization': 'Bearer ${token}'` : '') + " }, }, r => {",
+            "      let d=''; r.on('data',c=>d+=c); r.on('end',()=>res(d));",
+            "    }); req.on('error', rej); req.write(data); req.end();",
+            "  });",
+            '}',
+            '',
+        ];
+        if (launchBmm && exePath) {
+            lines.push(`spawn(${JSON.stringify(exePath)}, [], { detached: true, stdio: 'ignore' }).unref();`);
+            lines.push('await new Promise(r => setTimeout(r, 2000));');
+            lines.push('');
+        }
+        lines.push('(async () => {');
+        for (const a of actions) {
+            lines.push(..._jsAction(a, token, useDeeplink, BASE).map(l => '  ' + l));
+        }
+        lines.push('})();');
+        return lines.join('\n');
+    }
+
+    if (format === 'rb') {
+        const lines: string[] = [
+            '# Generated by BMM Script Generator',
+            "require 'net/http'", "require 'json'", "require 'uri'", '',
+            `BASE = '${BASE}'`,
+            `TOKEN = '${token || 'YOUR_TOKEN_HERE'}'`,
+            '',
+            'def bmm_post(path, body)',
+            '  uri = URI(BASE + path)',
+            '  req = Net::HTTP::Post.new(uri)',
+            "  req['Authorization'] = \"Bearer #{TOKEN}\"",
+            "  req['Content-Type'] = 'application/json'",
+            '  req.body = body.to_json',
+            '  Net::HTTP.start(uri.host, uri.port) { |h| h.request(req) }',
+            'end', '',
+        ];
+        if (launchBmm && exePath) {
+            lines.push(`system('start "" "${exePath.replace(/\\/g, '\\\\')}"')`);
+            lines.push('sleep(2)'); lines.push('');
+        }
+        for (const a of actions) lines.push(..._genericAction(a, 'rb', token, useDeeplink, BASE));
+        return lines.join('\n');
+    }
+
+    if (format === 'php') {
+        const authHdr = token ? `'Authorization: Bearer ${token}'` : "'Authorization: Bearer YOUR_TOKEN_HERE'";
+        const lines: string[] = [
+            '<?php', '// Generated by BMM Script Generator',
+            `$base = '${BASE}';`,
+            `$token = '${token || 'YOUR_TOKEN_HERE'}';`,
+            '',
+            'function bmm_post($base, $token, $path, $body) {',
+            '    $ch = curl_init($base . $path);',
+            `    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json', 'Authorization: Bearer ' . $token]);`,
+            '    curl_setopt($ch, CURLOPT_POST, 1);',
+            '    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));',
+            '    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);',
+            '    curl_close($ch);',
+            '}', '',
+        ];
+        if (launchBmm && exePath) {
+            lines.push(`pclose(popen('start "" "${exePath.replace(/\\/g, '\\\\')}"', 'r'));`);
+            lines.push('sleep(2);'); lines.push('');
+        }
+        for (const a of actions) lines.push(..._genericAction(a, 'php', token, useDeeplink, BASE));
+        lines.push('?>');
+        return lines.join('\n');
+    }
+
+    if (format === 'go') {
+        const al: string[] = [];
+        for (const a of actions) al.push(..._genericAction(a, 'go', token, useDeeplink, BASE).map(l => '\t' + l));
+        return [
+            '// Generated by BMM Script Generator — requires: go get github.com/levigross/grequests',
+            'package main',
+            'import ("bytes";"fmt";"net/http";"os/exec";"time")',
+            `const bmmBase = "${BASE}"`,
+            `const bmmToken = "${token || 'YOUR_TOKEN_HERE'}"`,
+            'func bmmPost(path, body string) {',
+            '\treq,_:=http.NewRequest("POST",bmmBase+path,bytes.NewBufferString(body))',
+            '\treq.Header.Set("Content-Type","application/json")',
+            '\treq.Header.Set("Authorization","Bearer "+bmmToken)',
+            '\thttp.DefaultClient.Do(req)',
+            '}',
+            'func main() {',
+            ...(launchBmm && exePath ? [
+                `\texec.Command("cmd","/c","start","","${exePath.replace(/\\/g, '\\\\')}").Start()`,
+                '\ttime.Sleep(2*time.Second)',
+            ] : []),
+            ...al,
+            '\tfmt.Println("Done.")',
+            '}',
+        ].join('\n');
+    }
+
+    if (format === 'java') {
+        const al: string[] = [];
+        for (const a of actions) al.push(..._genericAction(a, 'java', token, useDeeplink, BASE).map(l => '        ' + l));
+        return [
+            '// Generated by BMM Script Generator (Java 11+)',
+            'import java.net.http.*;import java.net.URI;',
+            'public class BmmScript {',
+            `    static final String BASE="${BASE}",TOKEN="${token || 'YOUR_TOKEN_HERE'}";`,
+            '    static void bmmPost(String p,String b) throws Exception{',
+            '        var r=HttpRequest.newBuilder(URI.create(BASE+p)).POST(HttpRequest.BodyPublishers.ofString(b))',
+            '            .header("Content-Type","application/json").header("Authorization","Bearer "+TOKEN).build();',
+            '        HttpClient.newHttpClient().send(r,HttpResponse.BodyHandlers.discarding());',
+            '    }',
+            '    public static void main(String[] a) throws Exception{',
+            ...(launchBmm && exePath ? [
+                `        Runtime.getRuntime().exec(new String[]{"cmd","/c","start","","${exePath.replace(/\\/g, '\\\\')}"}); Thread.sleep(2000);`,
+            ] : []),
+            ...al,
+            '        System.out.println("Done.");',
+            '    }',
+            '}',
+        ].join('\n');
+    }
+
+    if (format === 'cs') {
+        const al: string[] = [];
+        for (const a of actions) al.push(..._genericAction(a, 'cs', token, useDeeplink, BASE).map(l => '        ' + l));
+        return [
+            '// Generated by BMM Script Generator',
+            'using System;using System.Net.Http;using System.Text;using System.Threading.Tasks;using System.Diagnostics;',
+            'class BmmScript {',
+            '    static readonly HttpClient Http=new();',
+            `    const string Base="${BASE}",Token="${token || 'YOUR_TOKEN_HERE'}";`,
+            '    static async Task Post(string p,string b){',
+            '        var r=new HttpRequestMessage(HttpMethod.Post,Base+p);',
+            '        r.Headers.Add("Authorization","Bearer "+Token);',
+            '        r.Content=new StringContent(b,Encoding.UTF8,"application/json");',
+            '        await Http.SendAsync(r);',
+            '    }',
+            '    static async Task Main(){',
+            ...(launchBmm && exePath ? [
+                `        Process.Start("${exePath.replace(/\\/g, '\\\\')}"); await Task.Delay(2000);`,
+            ] : []),
+            ...al,
+            '        Console.WriteLine("Done.");',
+            '    }',
+            '}',
+        ].join('\n');
+    }
+
+    if (format === 'rs') {
+        const al: string[] = [];
+        for (const a of actions) al.push(..._genericAction(a, 'rs', token, useDeeplink, BASE).map(l => '    ' + l));
+        return [
+            '// Generated by BMM Script Generator',
+            '// Cargo.toml: reqwest = { version = "0.11", features = ["blocking"] }',
+            'use std::process::Command;',
+            `const BASE:&str="${BASE}";`,
+            `const TOKEN:&str="${token || 'YOUR_TOKEN_HERE'}";`,
+            'fn bmm_post(path:&str,body:&str){',
+            '    let _=reqwest::blocking::Client::new()',
+            '        .post(format!("{}{}",BASE,path))',
+            '        .bearer_auth(TOKEN)',
+            '        .header("Content-Type","application/json")',
+            '        .body(body.to_string()).send();',
+            '}',
+            'fn main(){',
+            ...(launchBmm && exePath ? [
+                `    Command::new("cmd").args(["/c","start","","${exePath.replace(/\\/g, '\\\\')}",]).spawn().ok();`,
+                '    std::thread::sleep(std::time::Duration::from_secs(2));',
+            ] : []),
+            ...al,
+            '    println!("Done.");',
+            '}',
+        ].join('\n');
+    }
+
+    return '# Unsupported format';
+}
+
+// Generic action renderer for simpler languages (Ruby, PHP, Go, Java, C#, Rust)
+function _genericAction(a: any, lang: string, token: string | null, useDeeplink: boolean, base: string): string[] {
+    const apiEps: Record<string, [string, string]> = {
+        enable_mod:       ['/api/mods/enable',        JSON.stringify({ mod_id: a.target_id })],
+        disable_mod:      ['/api/mods/disable',       JSON.stringify({ mod_id: a.target_id })],
+        activate_profile: ['/api/profiles/activate',  JSON.stringify({ profile_id: a.target_id })],
+        apply_plugin:     ['/api/plugins/apply',      JSON.stringify({ plugin_id: a.target_id, force_strict: false })],
+        compare_plugin:   ['/api/plugins/compare',    JSON.stringify({ plugin_id: a.target_id })],
+    };
+
+    const dlMap: Record<string, string> = {
+        enable_mod:       `bmm://mod/enable?id=${a.target_id}`,
+        disable_mod:      `bmm://mod/disable?id=${a.target_id}`,
+        activate_profile: `bmm://profile/activate?id=${a.target_id}`,
+        apply_plugin:     `bmm://plugin/activate?id=${a.target_id}`,
+        compare_plugin:   `bmm://plugin/compare?id=${a.target_id}`,
+    };
+
+    const comment = (t: string) => lang === 'php' ? `// ${t}` : lang === 'rs' ? `// ${t}` : `// ${t}`;
+    const printFn = (msg: string) => ({
+        rb: `puts ${JSON.stringify(msg)}`,
+        php: `echo ${JSON.stringify(msg)};`,
+        go: `fmt.Println(${JSON.stringify(msg)})`,
+        java: `System.out.println(${JSON.stringify(msg)});`,
+        cs: `Console.WriteLine(${JSON.stringify(msg)});`,
+        rs: `println!("{}", ${JSON.stringify(msg)});`,
+    })[lang] || `// print: ${msg}`;
+
+    const sleepFn = (ms: number) => {
+        const s = ms / 1000;
+        return ({
+            rb: `sleep(${s})`,
+            php: `sleep(${Math.ceil(s)});`,
+            go: `time.Sleep(${ms}*time.Millisecond)`,
+            java: `Thread.sleep(${ms});`,
+            cs: `await Task.Delay(${ms});`,
+            rs: `std::thread::sleep(std::time::Duration::from_millis(${ms}));`,
+        })[lang] || `// sleep ${ms}ms`;
+    };
+
+    const postFn = (path: string, body: string) => ({
+        rb: `bmm_post('${path}', ${body})`,
+        php: `bmm_post($base, $token, '${path}', ${body});`,
+        go: `bmmPost("${path}", \`${body}\`)`,
+        java: `bmmPost("${path}", "${body.replace(/"/g, '\\"')}");`,
+        cs: `await Post("${path}", "${body.replace(/"/g, '\\"')}");`,
+        rs: `bmm_post("${path}", r#"${body}"#);`,
+    })[lang] || `// post ${path}`;
+
+    const dlFn = (url: string) => ({
+        rb: `system('start "" "${url}"')`,
+        php: `shell_exec('start "" "${url}"');`,
+        go: `exec.Command("cmd","/c","start","","${url}").Run()`,
+        java: `Runtime.getRuntime().exec(new String[]{"cmd","/c","start","","${url}"});`,
+        cs: `Process.Start("${url}");`,
+        rs: `Command::new("cmd").args(["/c","start","","${url}"]).spawn().ok();`,
+    })[lang] || `// open ${url}`;
+
+    switch (a.action_type) {
+        case 'enable_mod': case 'disable_mod': case 'activate_profile':
+        case 'apply_plugin': case 'compare_plugin': {
+            const dl = dlMap[a.action_type];
+            const ep = apiEps[a.action_type];
+            return [useDeeplink ? dlFn(dl) : postFn(ep[0], ep[1])];
+        }
+        case 'wait':
+            return [sleepFn(a.extra.duration_ms || 1000)];
+        case 'log':
+            return [printFn(a.extra.message || '')];
+        case 'comment':
+            return [comment(a.extra.text || '')];
+        case 'set_variable': {
+            const expr = a.extra.expr || 'name=value';
+            const [n, ...rest] = expr.split('=');
+            const v = JSON.stringify(rest.join('=').trim());
+            return ({
+                rb: [`${n.trim()} = ${v}`],
+                php: [`$${n.trim()} = ${v};`],
+                go: [`${n.trim()} := ${v}`],
+                java: [`String ${n.trim()} = ${v};`],
+                cs: [`var ${n.trim()} = ${v};`],
+                rs: [`let ${n.trim()} = ${v};`],
+            })[lang] || [`// set ${expr}`];
+        }
+        case 'if_file_exists': {
+            const p = a.extra.path || '';
+            return ({
+                rb: [`if File.exist?(${JSON.stringify(p)})`],
+                php: [`if (file_exists(${JSON.stringify(p)})) {`],
+                go: [`if _, err := os.Stat(${JSON.stringify(p)}); err == nil {`],
+                java: [`if (new java.io.File(${JSON.stringify(p)}).exists()) {`],
+                cs: [`if (File.Exists(${JSON.stringify(p)})) {`],
+                rs: [`if std::path::Path::new(${JSON.stringify(p)}).exists() {`],
+            })[lang] || [`// if file exists: ${p}`];
+        }
+        case 'if_var_eq': {
+            const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
+            const n = vn.trim(), v = JSON.stringify(vr.join('=').trim());
+            return ({
+                rb: [`if ${n} == ${v}`],
+                php: [`if ($${n} == ${v}) {`],
+                go: [`if ${n} == ${v} {`],
+                java: [`if (${n}.equals(${v})) {`],
+                cs: [`if (${n} == ${v}) {`],
+                rs: [`if ${n} == ${v} {`],
+            })[lang] || [`// if ${n} == ${v}`];
+        }
+        case 'else_block':
+            return ({
+                rb: ['else'],
+                php: ['} else {'],
+                go: ['} else {'],
+                java: ['} else {'],
+                cs: ['} else {'],
+                rs: ['} else {'],
+            })[lang] || ['else'];
+        case 'end_block':
+            return ({
+                rb: ['end'],
+                php: ['}'],
+                go: ['}'],
+                java: ['}'],
+                cs: ['}'],
+                rs: ['}'],
+            })[lang] || ['}'];
+        case 'raw_code':
+            return [a.extra.code || ''];
+        case 'show_message':
+            return [printFn(`[MSG] ${a.extra.message || ''}`)];
+        case 'open_url': {
+            const url = a.extra.url || '';
+            return [dlFn(url)];
+        }
+        case 'launch_game': {
+            const exe = a.extra.exe_path || '';
+            return [dlFn(exe)];
+        }
+        default:
+            return [comment(`Unknown action: ${a.action_type}`)];
+    }
+}
+
+function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: string): string[] {
+    const auth = token ? `headers={"Authorization": "Bearer ${token}"}` : '';
+    const deeplink = (path: string, id: string) =>
+        `webbrowser.open(f"bmm://${path}/${id}")`;
+    const apiPost = (ep: string, body: object) =>
+        `requests.post("${base}${ep}", json=${JSON.stringify(body)}, ${auth})`;
+
+    switch (a.action_type) {
+        case 'enable_mod':
+            return [useDeeplink
+                ? deeplink('enable', a.target_id)
+                : `${apiPost('/api/mods/enable', { mod_id: a.target_id })}`];
+        case 'disable_mod':
+            return [useDeeplink
+                ? deeplink('disable', a.target_id)
+                : `${apiPost('/api/mods/disable', { mod_id: a.target_id })}`];
+        case 'activate_profile':
+            return [useDeeplink
+                ? deeplink('profile', a.target_id)
+                : `${apiPost('/api/profiles/activate', { profile_id: a.target_id })}`];
+        case 'apply_plugin':
+            return [`${apiPost('/api/plugins/apply', { plugin_id: a.target_id, force_strict: false })}`];
+        case 'compare_plugin':
+            return [`${apiPost('/api/plugins/compare', { plugin_id: a.target_id })}`];
+        case 'wait':
+            return [`time.sleep(${((a.extra.duration_ms || 1000) / 1000).toFixed(1)})`];
+        case 'show_message':
+            return [`import tkinter as tk; root=tk.Tk(); root.withdraw(); tk.messagebox.showinfo("BMM", ${JSON.stringify(a.extra.message || '')}); root.destroy()`];
+        case 'open_url':
+            return [`webbrowser.open(${JSON.stringify(a.extra.url || '')})`];
+        case 'launch_game':
+            return [`subprocess.Popen(${JSON.stringify(a.extra.exe_path || '')})`];
+        case 'log':
+            return [`print(${JSON.stringify(a.extra.message || '')})`];
+        case 'comment':
+            return [`# ${a.extra.text || ''}`];
+        case 'set_variable': {
+            const expr = a.extra.expr || 'name=value';
+            const [n, ...rest] = expr.split('=');
+            return [`${n.trim()} = ${JSON.stringify(rest.join('=').trim())}`];
+        }
+        case 'if_file_exists':
+            return [`if os.path.exists(${JSON.stringify(a.extra.path || '')}):`];
+        case 'if_var_eq': {
+            const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
+            return [`if ${vn.trim()} == ${JSON.stringify(vr.join('=').trim())}:`];
+        }
+        case 'else_block':
+            return ['else:'];
+        case 'end_block':
+            return ['# end'];
+        case 'raw_code':
+            return [a.extra.code || ''];
+        default:
+            return [`# Unknown action: ${a.action_type}`];
+    }
+}
+
+function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: string): string[] {
+    const authHdr = token ? `"Authorization: Bearer ${token}"` : 'nil';
+    const curlPost = (ep: string, body: string) =>
+        `os.execute('curl -s -X POST "${base}${ep}" -H "Content-Type: application/json"' .. (${authHdr} and ' -H "'..${authHdr}..'"' or '') .. ' -d \'${body}\'')`;
+
+    switch (a.action_type) {
+        case 'enable_mod':
+            return [useDeeplink
+                ? `os.execute('start bmm://enable/${a.target_id}')`
+                : curlPost('/api/mods/enable', `{"mod_id":"${a.target_id}"}`)];
+        case 'disable_mod':
+            return [useDeeplink
+                ? `os.execute('start bmm://disable/${a.target_id}')`
+                : curlPost('/api/mods/disable', `{"mod_id":"${a.target_id}"}`)];
+        case 'activate_profile':
+            return [useDeeplink
+                ? `os.execute('start bmm://profile/${a.target_id}')`
+                : curlPost('/api/profiles/activate', `{"profile_id":"${a.target_id}"}`)];
+        case 'apply_plugin':
+            return [curlPost('/api/plugins/apply', `{"plugin_id":"${a.target_id}","force_strict":false}`)];
+        case 'compare_plugin':
+            return [curlPost('/api/plugins/compare', `{"plugin_id":"${a.target_id}"}`)];
+        case 'wait': {
+            const secs = Math.round((a.extra.duration_ms || 1000) / 1000);
+            return [`os.execute("ping -n ${secs + 1} 127.0.0.1 > nul")  -- wait ~${secs}s`];
+        }
+        case 'show_message':
+            return [`os.execute('msg * ${(a.extra.message || '').replace(/'/g, '')}')  -- Windows only`];
+        case 'open_url':
+            return [`os.execute('start ${(a.extra.url || '').replace(/'/g, '')}')  -- Windows only`];
+        case 'launch_game':
+            return [`os.execute('start "" "${(a.extra.exe_path || '').replace(/"/g, '')}"')`];
+        case 'log':
+            return [`print(${JSON.stringify(a.extra.message || '')})`];
+        case 'comment':
+            return [`-- ${a.extra.text || ''}`];
+        case 'set_variable': {
+            const expr = a.extra.expr || 'name=value';
+            const [n, ...rest] = expr.split('=');
+            return [`local ${n.trim()} = ${JSON.stringify(rest.join('=').trim())}`];
+        }
+        case 'if_file_exists':
+            return [`local f = io.open(${JSON.stringify(a.extra.path || '')}, "r")`, `if f then f:close()`];
+        case 'if_var_eq': {
+            const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
+            return [`if ${vn.trim()} == ${JSON.stringify(vr.join('=').trim())} then`];
+        }
+        case 'else_block':
+            return ['else'];
+        case 'end_block':
+            return ['end'];
+        case 'raw_code':
+            return [a.extra.code || ''];
+        default:
+            return [`-- Unknown action: ${a.action_type}`];
+    }
+}
+
+function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: string): string[] {
+    const apiCall = (ep: string, body: object) =>
+        `await post('${ep}', ${JSON.stringify(body)});`;
+    const deeplink = (scheme: string, id: string) =>
+        `execSync('start bmm://${scheme}/${id}');`;
+
+    switch (a.action_type) {
+        case 'enable_mod':
+            return [useDeeplink ? deeplink('enable', a.target_id) : apiCall('/api/mods/enable', { mod_id: a.target_id })];
+        case 'disable_mod':
+            return [useDeeplink ? deeplink('disable', a.target_id) : apiCall('/api/mods/disable', { mod_id: a.target_id })];
+        case 'activate_profile':
+            return [useDeeplink ? deeplink('profile', a.target_id) : apiCall('/api/profiles/activate', { profile_id: a.target_id })];
+        case 'apply_plugin':
+            return [apiCall('/api/plugins/apply', { plugin_id: a.target_id, force_strict: false })];
+        case 'compare_plugin':
+            return [apiCall('/api/plugins/compare', { plugin_id: a.target_id })];
+        case 'wait':
+            return [`await new Promise(r => setTimeout(r, ${a.extra.duration_ms || 1000}));`];
+        case 'show_message':
+            return [`// Node.js cannot show GUI dialogs without extra libs`, `console.log('[MSG]', ${JSON.stringify(a.extra.message || '')});`];
+        case 'open_url':
+            return [`execSync('start ${(a.extra.url || '').replace(/'/g, '')}');`];
+        case 'launch_game':
+            return [`spawn(${JSON.stringify(a.extra.exe_path || '')}, [], { detached: true, stdio: 'ignore' }).unref();`];
+        case 'log':
+            return [`console.log(${JSON.stringify(a.extra.message || '')});`];
+        case 'comment':
+            return [`// ${a.extra.text || ''}`];
+        case 'set_variable': {
+            const expr = a.extra.expr || 'name=value';
+            const [n, ...rest] = expr.split('=');
+            return [`let ${n.trim()} = ${JSON.stringify(rest.join('=').trim())};`];
+        }
+        case 'if_file_exists':
+            return [`if (require('fs').existsSync(${JSON.stringify(a.extra.path || '')})) {`];
+        case 'if_var_eq': {
+            const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
+            return [`if (${vn.trim()} === ${JSON.stringify(vr.join('=').trim())}) {`];
+        }
+        case 'else_block':
+            return ['} else {'];
+        case 'end_block':
+            return ['}'];
+        case 'raw_code':
+            return [a.extra.code || ''];
+        default:
+            return [`// Unknown action: ${a.action_type}`];
+    }
+}
+
 // ── Tab: Permissions ───────────────────────────────────────────────────────
 
 async function renderPerms(container: HTMLElement) {
-    if (!_installedPlugins.length) {
-        container.innerHTML = `<div class="plug-empty"><p>${t('plugins.noPluginsForPerms')}</p></div>`;
-        return;
-    }
-
     const ALL_PERMS = ['read_mods','enable_mods','disable_mods','switch_profile','apply_modlist','compare_modlist'];
 
+    const globalAllowed = localStorage.getItem('bmm_plug_allow_global') === 'always';
     container.innerHTML = `
         <p class="plug-perms-desc">${IC.shield} ${t('plugins.permsDesc')}</p>
+        <div class="plug-perm-global-card">
+            <div class="plug-perm-global-inner">
+                <div class="plug-perm-global-icon">${IC.shield}</div>
+                <div class="plug-perm-global-text">
+                    <strong>${t('plugins.globalPermTitle')}</strong>
+                    <span class="plug-perm-global-sub">${t('plugins.globalPermDesc')}</span>
+                </div>
+                <label class="plug-toggle" style="margin-left:auto;">
+                    <input type="checkbox" id="plug-global-allow" ${globalAllowed ? 'checked' : ''}>
+                    <span class="plug-toggle-slider"></span>
+                </label>
+            </div>
+            <p class="plug-perm-global-warn">${IC.alert} ${t('plugins.globalPermWarn')}</p>
+        </div>
         <div id="plug-perms-list"></div>`;
 
+    container.querySelector('#plug-global-allow')?.addEventListener('change', (e) => {
+        if ((e.target as HTMLInputElement).checked) {
+            localStorage.setItem('bmm_plug_allow_global', 'always');
+        } else {
+            localStorage.removeItem('bmm_plug_allow_global');
+        }
+    });
+
     const list = document.getElementById('plug-perms-list') as HTMLElement;
+
+    if (!_installedPlugins.length) {
+        list.innerHTML = `<p style="color:var(--text-muted);font-size:13px;margin:16px 0;text-align:center;">${t('plugins.noPluginsForPerms')}</p>`;
+        return;
+    }
 
     for (const plugin of _installedPlugins) {
         let currentPerms: string[] = [];
@@ -1782,6 +2629,7 @@ async function renderPerms(container: HTMLElement) {
 // ── Permission Dialog ──────────────────────────────────────────────────────
 
 async function requestPermission(pluginId: string, pluginName: string, modNames: string[]): Promise<boolean> {
+    if (localStorage.getItem('bmm_plug_allow_global') === 'always') return true;
     const alwaysKey = `bmm_plug_allow_${pluginId}`;
     if (localStorage.getItem(alwaysKey) === 'always') return true;
 
@@ -1835,6 +2683,54 @@ async function requestPermission(pluginId: string, pluginName: string, modNames:
     });
 }
 
+// ── Plugin Checksum Modal ─────────────────────────────────────────────────
+
+function handlePluginChecksumModal(manifest: any, installDir: string, hash: string) {
+    const date = new Date().toLocaleDateString();
+    const ov = createOverlay(`
+        <div class="plug-ov-header">
+            <span class="plug-ov-title">${IC.hash} <strong>${escHtml(manifest.name)}</strong></span>
+            <button class="btn btn-xs btn-ghost plug-ov-close-btn">${IC.x}</button>
+        </div>
+        <div class="plug-ov-body" style="padding:16px;">
+            <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px;">${t('plugins.checksumTitle')}</p>
+            <div class="plug-code-pre" style="font-size:11px;word-break:break-all;user-select:all;cursor:text;padding:10px;border-radius:6px;background:rgba(0,0,0,0.3);">${escHtml(hash)}</div>
+            <p style="font-size:11px;color:var(--text-muted);margin:8px 0 0;">${IC.info} ${escHtml(installDir)}</p>
+            <p style="font-size:11px;color:var(--text-muted);margin:4px 0 0;">${date}</p>
+        </div>
+        <div class="plug-ov-footer">
+            <button class="btn btn-sm btn-ghost" id="plug-sha-copy">${IC.copy} ${t('common.copy')}</button>
+            <button class="btn btn-sm btn-ghost" id="plug-sha-recalc">${IC.refresh} ${t('plugins.checksumRecalc')}</button>
+            <button class="btn btn-sm btn-danger" id="plug-sha-delete">${IC.trash} ${t('common.delete')}</button>
+            <button class="btn btn-ghost plug-ov-close-btn">${t('common.close')}</button>
+        </div>`);
+    ov.querySelectorAll('.plug-ov-close-btn').forEach(b => b.addEventListener('click', () => ov.remove()));
+    ov.querySelector('#plug-sha-copy')?.addEventListener('click', async () => {
+        await navigator.clipboard.writeText(hash).catch(() => {});
+        toast(t('common.copy'), 'success');
+    });
+    ov.querySelector('#plug-sha-recalc')?.addEventListener('click', async () => {
+        try {
+            const newHash: string = await invoke('compute_plugin_checksum', { pluginId: manifest.id });
+            ov.remove();
+            handlePluginChecksumModal(manifest, installDir, newHash);
+            // Update badge
+            const badge = document.querySelector(`.plug-btn-sha[data-id="${manifest.id}"]`) as HTMLElement | null;
+            if (badge) {
+                badge.innerHTML = `${IC.hash} ${newHash.substring(0, 8)}…`;
+                badge.classList.remove('plug-sha-badge--pending');
+                badge.dataset.full = newHash;
+            }
+            toast('SHA256 recalculated', 'success');
+        } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+    });
+    ov.querySelector('#plug-sha-delete')?.addEventListener('click', async () => {
+        ov.remove();
+        // Uninstall the plugin (reuse handler)
+        handleUninstall(manifest.id, manifest.name);
+    });
+}
+
 // ── Action Handlers ────────────────────────────────────────────────────────
 
 async function handleInstall(downloadUrl: string, name: string) {
@@ -1845,6 +2741,7 @@ async function handleInstall(downloadUrl: string, name: string) {
         _installedPlugins = _installedPlugins.filter(p => p.manifest.id !== plugin.manifest.id);
         _installedPlugins.push(plugin);
         toast(t('plugins.installSuccess', { name }), 'success');
+        dispatchBmmAction(BMM_ACTIONS.PLUGIN_INSTALLED, { name });
         renderTab(_tab);
     } catch (e) { toast(`${t('plugins.installError')}: ${e}`, 'error'); }
 }

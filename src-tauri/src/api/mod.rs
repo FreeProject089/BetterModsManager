@@ -42,8 +42,6 @@ struct EnableDisableModpackBody {
 #[derive(Deserialize)]
 struct ServerRepoConnectBody {
     url: String,
-    #[serde(default)]
-    name: String,
 }
 
 fn with_data(
@@ -441,29 +439,78 @@ pub async fn start_api_server(
             )
         });
 
-    // POST /api/server-repo/connect  (requires token) — initiate connection to a Server Depot repo
+    // POST /api/server-repo/connect  (requires token) — validate + initiate connection to a Server Depot repo
     let tok_srv_repo = token.clone();
     let server_repo_connect = warp::path!("api" / "server-repo" / "connect")
         .and(warp::post())
         .and(require_token(tok_srv_repo))
         .and(warp::body::json::<ServerRepoConnectBody>())
-        .map(|body: ServerRepoConnectBody| {
+        .and_then(|body: ServerRepoConnectBody| async move {
             if body.url.is_empty() {
-                return warp::reply::with_status(
+                return Ok::<_, warp::Rejection>(warp::reply::with_status(
                     warp::reply::json(&ApiError { error: "url field is required".into() }),
                     StatusCode::BAD_REQUEST,
-                );
+                ));
             }
-            let display_name = if body.name.is_empty() { body.url.clone() } else { body.name.clone() };
-            warp::reply::with_status(
-                warp::reply::json(&serde_json::json!({
-                    "ok": true,
-                    "url": body.url,
-                    "name": display_name,
-                    "message": "Server Repo connection initiated — open the Server Depot tab to confirm."
-                })),
-                StatusCode::OK,
-            )
+
+            // Normalise URL: ensure it points at a repo.json
+            let mut target = body.url.trim().to_string();
+            if !target.starts_with("http://") && !target.starts_with("https://") {
+                target = format!("https://{}", target);
+            }
+            let probe_url = if target.to_lowercase().ends_with("repo.json") {
+                target.clone()
+            } else if target.ends_with('/') {
+                format!("{}repo.json", target)
+            } else {
+                format!("{}/repo.json", target)
+            };
+
+            // Try to fetch the repo.json to validate the URL is reachable
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(8))
+                .user_agent("BetterModsManager/1.0")
+                .build()
+                .map_err(|_| warp::reject::reject())?;
+
+            let fetch_result = client.get(&probe_url).send().await;
+
+            match fetch_result {
+                Err(e) => {
+                    Ok(warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: format!("Cannot reach server: {}", e) }),
+                        StatusCode::BAD_GATEWAY,
+                    ))
+                }
+                Ok(resp) if !resp.status().is_success() => {
+                    Ok(warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: format!("Server returned HTTP {}", resp.status()) }),
+                        StatusCode::BAD_GATEWAY,
+                    ))
+                }
+                Ok(resp) => {
+                    let repo_json: serde_json::Value = resp.json().await.unwrap_or(serde_json::Value::Null);
+                    let version   = repo_json.get("version").and_then(|v| v.as_str()).unwrap_or("?").to_string();
+                    let mod_count = repo_json.get("mods").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+                    let description = repo_json.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let game      = repo_json.get("game").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let author    = repo_json.get("author").and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+                    Ok(warp::reply::with_status(
+                        warp::reply::json(&serde_json::json!({
+                            "ok": true,
+                            "url": probe_url,
+                            "version": version,
+                            "mod_count": mod_count,
+                            "description": description,
+                            "game": game,
+                            "author": author,
+                            "message": "Connected to Server Depot successfully."
+                        })),
+                        StatusCode::OK,
+                    ))
+                }
+            }
         });
 
     // CORS headers — allow any origin (local-only, Bearer token required)

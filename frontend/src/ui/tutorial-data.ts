@@ -27,6 +27,8 @@ const ICON = {
     conflict:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`,
     share:   `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>`,
     repo:    `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>`,
+    plugin:  `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
+    api:     `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
     library: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
     rocket:  `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>`,
     bench:   `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,
@@ -39,7 +41,7 @@ const BASICS: TutorialDef = {
     id: 'basics',
     title_key: 'tut.basics.meta.title',
     desc_key:  'tut.basics.meta.desc',
-    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`,
+    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`,
     color: 'var(--accent)',
     assets: [
         {
@@ -347,7 +349,7 @@ const ADVANCED: TutorialDef = {
     id: 'advanced',
     title_key: 'tut.advanced.meta.title',
     desc_key:  'tut.advanced.meta.desc',
-    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><path d="M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"/></svg>`,
+    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`,
     color: '#f59e0b',
     parts: [
         // ── Part 1 : .MM Lists ─────────────────────────────────────
@@ -477,7 +479,7 @@ const OTHER: TutorialDef = {
     id: 'other',
     title_key: 'tut.other.meta.title',
     desc_key:  'tut.other.meta.desc',
-    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8z"/><path d="M5 16l.6 1.6L7 18l-1.4.4L5 20l-.6-1.6L3 18l1.4-.4z"/></svg>`,
+    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`,
     color: '#22c55e',
     parts: [
         // ── Part 1 : BMM Launchpack ────────────────────────────────
@@ -539,6 +541,65 @@ const OTHER: TutorialDef = {
                     title_key: 'tut.other.bugreport.s2.title',
                     text_key:  'tut.other.bugreport.s2.text',
                     img: 'assets/Tasky_Happy.png',
+                },
+            ],
+        },
+        // ── Part 4 : Plugins & API ─────────────────────────────────
+        {
+            id: 'pluginsapi',
+            title_key: 'tut.other.pluginsapi.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.pluginsapi.s1.title',
+                    text_key:  'tut.other.pluginsapi.s1.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'plugins',
+                    icon: ICON.plugin,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.pluginsapi.s2.title',
+                    text_key:  'tut.other.pluginsapi.s2.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'plugins',
+                    optional: true,
+                    action: { event: BMM_ACTIONS.PLUGIN_INSTALLED, desc_key: 'tut.other.pluginsapi.s2.action' },
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.pluginsapi.s3.title',
+                    text_key:  'tut.other.pluginsapi.s3.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'plugins',
+                    icon: ICON.shield,
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.other.pluginsapi.s4.title',
+                    text_key:  'tut.other.pluginsapi.s4.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'plugins',
+                    icon: ICON.api,
+                    optional: true,
+                    action: { event: BMM_ACTIONS.SCRIPT_GENERATED, desc_key: 'tut.other.pluginsapi.s4.action' },
+                },
+                {
+                    id: 's5',
+                    title_key: 'tut.other.pluginsapi.s5.title',
+                    text_key:  'tut.other.pluginsapi.s5.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'plugins',
+                    icon: ICON.api,
+                },
+                {
+                    id: 's6',
+                    title_key: 'tut.other.pluginsapi.s6.title',
+                    text_key:  'tut.other.pluginsapi.s6.text',
+                    img: 'assets/Tasky_Happy.png',
+                    nav: 'plugins',
+                    optional: true,
+                    action: { event: BMM_ACTIONS.API_TOKEN_COPIED, desc_key: 'tut.other.pluginsapi.s6.action' },
                 },
             ],
         },

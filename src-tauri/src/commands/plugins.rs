@@ -23,6 +23,10 @@ pub async fn fetch_plugin_catalog() -> Result<CatalogResponse, String> {
         .await
         .map_err(|e| format!("Network error: {}", e))?;
 
+    if resp.status().as_u16() == 404 {
+        // Catalog not published yet — return empty gracefully
+        return Ok(CatalogResponse { version: String::new(), plugins: vec![] });
+    }
     if !resp.status().is_success() {
         return Err(format!("Catalog fetch failed (HTTP {})", resp.status()));
     }
@@ -123,16 +127,27 @@ fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf) -> Result<PluginManif
     let cursor = std::io::Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(cursor).map_err(|e| format!("ZIP error: {}", e))?;
 
+    // Collect file names first for a useful error message
+    let file_names: Vec<String> = (0..archive.len())
+        .filter_map(|i| archive.by_index(i).ok().map(|f| f.name().to_string()))
+        .collect();
+
     let manifest_str = (0..archive.len())
         .find_map(|i| {
             let mut file = archive.by_index(i).ok()?;
-            if file.name().ends_with("plugin.json") {
+            if file.name().to_lowercase().ends_with("plugin.json") {
                 let mut s = String::new();
                 std::io::Read::read_to_string(&mut file, &mut s).ok()?;
                 Some(s)
             } else { None }
         })
-        .ok_or("plugin.json not found in archive")?;
+        .ok_or_else(|| {
+            if file_names.is_empty() {
+                "plugin.json not found in archive (archive appears empty)".to_string()
+            } else {
+                format!("plugin.json not found in archive. Files found: {}", file_names.join(", "))
+            }
+        })?;
 
     let manifest: PluginManifest = serde_json::from_str(&manifest_str)
         .map_err(|e| format!("plugin.json parse error: {}", e))?;
@@ -452,6 +467,43 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
                 out.push("timeout /t 1 /nobreak >nul".to_string());
             }
         }
+        "log" => {
+            let msg = extra_str(&action.extra, "message");
+            out.push(format!("echo {}", if msg.is_empty() { "." } else { &msg }));
+        }
+        "comment" => {
+            let text = extra_str(&action.extra, "text");
+            out.push(format!(":: {}", text));
+        }
+        "set_variable" => {
+            let expr = extra_str(&action.extra, "expr");
+            if !expr.is_empty() {
+                out.push(format!("set {}", expr));
+            }
+        }
+        "if_file_exists" => {
+            let path = extra_str(&action.extra, "path");
+            if !path.is_empty() {
+                out.push(format!("if exist \"{}\" (", path));
+            }
+        }
+        "if_var_eq" => {
+            let cond = extra_str(&action.extra, "cond");
+            let parts: Vec<&str> = cond.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                out.push(format!("if \"%{}%\"==\"{}\" (", parts[0].trim(), parts[1].trim()));
+            }
+        }
+        "else_block" => {
+            out.push(") else (".to_string());
+        }
+        "end_block" => {
+            out.push(")".to_string());
+        }
+        "raw_code" => {
+            let code = extra_str(&action.extra, "code");
+            if !code.is_empty() { out.push(code.to_string()); }
+        }
         _ if use_deeplink => {
             out.push(format!("start \"\" \"{}\"", action_to_deeplink(action)));
             out.push("timeout /t 1 /nobreak >nul".to_string());
@@ -540,6 +592,46 @@ fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
                 out.push("Start-Sleep -Seconds 1".to_string());
             }
         }
+        "log" => {
+            let msg = extra_str(&action.extra, "message");
+            out.push(format!("Write-Host \"{}\"", msg.replace('"', "''")));
+        }
+        "comment" => {
+            let text = extra_str(&action.extra, "text");
+            out.push(format!("# {}", text));
+        }
+        "set_variable" => {
+            let expr = extra_str(&action.extra, "expr");
+            if !expr.is_empty() {
+                let parts: Vec<&str> = expr.splitn(2, '=').collect();
+                if parts.len() == 2 {
+                    out.push(format!("${} = \"{}\"", parts[0].trim(), parts[1].trim()));
+                }
+            }
+        }
+        "if_file_exists" => {
+            let path = extra_str(&action.extra, "path");
+            if !path.is_empty() {
+                out.push(format!("if (Test-Path \"{}\") {{", path));
+            }
+        }
+        "if_var_eq" => {
+            let cond = extra_str(&action.extra, "cond");
+            let parts: Vec<&str> = cond.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                out.push(format!("if (${} -eq \"{}\") {{", parts[0].trim(), parts[1].trim()));
+            }
+        }
+        "else_block" => {
+            out.push("} else {".to_string());
+        }
+        "end_block" => {
+            out.push("}".to_string());
+        }
+        "raw_code" => {
+            let code = extra_str(&action.extra, "code");
+            if !code.is_empty() { out.push(code.to_string()); }
+        }
         _ if use_deeplink => {
             out.push(format!("Start-Process \"{}\"", action_to_deeplink(action)));
             out.push("Start-Sleep -Seconds 1".to_string());
@@ -619,6 +711,47 @@ fn vbs_action(action: &ScriptAction) -> Vec<String> {
                 out.push(format!("shell.Run Chr(34) & \"{}\" & Chr(34)", exe));
                 out.push("WScript.Sleep 1000".to_string());
             }
+        }
+        "log" => {
+            let msg = extra_str(&action.extra, "message");
+            out.push(format!("WScript.Echo \"{}\"", msg.replace('"', "\" & Chr(34) & \"")));
+        }
+        "comment" => {
+            let text = extra_str(&action.extra, "text");
+            out.push(format!("' {}", text));
+        }
+        "set_variable" => {
+            let expr = extra_str(&action.extra, "expr");
+            if !expr.is_empty() {
+                let parts: Vec<&str> = expr.splitn(2, '=').collect();
+                if parts.len() == 2 {
+                    out.push(format!("Dim {} : {} = \"{}\"", parts[0].trim(), parts[0].trim(), parts[1].trim()));
+                }
+            }
+        }
+        "if_file_exists" => {
+            let path = extra_str(&action.extra, "path");
+            if !path.is_empty() {
+                out.push("Dim fso : Set fso = CreateObject(\"Scripting.FileSystemObject\")".to_string());
+                out.push(format!("If fso.FileExists(\"{}\") Then", path));
+            }
+        }
+        "if_var_eq" => {
+            let cond = extra_str(&action.extra, "cond");
+            let parts: Vec<&str> = cond.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                out.push(format!("If {} = \"{}\" Then", parts[0].trim(), parts[1].trim()));
+            }
+        }
+        "else_block" => {
+            out.push("Else".to_string());
+        }
+        "end_block" => {
+            out.push("End If".to_string());
+        }
+        "raw_code" => {
+            let code = extra_str(&action.extra, "code");
+            if !code.is_empty() { out.push(code.to_string()); }
         }
         _ => {
             out.push(format!("shell.Run \"{}\"", action_to_deeplink(action)));
@@ -727,6 +860,7 @@ pub fn create_local_plugin(
     handle: tauri::AppHandle,
     manifest: PluginManifest,
     icon_src_path: Option<String>,
+    icon_svg: Option<String>,
 ) -> Result<InstalledPlugin, String> {
     if manifest.id.is_empty() || manifest.name.is_empty() {
         return Err("Plugin id and name are required".to_string());
@@ -737,14 +871,24 @@ pub fn create_local_plugin(
     let plugin_dir = app_dir.join("plugins").join(&manifest.id);
     std::fs::create_dir_all(&plugin_dir).map_err(|e| e.to_string())?;
 
-    // Copy icon if a source path is provided
+    // Determine icon path: prefer file copy, fall back to SVG, then existing
     let icon_path = if let Some(ref src) = icon_src_path {
+        // User picked a file → copy as icon.png
         let dest = plugin_dir.join("icon.png");
         let _ = std::fs::copy(src, &dest);
         if dest.exists() { Some(dest.to_string_lossy().to_string()) } else { None }
+    } else if let Some(ref svg) = icon_svg {
+        // User picked a builtin SVG → save as icon.svg
+        let dest = plugin_dir.join("icon.svg");
+        let _ = std::fs::write(&dest, svg.as_bytes());
+        if dest.exists() { Some(dest.to_string_lossy().to_string()) } else { None }
     } else {
-        let existing = plugin_dir.join("icon.png");
-        if existing.exists() { Some(existing.to_string_lossy().to_string()) } else { None }
+        // Preserve existing icon (png or svg)
+        let png = plugin_dir.join("icon.png");
+        let svg_f = plugin_dir.join("icon.svg");
+        if png.exists() { Some(png.to_string_lossy().to_string()) }
+        else if svg_f.exists() { Some(svg_f.to_string_lossy().to_string()) }
+        else { None }
     };
 
     let installed = InstalledPlugin {
@@ -763,4 +907,56 @@ pub fn create_local_plugin(
     let _ = state.save();
     log_line(format!("[PLUGINS] Created local plugin '{}'", manifest.id));
     Ok(installed)
+}
+
+// ── Open plugin folder in Explorer ────────────────────────────────────────
+
+#[tauri::command]
+pub fn open_plugin_folder(state: State<'_, AppState>, plugin_id: String) -> Result<(), String> {
+    let install_dir = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins.iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .map(|p| p.install_dir.clone())
+    };
+    let dir = install_dir.ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?;
+    crate::commands::mods::open_folder(dir)
+}
+
+// ── Compute SHA-256 of all files in plugin directory ─────────────────────
+
+#[tauri::command]
+pub fn compute_plugin_checksum(state: State<'_, AppState>, plugin_id: String) -> Result<String, String> {
+    let install_dir = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins.iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .map(|p| p.install_dir.clone())
+    };
+    let dir = install_dir.ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?;
+    let dir_path = std::path::PathBuf::from(&dir);
+
+    // Collect all files sorted for deterministic hash
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
+    fn collect_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            let mut sorted: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+            sorted.sort_by_key(|e| e.path());
+            for entry in sorted {
+                let path = entry.path();
+                if path.is_dir() { collect_files(&path, out); }
+                else { out.push(path); }
+            }
+        }
+    }
+    collect_files(&dir_path, &mut files);
+
+    use sha2::{Sha256, Digest};
+    let mut hasher = Sha256::new();
+    for file_path in &files {
+        let data = std::fs::read(file_path).map_err(|e| e.to_string())?;
+        hasher.update(&data);
+    }
+    let result = hasher.finalize();
+    Ok(format!("{:x}", result))
 }

@@ -65,6 +65,7 @@ pub async fn check_for_update(app_handle: tauri::AppHandle) -> Result<UpdateInfo
 
     let client = reqwest::Client::builder()
         .user_agent("BetterModManager")
+        .timeout(std::time::Duration::from_secs(10))
         .build()
         .map_err(|e| format!("HTTP client error: {}", e))?;
 
@@ -72,12 +73,21 @@ pub async fn check_for_update(app_handle: tauri::AppHandle) -> Result<UpdateInfo
         .get(url)
         .send()
         .await
-        .map_err(|e| format!("Network error: {}", e))?;
+        .map_err(|e| {
+            // Timeout or network error — not a crash, just silently fail
+            log_line(format!("[UPDATE] Network error (skipped): {}", e));
+            format!("NETWORK_ERROR")
+        })?;
 
     let status = response.status();
     if !status.is_success() {
         if status.as_u16() == 404 {
             return Err("NO_RELEASE".to_string());
+        }
+        if status.as_u16() >= 500 {
+            // GitHub is having issues — fail silently
+            log_line(format!("[UPDATE] GitHub returned {} — skipped", status));
+            return Err("NETWORK_ERROR".to_string());
         }
         return Err(format!(
             "GitHub API returned status {}",

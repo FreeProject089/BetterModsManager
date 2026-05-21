@@ -50,6 +50,9 @@ export async function initMapper(): Promise<void> {
     // 1. Initial Data Load
     await refreshMapperData();
 
+    // Re-populate translated dropdowns when language changes
+    document.addEventListener('langChanged', () => refreshMapperData());
+
     // 2. Events
     modSelect?.addEventListener('change', async () => {
         if (!modSelect.value && modSelect.value !== "") return;

@@ -568,17 +568,20 @@ async function performUpdateCheck(showNoUpdateToast = false) {
         }
     }
     catch (err) {
-        console.warn('[BMM] Update check failed:', err);
         const errStr = String(err);
-        if (errStr.includes('NO_RELEASE')) {
-            if (showNoUpdateToast) {
-                toast(t('settings.noRelease') || 'No releases published on GitHub yet.', 'info');
-            }
+        // Silently swallow network/timeout errors — don't log as [RPC ERROR]
+        if (errStr.includes('NETWORK_ERROR') || errStr.includes('NO_RELEASE')) {
             if (statusMsg) {
-                statusMsg.innerHTML = `<span style="color:var(--warning)">⚠ ${t('settings.noRelease') || 'No releases yet'}</span>`;
+                statusMsg.innerHTML = errStr.includes('NO_RELEASE')
+                    ? `<span style="color:var(--warning)">⚠ ${t('settings.noRelease') || 'No releases yet'}</span>`
+                    : `<span style="color:var(--text-muted)">— ${t('settings.updateUnavailable') || 'Unavailable'}</span>`;
+            }
+            if (errStr.includes('NO_RELEASE') && showNoUpdateToast) {
+                toast(t('settings.noRelease') || 'No releases on GitHub yet.', 'info');
             }
         }
         else {
+            console.warn('[BMM] Update check failed:', err);
             if (showNoUpdateToast) {
                 toast((t('settings.updateCheckFailed') || 'Update check failed') + ': ' + err, 'error');
             }

@@ -354,6 +354,8 @@ fn main() {
             commands::plugins::write_text_file,
             commands::plugins::get_app_exe_path,
             commands::plugins::create_local_plugin,
+            commands::plugins::open_plugin_folder,
+            commands::plugins::compute_plugin_checksum,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
