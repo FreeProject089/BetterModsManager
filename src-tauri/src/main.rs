@@ -5,6 +5,7 @@ mod commands;
 mod fs_utils;
 mod models;
 mod state;
+mod api;
 
 use state::AppState;
 use std::path::PathBuf;
@@ -125,6 +126,19 @@ fn main() {
             let _ = commands::ban_manager::load_bans(&app.handle());
             let _ = commands::whitelist_manager::load_whitelist(&app.handle());
             let _ = commands::discord::init_discord_rpc(app.state::<AppState>());
+
+            // Start local HTTP Plugin API on port 51274
+            {
+                let data_arc = app.state::<AppState>().data.clone();
+                let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+                {
+                    let state = app.state::<AppState>();
+                    *state.api_shutdown_tx.lock().unwrap() = Some(tx);
+                }
+                tauri::async_runtime::spawn(async move {
+                    crate::api::start_api_server(data_arc, rx).await;
+                });
+            }
 
             if let Some(link) = PENDING_DEEP_LINK.lock().unwrap().clone() {
                 let _ = app.emit_all("deep-link-received", link);
@@ -320,6 +334,23 @@ fn main() {
             crate::commands::mapper::open_game_item_in_explorer,
             crate::commands::mapper::create_mod_folder,
             crate::commands::mapper::rename_mod_item,
+            commands::plugins::fetch_plugin_catalog,
+            commands::plugins::install_plugin,
+            commands::plugins::install_plugin_from_file,
+            commands::plugins::uninstall_plugin,
+            commands::plugins::toggle_plugin,
+            commands::plugins::get_installed_plugins,
+            commands::plugins::compare_plugin_mods,
+            commands::plugins::apply_plugin_modlist,
+            commands::plugins::set_plugin_permissions,
+            commands::plugins::get_plugin_permissions,
+            commands::plugins::get_api_token,
+            commands::plugins::reset_api_token,
+            commands::plugins::generate_script,
+            commands::plugins::export_plugin,
+            commands::plugins::write_text_file,
+            commands::plugins::get_app_exe_path,
+            commands::plugins::create_local_plugin,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

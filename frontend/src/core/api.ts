@@ -108,22 +108,35 @@ export async function pickFolder(): Promise<string | null> {
     }
 }
 
-export async function pickFile(filters: Array<string | { name: string; extensions: string[] }> = []): Promise<string | null> {
+export async function pickFile(
+    options: Array<string | { name: string; extensions: string[] }> | { filters?: Array<{ name: string; extensions: string[] }> } = []
+): Promise<string | null> {
     try {
-        let normalizedFilters = filters;
-        if (filters.length > 0 && typeof filters[0] === 'string') {
-            normalizedFilters = [{ name: (filters as string[]).join(', ').toUpperCase(), extensions: filters as string[] }];
+        let dialogOptions: Record<string, unknown> = { multiple: false };
+        if (Array.isArray(options)) {
+            let filters: any[] = options;
+            if (filters.length > 0 && typeof filters[0] === 'string') {
+                filters = [{ name: (filters as string[]).join(', ').toUpperCase(), extensions: filters as string[] }];
+            }
+            if (filters.length > 0) dialogOptions.filters = filters;
+        } else {
+            if (options.filters?.length) dialogOptions.filters = options.filters;
         }
-        return await _dialog.open({ multiple: false, filters: normalizedFilters }) as string | null;
+        return await _dialog.open(dialogOptions) as string | null;
     } catch {
         return null;
     }
 }
 
-export async function saveFile(filters: Array<{ name: string; extensions: string[] }> = []): Promise<string | null> {
+export async function saveFile(
+    options: { defaultPath?: string; filters?: Array<{ name: string; extensions: string[] }> } = {}
+): Promise<string | null> {
     try {
-        const saveDialog = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
-        return await saveDialog.save({ filters }) as string | null;
+        if (_dialog?.save) {
+            return await _dialog.save(options) as string | null;
+        }
+        const mod = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
+        return await mod.save(options) as string | null;
     } catch {
         return null;
     }

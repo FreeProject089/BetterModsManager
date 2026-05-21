@@ -28,6 +28,7 @@ import { initCrashReportUI, checkPreviousCrash } from './crash-report.js';
 import { initInteractionLogging } from './user-logger.js';
 import { initDebugMenu } from '../features/debug/debug-menu.js';
 import { checkSecurityMode } from './security-modal.js';
+import { initPlugins } from '../features/plugins/plugins.js';
 import { escHtml, escAttr, formatBytes } from '../core/utils.js';
 import { initMapper } from '../features/mapper/mapper.js';
 import { openAdvancedPerfModal } from '../features/bench/benchmark.js';
@@ -624,6 +625,7 @@ async function main() {
     initNavbarVersion();
     initUpdateNotes();
     initMapper();
+    initPlugins();
 
     document.getElementById('btn-restart-onboarding')?.addEventListener('click', () => {
         openTutorialHub();

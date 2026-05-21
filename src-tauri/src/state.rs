@@ -48,6 +48,8 @@ pub struct AppSettings {
     pub enable_lazy_sha_calculation: bool,
     #[serde(default = "default_history_retention")]
     pub history_retention_days: u32,
+    #[serde(default = "default_api_token")]
+    pub api_token: String,
 }
 
 impl Default for AppSettings {
@@ -73,11 +75,13 @@ impl Default for AppSettings {
             show_sha_loading_animation: true,
             enable_lazy_sha_calculation: true,
             history_retention_days: default_history_retention(),
+            api_token: default_api_token(),
         }
     }
 }
 
 fn default_true() -> bool { true }
+fn default_api_token() -> String { uuid::Uuid::new_v4().to_string() }
 
 fn default_filter() -> String { "all".to_string() }
 fn default_sort() -> String { "name_asc".to_string() }
@@ -100,6 +104,10 @@ pub struct AppData {
     pub settings: AppSettings,
     #[serde(default)]
     pub launch_packs: Vec<crate::models::launch_pack::LaunchPack>,
+    #[serde(default)]
+    pub installed_plugins: Vec<crate::models::plugin::InstalledPlugin>,
+    #[serde(default)]
+    pub plugin_permissions: std::collections::HashMap<String, Vec<String>>,
 }
 
 pub struct AppState {
@@ -123,6 +131,7 @@ pub struct AppState {
     pub sha_calculation_active: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub current_sha_mod_id: std::sync::Arc<Mutex<Option<String>>>,
     pub export_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub api_shutdown_tx: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
 }
 
 impl AppState {
@@ -160,6 +169,7 @@ impl AppState {
             sha_calculation_active: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             current_sha_mod_id: std::sync::Arc::new(Mutex::new(None)),
             export_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            api_shutdown_tx: Mutex::new(None),
         }
     }
 

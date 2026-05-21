@@ -1,0 +1,749 @@
+use tauri::State;
+use std::path::PathBuf;
+use crate::state::AppState;
+use crate::models::plugin::{
+    InstalledPlugin, PluginManifest, CatalogResponse, ModCompareResult
+};
+use crate::commands::crash::log_line;
+
+const CATALOG_URL: &str = "https://raw.githubusercontent.com/BetterDCS/BetterModsManager_Plugins/main/catalog.json";
+
+// ── Catalog ────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn fetch_plugin_catalog() -> Result<CatalogResponse, String> {
+    let client = reqwest::Client::builder()
+        .user_agent("BetterModsManager/1.0")
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("Client build error: {}", e))?;
+
+    let resp = client.get(CATALOG_URL)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Catalog fetch failed (HTTP {})", resp.status()));
+    }
+
+    let catalog: CatalogResponse = resp.json().await
+        .map_err(|e| format!("Parse error: {}", e))?;
+
+    log_line(format!("[PLUGINS] Fetched catalog: {} plugins", catalog.plugins.len()));
+    Ok(catalog)
+}
+
+// ── Install / Uninstall ────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn install_plugin(
+    state: State<'_, AppState>,
+    handle: tauri::AppHandle,
+    download_url: String,
+) -> Result<InstalledPlugin, String> {
+    log_line(format!("[PLUGINS] Installing from: {}", download_url));
+
+    let client = reqwest::Client::builder()
+        .user_agent("BetterModsManager/1.0")
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let bytes = client.get(&download_url)
+        .send().await.map_err(|e| format!("Download error: {}", e))?
+        .bytes().await.map_err(|e| format!("Read error: {}", e))?;
+
+    let app_dir = handle.path_resolver().app_data_dir()
+        .ok_or("Cannot resolve app data dir")?;
+    let plugins_dir = app_dir.join("plugins");
+    std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
+
+    let manifest = extract_plugin_zip(&bytes, &plugins_dir)?;
+
+    let installed = InstalledPlugin {
+        install_dir: plugins_dir.join(&manifest.id).to_string_lossy().to_string(),
+        icon_path: {
+            let icon = plugins_dir.join(&manifest.id).join("icon.png");
+            if icon.exists() { Some(icon.to_string_lossy().to_string()) } else { None }
+        },
+        installed_at: chrono::Utc::now().to_rfc3339(),
+        enabled: true,
+        manifest: manifest.clone(),
+    };
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins.retain(|p| p.manifest.id != manifest.id);
+        data.installed_plugins.push(installed.clone());
+    }
+    let _ = state.save();
+    log_line(format!("[PLUGINS] Installed plugin '{}'", manifest.id));
+    Ok(installed)
+}
+
+#[tauri::command]
+pub async fn install_plugin_from_file(
+    state: State<'_, AppState>,
+    handle: tauri::AppHandle,
+    file_path: String,
+) -> Result<InstalledPlugin, String> {
+    log_line(format!("[PLUGINS] Installing from file: {}", file_path));
+
+    let bytes = std::fs::read(&file_path).map_err(|e| format!("Read error: {}", e))?;
+
+    let app_dir = handle.path_resolver().app_data_dir()
+        .ok_or("Cannot resolve app data dir")?;
+    let plugins_dir = app_dir.join("plugins");
+    std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
+
+    let manifest = extract_plugin_zip(&bytes, &plugins_dir)?;
+
+    let installed = InstalledPlugin {
+        install_dir: plugins_dir.join(&manifest.id).to_string_lossy().to_string(),
+        icon_path: {
+            let icon = plugins_dir.join(&manifest.id).join("icon.png");
+            if icon.exists() { Some(icon.to_string_lossy().to_string()) } else { None }
+        },
+        installed_at: chrono::Utc::now().to_rfc3339(),
+        enabled: true,
+        manifest: manifest.clone(),
+    };
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins.retain(|p| p.manifest.id != manifest.id);
+        data.installed_plugins.push(installed.clone());
+    }
+    let _ = state.save();
+    Ok(installed)
+}
+
+fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf) -> Result<PluginManifest, String> {
+    let cursor = std::io::Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(cursor).map_err(|e| format!("ZIP error: {}", e))?;
+
+    let manifest_str = (0..archive.len())
+        .find_map(|i| {
+            let mut file = archive.by_index(i).ok()?;
+            if file.name().ends_with("plugin.json") {
+                let mut s = String::new();
+                std::io::Read::read_to_string(&mut file, &mut s).ok()?;
+                Some(s)
+            } else { None }
+        })
+        .ok_or("plugin.json not found in archive")?;
+
+    let manifest: PluginManifest = serde_json::from_str(&manifest_str)
+        .map_err(|e| format!("plugin.json parse error: {}", e))?;
+
+    if manifest.id.is_empty() || manifest.name.is_empty() {
+        return Err("plugin.json: 'id' and 'name' are required".to_string());
+    }
+
+    let plugin_dir = plugins_dir.join(&manifest.id);
+    std::fs::create_dir_all(&plugin_dir).map_err(|e| e.to_string())?;
+
+    // Re-open archive to extract files
+    let cursor2 = std::io::Cursor::new(bytes);
+    let mut archive2 = zip::ZipArchive::new(cursor2).map_err(|e| format!("ZIP error: {}", e))?;
+
+    for i in 0..archive2.len() {
+        let mut file = archive2.by_index(i).map_err(|e| e.to_string())?;
+        let name = file.name().to_string();
+        if name.ends_with('/') { continue; }
+
+        let strip = name.find('/').map(|i| &name[i+1..]).unwrap_or(&name);
+        if strip.is_empty() { continue; }
+
+        let dest = plugin_dir.join(strip);
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let mut out = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
+        std::io::copy(&mut file, &mut out).map_err(|e| e.to_string())?;
+    }
+
+    Ok(manifest)
+}
+
+#[tauri::command]
+pub fn uninstall_plugin(state: State<'_, AppState>, plugin_id: String) -> Result<(), String> {
+    let install_dir = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins.iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .map(|p| p.install_dir.clone())
+    };
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins.retain(|p| p.manifest.id != plugin_id);
+        data.plugin_permissions.remove(&plugin_id);
+    }
+
+    if let Some(dir) = install_dir {
+        let path = PathBuf::from(dir);
+        if path.exists() {
+            std::fs::remove_dir_all(&path).ok();
+        }
+    }
+
+    let _ = state.save();
+    log_line(format!("[PLUGINS] Uninstalled plugin '{}'", plugin_id));
+    Ok(())
+}
+
+#[tauri::command]
+pub fn toggle_plugin(state: State<'_, AppState>, plugin_id: String, enabled: bool) -> Result<(), String> {
+    let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    if let Some(p) = data.installed_plugins.iter_mut().find(|p| p.manifest.id == plugin_id) {
+        p.enabled = enabled;
+    } else {
+        return Err(format!("Plugin '{}' not found", plugin_id));
+    }
+    drop(data);
+    let _ = state.save();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_installed_plugins(state: State<'_, AppState>) -> Result<Vec<InstalledPlugin>, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    Ok(data.installed_plugins.clone())
+}
+
+// ── Mod Comparison ─────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn compare_plugin_mods(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<ModCompareResult, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    let plugin = data.installed_plugins.iter()
+        .find(|p| p.manifest.id == plugin_id)
+        .ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?
+        .clone();
+
+    let active_id = data.active_profile_id.clone().unwrap_or_default();
+    let active_mods: Vec<String> = data.profiles.iter()
+        .find(|p| p.id == active_id)
+        .map(|p| p.active_mods.clone())
+        .unwrap_or_default();
+
+    Ok(crate::api::compute_compare(&plugin, &data.mods, &active_mods))
+}
+
+#[tauri::command]
+pub async fn apply_plugin_modlist(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    force_strict: bool,
+) -> Result<serde_json::Value, String> {
+    let (plugin, active_id) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let plugin = data.installed_plugins.iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?
+            .clone();
+        let active_id = data.active_profile_id.clone()
+            .ok_or("No active profile")?;
+        (plugin, active_id)
+    };
+
+    let modlist = plugin.manifest.modlist
+        .as_ref()
+        .ok_or("Plugin has no modlist")?
+        .clone();
+
+    let strict = modlist.strict || force_strict;
+    let mut enabled_ids: Vec<String> = Vec::new();
+    let mut not_found: Vec<String> = Vec::new();
+
+    {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        for req in &modlist.required_mods {
+            if let Some(m) = data.mods.iter().find(|m| m.name.to_lowercase() == req.name.to_lowercase()) {
+                enabled_ids.push(m.id.clone());
+            } else if !req.optional {
+                not_found.push(req.name.clone());
+            }
+        }
+    }
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(p) = data.profiles.iter_mut().find(|p| p.id == active_id) {
+            if strict {
+                p.active_mods = enabled_ids.clone();
+            } else {
+                for id in &enabled_ids {
+                    if !p.active_mods.contains(id) {
+                        p.active_mods.push(id.clone());
+                    }
+                }
+            }
+        }
+        for m in data.mods.iter_mut() {
+            if strict {
+                m.enabled = enabled_ids.contains(&m.id);
+            } else if enabled_ids.contains(&m.id) {
+                m.enabled = true;
+            }
+        }
+    }
+
+    let _ = state.save();
+    log_line(format!("[PLUGINS] Applied modlist for '{}'", plugin_id));
+    Ok(serde_json::json!({
+        "enabled": enabled_ids.len(),
+        "not_found": not_found,
+        "strict": strict,
+    }))
+}
+
+// ── Permissions ────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn set_plugin_permissions(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    permissions: Vec<String>,
+) -> Result<(), String> {
+    let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    data.plugin_permissions.insert(plugin_id, permissions);
+    drop(data);
+    let _ = state.save();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_plugin_permissions(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<Vec<String>, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    Ok(data.plugin_permissions.get(&plugin_id).cloned().unwrap_or_default())
+}
+
+// ── API Token ──────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn get_api_token(state: State<'_, AppState>) -> Result<String, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    Ok(data.settings.api_token.clone())
+}
+
+#[tauri::command]
+pub fn reset_api_token(state: State<'_, AppState>) -> Result<String, String> {
+    let new_token = uuid::Uuid::new_v4().to_string();
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.settings.api_token = new_token.clone();
+    }
+    let _ = state.save();
+    log_line("[PLUGINS] API token reset".to_string());
+    Ok(new_token)
+}
+
+// ── Script Generation ──────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct ScriptAction {
+    pub action_type: String,
+    pub target_id: String,
+    #[serde(default)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(serde::Deserialize)]
+pub struct GenerateScriptRequest {
+    pub format: String, // "bat" | "ps1" | "vbs"
+    pub actions: Vec<ScriptAction>,
+    #[serde(default)]
+    pub use_deeplink: bool,
+    pub token: Option<String>,
+    #[serde(default)]
+    pub launch_bmm: bool,
+    #[serde(default)]
+    pub exe_path: String,
+}
+
+#[tauri::command]
+pub fn generate_script(req: GenerateScriptRequest) -> Result<String, String> {
+    match req.format.as_str() {
+        "bat" => Ok(gen_bat(&req)),
+        "ps1" => Ok(gen_ps1(&req)),
+        "vbs" => Ok(gen_vbs(&req)),
+        _ => Err(format!("Unknown format: {}", req.format)),
+    }
+}
+
+fn extra_str<'a>(v: &'a serde_json::Value, k: &str) -> &'a str {
+    v.get(k).and_then(|x| x.as_str()).unwrap_or("")
+}
+fn extra_u64(v: &serde_json::Value, k: &str) -> u64 {
+    v.get(k).and_then(|x| x.as_u64()).unwrap_or(0)
+}
+
+fn gen_bat(req: &GenerateScriptRequest) -> String {
+    let token = req.token.as_deref().unwrap_or("YOUR_TOKEN_HERE");
+    let mut lines = vec![
+        "@echo off".to_string(),
+        ":: Generated by BetterModsManager".to_string(),
+        ":: https://github.com/FreeProject089/BetterModsManager".to_string(),
+        String::new(),
+    ];
+
+    if req.launch_bmm && !req.exe_path.is_empty() {
+        lines.push(format!("set \"BMM_EXE={}\"", req.exe_path));
+        lines.push("echo Starting BetterModsManager...".to_string());
+        lines.push("start \"\" \"%BMM_EXE%\"".to_string());
+        lines.push("timeout /t 3 /nobreak >nul".to_string());
+        lines.push(String::new());
+    }
+
+    if !req.use_deeplink {
+        lines.push(format!("set \"BMM_TOKEN={}\"", token));
+        lines.push(String::new());
+    }
+
+    for action in &req.actions {
+        lines.extend(bat_action(action, req.use_deeplink));
+    }
+
+    lines.push(String::new());
+    lines.push("echo Done.".to_string());
+    lines.join("\r\n")
+}
+
+fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    match action.action_type.as_str() {
+        "wait" => {
+            let ms = extra_u64(&action.extra, "duration_ms");
+            let secs = ((ms + 999) / 1000).max(1);
+            out.push(format!("timeout /t {} /nobreak >nul", secs));
+        }
+        "close_process" => {
+            let name = extra_str(&action.extra, "process_name");
+            if !name.is_empty() {
+                out.push(format!("taskkill /F /IM \"{}\" >nul 2>&1", name));
+            }
+        }
+        "open_url" => {
+            let url = extra_str(&action.extra, "url");
+            if !url.is_empty() {
+                out.push(format!("start \"\" \"{}\"", url));
+            }
+        }
+        "show_message" => {
+            let msg = extra_str(&action.extra, "message");
+            if !msg.is_empty() {
+                out.push(format!("echo {}", msg));
+                out.push("pause".to_string());
+            }
+        }
+        "launch_game" => {
+            let exe = extra_str(&action.extra, "exe_path");
+            if !exe.is_empty() {
+                out.push(format!("start \"\" \"{}\"", exe));
+                out.push("timeout /t 1 /nobreak >nul".to_string());
+            }
+        }
+        _ if use_deeplink => {
+            out.push(format!("start \"\" \"{}\"", action_to_deeplink(action)));
+            out.push("timeout /t 1 /nobreak >nul".to_string());
+        }
+        _ => {
+            if let Some((method, path, body)) = action_to_api_call(action) {
+                let base = format!(
+                    "curl -s -X {} \"http://127.0.0.1:51274{}\" -H \"Authorization: Bearer %BMM_TOKEN%\"",
+                    method, path
+                );
+                if body.is_empty() {
+                    out.push(base);
+                } else {
+                    out.push(format!(
+                        "{} -H \"Content-Type: application/json\" -d \"{}\"",
+                        base, body.replace('"', "\\\"")
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
+fn gen_ps1(req: &GenerateScriptRequest) -> String {
+    let token = req.token.as_deref().unwrap_or("YOUR_TOKEN_HERE");
+    let mut lines = vec![
+        "# Generated by BetterModsManager".to_string(),
+        "# https://github.com/FreeProject089/BetterModsManager".to_string(),
+        String::new(),
+    ];
+
+    if req.launch_bmm && !req.exe_path.is_empty() {
+        lines.push(format!("$bmmExe = \"{}\"", req.exe_path.replace('\\', "\\\\")));
+        lines.push("Write-Host \"Starting BetterModsManager...\"".to_string());
+        lines.push("Start-Process $bmmExe".to_string());
+        lines.push("Start-Sleep -Seconds 3".to_string());
+        lines.push(String::new());
+    }
+
+    if !req.use_deeplink {
+        lines.push(format!("$bmmToken = \"{}\"", token));
+        lines.push("$bmmHeaders = @{ Authorization = \"Bearer $bmmToken\"; \"Content-Type\" = \"application/json\" }".to_string());
+        lines.push(String::new());
+    }
+
+    for action in &req.actions {
+        lines.extend(ps1_action(action, req.use_deeplink));
+    }
+
+    lines.push(String::new());
+    lines.push("Write-Host \"Done.\"".to_string());
+    lines.join("\n")
+}
+
+fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    match action.action_type.as_str() {
+        "wait" => {
+            let ms = extra_u64(&action.extra, "duration_ms").max(100);
+            out.push(format!("Start-Sleep -Milliseconds {}", ms));
+        }
+        "close_process" => {
+            let name = extra_str(&action.extra, "process_name").trim_end_matches(".exe").to_string();
+            if !name.is_empty() {
+                out.push(format!("Stop-Process -Name \"{}\" -Force -ErrorAction SilentlyContinue", name));
+            }
+        }
+        "open_url" => {
+            let url = extra_str(&action.extra, "url");
+            if !url.is_empty() {
+                out.push(format!("Start-Process \"{}\"", url));
+            }
+        }
+        "show_message" => {
+            let msg = extra_str(&action.extra, "message");
+            if !msg.is_empty() {
+                out.push(format!("Write-Host \"{}\"", msg));
+                out.push("$null = Read-Host 'Press Enter to continue'".to_string());
+            }
+        }
+        "launch_game" => {
+            let exe = extra_str(&action.extra, "exe_path");
+            if !exe.is_empty() {
+                out.push(format!("Start-Process \"{}\"", exe));
+                out.push("Start-Sleep -Seconds 1".to_string());
+            }
+        }
+        _ if use_deeplink => {
+            out.push(format!("Start-Process \"{}\"", action_to_deeplink(action)));
+            out.push("Start-Sleep -Seconds 1".to_string());
+        }
+        _ => {
+            if let Some((method, path, body)) = action_to_api_call(action) {
+                if body.is_empty() {
+                    out.push(format!(
+                        "Invoke-RestMethod -Method {} -Uri \"http://127.0.0.1:51274{}\" -Headers $bmmHeaders",
+                        method, path
+                    ));
+                } else {
+                    out.push(format!(
+                        "Invoke-RestMethod -Method {} -Uri \"http://127.0.0.1:51274{}\" -Headers $bmmHeaders -Body '{}'",
+                        method, path, body
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
+fn gen_vbs(req: &GenerateScriptRequest) -> String {
+    let mut lines = vec![
+        "' Generated by BetterModsManager".to_string(),
+        "' https://github.com/FreeProject089/BetterModsManager".to_string(),
+        String::new(),
+        "Set shell = CreateObject(\"WScript.Shell\")".to_string(),
+        String::new(),
+    ];
+
+    if req.launch_bmm && !req.exe_path.is_empty() {
+        lines.push(format!("Dim bmmExe : bmmExe = \"{}\"", req.exe_path.replace('\\', "\\\\")));
+        lines.push("shell.Run Chr(34) & bmmExe & Chr(34)".to_string());
+        lines.push("WScript.Sleep 3000".to_string());
+        lines.push(String::new());
+    }
+
+    for action in &req.actions {
+        lines.extend(vbs_action(action));
+    }
+
+    lines.push(String::new());
+    lines.push("MsgBox \"Done.\"".to_string());
+    lines.join("\n")
+}
+
+fn vbs_action(action: &ScriptAction) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    match action.action_type.as_str() {
+        "wait" => {
+            let ms = extra_u64(&action.extra, "duration_ms").max(100);
+            out.push(format!("WScript.Sleep {}", ms));
+        }
+        "close_process" => {
+            let name = extra_str(&action.extra, "process_name");
+            if !name.is_empty() {
+                out.push(format!("shell.Run \"taskkill /F /IM {}\", 0, True", name));
+            }
+        }
+        "open_url" => {
+            let url = extra_str(&action.extra, "url");
+            if !url.is_empty() {
+                out.push(format!("shell.Run \"{}\"", url));
+            }
+        }
+        "show_message" => {
+            let msg = extra_str(&action.extra, "message");
+            if !msg.is_empty() {
+                out.push(format!("MsgBox \"{}\"", msg));
+            }
+        }
+        "launch_game" => {
+            let exe = extra_str(&action.extra, "exe_path");
+            if !exe.is_empty() {
+                out.push(format!("shell.Run Chr(34) & \"{}\" & Chr(34)", exe));
+                out.push("WScript.Sleep 1000".to_string());
+            }
+        }
+        _ => {
+            out.push(format!("shell.Run \"{}\"", action_to_deeplink(action)));
+            out.push("WScript.Sleep 1000".to_string());
+        }
+    }
+    out
+}
+
+fn action_to_deeplink(action: &ScriptAction) -> String {
+    match action.action_type.as_str() {
+        "enable_mod"       => format!("bmm://mod/enable?id={}", action.target_id),
+        "disable_mod"      => format!("bmm://mod/disable?id={}", action.target_id),
+        "activate_profile" => format!("bmm://profile/activate?id={}", action.target_id),
+        "apply_plugin"     => format!("bmm://plugin/activate?id={}", action.target_id),
+        "compare_plugin"   => format!("bmm://plugin/compare?id={}", action.target_id),
+        _                  => format!("bmm://unknown?id={}", action.target_id),
+    }
+}
+
+fn action_to_api_call(action: &ScriptAction) -> Option<(String, String, String)> {
+    match action.action_type.as_str() {
+        "enable_mod"       => Some(("POST".into(), "/api/mods/enable".into(),      format!("{{\"mod_id\":\"{}\"}}", action.target_id))),
+        "disable_mod"      => Some(("POST".into(), "/api/mods/disable".into(),     format!("{{\"mod_id\":\"{}\"}}", action.target_id))),
+        "activate_profile" => Some(("POST".into(), "/api/profiles/activate".into(),format!("{{\"profile_id\":\"{}\"}}", action.target_id))),
+        "apply_plugin"     => Some(("POST".into(), "/api/plugins/apply".into(),    format!("{{\"plugin_id\":\"{}\"}}", action.target_id))),
+        "compare_plugin"   => Some(("POST".into(), "/api/plugins/compare".into(),  format!("{{\"plugin_id\":\"{}\"}}", action.target_id))),
+        _                  => None,
+    }
+}
+
+// ── Export plugin ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn export_plugin(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    dest_path: String,
+) -> Result<(), String> {
+    let plugin = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins.iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?
+            .clone()
+    };
+
+    let plugin_dir = PathBuf::from(&plugin.install_dir);
+    let dest = PathBuf::from(&dest_path);
+
+    let file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::FileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+
+    if plugin_dir.exists() {
+        for entry in walkdir::WalkDir::new(&plugin_dir) {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            if path.is_file() {
+                let rel = path.strip_prefix(&plugin_dir).map_err(|e| e.to_string())?;
+                let zip_path = format!("{}/{}", plugin_id, rel.to_string_lossy());
+                zip.start_file(zip_path, options).map_err(|e| e.to_string())?;
+                let data = std::fs::read(path).map_err(|e| e.to_string())?;
+                std::io::Write::write_all(&mut zip, &data).map_err(|e| e.to_string())?;
+            }
+        }
+    } else {
+        // Plugin dir missing — just write the manifest
+        let manifest_json = serde_json::to_string_pretty(&plugin.manifest)
+            .map_err(|e| e.to_string())?;
+        zip.start_file(format!("{}/plugin.json", plugin_id), options).map_err(|e| e.to_string())?;
+        std::io::Write::write_all(&mut zip, manifest_json.as_bytes()).map_err(|e| e.to_string())?;
+    }
+
+    zip.finish().map_err(|e| e.to_string())?;
+    log_line(format!("[PLUGINS] Exported plugin '{}' to {:?}", plugin_id, dest));
+    Ok(())
+}
+
+// ── Write text file helper (for saving generated scripts) ─────────────────
+
+#[tauri::command]
+pub fn write_text_file(path: String, content: String) -> Result<(), String> {
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&path, content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ── Exe path helper (used by script generator to embed launch command) ────
+
+#[tauri::command]
+pub fn get_app_exe_path() -> Result<String, String> {
+    std::env::current_exe()
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| e.to_string())
+}
+
+// ── Create local plugin (from Create tab, no zip needed) ──────────────────
+
+#[tauri::command]
+pub fn create_local_plugin(
+    state: State<'_, AppState>,
+    manifest: PluginManifest,
+) -> Result<InstalledPlugin, String> {
+    if manifest.id.is_empty() || manifest.name.is_empty() {
+        return Err("Plugin id and name are required".to_string());
+    }
+
+    let installed = InstalledPlugin {
+        install_dir: String::new(),
+        icon_path: None,
+        installed_at: chrono::Utc::now().to_rfc3339(),
+        enabled: true,
+        manifest: manifest.clone(),
+    };
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins.retain(|p| p.manifest.id != manifest.id);
+        data.installed_plugins.push(installed.clone());
+    }
+    let _ = state.save();
+    log_line(format!("[PLUGINS] Created local plugin '{}'", manifest.id));
+    Ok(installed)
+}

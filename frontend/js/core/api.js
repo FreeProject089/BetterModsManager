@@ -93,22 +93,34 @@ export async function pickFolder() {
         return null;
     }
 }
-export async function pickFile(filters = []) {
+export async function pickFile(options = []) {
     try {
-        let normalizedFilters = filters;
-        if (filters.length > 0 && typeof filters[0] === 'string') {
-            normalizedFilters = [{ name: filters.join(', ').toUpperCase(), extensions: filters }];
+        let dialogOptions = { multiple: false };
+        if (Array.isArray(options)) {
+            let filters = options;
+            if (filters.length > 0 && typeof filters[0] === 'string') {
+                filters = [{ name: filters.join(', ').toUpperCase(), extensions: filters }];
+            }
+            if (filters.length > 0)
+                dialogOptions.filters = filters;
         }
-        return await _dialog.open({ multiple: false, filters: normalizedFilters });
+        else {
+            if (options.filters?.length)
+                dialogOptions.filters = options.filters;
+        }
+        return await _dialog.open(dialogOptions);
     }
     catch {
         return null;
     }
 }
-export async function saveFile(filters = []) {
+export async function saveFile(options = {}) {
     try {
-        const saveDialog = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
-        return await saveDialog.save({ filters });
+        if (_dialog?.save) {
+            return await _dialog.save(options);
+        }
+        const mod = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
+        return await mod.save(options);
     }
     catch {
         return null;

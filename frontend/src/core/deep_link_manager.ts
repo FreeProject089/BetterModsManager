@@ -9,6 +9,7 @@ import { t } from './i18n.js';
 import { refreshMods } from '../features/mods/mods.js';
 import { escHtml } from './utils.js';
 import type { Profile } from '../types/models.js';
+import { refreshPlugins, handleApplyViaDeepLink } from '../features/plugins/plugins.js';
 
 declare global {
     interface Window {
@@ -58,6 +59,64 @@ async function handleDeepLink(urlStr: string): Promise<void> {
         const parsedUrl = new URL(urlStr.replace('bmm://', 'https://bmm.local/'));
         const action = parsedUrl.pathname.replace(/^\/|\/$/g, ''); 
         
+        // ── Plugin actions ────────────────────────────────────────────────
+        if (action === 'plugin/activate' || action === 'plugin/compare') {
+            const pluginId = parsedUrl.searchParams.get('id');
+            if (!pluginId) {
+                toast(t('plugins.deepLinkMissingId'), 'error');
+                return;
+            }
+            // Navigate to plugins view first, then show compare overlay
+            const navBtn = document.querySelector('[data-view="plugins"]') as HTMLElement;
+            navBtn?.click();
+            try {
+                await handleApplyViaDeepLink(pluginId);
+            } catch (e) {
+                toast(`${t('common.error')}: ${e}`, 'error');
+            }
+            return;
+        }
+
+        // ── Mod actions ───────────────────────────────────────────────────
+        if (action === 'mod/enable' || action === 'mod/disable') {
+            const modId = parsedUrl.searchParams.get('id');
+            if (!modId) {
+                toast(t('plugins.deepLinkMissingId'), 'error');
+                return;
+            }
+            const isEnable = action === 'mod/enable';
+            try {
+                if (isEnable) {
+                    await invoke('enable_mod', { modId, dependencies: [] });
+                    toast(t('plugins.deepLinkModEnabled', { id: modId }), 'success');
+                } else {
+                    await invoke('disable_mod', { modId });
+                    toast(t('plugins.deepLinkModDisabled', { id: modId }), 'success');
+                }
+                await refreshMods(true);
+            } catch (e) {
+                toast(`${t('common.error')}: ${e}`, 'error');
+            }
+            return;
+        }
+
+        // ── Profile action ────────────────────────────────────────────────
+        if (action === 'profile/activate') {
+            const profileId = parsedUrl.searchParams.get('id');
+            if (!profileId) {
+                toast(t('plugins.deepLinkMissingId'), 'error');
+                return;
+            }
+            try {
+                await invoke('set_active_profile', { profileId });
+                toast(t('plugins.deepLinkProfileActivated', { id: profileId }), 'success');
+                window.location.reload();
+            } catch (e) {
+                toast(`${t('common.error')}: ${e}`, 'error');
+            }
+            return;
+        }
+
         if (action === 'import' || action === 'install' || action === 'download') {
             const modUrl = parsedUrl.searchParams.get('url');
             const modNameFromUrl = parsedUrl.searchParams.get('name') || t('mod.unknownName') || 'Mod Inconnu';

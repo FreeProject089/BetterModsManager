@@ -739,9 +739,9 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
     let (game_path, backup_path, active_id, mod_name, files_to_remove, other_active_mods) = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?.clone();
-        if !m.enabled { return Ok(()); }
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
+        if !p.active_mods.contains(&mod_id) { return Ok(()); }
         
         let mut others = Vec::new();
         for mid in p.active_mods.iter().rev() {
