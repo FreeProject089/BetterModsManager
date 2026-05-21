@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="frontend/assets/BetterMM.png" alt="Better Mod Manager" width="200" />
+  <img src="frontend/assets/BMm.png" alt="Better Mod Manager" width="200" />
   
   # Better Mod Manager
 
@@ -152,8 +152,8 @@ Traditional mod managers use symlinks or hardlinks that are OS-dependent, fragil
 | **IPC** | Tauri Commands & Events | Type-safe, async Rust ↔ TypeScript communication |
 | **Windows Integration** | winreg 0.52 | Registry persistence for Creator ID sealing |
 
-**Performance targets:**
-- Idle RAM: ~60 MB
+**Performance targets: (approximate)**
+- Idle RAM: ~30 MB
 - Active RAM: < 130 MB
 - UI framerate: 60 FPS
 - Cold boot: < 1.5 s

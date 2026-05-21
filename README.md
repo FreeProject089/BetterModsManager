@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="frontend/assets/BetterMM.png" alt="Better Mod Manager" width="200" />
+  <img src="frontend/assets/BMm.png" alt="Better Mod Manager" width="200" />
   
   # Better Mod Manager
 
