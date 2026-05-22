@@ -1309,6 +1309,203 @@ body.is-maximized .titlebar-spacer {
     border-color: rgba(255,255,255,0.15);
 }
 
+/* ── Update modal v2 ─────────────────────────────────────────────────────── */
+.upd-v2 { padding: 0; overflow: hidden; }
+.upd-v2 .update-modal-inner { padding: 20px 24px 22px; }
+
+/* Hero banner */
+.upd-hero {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px 18px;
+    background: linear-gradient(120deg, rgba(16,185,129,0.12) 0%, rgba(59,130,246,0.08) 60%, transparent 100%);
+    border-bottom: 1px solid rgba(16,185,129,0.15);
+    overflow: hidden;
+}
+.upd-hero-glow {
+    position: absolute;
+    inset: -40px;
+    background: radial-gradient(circle at 80% 50%, rgba(16,185,129,0.18) 0%, transparent 60%);
+    pointer-events: none;
+}
+.upd-hero-tasky {
+    width: 52px;
+    height: 52px;
+    object-fit: contain;
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 12px rgba(16,185,129,0.3));
+    animation: upd-tasky-bob 2.4s ease-in-out infinite;
+    position: relative;
+    z-index: 1;
+}
+@keyframes upd-tasky-bob {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-5px); }
+}
+.upd-hero-text { position: relative; z-index: 1; }
+.upd-hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #10b981;
+    background: rgba(16,185,129,0.12);
+    border: 1px solid rgba(16,185,129,0.3);
+    border-radius: 999px;
+    padding: 3px 8px;
+    margin-bottom: 6px;
+}
+.upd-hero-title {
+    font-size: 19px;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+}
+.upd-hero-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* Version row */
+.upd-version-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.upd-ver-box {
+    flex: 1;
+    padding: 11px 14px;
+    border-radius: 12px;
+}
+.upd-ver-old {
+    background: rgba(239,68,68,0.06);
+    border: 1px solid rgba(239,68,68,0.15);
+}
+.upd-ver-new {
+    background: rgba(16,185,129,0.06);
+    border: 1px solid rgba(16,185,129,0.2);
+}
+.upd-ver-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+.upd-ver-num {
+    font-size: 21px;
+    font-weight: 800;
+    font-family: var(--font-mono);
+    letter-spacing: -0.02em;
+}
+.upd-ver-num-old { color: #ef4444; }
+.upd-ver-num-new { color: #10b981; }
+.upd-ver-arrow {
+    color: rgba(255,255,255,0.25);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+/* Release notes */
+.upd-notes-wrap {
+    max-height: 180px;
+    overflow-y: auto;
+    padding: 12px 14px;
+    background: rgba(0,0,0,0.22);
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.06);
+    margin-bottom: 16px;
+}
+.upd-notes-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+.upd-notes-body {
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+}
+.upd-notes-body h1,.upd-notes-body h2,.upd-notes-body h3 {
+    font-size: 13px; font-weight: 700; margin: 10px 0 4px; color: var(--text-primary);
+}
+.upd-notes-body ul { padding-left: 16px; margin: 4px 0; }
+.upd-notes-body li { margin-bottom: 3px; }
+.upd-notes-body code {
+    font-family: var(--font-mono); font-size: 11px;
+    background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px;
+}
+
+/* Progress */
+.upd-progress-wrap {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    background: rgba(99,102,241,0.05);
+    border-radius: 10px;
+    border: 1px solid rgba(99,102,241,0.15);
+}
+
+/* Actions */
+.upd-actions { display: flex; flex-direction: column; gap: 8px; }
+.upd-btn-quick {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: 700;
+    padding: 11px 16px;
+}
+.upd-btn-tag {
+    font-size: 9px;
+    font-weight: 800;
+    background: rgba(255,255,255,0.15);
+    border-radius: 999px;
+    padding: 2px 7px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+.upd-actions-row2 {
+    display: flex;
+    gap: 8px;
+}
+.upd-actions-row2 .btn-ghost { flex: 1; font-size: 12px; }
+.upd-btn-full {
+    flex: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+}
+.upd-footer-link {
+    text-align: center;
+    margin-top: 12px;
+}
+.upd-footer-link a {
+    font-size: 11px;
+    color: rgba(59,130,246,0.65);
+    text-decoration: none;
+    transition: color 0.15s;
+}
+.upd-footer-link a:hover { color: var(--accent); }
+
 /* ── PTB Modal ── */
 
 
@@ -10462,69 +10659,112 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .plug-perm-dialog-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .plug-perm-deny { color: var(--danger) !important; }
 
-/* ── Overlay (compare / details panels) — matches .modal-overlay style ───── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   PLUG-OVERLAY — redesigned from scratch
+   ═══════════════════════════════════════════════════════════════════════════ */
+@keyframes plugOverlayIn  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes plugPanelIn    { from { opacity: 0; transform: translateY(18px) scale(0.97) } to { opacity: 1; transform: translateY(0) scale(1) } }
+
 .plug-overlay {
+    /* Full-screen dark scrim */
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    z-index: 9100;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 9000;
-    padding: 32px;
-    pointer-events: all;
-    animation: fadeIn 0.18s ease;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(6px) saturate(0.7);
+    -webkit-backdrop-filter: blur(6px) saturate(0.7);
+    animation: plugOverlayIn 0.15s ease both;
+    /* Clip so no child shadow bleeds beyond the viewport */
     overflow: hidden;
-    contain: paint; /* Reliably clips child box-shadows to overlay bounds */
 }
+
 .plug-overlay-panel {
-    background: #111827;
-    border: 1px solid var(--border);
-    border-radius: 16px;
+    /* Card */
+    position: relative;
     width: 100%;
-    max-width: 580px;
-    max-height: 85vh;
+    max-width: 560px;
+    max-height: min(88vh, 640px);
     display: flex;
     flex-direction: column;
-    /* Shadow spread < overlay padding so it never reaches the viewport edge */
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    background: var(--bg-secondary, #111827);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    box-shadow:
+        0 0   0 1px rgba(255,255,255,0.04) inset,
+        0 4px 6px rgba(0,0,0,0.18),
+        0 16px 40px rgba(0,0,0,0.55),
+        0 32px 64px rgba(0,0,0,0.30);
     overflow: hidden;
-    pointer-events: all;
-    position: relative;
-    animation: modalIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation: plugPanelIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* ── Header ── */
 .plug-ov-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--border);
+    gap: 10px;
+    padding: 13px 16px 13px 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
     flex-shrink: 0;
-    background: rgba(255,255,255,0.02);
+    background: rgba(255,255,255,0.025);
 }
+
 .plug-ov-title {
-    font-size: 14px;
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
     font-weight: 700;
     color: var(--text-primary);
     display: flex;
     align-items: center;
     gap: 8px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
-.plug-ov-close-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--text-muted);
-    padding: 4px 6px;
-    border-radius: 6px;
+
+/* Header ✕ icon button — fixed 26×26 square */
+.plug-ov-header .plug-ov-close-btn {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    transition: color 0.15s, background 0.15s;
-    line-height: 1;
+    justify-content: center;
+    width: 26px; height: 26px;
+    background: transparent;
+    border: none;
+    border-radius: 7px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
 }
-.plug-ov-close-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.08); }
+.plug-ov-header .plug-ov-close-btn:hover { background: rgba(255,255,255,0.09); color: var(--text-primary); }
+
+/* Footer text Close/Cancel buttons — auto-sized, inherit from btn-ghost */
+.plug-ov-footer .plug-ov-close-btn {
+    padding: 7px 14px;
+    height: auto;
+    width: auto;
+    min-width: 72px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.plug-ov-footer .plug-ov-close-btn:hover {
+    background: rgba(255,255,255,0.08);
+    color: var(--text-primary);
+    border-color: rgba(255,255,255,0.18);
+}
+
+/* ── Body ── */
 .plug-ov-body {
     flex: 1;
     overflow-y: auto;
@@ -10532,16 +10772,30 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    /* Custom scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.12) transparent;
 }
+.plug-ov-body::-webkit-scrollbar { width: 5px; }
+.plug-ov-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 99px; }
+
+/* ── Footer ── */
 .plug-ov-footer {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
-    padding: 12px 18px;
-    border-top: 1px solid var(--border);
+    padding: 11px 16px;
+    border-top: 1px solid rgba(255,255,255,0.07);
     flex-shrink: 0;
-    background: rgba(255,255,255,0.02);
+    background: rgba(255,255,255,0.025);
+}
+
+/* Smart-QT form fields */
+.plug-qt-smart-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
 /* ── Compare banner ───────────────────────────────────────────────────────── */
@@ -11025,6 +11279,67 @@ option   { background: #131825; color: var(--text-primary); }
     color: var(--text-muted);
     margin-bottom: 4px;
 }
+/* Auth note badges under ep description */
+.plug-ep-auth-note, .plug-ep-noauth-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 999px;
+    margin: 6px 0 2px;
+}
+.plug-ep-auth-note {
+    background: rgba(251,191,36,0.1);
+    color: #fbbf24;
+    border: 1px solid rgba(251,191,36,0.25);
+}
+.plug-ep-noauth-note {
+    background: rgba(34,197,94,0.08);
+    color: #4ade80;
+    border: 1px solid rgba(34,197,94,0.2);
+}
+/* Try It callout */
+.plug-ep-tryit-callout {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 6px 10px;
+    background: rgba(99,102,241,0.06);
+    border: 1px solid rgba(99,102,241,0.15);
+    border-radius: 7px;
+    margin: 8px 0 4px;
+}
+.plug-ep-tryit-link {
+    background: none !important;
+    border: none !important;
+    color: var(--accent) !important;
+    padding: 0 !important;
+    font-size: 11px !important;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+/* Code notice banner */
+.plug-ep-code-notice {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    background: rgba(0,0,0,0.18);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 7px;
+    padding: 8px 12px;
+}
+/* Response item note */
+.plug-resp-note {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-left: 4px;
+    font-style: italic;
+}
 
 /* Request fields table */
 .plug-ep-fields-table {
@@ -11460,6 +11775,41 @@ option   { background: #131825; color: var(--text-primary); }
     color: var(--text-primary);
     border-color: var(--border-hover);
 }
+.plug-qt-btn-post {
+    border-color: rgba(99,102,241,0.3);
+    color: rgba(165,180,252,0.8);
+}
+.plug-qt-btn-post:hover {
+    background: rgba(99,102,241,0.12);
+    border-color: rgba(99,102,241,0.55);
+    color: #c4b5fd;
+}
+.plug-qt-method-badge {
+    font-size: 8.5px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+.plug-qt-post {
+    background: rgba(99,102,241,0.25);
+    color: #a5b4fc;
+    border: 1px solid rgba(99,102,241,0.4);
+}
+
+/* ── Script gen: token env row ────────────────────────────────────────────── */
+.plug-gen-token-env-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(251,191,36,0.06);
+    border: 1px solid rgba(251,191,36,0.15);
+    margin-bottom: 4px;
+}
+
 .plug-qt-pre {
     max-height: 260px;
     overflow: auto;

@@ -807,20 +807,24 @@ pub async fn export_plugin(
     let options = zip::write::FileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
 
+    let mut has_manifest = false;
     if plugin_dir.exists() {
         for entry in walkdir::WalkDir::new(&plugin_dir) {
             let entry = entry.map_err(|e| e.to_string())?;
             let path = entry.path();
             if path.is_file() {
                 let rel = path.strip_prefix(&plugin_dir).map_err(|e| e.to_string())?;
-                let zip_path = format!("{}/{}", plugin_id, rel.to_string_lossy());
+                let rel_str = rel.to_string_lossy();
+                if rel_str == "plugin.json" { has_manifest = true; }
+                let zip_path = format!("{}/{}", plugin_id, rel_str);
                 zip.start_file(zip_path, options).map_err(|e| e.to_string())?;
                 let data = std::fs::read(path).map_err(|e| e.to_string())?;
                 std::io::Write::write_all(&mut zip, &data).map_err(|e| e.to_string())?;
             }
         }
-    } else {
-        // Plugin dir missing — just write the manifest
+    }
+    // Always ensure plugin.json is present (fallback from in-memory manifest)
+    if !has_manifest {
         let manifest_json = serde_json::to_string_pretty(&plugin.manifest)
             .map_err(|e| e.to_string())?;
         zip.start_file(format!("{}/plugin.json", plugin_id), options).map_err(|e| e.to_string())?;
@@ -840,6 +844,29 @@ pub fn write_text_file(path: String, content: String) -> Result<(), String> {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     std::fs::write(&path, content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ── Write multiple files as a ZIP (for Script Generator "Save as ZIP") ───────
+
+#[derive(serde::Deserialize)]
+pub struct ZipFileEntry {
+    pub name: String,
+    pub content: String,
+}
+
+#[tauri::command]
+pub fn write_zip_files(dest_path: String, files: Vec<ZipFileEntry>) -> Result<(), String> {
+    let file = std::fs::File::create(&dest_path).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::FileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    for entry in &files {
+        zip.start_file(&entry.name, options).map_err(|e| e.to_string())?;
+        std::io::Write::write_all(&mut zip, entry.content.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    zip.finish().map_err(|e| e.to_string())?;
+    log_line(format!("[PLUGINS] Wrote ZIP with {} files to {}", files.len(), dest_path));
     Ok(())
 }
 
@@ -898,6 +925,10 @@ pub fn create_local_plugin(
         enabled: true,
         manifest: manifest.clone(),
     };
+
+    // Write plugin.json to disk — required so export_plugin can zip it correctly
+    let manifest_json = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
+    std::fs::write(plugin_dir.join("plugin.json"), manifest_json).map_err(|e| e.to_string())?;
 
     {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());

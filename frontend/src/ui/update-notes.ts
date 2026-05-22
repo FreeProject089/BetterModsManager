@@ -632,90 +632,162 @@ function showUpdateAvailableModal(info) {
 
     const modal = document.createElement('div');
     modal.id = 'update-available-modal';
-    modal.className = 'update-modal-backdrop';
+    modal.style.cssText = `
+        position:fixed;inset:0;z-index:10400;
+        display:flex;align-items:center;justify-content:center;padding:24px;
+        background:rgba(0,0,0,0.75);
+        backdrop-filter:blur(8px);
+        animation:fadeIn 0.18s ease;
+    `;
+
     modal.innerHTML = `
-        <div class="update-modal-card">
-            <button class="update-modal-close" id="close-update-modal" title="Close">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <div id="upd-card" style="
+            width:100%;max-width:480px;
+            background:linear-gradient(160deg,#0d1424 0%,#090e1a 100%);
+            border:1px solid rgba(16,185,129,0.22);
+            border-radius:20px;
+            overflow:hidden;
+            box-shadow:0 0 0 1px rgba(255,255,255,0.04) inset,0 8px 32px rgba(0,0,0,0.6),0 32px 80px rgba(0,0,0,0.4);
+            animation:modalIn 0.28s cubic-bezier(0.22,1,0.36,1);
+            position:relative;
+        ">
+            <!-- Glow accent -->
+            <div style="position:absolute;top:-60px;right:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(16,185,129,0.12) 0%,transparent 70%);pointer-events:none;"></div>
+
+            <!-- Close -->
+            <button id="close-update-modal" style="
+                position:absolute;top:12px;right:12px;z-index:2;
+                width:28px;height:28px;border-radius:8px;border:none;cursor:pointer;
+                background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);
+                display:flex;align-items:center;justify-content:center;
+                transition:background 0.15s,color 0.15s;
+            " onmouseover="this.style.background='rgba(255,255,255,0.12)';this.style.color='#fff'"
+               onmouseout="this.style.background='rgba(255,255,255,0.06)';this.style.color='rgba(255,255,255,0.5)'">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
             </button>
 
-            <div class="update-modal-inner">
-                <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
-                    <div style="display:flex;width:48px;height:48px;flex-shrink:0;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(59,130,246,0.1));border-radius:14px;align-items:center;justify-content:center;border:1px solid rgba(16,185,129,0.2)">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
-                            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                        </svg>
+            <!-- Hero -->
+            <div style="
+                display:flex;align-items:center;gap:16px;
+                padding:22px 24px 18px;
+                background:linear-gradient(135deg,rgba(16,185,129,0.08) 0%,rgba(59,130,246,0.04) 100%);
+                border-bottom:1px solid rgba(255,255,255,0.06);
+            ">
+                <img src="assets/Tasky_Happy.png" alt="Tasky" style="
+                    width:54px;height:54px;object-fit:contain;flex-shrink:0;
+                    filter:drop-shadow(0 4px 16px rgba(16,185,129,0.35));
+                    animation:float 3s ease-in-out infinite;
+                ">
+                <div>
+                    <div style="font-size:9px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#10b981;margin-bottom:4px;display:flex;align-items:center;gap:5px;">
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="#10b981"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                        ${t('update.newVersion') || 'NEW VERSION'}
                     </div>
-                    <div>
-                        <div style="font-size:17px;font-weight:800;color:var(--text-primary);line-height:1.2">${t('settings.updateAvailableTitle') || 'Update Available'}</div>
-                        <div style="font-size:12px;color:var(--text-muted);margin-top:3px">${t('settings.newVersionReady') || 'A new version of Better Mod Manager is ready.'}</div>
+                    <div style="font-size:18px;font-weight:800;color:#fff;letter-spacing:-0.01em;line-height:1.2;">
+                        ${t('settings.updateAvailableTitle') || 'Update Available!'}
+                    </div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:3px;">
+                        ${t('settings.newVersionReady') || 'A new version of Better Mod Manager is ready.'}
                     </div>
                 </div>
+            </div>
 
-                <div style="display:flex;gap:8px;margin-bottom:20px;align-items:stretch">
-                    <div style="flex:1;padding:12px 14px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.12);border-radius:12px">
-                        <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);font-weight:700;margin-bottom:6px">${t('settings.currentVersion') || 'CURRENT'}</div>
-                        <div style="font-size:20px;font-weight:800;font-family:var(--font-mono);color:#ef4444;letter-spacing:-0.02em">v${escHtml(info.current_version)}</div>
+            <!-- Body -->
+            <div style="padding:18px 22px 20px;display:flex;flex-direction:column;gap:14px;">
+
+                <!-- Version diff -->
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="flex:1;padding:10px 14px;border-radius:11px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.18);text-align:center;">
+                        <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:rgba(239,68,68,0.7);margin-bottom:4px;">${t('settings.currentVersion') || 'CURRENT'}</div>
+                        <div style="font-size:20px;font-weight:800;color:#ef4444;font-family:var(--font-mono,monospace);letter-spacing:-0.02em;">v${escHtml(info.current_version)}</div>
                     </div>
-                    <div style="display:flex;align-items:center;padding:0 4px;color:rgba(255,255,255,0.2)">
+                    <div style="color:rgba(255,255,255,0.2);flex-shrink:0;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                     </div>
-                    <div style="flex:1;padding:12px 14px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:12px">
-                        <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);font-weight:700;margin-bottom:6px">${t('settings.latestVersion') || 'LATEST'}</div>
-                        <div style="font-size:20px;font-weight:800;font-family:var(--font-mono);color:#10b981;letter-spacing:-0.02em">v${escHtml(info.latest_version)}</div>
+                    <div style="flex:1;padding:10px 14px;border-radius:11px;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.22);text-align:center;">
+                        <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:rgba(16,185,129,0.7);margin-bottom:4px;">${t('settings.latestVersion') || 'LATEST'}</div>
+                        <div style="font-size:20px;font-weight:800;color:#10b981;font-family:var(--font-mono,monospace);letter-spacing:-0.02em;">v${escHtml(info.latest_version)}</div>
                     </div>
                 </div>
 
+                <!-- Release notes -->
                 ${releaseNotes ? `
-                <div style="max-height:200px;overflow-y:auto;padding:12px 14px;background:rgba(0,0,0,0.25);border-radius:10px;border:1px solid rgba(255,255,255,0.05);margin-bottom:18px;font-size:12px;line-height:1.6;color:var(--text-secondary)" class="custom-scrollbar">
-                    <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                <div style="border-radius:10px;border:1px solid rgba(255,255,255,0.07);overflow:hidden;">
+                    <div style="display:flex;align-items:center;gap:7px;padding:8px 12px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        ${t('settings.releaseNotes') || 'RELEASE NOTES'}
+                        ${t('settings.releaseNotes') || "WHAT'S NEW"}
                     </div>
-                    ${releaseNotes}
+                    <div style="max-height:160px;overflow-y:auto;padding:10px 14px;font-size:12px;line-height:1.65;color:rgba(255,255,255,0.55);scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.1) transparent;">
+                        ${releaseNotes}
+                    </div>
                 </div>
                 ` : ''}
 
-                <div id="incremental-progress-section" style="display:none;margin-bottom:16px;padding:12px 14px;background:rgba(99,102,241,0.05);border-radius:10px;border:1px solid rgba(99,102,241,0.15)">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                        <span style="font-size:12px;color:var(--text-secondary);font-weight:600" id="incremental-progress-label">Applying update...</span>
-                        <span style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)" id="incremental-progress-count">0 / 0</span>
+                <!-- Progress bar (incremental update) -->
+                <div id="incremental-progress-section" style="display:none;border-radius:10px;padding:12px 14px;border:1px solid rgba(59,130,246,0.2);background:rgba(59,130,246,0.05);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <span id="incremental-progress-label" style="font-size:12px;font-weight:600;color:var(--text-secondary);">Applying update...</span>
+                        <span id="incremental-progress-count" style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);">0 / 0</span>
                     </div>
-                    <div style="height:3px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
-                        <div id="incremental-progress-bar" style="height:100%;background:linear-gradient(90deg,#6366f1,#3b82f6);width:0%;transition:width 0.3s ease;border-radius:4px"></div>
+                    <div style="height:3px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;">
+                        <div id="incremental-progress-bar" style="height:100%;background:linear-gradient(90deg,#10b981,#3b82f6);width:0%;transition:width 0.3s ease;border-radius:3px;"></div>
                     </div>
-                    <div style="font-size:10px;color:var(--text-muted);margin-top:6px;font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="incremental-progress-file"></div>
+                    <div id="incremental-progress-file" style="font-size:10px;color:var(--text-muted);margin-top:5px;font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
                 </div>
 
-                <div style="display:flex;gap:8px;flex-direction:column">
+                <!-- Actions -->
+                <div style="display:flex;flex-direction:column;gap:8px;">
                     ${info.manifest_url ? `
-                    <button class="btn btn-primary" id="btn-incremental-update" style="display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                        ${t('update.quickUpdate') || 'Quick Update (incremental)'}
+                    <button id="btn-incremental-update" style="
+                        display:flex;align-items:center;justify-content:center;gap:9px;
+                        padding:11px 16px;border-radius:11px;border:none;cursor:pointer;
+                        background:linear-gradient(135deg,#10b981,#059669);
+                        color:#fff;font-size:13px;font-weight:700;
+                        box-shadow:0 4px 16px rgba(16,185,129,0.3);
+                        transition:opacity 0.15s,transform 0.15s;
+                    " onmouseover="this.style.opacity='0.9';this.style.transform='translateY(-1px)'"
+                       onmouseout="this.style.opacity='1';this.style.transform='translateY(0)'">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                        <span>${t('update.quickUpdate') || 'Quick Update'}</span>
+                        <span style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,0.18);">${t('update.recommended') || 'Recommended'}</span>
                     </button>
                     ` : ''}
-                    <div style="display:flex;gap:8px">
-                        <button class="btn btn-ghost" id="btn-update-later" style="flex:1;font-size:12px">
-                            ${t('settings.later') || 'Later'}
-                        </button>
-                        <button class="btn ${info.manifest_url ? 'btn-secondary' : 'btn-primary'}" id="btn-download-install-update" style="flex:2;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;font-weight:700">
+                    <div style="display:flex;gap:8px;">
+                        <button id="btn-update-later" style="
+                            flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);cursor:pointer;
+                            background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);
+                            font-size:12px;font-weight:600;transition:background 0.15s,color 0.15s;
+                        " onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.color='#fff'"
+                           onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.color='rgba(255,255,255,0.5)'"
+                        >${t('settings.later') || 'Later'}</button>
+                        <button id="btn-download-install-update" style="
+                            flex:2;display:flex;align-items:center;justify-content:center;gap:8px;
+                            padding:10px 14px;border-radius:10px;cursor:pointer;
+                            border:1px solid rgba(59,130,246,0.3);
+                            background:rgba(59,130,246,0.1);color:rgba(255,255,255,0.75);
+                            font-size:12px;font-weight:600;transition:background 0.15s,color 0.15s;
+                        " onmouseover="this.style.background='rgba(59,130,246,0.2)';this.style.color='#fff'"
+                           onmouseout="this.style.background='rgba(59,130,246,0.1)';this.style.color='rgba(255,255,255,0.75)'">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                            ${t('update.fullInstaller') || 'Full Installer'}
+                            ${t('update.fullInstaller') || 'Full Installer (.msi)'}
                         </button>
                     </div>
                 </div>
 
-                <div style="text-align:center;margin-top:14px">
-                    <a href="${escAttr(info.release_url)}" target="_blank" style="font-size:11px;color:rgba(59,130,246,0.7);text-decoration:none;transition:color 0.15s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='rgba(59,130,246,0.7)'">
-                        ${t('settings.viewOnGithub') || 'View on GitHub'} →
+                <!-- GitHub link -->
+                <div style="text-align:center;">
+                    <a href="${escAttr(info.release_url)}" target="_blank" style="font-size:11px;color:rgba(59,130,246,0.6);text-decoration:none;transition:color 0.15s;"
+                       onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='rgba(59,130,246,0.6)'">
+                        ${t('settings.viewOnGithub') || 'View release on GitHub'} ↗
                     </a>
                 </div>
             </div>
         </div>
     `;
-    document.getElementById('app-window-outer').appendChild(modal);
+
+    (document.getElementById('app-window-outer') || document.body).appendChild(modal);
 
     // Incremental update button
     const incrementalBtn = modal.querySelector('#btn-incremental-update');

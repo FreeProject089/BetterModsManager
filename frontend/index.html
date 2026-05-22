@@ -208,6 +208,13 @@
                 }
 
                 function startAnimation() {
+                    /* Fire boot sound — set pending flag so app.ts plays it if module loads later */
+                    if (window.__bmmPlayBootSound) {
+                        try { window.__bmmPlayBootSound(); } catch(_){}
+                    } else {
+                        window.__bmmBootSoundPending = true;
+                    }
+
                     /* Compute logo center in screen coords → orb start positions */
                     const wrap = document.getElementById('ld-logo-wrap');
                     const rect = wrap ? wrap.getBoundingClientRect() : { left: 0, top: 0, width: 100, height: 100 };
@@ -6888,6 +6895,26 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
                                         step="5" oninput="window.applyTaskySettings()"
                                         style="width:100%;accent-color:var(--accent);cursor:pointer" />
                                 </div>
+                                <!-- Sound effects toggle (moved from Sound & Animations card) -->
+                                <div style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                                    <div style="flex:1">
+                                        <div style="font-size:12px;font-weight:700;color:var(--text-primary)" data-i18n="settings.soundEnabled">Enable sound effects</div>
+                                        <div style="font-size:10px;color:var(--text-muted)" data-i18n="settings.soundEnabledDesc">Play sounds on app launch and close</div>
+                                    </div>
+                                    <label class="bmm-switch">
+                                        <input type="checkbox" id="chk-sound-effects" checked>
+                                        <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                                    </label>
+                                </div>
+                                <!-- Volume slider -->
+                                <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-muted);flex-shrink:0;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                                    <div style="flex:1">
+                                        <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;" data-i18n="settings.soundVolume">Volume</div>
+                                        <input type="range" id="setting-sound-volume" min="0" max="100" value="70" style="width:100%;accent-color:var(--accent);">
+                                    </div>
+                                    <span id="setting-sound-volume-display" style="font-size:11px;font-weight:700;color:var(--text-muted);min-width:36px;text-align:right;font-family:var(--font-mono);">70%</span>
+                                </div>
                             </div>
                         </div>
 
@@ -7060,8 +7087,6 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
                                 </label>
                             </div>
                         </div>
-
-
 
                         <div class="glass-card"
                             style="border: 1px solid rgba(59,130,246,0.15); position: relative; overflow: hidden;">

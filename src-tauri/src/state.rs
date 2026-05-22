@@ -50,6 +50,10 @@ pub struct AppSettings {
     pub history_retention_days: u32,
     #[serde(default = "default_api_token")]
     pub api_token: String,
+    #[serde(default = "default_true")]
+    pub sound_effects_enabled: bool,
+    #[serde(default = "default_sound_volume")]
+    pub sound_volume: u32, // 0–100
 }
 
 impl Default for AppSettings {
@@ -76,12 +80,15 @@ impl Default for AppSettings {
             enable_lazy_sha_calculation: true,
             history_retention_days: default_history_retention(),
             api_token: default_api_token(),
+            sound_effects_enabled: true,
+            sound_volume: default_sound_volume(),
         }
     }
 }
 
 fn default_true() -> bool { true }
 fn default_api_token() -> String { uuid::Uuid::new_v4().to_string() }
+fn default_sound_volume() -> u32 { 70 }
 
 fn default_filter() -> String { "all".to_string() }
 fn default_sort() -> String { "name_asc".to_string() }

@@ -120,11 +120,22 @@ export function getModCardHTML(mod, ctx) {
                         <span data-i18n="mod.openBackupFolder">${t('mod.openBackupFolder')}</span>
                     </div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item btn-open-folder" data-id="${mod.id}" 
-                         onmouseenter="window.showTaskyHelp('mod.openSourceFolderTip', 'folder')" 
+                    <div class="dropdown-item btn-open-folder" data-id="${mod.id}"
+                         onmouseenter="window.showTaskyHelp('mod.openSourceFolderTip', 'folder')"
                          onmouseleave="window.hideTaskyHelp()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                         <span data-i18n="mod.openSourceFolder">${t('mod.openSourceFolder')}</span>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item btn-copy-id" data-id="${mod.id}"
+                         onmouseenter="window.showTaskyHelp('mod.copyIdTip', 'copy')"
+                         onmouseleave="window.hideTaskyHelp()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        <span data-i18n="mod.copyId">${t('mod.copyId')}</span>
+                        <span class="mod-id-badge" style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--text-muted);opacity:0.6;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(mod.id)}</span>
                     </div>
                 </div>
             </div>

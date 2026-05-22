@@ -3,6 +3,7 @@
  */
 
 import { invoke } from '../core/api.js';
+import { playCloseSound } from './sound-engine.js';
 
 let tauriWindow: any = null;
 
@@ -47,6 +48,7 @@ export async function initTitlebar(): Promise<void> {
             checkMaximized();
         }
         document.getElementById('tb-close')?.addEventListener('click', async () => {
+            playCloseSound(); // fire immediately before animation starts
             await playVhsCloseAnimation();
             if (tauriWindow) {
                 invoke('finalize_and_close_app').catch(() => tauriWindow.close());

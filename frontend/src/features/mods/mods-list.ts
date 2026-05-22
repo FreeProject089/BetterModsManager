@@ -157,14 +157,15 @@ export async function renderModList(force = false) {
   for (let i = 0; i < visibleBatch.length; i++) {
     const mod = visibleBatch[i];
     let card = existingMap.get(mod.id);
+    const isProcessing = S.processingMods.has(mod.id);
 
-    // Only recreate cards when force is true AND mod has tags that changed
-    const shouldRecreate = !card || (force && mod.tags && mod.tags.length > 0);
+    // Never recreate a card that's mid-toggle — would overwrite the optimistic visual state
+    // and kill any in-progress animation. Only recreate when forced AND not processing.
+    const shouldRecreate = !card || (force && !isProcessing && mod.tags && mod.tags.length > 0);
     if (shouldRecreate) {
-      if (card) card.remove(); // Remove existing card if forcing recreation
+      if (card) card.remove();
       card = createModCard(mod);
       if (S.selectedModId === mod.id) {
-        // Re-render detail panel if this is the selected mod
         setTimeout(() => import('./mods-details.js').then(m => m.renderModDetail(mod.id)), 0);
       }
     } else {
@@ -196,7 +197,7 @@ export function createModCard(mod) {
   // Toggle handler
   const toggle = card.querySelector('.mod-toggle-input');
   toggle.addEventListener('change', async () => {
-    if (S.isGlobalProcessing || S.processingMods.has(mod.id)) {
+    if (S.processingMods.has(mod.id)) {
       toggle.checked = !toggle.checked;
       return;
     }
@@ -219,7 +220,6 @@ export function createModCard(mod) {
     }
     (window as any)[bypassKey] = false;
 
-    S.isGlobalProcessing = true;
     S.processingMods.add(mod.id);
 
     // 360° spin animation on the toggle when activating
@@ -324,10 +324,11 @@ export function createModCard(mod) {
       }
     } finally {
       setModLoading(mod.id, false);
-      await new Promise(r => setTimeout(r, 250));
+      await new Promise(r => setTimeout(r, 220));
       S.processingMods.delete(mod.id);
-      S.isGlobalProcessing = false;
       await refreshMods();
+      // Re-apply loading overlays for any mods still processing in parallel
+      S.processingMods.forEach((pid: string) => setModLoading(pid, true));
       await updateDiscordStatus();
     }
   });
@@ -356,6 +357,17 @@ export function createModCard(mod) {
     e.stopPropagation();
     window.closeGlobalDropdown(true);
     try { await invoke('open_mod_backup_folder', { modId: mod.id }); } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
+  });
+
+  card.querySelector('.btn-copy-id')?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    window.closeGlobalDropdown(true);
+    try {
+      await navigator.clipboard.writeText(mod.id);
+      toast(t('mod.idCopied', { id: mod.id }), 'success', 2000);
+    } catch (err) {
+      toast(t('common.error') + ' : ' + err, 'error');
+    }
   });
 
   card.querySelector('.btn-edit-mod').addEventListener('click', (e) => {
@@ -406,7 +418,7 @@ export function createModCard(mod) {
   card.addEventListener('dblclick', (e) => {
     if (e.target.closest('.btn-remove-mod') || e.target.closest('.btn-edit-mod') || e.target.closest('.btn-open-folder')) return;
     const toggle = card.querySelector('.mod-toggle-input') as HTMLInputElement;
-    if (toggle && !S.isGlobalProcessing && !S.processingMods.has(mod.id)) {
+    if (toggle && !S.processingMods.has(mod.id)) {
       toggle.checked = !toggle.checked;
       toggle.dispatchEvent(new Event('change'));
     }
@@ -416,22 +428,37 @@ export function createModCard(mod) {
 }
 
 export function updateCardState(card, mod) {
-  card.classList.toggle('enabled', mod.enabled);
-  card.classList.toggle('disabled', !mod.enabled);
-  
-  const toggle = card.querySelector('.mod-toggle-input');
-  if (toggle) toggle.checked = mod.enabled;
-  
-  const dot = card.querySelector('.mod-status-dot');
-  if (dot) {
-    dot.classList.toggle('enabled', mod.enabled);
-    dot.classList.toggle('disabled', !mod.enabled);
+  // While a toggle is in-flight the backend state is stale — freeze all
+  // enabled/disabled visuals so the optimistic UI state isn't overwritten.
+  const isProcessing = S.processingMods.has(mod.id);
+
+  if (!isProcessing) {
+    card.classList.toggle('enabled', mod.enabled);
+    card.classList.toggle('disabled', !mod.enabled);
+
+    const toggle = card.querySelector('.mod-toggle-input');
+    if (toggle) toggle.checked = mod.enabled;
+
+    const dot = card.querySelector('.mod-status-dot');
+    if (dot) {
+      dot.classList.toggle('enabled', mod.enabled);
+      dot.classList.toggle('disabled', !mod.enabled);
+    }
+
+    const pill = card.querySelector('.mod-status-pill');
+    if (pill) {
+      pill.classList.toggle('enabled', mod.enabled);
+      pill.classList.toggle('disabled', !mod.enabled);
+      pill.style.background = mod.enabled ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)';
+      pill.style.color = mod.enabled ? 'var(--success)' : 'var(--text-muted)';
+      pill.textContent = mod.enabled ? (t('mod.statusActive') || 'ACTIVE') : (t('mod.statusInactive') || 'INACTIVE');
+    }
   }
 
   const nameRow = card.querySelector('.mod-name')?.parentElement;
   if (nameRow) {
     let badge = nameRow.querySelector('.badge-accent');
-    if (mod.enabled) {
+    if (!isProcessing && mod.enabled) {
       if (!badge) {
         badge = document.createElement('span');
         badge.className = 'badge badge-accent';
@@ -446,18 +473,9 @@ export function updateCardState(card, mod) {
         }
       }
       badge.textContent = `#${mod.activation_order}`;
-    } else if (badge) {
+    } else if (!isProcessing && badge) {
       badge.remove();
     }
-  }
-
-  const pill = card.querySelector('.mod-status-pill');
-  if (pill) {
-    pill.classList.toggle('enabled', mod.enabled);
-    pill.classList.toggle('disabled', !mod.enabled);
-    pill.style.background = mod.enabled ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)';
-    pill.style.color = mod.enabled ? 'var(--success)' : 'var(--text-muted)';
-    pill.textContent = mod.enabled ? (t('mod.statusActive') || 'ACTIVE') : (t('mod.statusInactive') || 'INACTIVE');
   }
 
   // Update SHA status icon

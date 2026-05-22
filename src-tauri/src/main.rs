@@ -129,17 +129,18 @@ fn main() {
 
             // Start local HTTP Plugin API on port 51274
             {
-                let data_arc = app.state::<AppState>().data.clone();
+                let state_ref = app.state::<AppState>();
+                let data_arc = state_ref.data.clone();
+                let data_path = state_ref.data_path.clone();
                 let creator_id = std::sync::Arc::new(
                     commands::security::get_creator_id(app.handle()).unwrap_or_default()
                 );
                 let (tx, rx) = tokio::sync::oneshot::channel::<()>();
                 {
-                    let state = app.state::<AppState>();
-                    *state.api_shutdown_tx.lock().unwrap() = Some(tx);
+                    *state_ref.api_shutdown_tx.lock().unwrap() = Some(tx);
                 }
                 tauri::async_runtime::spawn(async move {
-                    crate::api::start_api_server(data_arc, creator_id, rx).await;
+                    crate::api::start_api_server(data_arc, data_path, creator_id, rx).await;
                 });
             }
 
@@ -352,6 +353,7 @@ fn main() {
             commands::plugins::generate_script,
             commands::plugins::export_plugin,
             commands::plugins::write_text_file,
+            commands::plugins::write_zip_files,
             commands::plugins::get_app_exe_path,
             commands::plugins::create_local_plugin,
             commands::plugins::open_plugin_folder,

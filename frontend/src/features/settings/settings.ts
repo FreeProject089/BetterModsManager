@@ -139,6 +139,40 @@ async function initDiscordRpcSettings() {
     });
 }
 
+// ── Sound / Animation Settings ───────────────────────────
+async function initSoundSettings() {
+    const chkSound = document.getElementById('chk-sound-effects') as HTMLInputElement;
+    const volSlider = document.getElementById('setting-sound-volume') as HTMLInputElement;
+    const volDisplay = document.getElementById('setting-sound-volume-display') as HTMLElement;
+    if (!chkSound || !volSlider) return;
+
+    try {
+        const settings = await getSettings();
+        chkSound.checked = settings.sound_effects_enabled !== false;
+        volSlider.value = String(settings.sound_volume ?? 70);
+        if (volDisplay) volDisplay.textContent = String(settings.sound_volume ?? 70) + '%';
+    } catch (e) { console.error('Failed to load sound settings:', e); }
+
+    const applySound = async () => {
+        try {
+            const settings = await getSettings();
+            settings.sound_effects_enabled = chkSound.checked;
+            settings.sound_volume = parseInt(volSlider.value) || 70;
+            await updateSettings(settings);
+            // Apply immediately via the exported functions from app.ts
+            const app = await import('../../ui/app.js');
+            app.setSoundEnabled(settings.sound_effects_enabled);
+            app.setSoundVolume(settings.sound_volume / 100);
+        } catch (err) { console.error(err); }
+    };
+
+    chkSound.addEventListener('change', applySound);
+    volSlider.addEventListener('input', () => {
+        if (volDisplay) volDisplay.textContent = volSlider.value + '%';
+    });
+    volSlider.addEventListener('change', applySound);
+}
+
 // ── SHA Settings ──────────────────────────────────────────
 async function initShaSettings() {
     const chkStrict = document.getElementById('chk-sha-strict-mode') as HTMLInputElement;
@@ -1171,6 +1205,7 @@ export async function initSettings() {
     await initGithubPatSettings();
     await initShaSettings();
     await initDiscordRpcSettings();
+    await initSoundSettings();
     await initShortcuts();
     renderSettingsShortcuts();
     await initStorageSettings();

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use tokio::sync::oneshot;
 use warp::Filter;
 use warp::http::StatusCode;
@@ -50,6 +51,22 @@ fn with_data(
     warp::any().map(move || data.clone())
 }
 
+fn with_path(
+    path: Arc<PathBuf>,
+) -> impl Filter<Extract = (Arc<PathBuf>,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || path.clone())
+}
+
+fn save_data(data: &Arc<std::sync::Mutex<AppData>>, path: &PathBuf) {
+    let d = data.lock().unwrap_or_else(|p| p.into_inner());
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string_pretty(&*d) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
 fn require_token(
     token: Arc<String>,
 ) -> impl Filter<Extract = (), Error = warp::Rejection> + Clone {
@@ -74,6 +91,7 @@ impl warp::reject::Reject for Unauthorized {}
 
 pub async fn start_api_server(
     data: Arc<std::sync::Mutex<AppData>>,
+    data_path: Arc<PathBuf>,
     creator_id: Arc<String>,
     shutdown_rx: oneshot::Receiver<()>,
 ) {
@@ -180,36 +198,44 @@ pub async fn start_api_server(
 
     // POST /api/mods/enable  (requires token)
     let data_enable = data.clone();
+    let path_enable = data_path.clone();
     let tok_enable = token.clone();
     let enable_mod = warp::path!("api" / "mods" / "enable")
         .and(warp::post())
         .and(require_token(tok_enable))
         .and(warp::body::json::<EnableDisableBody>())
         .and(with_data(data_enable))
-        .map(|body: EnableDisableBody, d: Arc<std::sync::Mutex<AppData>>| {
-            let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
-            let active_id = match data.active_profile_id.clone() {
-                Some(id) => id,
-                None => return warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: "No active profile".into() }),
-                    StatusCode::BAD_REQUEST,
-                ),
+        .and(with_path(path_enable))
+        .map(|body: EnableDisableBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
+            let active_id = {
+                let data = d.lock().unwrap_or_else(|p| p.into_inner());
+                match data.active_profile_id.clone() {
+                    Some(id) => id,
+                    None => return warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: "No active profile".into() }),
+                        StatusCode::BAD_REQUEST,
+                    ),
+                }
             };
-            let mod_exists = data.mods.iter().any(|m| m.id == body.mod_id);
-            if !mod_exists {
-                return warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: format!("Mod '{}' not found", body.mod_id) }),
-                    StatusCode::NOT_FOUND,
-                );
-            }
-            if let Some(p) = data.profiles.iter_mut().find(|p| p.id == active_id) {
-                if !p.active_mods.contains(&body.mod_id) {
-                    p.active_mods.push(body.mod_id.clone());
+            {
+                let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
+                let mod_exists = data.mods.iter().any(|m| m.id == body.mod_id);
+                if !mod_exists {
+                    return warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: format!("Mod '{}' not found", body.mod_id) }),
+                        StatusCode::NOT_FOUND,
+                    );
+                }
+                if let Some(p) = data.profiles.iter_mut().find(|p| p.id == active_id) {
+                    if !p.active_mods.contains(&body.mod_id) {
+                        p.active_mods.push(body.mod_id.clone());
+                    }
+                }
+                if let Some(m) = data.mods.iter_mut().find(|m| m.id == body.mod_id) {
+                    m.enabled = true;
                 }
             }
-            if let Some(m) = data.mods.iter_mut().find(|m| m.id == body.mod_id) {
-                m.enabled = true;
-            }
+            save_data(&d, &path);
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({ "ok": true, "mod_id": body.mod_id })),
                 StatusCode::OK,
@@ -218,27 +244,35 @@ pub async fn start_api_server(
 
     // POST /api/mods/disable  (requires token)
     let data_disable = data.clone();
+    let path_disable = data_path.clone();
     let tok_disable = token.clone();
     let disable_mod = warp::path!("api" / "mods" / "disable")
         .and(warp::post())
         .and(require_token(tok_disable))
         .and(warp::body::json::<EnableDisableBody>())
         .and(with_data(data_disable))
-        .map(|body: EnableDisableBody, d: Arc<std::sync::Mutex<AppData>>| {
-            let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
-            let active_id = match data.active_profile_id.clone() {
-                Some(id) => id,
-                None => return warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: "No active profile".into() }),
-                    StatusCode::BAD_REQUEST,
-                ),
+        .and(with_path(path_disable))
+        .map(|body: EnableDisableBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
+            let active_id = {
+                let data = d.lock().unwrap_or_else(|p| p.into_inner());
+                match data.active_profile_id.clone() {
+                    Some(id) => id,
+                    None => return warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: "No active profile".into() }),
+                        StatusCode::BAD_REQUEST,
+                    ),
+                }
             };
-            if let Some(p) = data.profiles.iter_mut().find(|p| p.id == active_id) {
-                p.active_mods.retain(|id| id != &body.mod_id);
+            {
+                let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
+                if let Some(p) = data.profiles.iter_mut().find(|p| p.id == active_id) {
+                    p.active_mods.retain(|id| id != &body.mod_id);
+                }
+                if let Some(m) = data.mods.iter_mut().find(|m| m.id == body.mod_id) {
+                    m.enabled = false;
+                }
             }
-            if let Some(m) = data.mods.iter_mut().find(|m| m.id == body.mod_id) {
-                m.enabled = false;
-            }
+            save_data(&d, &path);
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({ "ok": true, "mod_id": body.mod_id })),
                 StatusCode::OK,
@@ -247,22 +281,27 @@ pub async fn start_api_server(
 
     // POST /api/profiles/activate  (requires token)
     let data_profile_act = data.clone();
+    let path_profile_act = data_path.clone();
     let tok_profile = token.clone();
     let activate_profile = warp::path!("api" / "profiles" / "activate")
         .and(warp::post())
         .and(require_token(tok_profile))
         .and(warp::body::json::<ActivateProfileBody>())
         .and(with_data(data_profile_act))
-        .map(|body: ActivateProfileBody, d: Arc<std::sync::Mutex<AppData>>| {
-            let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
-            let exists = data.profiles.iter().any(|p| p.id == body.profile_id);
-            if !exists {
-                return warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: format!("Profile '{}' not found", body.profile_id) }),
-                    StatusCode::NOT_FOUND,
-                );
+        .and(with_path(path_profile_act))
+        .map(|body: ActivateProfileBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
+            {
+                let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
+                let exists = data.profiles.iter().any(|p| p.id == body.profile_id);
+                if !exists {
+                    return warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: format!("Profile '{}' not found", body.profile_id) }),
+                        StatusCode::NOT_FOUND,
+                    );
+                }
+                data.active_profile_id = Some(body.profile_id.clone());
             }
-            data.active_profile_id = Some(body.profile_id.clone());
+            save_data(&d, &path);
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({ "ok": true, "profile_id": body.profile_id })),
                 StatusCode::OK,
@@ -300,13 +339,15 @@ pub async fn start_api_server(
 
     // POST /api/plugins/apply  (requires token)
     let data_apply = data.clone();
+    let path_apply = data_path.clone();
     let tok_apply = token.clone();
     let apply_plugin = warp::path!("api" / "plugins" / "apply")
         .and(warp::post())
         .and(require_token(tok_apply))
         .and(warp::body::json::<ApplyPluginBody>())
         .and(with_data(data_apply))
-        .map(|body: ApplyPluginBody, d: Arc<std::sync::Mutex<AppData>>| {
+        .and(with_path(path_apply))
+        .map(|body: ApplyPluginBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
             let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
             let plugin = match data.installed_plugins.iter().find(|p| p.manifest.id == body.plugin_id).cloned() {
                 Some(p) => p,
@@ -356,6 +397,8 @@ pub async fn start_api_server(
             for m in data.mods.iter_mut() {
                 m.enabled = enabled_ids.contains(&m.id);
             }
+            drop(data);
+            save_data(&d, &path);
 
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({
@@ -381,28 +424,35 @@ pub async fn start_api_server(
 
     // POST /api/modpacks/enable  (requires token) — enables all mods belonging to a profile/modpack
     let data_mp_enable = data.clone();
+    let path_mp_enable = data_path.clone();
     let tok_mp_enable = token.clone();
     let enable_modpack = warp::path!("api" / "modpacks" / "enable")
         .and(warp::post())
         .and(require_token(tok_mp_enable))
         .and(warp::body::json::<EnableDisableModpackBody>())
         .and(with_data(data_mp_enable))
-        .map(|body: EnableDisableModpackBody, d: Arc<std::sync::Mutex<AppData>>| {
-            let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
-            let profile = match data.profiles.iter().find(|p| p.id == body.profile_id) {
-                Some(p) => p.clone(),
-                None => return warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: format!("Profile '{}' not found", body.profile_id) }),
-                    StatusCode::NOT_FOUND,
-                ),
-            };
-            let mod_ids = profile.active_mods.clone();
-            let count = mod_ids.len();
-            for m in data.mods.iter_mut() {
-                if mod_ids.contains(&m.id) {
-                    m.enabled = true;
+        .and(with_path(path_mp_enable))
+        .map(|body: EnableDisableModpackBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
+            let (mod_ids, count) = {
+                let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
+                let profile = match data.profiles.iter().find(|p| p.id == body.profile_id) {
+                    Some(p) => p.clone(),
+                    None => return warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: format!("Profile '{}' not found", body.profile_id) }),
+                        StatusCode::NOT_FOUND,
+                    ),
+                };
+                let mod_ids = profile.active_mods.clone();
+                let count = mod_ids.len();
+                for m in data.mods.iter_mut() {
+                    if mod_ids.contains(&m.id) {
+                        m.enabled = true;
+                    }
                 }
-            }
+                (mod_ids, count)
+            };
+            let _ = mod_ids;
+            save_data(&d, &path);
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({ "ok": true, "profile_id": body.profile_id, "enabled_count": count })),
                 StatusCode::OK,
@@ -411,28 +461,35 @@ pub async fn start_api_server(
 
     // POST /api/modpacks/disable  (requires token) — disables all mods belonging to a profile/modpack
     let data_mp_disable = data.clone();
+    let path_mp_disable = data_path.clone();
     let tok_mp_disable = token.clone();
     let disable_modpack = warp::path!("api" / "modpacks" / "disable")
         .and(warp::post())
         .and(require_token(tok_mp_disable))
         .and(warp::body::json::<EnableDisableModpackBody>())
         .and(with_data(data_mp_disable))
-        .map(|body: EnableDisableModpackBody, d: Arc<std::sync::Mutex<AppData>>| {
-            let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
-            let profile = match data.profiles.iter().find(|p| p.id == body.profile_id) {
-                Some(p) => p.clone(),
-                None => return warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: format!("Profile '{}' not found", body.profile_id) }),
-                    StatusCode::NOT_FOUND,
-                ),
-            };
-            let mod_ids = profile.active_mods.clone();
-            let count = mod_ids.len();
-            for m in data.mods.iter_mut() {
-                if mod_ids.contains(&m.id) {
-                    m.enabled = false;
+        .and(with_path(path_mp_disable))
+        .map(|body: EnableDisableModpackBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
+            let (mod_ids, count) = {
+                let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
+                let profile = match data.profiles.iter().find(|p| p.id == body.profile_id) {
+                    Some(p) => p.clone(),
+                    None => return warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: format!("Profile '{}' not found", body.profile_id) }),
+                        StatusCode::NOT_FOUND,
+                    ),
+                };
+                let mod_ids = profile.active_mods.clone();
+                let count = mod_ids.len();
+                for m in data.mods.iter_mut() {
+                    if mod_ids.contains(&m.id) {
+                        m.enabled = false;
+                    }
                 }
-            }
+                (mod_ids, count)
+            };
+            let _ = mod_ids;
+            save_data(&d, &path);
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({ "ok": true, "profile_id": body.profile_id, "disabled_count": count })),
                 StatusCode::OK,

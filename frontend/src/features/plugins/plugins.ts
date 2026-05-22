@@ -405,13 +405,117 @@ function createOverlay(html: string): HTMLElement {
     const ov = document.createElement('div');
     ov.className = 'plug-overlay';
     ov.innerHTML = `<div class="plug-overlay-panel">${html}</div>`;
-    document.body.appendChild(ov);
-    ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+    (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+    // Backdrop click closes
+    ov.addEventListener('pointerdown', (e) => { if (e.target === ov) ov.remove(); });
+    // Esc key closes
     const onEsc = (e: KeyboardEvent) => {
         if (e.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', onEsc); }
     };
     document.addEventListener('keydown', onEsc);
+    // Clean up Esc listener when overlay is removed via other means
+    const obs = new MutationObserver(() => {
+        if (!document.contains(ov)) { document.removeEventListener('keydown', onEsc); obs.disconnect(); }
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
     return ov;
+}
+
+// ── Smart quick-test overlay (shows selectors for mods / profiles / plugins) ──
+
+function openSmartQuickTest(m: string, p: string, rawBody: string) {
+    let formHtml = '';
+
+    if (p === '/api/mods/enable' || p === '/api/mods/disable') {
+        const opts = _allMods.length
+            ? _allMods.map(mod => `<option value="${escHtml(mod.id)}">${escHtml(mod.name || mod.id)}</option>`).join('')
+            : `<option value="">${t('plugins.noMods')}</option>`;
+        formHtml = `
+            <div class="plug-qt-smart-field">
+                <label class="plug-form-label" style="margin-bottom:4px;">Mod</label>
+                <select id="plug-qt-s-mod" class="select">${opts}</select>
+            </div>`;
+    } else if (p === '/api/profiles/activate' || p === '/api/modpacks/enable' || p === '/api/modpacks/disable') {
+        const opts = _allProfiles.length
+            ? _allProfiles.map(pr => `<option value="${escHtml(pr.id)}">${escHtml(pr.name)}</option>`).join('')
+            : `<option value="">${t('plugins.noProfiles') || 'Aucun profil'}</option>`;
+        formHtml = `
+            <div class="plug-qt-smart-field">
+                <label class="plug-form-label" style="margin-bottom:4px;">Profil</label>
+                <select id="plug-qt-s-profile" class="select">${opts}</select>
+            </div>`;
+    } else if (p === '/api/plugins/compare' || p === '/api/plugins/apply') {
+        const opts = _installedPlugins.length
+            ? _installedPlugins.map(pl => `<option value="${escHtml(pl.manifest.id)}">${escHtml(pl.manifest.name)}</option>`).join('')
+            : `<option value="">${t('plugins.noPlugins') || 'Aucun plugin'}</option>`;
+        const strictRow = p === '/api/plugins/apply' ? `
+            <div class="plug-qt-smart-field" style="flex-direction:row;align-items:center;gap:10px;margin-top:4px;">
+                <label class="plug-form-label" style="margin:0;">force_strict</label>
+                <label class="plug-toggle" style="margin:0;"><input type="checkbox" id="plug-qt-s-strict"><span class="plug-toggle-slider"></span></label>
+                <span style="font-size:11px;color:var(--text-muted);">Désactive les mods absents de la liste</span>
+            </div>` : '';
+        formHtml = `
+            <div class="plug-qt-smart-field">
+                <label class="plug-form-label" style="margin-bottom:4px;">Plugin</label>
+                <select id="plug-qt-s-plugin" class="select">${opts}</select>
+            </div>${strictRow}`;
+    } else if (p === '/api/server-repo/connect') {
+        formHtml = `
+            <div class="plug-qt-smart-field">
+                <label class="plug-form-label" style="margin-bottom:4px;">URL du serveur <span style="color:var(--danger)">*</span></label>
+                <input type="text" id="plug-qt-s-url" class="input" placeholder="https://monserveur.com/repo.json" style="font-family:var(--font-mono);font-size:12px;">
+            </div>
+            <div class="plug-qt-smart-field" style="margin-top:8px;">
+                <label class="plug-form-label" style="margin-bottom:4px;">Nom (optionnel)</label>
+                <input type="text" id="plug-qt-s-name" class="input" placeholder="Mon Serveur">
+            </div>`;
+    } else {
+        const pretty = (() => { try { return JSON.stringify(JSON.parse(rawBody), null, 2); } catch { return rawBody; } })();
+        formHtml = `
+            <p style="font-size:11px;color:var(--text-muted);margin:0 0 6px;">${t('plugins.qtBodyHint')}</p>
+            <textarea id="plug-qt-s-json" class="input" style="font-family:var(--font-mono);font-size:12px;min-height:110px;resize:vertical;" spellcheck="false">${escHtml(pretty)}</textarea>`;
+    }
+
+    const overlay = createOverlay(`
+        <div class="plug-ov-header">
+            <span class="plug-ov-title">${IC.play} <span class="plug-method plug-method-post" style="font-size:10px;">POST</span> <code style="font-size:11px;color:var(--accent);margin-left:4px;">${escHtml(p)}</code></span>
+            <button class="btn btn-xs btn-ghost plug-ov-close-btn">${IC.x}</button>
+        </div>
+        <div class="plug-ov-body" style="padding:16px 18px;display:flex;flex-direction:column;gap:4px;">
+            ${formHtml}
+        </div>
+        <div class="plug-ov-footer">
+            <button class="btn btn-ghost plug-ov-close-btn">${t('common.cancel')}</button>
+            <button class="btn btn-accent" id="plug-qt-s-run">${IC.play} ${t('plugins.run')}</button>
+        </div>`);
+
+    overlay.querySelectorAll('.plug-ov-close-btn').forEach(b => b.addEventListener('click', () => overlay.remove()));
+    overlay.querySelector('#plug-qt-s-run')?.addEventListener('click', () => {
+        let body = '{}';
+        if (p === '/api/mods/enable' || p === '/api/mods/disable') {
+            const modId = (overlay.querySelector('#plug-qt-s-mod') as HTMLSelectElement)?.value || '';
+            body = JSON.stringify({ mod_id: modId });
+        } else if (p === '/api/profiles/activate' || p === '/api/modpacks/enable' || p === '/api/modpacks/disable') {
+            const profId = (overlay.querySelector('#plug-qt-s-profile') as HTMLSelectElement)?.value || '';
+            body = JSON.stringify({ profile_id: profId });
+        } else if (p === '/api/plugins/compare') {
+            const plugId = (overlay.querySelector('#plug-qt-s-plugin') as HTMLSelectElement)?.value || '';
+            body = JSON.stringify({ plugin_id: plugId });
+        } else if (p === '/api/plugins/apply') {
+            const plugId  = (overlay.querySelector('#plug-qt-s-plugin') as HTMLSelectElement)?.value || '';
+            const strict  = (overlay.querySelector('#plug-qt-s-strict')  as HTMLInputElement)?.checked  || false;
+            body = JSON.stringify({ plugin_id: plugId, force_strict: strict });
+        } else if (p === '/api/server-repo/connect') {
+            const url  = (overlay.querySelector('#plug-qt-s-url')  as HTMLInputElement)?.value || '';
+            const name = (overlay.querySelector('#plug-qt-s-name') as HTMLInputElement)?.value || '';
+            if (!url) { return; } // URL required
+            body = JSON.stringify({ url, name });
+        } else {
+            body = (overlay.querySelector('#plug-qt-s-json') as HTMLTextAreaElement)?.value || rawBody;
+        }
+        overlay.remove();
+        handleQuickTest(m, p, body);
+    });
 }
 
 function buildCompareContent(result: any, pluginName?: string, mode: 'compare' | 'apply' = 'apply'): string {
@@ -656,7 +760,7 @@ function hlJson(raw: string): string {
         .replace(/:\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g, ': <span class="hlj-num">$1</span>');
 }
 
-async function handleQuickTest(method: string, path: string) {
+async function handleQuickTest(method: string, path: string, body?: string) {
     const resultDiv = document.getElementById('plug-qt-result') as HTMLElement;
     const statusEl  = document.getElementById('plug-qt-status') as HTMLElement;
     const pathEl    = document.getElementById('plug-qt-path') as HTMLElement;
@@ -670,10 +774,12 @@ async function handleQuickTest(method: string, path: string) {
     bodyEl.innerHTML = `<span style="color:var(--text-muted)">${t('common.loading')}</span>`;
 
     try {
-        const res = await fetch(`http://127.0.0.1:51274${path}`, {
+        const opts: RequestInit = {
             method,
             headers: { 'Authorization': `Bearer ${_apiToken}`, 'Content-Type': 'application/json' },
-        });
+        };
+        if (method === 'POST' && body) opts.body = body;
+        const res = await fetch(`http://127.0.0.1:51274${path}`, opts);
         const json = await res.json().catch(() => null);
         statusEl.textContent = `${res.status} ${res.statusText}`;
         statusEl.className = `plug-tester-status ${res.ok ? 'plug-status-ok' : 'plug-status-err'}`;
@@ -963,13 +1069,18 @@ function renderCreate(container: HTMLElement) {
 
 function renderScripts(container: HTMLElement) {
     const QT_ENDPOINTS = [
-        { m: 'GET',  p: '/api/health',       l: 'Health',      icon: IC.checkCircle },
-        { m: 'GET',  p: '/api/status',       l: 'Status',      icon: IC.info },
-        { m: 'GET',  p: '/api/mods',         l: 'All Mods',    icon: IC.list },
-        { m: 'GET',  p: '/api/mods/active',  l: 'Active Mods', icon: IC.check },
-        { m: 'GET',  p: '/api/profiles',     l: 'Profiles',    icon: IC.puzzle },
-        { m: 'GET',  p: '/api/plugins',      l: 'Plugins',     icon: IC.zap },
-        { m: 'GET',  p: '/api/creator-id',   l: 'Creator ID',  icon: IC.shield },
+        { m: 'GET',  p: '/api/health',              l: 'Health',         icon: IC.checkCircle },
+        { m: 'GET',  p: '/api/status',              l: 'Status',         icon: IC.info },
+        { m: 'GET',  p: '/api/mods',                l: 'All Mods',       icon: IC.list },
+        { m: 'GET',  p: '/api/mods/active',         l: 'Active Mods',    icon: IC.check },
+        { m: 'GET',  p: '/api/profiles',            l: 'Profiles',       icon: IC.puzzle },
+        { m: 'GET',  p: '/api/plugins',             l: 'Plugins',        icon: IC.zap },
+        { m: 'GET',  p: '/api/creator-id',          l: 'Creator ID',     icon: IC.shield },
+        { m: 'POST', p: '/api/mods/enable',         l: 'Enable Mod',     icon: IC.check,  body: '{"mod_id":""}' },
+        { m: 'POST', p: '/api/mods/disable',        l: 'Disable Mod',    icon: IC.x,      body: '{"mod_id":""}' },
+        { m: 'POST', p: '/api/profiles/activate',   l: 'Activate Profile', icon: IC.puzzle, body: '{"profile_id":""}' },
+        { m: 'POST', p: '/api/plugins/apply',       l: 'Apply Plugin',   icon: IC.zap,    body: '{"plugin_id":"","force_strict":false}' },
+        { m: 'POST', p: '/api/plugins/compare',     l: 'Compare Plugin', icon: IC.shield, body: '{"plugin_id":""}' },
     ];
 
     container.innerHTML = `
@@ -993,11 +1104,14 @@ function renderScripts(container: HTMLElement) {
             <div class="plug-section-card">
                 <h3 class="plug-section-title">${IC.zap} ${t('plugins.quickTest')}</h3>
                 <div class="plug-qt-grid">
-                    ${QT_ENDPOINTS.map(e =>
-                        `<button class="plug-qt-btn" data-method="${e.m}" data-path="${e.p}" data-tooltip="${e.m} ${e.p}">
-                            ${e.icon} <span>${e.l}</span>
-                        </button>`
-                    ).join('')}
+                    ${QT_ENDPOINTS.map(e => {
+                        const isPost = e.m === 'POST';
+                        const badge = isPost ? `<span class="plug-qt-method-badge plug-qt-post">POST</span>` : '';
+                        const body = (e as any).body ? ` data-body="${escHtml((e as any).body)}"` : '';
+                        return `<button class="plug-qt-btn${isPost ? ' plug-qt-btn-post' : ''}" data-method="${e.m}" data-path="${e.p}"${body} data-tooltip="${e.m} ${e.p}">
+                            ${e.icon} <span>${e.l}</span>${badge}
+                        </button>`;
+                    }).join('')}
                 </div>
                 <div id="plug-qt-result" class="plug-qt-result" style="display:none;">
                     <div class="plug-qt-result-header">
@@ -1090,9 +1204,18 @@ function renderScripts(container: HTMLElement) {
                             </div>
                             <div id="plug-actions-container" class="plug-actions-list"></div>
                         </div>
+                        <div class="plug-gen-token-env-row">
+                            <label class="plug-form-label" style="margin:0;white-space:nowrap;">${IC.lock} ${t('plugins.genTokenEnv')}</label>
+                            <label class="plug-toggle" data-tooltip="${t('plugins.genTokenEnvTip')}">
+                                <input type="checkbox" id="plug-gen-use-env" checked>
+                                <span class="plug-toggle-slider"></span>
+                            </label>
+                            <span id="plug-gen-token-hint" class="plug-mode-hint-txt" style="flex:1;">${t('plugins.genTokenEnvOn')}</span>
+                        </div>
                         <div class="plug-gen-buttons">
                             <button class="btn btn-secondary" id="plug-gen-preview">${IC.eye} ${t('plugins.preview')}</button>
-                            <button class="btn btn-accent" id="plug-gen-save">${IC.save} ${t('plugins.saveScript')}</button>
+                            <button class="btn btn-ghost" id="plug-gen-save">${IC.save} ${t('plugins.saveScript')}</button>
+                            <button class="btn btn-accent" id="plug-gen-zip">${IC.download} ${t('plugins.saveScriptZip')}</button>
                         </div>
                     </div>
                     <div class="plug-gen-output-col">
@@ -1133,10 +1256,17 @@ function renderScripts(container: HTMLElement) {
 
     // Quick test
     container.querySelectorAll('.plug-qt-btn').forEach(btn => {
-        btn.addEventListener('click', () => handleQuickTest(
-            (btn as HTMLElement).dataset.method || 'GET',
-            (btn as HTMLElement).dataset.path || '/api/health'
-        ));
+        btn.addEventListener('click', () => {
+            const el = btn as HTMLElement;
+            const m = el.dataset.method || 'GET';
+            const p = el.dataset.path || '/api/health';
+            const rawBody = el.dataset.body;
+            if (m === 'POST' && rawBody) {
+                openSmartQuickTest(m, p, rawBody);
+            } else {
+                handleQuickTest(m, p);
+            }
+        });
     });
     container.querySelector('#plug-qt-copy')?.addEventListener('click', () => {
         const txt = document.getElementById('plug-qt-body')?.textContent || '';
@@ -1188,11 +1318,29 @@ function renderScripts(container: HTMLElement) {
             }
             return;
         }
-        // Test button → prefill tester
+        // Test button (from endpoint "Try it" callout or QT row) → run test directly
         const testBtn = tgt.closest('.plug-ep-test-btn') as HTMLElement | null;
         if (testBtn) {
             e.stopPropagation();
-            prefillTester(testBtn.dataset.method || 'GET', testBtn.dataset.path || '');
+            const method = testBtn.dataset.method || 'GET';
+            const path   = testBtn.dataset.path   || '';
+            if (method === 'POST') {
+                const bodyHints: Record<string, string> = {
+                    '/api/mods/enable':           '{"mod_id":""}',
+                    '/api/mods/disable':          '{"mod_id":""}',
+                    '/api/profiles/activate':     '{"profile_id":""}',
+                    '/api/plugins/compare':       '{"plugin_id":""}',
+                    '/api/plugins/apply':         '{"plugin_id":"","force_strict":false}',
+                    '/api/modpacks/enable':       '{"profile_id":""}',
+                    '/api/modpacks/disable':      '{"profile_id":""}',
+                    '/api/server-repo/connect':   '{"url":"","name":""}',
+                };
+                openSmartQuickTest('POST', path, bodyHints[path] || '{}');
+            } else {
+                // For GET: scroll QT result into view and run
+                document.getElementById('plug-qt-result')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                handleQuickTest(method, path);
+            }
             return;
         }
         // Copy URL button (handled by its own listener below)
@@ -1273,10 +1421,18 @@ function renderScripts(container: HTMLElement) {
         if (hint) hint.textContent = t(mode === 'api' ? 'plugins.modeApiHint' : 'plugins.modeDeeplinkHint');
     });
 
+    // Token env toggle
+    container.querySelector('#plug-gen-use-env')?.addEventListener('change', (e) => {
+        const useEnv = (e.target as HTMLInputElement).checked;
+        const hint = document.getElementById('plug-gen-token-hint');
+        if (hint) hint.textContent = t(useEnv ? 'plugins.genTokenEnvOn' : 'plugins.genTokenEnvOff');
+    });
+
     // Script gen
     container.querySelector('#plug-add-action')?.addEventListener('click', addActionRow);
     container.querySelector('#plug-gen-preview')?.addEventListener('click', handlePreviewScript);
     container.querySelector('#plug-gen-save')?.addEventListener('click', handleSaveScript);
+    container.querySelector('#plug-gen-zip')?.addEventListener('click', handleSaveScriptZip);
     container.querySelector('#plug-copy-script')?.addEventListener('click', async () => {
         const codeEl = document.getElementById('plug-gen-code');
         const raw = codeEl?.dataset.raw || codeEl?.textContent || '';
@@ -1543,14 +1699,26 @@ function buildEndpointRow(ep: EndpointDef): string {
 
     const statusesHtml = ep.responseStatuses.map(s => {
         const scls = s.code < 300 ? 'plug-resp-ok' : s.code < 400 ? 'plug-resp-warn' : 'plug-resp-err';
+        const codeNote = s.code === 200 ? t('plugins.epRespNoteOk')
+            : s.code === 401 ? t('plugins.epRespNote401')
+            : s.code === 404 ? t('plugins.epRespNote404')
+            : s.code === 400 ? t('plugins.epRespNote400')
+            : '';
         return `<details class="plug-ep-resp-item">
-            <summary><span class="plug-resp-code ${scls}">${s.code}</span> <span class="plug-resp-label">${escHtml(s.label)}</span></summary>
+            <summary>
+                <span class="plug-resp-code ${scls}">${s.code}</span>
+                <span class="plug-resp-label">${escHtml(s.label)}</span>
+                ${codeNote ? `<span class="plug-resp-note">${codeNote}</span>` : ''}
+            </summary>
             <pre class="plug-ep-resp-body plug-code-pre">${hlJson(s.body)}</pre>
         </details>`;
     }).join('');
 
     const curlRaw = _curlEx(ep);
     const ps1Raw  = _ps1Ex(ep);
+    const authNote = ep.auth
+        ? `<span class="plug-ep-auth-note">${IC.lock} ${t('plugins.epAuthNote')}</span>`
+        : `<span class="plug-ep-noauth-note">${IC.checkCircle} ${t('plugins.epNoAuthNote')}</span>`;
 
     return `
         <div class="plug-ep-wrap" id="epw-${safeId}">
@@ -1570,9 +1738,11 @@ function buildEndpointRow(ep: EndpointDef): string {
             <div class="plug-ep-detail plug-ep-swagger" id="epd-${safeId}" style="display:none;">
                 <div class="plug-ep-swagger-left">
                     <p class="plug-ep-about">${escHtml(ep.about)}</p>
+                    ${authNote}
                     ${fieldsHtml}
                 </div>
                 <div class="plug-ep-swagger-right">
+                    <div class="plug-ep-code-notice">${t('plugins.epCodeNotice')}</div>
                     <div class="plug-ep-code-tabs" data-epid="${safeId}">
                         <button class="plug-ep-scroll-btn" data-scroll="left" data-epid="${safeId}" aria-label="scroll left">&#8249;</button>
                         <div class="plug-ep-lang-tabs-scroll" id="epls-${safeId}">
@@ -1816,20 +1986,21 @@ function addActionRow() {
     const profOpts = _allProfiles.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`).join('');
     const plugOpts = _installedPlugins.map(p => `<option value="${escHtml(p.manifest.id)}">${escHtml(p.manifest.name)}</option>`).join('');
 
-    const EXTRA_TYPES = new Set(['wait','close_process','open_url','show_message','launch_game','log','comment','set_variable','if_file_exists','if_var_eq','raw_code']);
+    const EXTRA_TYPES = new Set(['wait','close_process','open_url','show_message','launch_game','log','comment','set_variable','if_file_exists','if_var_eq','raw_code','connect_server_repo']);
     const NO_INPUT_TYPES = new Set(['else_block','end_block']);
     const EXTRA_PH: Record<string,string> = {
-        wait:           t('plugins.waitDuration'),
-        close_process:  t('plugins.processName'),
-        open_url:       t('plugins.urlToOpen'),
-        show_message:   t('plugins.messageText'),
-        launch_game:    t('plugins.gameExePath'),
-        log:            t('plugins.logMessage'),
-        comment:        t('plugins.commentText'),
-        set_variable:   t('plugins.varNameValue'),
-        if_file_exists: t('plugins.filePathCheck'),
-        if_var_eq:      'VARNAME=value',
-        raw_code:       t('plugins.rawCodeHint'),
+        wait:                t('plugins.waitDuration'),
+        close_process:       t('plugins.processName'),
+        open_url:            t('plugins.urlToOpen'),
+        show_message:        t('plugins.messageText'),
+        launch_game:         t('plugins.gameExePath'),
+        log:                 t('plugins.logMessage'),
+        comment:             t('plugins.commentText'),
+        set_variable:        t('plugins.varNameValue'),
+        if_file_exists:      t('plugins.filePathCheck'),
+        if_var_eq:           'VARNAME=value',
+        raw_code:            t('plugins.rawCodeHint'),
+        connect_server_repo: 'https://server.example.com/repo.json | Server Name',
     };
 
     const row = document.createElement('div');
@@ -1845,8 +2016,11 @@ function addActionRow() {
                     <option value="enable_mod">${t('plugins.actionEnableMod')}</option>
                     <option value="disable_mod">${t('plugins.actionDisableMod')}</option>
                     <option value="activate_profile">${t('plugins.actionActivateProfile')}</option>
+                    <option value="enable_modpack">${t('plugins.actionEnableModpack') || 'Activer liste de mods du plugin'}</option>
+                    <option value="disable_modpack">${t('plugins.actionDisableModpack') || 'Désactiver liste de mods du plugin'}</option>
                     <option value="apply_plugin">${t('plugins.actionApplyPlugin')}</option>
                     <option value="compare_plugin">${t('plugins.actionComparePlugin')}</option>
+                    <option value="connect_server_repo">${t('plugins.actionConnectRepo') || 'Se connecter à un repo'}</option>
                 </optgroup>
                 <optgroup label="${t('plugins.actionGroupSystem')}">
                     <option value="wait">${t('plugins.actionWait')}</option>
@@ -1896,7 +2070,7 @@ function addActionRow() {
         if (!isExtra && !isNoInput) {
             if (type === 'enable_mod' || type === 'disable_mod') {
                 targetSelect.innerHTML = modOpts || `<option value="">${t('plugins.noMods')}</option>`;
-            } else if (type === 'activate_profile') {
+            } else if (type === 'activate_profile' || type === 'enable_modpack' || type === 'disable_modpack') {
                 targetSelect.innerHTML = profOpts || `<option value="">${t('plugins.noProfiles')}</option>`;
             } else {
                 targetSelect.innerHTML = plugOpts || `<option value="">${t('plugins.noPlugins')}</option>`;
@@ -1943,15 +2117,85 @@ async function handleSaveScript() {
     } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
 }
 
-async function buildScript(): Promise<string | null> {
+async function handleSaveScriptZip() {
+    const script = await buildScript();
+    if (script == null) return;
+
     const format    = (document.getElementById('plug-gen-format') as HTMLSelectElement)?.value || 'bat';
     const mode      = (document.getElementById('plug-gen-mode') as HTMLSelectElement)?.value || 'deeplink';
-    const launchBmm = (document.getElementById('plug-gen-launch') as HTMLInputElement)?.checked ?? true;
-    const rows      = document.querySelectorAll('.plug-action-row');
+    const useEnv    = (document.getElementById('plug-gen-use-env') as HTMLInputElement)?.checked ?? true;
+    const needsEnv  = mode === 'api' && useEnv;
 
+    const zipPath = await saveFile({ defaultPath: `bmm-plugin.zip`, filters: [{ name: 'ZIP Archive', extensions: ['zip'] }] });
+    if (!zipPath) return;
+
+    // Build .env content
+    const envContent = needsEnv
+        ? `# BMM Script — environment variables\n# Do NOT commit this file to version control!\nBMM_TOKEN=${_apiToken}\nBMM_API_BASE=http://127.0.0.1:51274\n`
+        : `# BMM Script — no API token required (deeplink mode)\nBMM_API_BASE=http://127.0.0.1:51274\n`;
+
+    // Build .gitignore
+    const gitignore = `.env\n*.log\n__pycache__/\nnode_modules/\ntarget/\n`;
+
+    // Build README.md
+    const extMap: Record<string,string> = { bat:'cmd', ps1:'powershell', vbs:'cscript', py:'python', lua:'lua', js:'node', rb:'ruby', php:'php', go:'go run', java:'javac + java', cs:'dotnet run', rs:'cargo run' };
+    const runner = extMap[format] || format;
+    const readme = [
+        `# BMM Script — generated by BMM Script Generator`,
+        ``,
+        `## Files`,
+        `| File | Description |`,
+        `|------|-------------|`,
+        `| \`bmm-script.${format}\` | Main script (${runner}) |`,
+        needsEnv ? `| \`.env\` | API credentials — **do not commit!** |` : '',
+        `| \`.gitignore\` | Ignores \`.env\` and temp files |`,
+        ``,
+        `## Usage`,
+        ``,
+        needsEnv ? `1. Open \`.env\` and verify your \`BMM_TOKEN\` is correct.\n2. Make sure BMM is running (API on port 51274).\n3. Run the script with \`${runner} bmm-script.${format}\`.` : `1. Make sure BMM is running.\n2. Run: \`${runner} bmm-script.${format}\``,
+        ``,
+        `## Requirements`,
+        _genFormatReqs(format),
+        ``,
+        `> Generated by [Better Mod Manager](https://github.com/YourRepo/BMM) — ${new Date().toISOString().slice(0,10)}`,
+    ].filter(l => l !== '').join('\n');
+
+    try {
+        await invoke('write_zip_files', {
+            destPath: zipPath,
+            files: [
+                { name: `bmm-script.${format}`, content: script },
+                { name: '.env',                 content: envContent },
+                { name: '.gitignore',           content: gitignore },
+                { name: 'README.md',            content: readme },
+            ],
+        });
+        toast(t('plugins.scriptZipSaved'), 'success');
+    } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+}
+
+function _genFormatReqs(fmt: string): string {
+    const map: Record<string,string> = {
+        bat: '- Windows CMD (built-in)',
+        ps1: '- PowerShell 5+ (built-in on Windows)',
+        vbs: '- VBScript / cscript.exe (built-in on Windows)',
+        py:  '- Python 3.x + `pip install requests`',
+        lua: '- Lua 5.x + `luarocks install http`',
+        js:  '- Node.js 18+',
+        rb:  '- Ruby 3.x (stdlib only)',
+        php: '- PHP 7.4+ with cURL extension',
+        go:  '- Go 1.18+',
+        java:'- Java 11+ (stdlib only)',
+        cs:  '- .NET 6+ (stdlib only)',
+        rs:  '- Rust + `reqwest = { features = ["blocking"] }` in Cargo.toml',
+    };
+    return map[fmt] || `- ${fmt} runtime`;
+}
+
+function _collectActions(): Array<{ action_type: string; target_id: string; extra: Record<string,any> }> | null {
+    const rows = document.querySelectorAll('.plug-action-row');
     if (!rows.length) { toast(t('plugins.addActionFirst'), 'warning'); return null; }
-
-    const actions = Array.from(rows).map(row => {
+    return Array.from(rows).map(row => {
         const type = (row.querySelector('.plug-action-type') as HTMLSelectElement).value;
         const extra: Record<string, any> = {};
         const extraWrap = row.querySelector('.plug-action-extra-wrap') as HTMLElement;
@@ -1959,17 +2203,23 @@ async function buildScript(): Promise<string | null> {
         if (extraInp && extraWrap?.style.display !== 'none') {
             const val = extraInp.value.trim();
             switch (type) {
-                case 'wait':           extra.duration_ms = (parseFloat(val) || 1) * 1000; break;
-                case 'close_process':  extra.process_name = val; break;
-                case 'open_url':       extra.url = val; break;
-                case 'show_message':   extra.message = val; break;
-                case 'launch_game':    extra.exe_path = val; break;
-                case 'log':            extra.message = val; break;
-                case 'comment':        extra.text = val; break;
-                case 'set_variable':   extra.expr = val; break;
-                case 'if_file_exists': extra.path = val; break;
-                case 'if_var_eq':      extra.cond = val; break;
-                case 'raw_code':       extra.code = val; break;
+                case 'wait':                extra.duration_ms = (parseFloat(val) || 1) * 1000; break;
+                case 'close_process':       extra.process_name = val; break;
+                case 'open_url':            extra.url = val; break;
+                case 'show_message':        extra.message = val; break;
+                case 'launch_game':         extra.exe_path = val; break;
+                case 'log':                 extra.message = val; break;
+                case 'comment':             extra.text = val; break;
+                case 'set_variable':        extra.expr = val; break;
+                case 'if_file_exists':      extra.path = val; break;
+                case 'if_var_eq':           extra.cond = val; break;
+                case 'raw_code':            extra.code = val; break;
+                case 'connect_server_repo': {
+                    const [u, ...rest2] = val.split('|');
+                    extra.url  = u.trim();
+                    extra.name = rest2.join('|').trim();
+                    break;
+                }
             }
         }
         return {
@@ -1978,16 +2228,28 @@ async function buildScript(): Promise<string | null> {
             extra,
         };
     });
+}
+
+async function buildScript(): Promise<string | null> {
+    const format    = (document.getElementById('plug-gen-format') as HTMLSelectElement)?.value || 'bat';
+    const mode      = (document.getElementById('plug-gen-mode') as HTMLSelectElement)?.value || 'deeplink';
+    const launchBmm = (document.getElementById('plug-gen-launch') as HTMLInputElement)?.checked ?? true;
+    const useEnv    = (document.getElementById('plug-gen-use-env') as HTMLInputElement)?.checked ?? true;
+    const actions   = _collectActions();
+    if (!actions) return null;
+
+    // Token: if useEnv → pass null so generators use env-var placeholder; else inline token
+    const tokenArg = mode === 'api' ? (useEnv ? null : _apiToken) : null;
 
     // TS-side generation for non-native formats
     const TS_FORMATS = new Set(['py', 'lua', 'js', 'rb', 'php', 'go', 'java', 'cs', 'rs']);
     if (TS_FORMATS.has(format)) {
-        return genScriptLocal(format, actions, mode === 'api' ? _apiToken : null, mode === 'deeplink', launchBmm, _exePath);
+        return genScriptLocal(format, actions, tokenArg, mode === 'deeplink', launchBmm, _exePath, useEnv && mode === 'api');
     }
 
     try {
         return await invoke('generate_script', {
-            req: { format, actions, use_deeplink: mode === 'deeplink', token: mode === 'api' ? _apiToken : null, launch_bmm: launchBmm, exe_path: _exePath }
+            req: { format, actions, use_deeplink: mode === 'deeplink', token: tokenArg, launch_bmm: launchBmm, exe_path: _exePath }
         });
     } catch (e) {
         toast(`${t('common.error')}: ${e}`, 'error');
@@ -2003,16 +2265,32 @@ function genScriptLocal(
     token: string | null,
     useDeeplink: boolean,
     launchBmm: boolean,
-    exePath: string
+    exePath: string,
+    useEnvFile: boolean = false
 ): string {
     const BASE = 'http://127.0.0.1:51274';
+    // When useEnvFile: generated code reads token from env var, not hardcoded
+    const ENV_TOKEN_PY   = 'os.environ.get("BMM_TOKEN", "")';
+    const ENV_TOKEN_LUA  = 'os.getenv("BMM_TOKEN") or ""';
+    const ENV_TOKEN_JS   = 'process.env.BMM_TOKEN || ""';
+    const ENV_TOKEN_RB   = 'ENV["BMM_TOKEN"] || ""';
+    const ENV_TOKEN_PHP  = 'getenv("BMM_TOKEN") ?: ""';
+    const ENV_TOKEN_GO   = 'os.Getenv("BMM_TOKEN")';
+    const ENV_TOKEN_JAVA = 'System.getenv("BMM_TOKEN")';
+    const ENV_TOKEN_CS   = 'Environment.GetEnvironmentVariable("BMM_TOKEN") ?? ""';
+    const ENV_TOKEN_RS   = 'std::env::var("BMM_TOKEN").unwrap_or_default()';
 
     if (format === 'py') {
+        const tok = useEnvFile ? ENV_TOKEN_PY : (token ? JSON.stringify(token) : '"YOUR_TOKEN_HERE"');
         const lines: string[] = [
             '# Generated by BMM Script Generator',
             'import subprocess, time, os, webbrowser',
             'try: import requests',
             'except ImportError: raise SystemExit("pip install requests")',
+            '',
+            ...(useEnvFile ? ['# Load .env if present (pip install python-dotenv)','try:', '    from dotenv import load_dotenv; load_dotenv()', 'except ImportError: pass', ''] : []),
+            `TOKEN = ${tok}`,
+            `BASE  = os.environ.get("BMM_API_BASE", ${JSON.stringify(BASE)})`,
             '',
         ];
         if (launchBmm && exePath) {
@@ -2021,15 +2299,19 @@ function genScriptLocal(
             lines.push('');
         }
         for (const a of actions) {
-            lines.push(..._pyAction(a, token, useDeeplink, BASE));
+            lines.push(..._pyAction(a, useEnvFile ? '__ENV__' : token, useDeeplink, BASE));
         }
         return lines.join('\n');
     }
 
     if (format === 'lua') {
+        const tok = useEnvFile ? ENV_TOKEN_LUA : (token || '"YOUR_TOKEN_HERE"');
         const lines: string[] = [
             '-- Generated by BMM Script Generator',
             '-- Requires: lua-http or similar HTTP library (luarocks install http)',
+            '',
+            `local TOKEN = ${tok}`,
+            `local BASE  = os.getenv("BMM_API_BASE") or ${JSON.stringify(BASE)}`,
             '',
         ];
         if (launchBmm && exePath) {
@@ -2038,48 +2320,56 @@ function genScriptLocal(
             lines.push('');
         }
         for (const a of actions) {
-            lines.push(..._luaAction(a, token, useDeeplink, BASE));
+            lines.push(..._luaAction(a, useEnvFile ? '__ENV__' : token, useDeeplink, BASE));
         }
         return lines.join('\n');
     }
 
     if (format === 'js') {
+        // ES-module style (Node 18+ has built-in fetch — no http import needed)
+        const tok = useEnvFile ? `process.env.BMM_TOKEN ?? ''` : (token ? `'${token}'` : `'YOUR_TOKEN_HERE'`);
         const lines: string[] = [
             '// Generated by BMM Script Generator',
-            '// Run with: node script.js',
-            "const http = require('http');",
-            "const { execSync, spawn } = require('child_process');",
+            '// Node.js 18+  |  save as .mjs  OR  add {"type":"module"} to package.json',
             '',
-            'async function post(path, body) {',
-            `  const url = '${BASE}' + path;`,
-            "  const data = JSON.stringify(body);",
-            "  return new Promise((res, rej) => {",
-            "    const req = http.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json'" + (token ? `, 'Authorization': 'Bearer ${token}'` : '') + " }, }, r => {",
-            "      let d=''; r.on('data',c=>d+=c); r.on('end',()=>res(d));",
-            "    }); req.on('error', rej); req.write(data); req.end();",
-            "  });",
+            ...(useEnvFile ? ["import * as dotenv from 'dotenv'; dotenv.config(); // npm install dotenv", ''] : []),
+            "import { execSync, spawn } from 'child_process';",
+            "import { existsSync } from 'fs';",
+            '',
+            `const TOKEN = ${tok};`,
+            `const BASE  = process.env.BMM_API_BASE ?? '${BASE}';`,
+            '',
+            '/** POST helper — uses built-in fetch */',
+            'async function bmmPost(path, body) {',
+            "  const r = await fetch(BASE + path, {",
+            "    method: 'POST',",
+            "    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },",
+            '    body: JSON.stringify(body),',
+            '  });',
+            '  return r.json().catch(() => null);',
             '}',
             '',
         ];
         if (launchBmm && exePath) {
             lines.push(`spawn(${JSON.stringify(exePath)}, [], { detached: true, stdio: 'ignore' }).unref();`);
+            lines.push('// Wait for BMM to start');
             lines.push('await new Promise(r => setTimeout(r, 2000));');
             lines.push('');
         }
-        lines.push('(async () => {');
+        // Top-level await works in ES modules — no IIFE needed
         for (const a of actions) {
-            lines.push(..._jsAction(a, token, useDeeplink, BASE).map(l => '  ' + l));
+            lines.push(..._jsAction(a, useEnvFile ? '__ENV__' : token, useDeeplink, BASE));
         }
-        lines.push('})();');
         return lines.join('\n');
     }
 
     if (format === 'rb') {
+        const tok = useEnvFile ? ENV_TOKEN_RB : `'${token || 'YOUR_TOKEN_HERE'}'`;
         const lines: string[] = [
             '# Generated by BMM Script Generator',
             "require 'net/http'", "require 'json'", "require 'uri'", '',
-            `BASE = '${BASE}'`,
-            `TOKEN = '${token || 'YOUR_TOKEN_HERE'}'`,
+            `BASE  = (ENV["BMM_API_BASE"] || '${BASE}').freeze`,
+            `TOKEN = ${tok}`,
             '',
             'def bmm_post(path, body)',
             '  uri = URI(BASE + path)',
@@ -2094,16 +2384,16 @@ function genScriptLocal(
             lines.push(`system('start "" "${exePath.replace(/\\/g, '\\\\')}"')`);
             lines.push('sleep(2)'); lines.push('');
         }
-        for (const a of actions) lines.push(..._genericAction(a, 'rb', token, useDeeplink, BASE));
+        for (const a of actions) lines.push(..._genericAction(a, 'rb', useEnvFile ? '__ENV__' : token, useDeeplink, BASE));
         return lines.join('\n');
     }
 
     if (format === 'php') {
-        const authHdr = token ? `'Authorization: Bearer ${token}'` : "'Authorization: Bearer YOUR_TOKEN_HERE'";
+        const tok = useEnvFile ? `getenv('BMM_TOKEN') ?: 'YOUR_TOKEN_HERE'` : `'${token || 'YOUR_TOKEN_HERE'}'`;
         const lines: string[] = [
             '<?php', '// Generated by BMM Script Generator',
-            `$base = '${BASE}';`,
-            `$token = '${token || 'YOUR_TOKEN_HERE'}';`,
+            `$base  = getenv('BMM_API_BASE') ?: '${BASE}';`,
+            `$token = ${tok};`,
             '',
             'function bmm_post($base, $token, $path, $body) {',
             '    $ch = curl_init($base . $path);',
@@ -2118,20 +2408,21 @@ function genScriptLocal(
             lines.push(`pclose(popen('start "" "${exePath.replace(/\\/g, '\\\\')}"', 'r'));`);
             lines.push('sleep(2);'); lines.push('');
         }
-        for (const a of actions) lines.push(..._genericAction(a, 'php', token, useDeeplink, BASE));
+        for (const a of actions) lines.push(..._genericAction(a, 'php', useEnvFile ? '__ENV__' : token, useDeeplink, BASE));
         lines.push('?>');
         return lines.join('\n');
     }
 
     if (format === 'go') {
         const al: string[] = [];
-        for (const a of actions) al.push(..._genericAction(a, 'go', token, useDeeplink, BASE).map(l => '\t' + l));
+        const goTok = useEnvFile ? `os.Getenv("BMM_TOKEN")` : `"${token || 'YOUR_TOKEN_HERE'}"`;
+        for (const a of actions) al.push(..._genericAction(a, 'go', useEnvFile ? '__ENV__' : token, useDeeplink, BASE).map(l => '\t' + l));
         return [
-            '// Generated by BMM Script Generator — requires: go get github.com/levigross/grequests',
+            '// Generated by BMM Script Generator',
             'package main',
-            'import ("bytes";"fmt";"net/http";"os/exec";"time")',
-            `const bmmBase = "${BASE}"`,
-            `const bmmToken = "${token || 'YOUR_TOKEN_HERE'}"`,
+            'import ("bytes";"fmt";"net/http";"os";"os/exec";"time")',
+            `var bmmBase  = func() string { if v := os.Getenv("BMM_API_BASE"); v != "" { return v }; return "${BASE}" }()`,
+            `var bmmToken = ${goTok}`,
             'func bmmPost(path, body string) {',
             '\treq,_:=http.NewRequest("POST",bmmBase+path,bytes.NewBufferString(body))',
             '\treq.Header.Set("Content-Type","application/json")',
@@ -2151,12 +2442,14 @@ function genScriptLocal(
 
     if (format === 'java') {
         const al: string[] = [];
-        for (const a of actions) al.push(..._genericAction(a, 'java', token, useDeeplink, BASE).map(l => '        ' + l));
+        const javaTok = useEnvFile ? `System.getenv("BMM_TOKEN") != null ? System.getenv("BMM_TOKEN") : "YOUR_TOKEN_HERE"` : `"${token || 'YOUR_TOKEN_HERE'}"`;
+        for (const a of actions) al.push(..._genericAction(a, 'java', useEnvFile ? '__ENV__' : token, useDeeplink, BASE).map(l => '        ' + l));
         return [
             '// Generated by BMM Script Generator (Java 11+)',
             'import java.net.http.*;import java.net.URI;',
             'public class BmmScript {',
-            `    static final String BASE="${BASE}",TOKEN="${token || 'YOUR_TOKEN_HERE'}";`,
+            `    static final String BASE=System.getenv("BMM_API_BASE")!=null?System.getenv("BMM_API_BASE"):"${BASE}";`,
+            `    static final String TOKEN=${javaTok};`,
             '    static void bmmPost(String p,String b) throws Exception{',
             '        var r=HttpRequest.newBuilder(URI.create(BASE+p)).POST(HttpRequest.BodyPublishers.ofString(b))',
             '            .header("Content-Type","application/json").header("Authorization","Bearer "+TOKEN).build();',
@@ -2175,13 +2468,15 @@ function genScriptLocal(
 
     if (format === 'cs') {
         const al: string[] = [];
-        for (const a of actions) al.push(..._genericAction(a, 'cs', token, useDeeplink, BASE).map(l => '        ' + l));
+        const csTok = useEnvFile ? `Environment.GetEnvironmentVariable("BMM_TOKEN") ?? "YOUR_TOKEN_HERE"` : `"${token || 'YOUR_TOKEN_HERE'}"`;
+        for (const a of actions) al.push(..._genericAction(a, 'cs', useEnvFile ? '__ENV__' : token, useDeeplink, BASE).map(l => '        ' + l));
         return [
             '// Generated by BMM Script Generator',
             'using System;using System.Net.Http;using System.Text;using System.Threading.Tasks;using System.Diagnostics;',
             'class BmmScript {',
             '    static readonly HttpClient Http=new();',
-            `    const string Base="${BASE}",Token="${token || 'YOUR_TOKEN_HERE'}";`,
+            `    static string Base=Environment.GetEnvironmentVariable("BMM_API_BASE")??"${BASE}";`,
+            `    static string Token=${csTok};`,
             '    static async Task Post(string p,string b){',
             '        var r=new HttpRequestMessage(HttpMethod.Post,Base+p);',
             '        r.Headers.Add("Authorization","Bearer "+Token);',
@@ -2201,21 +2496,29 @@ function genScriptLocal(
 
     if (format === 'rs') {
         const al: string[] = [];
-        for (const a of actions) al.push(..._genericAction(a, 'rs', token, useDeeplink, BASE).map(l => '    ' + l));
+        for (const a of actions) al.push(..._genericAction(a, 'rs', useEnvFile ? '__ENV__' : token, useDeeplink, BASE).map(l => '    ' + l));
+        const rsTokLine = useEnvFile
+            ? `    let token = std::env::var("BMM_TOKEN").unwrap_or_default();`
+            : `    let token = "${token || 'YOUR_TOKEN_HERE'}";`;
+        const rsStaticTok = useEnvFile ? '' : `const TOKEN:&str="${token || 'YOUR_TOKEN_HERE'}";`;
+        const rsStaticBase = useEnvFile ? '' : `const BASE:&str="${BASE}";`;
         return [
             '// Generated by BMM Script Generator',
             '// Cargo.toml: reqwest = { version = "0.11", features = ["blocking"] }',
             'use std::process::Command;',
-            `const BASE:&str="${BASE}";`,
-            `const TOKEN:&str="${token || 'YOUR_TOKEN_HERE'}";`,
-            'fn bmm_post(path:&str,body:&str){',
+            ...(useEnvFile ? [] : [rsStaticBase, rsStaticTok]),
+            'fn bmm_post(path:&str,body:&str,base:&str,token:&str){',
             '    let _=reqwest::blocking::Client::new()',
-            '        .post(format!("{}{}",BASE,path))',
-            '        .bearer_auth(TOKEN)',
+            '        .post(format!("{}{}",base,path))',
+            '        .bearer_auth(token)',
             '        .header("Content-Type","application/json")',
             '        .body(body.to_string()).send();',
             '}',
             'fn main(){',
+            ...(useEnvFile ? [
+                `    let base  = std::env::var("BMM_API_BASE").unwrap_or_else(|_| "${BASE}".to_string());`,
+                `    let token = std::env::var("BMM_TOKEN").unwrap_or_default();`,
+            ] : []),
             ...(launchBmm && exePath ? [
                 `    Command::new("cmd").args(["/c","start","","${exePath.replace(/\\/g, '\\\\')}",]).spawn().ok();`,
                 '    std::thread::sleep(std::time::Duration::from_secs(2));',
@@ -2223,7 +2526,7 @@ function genScriptLocal(
             ...al,
             '    println!("Done.");',
             '}',
-        ].join('\n');
+        ].filter(l => l !== '').join('\n');
     }
 
     return '# Unsupported format';
@@ -2232,11 +2535,14 @@ function genScriptLocal(
 // Generic action renderer for simpler languages (Ruby, PHP, Go, Java, C#, Rust)
 function _genericAction(a: any, lang: string, token: string | null, useDeeplink: boolean, base: string): string[] {
     const apiEps: Record<string, [string, string]> = {
-        enable_mod:       ['/api/mods/enable',        JSON.stringify({ mod_id: a.target_id })],
-        disable_mod:      ['/api/mods/disable',       JSON.stringify({ mod_id: a.target_id })],
-        activate_profile: ['/api/profiles/activate',  JSON.stringify({ profile_id: a.target_id })],
-        apply_plugin:     ['/api/plugins/apply',      JSON.stringify({ plugin_id: a.target_id, force_strict: false })],
-        compare_plugin:   ['/api/plugins/compare',    JSON.stringify({ plugin_id: a.target_id })],
+        enable_mod:          ['/api/mods/enable',        JSON.stringify({ mod_id: a.target_id })],
+        disable_mod:         ['/api/mods/disable',       JSON.stringify({ mod_id: a.target_id })],
+        activate_profile:    ['/api/profiles/activate',  JSON.stringify({ profile_id: a.target_id })],
+        apply_plugin:        ['/api/plugins/apply',      JSON.stringify({ plugin_id: a.target_id, force_strict: false })],
+        compare_plugin:      ['/api/plugins/compare',    JSON.stringify({ plugin_id: a.target_id })],
+        enable_modpack:      ['/api/modpacks/enable',    JSON.stringify({ profile_id: a.target_id })],
+        disable_modpack:     ['/api/modpacks/disable',   JSON.stringify({ profile_id: a.target_id })],
+        connect_server_repo: ['/api/server-repo/connect', JSON.stringify({ url: a.extra?.url || '', name: a.extra?.name || '' })],
     };
 
     const dlMap: Record<string, string> = {
@@ -2245,6 +2551,8 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
         activate_profile: `bmm://profile/activate?id=${a.target_id}`,
         apply_plugin:     `bmm://plugin/activate?id=${a.target_id}`,
         compare_plugin:   `bmm://plugin/compare?id=${a.target_id}`,
+        enable_modpack:   `bmm://modpack/enable?id=${a.target_id}`,
+        disable_modpack:  `bmm://modpack/disable?id=${a.target_id}`,
     };
 
     const comment = (t: string) => lang === 'php' ? `// ${t}` : lang === 'rs' ? `// ${t}` : `// ${t}`;
@@ -2269,13 +2577,14 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
         })[lang] || `// sleep ${ms}ms`;
     };
 
+    const isEnv = token === '__ENV__';
     const postFn = (path: string, body: string) => ({
         rb: `bmm_post('${path}', ${body})`,
         php: `bmm_post($base, $token, '${path}', ${body});`,
         go: `bmmPost("${path}", \`${body}\`)`,
         java: `bmmPost("${path}", "${body.replace(/"/g, '\\"')}");`,
         cs: `await Post("${path}", "${body.replace(/"/g, '\\"')}");`,
-        rs: `bmm_post("${path}", r#"${body}"#);`,
+        rs: isEnv ? `bmm_post("${path}", r#"${body}"#, &base, &token);` : `bmm_post("${path}", r#"${body}"#, BASE, TOKEN);`,
     })[lang] || `// post ${path}`;
 
     const dlFn = (url: string) => ({
@@ -2289,10 +2598,12 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
 
     switch (a.action_type) {
         case 'enable_mod': case 'disable_mod': case 'activate_profile':
-        case 'apply_plugin': case 'compare_plugin': {
+        case 'apply_plugin': case 'compare_plugin':
+        case 'enable_modpack': case 'disable_modpack':
+        case 'connect_server_repo': {
             const dl = dlMap[a.action_type];
             const ep = apiEps[a.action_type];
-            return [useDeeplink ? dlFn(dl) : postFn(ep[0], ep[1])];
+            return [dl && useDeeplink ? dlFn(dl) : postFn(ep[0], ep[1])];
         }
         case 'wait':
             return [sleepFn(a.extra.duration_ms || 1000)];
@@ -2372,11 +2683,14 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
 }
 
 function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: string): string[] {
-    const auth = token ? `headers={"Authorization": "Bearer ${token}"}` : '';
+    const isEnvVar = token === '__ENV__';
+    const auth = isEnvVar
+        ? `headers={"Authorization": f"Bearer {TOKEN}"}`
+        : (token ? `headers={"Authorization": "Bearer ${token}"}` : '');
     const deeplink = (path: string, id: string) =>
         `webbrowser.open(f"bmm://${path}/${id}")`;
     const apiPost = (ep: string, body: object) =>
-        `requests.post("${base}${ep}", json=${JSON.stringify(body)}, ${auth})`;
+        `requests.post(f"{BASE}${ep}", json=${JSON.stringify(body)}${auth ? ', ' + auth : ''})`;
 
     switch (a.action_type) {
         case 'enable_mod':
@@ -2395,6 +2709,12 @@ function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: str
             return [`${apiPost('/api/plugins/apply', { plugin_id: a.target_id, force_strict: false })}`];
         case 'compare_plugin':
             return [`${apiPost('/api/plugins/compare', { plugin_id: a.target_id })}`];
+        case 'enable_modpack':
+            return [useDeeplink ? deeplink('modpack/enable', a.target_id) : `${apiPost('/api/modpacks/enable', { profile_id: a.target_id })}`];
+        case 'disable_modpack':
+            return [useDeeplink ? deeplink('modpack/disable', a.target_id) : `${apiPost('/api/modpacks/disable', { profile_id: a.target_id })}`];
+        case 'connect_server_repo':
+            return [`${apiPost('/api/server-repo/connect', { url: a.extra?.url || '', name: a.extra?.name || '' })}`];
         case 'wait':
             return [`time.sleep(${((a.extra.duration_ms || 1000) / 1000).toFixed(1)})`];
         case 'show_message':
@@ -2430,9 +2750,9 @@ function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: str
 }
 
 function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: string): string[] {
-    const authHdr = token ? `"Authorization: Bearer ${token}"` : 'nil';
+    // TOKEN and BASE are always declared as locals at the top of the Lua script
     const curlPost = (ep: string, body: string) =>
-        `os.execute('curl -s -X POST "${base}${ep}" -H "Content-Type: application/json"' .. (${authHdr} and ' -H "'..${authHdr}..'"' or '') .. ' -d \'${body}\'')`;
+        `os.execute(('curl -s -X POST %s%s -H "Content-Type: application/json" -H "Authorization: Bearer %s" -d %q'):format(BASE, ${JSON.stringify(ep)}, TOKEN, ${JSON.stringify(body)}))`;
 
     switch (a.action_type) {
         case 'enable_mod':
@@ -2451,6 +2771,16 @@ function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: st
             return [curlPost('/api/plugins/apply', `{"plugin_id":"${a.target_id}","force_strict":false}`)];
         case 'compare_plugin':
             return [curlPost('/api/plugins/compare', `{"plugin_id":"${a.target_id}"}`)];
+        case 'enable_modpack':
+            return [useDeeplink
+                ? `os.execute('start bmm://modpack/enable/${a.target_id}')`
+                : curlPost('/api/modpacks/enable', `{"profile_id":"${a.target_id}"}`)];
+        case 'disable_modpack':
+            return [useDeeplink
+                ? `os.execute('start bmm://modpack/disable/${a.target_id}')`
+                : curlPost('/api/modpacks/disable', `{"profile_id":"${a.target_id}"}`)];
+        case 'connect_server_repo':
+            return [curlPost('/api/server-repo/connect', `{"url":"${(a.extra?.url||'').replace(/"/g,'\\"')}","name":"${(a.extra?.name||'').replace(/"/g,'\\"')}"}`)];
         case 'wait': {
             const secs = Math.round((a.extra.duration_ms || 1000) / 1000);
             return [`os.execute("ping -n ${secs + 1} 127.0.0.1 > nul")  -- wait ~${secs}s`];
@@ -2488,8 +2818,9 @@ function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: st
 }
 
 function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: string): string[] {
+    // bmmPost is the helper declared in the JS generator header
     const apiCall = (ep: string, body: object) =>
-        `await post('${ep}', ${JSON.stringify(body)});`;
+        `await bmmPost('${ep}', ${JSON.stringify(body)});`;
     const deeplink = (scheme: string, id: string) =>
         `execSync('start bmm://${scheme}/${id}');`;
 
@@ -2504,10 +2835,16 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
             return [apiCall('/api/plugins/apply', { plugin_id: a.target_id, force_strict: false })];
         case 'compare_plugin':
             return [apiCall('/api/plugins/compare', { plugin_id: a.target_id })];
+        case 'enable_modpack':
+            return [useDeeplink ? deeplink('modpack/enable', a.target_id) : apiCall('/api/modpacks/enable', { profile_id: a.target_id })];
+        case 'disable_modpack':
+            return [useDeeplink ? deeplink('modpack/disable', a.target_id) : apiCall('/api/modpacks/disable', { profile_id: a.target_id })];
+        case 'connect_server_repo':
+            return [apiCall('/api/server-repo/connect', { url: a.extra.url || '', name: a.extra.name || '' })];
         case 'wait':
             return [`await new Promise(r => setTimeout(r, ${a.extra.duration_ms || 1000}));`];
         case 'show_message':
-            return [`// Node.js cannot show GUI dialogs without extra libs`, `console.log('[MSG]', ${JSON.stringify(a.extra.message || '')});`];
+            return [`// Node.js: no native GUI dialog`, `console.log('[MSG]', ${JSON.stringify(a.extra.message || '')});`];
         case 'open_url':
             return [`execSync('start ${(a.extra.url || '').replace(/'/g, '')}');`];
         case 'launch_game':
@@ -2522,7 +2859,8 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
             return [`let ${n.trim()} = ${JSON.stringify(rest.join('=').trim())};`];
         }
         case 'if_file_exists':
-            return [`if (require('fs').existsSync(${JSON.stringify(a.extra.path || '')})) {`];
+            // existsSync imported at top by the JS generator header
+            return [`if (existsSync(${JSON.stringify(a.extra.path || '')})) {`];
         case 'if_var_eq': {
             const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
             return [`if (${vn.trim()} === ${JSON.stringify(vr.join('=').trim())}) {`];

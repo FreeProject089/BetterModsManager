@@ -32,6 +32,16 @@ import { initPlugins } from '../features/plugins/plugins.js';
 import { escHtml, escAttr, formatBytes } from '../core/utils.js';
 import { initMapper } from '../features/mapper/mapper.js';
 import { openAdvancedPerfModal } from '../features/bench/benchmark.js';
+import { playBootSound, playCloseSound, setSoundEnabled, setSoundVolume } from './sound-engine.js';
+export { setSoundEnabled, setSoundVolume, playCloseSound };
+
+// Expose boot sound to inline loader script. If the loader already fired before this module
+// loaded, __bmmBootSoundPending will be true — play it now.
+(window as any).__bmmPlayBootSound = () => playBootSound();
+if ((window as any).__bmmBootSoundPending) {
+    (window as any).__bmmBootSoundPending = false;
+    try { playBootSound(); } catch (_) {}
+}
 
 async function waitForModalClosed(id: string): Promise<void> {
     const el = document.getElementById(id);
@@ -674,6 +684,14 @@ async function main() {
     }
 
     await initSettings();
+
+    // ── Apply sound settings from config ──
+    try {
+        const { getSettings } = await import('../core/api.js');
+        const cfg = await getSettings();
+        setSoundEnabled(cfg.sound_effects_enabled !== false);
+        setSoundVolume((cfg.sound_volume ?? 70) / 100);
+    } catch (_e) { /* use defaults */ }
 
     // ── Startup Modal Sequence ──
     // 0. Language selection on first start (before everything else)
