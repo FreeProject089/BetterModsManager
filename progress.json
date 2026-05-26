@@ -18,7 +18,7 @@
             "fr": "Système de Plugins C"
           },
           "status": "progress",
-          "percent": 60
+          "percent": 90
         },
         {
           "label": {
@@ -42,7 +42,7 @@
             "fr": "Système P2P Sync"
           },
           "status": "progress",
-          "percent": 5
+          "percent": 3
         }
       ]
     },
@@ -58,7 +58,7 @@
             "fr": "Refonte Complète de la Doc"
           },
           "status": "progress",
-          "percent": 87
+          "percent": 90
         },
         {
           "label": {
@@ -66,7 +66,7 @@
             "fr": "Série de Vidéos Tutoriels"
           },
           "status": "progress",
-          "percent": 40
+          "percent": 45
         }
       ]
     },
@@ -82,7 +82,7 @@
             "fr": "Interface Glassmorphism v2"
           },
           "status": "progress",
-          "percent": 80
+          "percent": 85
         },
         {
           "label": {
@@ -90,7 +90,7 @@
             "fr": "Optimisation Performances Rust"
           },
           "status": "progress",
-          "percent": 90
+          "percent": 95
         }
       ]
     }
