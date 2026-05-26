@@ -60,6 +60,40 @@ export async function initModpackCreator(container) {
 
     await _loadData();
     _renderModpackList(container);
+
+    // Live refresh: update mod/profile lists without requiring a BMM restart
+    window.addEventListener('bmm:mods-updated', async () => {
+        try {
+            [_allMods, _profiles, _activeProfileId] = await Promise.all([
+                invoke('get_all_mods'),
+                invoke('get_profiles'),
+                invoke('get_active_profile_id'),
+            ]);
+            // If editing, refresh the mod selector in the editor
+            if (_editingPack) {
+                _refreshModSelectorInEditor();
+            } else {
+                _renderModpackList(container);
+            }
+        } catch (e) { console.error('[ModpackCreator] live-refresh error', e); }
+    });
+}
+
+/** Refreshes the mod picker list inside an open editor without closing it */
+function _refreshModSelectorInEditor() {
+    const availableContainer = document.getElementById('mp-available-mods');
+    if (!availableContainer) return;
+    const existingIds = new Set(
+        Array.from(document.querySelectorAll('#mp-selected-items [data-mod-id]'))
+            .map(el => (el as HTMLElement).dataset.modId || '')
+    );
+    availableContainer.innerHTML = _allMods.length
+        ? _allMods.map(m => `
+            <div class="mp-mod-item${existingIds.has(m.id) ? ' mp-mod-selected' : ''}" data-id="${m.id}" data-name="${m.name || m.id}">
+                <span class="mp-mod-name">${m.name || m.id}</span>
+                <button class="btn btn-xs mp-mod-add-btn" ${existingIds.has(m.id) ? 'disabled' : ''}>+</button>
+            </div>`).join('')
+        : `<div class="plug-mod-empty">Aucun mod disponible</div>`;
 }
 
 async function _loadData() {

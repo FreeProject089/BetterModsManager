@@ -323,6 +323,8 @@ export async function refreshMods(autoScan = false, immediate = false) {
         if (S.selectedModId)
             renderModDetail(S.selectedModId);
         checkAllConflicts();
+        // Notify other features (mapper, modpack-creator) that mods list changed
+        window.dispatchEvent(new CustomEvent('bmm:mods-updated', { detail: { mods: S.allMods } }));
     };
     if (immediate)
         return await doRefresh();

@@ -357,7 +357,7 @@ export function createModCard(mod) {
             toast(t('common.error') + ' : ' + err, 'error');
         }
     });
-    card.querySelectorAll('.btn-copy-id').forEach(btn => {
+    card.querySelectorAll('.btn-copy-id, .btn-copy-id-card').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             window.closeGlobalDropdown(true);

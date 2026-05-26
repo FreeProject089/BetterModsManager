@@ -189,6 +189,20 @@ export async function renderModDetail(modId) {
     }
     panel.querySelector('#btn-close-detail-inner').onclick = closeModDetail;
     panel.querySelector('#btn-browse-archive').onclick = () => openArchiveExplorer(mod);
+    // Copy Content ID button (inside the detail panel content-id-box)
+    panel.querySelector('.btn-copy-content-id')?.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const contentId = e.currentTarget.dataset.contentId || '';
+        if (!contentId)
+            return;
+        try {
+            await navigator.clipboard.writeText(contentId);
+            toast('Content ID copié : ' + contentId.slice(0, 16) + '…', 'success', 2000);
+        }
+        catch (err) {
+            toast(t('common.error') + ' : ' + err, 'error');
+        }
+    });
     panel.querySelector('#btn-verify-mod-integrity')?.addEventListener('click', async () => {
         try {
             // If hashes are missing, trigger calculation first

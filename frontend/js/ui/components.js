@@ -150,6 +150,12 @@ export function getModCardHTML(mod, ctx) {
                     </div>
                 </div>
             </div>
+            <button class="btn btn-sm btn-icon btn-copy-id-card" data-id="${mod.id}" title="Copier l'ID du mod" onmouseenter="window.showTaskyHelp('mod.copyIdTip', 'copy')" onmouseleave="window.hideTaskyHelp()" style="background:rgba(255,255,255,0.04);color:var(--text-muted);border:1px solid rgba(255,255,255,0.07);padding:4px 6px;border-radius:6px;cursor:pointer;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+            </button>
             <button class="btn btn-sm btn-icon btn-edit-mod" onmouseenter="window.showTaskyHelp('mod.editTip', 'edit')" onmouseleave="window.hideTaskyHelp()" data-id="${mod.id}" style="background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                     <path d="M12 20h9"/>
@@ -338,10 +344,19 @@ export function getModDetailHTML(mod, ctx) {
             </div>
             <div id="content-id-hint" style="font-size:9px; color:var(--text-muted); font-style:italic; opacity:0.6">${contentIdHint}</div>
           </div>
-          ${contentIdStatus === 'missing' || contentIdStatus === 'approximate' ? `
-          <button id="btn-compute-content-id" class="btn btn-sm btn-icon" onclick="window.recalculateModSha('${mod.id}')" title="Compute precise content ID" style="background:rgba(59,130,246,0.15); color:var(--accent); border:1px solid rgba(59,130,246,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-          </button>` : ''}
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+            ${hasContentId ? `
+            <button class="btn btn-sm btn-icon btn-copy-content-id" data-content-id="${escHtml(mod.content_id)}" title="Copier le Content ID" style="background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.25);width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 0.15s;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>` : ''}
+            ${contentIdStatus === 'missing' || contentIdStatus === 'approximate' ? `
+            <button id="btn-compute-content-id" class="btn btn-sm btn-icon" onclick="window.recalculateModSha('${mod.id}')" title="Compute precise content ID" style="background:rgba(59,130,246,0.15); color:var(--accent); border:1px solid rgba(59,130,246,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </button>` : ''}
+          </div>
         </div>
       </div>
   `;

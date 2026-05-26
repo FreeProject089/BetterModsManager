@@ -37,11 +37,6 @@ struct ApplyPluginBody {
 }
 
 #[derive(Deserialize)]
-struct ServerRepoConnectBody {
-    url: String,
-}
-
-#[derive(Deserialize)]
 struct CreateProfileBody {
     name: String,
     game_name: String,
@@ -93,10 +88,16 @@ struct CreateModpackRealBody {
     name: String,
     #[serde(default)]
     description: Option<String>,
+    /// Direct list of mod UUIDs to include — takes precedence over source_profile_id
+    #[serde(default)]
+    mod_ids: Option<Vec<String>>,
     #[serde(default)]
     source_profile_id: Option<String>,
     #[serde(default)]
     game_name: Option<String>,
+    /// Optional Server Repo URL to link with this modpack
+    #[serde(default)]
+    sr_link: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -119,7 +120,7 @@ struct HostServerRepoBody {
     /// Optional repo name shown to clients
     #[serde(default)]
     name: Option<String>,
-    /// Special host authorization secret (in addition to Bearer token)
+/// Special host authorization secret (in addition to Bearer token)
     host_secret: String,
 }
 
@@ -128,7 +129,7 @@ struct ServerRepoSyncBody {
     url: String,
     #[serde(default)]
     profile_id: Option<String>,
-    /// "all" | "active" | "selected"
+/// "all" | "active" | "selected"
     #[serde(default)]
     sync_mode: Option<String>,
     #[serde(default)]
@@ -629,98 +630,6 @@ pub async fn start_api_server(
             )
         });
 
-    // POST /api/server-repo/connect  (requires token) — validate + initiate connection to a Server Depot repo
-    let tok_srv_repo = token.clone();
-    let data_srv_repo = data.clone();
-    let path_srv_repo = data_path.clone();
-    let server_repo_connect = warp::path!("api" / "server-repo" / "connect")
-        .and(warp::post())
-        .and(require_token(tok_srv_repo))
-        .and(warp::body::json::<ServerRepoConnectBody>())
-        .and(with_data(data_srv_repo))
-        .and(with_path(path_srv_repo))
-        .and_then(|body: ServerRepoConnectBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| async move {
-            if body.url.is_empty() {
-                return Ok::<_, warp::Rejection>(warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: "url field is required".into() }),
-                    StatusCode::BAD_REQUEST,
-                ));
-            }
-
-            // Normalise URL: ensure it points at a repo.json
-            let mut target = body.url.trim().to_string();
-            if !target.starts_with("http://") && !target.starts_with("https://") {
-                target = format!("https://{}", target);
-            }
-            let probe_url = if target.to_lowercase().ends_with("repo.json") {
-                target.clone()
-            } else if target.ends_with('/') {
-                format!("{}repo.json", target)
-            } else {
-                format!("{}/repo.json", target)
-            };
-
-            // Try to fetch the repo.json to validate the URL is reachable
-            let client = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(8))
-                .user_agent("BetterModsManager/1.0")
-                .build()
-                .map_err(|_| warp::reject::reject())?;
-
-            let fetch_result = client.get(&probe_url).send().await;
-
-            match fetch_result {
-                Err(e) => {
-                    Ok(warp::reply::with_status(
-                        warp::reply::json(&ApiError { error: format!("Cannot reach server: {}", e) }),
-                        StatusCode::BAD_GATEWAY,
-                    ))
-                }
-                Ok(resp) if !resp.status().is_success() => {
-                    Ok(warp::reply::with_status(
-                        warp::reply::json(&ApiError { error: format!("Server returned HTTP {}", resp.status()) }),
-                        StatusCode::BAD_GATEWAY,
-                    ))
-                }
-                Ok(resp) => {
-                    let repo_json: serde_json::Value = resp.json().await.unwrap_or(serde_json::Value::Null);
-                    let version   = repo_json.get("version").and_then(|v| v.as_str()).unwrap_or("?").to_string();
-                    let mod_count = repo_json.get("mods").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
-                    let description = repo_json.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let game      = repo_json.get("game").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let author    = repo_json.get("author").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let repo_name = repo_json.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
-
-                    // Persist repo URL so GET /api/server-repo/list can return it
-                    {
-                        let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
-                        let already = data.settings.connected_server_repos.iter().any(|r| r.url == probe_url);
-                        if !already {
-                            data.settings.connected_server_repos.push(crate::state::ConnectedServerRepo {
-                                url:  probe_url.clone(),
-                                name: repo_name.clone(),
-                            });
-                        }
-                    }
-                    save_data(&d, &path);
-
-                    Ok(warp::reply::with_status(
-                        warp::reply::json(&serde_json::json!({
-                            "ok": true,
-                            "url": probe_url,
-                            "version": version,
-                            "mod_count": mod_count,
-                            "description": description,
-                            "game": game,
-                            "author": author,
-                            "message": "Connected to Server Depot successfully."
-                        })),
-                        StatusCode::OK,
-                    ))
-                }
-            }
-        });
-
     // DELETE /api/mods/:id  (requires token)
     let data_del_mod = data.clone();
     let path_del_mod = data_path.clone();
@@ -731,23 +640,38 @@ pub async fn start_api_server(
         .and(with_data(data_del_mod))
         .and(with_path(path_del_mod))
         .map(|mod_id: String, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
+            let mod_folder_path: Option<PathBuf>;
             {
                 let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
-                let before = data.mods.len();
-                data.mods.retain(|m| m.id != mod_id);
-                if data.mods.len() == before {
+                let found = data.mods.iter().find(|m| m.id == mod_id).map(|m| m.mod_folder_path.clone());
+                if found.is_none() {
                     return warp::reply::with_status(
                         warp::reply::json(&ApiError { error: format!("Mod '{}' not found", mod_id) }),
                         StatusCode::NOT_FOUND,
                     );
                 }
+                mod_folder_path = found;
+                data.mods.retain(|m| m.id != mod_id);
+                // Remove from all profiles' active_mods
                 for profile in data.profiles.iter_mut() {
                     profile.active_mods.retain(|id| id != &mod_id);
                 }
             }
             save_data(&d, &path);
+            // Delete actual mod folder from disk
+            let mut deleted_folder = false;
+            if let Some(folder) = &mod_folder_path {
+                if folder.exists() {
+                    deleted_folder = std::fs::remove_dir_all(folder).is_ok();
+                }
+            }
             warp::reply::with_status(
-                warp::reply::json(&serde_json::json!({ "ok": true, "mod_id": mod_id })),
+                warp::reply::json(&serde_json::json!({
+                    "ok": true,
+                    "mod_id": mod_id,
+                    "folder_deleted": deleted_folder,
+                    "folder_path": mod_folder_path.as_ref().map(|p| p.to_string_lossy().to_string()),
+                })),
                 StatusCode::OK,
             )
         });
@@ -954,192 +878,6 @@ pub async fn start_api_server(
             )
         });
 
-    // POST /api/server-repo/sync  (requires token)
-    // Full configurable Server Repo sync: fetch repo.json, download mods, optionally clean extras.
-    // sync_mode: "all" (default) | "active" (profile's active mods) | "selected" (mod_ids list)
-    let tok_sr_sync = token.clone();
-    let data_sr_sync = data.clone();
-    let path_sr_sync = data_path.clone();
-    let server_repo_sync = warp::path!("api" / "server-repo" / "sync")
-        .and(warp::post())
-        .and(require_token(tok_sr_sync))
-        .and(warp::body::json::<ServerRepoSyncBody>())
-        .and(with_data(data_sr_sync))
-        .and(with_path(path_sr_sync))
-        .and_then(|body: ServerRepoSyncBody, d: Arc<std::sync::Mutex<AppData>>, _path: Arc<PathBuf>| async move {
-            if body.url.is_empty() {
-                return Ok::<_, warp::Rejection>(warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: "url is required".into() }),
-                    StatusCode::BAD_REQUEST,
-                ));
-            }
-
-            let mut raw = body.url.trim().to_string();
-            if !raw.starts_with("http://") && !raw.starts_with("https://") {
-                raw = format!("https://{}", raw);
-            }
-            let repo_url = if raw.to_lowercase().ends_with("repo.json") { raw.clone() }
-                else if raw.ends_with('/') { format!("{}repo.json", raw) }
-                else { format!("{}/repo.json", raw) };
-            let base_url = repo_url[..repo_url.len() - "repo.json".len()].to_string();
-
-            let client = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(10))
-                .user_agent("BetterModsManager/1.0")
-                .build()
-                .map_err(|_| warp::reject::reject())?;
-
-            let repo_data: serde_json::Value = match client.get(&repo_url).send().await {
-                Ok(r) if r.status().is_success() => r.json().await.unwrap_or(serde_json::Value::Null),
-                Ok(r) => return Ok(warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: format!("Server returned {}", r.status()) }),
-                    StatusCode::BAD_GATEWAY,
-                )),
-                Err(e) => return Ok(warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: format!("Cannot reach server: {}", e) }),
-                    StatusCode::BAD_GATEWAY,
-                )),
-            };
-
-            let repo_mods = repo_data["mods"].as_array().cloned().unwrap_or_default();
-
-            // Resolve mods_dir: explicit param → active/specified profile → error
-            let mods_dir = {
-                if let Some(ref dir) = body.mods_dir {
-                    PathBuf::from(dir)
-                } else {
-                    let data = d.lock().unwrap_or_else(|p| p.into_inner());
-                    let pid = body.profile_id.as_ref().cloned()
-                        .or_else(|| data.active_profile_id.clone());
-                    match pid.and_then(|id| data.profiles.iter().find(|p| p.id == id).map(|p| p.mods_path.clone())) {
-                        Some(p) => p,
-                        None => return Ok(warp::reply::with_status(
-                            warp::reply::json(&ApiError { error: "mods_dir required (no active profile)".into() }),
-                            StatusCode::BAD_REQUEST,
-                        )),
-                    }
-                }
-            };
-
-            // Collect active mod names (for "active" sync mode)
-            let active_mod_names: Vec<String> = {
-                let data = d.lock().unwrap_or_else(|p| p.into_inner());
-                let pid = body.profile_id.as_ref().cloned()
-                    .or_else(|| data.active_profile_id.clone());
-                pid.and_then(|id| data.profiles.iter().find(|p| p.id == id).cloned())
-                    .map(|prof| prof.active_mods.iter()
-                        .filter_map(|mid| data.mods.iter().find(|m| &m.id == mid)
-                            .map(|m| m.name.to_lowercase()))
-                        .collect())
-                    .unwrap_or_default()
-            };
-
-            let sync_mode = body.sync_mode.clone().unwrap_or_else(|| "all".to_string());
-            let selected_ids = body.mod_ids.clone().unwrap_or_default();
-
-            let mods_to_dl: Vec<(String, String)> = repo_mods.iter().filter_map(|m| {
-                let name = m["name"].as_str().unwrap_or("").to_string();
-                let file = m["file"].as_str().unwrap_or("").trim_start_matches('/').to_string();
-                if file.is_empty() { return None; }
-                let include = match sync_mode.as_str() {
-                    "selected" => selected_ids.iter().any(|sel| {
-                        m["id"].as_str().map(|id| id == sel).unwrap_or(false)
-                            || name.to_lowercase() == sel.to_lowercase()
-                    }),
-                    "active" => active_mod_names.contains(&name.to_lowercase()),
-                    _ => true,
-                };
-                if include { Some((name, file)) } else { None }
-            }).collect();
-
-            let mods_count = mods_to_dl.len();
-            let clean_extras = body.clean_extras.unwrap_or(false);
-            let dl_limit_kbps = body.download_limit.unwrap_or(0);
-            let repo_files: Vec<String> = repo_mods.iter()
-                .filter_map(|m| m["file"].as_str().map(|f| f.trim_start_matches('/').to_string()))
-                .collect();
-
-            tokio::spawn(async move {
-                let dl_client = match reqwest::Client::builder()
-                    .user_agent("BetterModsManager/1.0")
-                    .build() { Ok(c) => c, Err(_) => return };
-
-                let _ = std::fs::create_dir_all(&mods_dir);
-
-                for (mod_name, mod_file) in &mods_to_dl {
-                    let url = format!("{}mods/{}", base_url, mod_file);
-                    let dest = mods_dir.join(mod_file);
-                    if dest.exists() { continue; }
-                    if let Some(parent) = dest.parent() { let _ = std::fs::create_dir_all(parent); }
-
-                    let bytes = match dl_client.get(&url).send().await {
-                        Ok(r) if r.status().is_success() => match r.bytes().await {
-                            Ok(b) => b,
-                            Err(e) => {
-                                crate::commands::crash::log_line(format!("[PLUGIN-API] Sync read error {}: {}", mod_name, e));
-                                continue;
-                            }
-                        },
-                        Ok(r) => {
-                            crate::commands::crash::log_line(format!("[PLUGIN-API] Sync HTTP {} for {}", r.status(), mod_name));
-                            continue;
-                        }
-                        Err(e) => {
-                            crate::commands::crash::log_line(format!("[PLUGIN-API] Sync download error {}: {}", mod_name, e));
-                            continue;
-                        }
-                    };
-
-                    if dl_limit_kbps > 0 {
-                        let chunk_size = (dl_limit_kbps as usize) * 1024;
-                        let mut written = 0usize;
-                        let mut first = true;
-                        while written < bytes.len() {
-                            let end = (written + chunk_size).min(bytes.len());
-                            let _ = if first {
-                                std::fs::write(&dest, &bytes[written..end])
-                            } else {
-                                use std::io::Write;
-                                std::fs::OpenOptions::new().append(true).open(&dest)
-                                    .and_then(|mut f| f.write_all(&bytes[written..end]).map(|_| ()))
-                            };
-                            first = false;
-                            written = end;
-                            if written < bytes.len() {
-                                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                            }
-                        }
-                    } else {
-                        let _ = std::fs::write(&dest, &bytes);
-                    }
-                    crate::commands::crash::log_line(format!("[PLUGIN-API] Sync downloaded: {}", mod_name));
-                }
-
-                if clean_extras {
-                    if let Ok(entries) = std::fs::read_dir(&mods_dir) {
-                        for entry in entries.flatten() {
-                            let fname = entry.file_name().to_string_lossy().to_string();
-                            if !repo_files.contains(&fname) {
-                                let p = entry.path();
-                                let _ = if p.is_dir() { std::fs::remove_dir_all(&p) } else { std::fs::remove_file(&p) };
-                            }
-                        }
-                    }
-                }
-            });
-
-            Ok(warp::reply::with_status(
-                warp::reply::json(&serde_json::json!({
-                    "ok": true,
-                    "started": true,
-                    "url": repo_url,
-                    "mods_queued": mods_count,
-                    "sync_mode": sync_mode,
-                })),
-                StatusCode::OK,
-            ))
-        });
-
     // GET /api/modpacks — list all LocalModpacks
     let data_mp_list = data.clone();
     let get_modpacks = warp::path!("api" / "modpacks")
@@ -1162,34 +900,58 @@ pub async fn start_api_server(
         .and(with_path(path_mp_create))
         .map(|body: CreateModpackRealBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
             let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
-            // Resolve source profile
+            // Resolve source profile (used for mod list and metadata inheritance)
             let source = body.source_profile_id.as_ref()
                 .and_then(|id| data.profiles.iter().find(|p| &p.id == id).cloned())
                 .or_else(|| data.active_profile_id.as_ref()
                     .and_then(|id| data.profiles.iter().find(|p| &p.id == id).cloned()));
 
-            // Build mod refs from source profile's active_mods
-            let mods_refs: Vec<crate::models::modpack::ModpackModRef> = source.as_ref()
-                .map(|profile| {
-                    profile.active_mods.iter().filter_map(|mid| {
-                        data.mods.iter().find(|m| &m.id == mid).map(|m| {
-                            crate::models::modpack::ModpackModRef {
-                                mod_id: m.id.clone(),
-                                mod_name: m.name.clone(),
-                                mod_version: m.version.clone(),
-                                profile_id: Some(profile.id.clone()),
-                                profile_name: Some(profile.name.clone()),
-                                sha256: m.content_id.clone().unwrap_or_default(),
-                                file_manifest: vec![],
-                                include_dependencies: false,
-                                download_link: None,
-                                fallback_link: None,
-                                fallback_type: None,
-                            }
-                        })
-                    }).collect()
-                })
-                .unwrap_or_default();
+            // Build mod refs: use explicit mod_ids if provided, otherwise fall back to source profile
+            let mods_refs: Vec<crate::models::modpack::ModpackModRef> = if let Some(ref explicit_ids) = body.mod_ids {
+                // Explicit mod_ids take precedence
+                let src_profile_id   = source.as_ref().map(|s| s.id.clone());
+                let src_profile_name = source.as_ref().map(|s| s.name.clone());
+                explicit_ids.iter().filter_map(|mid| {
+                    data.mods.iter().find(|m| &m.id == mid).map(|m| {
+                        crate::models::modpack::ModpackModRef {
+                            mod_id: m.id.clone(),
+                            mod_name: m.name.clone(),
+                            mod_version: m.version.clone(),
+                            profile_id: src_profile_id.clone(),
+                            profile_name: src_profile_name.clone(),
+                            sha256: m.content_id.clone().unwrap_or_default(),
+                            file_manifest: vec![],
+                            include_dependencies: false,
+                            download_link: None,
+                            fallback_link: None,
+                            fallback_type: None,
+                        }
+                    })
+                }).collect()
+            } else {
+                // Fall back to source profile's active_mods
+                source.as_ref()
+                    .map(|profile| {
+                        profile.active_mods.iter().filter_map(|mid| {
+                            data.mods.iter().find(|m| &m.id == mid).map(|m| {
+                                crate::models::modpack::ModpackModRef {
+                                    mod_id: m.id.clone(),
+                                    mod_name: m.name.clone(),
+                                    mod_version: m.version.clone(),
+                                    profile_id: Some(profile.id.clone()),
+                                    profile_name: Some(profile.name.clone()),
+                                    sha256: m.content_id.clone().unwrap_or_default(),
+                                    file_manifest: vec![],
+                                    include_dependencies: false,
+                                    download_link: None,
+                                    fallback_link: None,
+                                    fallback_type: None,
+                                }
+                            })
+                        }).collect()
+                    })
+                    .unwrap_or_default()
+            };
 
             let now = chrono::Local::now().to_rfc3339();
             let new_id = uuid::Uuid::new_v4().to_string();
@@ -1204,7 +966,7 @@ pub async fn start_api_server(
                 dependency_mode: crate::models::modpack::DependencyMode::None,
                 skip_integrity_check: false,
                 mods: mods_refs,
-                sr_link: None,
+                sr_link: body.sr_link,
                 game_name: body.game_name
                     .or_else(|| source.as_ref().map(|s| s.game_name.clone())),
             };
@@ -1221,7 +983,7 @@ pub async fn start_api_server(
             )
         });
 
-    // GET /api/server-repo/list — list saved server repo URLs
+        // GET /api/server-repo/list — list saved server repo URLs
     let data_sr_list = data.clone();
     let get_server_repos = warp::path!("api" / "server-repo" / "list")
         .and(warp::get())
@@ -1231,7 +993,7 @@ pub async fn start_api_server(
             let repos: Vec<serde_json::Value> = data.settings.connected_server_repos.iter()
                 .map(|r| serde_json::json!({ "url": r.url, "name": r.name }))
                 .collect();
-            warp::reply::json(&serde_json::json!({ "ok": true, "data": repos }))
+                            warp::reply::json(&serde_json::json!({ "ok": true, "data": repos }))
         });
 
     // POST /api/server-repo/host — start a local mini server repo (requires token + host_secret)
@@ -1245,7 +1007,7 @@ pub async fn start_api_server(
             if body.host_secret.trim().is_empty() {
                 return Ok::<_, warp::Rejection>(warp::reply::with_status(
                     warp::reply::json(&ApiError { error: "host_secret is required to host a server repo".into() }),
-                    StatusCode::FORBIDDEN,
+StatusCode::FORBIDDEN,
                 ));
             }
             let mods_path = std::path::Path::new(&body.mods_path);
@@ -1278,13 +1040,13 @@ pub async fn start_api_server(
             }
 
             let repo_json = serde_json::json!({
-                "version":     "1.0",
-                "name":        name,
-                "description": "Hosted via BMM API",
-                "mods":        mod_entries,
-            });
+                    "version":     "1.0",
+                    "name":        name,
+                    "description": "Hosted via BMM API",
+                    "mods":        mod_entries,
+        });
 
-            // Write repo.json next to the mods
+    // Write repo.json next to the mods
             let repo_json_path = mods_path.join("repo.json");
             if let Ok(s) = serde_json::to_string_pretty(&repo_json) {
                 let _ = std::fs::write(&repo_json_path, s);
@@ -1294,7 +1056,7 @@ pub async fn start_api_server(
                 "[PLUGIN-API] Server repo host requested on port {} for path {:?}", port, mods_path
             ));
 
-            Ok(warp::reply::with_status(
+            Ok(            warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({
                     "ok":          true,
                     "port":        port,
@@ -1304,7 +1066,7 @@ pub async fn start_api_server(
                     "message":     format!("repo.json written. Serve the folder at http://127.0.0.1:{}/", port),
                 })),
                 StatusCode::OK,
-            ))
+            )            )
         });
 
     // CORS headers — allow any origin (local-only, Bearer token required)
@@ -1332,11 +1094,6 @@ pub async fn start_api_server(
         .or(disable_modpack)
         .or(create_modpack)
         .or(restart)
-        // server-repo (specific paths before generic sync)
-        .or(server_repo_connect)
-        .or(server_repo_sync)
-        .or(get_server_repos)
-        .or(server_repo_host)
         // modpacks list (GET, after POST create — avoids ambiguity)
         .or(get_modpacks)
         // PUT / DELETE with :id wildcards — must come after literal-path routes

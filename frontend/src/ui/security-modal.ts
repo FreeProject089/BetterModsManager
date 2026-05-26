@@ -50,19 +50,23 @@ function showSecurityModal(): Promise<void> {
                 .security-container {
                     width: 100%;
                     max-width: 520px;
+                    max-height: calc(100vh - 40px);
                     background: linear-gradient(165deg, rgba(17, 24, 39, 0.8) 0%, rgba(10, 14, 23, 0.9) 100%);
                     backdrop-filter: blur(40px);
                     border: 1px solid rgba(255, 255, 255, 0.08);
                     border-radius: 28px;
-                    box-shadow: 
+                    box-shadow:
                         0 25px 60px rgba(0, 0, 0, 0.6),
                         inset 0 0 0 1px rgba(255, 255, 255, 0.05);
-                    overflow: hidden;
+                    overflow-y: auto;
+                    overflow-x: hidden;
                     transform: translateY(20px) scale(0.97);
                     transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
                     position: relative;
                     display: flex;
                     flex-direction: column;
+                    scrollbar-width: thin;
+                    scrollbar-color: rgba(255,255,255,0.1) transparent;
                 }
                 .modal-overlay-security.open .security-container {
                     transform: translateY(0) scale(1);

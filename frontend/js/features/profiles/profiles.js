@@ -227,6 +227,12 @@ export async function initProfiles() {
         document.getElementById('global-mods-context-menu').style.display = 'none';
     });
     await renderProfiles();
+    // ── Live refresh: react to API-driven profile mutations (via Quick Test) ──
+    window.addEventListener('bmm:profiles-updated', async () => {
+        await renderProfiles();
+        updateProfileChip?.();
+        updateLibraryProfileSelector?.();
+    });
 }
 async function disableAllRequestedMods() {
     const profiles = await invoke('get_profiles');
@@ -698,6 +704,14 @@ export async function renderProfiles() {
         <button class="btn btn-secondary btn-sm flex-1 btn-activate" style="flex:1" data-id="${escAttr(p.id)}">
           ${isActive ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="vertical-align:middle;margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg>' + t('prof.active') : t('mod.activate')}
         </button>
+        <button class="btn btn-secondary btn-sm btn-copy-profile-id" data-id="${escAttr(p.id)}" data-name="${escAttr(p.name)}"
+            onmouseenter="window.showTaskyHelp('prof.copyIdTip', 'hash')" onmouseleave="window.hideTaskyHelp()"
+            title="Copier l'ID du profil (pour API/scripts)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/>
+            <line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
+          </svg>
+        </button>
         <button class="btn btn-secondary btn-sm btn-edit-profile" data-id="${escAttr(p.id)}" onmouseenter="window.showTaskyHelp('prof.editTip', 'edit')" onmouseleave="window.hideTaskyHelp()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
@@ -790,6 +804,22 @@ export async function renderProfiles() {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             activateProfile(e.currentTarget.dataset.id);
+        });
+    });
+    // Copy Profile ID
+    grid.querySelectorAll('.btn-copy-profile-id').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const el = e.currentTarget;
+            const id = el.dataset.id || '';
+            const name = el.dataset.name || '';
+            try {
+                await navigator.clipboard.writeText(id);
+                toast(`ID copié : ${name}`, 'success');
+            }
+            catch {
+                toast(id, 'info');
+            }
         });
     });
     grid.querySelectorAll('.btn-edit-profile').forEach(btn => {

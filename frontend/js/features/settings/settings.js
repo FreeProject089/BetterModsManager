@@ -845,25 +845,46 @@ async function initSecuritySettings() {
     }
     function updateUI(mode) {
         currentSelected = mode;
+        const ciFull = cardFull.querySelector('.check-indicator');
+        const ciLim = cardLimited.querySelector('.check-indicator');
+        const iconFull = document.getElementById('settings-sec-full-icon');
+        const iconLimited = document.getElementById('settings-sec-limited-icon');
         if (mode === 'full') {
             cardFull.classList.add('active');
             cardLimited.classList.remove('active');
-            const ciFull = cardFull.querySelector('.check-indicator');
-            const ciLim = cardLimited.querySelector('.check-indicator');
             if (ciFull)
                 ciFull.style.display = 'flex';
             if (ciLim)
                 ciLim.style.display = 'none';
+            // Icon box: active card gets accent colour, inactive goes muted
+            if (iconFull) {
+                iconFull.style.background = 'rgba(59,130,246,0.15)';
+                iconFull.style.color = 'var(--accent)';
+                iconFull.style.border = '1px solid rgba(59,130,246,0.3)';
+            }
+            if (iconLimited) {
+                iconLimited.style.background = 'rgba(255,255,255,0.05)';
+                iconLimited.style.color = 'var(--text-muted)';
+                iconLimited.style.border = '1px solid rgba(255,255,255,0.1)';
+            }
         }
         else {
             cardFull.classList.remove('active');
             cardLimited.classList.add('active');
-            const ciFull = cardFull.querySelector('.check-indicator');
-            const ciLim = cardLimited.querySelector('.check-indicator');
             if (ciFull)
                 ciFull.style.display = 'none';
             if (ciLim)
                 ciLim.style.display = 'flex';
+            if (iconFull) {
+                iconFull.style.background = 'rgba(255,255,255,0.05)';
+                iconFull.style.color = 'var(--text-muted)';
+                iconFull.style.border = '1px solid rgba(255,255,255,0.1)';
+            }
+            if (iconLimited) {
+                iconLimited.style.background = 'rgba(59,130,246,0.15)';
+                iconLimited.style.color = 'var(--accent)';
+                iconLimited.style.border = '1px solid rgba(59,130,246,0.3)';
+            }
         }
         btnApply.disabled = currentSelected === initialMode;
     }

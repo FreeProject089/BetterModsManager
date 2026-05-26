@@ -1831,6 +1831,7 @@ body.is-maximized .titlebar-spacer {
 
 .view-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
     flex-shrink: 0;
     align-items: center;
@@ -1933,6 +1934,7 @@ body.is-maximized .titlebar-spacer {
 .lib-actions-tab {
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
     margin-bottom: -1px;
     position: relative;
     z-index: 2;
@@ -3631,7 +3633,7 @@ select.input-field option {
     position: relative;
     z-index: 1;
     width: min(860px, 95vw);
-    max-height: 90vh;
+    max-height: min(90vh, calc(100% - 40px));
     display: flex;
     flex-direction: column;
     background: linear-gradient(160deg, rgba(15, 23, 42, 0.98) 0%, rgba(10, 16, 30, 0.98) 100%);
@@ -11126,6 +11128,8 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     padding: 2px 5px !important;
 }
 .plug-endpoint-row:hover .plug-ep-copy-btn { opacity: 1; }
+/* elements inside the deeplink info bar are always visible */
+.plug-ep-dl-info .plug-ep-copy-btn { opacity: 1 !important; margin-left: 0 !important; }
 .plug-ep-detail {
     background: rgba(0,0,0,0.2);
     border: 1px solid var(--border);
@@ -11934,4 +11938,83 @@ option   { background: #131825; color: var(--text-primary); }
     padding: 5px 8px;
     background: rgba(0,0,0,0.15);
     border-radius: 5px 5px 0 0;
+}
+
+/* ── Endpoint method-group separators (QT grid) ──────────────────────────── */
+.plug-qt-method-sep {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0 2px;
+}
+.plug-qt-sep-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.plug-qt-method-sep::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255,255,255,0.06);
+}
+
+/* ── Endpoint group headers (docs list) ──────────────────────────────────── */
+.plug-ep-group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 8px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    margin-bottom: 2px;
+}
+.plug-ep-group-header:not(:first-child) { margin-top: 10px; }
+.plug-ep-group-label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+.plug-ep-group-count {
+    font-size: 10px;
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 1px 7px;
+    font-weight: 600;
+}
+
+/* ── Filter bar responsive ───────────────────────────────────────────────── */
+.filter-bar { flex-wrap: wrap; }
+.filter-buttons {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+/* ── Tutorial Hub — scroll on small windows ──────────────────────────────── */
+.tut-hub-container {
+    overflow-y: auto;
+    max-height: min(90vh, 100%);
+}
+
+/* ── Security modal — responsive ─────────────────────────────────────────── */
+@media (max-height: 700px) {
+    .security-header { padding: 24px 32px 16px !important; }
+    .security-icon-main { width: 52px !important; height: 52px !important; margin-bottom: 14px !important; }
+    .security-options-list { padding: 0 24px 24px !important; gap: 10px !important; }
+    .security-premium-card { padding: 16px !important; }
+    .security-footer { padding: 20px !important; }
+    .btn-premium-save { height: 46px !important; font-size: 14px !important; }
+}
+@media (max-width: 520px) {
+    .security-container { border-radius: 18px !important; }
+    .security-header { padding: 28px 24px 16px !important; }
+    .security-options-list { padding: 0 20px 24px !important; }
+    .security-footer { padding: 20px !important; }
 }

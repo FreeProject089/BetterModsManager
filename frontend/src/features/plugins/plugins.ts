@@ -429,7 +429,21 @@ function createOverlay(html: string): HTMLElement {
 
 // ── Smart quick-test overlay (shows selectors for mods / profiles / plugins) ──
 
-function openSmartQuickTest(m: string, p: string, rawBody: string) {
+async function openSmartQuickTest(m: string, p: string, rawBody: string) {
+    // ── Live refresh: reload all data before showing the overlay ──────────
+    try {
+        [_allMods, _allProfiles, _installedPlugins] = await Promise.all([
+            invoke('get_mods'),
+            invoke('get_profiles'),
+            invoke('get_installed_plugins'),
+        ]);
+        try {
+            const mpRes  = await fetch('http://127.0.0.1:51274/api/modpacks');
+            const mpJson = await mpRes.json().catch(() => ({}));
+            _allModpacks = mpJson.data || [];
+        } catch { _allModpacks = []; }
+    } catch (e) { console.warn('[PLUGINS] qt data refresh failed', e); }
+
     const modOpts  = _allMods.length     ? _allMods.map(mod => `<option value="${escHtml(mod.id)}">${escHtml(mod.name || mod.id)}</option>`).join('') : `<option value="">— aucun mod —</option>`;
     const profOpts = _allProfiles.length ? _allProfiles.map(pr  => `<option value="${escHtml(pr.id)}">${escHtml(pr.name)}</option>`).join('') : `<option value="">— aucun profil —</option>`;
     const plugOpts = _installedPlugins.length ? _installedPlugins.map(pl => `<option value="${escHtml(pl.manifest.id)}">${escHtml(pl.manifest.name)}</option>`).join('') : `<option value="">— aucun plugin —</option>`;
@@ -450,7 +464,11 @@ function openSmartQuickTest(m: string, p: string, rawBody: string) {
     } else if (p === '/api/mods/:id') {
         formHtml = m === 'DELETE'
             ? modSel + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;">⚠ Cette action est irréversible.</p>`
-            : modSel + txtInput('plug-qt-s-name', 'name (nouveau nom)', 'Nouveau nom du mod', true);
+            : modSel
+                + txtInput('plug-qt-s-name',        'name',        'Nouveau nom du mod',  true)
+                + txtInput('plug-qt-s-version',     'version',     '1.0.0',               true)
+                + txtInput('plug-qt-s-author',      'author',      'Auteur',              true)
+                + txtInput('plug-qt-s-description', 'description', 'Description du mod',  true);
     } else if (p === '/api/profiles/activate') {
         formHtml = profSel;
     } else if (p === '/api/modpacks/enable' || p === '/api/modpacks/disable') {
@@ -458,7 +476,13 @@ function openSmartQuickTest(m: string, p: string, rawBody: string) {
     } else if (p === '/api/profiles/:id') {
         formHtml = m === 'DELETE'
             ? profSel + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;">⚠ Cette action est irréversible.</p>`
-            : profSel + txtInput('plug-qt-s-name', 'name (nouveau nom)', 'Nouveau nom', true) + txtInput('plug-qt-s-color', 'color', '#3b82f6', true);
+            : profSel
+                + txtInput('plug-qt-s-name',        'name',        'Nouveau nom du profil',      true)
+                + txtInput('plug-qt-s-color',       'color',       '#3b82f6',                    true)
+                + txtInput('plug-qt-s-icon',        'icon',        'star / folder / shield…',    true)
+                + txtInput('plug-qt-s-game-path',   'game_path',   'C:/Games/MonJeu',            true)
+                + txtInput('plug-qt-s-mods-path',   'mods_path',   'C:/Games/MonJeu/Mods',       true)
+                + txtInput('plug-qt-s-backup-path', 'backup_path', 'C:/BMM/Backups/MonJeu',      true);
     } else if (p === '/api/profiles') {
         formHtml = txtInput('plug-qt-s-name', 'name', 'Mon profil')
             + txtInput('plug-qt-s-game-path', 'game_path', 'C:/Games/MyGame')
@@ -472,32 +496,68 @@ function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 <span style="font-size:11px;color:var(--text-muted);">Désactive les mods absents de la liste</span>
             </div>` : '';
         formHtml = plugSel + strictRow;
-    } else if (p === '/api/server-repo/connect') {
-        formHtml = txtInput('plug-qt-s-url', 'url', 'https://monserveur.com/repo.json')
-            + txtInput('plug-qt-s-name', 'name', 'Mon Serveur', true);
-    } else if (p === '/api/server-repo/sync') {
-        formHtml = txtInput('plug-qt-s-url', 'url', 'https://monserveur.com/repo.json')
-            + `<div class="plug-qt-smart-field" style="margin-top:8px;">
-                <label class="plug-form-label" style="margin-bottom:4px;">sync_mode</label>
-                <select id="plug-qt-s-sync-mode" class="select"><option value="all">all — tous les mods</option><option value="selected">selected — mods spécifiques</option></select>
-               </div>`;
     } else if (p === '/api/restart') {
         formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">BMM va redémarrer dans 300 ms. L'API sera brièvement indisponible.</p>`;
     } else if (p === '/api/modpacks/create') {
-        formHtml = txtInput('plug-qt-s-name', 'name (nom du modpack)', 'Mon Modpack', true)
-            + `<div class="plug-qt-smart-field" style="margin-top:8px;">
-                <label class="plug-form-label" style="margin-bottom:4px;">profile_id (source — optionnel)</label>
-                <select id="plug-qt-s-profile" class="select"><option value="">— aucun (modpack vide) —</option>${_allProfiles.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`).join('')}</select>
+        // Profile checkboxes (multi-select, used to import mods from multiple profiles)
+        const profileChecks = _allProfiles.length
+            ? _allProfiles.map(pr => `<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
+                <input type="checkbox" class="plug-qt-prof-check" value="${escHtml(pr.id)}" style="accent-color:var(--accent);width:13px;height:13px;">
+                <span style="font-size:12px;color:var(--text-primary);flex:1;">${escHtml(pr.name)}</span>
+                <span style="font-size:10px;color:var(--text-muted);">${pr.active_mods?.length || 0} mods actifs</span>
+              </label>`).join('')
+            : `<p style="font-size:12px;color:var(--text-muted);padding:8px;">Aucun profil.</p>`;
+
+        // Plugin source options
+        const pluginOpts2 = _installedPlugins.length
+            ? _installedPlugins.map(pl => `<option value="plugin:${escHtml(pl.manifest.id)}">${escHtml(pl.manifest.name)} (plugin)</option>`).join('')
+            : '';
+
+        // Mod checkboxes
+        const modCheckboxes = _allMods.length
+            ? _allMods.map(mod => `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;transition:background 0.15s;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
+                <input type="checkbox" class="plug-qt-mod-check" value="${escHtml(mod.id)}" style="accent-color:var(--accent);width:14px;height:14px;">
+                <span style="font-size:12px;color:var(--text-primary);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(mod.name || mod.id)}">${escHtml(mod.name || mod.id)}</span>
+                ${mod.active ? `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(34,197,94,0.15);color:#4ade80;font-weight:700;">ON</span>` : ''}
+              </label>`).join('')
+            : `<p style="font-size:12px;color:var(--text-muted);padding:8px;">Aucun mod disponible.</p>`;
+
+        formHtml = txtInput('plug-qt-s-name', 'name (nom du modpack)', 'Mon Modpack')
+            + txtInput('plug-qt-s-desc', 'description (optionnel)', 'Description...', true)
+            + txtInput('plug-qt-s-game', 'game_name (optionnel)', 'DCS World, ArmA 3...', true)
+            + txtInput('plug-qt-s-sr-link', 'sr_link — URL Server Repo (optionnel)', 'https://monserveur.com/repo.json', true)
+            // Multi-profile import
+            + `<div class="plug-qt-smart-field" style="margin-top:8px;flex-direction:column;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                    <label class="plug-form-label" style="margin:0;">Importer depuis profil(s) <span style="color:var(--text-muted);font-size:10px;">(coche = ajoute les mods actifs)</span></label>
+                </div>
+                <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:4px;max-height:110px;overflow-y:auto;scrollbar-width:thin;">
+                    ${profileChecks}
+                </div>
+               </div>`
+            // Plugin import dropdown
+            + (pluginOpts2 ? `<div class="plug-qt-smart-field" style="margin-top:8px;">
+                <label class="plug-form-label" style="margin-bottom:4px;">OU importer depuis plugin <span style="color:var(--text-muted);font-size:10px;">(optionnel)</span></label>
+                <select id="plug-qt-s-plugin-src" class="select">
+                    <option value="">— aucun —</option>
+                    ${pluginOpts2}
+                </select>
+               </div>` : '')
+            // Mod checkboxes
+            + `<div class="plug-qt-smart-field" style="margin-top:8px;flex-direction:column;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                    <label class="plug-form-label" style="margin:0;">Mods à inclure <span style="color:var(--text-muted);font-size:10px;">(sélection manuelle)</span></label>
+                    <div style="display:flex;gap:6px;">
+                        <button type="button" id="plug-qt-sel-all" class="btn btn-xs btn-ghost" style="font-size:10px;">Tout</button>
+                        <button type="button" id="plug-qt-sel-active" class="btn btn-xs btn-ghost" style="font-size:10px;">Actifs</button>
+                        <button type="button" id="plug-qt-sel-none" class="btn btn-xs btn-ghost" style="font-size:10px;">Aucun</button>
+                    </div>
+                </div>
+                <div id="plug-qt-mod-checklist" style="max-height:200px;overflow-y:auto;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:6px 4px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.1) transparent;">
+                    ${modCheckboxes}
+                </div>
                </div>`;
-    } else if (p === '/api/server-repo/host') {
-        formHtml = txtInput('plug-qt-s-path', 'mods_path (chemin absolu)', 'C:\\mods', true)
-            + txtInput('plug-qt-s-secret', 'host_secret', '', true)
-            + txtInput('plug-qt-s-name', 'name (optionnel)', 'Mon Repo')
-            + `<div class="plug-qt-smart-field" style="margin-top:8px;">
-                <label class="plug-form-label" style="margin-bottom:4px;">port (défaut: 8765)</label>
-                <input id="plug-qt-s-port" class="input" type="number" value="8765" min="1024" max="65535" style="width:100px;">
-               </div>`;
-    } else if (p === '/api/modpacks' || p === '/api/server-repo/list') {
+    } else if (p === '/api/modpacks') {
         formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">Requête GET — aucun corps requis.</p>`;
     } else {
         const pretty = (() => { try { return JSON.stringify(JSON.parse(rawBody), null, 2); } catch { return rawBody; } })();
@@ -520,6 +580,51 @@ function openSmartQuickTest(m: string, p: string, rawBody: string) {
         </div>`);
 
     overlay.querySelectorAll('.plug-ov-close-btn').forEach(b => b.addEventListener('click', () => overlay.remove()));
+
+    // ── Create Modpack helpers ────────────────────────────────────────────────
+    if (p === '/api/modpacks/create') {
+        const checkAll  = (v: boolean) => overlay.querySelectorAll<HTMLInputElement>('.plug-qt-mod-check').forEach(c => c.checked = v);
+        overlay.querySelector('#plug-qt-sel-all')?.addEventListener('click',    () => checkAll(true));
+        overlay.querySelector('#plug-qt-sel-none')?.addEventListener('click',   () => checkAll(false));
+        overlay.querySelector('#plug-qt-sel-active')?.addEventListener('click', () => {
+            overlay.querySelectorAll<HTMLInputElement>('.plug-qt-mod-check').forEach(c => {
+                const mod = _allMods.find(m => m.id === c.value);
+                c.checked = !!(mod && mod.active);
+            });
+        });
+
+        // Profile multi-select: checking a profile auto-adds its active mods (additive)
+        overlay.querySelectorAll<HTMLInputElement>('.plug-qt-prof-check').forEach(cb => {
+            cb.addEventListener('change', () => {
+                // Collect all checked profiles
+                const checkedProfIds = Array.from(overlay.querySelectorAll<HTMLInputElement>('.plug-qt-prof-check:checked')).map(c => c.value);
+                // Build union of all active mod IDs from checked profiles
+                const unionIds = new Set<string>();
+                checkedProfIds.forEach(pid => {
+                    const prof = _allProfiles.find(pr => pr.id === pid);
+                    (Array.isArray(prof?.active_mods) ? prof.active_mods : []).forEach(id => unionIds.add(id));
+                });
+                overlay.querySelectorAll<HTMLInputElement>('.plug-qt-mod-check').forEach(c => {
+                    if (unionIds.has(c.value)) c.checked = true;
+                    // don't uncheck — user may have manual selections too
+                });
+            });
+        });
+
+        // Plugin source: when selected, auto-check matching mods
+        overlay.querySelector('#plug-qt-s-plugin-src')?.addEventListener('change', (ev) => {
+            const val = (ev.target as HTMLSelectElement).value;
+            if (!val) return;
+            const plId = val;
+            const pl = _installedPlugins.find(p => p.manifest.id === plId);
+            const reqNames: string[] = (pl?.manifest?.modlist?.required_mods || []).map((rm: any) => (rm.name || '').toLowerCase());
+            overlay.querySelectorAll<HTMLInputElement>('.plug-qt-mod-check').forEach(c => {
+                const mod = _allMods.find(m => m.id === c.value);
+                if (mod && reqNames.includes((mod.name || '').toLowerCase())) c.checked = true;
+            });
+        });
+    }
+
     overlay.querySelector('#plug-qt-s-run')?.addEventListener('click', () => {
         let body = '{}';
         let resolvedPath = p;
@@ -530,8 +635,16 @@ function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const modId = (overlay.querySelector('#plug-qt-s-mod') as HTMLSelectElement)?.value || '';
             resolvedPath = `/api/mods/${modId}`;
             if (m === 'PUT') {
-                const name = (overlay.querySelector('#plug-qt-s-name') as HTMLInputElement)?.value || '';
-                body = name ? JSON.stringify({ name }) : '{}';
+                const obj: any = {};
+                const name  = (overlay.querySelector('#plug-qt-s-name')        as HTMLInputElement)?.value?.trim();
+                const ver   = (overlay.querySelector('#plug-qt-s-version')     as HTMLInputElement)?.value?.trim();
+                const auth  = (overlay.querySelector('#plug-qt-s-author')      as HTMLInputElement)?.value?.trim();
+                const desc  = (overlay.querySelector('#plug-qt-s-description') as HTMLInputElement)?.value?.trim();
+                if (name)  obj.name        = name;
+                if (ver)   obj.version     = ver;
+                if (auth)  obj.author      = auth;
+                if (desc)  obj.description = desc;
+                body = Object.keys(obj).length ? JSON.stringify(obj) : '{}';
             }
         } else if (p === '/api/profiles/activate') {
             body = JSON.stringify({ profile_id: (overlay.querySelector('#plug-qt-s-profile') as HTMLSelectElement)?.value || '' });
@@ -541,11 +654,19 @@ function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const profId = (overlay.querySelector('#plug-qt-s-profile') as HTMLSelectElement)?.value || '';
             resolvedPath = `/api/profiles/${profId}`;
             if (m === 'PUT') {
-                const name  = (overlay.querySelector('#plug-qt-s-name')  as HTMLInputElement)?.value || '';
-                const color = (overlay.querySelector('#plug-qt-s-color') as HTMLInputElement)?.value || '';
                 const obj: any = {};
-                if (name)  obj.name  = name;
-                if (color) obj.color = color;
+                const name       = (overlay.querySelector('#plug-qt-s-name')        as HTMLInputElement)?.value?.trim();
+                const color      = (overlay.querySelector('#plug-qt-s-color')       as HTMLInputElement)?.value?.trim();
+                const icon       = (overlay.querySelector('#plug-qt-s-icon')        as HTMLInputElement)?.value?.trim();
+                const gamePath   = (overlay.querySelector('#plug-qt-s-game-path')   as HTMLInputElement)?.value?.trim();
+                const modsPath   = (overlay.querySelector('#plug-qt-s-mods-path')   as HTMLInputElement)?.value?.trim();
+                const backupPath = (overlay.querySelector('#plug-qt-s-backup-path') as HTMLInputElement)?.value?.trim();
+                if (name)       obj.name        = name;
+                if (color)      obj.color       = color;
+                if (icon)       obj.icon        = icon;
+                if (gamePath)   obj.game_path   = gamePath;
+                if (modsPath)   obj.mods_path   = modsPath;
+                if (backupPath) obj.backup_path = backupPath;
                 body = JSON.stringify(obj);
             }
         } else if (p === '/api/profiles') {
@@ -560,39 +681,23 @@ function openSmartQuickTest(m: string, p: string, rawBody: string) {
             body = JSON.stringify({ plugin_id: (overlay.querySelector('#plug-qt-s-plugin') as HTMLSelectElement)?.value || '' });
         } else if (p === '/api/plugins/apply') {
             body = JSON.stringify({ plugin_id: (overlay.querySelector('#plug-qt-s-plugin') as HTMLSelectElement)?.value || '', force_strict: (overlay.querySelector('#plug-qt-s-strict') as HTMLInputElement)?.checked || false });
-        } else if (p === '/api/server-repo/connect') {
-            const url  = (overlay.querySelector('#plug-qt-s-url')  as HTMLInputElement)?.value || '';
-            const name = (overlay.querySelector('#plug-qt-s-name') as HTMLInputElement)?.value || '';
-            if (!url) return;
-            body = JSON.stringify({ url, name });
-        } else if (p === '/api/server-repo/sync') {
-            const url  = (overlay.querySelector('#plug-qt-s-url')       as HTMLInputElement)?.value || '';
-            const mode = (overlay.querySelector('#plug-qt-s-sync-mode') as HTMLSelectElement)?.value || 'all';
-            if (!url) return;
-            overlay.remove();
-            (document.querySelector('.nav-item[data-view="repo"]') as HTMLElement)?.click();
-            setTimeout(() => {
-                const urlInput = document.getElementById('repo-sync-url') as HTMLInputElement | null;
-                if (urlInput) { urlInput.value = url; urlInput.dispatchEvent(new Event('input')); }
-                const fetchBtn = document.getElementById('btn-fetch-repo-info') as HTMLElement | null;
-                if (fetchBtn) fetchBtn.click();
-            }, 500);
-            return;
         } else if (p === '/api/restart') {
             body = '{}';
         } else if (p === '/api/modpacks/create') {
-            const name   = (overlay.querySelector('#plug-qt-s-name')    as HTMLInputElement)?.value || '';
-            const profId = (overlay.querySelector('#plug-qt-s-profile') as HTMLSelectElement)?.value || '';
+            const name = (overlay.querySelector('#plug-qt-s-name') as HTMLInputElement)?.value?.trim() || '';
             if (!name) return;
-            body = JSON.stringify({ name, ...(profId ? { profile_id: profId } : {}) });
-        } else if (p === '/api/server-repo/host') {
-            const modsPath  = (overlay.querySelector('#plug-qt-s-path')   as HTMLInputElement)?.value || '';
-            const secret    = (overlay.querySelector('#plug-qt-s-secret') as HTMLInputElement)?.value || '';
-            const name      = (overlay.querySelector('#plug-qt-s-name')   as HTMLInputElement)?.value || '';
-            const port      = parseInt((overlay.querySelector('#plug-qt-s-port') as HTMLInputElement)?.value || '8765', 10);
-            if (!modsPath || !secret) return;
-            body = JSON.stringify({ mods_path: modsPath, host_secret: secret, port, ...(name ? { name } : {}) });
-        } else if (p === '/api/modpacks' || p === '/api/server-repo/list') {
+            const desc    = (overlay.querySelector('#plug-qt-s-desc')    as HTMLInputElement)?.value?.trim();
+            const game    = (overlay.querySelector('#plug-qt-s-game')    as HTMLInputElement)?.value?.trim();
+            const srLink  = (overlay.querySelector('#plug-qt-s-sr-link') as HTMLInputElement)?.value?.trim();
+            const checks  = Array.from(overlay.querySelectorAll<HTMLInputElement>('.plug-qt-mod-check:checked'));
+            const modIds  = checks.map(c => c.value).filter(Boolean);
+            const payload: any = { name };
+            if (desc)          payload.description = desc;
+            if (game)          payload.game_name   = game;
+            if (srLink)        payload.sr_link      = srLink;
+            if (modIds.length) payload.mod_ids      = modIds;
+            body = JSON.stringify(payload);
+        } else if (p === '/api/modpacks') {
             body = '';
         } else {
             body = (overlay.querySelector('#plug-qt-s-json') as HTMLTextAreaElement)?.value || rawBody;
@@ -862,13 +967,27 @@ async function handleQuickTest(method: string, path: string, body?: string) {
             method,
             headers: { 'Authorization': `Bearer ${_apiToken}`, 'Content-Type': 'application/json' },
         };
-        if (method === 'POST' && body) opts.body = body;
+        if ((method === 'POST' || method === 'PUT' || method === 'PATCH') && body) opts.body = body;
         const res = await fetch(`http://127.0.0.1:51274${path}`, opts);
         const json = await res.json().catch(() => null);
         statusEl.textContent = `${res.status} ${res.statusText}`;
         statusEl.className = `plug-tester-status ${res.ok ? 'plug-status-ok' : 'plug-status-err'}`;
         const pretty = json !== null ? JSON.stringify(json, null, 2) : '';
         bodyEl.innerHTML = hlJson(pretty);
+
+        // ── Live UI refresh after successful mutations ─────────────────────
+        if (res.ok && method !== 'GET') {
+            if (path.includes('/profiles')) {
+                window.dispatchEvent(new CustomEvent('bmm:profiles-updated'));
+                window.dispatchEvent(new CustomEvent('bmm:mods-updated')); // profile change may affect active mods display
+            }
+            if (path.includes('/mods') && !path.includes('/modpacks')) {
+                window.dispatchEvent(new CustomEvent('bmm:mods-updated'));
+            }
+            if (path.includes('/modpacks')) {
+                window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
+            }
+        }
     } catch (e) {
         statusEl.textContent = t('common.error');
         statusEl.className = 'plug-tester-status plug-status-err';
@@ -1156,32 +1275,33 @@ function renderCreate(container: HTMLElement) {
 // ── Tab: API & Scripts ─────────────────────────────────────────────────────
 
 function renderScripts(container: HTMLElement) {
+    // Endpoints sorted by method: GET → POST → PUT → DELETE
     const QT_ENDPOINTS = [
+        // ── GET ────────────────────────────────────────────────────
         { m: 'GET',    p: '/api/health',              l: 'Health',           icon: IC.checkCircle },
         { m: 'GET',    p: '/api/status',              l: 'Status',           icon: IC.info },
         { m: 'GET',    p: '/api/check-update',        l: 'Check Update',     icon: IC.refresh },
         { m: 'GET',    p: '/api/mods',                l: 'All Mods',         icon: IC.list },
         { m: 'GET',    p: '/api/mods/active',         l: 'Active Mods',      icon: IC.check },
+        { m: 'GET',    p: '/api/modpacks',            l: 'List Modpacks',    icon: IC.list },
         { m: 'GET',    p: '/api/profiles',            l: 'Profiles',         icon: IC.puzzle },
         { m: 'GET',    p: '/api/plugins',             l: 'Plugins',          icon: IC.zap },
         { m: 'GET',    p: '/api/creator-id',          l: 'Creator ID',       icon: IC.shield },
+        // ── POST ───────────────────────────────────────────────────
         { m: 'POST',   p: '/api/mods/enable',         l: 'Enable Mod',       icon: IC.check,      body: '{"mod_id":""}' },
         { m: 'POST',   p: '/api/mods/disable',        l: 'Disable Mod',      icon: IC.x,          body: '{"mod_id":""}' },
-        { m: 'POST',   p: '/api/profiles/activate',   l: 'Activate Profile', icon: IC.puzzle,     body: '{"profile_id":""}' },
         { m: 'POST',   p: '/api/profiles',            l: 'Create Profile',   icon: IC.plus,       body: '{"name":"","game_path":"","mods_path":"","backup_path":""}' },
+        { m: 'POST',   p: '/api/profiles/activate',   l: 'Activate Profile', icon: IC.puzzle,     body: '{"profile_id":""}' },
         { m: 'POST',   p: '/api/plugins/apply',       l: 'Apply Plugin',     icon: IC.zap,        body: '{"plugin_id":"","force_strict":false}' },
         { m: 'POST',   p: '/api/plugins/compare',     l: 'Compare Plugin',   icon: IC.shield,     body: '{"plugin_id":""}' },
         { m: 'POST',   p: '/api/modpacks/enable',     l: 'Enable Modpack',   icon: IC.folder,     body: '{"modpack_id":""}' },
         { m: 'POST',   p: '/api/modpacks/disable',    l: 'Disable Modpack',  icon: IC.folder,     body: '{"modpack_id":""}' },
         { m: 'POST',   p: '/api/modpacks/create',     l: 'Create Modpack',   icon: IC.plus,       body: '{"name":"","profile_id":""}' },
-        { m: 'POST',   p: '/api/server-repo/connect', l: 'Connect Repo',     icon: IC.globe,      body: '{"url":"https://","name":""}' },
-        { m: 'POST',   p: '/api/server-repo/sync',    l: 'Sync Repo',        icon: IC.refresh,    body: '{"url":"https://","sync_mode":"all"}' },
-        { m: 'POST',   p: '/api/server-repo/host',    l: 'Host Repo',        icon: IC.upload,     body: '{"mods_path":"","host_secret":"","port":8765}' },
         { m: 'POST',   p: '/api/restart',             l: 'Restart BMM',      icon: IC.refresh,    body: '' },
-        { m: 'GET',    p: '/api/modpacks',            l: 'List Modpacks',    icon: IC.list },
-        { m: 'GET',    p: '/api/server-repo/list',    l: 'Repo List',        icon: IC.globe },
-        { m: 'PUT',    p: '/api/profiles/:id',        l: 'Update Profile',   icon: IC.editIcon,   body: '{"name":""}' },
+        // ── PUT ────────────────────────────────────────────────────
         { m: 'PUT',    p: '/api/mods/:id',            l: 'Update Mod',       icon: IC.editIcon,   body: '{"name":""}' },
+        { m: 'PUT',    p: '/api/profiles/:id',        l: 'Update Profile',   icon: IC.editIcon,   body: '{"name":""}' },
+        // ── DELETE ─────────────────────────────────────────────────
         { m: 'DELETE', p: '/api/mods/:id',            l: 'Delete Mod',       icon: IC.trash },
         { m: 'DELETE', p: '/api/profiles/:id',        l: 'Delete Profile',   icon: IC.trash },
     ];
@@ -1207,14 +1327,22 @@ function renderScripts(container: HTMLElement) {
             <div class="plug-section-card">
                 <h3 class="plug-section-title">${IC.zap} ${t('plugins.quickTest')}</h3>
                 <div class="plug-qt-grid">
-                    ${QT_ENDPOINTS.map(e => {
-                        const mc = e.m.toLowerCase();
-                        const badge = `<span class="plug-qt-method-badge plug-qt-${mc}">${e.m}</span>`;
-                        const body = (e as any).body !== undefined ? ` data-body="${escHtml((e as any).body || '')}"` : '';
-                        return `<button class="plug-qt-btn" data-method="${e.m}" data-path="${e.p}"${body} data-tooltip="${e.m} ${e.p}">
-                            ${e.icon} <span>${e.l}</span>${badge}
-                        </button>`;
-                    }).join('')}
+                    ${(() => {
+                        let lastMethod = '';
+                        return QT_ENDPOINTS.map(e => {
+                            const mc = e.m.toLowerCase();
+                            const badge = `<span class="plug-qt-method-badge plug-qt-${mc}">${e.m}</span>`;
+                            const body = (e as any).body !== undefined ? ` data-body="${escHtml((e as any).body || '')}"` : '';
+                            let sep = '';
+                            if (e.m !== lastMethod) {
+                                lastMethod = e.m;
+                                sep = `<div class="plug-qt-method-sep"><span class="plug-qt-sep-label plug-qt-${mc}">${e.m}</span></div>`;
+                            }
+                            return sep + `<button class="plug-qt-btn" data-method="${e.m}" data-path="${e.p}"${body} data-tooltip="${e.m} ${e.p}">
+                                ${e.icon} <span>${e.l}</span>${badge}
+                            </button>`;
+                        }).join('');
+                    })()}
                 </div>
                 <div id="plug-qt-result" class="plug-qt-result" style="display:none;">
                     <div class="plug-qt-result-header">
@@ -1251,7 +1379,27 @@ function renderScripts(container: HTMLElement) {
                 <h3 class="plug-section-title" style="margin-top:18px;">${IC.list} ${t('plugins.apiEndpoints')}</h3>
                 <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px;">${t('plugins.epHint')}</p>
                 <div class="plug-endpoint-list" id="plug-ep-list">
-                    ${(() => { const defs = getEndpointDefs(); defs.forEach(ep => { const sid = ep.path.replace(/\//g,'_').replace(/^_/,''); _epCodeCache.set(sid, ep); }); return defs.map(ep => buildEndpointRow(ep)).join(''); })()}
+                    ${(() => {
+                        const defs = getEndpointDefs();
+                        // Sort by method: GET → POST → PUT → DELETE → PATCH
+                        const methodOrder: Record<string, number> = { GET: 0, POST: 1, PUT: 2, DELETE: 3, PATCH: 4 };
+                        defs.sort((a, b) => (methodOrder[a.method] ?? 9) - (methodOrder[b.method] ?? 9));
+                        defs.forEach(ep => {
+                            const sid = ep.path.replace(/\//g,'_').replace(/^_/,'');
+                            _epCodeCache.set(sid, ep);
+                        });
+                        let lastMethod = '';
+                        const methodCls: Record<string, string> = { GET: 'plug-method-get', POST: 'plug-method-post', PUT: 'plug-method-put', DELETE: 'plug-method-delete', PATCH: 'plug-method-patch' };
+                        return defs.map(ep => {
+                            let header = '';
+                            if (ep.method !== lastMethod) {
+                                lastMethod = ep.method;
+                                const cls = methodCls[ep.method] || '';
+                                header = `<div class="plug-ep-group-header"><span class="plug-method ${cls}" style="font-size:11px;">${ep.method}</span><span class="plug-ep-group-count">${defs.filter(d => d.method === ep.method).length} endpoint${defs.filter(d => d.method === ep.method).length > 1 ? 's' : ''}</span></div>`;
+                            }
+                            return header + buildEndpointRow(ep);
+                        }).join('');
+                    })()}
                 </div>
             </div>
 
@@ -1368,7 +1516,7 @@ function renderScripts(container: HTMLElement) {
             if (needsOverlay) {
                 openSmartQuickTest(m, p, rawBody || '{}');
             } else {
-                handleQuickTest(m, p);
+                handleQuickTest(m, p, '');
             }
         });
     });
@@ -1407,9 +1555,6 @@ function renderScripts(container: HTMLElement) {
             '/api/modpacks/enable':       '{\n  "modpack_id": ""\n}',
             '/api/modpacks/disable':      '{\n  "modpack_id": ""\n}',
             '/api/modpacks/create':       '{\n  "name": "",\n  "profile_id": ""\n}',
-            '/api/server-repo/connect':   '{\n  "url": "https://",\n  "name": ""\n}',
-            '/api/server-repo/sync':      '{\n  "url": "https://",\n  "sync_mode": "all"\n}',
-            '/api/server-repo/host':      '{\n  "mods_path": "",\n  "host_secret": "",\n  "port": 8765,\n  "name": ""\n}',
             '/api/restart':               '',
         };
         bodyTa.value = (method !== 'GET' && method !== 'DELETE') ? (bodyHints[path] ?? '') : '';
@@ -1518,12 +1663,13 @@ function renderScripts(container: HTMLElement) {
         scrollEl.scrollLeft += e.deltaY !== 0 ? e.deltaY : e.deltaX;
     }, { passive: false });
 
-    // Endpoint URL copy buttons (url path copy)
+    // Endpoint URL copy buttons (url path copy OR bmm:// deeplink copy)
     container.querySelectorAll('.plug-ep-copy-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const path = (btn as HTMLElement).dataset.copy || '';
-            const full = `http://127.0.0.1:51274${path}`;
+            const val = (btn as HTMLElement).dataset.copy || '';
+            // bmm:// deeplinks are copied as-is; API paths get the base URL prepended
+            const full = val.startsWith('bmm://') ? val : `http://127.0.0.1:51274${val}`;
             await navigator.clipboard.writeText(full).catch(() => {});
             toast(t('plugins.epCopyDone'), 'success');
         });
@@ -1840,6 +1986,30 @@ function buildEndpointRow(ep: EndpointDef): string {
         ? `<span class="plug-ep-auth-note">${IC.lock} ${t('plugins.epAuthNote')}</span>`
         : `<span class="plug-ep-noauth-note">${IC.checkCircle} ${t('plugins.epNoAuthNote')}</span>`;
 
+    // ── bmm:// deeplink equivalent (if one exists) ─────────────────────────
+    const ENDPOINT_TO_DL: Record<string, string> = {
+        'POST /api/mods/enable':       'bmm://mod/enable?id=<mod_id>',
+        'POST /api/mods/disable':      'bmm://mod/disable?id=<mod_id>',
+        'POST /api/profiles/activate': 'bmm://profile/activate?id=<profile_id>',
+        'POST /api/plugins/apply':     'bmm://plugin/activate?id=<plugin_id>',
+        'POST /api/plugins/compare':   'bmm://plugin/compare?id=<plugin_id>',
+        'POST /api/modpacks/enable':   'bmm://modpack/enable?id=<modpack_id>',
+        'POST /api/modpacks/disable':  'bmm://modpack/disable?id=<modpack_id>',
+    };
+    const dlEquiv = ENDPOINT_TO_DL[`${ep.method} ${ep.path}`];
+    const dlBadge = dlEquiv
+        ? `<span class="plug-ep-dl-badge" data-tooltip="Équivalent bmm:// : ${dlEquiv}" title="Equivalent deeplink"
+               style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);white-space:nowrap;font-weight:700;cursor:default;user-select:none;">bmm://</span>`
+        : '';
+    const dlInfoHtml = dlEquiv
+        ? `<div class="plug-ep-dl-info" style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:6px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);border-radius:8px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" style="flex-shrink:0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                <span style="font-size:11px;color:var(--text-secondary);white-space:nowrap;flex-shrink:0;">Équivalent deeplink :</span>
+                <code class="plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" title="Cliquer pour copier" style="flex:1;font-size:11px;color:#a78bfa;background:rgba(139,92,246,0.12);padding:2px 8px;border-radius:4px;cursor:pointer;user-select:all;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;" tabindex="0">${escHtml(dlEquiv)}</code>
+                <button class="btn btn-xs plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" data-tooltip="Copier" style="flex-shrink:0;padding:3px 7px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.25);border-radius:5px;">${IC.copy}</button>
+           </div>`
+        : '';
+
     return `
         <div class="plug-ep-wrap" id="epw-${safeId}">
             <div class="plug-endpoint-row" data-method="${ep.method}" data-path="${ep.path}" data-ep-id="${safeId}">
@@ -1848,6 +2018,7 @@ function buildEndpointRow(ep: EndpointDef): string {
                 </button>
                 <span class="plug-method ${cls}">${ep.method}</span>
                 <code class="plug-path">${ep.path}</code>
+                ${dlBadge}
                 <span class="plug-endpoint-desc">${ep.desc}</span>
                 <div class="plug-ep-row-actions">
                     <button class="btn btn-xs btn-ghost plug-ep-prefill-btn" data-method="${ep.method}" data-path="${ep.path}" data-tooltip="Préremplir la requête personnalisée">${IC.terminal}</button>
@@ -1859,6 +2030,7 @@ function buildEndpointRow(ep: EndpointDef): string {
                 <div class="plug-ep-swagger-left">
                     <p class="plug-ep-about">${escHtml(ep.about)}</p>
                     ${authNote}
+                    ${dlInfoHtml}
                     ${fieldsHtml}
                 </div>
                 <div class="plug-ep-swagger-right">
@@ -2213,61 +2385,6 @@ function getEndpointDefs(): EndpointDef[] {
                 e401, e404,
             ],
         },
-        // ── Server Repo ─────────────────────────────────────────────────────
-        {
-            method: 'POST', path: '/api/server-repo/connect', auth: true,
-            desc: t('plugins.endpointServerRepoConnect'), about: 'Registers a remote server repository URL in BMM settings. Once connected, you can sync mods from the repo via the Sync tab or the /api/server-repo/sync endpoint.',
-            fields: [
-                { name: 'url',  type: 'string', required: true,  desc: 'Base URL of the server repository, e.g. "https://myserver.com/mods".' },
-                { name: 'name', type: 'string', required: false, desc: 'Optional friendly name for the repository.' },
-            ],
-            responseStatuses: [
-                { code: 200, label: 'OK', body: '{ "ok": true, "url": "https://myserver.com/mods", "name": "My Server" }' },
-                e400, e401,
-            ],
-        },
-        {
-            method: 'POST', path: '/api/server-repo/sync', auth: true,
-            desc: t('plugins.endpointServerRepoSync') || 'Sync mods from server repo',
-            about: 'Starts a background download job that fetches mods from a server repository. Large downloads run asynchronously — poll GET /api/status or listen to Tauri events for progress.',
-            fields: [
-                { name: 'url',            type: 'string',  required: true,  desc: 'Base URL of the server repository to sync from.' },
-                { name: 'profile_id',     type: 'string',  required: false, desc: 'Target profile UUID. Defaults to the currently active profile.' },
-                { name: 'sync_mode',      type: 'string',  required: false, desc: '"all" — sync every mod from the repo. "selected" — only the mod IDs listed in mod_ids. Default: "all".' },
-                { name: 'mod_ids',        type: 'array',   required: false, desc: 'Array of mod ID strings to sync when sync_mode is "selected".' },
-                { name: 'download_limit', type: 'number',  required: false, desc: 'Speed cap in KB/s (0 = unlimited). Default: 0.' },
-                { name: 'clean_extras',   type: 'boolean', required: false, desc: 'If true, deletes local mods that are NOT present in the remote repo. Default: false.' },
-            ],
-            responseStatuses: [
-                { code: 200, label: 'OK', body: '{ "ok": true, "started": true, "mods_queued": 12, "sync_mode": "all" }' },
-                e400, e401,
-            ],
-        },
-        {
-            method: 'GET', path: '/api/server-repo/list', auth: false,
-            desc: 'List connected server repos',
-            about: 'Returns all server repository URLs that have been connected via POST /api/server-repo/connect. Saved persistently in BMM settings.',
-            fields: [],
-            responseStatuses: [
-                { code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "url": "https://...", "name": "My Repo" }] }' },
-            ],
-        },
-        {
-            method: 'POST', path: '/api/server-repo/host', auth: true,
-            desc: 'Host a local server repo',
-            about: 'Generates a repo.json from a local mods folder so other BMM clients can sync from it. Requires a special host_secret in addition to the Bearer token. The folder must be served separately (e.g. via a static file server or BMM\'s built-in mini-server).',
-            fields: [
-                { name: 'mods_path',   type: 'string', required: true,  desc: 'Absolute path to the folder containing mod files to expose.' },
-                { name: 'host_secret', type: 'string', required: true,  desc: 'Special authorization secret required to host a repo. Set in BMM settings → Server Repo.' },
-                { name: 'port',        type: 'number', required: false, desc: 'Port for the mini HTTP server (default: 8765).' },
-                { name: 'name',        type: 'string', required: false, desc: 'Friendly name shown to clients connecting to this repo.' },
-            ],
-            responseStatuses: [
-                { code: 200, label: 'OK', body: '{ "ok": true, "port": 8765, "mod_count": 5, "repo_json": "C:\\\\mods\\\\repo.json" }' },
-                e400, e401,
-                { code: 403, label: 'Forbidden', body: '{ "error": "host_secret is required to host a server repo" }' },
-            ],
-        },
         // ── Modpacks (list + create) ─────────────────────────────────────────
         {
             method: 'GET', path: '/api/modpacks', auth: false,
@@ -2281,14 +2398,13 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'POST', path: '/api/modpacks/create', auth: true,
             desc: 'Create a new modpack',
-            about: 'Creates a new modpack (profile snapshot) with a given name. If a source profile_id is provided, the new modpack inherits that profile\'s active mod list. Otherwise it starts empty.',
+            about: 'Creates a new modpack with a given name. Specify mod_ids to include specific mods directly, or provide a profile_id to snapshot that profile\'s active mod list. Both fields are optional — omit both to create an empty modpack.',
             fields: [
-                { name: 'name',        type: 'string', required: true,  desc: 'Display name for the new modpack.' },
-                { name: 'profile_id',  type: 'string', required: false, desc: 'UUID of the source profile to snapshot mods from. Defaults to the active profile.' },
-                { name: 'game_name',   type: 'string', required: false, desc: 'Game name (inherited from source profile if omitted).' },
-                { name: 'game_path',   type: 'string', required: false, desc: 'Absolute path to the game executable (inherited if omitted).' },
-                { name: 'mods_path',   type: 'string', required: false, desc: 'Absolute path to the mods folder (inherited if omitted).' },
-                { name: 'backup_path', type: 'string', required: false, desc: 'Absolute path to the backup folder (inherited if omitted).' },
+                { name: 'name',              type: 'string', required: true,  desc: 'Display name for the new modpack.' },
+                { name: 'mod_ids',           type: 'array',  required: false, desc: 'Array of mod UUIDs to include directly. Takes precedence over source_profile_id.' },
+                { name: 'source_profile_id', type: 'string', required: false, desc: 'UUID of a profile to snapshot active mods from (used if mod_ids is not provided).' },
+                { name: 'description',       type: 'string', required: false, desc: 'Short description for the modpack.' },
+                { name: 'game_name',         type: 'string', required: false, desc: 'Game name label (inherited from source profile if omitted).' },
             ],
             responseStatuses: [
                 { code: 201, label: 'Created', body: '{ "ok": true, "modpack_id": "new-uuid", "mod_count": 12 }' },
@@ -2321,29 +2437,6 @@ async function handleApiTest() {
         const pretty = json !== null ? JSON.stringify(json, null, 2) : '';
         respPre.innerHTML = hlJson(pretty);
 
-        // ── Special handling for /api/server-repo/connect ──────────────────
-        if (path === '/api/server-repo/connect') {
-            if (res.status === 401) {
-                _showServerRepoAuthModal();
-            } else if (res.ok && json?.ok) {
-                toast(t('plugins.serverRepoConnected'), 'success');
-                // Pre-fill the repo sync URL input before navigating
-                const repoUrl = json.url || '';
-                setTimeout(() => {
-                    (document.querySelector('.nav-item[data-view="repo"]') as HTMLElement)?.click();
-                    // After tab switch, pre-fill the URL input and trigger fetch
-                    setTimeout(() => {
-                        const urlInput = document.getElementById('repo-sync-url') as HTMLInputElement | null;
-                        if (urlInput && repoUrl) {
-                            urlInput.value = repoUrl;
-                            // Trigger the fetch button if available
-                            const fetchBtn = document.getElementById('btn-fetch-repo-info') as HTMLElement | null;
-                            fetchBtn?.click();
-                        }
-                    }, 400);
-                }, 600);
-            }
-        }
     } catch (e) {
         statusBadge.textContent = t('common.error');
         statusBadge.className = 'plug-tester-status plug-status-err';
@@ -2385,7 +2478,7 @@ function addActionRow() {
     const profOpts = _allProfiles.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`).join('');
     const plugOpts = _installedPlugins.map(p => `<option value="${escHtml(p.manifest.id)}">${escHtml(p.manifest.name)}</option>`).join('');
 
-    const EXTRA_TYPES = new Set(['wait','close_process','open_url','show_message','launch_game','log','comment','set_variable','if_file_exists','if_var_eq','raw_code','connect_server_repo']);
+    const EXTRA_TYPES = new Set(['wait','close_process','open_url','show_message','launch_game','log','comment','set_variable','if_file_exists','if_var_eq','raw_code']);
     const NO_INPUT_TYPES = new Set(['else_block','end_block']);
     const EXTRA_PH: Record<string,string> = {
         wait:                t('plugins.waitDuration'),
@@ -2399,7 +2492,6 @@ function addActionRow() {
         if_file_exists:      t('plugins.filePathCheck'),
         if_var_eq:           'VARNAME=value',
         raw_code:            t('plugins.rawCodeHint'),
-        connect_server_repo: 'https://server.example.com/repo.json | Server Name',
     };
 
     const row = document.createElement('div');
@@ -2419,7 +2511,6 @@ function addActionRow() {
                     <option value="disable_modpack">${t('plugins.actionDisableModpack') || 'Désactiver liste de mods du plugin'}</option>
                     <option value="apply_plugin">${t('plugins.actionApplyPlugin')}</option>
                     <option value="compare_plugin">${t('plugins.actionComparePlugin')}</option>
-                    <option value="connect_server_repo">${t('plugins.actionConnectRepo') || 'Se connecter à un repo'}</option>
                 </optgroup>
                 <optgroup label="${t('plugins.actionGroupSystem')}">
                     <option value="wait">${t('plugins.actionWait')}</option>
@@ -2613,12 +2704,6 @@ function _collectActions(): Array<{ action_type: string; target_id: string; extr
                 case 'if_file_exists':      extra.path = val; break;
                 case 'if_var_eq':           extra.cond = val; break;
                 case 'raw_code':            extra.code = val; break;
-                case 'connect_server_repo': {
-                    const [u, ...rest2] = val.split('|');
-                    extra.url  = u.trim();
-                    extra.name = rest2.join('|').trim();
-                    break;
-                }
             }
         }
         return {
@@ -2941,7 +3026,6 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
         compare_plugin:      ['/api/plugins/compare',    JSON.stringify({ plugin_id: a.target_id })],
         enable_modpack:      ['/api/modpacks/enable',    JSON.stringify({ profile_id: a.target_id })],
         disable_modpack:     ['/api/modpacks/disable',   JSON.stringify({ profile_id: a.target_id })],
-        connect_server_repo: ['/api/server-repo/connect', JSON.stringify({ url: a.extra?.url || '', name: a.extra?.name || '' })],
     };
 
     const dlMap: Record<string, string> = {
@@ -2998,8 +3082,7 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
     switch (a.action_type) {
         case 'enable_mod': case 'disable_mod': case 'activate_profile':
         case 'apply_plugin': case 'compare_plugin':
-        case 'enable_modpack': case 'disable_modpack':
-        case 'connect_server_repo': {
+        case 'enable_modpack': case 'disable_modpack': {
             const dl = dlMap[a.action_type];
             const ep = apiEps[a.action_type];
             return [dl && useDeeplink ? dlFn(dl) : postFn(ep[0], ep[1])];
@@ -3112,8 +3195,6 @@ function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: str
             return [useDeeplink ? deeplink('modpack/enable', a.target_id) : `${apiPost('/api/modpacks/enable', { profile_id: a.target_id })}`];
         case 'disable_modpack':
             return [useDeeplink ? deeplink('modpack/disable', a.target_id) : `${apiPost('/api/modpacks/disable', { profile_id: a.target_id })}`];
-        case 'connect_server_repo':
-            return [`${apiPost('/api/server-repo/connect', { url: a.extra?.url || '', name: a.extra?.name || '' })}`];
         case 'wait':
             return [`time.sleep(${((a.extra.duration_ms || 1000) / 1000).toFixed(1)})`];
         case 'show_message':
@@ -3178,8 +3259,6 @@ function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: st
             return [useDeeplink
                 ? `os.execute('start bmm://modpack/disable?id=${a.target_id}')`
                 : curlPost('/api/modpacks/disable', `{"profile_id":"${a.target_id}"}`)];
-        case 'connect_server_repo':
-            return [curlPost('/api/server-repo/connect', `{"url":"${(a.extra?.url||'').replace(/"/g,'\\"')}","name":"${(a.extra?.name||'').replace(/"/g,'\\"')}"}`)];
         case 'wait': {
             const secs = Math.round((a.extra.duration_ms || 1000) / 1000);
             return [`os.execute("ping -n ${secs + 1} 127.0.0.1 > nul")  -- wait ~${secs}s`];
@@ -3238,8 +3317,6 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
             return [useDeeplink ? deeplink('modpack/enable', a.target_id) : apiCall('/api/modpacks/enable', { profile_id: a.target_id })];
         case 'disable_modpack':
             return [useDeeplink ? deeplink('modpack/disable', a.target_id) : apiCall('/api/modpacks/disable', { profile_id: a.target_id })];
-        case 'connect_server_repo':
-            return [apiCall('/api/server-repo/connect', { url: a.extra.url || '', name: a.extra.name || '' })];
         case 'wait':
             return [`await new Promise(r => setTimeout(r, ${a.extra.duration_ms || 1000}));`];
         case 'show_message':
@@ -3280,23 +3357,64 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
 async function renderPerms(container: HTMLElement) {
     const ALL_PERMS = ['read_mods','enable_mods','disable_mods','switch_profile','apply_modlist','compare_modlist'];
 
-    const globalAllowed = localStorage.getItem('bmm_plug_allow_global') === 'always';
+    const globalAllowed   = localStorage.getItem('bmm_plug_allow_global') === 'always';
+    const deepLinkAllowed = localStorage.getItem('bmm_deeplink_allow_global') !== 'blocked';
+    const apiNoAuthAllow  = localStorage.getItem('bmm_api_public_allow') !== 'blocked';
+
     container.innerHTML = `
         <p class="plug-perms-desc">${IC.shield} ${t('plugins.permsDesc')}</p>
-        <div class="plug-perm-global-card">
-            <div class="plug-perm-global-inner">
-                <div class="plug-perm-global-icon">${IC.shield}</div>
-                <div class="plug-perm-global-text">
-                    <strong>${t('plugins.globalPermTitle')}</strong>
-                    <span class="plug-perm-global-sub">${t('plugins.globalPermDesc')}</span>
+
+        <!-- ── Global API permissions ─────────────────────────── -->
+        <div class="plug-section-card" style="margin-bottom:14px;">
+            <h3 class="plug-section-title" style="margin-bottom:10px;">${IC.globe} ${t('plugins.globalApiPermTitle') || 'Permissions globales (API & Deep Links)'}</h3>
+            <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px;line-height:1.5;">${t('plugins.globalApiPermDesc') || 'Ces paramètres s\'appliquent à tous les appelants externes : plugins, scripts .bat, PowerShell, applications tierces, etc.'}</p>
+
+            <div class="plug-perm-global-card" style="margin-bottom:8px;">
+                <div class="plug-perm-global-inner">
+                    <div class="plug-perm-global-icon">${IC.shield}</div>
+                    <div class="plug-perm-global-text">
+                        <strong>${t('plugins.globalPermTitle')}</strong>
+                        <span class="plug-perm-global-sub">${t('plugins.globalPermDesc')}</span>
+                    </div>
+                    <label class="plug-toggle" style="margin-left:auto;">
+                        <input type="checkbox" id="plug-global-allow" ${globalAllowed ? 'checked' : ''}>
+                        <span class="plug-toggle-slider"></span>
+                    </label>
                 </div>
-                <label class="plug-toggle" style="margin-left:auto;">
-                    <input type="checkbox" id="plug-global-allow" ${globalAllowed ? 'checked' : ''}>
-                    <span class="plug-toggle-slider"></span>
-                </label>
+                <p class="plug-perm-global-warn">${IC.alert} ${t('plugins.globalPermWarn')}</p>
             </div>
-            <p class="plug-perm-global-warn">${IC.alert} ${t('plugins.globalPermWarn')}</p>
+
+            <div class="plug-perm-global-card" style="margin-bottom:8px;">
+                <div class="plug-perm-global-inner">
+                    <div class="plug-perm-global-icon" style="color:#a78bfa;">${IC.zap}</div>
+                    <div class="plug-perm-global-text">
+                        <strong>${t('plugins.deepLinkPermTitle') || 'Autoriser les Deep Links bmm://'}</strong>
+                        <span class="plug-perm-global-sub">${t('plugins.deepLinkPermDesc') || 'Permet aux scripts et applications externes de déclencher des actions via bmm:// sans confirmation.'}</span>
+                    </div>
+                    <label class="plug-toggle" style="margin-left:auto;">
+                        <input type="checkbox" id="plug-deeplink-allow" ${deepLinkAllowed ? 'checked' : ''}>
+                        <span class="plug-toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="plug-perm-global-card">
+                <div class="plug-perm-global-inner">
+                    <div class="plug-perm-global-icon">${IC.globe}</div>
+                    <div class="plug-perm-global-text">
+                        <strong>${t('plugins.apiPublicPermTitle') || 'Endpoints GET publics actifs'}</strong>
+                        <span class="plug-perm-global-sub">${t('plugins.apiPublicPermDesc') || 'Les endpoints GET (health, status, mods...) sont accessibles sans token. Désactivez pour forcer l\'auth sur tout.'}</span>
+                    </div>
+                    <label class="plug-toggle" style="margin-left:auto;">
+                        <input type="checkbox" id="plug-api-public-allow" ${apiNoAuthAllow ? 'checked' : ''}>
+                        <span class="plug-toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
         </div>
+
+        <!-- ── Per-plugin permissions ──────────────────────────── -->
+        <h3 class="plug-section-title" style="margin-bottom:8px;">${IC.puzzle} ${t('plugins.perPluginPermTitle') || 'Permissions par plugin'}</h3>
         <div id="plug-perms-list"></div>`;
 
     container.querySelector('#plug-global-allow')?.addEventListener('change', (e) => {
@@ -3305,6 +3423,21 @@ async function renderPerms(container: HTMLElement) {
         } else {
             localStorage.removeItem('bmm_plug_allow_global');
         }
+    });
+    container.querySelector('#plug-deeplink-allow')?.addEventListener('change', (e) => {
+        if ((e.target as HTMLInputElement).checked) {
+            localStorage.removeItem('bmm_deeplink_allow_global');
+        } else {
+            localStorage.setItem('bmm_deeplink_allow_global', 'blocked');
+        }
+    });
+    container.querySelector('#plug-api-public-allow')?.addEventListener('change', (e) => {
+        if ((e.target as HTMLInputElement).checked) {
+            localStorage.removeItem('bmm_api_public_allow');
+        } else {
+            localStorage.setItem('bmm_api_public_allow', 'blocked');
+        }
+        toast(t('plugins.apiPublicPermRestart') || 'Redémarrez BMM pour appliquer ce changement.', 'info');
     });
 
     const list = document.getElementById('plug-perms-list') as HTMLElement;

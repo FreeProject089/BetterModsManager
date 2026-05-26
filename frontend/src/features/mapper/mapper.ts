@@ -167,6 +167,18 @@ export async function initMapper(): Promise<void> {
     onBmmAction(BMM_ACTIONS.MODS_SCANNED, async () => {
         await refreshMapperData();
     });
+
+    // Live refresh: update mod selector when mods list changes from any part of the app
+    window.addEventListener('bmm:mods-updated', async () => {
+        const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement | null;
+        if (!modSelect) return;
+        const currentVal = modSelect.value;
+        await refreshMapperData();
+        // Restore selection if mod still exists
+        if (currentVal && modSelect.querySelector(`option[value="${currentVal}"]`)) {
+            modSelect.value = currentVal;
+        }
+    });
 }
 
 /**
