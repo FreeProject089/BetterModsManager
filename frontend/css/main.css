@@ -2153,6 +2153,17 @@ body.is-maximized .titlebar-spacer {
     border-left-color: var(--accent);
 }
 
+/* API / deep-link toggle pulse */
+@keyframes modApiToggle {
+    0%   { box-shadow: 0 0 0 0 rgba(var(--accent-rgb, 99,102,241), 0.6); }
+    50%  { box-shadow: 0 0 0 8px rgba(var(--accent-rgb, 99,102,241), 0); }
+    100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb, 99,102,241), 0); }
+}
+.mod-card.mod-api-toggling {
+    animation: modApiToggle 0.8s ease-out forwards;
+    border-color: var(--accent) !important;
+}
+
 .mod-list.compact {
     gap: 4px;
 
@@ -10221,8 +10232,11 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     letter-spacing: 0.05em;
     flex-shrink: 0;
 }
-.plug-method-get { background: rgba(16,185,129,0.15); color: #10b981; }
-.plug-method-post { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.plug-method-get    { background: rgba(16,185,129,0.15);  color: #10b981; }
+.plug-method-post   { background: rgba(59,130,246,0.15);  color: #3b82f6; }
+.plug-method-put    { background: rgba(245,158,11,0.15);  color: #f59e0b; }
+.plug-method-delete { background: rgba(239,68,68,0.15);   color: #ef4444; }
+.plug-method-patch  { background: rgba(168,85,247,0.15);  color: #a855f7; }
 .plug-path {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -11792,10 +11806,18 @@ option   { background: #131825; color: var(--text-primary); }
     border-radius: 4px;
     flex-shrink: 0;
 }
-.plug-qt-post {
-    background: rgba(99,102,241,0.25);
-    color: #a5b4fc;
-    border: 1px solid rgba(99,102,241,0.4);
+.plug-qt-get    { background: rgba(16,185,129,0.2);  color: #10b981; border: 1px solid rgba(16,185,129,0.35); }
+.plug-qt-post   { background: rgba(59,130,246,0.2);  color: #60a5fa; border: 1px solid rgba(59,130,246,0.35); }
+.plug-qt-put    { background: rgba(245,158,11,0.2);  color: #fbbf24; border: 1px solid rgba(245,158,11,0.35); }
+.plug-qt-delete { background: rgba(239,68,68,0.2);   color: #f87171; border: 1px solid rgba(239,68,68,0.35); }
+.plug-qt-patch  { background: rgba(168,85,247,0.2);  color: #c084fc; border: 1px solid rgba(168,85,247,0.35); }
+
+/* Tester highlight flash when prefill fires */
+.plug-tester-highlight { animation: plug-tester-flash 0.9s ease; }
+@keyframes plug-tester-flash {
+    0%   { box-shadow: 0 0 0 2px rgba(99,102,241,0); }
+    30%  { box-shadow: 0 0 0 3px rgba(99,102,241,0.55); }
+    100% { box-shadow: 0 0 0 2px rgba(99,102,241,0); }
 }
 
 /* ── Script gen: token env row ────────────────────────────────────────────── */

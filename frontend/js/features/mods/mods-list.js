@@ -313,10 +313,11 @@ export function createModCard(mod) {
             setModLoading(mod.id, false);
             await new Promise(r => setTimeout(r, 220));
             S.processingMods.delete(mod.id);
-            await refreshMods();
-            // Re-apply loading overlays for any mods still processing in parallel
-            S.processingMods.forEach((pid) => setModLoading(pid, true));
-            await updateDiscordStatus();
+            // Non-blocking refresh — UI stays interactive while the list reloads
+            refreshMods().then(() => {
+                S.processingMods.forEach((pid) => setModLoading(pid, true));
+            });
+            updateDiscordStatus();
         }
     });
     // Action listeners
@@ -356,12 +357,28 @@ export function createModCard(mod) {
             toast(t('common.error') + ' : ' + err, 'error');
         }
     });
-    card.querySelector('.btn-copy-id')?.addEventListener('click', async (e) => {
+    card.querySelectorAll('.btn-copy-id').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            window.closeGlobalDropdown(true);
+            try {
+                await navigator.clipboard.writeText(mod.id);
+                toast(t('mod.idCopied', { id: mod.id }), 'success', 2000);
+            }
+            catch (err) {
+                toast(t('common.error') + ' : ' + err, 'error');
+            }
+        });
+    });
+    card.querySelector('.btn-copy-content-id')?.addEventListener('click', async (e) => {
         e.stopPropagation();
         window.closeGlobalDropdown(true);
+        const contentId = e.currentTarget.dataset.contentId || '';
+        if (!contentId)
+            return;
         try {
-            await navigator.clipboard.writeText(mod.id);
-            toast(t('mod.idCopied', { id: mod.id }), 'success', 2000);
+            await navigator.clipboard.writeText(contentId);
+            toast('Content ID copié : ' + contentId.slice(0, 16) + '…', 'success', 2000);
         }
         catch (err) {
             toast(t('common.error') + ' : ' + err, 'error');

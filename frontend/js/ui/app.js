@@ -641,8 +641,12 @@ async function main() {
     try {
         const { getSettings } = await import('../core/api.js');
         const cfg = await getSettings();
-        setSoundEnabled(cfg.sound_effects_enabled !== false);
-        setSoundVolume((cfg.sound_volume ?? 70) / 100);
+        const soundEnabled = cfg.sound_effects_enabled !== false;
+        const soundVol = (cfg.sound_volume ?? 70) / 100;
+        setSoundEnabled(soundEnabled);
+        setSoundVolume(soundVol);
+        localStorage.setItem('bmm_sound_enabled', String(soundEnabled));
+        localStorage.setItem('bmm_sound_volume', String(soundVol));
     }
     catch (_e) { /* use defaults */ }
     // ── Startup Modal Sequence ──

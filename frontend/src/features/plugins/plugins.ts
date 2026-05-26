@@ -51,6 +51,7 @@ let _allMods = [];
 let _allProfiles = [];
 let _apiToken = '';
 let _exePath = '';
+let _allModpacks: any[] = [];
 
 // Prevents event-listener accumulation when switching back to the Scripts tab
 let _scriptClickHandler: EventListener | null = null;
@@ -82,6 +83,11 @@ async function loadInitialData() {
             invoke('get_api_token'),
         ]);
         _exePath = await invoke('get_app_exe_path').catch(() => '');
+        try {
+            const mpRes = await fetch('http://127.0.0.1:51274/api/modpacks');
+            const mpJson = await mpRes.json().catch(() => ({}));
+            _allModpacks = mpJson.data || [];
+        } catch { _allModpacks = []; }
     } catch (e) {
         console.error('[PLUGINS] loadInitialData error:', e);
     }
@@ -424,61 +430,85 @@ function createOverlay(html: string): HTMLElement {
 // ── Smart quick-test overlay (shows selectors for mods / profiles / plugins) ──
 
 function openSmartQuickTest(m: string, p: string, rawBody: string) {
+    const modOpts  = _allMods.length     ? _allMods.map(mod => `<option value="${escHtml(mod.id)}">${escHtml(mod.name || mod.id)}</option>`).join('') : `<option value="">— aucun mod —</option>`;
+    const profOpts = _allProfiles.length ? _allProfiles.map(pr  => `<option value="${escHtml(pr.id)}">${escHtml(pr.name)}</option>`).join('') : `<option value="">— aucun profil —</option>`;
+    const plugOpts = _installedPlugins.length ? _installedPlugins.map(pl => `<option value="${escHtml(pl.manifest.id)}">${escHtml(pl.manifest.name)}</option>`).join('') : `<option value="">— aucun plugin —</option>`;
+
+    const modSel     = `<div class="plug-qt-smart-field"><label class="plug-form-label" style="margin-bottom:4px;">Mod <span style="color:var(--danger)">*</span></label><select id="plug-qt-s-mod" class="select">${modOpts}</select></div>`;
+    const profSel    = `<div class="plug-qt-smart-field"><label class="plug-form-label" style="margin-bottom:4px;">Profil <span style="color:var(--danger)">*</span></label><select id="plug-qt-s-profile" class="select">${profOpts}</select></div>`;
+    const plugSel    = `<div class="plug-qt-smart-field"><label class="plug-form-label" style="margin-bottom:4px;">Plugin <span style="color:var(--danger)">*</span></label><select id="plug-qt-s-plugin" class="select">${plugOpts}</select></div>`;
+    const modpackOpts = _allModpacks.length ? _allModpacks.map(mp => `<option value="${escHtml(mp.id)}">${escHtml(mp.name)} (${mp.mods?.length ?? 0} mods)</option>`).join('') : `<option value="">— aucun modpack —</option>`;
+    const modpackSel = `<div class="plug-qt-smart-field"><label class="plug-form-label" style="margin-bottom:4px;">Modpack <span style="color:var(--danger)">*</span></label><select id="plug-qt-s-modpack" class="select">${modpackOpts}</select></div>`;
+    const idInput    = (label: string, ph: string) => `<div class="plug-qt-smart-field"><label class="plug-form-label" style="margin-bottom:4px;">${label} <span style="color:var(--danger)">*</span></label><input type="text" id="plug-qt-s-id" class="input" placeholder="${ph}" style="font-family:var(--font-mono);font-size:12px;"></div>`;
+    const txtInput   = (id: string, label: string, ph: string, opt = false) => `<div class="plug-qt-smart-field" style="margin-top:8px;"><label class="plug-form-label" style="margin-bottom:4px;">${label}${opt ? ' <span style="color:var(--text-muted);font-size:10px;">(optionnel)</span>' : ' <span style="color:var(--danger)">*</span>'}</label><input type="text" id="${id}" class="input" placeholder="${ph}" style="font-family:var(--font-mono);font-size:12px;"></div>`;
+
     let formHtml = '';
+    let actualPath = p; // may be rewritten when :id is in path
 
     if (p === '/api/mods/enable' || p === '/api/mods/disable') {
-        const opts = _allMods.length
-            ? _allMods.map(mod => `<option value="${escHtml(mod.id)}">${escHtml(mod.name || mod.id)}</option>`).join('')
-            : `<option value="">${t('plugins.noMods')}</option>`;
-        formHtml = `
-            <div class="plug-qt-smart-field">
-                <label class="plug-form-label" style="margin-bottom:4px;">Mod</label>
-                <select id="plug-qt-s-mod" class="select">${opts}</select>
-            </div>`;
-    } else if (p === '/api/profiles/activate' || p === '/api/modpacks/enable' || p === '/api/modpacks/disable') {
-        const opts = _allProfiles.length
-            ? _allProfiles.map(pr => `<option value="${escHtml(pr.id)}">${escHtml(pr.name)}</option>`).join('')
-            : `<option value="">${t('plugins.noProfiles') || 'Aucun profil'}</option>`;
-        formHtml = `
-            <div class="plug-qt-smart-field">
-                <label class="plug-form-label" style="margin-bottom:4px;">Profil</label>
-                <select id="plug-qt-s-profile" class="select">${opts}</select>
-            </div>`;
+        formHtml = modSel;
+    } else if (p === '/api/mods/:id') {
+        formHtml = m === 'DELETE'
+            ? modSel + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;">⚠ Cette action est irréversible.</p>`
+            : modSel + txtInput('plug-qt-s-name', 'name (nouveau nom)', 'Nouveau nom du mod', true);
+    } else if (p === '/api/profiles/activate') {
+        formHtml = profSel;
+    } else if (p === '/api/modpacks/enable' || p === '/api/modpacks/disable') {
+        formHtml = modpackSel;
+    } else if (p === '/api/profiles/:id') {
+        formHtml = m === 'DELETE'
+            ? profSel + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;">⚠ Cette action est irréversible.</p>`
+            : profSel + txtInput('plug-qt-s-name', 'name (nouveau nom)', 'Nouveau nom', true) + txtInput('plug-qt-s-color', 'color', '#3b82f6', true);
+    } else if (p === '/api/profiles') {
+        formHtml = txtInput('plug-qt-s-name', 'name', 'Mon profil')
+            + txtInput('plug-qt-s-game-path', 'game_path', 'C:/Games/MyGame')
+            + txtInput('plug-qt-s-mods-path', 'mods_path', 'C:/Games/MyGame/Mods')
+            + txtInput('plug-qt-s-backup-path', 'backup_path', 'C:/BMM/Backups/MyGame');
     } else if (p === '/api/plugins/compare' || p === '/api/plugins/apply') {
-        const opts = _installedPlugins.length
-            ? _installedPlugins.map(pl => `<option value="${escHtml(pl.manifest.id)}">${escHtml(pl.manifest.name)}</option>`).join('')
-            : `<option value="">${t('plugins.noPlugins') || 'Aucun plugin'}</option>`;
         const strictRow = p === '/api/plugins/apply' ? `
-            <div class="plug-qt-smart-field" style="flex-direction:row;align-items:center;gap:10px;margin-top:4px;">
+            <div class="plug-qt-smart-field" style="flex-direction:row;align-items:center;gap:10px;margin-top:8px;">
                 <label class="plug-form-label" style="margin:0;">force_strict</label>
                 <label class="plug-toggle" style="margin:0;"><input type="checkbox" id="plug-qt-s-strict"><span class="plug-toggle-slider"></span></label>
                 <span style="font-size:11px;color:var(--text-muted);">Désactive les mods absents de la liste</span>
             </div>` : '';
-        formHtml = `
-            <div class="plug-qt-smart-field">
-                <label class="plug-form-label" style="margin-bottom:4px;">Plugin</label>
-                <select id="plug-qt-s-plugin" class="select">${opts}</select>
-            </div>${strictRow}`;
+        formHtml = plugSel + strictRow;
     } else if (p === '/api/server-repo/connect') {
-        formHtml = `
-            <div class="plug-qt-smart-field">
-                <label class="plug-form-label" style="margin-bottom:4px;">URL du serveur <span style="color:var(--danger)">*</span></label>
-                <input type="text" id="plug-qt-s-url" class="input" placeholder="https://monserveur.com/repo.json" style="font-family:var(--font-mono);font-size:12px;">
-            </div>
-            <div class="plug-qt-smart-field" style="margin-top:8px;">
-                <label class="plug-form-label" style="margin-bottom:4px;">Nom (optionnel)</label>
-                <input type="text" id="plug-qt-s-name" class="input" placeholder="Mon Serveur">
-            </div>`;
+        formHtml = txtInput('plug-qt-s-url', 'url', 'https://monserveur.com/repo.json')
+            + txtInput('plug-qt-s-name', 'name', 'Mon Serveur', true);
+    } else if (p === '/api/server-repo/sync') {
+        formHtml = txtInput('plug-qt-s-url', 'url', 'https://monserveur.com/repo.json')
+            + `<div class="plug-qt-smart-field" style="margin-top:8px;">
+                <label class="plug-form-label" style="margin-bottom:4px;">sync_mode</label>
+                <select id="plug-qt-s-sync-mode" class="select"><option value="all">all — tous les mods</option><option value="selected">selected — mods spécifiques</option></select>
+               </div>`;
+    } else if (p === '/api/restart') {
+        formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">BMM va redémarrer dans 300 ms. L'API sera brièvement indisponible.</p>`;
+    } else if (p === '/api/modpacks/create') {
+        formHtml = txtInput('plug-qt-s-name', 'name (nom du modpack)', 'Mon Modpack', true)
+            + `<div class="plug-qt-smart-field" style="margin-top:8px;">
+                <label class="plug-form-label" style="margin-bottom:4px;">profile_id (source — optionnel)</label>
+                <select id="plug-qt-s-profile" class="select"><option value="">— aucun (modpack vide) —</option>${_allProfiles.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`).join('')}</select>
+               </div>`;
+    } else if (p === '/api/server-repo/host') {
+        formHtml = txtInput('plug-qt-s-path', 'mods_path (chemin absolu)', 'C:\\mods', true)
+            + txtInput('plug-qt-s-secret', 'host_secret', '', true)
+            + txtInput('plug-qt-s-name', 'name (optionnel)', 'Mon Repo')
+            + `<div class="plug-qt-smart-field" style="margin-top:8px;">
+                <label class="plug-form-label" style="margin-bottom:4px;">port (défaut: 8765)</label>
+                <input id="plug-qt-s-port" class="input" type="number" value="8765" min="1024" max="65535" style="width:100px;">
+               </div>`;
+    } else if (p === '/api/modpacks' || p === '/api/server-repo/list') {
+        formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">Requête GET — aucun corps requis.</p>`;
     } else {
         const pretty = (() => { try { return JSON.stringify(JSON.parse(rawBody), null, 2); } catch { return rawBody; } })();
-        formHtml = `
-            <p style="font-size:11px;color:var(--text-muted);margin:0 0 6px;">${t('plugins.qtBodyHint')}</p>
+        formHtml = `<p style="font-size:11px;color:var(--text-muted);margin:0 0 6px;">${t('plugins.qtBodyHint')}</p>
             <textarea id="plug-qt-s-json" class="input" style="font-family:var(--font-mono);font-size:12px;min-height:110px;resize:vertical;" spellcheck="false">${escHtml(pretty)}</textarea>`;
     }
 
+    const methodCls: Record<string, string> = { GET:'plug-method-get', POST:'plug-method-post', PUT:'plug-method-put', DELETE:'plug-method-delete', PATCH:'plug-method-patch' };
     const overlay = createOverlay(`
         <div class="plug-ov-header">
-            <span class="plug-ov-title">${IC.play} <span class="plug-method plug-method-post" style="font-size:10px;">POST</span> <code style="font-size:11px;color:var(--accent);margin-left:4px;">${escHtml(p)}</code></span>
+            <span class="plug-ov-title">${IC.play} <span class="plug-method ${methodCls[m] || 'plug-method-get'}" style="font-size:10px;">${escHtml(m)}</span> <code style="font-size:11px;color:var(--accent);margin-left:4px;">${escHtml(p)}</code></span>
             <button class="btn btn-xs btn-ghost plug-ov-close-btn">${IC.x}</button>
         </div>
         <div class="plug-ov-body" style="padding:16px 18px;display:flex;flex-direction:column;gap:4px;">
@@ -492,29 +522,83 @@ function openSmartQuickTest(m: string, p: string, rawBody: string) {
     overlay.querySelectorAll('.plug-ov-close-btn').forEach(b => b.addEventListener('click', () => overlay.remove()));
     overlay.querySelector('#plug-qt-s-run')?.addEventListener('click', () => {
         let body = '{}';
+        let resolvedPath = p;
+
         if (p === '/api/mods/enable' || p === '/api/mods/disable') {
+            body = JSON.stringify({ mod_id: (overlay.querySelector('#plug-qt-s-mod') as HTMLSelectElement)?.value || '' });
+        } else if (p === '/api/mods/:id') {
             const modId = (overlay.querySelector('#plug-qt-s-mod') as HTMLSelectElement)?.value || '';
-            body = JSON.stringify({ mod_id: modId });
-        } else if (p === '/api/profiles/activate' || p === '/api/modpacks/enable' || p === '/api/modpacks/disable') {
+            resolvedPath = `/api/mods/${modId}`;
+            if (m === 'PUT') {
+                const name = (overlay.querySelector('#plug-qt-s-name') as HTMLInputElement)?.value || '';
+                body = name ? JSON.stringify({ name }) : '{}';
+            }
+        } else if (p === '/api/profiles/activate') {
+            body = JSON.stringify({ profile_id: (overlay.querySelector('#plug-qt-s-profile') as HTMLSelectElement)?.value || '' });
+        } else if (p === '/api/modpacks/enable' || p === '/api/modpacks/disable') {
+            body = JSON.stringify({ modpack_id: (overlay.querySelector('#plug-qt-s-modpack') as HTMLSelectElement)?.value || '' });
+        } else if (p === '/api/profiles/:id') {
             const profId = (overlay.querySelector('#plug-qt-s-profile') as HTMLSelectElement)?.value || '';
-            body = JSON.stringify({ profile_id: profId });
+            resolvedPath = `/api/profiles/${profId}`;
+            if (m === 'PUT') {
+                const name  = (overlay.querySelector('#plug-qt-s-name')  as HTMLInputElement)?.value || '';
+                const color = (overlay.querySelector('#plug-qt-s-color') as HTMLInputElement)?.value || '';
+                const obj: any = {};
+                if (name)  obj.name  = name;
+                if (color) obj.color = color;
+                body = JSON.stringify(obj);
+            }
+        } else if (p === '/api/profiles') {
+            body = JSON.stringify({
+                name:        (overlay.querySelector('#plug-qt-s-name')        as HTMLInputElement)?.value || '',
+                game_path:   (overlay.querySelector('#plug-qt-s-game-path')   as HTMLInputElement)?.value || '',
+                mods_path:   (overlay.querySelector('#plug-qt-s-mods-path')   as HTMLInputElement)?.value || '',
+                backup_path: (overlay.querySelector('#plug-qt-s-backup-path') as HTMLInputElement)?.value || '',
+                game_name:   '',
+            });
         } else if (p === '/api/plugins/compare') {
-            const plugId = (overlay.querySelector('#plug-qt-s-plugin') as HTMLSelectElement)?.value || '';
-            body = JSON.stringify({ plugin_id: plugId });
+            body = JSON.stringify({ plugin_id: (overlay.querySelector('#plug-qt-s-plugin') as HTMLSelectElement)?.value || '' });
         } else if (p === '/api/plugins/apply') {
-            const plugId  = (overlay.querySelector('#plug-qt-s-plugin') as HTMLSelectElement)?.value || '';
-            const strict  = (overlay.querySelector('#plug-qt-s-strict')  as HTMLInputElement)?.checked  || false;
-            body = JSON.stringify({ plugin_id: plugId, force_strict: strict });
+            body = JSON.stringify({ plugin_id: (overlay.querySelector('#plug-qt-s-plugin') as HTMLSelectElement)?.value || '', force_strict: (overlay.querySelector('#plug-qt-s-strict') as HTMLInputElement)?.checked || false });
         } else if (p === '/api/server-repo/connect') {
             const url  = (overlay.querySelector('#plug-qt-s-url')  as HTMLInputElement)?.value || '';
             const name = (overlay.querySelector('#plug-qt-s-name') as HTMLInputElement)?.value || '';
-            if (!url) { return; } // URL required
+            if (!url) return;
             body = JSON.stringify({ url, name });
+        } else if (p === '/api/server-repo/sync') {
+            const url  = (overlay.querySelector('#plug-qt-s-url')       as HTMLInputElement)?.value || '';
+            const mode = (overlay.querySelector('#plug-qt-s-sync-mode') as HTMLSelectElement)?.value || 'all';
+            if (!url) return;
+            overlay.remove();
+            (document.querySelector('.nav-item[data-view="repo"]') as HTMLElement)?.click();
+            setTimeout(() => {
+                const urlInput = document.getElementById('repo-sync-url') as HTMLInputElement | null;
+                if (urlInput) { urlInput.value = url; urlInput.dispatchEvent(new Event('input')); }
+                const fetchBtn = document.getElementById('btn-fetch-repo-info') as HTMLElement | null;
+                if (fetchBtn) fetchBtn.click();
+            }, 500);
+            return;
+        } else if (p === '/api/restart') {
+            body = '{}';
+        } else if (p === '/api/modpacks/create') {
+            const name   = (overlay.querySelector('#plug-qt-s-name')    as HTMLInputElement)?.value || '';
+            const profId = (overlay.querySelector('#plug-qt-s-profile') as HTMLSelectElement)?.value || '';
+            if (!name) return;
+            body = JSON.stringify({ name, ...(profId ? { profile_id: profId } : {}) });
+        } else if (p === '/api/server-repo/host') {
+            const modsPath  = (overlay.querySelector('#plug-qt-s-path')   as HTMLInputElement)?.value || '';
+            const secret    = (overlay.querySelector('#plug-qt-s-secret') as HTMLInputElement)?.value || '';
+            const name      = (overlay.querySelector('#plug-qt-s-name')   as HTMLInputElement)?.value || '';
+            const port      = parseInt((overlay.querySelector('#plug-qt-s-port') as HTMLInputElement)?.value || '8765', 10);
+            if (!modsPath || !secret) return;
+            body = JSON.stringify({ mods_path: modsPath, host_secret: secret, port, ...(name ? { name } : {}) });
+        } else if (p === '/api/modpacks' || p === '/api/server-repo/list') {
+            body = '';
         } else {
             body = (overlay.querySelector('#plug-qt-s-json') as HTMLTextAreaElement)?.value || rawBody;
         }
         overlay.remove();
-        handleQuickTest(m, p, body);
+        handleQuickTest(m, resolvedPath, body);
     });
 }
 
@@ -979,25 +1063,29 @@ function renderCreate(container: HTMLElement) {
         updateCount();
     }
 
-    // Profile filter
-    container.querySelector('#pc-profile-filter')?.addEventListener('change', (e) => {
-        const profileId = (e.target as HTMLSelectElement).value;
+    function applyModFilters() {
+        const profileId = (container.querySelector('#pc-profile-filter') as HTMLSelectElement)?.value || '';
+        const q = ((container.querySelector('#pc-mod-search') as HTMLInputElement)?.value || '').toLowerCase();
         const profile = _allProfiles.find(p => p.id === profileId);
         const activeMods = new Set<string>(profile?.active_mods || []);
         container.querySelectorAll('.plug-mod-item').forEach(item => {
-            const id = (item as HTMLElement).dataset.id || '';
-            const badge = item.querySelector('.plug-mod-profile-badge') as HTMLElement;
+            const el = item as HTMLElement;
+            const id = el.dataset.id || '';
+            const name = el.dataset.name?.toLowerCase() || '';
+            const badge = el.querySelector('.plug-mod-profile-badge') as HTMLElement | null;
+            // Show badge if this mod is in the selected profile
             if (badge) badge.style.display = profileId && activeMods.has(id) ? '' : 'none';
+            // Filter visibility: if a profile is selected, only show mods in that profile (OR all if no profile)
+            const passesProfile = !profileId || activeMods.has(id);
+            const passesSearch = !q || name.includes(q);
+            el.style.display = passesProfile && passesSearch ? '' : 'none';
         });
-    });
+    }
 
-    container.querySelector('#pc-mod-search')?.addEventListener('input', (e) => {
-        const q = (e.target as HTMLInputElement).value.toLowerCase();
-        container.querySelectorAll('.plug-mod-item').forEach(el => {
-            const name = (el as HTMLElement).dataset.name?.toLowerCase() || '';
-            (el as HTMLElement).style.display = name.includes(q) ? '' : 'none';
-        });
-    });
+    // Profile filter
+    container.querySelector('#pc-profile-filter')?.addEventListener('change', applyModFilters);
+
+    container.querySelector('#pc-mod-search')?.addEventListener('input', applyModFilters);
 
     container.querySelectorAll('.plug-mod-add-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1069,18 +1157,33 @@ function renderCreate(container: HTMLElement) {
 
 function renderScripts(container: HTMLElement) {
     const QT_ENDPOINTS = [
-        { m: 'GET',  p: '/api/health',              l: 'Health',         icon: IC.checkCircle },
-        { m: 'GET',  p: '/api/status',              l: 'Status',         icon: IC.info },
-        { m: 'GET',  p: '/api/mods',                l: 'All Mods',       icon: IC.list },
-        { m: 'GET',  p: '/api/mods/active',         l: 'Active Mods',    icon: IC.check },
-        { m: 'GET',  p: '/api/profiles',            l: 'Profiles',       icon: IC.puzzle },
-        { m: 'GET',  p: '/api/plugins',             l: 'Plugins',        icon: IC.zap },
-        { m: 'GET',  p: '/api/creator-id',          l: 'Creator ID',     icon: IC.shield },
-        { m: 'POST', p: '/api/mods/enable',         l: 'Enable Mod',     icon: IC.check,  body: '{"mod_id":""}' },
-        { m: 'POST', p: '/api/mods/disable',        l: 'Disable Mod',    icon: IC.x,      body: '{"mod_id":""}' },
-        { m: 'POST', p: '/api/profiles/activate',   l: 'Activate Profile', icon: IC.puzzle, body: '{"profile_id":""}' },
-        { m: 'POST', p: '/api/plugins/apply',       l: 'Apply Plugin',   icon: IC.zap,    body: '{"plugin_id":"","force_strict":false}' },
-        { m: 'POST', p: '/api/plugins/compare',     l: 'Compare Plugin', icon: IC.shield, body: '{"plugin_id":""}' },
+        { m: 'GET',    p: '/api/health',              l: 'Health',           icon: IC.checkCircle },
+        { m: 'GET',    p: '/api/status',              l: 'Status',           icon: IC.info },
+        { m: 'GET',    p: '/api/check-update',        l: 'Check Update',     icon: IC.refresh },
+        { m: 'GET',    p: '/api/mods',                l: 'All Mods',         icon: IC.list },
+        { m: 'GET',    p: '/api/mods/active',         l: 'Active Mods',      icon: IC.check },
+        { m: 'GET',    p: '/api/profiles',            l: 'Profiles',         icon: IC.puzzle },
+        { m: 'GET',    p: '/api/plugins',             l: 'Plugins',          icon: IC.zap },
+        { m: 'GET',    p: '/api/creator-id',          l: 'Creator ID',       icon: IC.shield },
+        { m: 'POST',   p: '/api/mods/enable',         l: 'Enable Mod',       icon: IC.check,      body: '{"mod_id":""}' },
+        { m: 'POST',   p: '/api/mods/disable',        l: 'Disable Mod',      icon: IC.x,          body: '{"mod_id":""}' },
+        { m: 'POST',   p: '/api/profiles/activate',   l: 'Activate Profile', icon: IC.puzzle,     body: '{"profile_id":""}' },
+        { m: 'POST',   p: '/api/profiles',            l: 'Create Profile',   icon: IC.plus,       body: '{"name":"","game_path":"","mods_path":"","backup_path":""}' },
+        { m: 'POST',   p: '/api/plugins/apply',       l: 'Apply Plugin',     icon: IC.zap,        body: '{"plugin_id":"","force_strict":false}' },
+        { m: 'POST',   p: '/api/plugins/compare',     l: 'Compare Plugin',   icon: IC.shield,     body: '{"plugin_id":""}' },
+        { m: 'POST',   p: '/api/modpacks/enable',     l: 'Enable Modpack',   icon: IC.folder,     body: '{"modpack_id":""}' },
+        { m: 'POST',   p: '/api/modpacks/disable',    l: 'Disable Modpack',  icon: IC.folder,     body: '{"modpack_id":""}' },
+        { m: 'POST',   p: '/api/modpacks/create',     l: 'Create Modpack',   icon: IC.plus,       body: '{"name":"","profile_id":""}' },
+        { m: 'POST',   p: '/api/server-repo/connect', l: 'Connect Repo',     icon: IC.globe,      body: '{"url":"https://","name":""}' },
+        { m: 'POST',   p: '/api/server-repo/sync',    l: 'Sync Repo',        icon: IC.refresh,    body: '{"url":"https://","sync_mode":"all"}' },
+        { m: 'POST',   p: '/api/server-repo/host',    l: 'Host Repo',        icon: IC.upload,     body: '{"mods_path":"","host_secret":"","port":8765}' },
+        { m: 'POST',   p: '/api/restart',             l: 'Restart BMM',      icon: IC.refresh,    body: '' },
+        { m: 'GET',    p: '/api/modpacks',            l: 'List Modpacks',    icon: IC.list },
+        { m: 'GET',    p: '/api/server-repo/list',    l: 'Repo List',        icon: IC.globe },
+        { m: 'PUT',    p: '/api/profiles/:id',        l: 'Update Profile',   icon: IC.editIcon,   body: '{"name":""}' },
+        { m: 'PUT',    p: '/api/mods/:id',            l: 'Update Mod',       icon: IC.editIcon,   body: '{"name":""}' },
+        { m: 'DELETE', p: '/api/mods/:id',            l: 'Delete Mod',       icon: IC.trash },
+        { m: 'DELETE', p: '/api/profiles/:id',        l: 'Delete Profile',   icon: IC.trash },
     ];
 
     container.innerHTML = `
@@ -1105,10 +1208,10 @@ function renderScripts(container: HTMLElement) {
                 <h3 class="plug-section-title">${IC.zap} ${t('plugins.quickTest')}</h3>
                 <div class="plug-qt-grid">
                     ${QT_ENDPOINTS.map(e => {
-                        const isPost = e.m === 'POST';
-                        const badge = isPost ? `<span class="plug-qt-method-badge plug-qt-post">POST</span>` : '';
-                        const body = (e as any).body ? ` data-body="${escHtml((e as any).body)}"` : '';
-                        return `<button class="plug-qt-btn${isPost ? ' plug-qt-btn-post' : ''}" data-method="${e.m}" data-path="${e.p}"${body} data-tooltip="${e.m} ${e.p}">
+                        const mc = e.m.toLowerCase();
+                        const badge = `<span class="plug-qt-method-badge plug-qt-${mc}">${e.m}</span>`;
+                        const body = (e as any).body !== undefined ? ` data-body="${escHtml((e as any).body || '')}"` : '';
+                        return `<button class="plug-qt-btn" data-method="${e.m}" data-path="${e.p}"${body} data-tooltip="${e.m} ${e.p}">
                             ${e.icon} <span>${e.l}</span>${badge}
                         </button>`;
                     }).join('')}
@@ -1128,7 +1231,7 @@ function renderScripts(container: HTMLElement) {
                     <div class="plug-tester">
                         <div class="plug-tester-row">
                             <select id="pt-method" class="select select-sm" style="width:80px;">
-                                <option>GET</option><option>POST</option>
+                                <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option><option>PATCH</option>
                             </select>
                             <input type="text" id="pt-path" class="input input-sm" value="/api/health" style="flex:1;">
                             <button class="btn btn-sm btn-accent" id="pt-run">${IC.play} ${t('plugins.run')}</button>
@@ -1261,8 +1364,9 @@ function renderScripts(container: HTMLElement) {
             const m = el.dataset.method || 'GET';
             const p = el.dataset.path || '/api/health';
             const rawBody = el.dataset.body;
-            if (m === 'POST' && rawBody) {
-                openSmartQuickTest(m, p, rawBody);
+            const needsOverlay = p.includes(':id') || ((m === 'POST' || m === 'PUT' || m === 'PATCH') && rawBody !== undefined);
+            if (needsOverlay) {
+                openSmartQuickTest(m, p, rawBody || '{}');
             } else {
                 handleQuickTest(m, p);
             }
@@ -1284,22 +1388,34 @@ function renderScripts(container: HTMLElement) {
 
     // Helper: prefill custom tester from endpoint
     function prefillTester(method: string, path: string) {
-        const details = document.getElementById('plug-custom-tester') as HTMLDetailsElement;
+        const details   = document.getElementById('plug-custom-tester') as HTMLDetailsElement;
+        const methodSel = document.getElementById('pt-method') as HTMLSelectElement;
+        const pathInp   = document.getElementById('pt-path')   as HTMLInputElement;
+        const bodyTa    = document.getElementById('pt-body')    as HTMLTextAreaElement;
         if (details) details.open = true;
-        (document.getElementById('pt-method') as HTMLSelectElement).value = method;
-        (document.getElementById('pt-path') as HTMLInputElement).value = path;
+        methodSel.value = method;
+        pathInp.value   = path;
         const bodyHints: Record<string, string> = {
-            '/api/mods/enable':           '{"mod_id": ""}',
-            '/api/mods/disable':          '{"mod_id": ""}',
-            '/api/profiles/activate':     '{"profile_id": ""}',
-            '/api/plugins/compare':       '{"plugin_id": ""}',
-            '/api/plugins/apply':         '{"plugin_id": "", "force_strict": false}',
-            '/api/modpacks/enable':       '{"profile_id": ""}',
-            '/api/modpacks/disable':      '{"profile_id": ""}',
-            '/api/server-repo/connect':   '{"url": "https://", "name": ""}',
+            '/api/mods/enable':           '{\n  "mod_id": ""\n}',
+            '/api/mods/disable':          '{\n  "mod_id": ""\n}',
+            '/api/mods/:id':              '{\n  "name": ""\n}',
+            '/api/profiles/activate':     '{\n  "profile_id": ""\n}',
+            '/api/profiles':              '{\n  "name": "",\n  "game_path": "",\n  "mods_path": "",\n  "backup_path": ""\n}',
+            '/api/profiles/:id':          '{\n  "name": ""\n}',
+            '/api/plugins/compare':       '{\n  "plugin_id": ""\n}',
+            '/api/plugins/apply':         '{\n  "plugin_id": "",\n  "force_strict": false\n}',
+            '/api/modpacks/enable':       '{\n  "modpack_id": ""\n}',
+            '/api/modpacks/disable':      '{\n  "modpack_id": ""\n}',
+            '/api/modpacks/create':       '{\n  "name": "",\n  "profile_id": ""\n}',
+            '/api/server-repo/connect':   '{\n  "url": "https://",\n  "name": ""\n}',
+            '/api/server-repo/sync':      '{\n  "url": "https://",\n  "sync_mode": "all"\n}',
+            '/api/server-repo/host':      '{\n  "mods_path": "",\n  "host_secret": "",\n  "port": 8765,\n  "name": ""\n}',
+            '/api/restart':               '',
         };
-        if (method === 'POST') (document.getElementById('pt-body') as HTMLTextAreaElement).value = bodyHints[path] || '';
+        bodyTa.value = (method !== 'GET' && method !== 'DELETE') ? (bodyHints[path] ?? '') : '';
         details.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        details.classList.add('plug-tester-highlight');
+        setTimeout(() => details.classList.remove('plug-tester-highlight'), 900);
     }
 
     // ── Endpoint area click handler — stored to prevent accumulation on re-render ──
@@ -1318,33 +1434,24 @@ function renderScripts(container: HTMLElement) {
             }
             return;
         }
-        // Test button (from endpoint "Try it" callout or QT row) → run test directly
-        const testBtn = tgt.closest('.plug-ep-test-btn') as HTMLElement | null;
-        if (testBtn) {
+        // Prefill button → fill the custom tester form and scroll to it
+        const prefillBtn = tgt.closest('.plug-ep-prefill-btn') as HTMLElement | null;
+        if (prefillBtn) {
             e.stopPropagation();
-            const method = testBtn.dataset.method || 'GET';
-            const path   = testBtn.dataset.path   || '';
-            if (method === 'POST') {
-                const bodyHints: Record<string, string> = {
-                    '/api/mods/enable':           '{"mod_id":""}',
-                    '/api/mods/disable':          '{"mod_id":""}',
-                    '/api/profiles/activate':     '{"profile_id":""}',
-                    '/api/plugins/compare':       '{"plugin_id":""}',
-                    '/api/plugins/apply':         '{"plugin_id":"","force_strict":false}',
-                    '/api/modpacks/enable':       '{"profile_id":""}',
-                    '/api/modpacks/disable':      '{"profile_id":""}',
-                    '/api/server-repo/connect':   '{"url":"","name":""}',
-                };
-                openSmartQuickTest('POST', path, bodyHints[path] || '{}');
-            } else {
-                // For GET: scroll QT result into view and run
-                document.getElementById('plug-qt-result')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                handleQuickTest(method, path);
-            }
+            prefillTester(prefillBtn.dataset.method || 'GET', prefillBtn.dataset.path || '');
             return;
         }
         // Copy URL button (handled by its own listener below)
         if (tgt.closest('.plug-ep-copy-btn')) return;
+        // Copy response body button
+        const copyRespBtn = tgt.closest('.plug-ep-copy-resp-btn') as HTMLElement | null;
+        if (copyRespBtn) {
+            e.stopPropagation();
+            const body = copyRespBtn.dataset.body || '';
+            navigator.clipboard.writeText(body).catch(() => {});
+            toast(t('plugins.epCopyDone'), 'success');
+            return;
+        }
         // Copy code button
         const copyCodeBtn = tgt.closest('.plug-ep-copy-code-btn') as HTMLElement | null;
         if (copyCodeBtn) {
@@ -1392,16 +1499,24 @@ function renderScripts(container: HTMLElement) {
         if (chev) chev.classList.toggle('rotated', !isOpen);
         // Show/hide scroll buttons based on actual overflow
         if (!isOpen) {
-            setTimeout(() => {
+            requestAnimationFrame(() => {
                 const scrollEl = document.getElementById(`epls-${epId}`);
                 if (scrollEl) {
                     const overflows = scrollEl.scrollWidth > scrollEl.clientWidth + 2;
                     scrollEl.closest('.plug-ep-code-tabs')?.classList.toggle('tabs-overflow', overflows);
                 }
-            }, 30);
+            });
         }
     };
     container.addEventListener('click', _scriptClickHandler);
+
+    // Wheel → horizontal scroll on lang tab strips
+    container.addEventListener('wheel', (e: WheelEvent) => {
+        const scrollEl = (e.target as HTMLElement).closest('.plug-ep-lang-tabs-scroll') as HTMLElement | null;
+        if (!scrollEl) return;
+        e.preventDefault();
+        scrollEl.scrollLeft += e.deltaY !== 0 ? e.deltaY : e.deltaX;
+    }, { passive: false });
 
     // Endpoint URL copy buttons (url path copy)
     container.querySelectorAll('.plug-ep-copy-btn').forEach(btn => {
@@ -1677,7 +1792,11 @@ function _ps1Ex(ep: EndpointDef): string {
 }
 
 function buildEndpointRow(ep: EndpointDef): string {
-    const cls = ep.method === 'GET' ? 'plug-method-get' : 'plug-method-post';
+    const methodCls: Record<string, string> = {
+        GET: 'plug-method-get', POST: 'plug-method-post',
+        PUT: 'plug-method-put', DELETE: 'plug-method-delete', PATCH: 'plug-method-patch',
+    };
+    const cls = methodCls[ep.method] || 'plug-method-get';
     const safeId = ep.path.replace(/\//g, '_').replace(/^_/, '');
 
     const fieldsHtml = ep.fields ? `
@@ -1688,7 +1807,7 @@ function buildEndpointRow(ep: EndpointDef): string {
                 <thead><tr><th>Field</th><th>Type</th><th></th><th>Description</th></tr></thead>
                 <tbody>
                     ${ep.fields.map(f => `<tr>
-                        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0;"><code class="plug-ep-fname" title="${escHtml(f.name)}">${escHtml(f.name)}</code></td>
+                        <td style="white-space:nowrap;min-width:80px;"><code class="plug-ep-fname" title="${escHtml(f.name)}">${escHtml(f.name)}</code></td>
                         <td style="white-space:nowrap;"><span class="plug-type-tag plug-type-${f.type}">${f.type}</span></td>
                         <td style="text-align:center;">${f.required ? '<span class="plug-req-star">*</span>' : '<span style="color:var(--text-muted)">—</span>'}</td>
                         <td class="plug-ep-fdesc">${escHtml(f.desc)}</td>
@@ -1709,6 +1828,7 @@ function buildEndpointRow(ep: EndpointDef): string {
                 <span class="plug-resp-code ${scls}">${s.code}</span>
                 <span class="plug-resp-label">${escHtml(s.label)}</span>
                 ${codeNote ? `<span class="plug-resp-note">${codeNote}</span>` : ''}
+                <button class="btn btn-xs btn-ghost plug-ep-copy-resp-btn" data-body="${escHtml(s.body)}" data-tooltip="${t('plugins.epCopy')}" style="margin-left:auto;">${IC.copy}</button>
             </summary>
             <pre class="plug-ep-resp-body plug-code-pre">${hlJson(s.body)}</pre>
         </details>`;
@@ -1730,7 +1850,7 @@ function buildEndpointRow(ep: EndpointDef): string {
                 <code class="plug-path">${ep.path}</code>
                 <span class="plug-endpoint-desc">${ep.desc}</span>
                 <div class="plug-ep-row-actions">
-                    <button class="btn btn-xs btn-ghost plug-ep-test-btn" data-method="${ep.method}" data-path="${ep.path}" data-tooltip="${t('plugins.clickToTest')}">${IC.play}</button>
+                    <button class="btn btn-xs btn-ghost plug-ep-prefill-btn" data-method="${ep.method}" data-path="${ep.path}" data-tooltip="Préremplir la requête personnalisée">${IC.terminal}</button>
                     <button class="btn btn-xs btn-ghost plug-ep-copy-btn" data-copy="${ep.path}" data-tooltip="${t('plugins.epCopy')}">${IC.copy}</button>
                     ${ep.auth ? `<span class="plug-auth-badge" data-tooltip="${t('plugins.requiresToken')}">${IC.lock}</span>` : ''}
                 </div>
@@ -1744,21 +1864,10 @@ function buildEndpointRow(ep: EndpointDef): string {
                 <div class="plug-ep-swagger-right">
                     <div class="plug-ep-code-notice">${t('plugins.epCodeNotice')}</div>
                     <div class="plug-ep-code-tabs" data-epid="${safeId}">
-                        <button class="plug-ep-scroll-btn" data-scroll="left" data-epid="${safeId}" aria-label="scroll left">&#8249;</button>
                         <div class="plug-ep-lang-tabs-scroll" id="epls-${safeId}">
                             <button class="plug-ep-code-tab active" data-lang="curl">cURL</button>
                             <button class="plug-ep-code-tab" data-lang="ps1">PS1</button>
-                            <button class="plug-ep-code-tab" data-lang="js">JS</button>
-                            <button class="plug-ep-code-tab" data-lang="python">Python</button>
-                            <button class="plug-ep-code-tab" data-lang="lua">Lua</button>
-                            <button class="plug-ep-code-tab" data-lang="go">Go</button>
-                            <button class="plug-ep-code-tab" data-lang="rust">Rust</button>
-                            <button class="plug-ep-code-tab" data-lang="java">Java</button>
-                            <button class="plug-ep-code-tab" data-lang="cs">C#</button>
-                            <button class="plug-ep-code-tab" data-lang="php">PHP</button>
-                            <button class="plug-ep-code-tab" data-lang="ruby">Ruby</button>
                         </div>
-                        <button class="plug-ep-scroll-btn" data-scroll="right" data-epid="${safeId}" aria-label="scroll right">&#8250;</button>
                         <button class="btn btn-xs btn-ghost plug-ep-copy-code-btn" data-epid="${safeId}" data-tooltip="${t('plugins.epCopy')}">${IC.copy}</button>
                     </div>
                     <pre class="plug-ep-code-block" id="epc-${safeId}">${hlCode(curlRaw, 'curl')}</pre>
@@ -1771,95 +1880,308 @@ function buildEndpointRow(ep: EndpointDef): string {
         </div>`;
 }
 
-function getEndpointDefs(): EndpointDef[] {
-    const e401 = { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' };
-    const e404 = { code: 404, label: 'Not Found', body: '{ "error": "Not found" }' };
-    const e400 = { code: 400, label: 'Bad Request', body: '{ "error": "..." }' };
+// ── Deep Link definitions ───────────────────────────────────────────────────
+
+interface DeepLinkDef {
+    scheme: string;        // e.g. "mod/enable"
+    params: { name: string; required: boolean; desc: string }[];
+    desc: string;
+    about: string;
+    example: string;       // full bmm:// example
+}
+
+function getDeepLinkDefs(): DeepLinkDef[] {
     return [
         {
+            scheme: 'mod/enable',
+            params: [{ name: 'id', required: true, desc: 'ID du mod à activer (UUID ou nom de dossier).' }],
+            desc: 'Activer un mod',
+            about: 'Active un mod spécifique dans le profil actif. BMM doit être en cours d\'exécution. Fonctionne depuis un .bat, un script ou n\'importe quelle application.',
+            example: 'bmm://mod/enable?id=my-mod-folder',
+        },
+        {
+            scheme: 'mod/disable',
+            params: [{ name: 'id', required: true, desc: 'ID du mod à désactiver.' }],
+            desc: 'Désactiver un mod',
+            about: 'Désactive un mod spécifique dans le profil actif.',
+            example: 'bmm://mod/disable?id=my-mod-folder',
+        },
+        {
+            scheme: 'profile/activate',
+            params: [{ name: 'id', required: true, desc: 'UUID du profil à activer.' }],
+            desc: 'Activer un profil',
+            about: 'Bascule le profil actif de BMM. Les mods du profil cible sont chargés automatiquement.',
+            example: 'bmm://profile/activate?id=prof-uuid',
+        },
+        {
+            scheme: 'plugin/activate',
+            params: [{ name: 'id', required: true, desc: 'ID du plugin à appliquer (champ "id" dans plugin.json).' }],
+            desc: 'Appliquer un plugin',
+            about: 'Applique la modlist du plugin : active les mods requis et (si strict:true) désactive les autres.',
+            example: 'bmm://plugin/activate?id=my-server-pack',
+        },
+        {
+            scheme: 'plugin/compare',
+            params: [{ name: 'id', required: true, desc: 'ID du plugin à comparer.' }],
+            desc: 'Comparer un plugin',
+            about: 'Ouvre le panneau de comparaison entre la modlist du plugin et les mods actuellement actifs.',
+            example: 'bmm://plugin/compare?id=my-server-pack',
+        },
+        {
+            scheme: 'modpack/enable',
+            params: [{ name: 'id', required: true, desc: 'ID du modpack (LocalModpack.id).' }],
+            desc: 'Activer un modpack',
+            about: 'Active tous les mods appartenant au modpack spécifié dans le profil courant.',
+            example: 'bmm://modpack/enable?id=modpack-uuid',
+        },
+        {
+            scheme: 'modpack/disable',
+            params: [{ name: 'id', required: true, desc: 'ID du modpack.' }],
+            desc: 'Désactiver un modpack',
+            about: 'Désactive tous les mods appartenant au modpack spécifié.',
+            example: 'bmm://modpack/disable?id=modpack-uuid',
+        },
+        {
+            scheme: 'install',
+            params: [
+                { name: 'url',  required: true,  desc: 'URL directe vers le fichier du mod à installer.' },
+                { name: 'name', required: false, desc: 'Nom affiché dans BMM après l\'installation.' },
+            ],
+            desc: 'Installer un mod depuis une URL',
+            about: 'Déclenche le téléchargement et l\'installation d\'un mod directement depuis une URL externe. BMM ouvre la boîte de dialogue d\'installation.',
+            example: 'bmm://install?url=https://example.com/mod.zip&name=MyMod',
+        },
+    ];
+}
+
+function buildDeepLinkRow(dl: DeepLinkDef): string {
+    const safeId = 'dl_' + dl.scheme.replace(/\//g, '_');
+    const fullUrl = `bmm://${dl.scheme}`;
+    const paramsHtml = dl.params.length ? `
+        <div class="plug-ep-fields" style="margin-top:10px;">
+            <div class="plug-ep-section-lbl">Paramètres URL (query string)</div>
+            <table class="plug-ep-fields-table">
+                <colgroup><col class="col-field"><col class="col-type"><col class="col-req"><col class="col-desc"></colgroup>
+                <thead><tr><th>Paramètre</th><th>Type</th><th></th><th>Description</th></tr></thead>
+                <tbody>
+                    ${dl.params.map(p => `<tr>
+                        <td style="white-space:nowrap;min-width:80px;"><code class="plug-ep-fname">${escHtml(p.name)}</code></td>
+                        <td><span class="plug-type-tag plug-type-string">string</span></td>
+                        <td style="text-align:center;">${p.required ? '<span class="plug-req-star">*</span>' : '<span style="color:var(--text-muted)">—</span>'}</td>
+                        <td class="plug-ep-fdesc">${escHtml(p.desc)}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>` : '';
+
+    const batExample = `REM ${dl.desc}\nstart "" "${dl.example}"`;
+    const ps1Example = `# ${dl.desc}\nStart-Process "${dl.example}"`;
+
+    return `
+        <div class="plug-ep-wrap" id="${safeId}">
+            <div class="plug-endpoint-row" data-method="DL" data-path="${escHtml(fullUrl)}">
+                <button class="plug-ep-chevron" id="epchev-${safeId}" aria-label="expand">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <span class="plug-method" style="background:rgba(139,92,246,0.15);color:#a78bfa;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:700;white-space:nowrap;">bmm://</span>
+                <code class="plug-path">${escHtml(fullUrl)}</code>
+                <span class="plug-endpoint-desc">${escHtml(dl.desc)}</span>
+                <div class="plug-ep-row-actions">
+                    <button class="btn btn-xs btn-ghost plug-dl-open-btn" data-url="${escHtml(dl.example)}" data-tooltip="Ouvrir ce deep link">${IC.play}</button>
+                    <button class="btn btn-xs btn-ghost plug-ep-copy-btn" data-copy="${escHtml(dl.example)}" data-tooltip="Copier l'URL">${IC.copy}</button>
+                    <span class="plug-ep-noauth-note" style="font-size:10px;">${IC.checkCircle} Sans auth</span>
+                </div>
+            </div>
+            <div class="plug-ep-detail" id="epd-${safeId}" style="display:none;padding:12px 16px 14px;gap:16px;display:none;flex-direction:row;">
+                <div style="flex:1;min-width:0;">
+                    <p class="plug-ep-about">${escHtml(dl.about)}</p>
+                    ${paramsHtml}
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <div class="plug-ep-section-lbl">Exemple .bat</div>
+                    <pre class="plug-ep-code-block" style="margin-bottom:8px;">${escHtml(batExample)}</pre>
+                    <div class="plug-ep-section-lbl">Exemple PowerShell</div>
+                    <pre class="plug-ep-code-block">${escHtml(ps1Example)}</pre>
+                </div>
+            </div>
+        </div>`;
+}
+
+function getEndpointDefs(): EndpointDef[] {
+    const e401 = { code: 401, label: 'Unauthorized',  body: '{ "error": "Unauthorized" }' };
+    const e404 = { code: 404, label: 'Not Found',      body: '{ "error": "Not found" }' };
+    const e400 = { code: 400, label: 'Bad Request',    body: '{ "error": "Invalid or missing fields" }' };
+    const e500 = { code: 500, label: 'Server Error',   body: '{ "error": "Internal server error" }' };
+    return [
+        // ── System ──────────────────────────────────────────────────────────
+        {
             method: 'GET', path: '/api/health', auth: false,
-            desc: t('plugins.endpointHealth'), about: t('plugins.epAboutHealth'),
+            desc: t('plugins.endpointHealth'), about: 'Lightweight liveness probe — no auth needed. Use this to verify the BMM API server is running.',
             fields: null,
             responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "service": "BMM Plugin API", "port": 51274 }' }],
         },
         {
             method: 'GET', path: '/api/status', auth: false,
-            desc: t('plugins.endpointStatus'), about: t('plugins.epAboutStatus'),
+            desc: t('plugins.endpointStatus'), about: 'Returns the application version, active profile, and aggregate counts for mods/profiles/plugins.',
             fields: null,
-            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "version": "1.0.0", "active_profile": { "id": "...", "name": "..." }, "mod_count": 42, "profile_count": 3, "plugin_count": 1 }' }],
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "version": "1.2.0", "active_profile": { "id": "abc", "name": "DCS World" }, "mod_count": 42, "profile_count": 3, "plugin_count": 1 }' }],
         },
         {
-            method: 'GET', path: '/api/mods', auth: false,
-            desc: t('plugins.endpointMods'), about: t('plugins.epAboutMods'),
+            method: 'GET', path: '/api/check-update', auth: false,
+            desc: t('plugins.endpointCheckUpdate') || 'Check for BMM updates',
+            about: 'Fetches the latest release from GitHub and compares it to the running version. Returns whether an update is available and the release URL.',
             fields: null,
-            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "id": "...", "name": "...", "active": true, "enabled": true, "path": "..." }] }' }],
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "current": "1.2.0", "latest": "1.3.0", "has_update": true, "release_url": "https://github.com/FreeProject089/BetterModsManager/releases/latest" }' }],
+        },
+        {
+            method: 'POST', path: '/api/restart', auth: true,
+            desc: t('plugins.endpointRestart') || 'Restart BMM',
+            about: 'Gracefully restarts the BMM application. The process exits and relaunches after a 300 ms delay. The API will become briefly unavailable.',
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "message": "Restarting..." }' },
+                e401,
+            ],
+        },
+        // ── Mods ────────────────────────────────────────────────────────────
+        {
+            method: 'GET', path: '/api/mods', auth: false,
+            desc: t('plugins.endpointMods'), about: 'Returns all mods visible in the active profile, including their enabled/active state and folder path.',
+            fields: null,
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "id": "mod-uuid", "name": "MyMod", "active": true, "enabled": true, "path": "C:/mods/MyMod" }] }' }],
         },
         {
             method: 'GET', path: '/api/mods/active', auth: false,
-            desc: t('plugins.endpointModsActive'), about: t('plugins.epAboutModsActive'),
+            desc: t('plugins.endpointModsActive'), about: 'Shorthand for listing only enabled mods in the active profile.',
             fields: null,
-            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "id": "...", "name": "...", "active": true }] }' }],
-        },
-        {
-            method: 'GET', path: '/api/profiles', auth: false,
-            desc: t('plugins.endpointProfiles'), about: t('plugins.epAboutProfiles'),
-            fields: null,
-            responseStatuses: [{ code: 200, label: 'OK', body: '[{ "id": "...", "name": "...", "active_mods": ["mod-id-1", "mod-id-2"] }]' }],
-        },
-        {
-            method: 'GET', path: '/api/plugins', auth: false,
-            desc: t('plugins.endpointPlugins'), about: t('plugins.epAboutPlugins'),
-            fields: null,
-            responseStatuses: [{ code: 200, label: 'OK', body: '[{ "manifest": { "id": "...", "name": "...", "version": "1.0.0" }, "enabled": true }]' }],
-        },
-        {
-            method: 'GET', path: '/api/creator-id', auth: false,
-            desc: t('plugins.endpointCreatorId'), about: t('plugins.epAboutCreatorId'),
-            fields: null,
-            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "creator_id": "a1b2c3d4e5f6..." }' }],
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "id": "mod-uuid", "name": "MyMod", "active": true }] }' }],
         },
         {
             method: 'POST', path: '/api/mods/enable', auth: true,
-            desc: t('plugins.endpointEnableMod'), about: t('plugins.epAboutEnableMod'),
-            fields: [{ name: 'mod_id', type: 'string', required: true, desc: t('plugins.fieldModId') }],
+            desc: t('plugins.endpointEnableMod'), about: 'Enables a single mod by its ID. Applies to the currently active profile.',
+            fields: [{ name: 'mod_id', type: 'string', required: true, desc: 'UUID of the mod to enable (use GET /api/mods to find IDs).' }],
             responseStatuses: [
-                { code: 200, label: 'OK', body: '{ "ok": true, "mod_id": "your-mod-id" }' },
+                { code: 200, label: 'OK', body: '{ "ok": true, "mod_id": "mod-uuid" }' },
                 e401, e404,
             ],
         },
         {
             method: 'POST', path: '/api/mods/disable', auth: true,
-            desc: t('plugins.endpointDisableMod'), about: t('plugins.epAboutDisableMod'),
-            fields: [{ name: 'mod_id', type: 'string', required: true, desc: t('plugins.fieldModId') }],
+            desc: t('plugins.endpointDisableMod'), about: 'Disables a single mod by its ID. Applies to the currently active profile.',
+            fields: [{ name: 'mod_id', type: 'string', required: true, desc: 'UUID of the mod to disable.' }],
             responseStatuses: [
-                { code: 200, label: 'OK', body: '{ "ok": true, "mod_id": "your-mod-id" }' },
+                { code: 200, label: 'OK', body: '{ "ok": true, "mod_id": "mod-uuid" }' },
                 e401, e404,
+            ],
+        },
+        {
+            method: 'PUT', path: '/api/mods/:id', auth: true,
+            desc: t('plugins.endpointUpdateMod') || 'Update mod metadata',
+            about: 'Partially updates editable metadata fields on a mod. Replace :id in the URL with the mod UUID. All fields are optional — only the fields you send will be updated.',
+            fields: [
+                { name: 'name',        type: 'string', required: false, desc: 'New display name shown in the UI.' },
+                { name: 'version',     type: 'string', required: false, desc: 'Version string, e.g. "1.2.3".' },
+                { name: 'author',      type: 'string', required: false, desc: 'Author or creator name.' },
+                { name: 'description', type: 'string', required: false, desc: 'Short description shown in mod details.' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "mod": { "id": "mod-uuid", "name": "Updated Name" } }' },
+                e400, e401, e404,
+            ],
+        },
+        {
+            method: 'DELETE', path: '/api/mods/:id', auth: true,
+            desc: t('plugins.endpointDeleteMod') || 'Delete a mod',
+            about: 'Permanently removes a mod record from BMM. Replace :id with the mod UUID. This does NOT delete the files on disk — use the UI for full removal.',
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "mod_id": "mod-uuid" }' },
+                e401, e404,
+            ],
+        },
+        // ── Profiles ────────────────────────────────────────────────────────
+        {
+            method: 'GET', path: '/api/profiles', auth: false,
+            desc: t('plugins.endpointProfiles'), about: 'Returns all profiles, including their mod lists. Useful for discovering profile IDs before activating or updating one.',
+            fields: null,
+            responseStatuses: [{ code: 200, label: 'OK', body: '[{ "id": "prof-uuid", "name": "DCS World", "active_mods": ["mod-id-1", "mod-id-2"] }]' }],
+        },
+        {
+            method: 'POST', path: '/api/profiles', auth: true,
+            desc: t('plugins.endpointCreateProfile') || 'Create a profile',
+            about: 'Creates a new mod profile. The profile is not automatically set as active — call POST /api/profiles/activate afterwards if needed.',
+            fields: [
+                { name: 'name',        type: 'string', required: true,  desc: 'Profile display name shown in the sidebar.' },
+                { name: 'game_path',   type: 'string', required: true,  desc: 'Absolute path to the game installation folder.' },
+                { name: 'mods_path',   type: 'string', required: true,  desc: 'Absolute path to the folder where mods are stored.' },
+                { name: 'backup_path', type: 'string', required: true,  desc: 'Absolute path where backup copies are saved.' },
+                { name: 'game_name',   type: 'string', required: false, desc: 'Optional game label, e.g. "DCS World".' },
+                { name: 'color',       type: 'string', required: false, desc: 'Accent color hex, e.g. "#3b82f6". Defaults to blue.' },
+                { name: 'icon',        type: 'string', required: false, desc: 'Icon slug shown next to the profile, e.g. "star".' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "profile": { "id": "prof-uuid", "name": "My Profile" } }' },
+                e400, e401,
             ],
         },
         {
             method: 'POST', path: '/api/profiles/activate', auth: true,
-            desc: t('plugins.endpointActivateProfile'), about: t('plugins.epAboutActivateProfile'),
-            fields: [{ name: 'profile_id', type: 'string', required: true, desc: t('plugins.fieldProfileId') }],
+            desc: t('plugins.endpointActivateProfile'), about: 'Switches the active profile. All subsequent mod operations will operate on the newly active profile.',
+            fields: [{ name: 'profile_id', type: 'string', required: true, desc: 'UUID of the profile to activate (use GET /api/profiles to find IDs).' }],
             responseStatuses: [
-                { code: 200, label: 'OK', body: '{ "ok": true, "profile_id": "your-profile-id" }' },
+                { code: 200, label: 'OK', body: '{ "ok": true, "profile_id": "prof-uuid" }' },
                 e401, e404,
             ],
         },
         {
-            method: 'POST', path: '/api/plugins/compare', auth: true,
-            desc: t('plugins.endpointCompare'), about: t('plugins.epAboutCompare'),
-            fields: [{ name: 'plugin_id', type: 'string', required: true, desc: t('plugins.fieldPluginId') }],
+            method: 'PUT', path: '/api/profiles/:id', auth: true,
+            desc: t('plugins.endpointUpdateProfile') || 'Update a profile',
+            about: 'Partially updates an existing profile. Replace :id with the profile UUID. All fields are optional — only the fields you send will be changed.',
+            fields: [
+                { name: 'name',        type: 'string', required: false, desc: 'New display name.' },
+                { name: 'color',       type: 'string', required: false, desc: 'New accent color hex, e.g. "#ef4444".' },
+                { name: 'icon',        type: 'string', required: false, desc: 'New icon slug.' },
+                { name: 'game_path',   type: 'string', required: false, desc: 'New absolute path to the game folder.' },
+                { name: 'mods_path',   type: 'string', required: false, desc: 'New absolute path to the mods folder.' },
+                { name: 'backup_path', type: 'string', required: false, desc: 'New absolute path to the backup folder.' },
+            ],
             responseStatuses: [
-                { code: 200, label: 'OK', body: '{ "plugin_id": "...", "all_required_active": false, "missing_required": 2, "required": [...], "strict_extra": [...] }' },
+                { code: 200, label: 'OK', body: '{ "ok": true, "profile": { "id": "prof-uuid", "name": "Updated Name" } }' },
+                e400, e401, e404,
+            ],
+        },
+        {
+            method: 'DELETE', path: '/api/profiles/:id', auth: true,
+            desc: t('plugins.endpointDeleteProfile') || 'Delete a profile',
+            about: 'Permanently deletes a profile and removes all mod associations for that profile. Replace :id with the profile UUID. Cannot delete the currently active profile.',
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "profile_id": "prof-uuid" }' },
+                e400, e401, e404,
+            ],
+        },
+        // ── Plugins ─────────────────────────────────────────────────────────
+        {
+            method: 'GET', path: '/api/plugins', auth: false,
+            desc: t('plugins.endpointPlugins'), about: 'Returns all installed BMM plugins with their manifests and enabled state.',
+            fields: null,
+            responseStatuses: [{ code: 200, label: 'OK', body: '[{ "manifest": { "id": "my-plugin", "name": "My Plugin", "version": "1.0.0" }, "enabled": true }]' }],
+        },
+        {
+            method: 'POST', path: '/api/plugins/compare', auth: true,
+            desc: t('plugins.endpointCompare'), about: 'Compares the mods a plugin requires against the currently active mods. Returns which required mods are missing and which extra mods are active.',
+            fields: [{ name: 'plugin_id', type: 'string', required: true, desc: 'ID of the installed plugin to compare against.' }],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "plugin_id": "my-plugin", "all_required_active": false, "missing_required": 2, "required": ["mod-a", "mod-b"], "strict_extra": ["mod-c"] }' },
                 e401, e404,
             ],
         },
         {
             method: 'POST', path: '/api/plugins/apply', auth: true,
-            desc: t('plugins.endpointApply'), about: t('plugins.epAboutApply'),
+            desc: t('plugins.endpointApply'), about: 'Enables all mods required by a plugin. Optionally disable mods not in the plugin\'s list (strict mode). Returns a count of enabled mods and any IDs that were not found.',
             fields: [
-                { name: 'plugin_id', type: 'string', required: true, desc: t('plugins.fieldPluginId') },
-                { name: 'force_strict', type: 'boolean', required: false, desc: t('plugins.fieldForceStrict') },
+                { name: 'plugin_id',    type: 'string',  required: true,  desc: 'ID of the installed plugin to apply.' },
+                { name: 'force_strict', type: 'boolean', required: false, desc: 'If true, disables mods not in the plugin list. Default: false.' },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "enabled": 3, "not_found": [], "strict": false }' },
@@ -1867,32 +2189,109 @@ function getEndpointDefs(): EndpointDef[] {
             ],
         },
         {
+            method: 'GET', path: '/api/creator-id', auth: false,
+            desc: t('plugins.endpointCreatorId'), about: 'Returns the unique creator ID generated for this BMM installation. Used as the publisher identifier when exporting plugins.',
+            fields: null,
+            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "creator_id": "a1b2c3d4e5f6..." }' }],
+        },
+        // ── Modpacks ────────────────────────────────────────────────────────
+        {
             method: 'POST', path: '/api/modpacks/enable', auth: true,
-            desc: t('plugins.endpointEnableModpack'), about: t('plugins.epAboutEnableModpack'),
-            fields: [{ name: 'profile_id', type: 'string', required: true, desc: t('plugins.fieldModpackProfileId') }],
+            desc: t('plugins.endpointEnableModpack'), about: 'Enables all mods associated with the given modpack. Useful for one-click activation of an entire preset.',
+            fields: [{ name: 'modpack_id', type: 'string', required: true, desc: 'UUID of the LocalModpack to enable all mods for.' }],
             responseStatuses: [
-                { code: 200, label: 'OK', body: '{ "ok": true, "profile_id": "your-profile-id", "enabled_count": 5 }' },
+                { code: 200, label: 'OK', body: '{ "ok": true, "modpack_id": "mp-uuid", "enabled_count": 5 }' },
                 e401, e404,
             ],
         },
         {
             method: 'POST', path: '/api/modpacks/disable', auth: true,
-            desc: t('plugins.endpointDisableModpack'), about: t('plugins.epAboutDisableModpack'),
-            fields: [{ name: 'profile_id', type: 'string', required: true, desc: t('plugins.fieldModpackProfileId') }],
+            desc: t('plugins.endpointDisableModpack'), about: 'Disables all mods associated with the given modpack.',
+            fields: [{ name: 'modpack_id', type: 'string', required: true, desc: 'UUID of the LocalModpack to disable all mods for.' }],
             responseStatuses: [
-                { code: 200, label: 'OK', body: '{ "ok": true, "profile_id": "your-profile-id", "disabled_count": 5 }' },
+                { code: 200, label: 'OK', body: '{ "ok": true, "modpack_id": "mp-uuid", "disabled_count": 5 }' },
                 e401, e404,
             ],
         },
+        // ── Server Repo ─────────────────────────────────────────────────────
         {
             method: 'POST', path: '/api/server-repo/connect', auth: true,
-            desc: t('plugins.endpointServerRepoConnect'), about: t('plugins.epAboutServerRepoConnect'),
+            desc: t('plugins.endpointServerRepoConnect'), about: 'Registers a remote server repository URL in BMM settings. Once connected, you can sync mods from the repo via the Sync tab or the /api/server-repo/sync endpoint.',
             fields: [
-                { name: 'url', type: 'string', required: true, desc: t('plugins.fieldServerRepoUrl') },
-                { name: 'name', type: 'string', required: false, desc: t('plugins.fieldServerRepoName') },
+                { name: 'url',  type: 'string', required: true,  desc: 'Base URL of the server repository, e.g. "https://myserver.com/mods".' },
+                { name: 'name', type: 'string', required: false, desc: 'Optional friendly name for the repository.' },
             ],
             responseStatuses: [
-                { code: 200, label: 'OK', body: '{ "ok": true, "url": "https://...", "name": "My Server" }' },
+                { code: 200, label: 'OK', body: '{ "ok": true, "url": "https://myserver.com/mods", "name": "My Server" }' },
+                e400, e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/server-repo/sync', auth: true,
+            desc: t('plugins.endpointServerRepoSync') || 'Sync mods from server repo',
+            about: 'Starts a background download job that fetches mods from a server repository. Large downloads run asynchronously — poll GET /api/status or listen to Tauri events for progress.',
+            fields: [
+                { name: 'url',            type: 'string',  required: true,  desc: 'Base URL of the server repository to sync from.' },
+                { name: 'profile_id',     type: 'string',  required: false, desc: 'Target profile UUID. Defaults to the currently active profile.' },
+                { name: 'sync_mode',      type: 'string',  required: false, desc: '"all" — sync every mod from the repo. "selected" — only the mod IDs listed in mod_ids. Default: "all".' },
+                { name: 'mod_ids',        type: 'array',   required: false, desc: 'Array of mod ID strings to sync when sync_mode is "selected".' },
+                { name: 'download_limit', type: 'number',  required: false, desc: 'Speed cap in KB/s (0 = unlimited). Default: 0.' },
+                { name: 'clean_extras',   type: 'boolean', required: false, desc: 'If true, deletes local mods that are NOT present in the remote repo. Default: false.' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "started": true, "mods_queued": 12, "sync_mode": "all" }' },
+                e400, e401,
+            ],
+        },
+        {
+            method: 'GET', path: '/api/server-repo/list', auth: false,
+            desc: 'List connected server repos',
+            about: 'Returns all server repository URLs that have been connected via POST /api/server-repo/connect. Saved persistently in BMM settings.',
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "url": "https://...", "name": "My Repo" }] }' },
+            ],
+        },
+        {
+            method: 'POST', path: '/api/server-repo/host', auth: true,
+            desc: 'Host a local server repo',
+            about: 'Generates a repo.json from a local mods folder so other BMM clients can sync from it. Requires a special host_secret in addition to the Bearer token. The folder must be served separately (e.g. via a static file server or BMM\'s built-in mini-server).',
+            fields: [
+                { name: 'mods_path',   type: 'string', required: true,  desc: 'Absolute path to the folder containing mod files to expose.' },
+                { name: 'host_secret', type: 'string', required: true,  desc: 'Special authorization secret required to host a repo. Set in BMM settings → Server Repo.' },
+                { name: 'port',        type: 'number', required: false, desc: 'Port for the mini HTTP server (default: 8765).' },
+                { name: 'name',        type: 'string', required: false, desc: 'Friendly name shown to clients connecting to this repo.' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "port": 8765, "mod_count": 5, "repo_json": "C:\\\\mods\\\\repo.json" }' },
+                e400, e401,
+                { code: 403, label: 'Forbidden', body: '{ "error": "host_secret is required to host a server repo" }' },
+            ],
+        },
+        // ── Modpacks (list + create) ─────────────────────────────────────────
+        {
+            method: 'GET', path: '/api/modpacks', auth: false,
+            desc: 'List all modpacks',
+            about: 'Returns all profiles treated as modpacks, including their mod count and metadata. A modpack in BMM is essentially a named profile with a list of mods.',
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "id": "...", "name": "My Pack", "mod_count": 12, "active": true }] }' },
+            ],
+        },
+        {
+            method: 'POST', path: '/api/modpacks/create', auth: true,
+            desc: 'Create a new modpack',
+            about: 'Creates a new modpack (profile snapshot) with a given name. If a source profile_id is provided, the new modpack inherits that profile\'s active mod list. Otherwise it starts empty.',
+            fields: [
+                { name: 'name',        type: 'string', required: true,  desc: 'Display name for the new modpack.' },
+                { name: 'profile_id',  type: 'string', required: false, desc: 'UUID of the source profile to snapshot mods from. Defaults to the active profile.' },
+                { name: 'game_name',   type: 'string', required: false, desc: 'Game name (inherited from source profile if omitted).' },
+                { name: 'game_path',   type: 'string', required: false, desc: 'Absolute path to the game executable (inherited if omitted).' },
+                { name: 'mods_path',   type: 'string', required: false, desc: 'Absolute path to the mods folder (inherited if omitted).' },
+                { name: 'backup_path', type: 'string', required: false, desc: 'Absolute path to the backup folder (inherited if omitted).' },
+            ],
+            responseStatuses: [
+                { code: 201, label: 'Created', body: '{ "ok": true, "modpack_id": "new-uuid", "mod_count": 12 }' },
                 e400, e401,
             ],
         },
@@ -1914,7 +2313,7 @@ async function handleApiTest() {
 
     try {
         const opts: RequestInit = { method, headers: { 'Authorization': `Bearer ${_apiToken}`, 'Content-Type': 'application/json' } };
-        if (method === 'POST' && bodyText) opts.body = bodyText;
+        if ((method === 'POST' || method === 'PUT' || method === 'PATCH') && bodyText) opts.body = bodyText;
         const res = await fetch(`http://127.0.0.1:51274${path}`, opts);
         const json = await res.json().catch(() => null);
         statusBadge.textContent = `${res.status} ${res.statusText}`;
@@ -2757,15 +3156,15 @@ function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: st
     switch (a.action_type) {
         case 'enable_mod':
             return [useDeeplink
-                ? `os.execute('start bmm://enable/${a.target_id}')`
+                ? `os.execute('start bmm://mod/enable?id=${a.target_id}')`
                 : curlPost('/api/mods/enable', `{"mod_id":"${a.target_id}"}`)];
         case 'disable_mod':
             return [useDeeplink
-                ? `os.execute('start bmm://disable/${a.target_id}')`
+                ? `os.execute('start bmm://mod/disable?id=${a.target_id}')`
                 : curlPost('/api/mods/disable', `{"mod_id":"${a.target_id}"}`)];
         case 'activate_profile':
             return [useDeeplink
-                ? `os.execute('start bmm://profile/${a.target_id}')`
+                ? `os.execute('start bmm://profile/activate?id=${a.target_id}')`
                 : curlPost('/api/profiles/activate', `{"profile_id":"${a.target_id}"}`)];
         case 'apply_plugin':
             return [curlPost('/api/plugins/apply', `{"plugin_id":"${a.target_id}","force_strict":false}`)];
@@ -2773,11 +3172,11 @@ function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: st
             return [curlPost('/api/plugins/compare', `{"plugin_id":"${a.target_id}"}`)];
         case 'enable_modpack':
             return [useDeeplink
-                ? `os.execute('start bmm://modpack/enable/${a.target_id}')`
+                ? `os.execute('start bmm://modpack/enable?id=${a.target_id}')`
                 : curlPost('/api/modpacks/enable', `{"profile_id":"${a.target_id}"}`)];
         case 'disable_modpack':
             return [useDeeplink
-                ? `os.execute('start bmm://modpack/disable/${a.target_id}')`
+                ? `os.execute('start bmm://modpack/disable?id=${a.target_id}')`
                 : curlPost('/api/modpacks/disable', `{"profile_id":"${a.target_id}"}`)];
         case 'connect_server_repo':
             return [curlPost('/api/server-repo/connect', `{"url":"${(a.extra?.url||'').replace(/"/g,'\\"')}","name":"${(a.extra?.name||'').replace(/"/g,'\\"')}"}`)];

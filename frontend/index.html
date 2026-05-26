@@ -6266,15 +6266,6 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
                                         <tr><td><code>.bat</code></td><td>Windows CMD</td><td data-i18n="docs.scriptGenFmtBat">Native Windows — no runtime needed</td></tr>
                                         <tr><td><code>.ps1</code></td><td>PowerShell</td><td data-i18n="docs.scriptGenFmtPs1">Requires PowerShell 5+</td></tr>
                                         <tr><td><code>.vbs</code></td><td>VBScript</td><td data-i18n="docs.scriptGenFmtVbs">Legacy Windows scripting</td></tr>
-                                        <tr><td><code>.py</code></td><td>Python 3</td><td data-i18n="docs.scriptGenFmtPy">Requires Python 3 + <code>requests</code></td></tr>
-                                        <tr><td><code>.lua</code></td><td>Lua</td><td data-i18n="docs.scriptGenFmtLua">Requires Lua runtime + curl</td></tr>
-                                        <tr><td><code>.js</code></td><td>Node.js</td><td data-i18n="docs.scriptGenFmtJs">Requires Node.js</td></tr>
-                                        <tr><td><code>.go</code></td><td>Go</td><td data-i18n="docs.scriptGenFmtGo">Requires Go toolchain — uses net/http</td></tr>
-                                        <tr><td><code>.rs</code></td><td>Rust</td><td data-i18n="docs.scriptGenFmtRs">Requires Rust + reqwest crate</td></tr>
-                                        <tr><td><code>.java</code></td><td>Java</td><td data-i18n="docs.scriptGenFmtJava">Requires JDK — uses HttpURLConnection</td></tr>
-                                        <tr><td><code>.cs</code></td><td>C# / .NET</td><td data-i18n="docs.scriptGenFmtCs">Requires .NET 6+ — uses HttpClient</td></tr>
-                                        <tr><td><code>.php</code></td><td>PHP</td><td data-i18n="docs.scriptGenFmtPhp">Requires PHP + curl extension</td></tr>
-                                        <tr><td><code>.rb</code></td><td>Ruby</td><td data-i18n="docs.scriptGenFmtRb">Requires Ruby — uses net/http stdlib</td></tr>
                                     </tbody>
                                 </table>
 
@@ -6303,7 +6294,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
 
                                 <div class="plug-doc-tip">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                    <span data-i18n="docs.scriptGenTip">Python, Lua and Node.js scripts are generated locally in BMM — no Rust backend call. They use the HTTP API (not deep links) for maximum compatibility across platforms.</span>
+                                    <span data-i18n="docs.scriptGenTip">Scripts .bat, .ps1 et .vbs sont générés nativement. Les endpoints sont documentés en cURL et PS1.</span>
                                 </div>
                             </div>
                         </details>

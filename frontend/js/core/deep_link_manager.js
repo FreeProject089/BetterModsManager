@@ -70,18 +70,27 @@ async function handleDeepLink(urlStr) {
                 return;
             }
             const isEnable = action === 'mod/enable';
+            console.log(`[BMM-API] bmm:// ${isEnable ? 'enable' : 'disable'} mod: ${modId}`);
+            const modCard = document.querySelector(`[data-mod-id="${modId}"]`);
+            if (modCard) {
+                modCard.classList.add('mod-api-toggling');
+                setTimeout(() => modCard.classList.remove('mod-api-toggling'), 800);
+            }
             try {
                 if (isEnable) {
                     await invoke('enable_mod', { modId, dependencies: [] });
+                    console.log(`[BMM-API] Mod enabled via deep link: ${modId}`);
                     toast(t('plugins.deepLinkModEnabled', { id: modId }), 'success');
                 }
                 else {
                     await invoke('disable_mod', { modId });
+                    console.log(`[BMM-API] Mod disabled via deep link: ${modId}`);
                     toast(t('plugins.deepLinkModDisabled', { id: modId }), 'success');
                 }
                 await refreshMods(true);
             }
             catch (e) {
+                console.error(`[BMM-API] Failed to ${isEnable ? 'enable' : 'disable'} mod via deep link:`, e);
                 toast(`${t('common.error')}: ${e}`, 'error');
             }
             return;
@@ -93,12 +102,20 @@ async function handleDeepLink(urlStr) {
                 toast(t('plugins.deepLinkMissingId'), 'error');
                 return;
             }
+            console.log(`[BMM-API] bmm:// activate profile: ${profileId}`);
             try {
                 await invoke('set_active_profile', { profileId });
+                console.log(`[BMM-API] Profile activated via deep link: ${profileId}`);
                 toast(t('plugins.deepLinkProfileActivated', { id: profileId }), 'success');
-                window.location.reload();
+                await refreshMods(true);
+                if (window._refreshProfilesFn)
+                    await window._refreshProfilesFn();
+                const sel = document.getElementById('library-profile-select');
+                if (sel)
+                    sel.value = profileId;
             }
             catch (e) {
+                console.error('[BMM-API] Failed to activate profile via deep link:', e);
                 toast(`${t('common.error')}: ${e}`, 'error');
             }
             return;

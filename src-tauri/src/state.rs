@@ -6,6 +6,13 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Instant;
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct ConnectedServerRepo {
+    pub url:  String,
+    #[serde(default)]
+    pub name: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppSettings {
     #[serde(default = "default_lang")]
@@ -54,6 +61,8 @@ pub struct AppSettings {
     pub sound_effects_enabled: bool,
     #[serde(default = "default_sound_volume")]
     pub sound_volume: u32, // 0–100
+    #[serde(default)]
+    pub connected_server_repos: Vec<ConnectedServerRepo>,
 }
 
 impl Default for AppSettings {
@@ -82,6 +91,7 @@ impl Default for AppSettings {
             api_token: default_api_token(),
             sound_effects_enabled: true,
             sound_volume: default_sound_volume(),
+            connected_server_repos: Vec::new(),
         }
     }
 }
@@ -115,6 +125,8 @@ pub struct AppData {
     pub installed_plugins: Vec<crate::models::plugin::InstalledPlugin>,
     #[serde(default)]
     pub plugin_permissions: std::collections::HashMap<String, Vec<String>>,
+    #[serde(default)]
+    pub modpacks: Vec<crate::models::modpack::LocalModpack>,
 }
 
 pub struct AppState {

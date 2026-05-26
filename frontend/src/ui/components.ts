@@ -137,8 +137,19 @@ export function getModCardHTML(mod, ctx) {
                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                         </svg>
-                        <span data-i18n="mod.copyId">${t('mod.copyId')}</span>
-                        <span class="mod-id-badge" style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--text-muted);opacity:0.6;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(mod.id)}</span>
+                        <span>Copy ID</span>
+                        <span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--text-muted);opacity:0.55;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(mod.id.slice(0, 8))}…</span>
+                    </div>
+                    <div class="dropdown-item btn-copy-content-id" data-content-id="${escHtml(mod.content_id || '')}" data-id="${mod.id}"
+                         onmouseenter="window.showTaskyHelp('mod.copyContentIdTip', 'copy')"
+                         onmouseleave="window.hideTaskyHelp()"
+                         style="${!mod.content_id ? 'opacity:0.4;pointer-events:none;' : ''}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        <span>Copy Content ID</span>
+                        <span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--accent);opacity:0.6;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${mod.content_id ? escHtml(mod.content_id.slice(0, 8)) + '…' : 'N/A'}</span>
                     </div>
                 </div>
             </div>
