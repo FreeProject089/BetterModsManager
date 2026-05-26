@@ -3,8 +3,8 @@
     "en": "May 16th 2026",
     "fr": "16 Mai 2026"
   },
-  "art": 80,
-  "code": 80,
+  "art": 85,
+  "code": 87,
   "categories": [
     {
       "name": {
@@ -58,7 +58,7 @@
             "fr": "Refonte Complète de la Doc"
           },
           "status": "progress",
-          "percent": 90
+          "percent": 70
         },
         {
           "label": {
