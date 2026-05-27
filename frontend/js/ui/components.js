@@ -128,7 +128,7 @@ export function getModCardHTML(mod, ctx) {
                     </div>
                     <div class="dropdown-divider"></div>
                     <div class="dropdown-item btn-copy-id" data-id="${mod.id}"
-                         onmouseenter="window.showTaskyHelp('mod.copyIdTip', 'copy')"
+                         onmouseenter="window.showTaskyHelp('mod.copyIdTip', 'icon-copy')"
                          onmouseleave="window.hideTaskyHelp()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5">
                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -138,7 +138,7 @@ export function getModCardHTML(mod, ctx) {
                         <span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--text-muted);opacity:0.55;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(mod.id.slice(0, 8))}…</span>
                     </div>
                     <div class="dropdown-item btn-copy-content-id" data-content-id="${escHtml(mod.content_id || '')}" data-id="${mod.id}"
-                         onmouseenter="window.showTaskyHelp('mod.copyContentIdTip', 'copy')"
+                         onmouseenter="window.showTaskyHelp('mod.copyContentIdTip', 'icon-copy')"
                          onmouseleave="window.hideTaskyHelp()"
                          style="${!mod.content_id ? 'opacity:0.4;pointer-events:none;' : ''}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5">
@@ -150,12 +150,7 @@ export function getModCardHTML(mod, ctx) {
                     </div>
                 </div>
             </div>
-            <button class="btn btn-sm btn-icon btn-copy-id-card" data-id="${mod.id}" title="Copier l'ID du mod" onmouseenter="window.showTaskyHelp('mod.copyIdTip', 'copy')" onmouseleave="window.hideTaskyHelp()" style="background:rgba(255,255,255,0.04);color:var(--text-muted);border:1px solid rgba(255,255,255,0.07);padding:4px 6px;border-radius:6px;cursor:pointer;">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-            </button>
+            
             <button class="btn btn-sm btn-icon btn-edit-mod" onmouseenter="window.showTaskyHelp('mod.editTip', 'edit')" onmouseleave="window.hideTaskyHelp()" data-id="${mod.id}" style="background:rgba(59,130,246,0.15);color:var(--accent);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                     <path d="M12 20h9"/>

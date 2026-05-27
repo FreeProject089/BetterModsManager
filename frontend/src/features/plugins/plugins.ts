@@ -869,22 +869,114 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
 
     // ── Copy cURL button ─────────────────────────────────────────────────────
     overlay.querySelector('#plug-qt-s-copy')?.addEventListener('click', async () => {
-        // Get body: from JSON textarea if present, else from the pre-filled hint body
-        const bodyTa = overlay.querySelector('#plug-qt-s-json') as HTMLTextAreaElement | null;
-        let bodyStr = bodyTa ? bodyTa.value.trim() : (rawBody || '');
-        // For smart forms with no textarea, try to build a representative JSON from visible fields
-        if (!bodyStr && m !== 'GET') bodyStr = '{}';
+        // Build the actual body from form fields (mirrors the Run handler, read-only)
+        let bodyObj: any = null;
+        let resolvedCopyPath = p;
+
+        if (p === '/api/repo/gen') {
+            const profIds   = Array.from(overlay.querySelectorAll<HTMLInputElement>('.plug-qt-host-prof-check:checked')).map(c => c.value);
+            const outputDir = (overlay.querySelector('#plug-qt-s-output-dir')     as HTMLInputElement)?.value?.trim() || '';
+            const author    = (overlay.querySelector('#plug-qt-s-author-name')    as HTMLInputElement)?.value?.trim() || '';
+            const seed      = (overlay.querySelector('#plug-qt-s-seed')           as HTMLInputElement)?.value?.trim();
+            const genServer = (overlay.querySelector('#plug-qt-s-gen-server')     as HTMLInputElement)?.checked || false;
+            const zipOutput = (overlay.querySelector('#plug-qt-s-zip-output')     as HTMLInputElement)?.checked || false;
+            const useCf     = (overlay.querySelector('#plug-qt-s-use-cf')         as HTMLInputElement)?.checked || false;
+            const useUpnp   = (overlay.querySelector('#plug-qt-s-use-upnp')       as HTMLInputElement)?.checked || false;
+            const useDocker = (overlay.querySelector('#plug-qt-s-use-docker')     as HTMLInputElement)?.checked || false;
+            const dockerOs  = (overlay.querySelector('#plug-qt-s-docker-os')      as HTMLSelectElement)?.value || 'linux';
+            const srvVer    = (overlay.querySelector('#plug-qt-s-server-version') as HTMLSelectElement)?.value || 'std';
+            const autoStart = (overlay.querySelector('#plug-qt-s-auto-start')     as HTMLInputElement)?.checked || false;
+            const portStr   = (overlay.querySelector('#plug-qt-s-port')           as HTMLInputElement)?.value?.trim();
+            const ulStr     = (overlay.querySelector('#plug-qt-s-upload-limit')   as HTMLInputElement)?.value?.trim();
+            const adminPw   = (overlay.querySelector('#plug-qt-s-admin-pw')       as HTMLInputElement)?.value?.trim();
+            bodyObj = { profileIds: profIds, outputDir, authorName: author, generateServer: genServer || zipOutput, zipOutput, useCloudflare: useCf, useUpnp, autoStart };
+            if (seed)    bodyObj.seed          = seed;
+            if (portStr) bodyObj.port          = parseInt(portStr, 10) || 8080;
+            if (ulStr)   bodyObj.uploadLimit   = parseInt(ulStr, 10) || 0;
+            if (adminPw) bodyObj.adminPassword = adminPw;
+            if (useDocker) { bodyObj.useDocker = true; bodyObj.dockerOs = dockerOs; bodyObj.serverVersion = srvVer; }
+
+        } else if (p === '/api/repo/sync') {
+            const profIds = Array.from(overlay.querySelectorAll<HTMLInputElement>('.plug-qt-sync-prof-check:checked')).map(c => c.value);
+            bodyObj = {
+                url:          (overlay.querySelector('#plug-qt-s-repo-url')    as HTMLInputElement)?.value?.trim() || '',
+                gameDir:      (overlay.querySelector('#plug-qt-s-game-dir')    as HTMLInputElement)?.value?.trim() || '',
+                modsDir:      (overlay.querySelector('#plug-qt-s-mods-dir')    as HTMLInputElement)?.value?.trim() || '',
+                backupDir:    (overlay.querySelector('#plug-qt-s-backup-dir')  as HTMLInputElement)?.value?.trim() || '',
+                overwriteAll: (overlay.querySelector('#plug-qt-s-sync-mode')   as HTMLSelectElement)?.value === 'all',
+                deleteExtra:  (overlay.querySelector('#plug-qt-s-delete-extra') as HTMLInputElement)?.checked || false,
+                downloadLimit: parseInt((overlay.querySelector('#plug-qt-s-dl-limit') as HTMLInputElement)?.value || '0', 10) || 0,
+            };
+            if (profIds.length) bodyObj.choices = profIds.map(pid => ({ repoProfileId: pid }));
+
+        } else if (p === '/api/repo/host') {
+            bodyObj = {
+                serveDir:    (overlay.querySelector('#plug-qt-s-serve-dir')          as HTMLInputElement)?.value?.trim() || '',
+                port:        parseInt((overlay.querySelector('#plug-qt-s-http-port') as HTMLInputElement)?.value || '8080', 10),
+                uploadLimit: parseInt((overlay.querySelector('#plug-qt-s-http-upload-limit') as HTMLInputElement)?.value || '0', 10),
+            };
+
+        } else if (p === '/api/modpacks/create') {
+            const name  = (overlay.querySelector('#plug-qt-s-name')            as HTMLInputElement)?.value?.trim() || '';
+            const desc  = (overlay.querySelector('#plug-qt-s-desc')            as HTMLInputElement)?.value?.trim();
+            const game  = (overlay.querySelector('#plug-qt-s-game')            as HTMLInputElement)?.value?.trim();
+            const sr    = (overlay.querySelector('#plug-qt-s-sr-link')         as HTMLInputElement)?.value?.trim();
+            const dep   = (overlay.querySelector('#plug-qt-s-dep-mode')        as HTMLSelectElement)?.value || 'none';
+            const multi = (overlay.querySelector('#plug-qt-s-multi-profile')   as HTMLInputElement)?.checked || false;
+            const skip  = (overlay.querySelector('#plug-qt-s-skip-integrity')  as HTMLInputElement)?.checked || false;
+            const mods  = Array.from(overlay.querySelectorAll<HTMLInputElement>('.plug-qt-mod-check:checked')).map(c => c.value);
+            bodyObj = { name, multi_profile: multi, skip_integrity_check: skip, dependency_mode: dep };
+            if (desc) bodyObj.description = desc;
+            if (game) bodyObj.game_name   = game;
+            if (sr)   bodyObj.sr_link     = sr;
+            if (mods.length) bodyObj.mod_ids = mods;
+
+        } else if (p === '/api/modpacks/:id' && m === 'PUT') {
+            const mpId = (overlay.querySelector('#plug-qt-s-modpack') as HTMLSelectElement)?.value || '';
+            resolvedCopyPath = `/api/modpacks/${mpId}`;
+            bodyObj = {
+                name:                (overlay.querySelector('#plug-qt-s-name')           as HTMLInputElement)?.value?.trim() || '',
+                multi_profile:       (overlay.querySelector('#plug-qt-s-multi-profile')  as HTMLInputElement)?.checked || false,
+                skip_integrity_check:(overlay.querySelector('#plug-qt-s-skip-integrity') as HTMLInputElement)?.checked || false,
+                dependency_mode:     (overlay.querySelector('#plug-qt-s-dep-mode')       as HTMLSelectElement)?.value || 'none',
+            };
+            const desc2 = (overlay.querySelector('#plug-qt-s-description') as HTMLInputElement)?.value?.trim();
+            const gn2   = (overlay.querySelector('#plug-qt-s-game-name')   as HTMLInputElement)?.value?.trim();
+            const sr2   = (overlay.querySelector('#plug-qt-s-sr-link')     as HTMLInputElement)?.value?.trim();
+            const mods2 = Array.from(overlay.querySelectorAll<HTMLInputElement>('.plug-qt-upd-mod-check:checked')).map(c => c.value);
+            if (desc2) bodyObj.description   = desc2;
+            if (gn2)   bodyObj.game_name     = gn2;
+            if (sr2)   bodyObj.sr_link       = sr2;
+            if (mods2.length) bodyObj.mod_ids = mods2;
+
+        } else {
+            // Fallback: read JSON textarea or raw hint
+            const bodyTa = overlay.querySelector('#plug-qt-s-json') as HTMLTextAreaElement | null;
+            const raw = bodyTa ? bodyTa.value.trim() : (rawBody || '');
+            if (raw && raw !== '{}') {
+                try { bodyObj = JSON.parse(raw); } catch { bodyObj = raw; }
+            }
+            // Resolve :param placeholders for simple cases
+            const modId  = (overlay.querySelector('#plug-qt-s-mod')     as HTMLSelectElement)?.value;
+            const profId = (overlay.querySelector('#plug-qt-s-profile')  as HTMLSelectElement)?.value;
+            const mpId2  = (overlay.querySelector('#plug-qt-s-modpack')  as HTMLSelectElement)?.value;
+            if (modId)  resolvedCopyPath = p.replace(':id', modId);
+            if (profId) resolvedCopyPath = p.replace(':id', profId);
+            if (mpId2)  resolvedCopyPath = p.replace(':id', mpId2);
+        }
+
+        const bodyStr = bodyObj != null
+            ? (typeof bodyObj === 'string' ? bodyObj : JSON.stringify(bodyObj, null, 2))
+            : '';
         const authHeader = _apiToken ? ` \\\n  -H "Authorization: Bearer ${_apiToken}"` : '';
         const bodyFlag = (m !== 'GET' && bodyStr && bodyStr !== '{}')
-            ? ` \\\n  -H "Content-Type: application/json" \\\n  -d '${bodyStr.replace(/'/g, "'\\''")}'`
+            ? ` \\\n  -H "Content-Type: application/json" \\\n  -d '${bodyStr.replace(/\n/g, '').replace(/'/g, "'\\''")}'`
             : '';
-        const resolvedP = p.replace(/:([a-zA-Z_]+)/g, '<$1>'); // :id → <id>
-        const curl = `curl -X ${m} "http://127.0.0.1:51274${resolvedP}"${authHeader}${bodyFlag}`;
+        const curl = `curl -X ${m} "http://127.0.0.1:51274${resolvedCopyPath}"${authHeader}${bodyFlag}`;
         try {
             await navigator.clipboard.writeText(curl);
             toast('cURL copié ! 📋', 'success');
         } catch {
-            // Fallback: show in a prompt
             window.prompt('Copiez la commande cURL :', curl);
         }
     });

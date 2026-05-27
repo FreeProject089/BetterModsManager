@@ -432,17 +432,15 @@ export function initRepo() {
                     });
                 }
 
-                // ── Zip output / standalone server — enable server panel ──
-                const needServerPanel = prefill.zipOutput || prefill.generateServer;
-                if (needServerPanel && elements.cbZipEnable) {
+                // ── Zip output — only check the ZIP checkbox if zipOutput is explicitly true ──
+                // generateServer alone (standalone .bat) does NOT produce a zip — it fills the mini server section
+                if (prefill.zipOutput && elements.cbZipEnable) {
                     (elements.cbZipEnable as HTMLInputElement).checked = true;
-                    // Trigger change to reveal the zip/server options panel
                     elements.cbZipEnable.dispatchEvent(new Event('change', { bubbles: true }));
                 }
 
-                // ── Server distribution options ──
-                // These only take effect after the panel is visible (requestAnimationFrame)
-                if (needServerPanel) {
+                // ── Server distribution options (only apply when zip output is active) ──
+                if (prefill.zipOutput) {
                     requestAnimationFrame(() => {
                         // Port
                         if (prefill.port && elements.inputZipPort)
