@@ -865,7 +865,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         </div>
         <div class="plug-ov-footer">
             <button class="btn btn-ghost plug-ov-close-btn">${t('common.cancel')}</button>
-            <button class="btn btn-ghost" id="plug-qt-s-copy" data-tooltip="Copier la requête cURL" style="gap:5px;">${IC.copy} cURL</button>
+            <button class="btn btn-ghost" id="plug-qt-s-copy"  style="gap:5px;">${IC.copy} cURL</button>
             <button class="btn btn-accent" id="plug-qt-s-run">${IC.play} ${t('plugins.run')}</button>
         </div>`);
 
