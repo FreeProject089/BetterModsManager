@@ -1,4 +1,4 @@
-/**
+﻿/**
  * betahub-modals.ts — BetaHub Feedback & Bug Report Modals
  * Manages the UI and submission logic for both BetaHub modals.
  */
@@ -744,7 +744,7 @@ function renderSteps(): void {
                 <textarea class="bh-step-input" placeholder="${t('betahub.stepPlaceholder', { n: String(i + 1) })}" data-step-idx="${i}">${step}</textarea>
             </div>
             ${dynamicSteps.length > 1 ? `
-                <button type="button" class="bh-step-remove" title="${t('common.remove')}" data-remove-step="${i}">
+                <button type="button" class="bh-step-remove" data-tooltip="${t('common.remove')}" data-remove-step="${i}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <path d="M18 6 6 18M6 6l12 12"/>
                     </svg>
@@ -793,7 +793,7 @@ function renderScreenshotList(modal: 'bug' | 'feedback'): void {
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
                 <span style="font-size:10px;opacity:0.6">${formatFileSize(file.size)}</span>
-                <button type="button" class="bh-remove-file-btn" data-remove-ss="${i}" data-modal="${modal}" title="${t('betahub.removeFile')}">✕</button>
+                <button type="button" class="bh-remove-file-btn" data-remove-ss="${i}" data-modal="${modal}" data-tooltip="${t('betahub.removeFile')}">✕</button>
             </div>
         `;
         list.appendChild(item);
@@ -839,7 +839,7 @@ function renderVideoPreview(): void {
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
                     <span style="font-size:10px;opacity:0.6">${formatFileSize(selectedVideo.size)}</span>
-                    <button type="button" class="bh-remove-file-btn" id="bh-bug-video-remove" title="${t('betahub.removeFile')}">✕</button>
+                    <button type="button" class="bh-remove-file-btn" id="bh-bug-video-remove" data-tooltip="${t('betahub.removeFile')}">✕</button>
                 </div>
             </div>
         `;

@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 /**
  * tutorial-hub.ts — Central tutorial hub overlay for BMM.
  *
@@ -79,7 +79,7 @@ function _renderHub(overlay: HTMLElement): void {
                         <p class="tut-hub-subtitle">${t('hub.subtitle')}</p>
                     </div>
                 </div>
-                <button class="tut-hub-close" id="btn-hub-close" title="${t('hub.close')}">
+                <button class="tut-hub-close" id="btn-hub-close" data-tooltip="${t('hub.close')}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
@@ -197,7 +197,7 @@ function _renderTutorialCard(tut: TutorialDef): string {
 
     // Assets badge (clickable)
     const assetsBadge = tut.assets?.length ? `
-        <button class="tut-assets-badge" data-tut-assets="${tut.id}" title="${t('hub.assets.title')}" type="button">
+        <button class="tut-assets-badge" data-tut-assets="${tut.id}" data-tooltip="${t('hub.assets.title')}" type="button">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
             ${tut.assets.length} ${t('hub.assets.count')}
         </button>

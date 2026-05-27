@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 /**
  * components.js — Reusable UI Components and DOM generators
  * Extracts large template literals and DOM manipulations from main controllers.
@@ -185,7 +185,7 @@ export function getModCardHTML(mod, ctx) {
         ${mod.shared_activations && mod.shared_activations.length > 1 ? `
         <div class="mod-shared-info" style="border-left:1px solid var(--border); padding-left:14px; margin-left:8px; align-self:stretch; display:flex; flex-direction:column; justify-content:center; gap:4px; max-width:240px; overflow-y:auto; max-height:80px; scrollbar-width: none;">
             ${mod.shared_activations.map(sa => `
-                <div class="shared-activation-item" style="display:flex; align-items:center; gap:8px; font-size:10.5px; opacity:${sa.active ? '1' : '0.4'}" title="${escAttr(sa.profile_name)}\n${escAttr(sa.game_path)}">
+                <div class="shared-activation-item" style="display:flex; align-items:center; gap:8px; font-size:10.5px; opacity:${sa.active ? '1' : '0.4'}" data-tooltip="${escAttr(sa.profile_name)}\n${escAttr(sa.game_path)}">
                     <div style="width:8px; height:8px; border-radius:50%; background:${sa.active ? 'var(--success)' : 'var(--text-muted)'}; flex-shrink:0; box-shadow:${sa.active ? '0 0 6px var(--success)' : 'none'}"></div>
                     <div style="display:flex; flex-direction:column; min-width:0; flex:1">
                         <span style="font-weight:600; color:${sa.active ? 'var(--text-primary)' : 'var(--text-muted)'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${escHtml(sa.profile_name)}</span>
@@ -343,21 +343,21 @@ export function getModDetailHTML(mod, ctx) {
               <div id="content-id-dot" style="width:6px; height:6px; border-radius:50%; background:currentColor; box-shadow:0 0 6px currentColor; flex-shrink:0"></div>
               ${contentIdLabel}
             </div>
-            <div id="content-id-value" style="font-size:9px; color:var(--text-muted); font-family:var(--font-mono); opacity:0.7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="${mod.content_id || ''}">
+            <div id="content-id-value" style="font-size:9px; color:var(--text-muted); font-family:var(--font-mono); opacity:0.7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" data-tooltip="${mod.content_id || ''}">
               ${hasContentId ? mod.content_id : '—'}
             </div>
             <div id="content-id-hint" style="font-size:9px; color:var(--text-muted); font-style:italic; opacity:0.6">${contentIdHint}</div>
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
             ${hasContentId ? `
-            <button class="btn btn-sm btn-icon btn-copy-content-id" data-content-id="${escHtml(mod.content_id)}" title="Copier le Content ID" style="background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.25);width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 0.15s;">
+            <button class="btn btn-sm btn-icon btn-copy-content-id" data-content-id="${escHtml(mod.content_id)}" data-tooltip="Copier le Content ID" style="background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.25);width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 0.15s;">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
               </svg>
             </button>` : ''}
             ${contentIdStatus === 'missing' || contentIdStatus === 'approximate' ? `
-            <button id="btn-compute-content-id" class="btn btn-sm btn-icon" onclick="window.recalculateModSha('${mod.id}')" title="Compute precise content ID" style="background:rgba(59,130,246,0.15); color:var(--accent); border:1px solid rgba(59,130,246,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
+            <button id="btn-compute-content-id" class="btn btn-sm btn-icon" onclick="window.recalculateModSha('${mod.id}')" data-tooltip="Compute precise content ID" style="background:rgba(59,130,246,0.15); color:var(--accent); border:1px solid rgba(59,130,246,0.2); width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </button>` : ''}
           </div>

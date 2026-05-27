@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 /**
  * tutorial-engine.ts — Step-by-step tutorial runner for BMM.
  *
@@ -261,10 +261,10 @@ function _renderMinimizedPill(): void {
                 <span class="tut-min-title">${t(step.title_key)}</span>
                 <span class="tut-min-sub" style="color:${tut.color}">${t(tut.title_key)} &middot; ${t('hub.step').replace('{current}', String(_stepIndex + 1)).replace('{total}', String(_totalSteps()))}</span>
             </div>
-            <button class="tut-min-restore-btn" id="btn-tut-restore" title="${t('common.resume')}">
+            <button class="tut-min-restore-btn" id="btn-tut-restore" data-tooltip="${t('common.resume')}">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 15 12 8 19 15"/></svg>
             </button>
-            <button class="tut-x-btn" id="btn-tut-close-min" title="${t('hub.close')}">
+            <button class="tut-x-btn" id="btn-tut-close-min" data-tooltip="${t('hub.close')}">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
         </div>
@@ -314,7 +314,7 @@ function _renderStep(): void {
         const isActive = i === _partIndex;
         const isDone   = done === p.steps.length;
         const chipStyle = isActive ? `background:${tut.color}1a;border-color:${tut.color}55;color:${tut.color}` : '';
-        return `<button class="tut-part-chip ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}" data-pi="${i}" title="${t(p.title_key)}" ${chipStyle ? `style="${chipStyle}"` : ''}>
+        return `<button class="tut-part-chip ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}" data-pi="${i}" data-tooltip="${t(p.title_key)}" ${chipStyle ? `style="${chipStyle}"` : ''}>
             ${isDone ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
             <span class="tut-part-chip-label">${t(p.title_key)}</span>
         </button>`;
@@ -325,7 +325,7 @@ function _renderStep(): void {
         const st = getStepStatus(tut.id, part.id, s.id);
         const isCurrent = i === _stepIndex;
         const currentStyle = isCurrent && st.state === 'pending' ? `style="background:${tut.color};box-shadow:0 0 8px ${tut.color}88;outline-color:${tut.color}44"` : '';
-        return `<span class="tut-step-badge tut-badge-${st.state}${isCurrent ? ' current' : ''}" ${currentStyle} title="${t(`hub.badge.${st.state}`)}"></span>`;
+        return `<span class="tut-step-badge tut-badge-${st.state}${isCurrent ? ' current' : ''}" ${currentStyle} data-tooltip="${t(`hub.badge.${st.state}`)}"></span>`;
     }).join('');
 
     /* ── Global progress ── */
@@ -340,7 +340,7 @@ function _renderStep(): void {
     const navHintHtml = step.nav && NAV_LABELS[step.nav] ? `
         <button class="tut-nav-hint" id="btn-tut-nav-hint" data-nav="${step.nav}"
             style="border-color:${tut.color}33;background:${tut.color}0d;cursor:pointer"
-            title="${t('hub.goTo')} ${t(NAV_LABELS[step.nav])}">
+            data-tooltip="${t('hub.goTo')} ${t(NAV_LABELS[step.nav])}">
             ${NAV_ICONS[step.nav] || ''}
             <span class="tut-nav-hint-label">${t('hub.goTo')}</span>
             <strong class="tut-nav-hint-page">${t(NAV_LABELS[step.nav])}</strong>
@@ -377,10 +377,10 @@ function _renderStep(): void {
             </div>
 
             <div class="tut-topbar-right">
-                <button class="tut-min-btn" id="btn-tut-minimize" title="${t('common.minimize')}">
+                <button class="tut-min-btn" id="btn-tut-minimize" data-tooltip="${t('common.minimize')}">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 </button>
-                <button class="tut-x-btn" id="btn-tut-close" title="${t('hub.close')}">
+                <button class="tut-x-btn" id="btn-tut-close" data-tooltip="${t('hub.close')}">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </div>
@@ -426,7 +426,7 @@ function _renderStep(): void {
                     ? `<button class="tut-prev-btn" id="btn-tut-prev">← ${t('hub.prev')}</button>`
                     : `<span></span>`}
                 <div style="display:flex;align-items:center;gap:8px">
-                    <button class="tut-skip-all-btn" id="btn-tut-skip-all" title="${t('tut.skip.title')}">${t('tut.skip')}</button>
+                    <button class="tut-skip-all-btn" id="btn-tut-skip-all" data-tooltip="${t('tut.skip.title')}">${t('tut.skip')}</button>
                     <button class="tut-next-btn" id="btn-tut-next" ${step.action ? 'disabled' : ''} style="background:${tut.color};border-color:${tut.color}">${nextLabel}</button>
                 </div>
             </div>
@@ -561,7 +561,7 @@ function _renderStep(): void {
             if (badgesEl) {
                 badgesEl.innerHTML = part.steps.map((s, i) => {
                     const st = getStepStatus(tut.id, part.id, s.id);
-                    return `<span class="tut-step-badge tut-badge-${st.state}${i === _stepIndex ? ' current' : ''}" title="${t(`hub.badge.${st.state}`)}"></span>`;
+                    return `<span class="tut-step-badge tut-badge-${st.state}${i === _stepIndex ? ' current' : ''}" data-tooltip="${t(`hub.badge.${st.state}`)}"></span>`;
                 }).join('');
             }
 

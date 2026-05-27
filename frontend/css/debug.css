@@ -220,11 +220,12 @@
 
 /* IPC Entries */
 .ipc-entry {
-    padding: 8px 12px;
+    padding: 6px 12px;
     border-bottom: 1px solid rgba(255,255,255,0.02);
     display: grid;
-    grid-template-columns: 1fr 60px 80px;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1.2fr);
     align-items: center;
+    column-gap: 6px;
 }
 
 .ipc-cmd { 
@@ -254,6 +255,22 @@
 .ipc-status.success { color: var(--debug-success); }
 .ipc-status.error { color: var(--debug-error); }
 .ipc-status.pending { color: var(--text-muted); animation: pulse 1s infinite; }
+.ipc-status.info { color: var(--text-muted); }
+
+/* Timeline enhanced entries */
+.timeline-entry { cursor: default; transition: background 0.1s; flex-wrap: wrap; }
+.timeline-entry:hover { background: rgba(255,255,255,0.03); }
+.timeline-entry .ipc-time { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.timeline-expand-btn { font-size: 10px; line-height: 1; color: var(--text-muted); opacity: 0.6; transition: opacity 0.15s; }
+.timeline-expand-btn:hover { opacity: 1; }
+.timeline-detail { font-size: 10px !important; line-height: 1.45 !important; }
+
+/* Sources: line numbers */
+.src-line { line-height: 1.6; }
+.src-line:hover { background: rgba(255,255,255,0.03); }
+.src-gutter { font-size: 10px; }
+.tree-row:hover { background: rgba(255,255,255,0.04); border-radius: 4px; }
+.tree-row.active { background: rgba(59,130,246,0.12); border-radius: 4px; color: var(--debug-accent); }
 
 /* Metrics Footer */
 .debug-footer {

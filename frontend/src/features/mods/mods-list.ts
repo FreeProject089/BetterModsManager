@@ -6,6 +6,7 @@ import { invoke, sendOsNotification } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { updateDiscordStatus } from '../settings/settings.js';
 import { refreshMods, selectMod, closeModDetail } from './mods.js';
+import { registerSingleModOp, unregisterSingleModOp } from './mods-actions.js';
 import { escHtml, escAttr, escJs, truncate } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 
@@ -222,6 +223,10 @@ export function createModCard(mod) {
 
     S.processingMods.add(mod.id);
 
+    // Snapshot the PREVIOUS state so the cancel button can revert it.
+    // At this point toggle.checked is already the NEW desired state.
+    registerSingleModOp(mod.id, !toggle.checked);
+
     // 360° spin animation on the toggle when activating
     if (toggle.checked) {
       const toggleLabel = card.querySelector('.mod-toggle');
@@ -234,7 +239,8 @@ export function createModCard(mod) {
     }
 
     setModLoading(mod.id, true);
-    try {
+
+    try {
       if (toggle.checked) {
         const warningMsg = await invoke('enable_mod', { modId: mod.id, bypassSha: false });
         if (warningMsg && warningMsg.startsWith('WARNING_SPACE|')) {
@@ -323,13 +329,18 @@ export function createModCard(mod) {
         toggle.checked = !toggle.checked;
       }
     } finally {
+      // Unregister from cancel-ops registry immediately
+      unregisterSingleModOp(mod.id);
+      // Start fade-out animation, then clean up state — does NOT block the event handler
       setModLoading(mod.id, false);
-      await new Promise(r => setTimeout(r, 220));
-      S.processingMods.delete(mod.id);
-      // Non-blocking refresh — UI stays interactive while the list reloads
-      refreshMods().then(() => {
-        S.processingMods.forEach((pid: string) => setModLoading(pid, true));
-      });
+      const _mid = mod.id;
+      setTimeout(() => {
+        S.processingMods.delete(_mid);
+        // Non-blocking refresh once animation is done
+        refreshMods().then(() => {
+          S.processingMods.forEach((pid: string) => setModLoading(pid, true));
+        });
+      }, 250);
       updateDiscordStatus();
     }
   });

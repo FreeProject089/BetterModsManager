@@ -173,7 +173,7 @@ export async function renderModDetail(modId) {
                 </span>
                 <span style="font-size:10px;font-family:var(--font-mono);color:var(--text-muted)">${c.file_count} f.</span>
               </div>
-              <div style="font-size:11px;color:var(--text-primary);font-weight:600" title="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</div>
+              <div style="font-size:11px;color:var(--text-primary);font-weight:600" data-tooltip="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</div>
               <div style="font-size:10px;color:var(--text-muted)">${t('mod.profilLabel')}${escHtml(c.other_profile_name)}</div>
             </div>
           `).join('');

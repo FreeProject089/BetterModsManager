@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 /**
  * modlist.js — Mod List Import/Export/Install Logic
  */
@@ -408,7 +408,7 @@ export function renderImportedModlist(modlist) {
                 <div data-i18n="mm.installPath" style="font-size:9px; color:var(--text-muted); text-transform:uppercase; font-weight:700">${t('mm.installPath')}</div>
                 <div style="font-family:var(--font-mono); font-size:11px; color:var(--cyan); white-space:nowrap; overflow:hidden; text-overflow:ellipsis" id="imported-path-hint">${escHtml(modlist.game_path_hint || '—')}</div>
             </div>
-            <button class="btn btn-sm btn-ghost" id="btn-override-import-path" title="Modifier le dossier de destination" style="height:28px; width:28px; border-radius:6px; padding:0; display:flex; align-items:center; justify-content:center">
+            <button class="btn btn-sm btn-ghost" id="btn-override-import-path" data-tooltip="Modifier le dossier de destination" style="height:28px; width:28px; border-radius:6px; padding:0; display:flex; align-items:center; justify-content:center">
                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
             </button>
         </div>
@@ -435,10 +435,10 @@ export function renderImportedModlist(modlist) {
         const hashedFiles = fileEntries.filter(f => f.sha256).length;
         const hashBadge = fileEntries.length === 0 ? '' :
             hashedFiles === fileEntries.length
-                ? `<span style="font-size:9px;font-weight:700;color:#10b981;background:rgba(16,185,129,0.12);padding:2px 6px;border-radius:4px;border:1px solid rgba(16,185,129,0.25);flex-shrink:0;white-space:nowrap" title="${t('mm.hashVerifiedAll')} (${hashedFiles} ${t('mm.hashFiles')})">SHA-256 ✓</span>`
+                ? `<span style="font-size:9px;font-weight:700;color:#10b981;background:rgba(16,185,129,0.12);padding:2px 6px;border-radius:4px;border:1px solid rgba(16,185,129,0.25);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashVerifiedAll')} (${hashedFiles} ${t('mm.hashFiles')})">SHA-256 ✓</span>`
                 : hashedFiles > 0
-                    ? `<span style="font-size:9px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(245,158,11,0.25);flex-shrink:0;white-space:nowrap" title="${t('mm.hashPartial')}">${hashedFiles}/${fileEntries.length} SHA</span>`
-                    : `<span style="font-size:9px;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:2px 6px;border-radius:4px;border:1px solid var(--border);flex-shrink:0;white-space:nowrap" title="${t('mm.hashNone')}">${t('mm.noHashes')}</span>`;
+                    ? `<span style="font-size:9px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(245,158,11,0.25);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashPartial')}">${hashedFiles}/${fileEntries.length} SHA</span>`
+                    : `<span style="font-size:9px;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:2px 6px;border-radius:4px;border:1px solid var(--border);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashNone')}">${t('mm.noHashes')}</span>`;
 
         return `
         <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; flex-direction:column; gap:8px; position:relative; overflow:hidden; ${isAlreadyPresent ? 'opacity: 0.7;' : ''}">
@@ -453,7 +453,7 @@ export function renderImportedModlist(modlist) {
                 ${hashBadge}
             </div>
             <div style="display:flex; align-items:center; gap:8px; flex-shrink:0">
-                <input type="checkbox" class="mm-mod-checkbox" data-index="${idx}" ${isAlreadyPresent ? '' : 'checked'} style="width:18px; height:18px; cursor:pointer; flex-shrink:0" title="${isAlreadyPresent ? t('mm.alreadyPresent') : ''}">
+                <input type="checkbox" class="mm-mod-checkbox" data-index="${idx}" ${isAlreadyPresent ? '' : 'checked'} style="width:18px; height:18px; cursor:pointer; flex-shrink:0" data-tooltip="${isAlreadyPresent ? t('mm.alreadyPresent') : ''}">
             </div>
           </div>
 
@@ -489,22 +489,22 @@ export function renderImportedModlist(modlist) {
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
                 ${t('mm.fileTree').replace('{count}', fileCount)}
                 ${allHashed
-                    ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);font-family:var(--font-sans);letter-spacing:0.03em" title="${t('mm.hashVerifiedAll')}">SHA-256 ✓</span>`
+                    ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);font-family:var(--font-sans);letter-spacing:0.03em" data-tooltip="${t('mm.hashVerifiedAll')}">SHA-256 ✓</span>`
                     : hashedCount > 0
-                        ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);font-family:var(--font-sans)" title="${t('mm.hashPartial')}">${hashedCount}/${fileCount2} SHA-256</span>`
-                        : `<span style="margin-left:4px;font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.04);color:var(--text-muted);border:1px solid var(--border);font-family:var(--font-sans)" title="${t('mm.hashNone')}">${t('mm.noHashes')}</span>`
+                        ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);font-family:var(--font-sans)" data-tooltip="${t('mm.hashPartial')}">${hashedCount}/${fileCount2} SHA-256</span>`
+                        : `<span style="margin-left:4px;font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.04);color:var(--text-muted);border:1px solid var(--border);font-family:var(--font-sans)" data-tooltip="${t('mm.hashNone')}">${t('mm.noHashes')}</span>`
                 }
               </summary>
               <div style="max-height:180px; overflow-y:auto; margin-top:8px; padding:8px; background:rgba(0,0,0,0.2); border-radius:6px; font-size:10.5px; font-family:var(--font-mono); color:var(--text-muted); border:1px solid rgba(255,255,255,0.03)">
                 ${m.file_tree.map(f => `
                     <div style="padding:3px 0; display:flex; align-items:center; gap:6px; border-bottom:1px solid rgba(255,255,255,0.02)">
                         <span style="opacity:0.6">${f.is_directory ? '📁' : '📄'}</span>
-                        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${escAttr(f.relative_path)}">${escHtml(f.relative_path)}</span>
+                        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" data-tooltip="${escAttr(f.relative_path)}">${escHtml(f.relative_path)}</span>
                         ${!f.is_directory ? `<span style="opacity:0.4; font-size:9px; flex-shrink:0">${formatBytes(f.size)}</span>` : ''}
                         ${f.sha256 ? `
                             <span
                                 style="font-size:9px; color:rgba(16,185,129,0.7); flex-shrink:0; cursor:pointer; padding:1px 4px; border-radius:3px; border:1px solid rgba(16,185,129,0.2); background:rgba(16,185,129,0.05); transition:background 0.15s"
-                                title="${escAttr(f.sha256)}"
+                                data-tooltip="${escAttr(f.sha256)}"
                                 onclick="navigator.clipboard.writeText('${escAttr(f.sha256)}').then(()=>{this.style.background='rgba(16,185,129,0.2)';setTimeout(()=>this.style.background='rgba(16,185,129,0.05)',800)})"
                                 onmouseenter="this.style.background='rgba(16,185,129,0.12)'"
                                 onmouseleave="this.style.background='rgba(16,185,129,0.05)'"

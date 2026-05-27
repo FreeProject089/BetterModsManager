@@ -2114,9 +2114,15 @@ body.is-maximized .titlebar-spacer {
     align-items: center;
     gap: 14px;
     flex-wrap: wrap;
-    transition: var(--transition);
+    transition: border-color 0.18s ease,
+                border-left-color 0.18s ease,
+                background-color 0.18s ease,
+                transform 0.15s ease,
+                box-shadow 0.18s ease,
+                opacity 0.18s ease;
     animation: slideIn 0.18s ease;
     overflow: visible !important;
+    will-change: transform, border-left-color, opacity;
 }
 
 @keyframes slideIn {
@@ -3763,6 +3769,8 @@ select.input-field option {
     transition: background 0.2s, box-shadow 0.22s, transform 0.15s, border-color 0.2s;
     position: relative;
     overflow: hidden;
+    /* Never let cards shrink — the list scrolls instead */
+    flex-shrink: 0;
 }
 
 .tut-card::before {
@@ -8487,20 +8495,27 @@ select:focus {
     fill: #f59e0b !important;
 }
 
-/* Virtualization */
-.mod-card { content-visibility: auto; contain-intrinsic-size: auto 60px; }
+/* Virtualization — note: content-visibility removed; it conflicts with
+   smooth toggle transitions and loading overlays */
+/* .mod-card { content-visibility: auto; contain-intrinsic-size: auto 60px; } */
 
 /* Mod Loading Overlay */
 .mod-loading-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(15, 23, 42, 0.6);
+    background: rgba(15, 23, 42, 0.55);
     backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: var(--radius-card);
     z-index: 10;
+    animation: modOverlayIn 0.12s ease forwards;
+}
+@keyframes modOverlayIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 
 @keyframes fadeIn {
@@ -11997,10 +12012,39 @@ option   { background: #131825; color: var(--text-primary); }
     flex-wrap: wrap;
 }
 
-/* ── Tutorial Hub — scroll on small windows ──────────────────────────────── */
-.tut-hub-container {
-    overflow-y: auto;
-    max-height: min(90vh, 100%);
+/* ── Tutorial Hub — inner scroll (preserves shadow) ─────────────────────── */
+/* The overlay stays as a centred flex container — do NOT add overflow to it
+   or the container's box-shadow gets clipped.
+   Fix: give the list min-height:0 so the flex algorithm lets it shrink and
+   the inner overflow-y:auto actually kicks in. */
+.tut-hub-list {
+    min-height: 0; /* critical: without this flex children ignore max-height */
+}
+
+/* ── Mod library — sticky action tab + filter bar ───────────────────────── */
+/* Keep actions and filters always visible without forcing the user to
+   scroll back to the top of the library.
+   The .lib-sticky-header class is toggled by the pin button; when absent,
+   both bars revert to normal document flow. */
+#view-library.lib-sticky-header .lib-actions-tab {
+    position: sticky;
+    top: 0;
+    z-index: 15;
+    background: var(--bg-primary, #0b0f1e);
+    padding-top: 2px;
+}
+#view-library.lib-sticky-header .lib-header-shell {
+    position: sticky;
+    /* ~42px = 6px padding + ~30px button + 6px padding on .view-actions */
+    top: 42px;
+    z-index: 14;
+    background: var(--bg-primary, #0b0f1e);
+}
+/* When sticky is OFF, reset to normal flow */
+#view-library:not(.lib-sticky-header) .lib-actions-tab,
+#view-library:not(.lib-sticky-header) .lib-header-shell {
+    position: relative;
+    background: transparent;
 }
 
 /* ── Security modal — responsive ─────────────────────────────────────────── */
@@ -12017,4 +12061,90 @@ option   { background: #131825; color: var(--text-primary); }
     .security-header { padding: 28px 24px 16px !important; }
     .security-options-list { padding: 0 20px 24px !important; }
     .security-footer { padding: 20px !important; }
+}
+
+/* ── Settings identity card ──────────────────────────────────────────────── */
+.sic-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    margin-bottom: 8px;
+}
+.sic-row:last-child { margin-bottom: 0; }
+.sic-label {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    width: 90px;
+}
+.sic-value {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-primary);
+    word-break: break-all;
+    padding: 5px 10px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 7px;
+    user-select: all;
+    cursor: text;
+    letter-spacing: 0.03em;
+    transition: border-color 0.15s;
+    /* masked by default — JS adds/removes .revealed */
+    filter: blur(6px);
+    pointer-events: none;
+}
+.sic-value.revealed {
+    filter: none;
+    pointer-events: auto;
+}
+.sic-actions {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+}
+.sic-btn {
+    height: 30px;
+    padding: 0 9px;
+    font-size: 11px;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: background 0.15s, color 0.15s;
+}
+.sic-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); }
+.sic-btn.danger:hover { background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239, 68, 68, 0.25); }
+.sic-reveal-btn.is-revealed { color: var(--accent); border-color: rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.07); }
+
+/* Pin / sticky button — compact icon-only style */
+#btn-toggle-lib-sticky {
+    padding: 0 7px;
+    min-width: 30px;
+}
+#btn-toggle-lib-sticky svg {
+    transition: color 0.15s;
+}
+#btn-toggle-lib-sticky.pinned svg {
+    color: var(--accent);
+}
+
+/* Cancel ops button — always visible, inactive state */
+#btn-cancel-mod-ops:disabled {
+    opacity: 0.32;
+    cursor: not-allowed;
+    pointer-events: none;
 }

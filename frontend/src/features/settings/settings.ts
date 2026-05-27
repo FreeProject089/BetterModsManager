@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 /**
  * settings.js — Settings UI (PAT, Discord, Shortcuts, Storage, Language, Tags)
  */
@@ -387,7 +387,7 @@ const _renderStorageModal = async () => {
             <div style="position:relative; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:20px; overflow:hidden;" id="storage-alert-thresholds-block" class="${alertEnabled ? '' : 'config-disabled'}" data-i18n-content="settings.disabledOverlay" data-content="${alertEnabled ? '' : t('settings.disabledOverlay')}">
                 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:${alertEnabled ? '12px' : '0px'}">
                     <div style="font-size:14px; font-weight:700; color:var(--text-primary); position:relative; z-index:60; pointer-events:auto;">${t('storage.alertThresholds')}</div>
-                    <label class="bmm-switch" title="${alertEnabled ? t('settings.disabledOverlay') : t('settings.disabledOverlay')}" style="position:relative; z-index:60; pointer-events:auto;">
+                    <label class="bmm-switch" data-tooltip="${alertEnabled ? t('settings.disabledOverlay') : t('settings.disabledOverlay')}" style="position:relative; z-index:60; pointer-events:auto;">
                         <input type="checkbox" id="chk-alert-enabled" ${alertEnabled ? 'checked' : ''}>
                         <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
                     </label>
@@ -1221,6 +1221,92 @@ window.recalculateAllHashesPrompt = async () => {
     document.getElementById('btn-recalc-x').onclick = cleanup;
 };
 
+// ── Identity & API card ────────────────────────────────────
+async function initSecurityInfoCard() {
+    const elCreatorId  = document.getElementById('sic-creator-id');
+    const elApiToken   = document.getElementById('sic-api-token');
+    const elVersion    = document.getElementById('sic-bmm-version');
+
+    // Load values
+    try {
+        const [creatorId, apiToken] = await Promise.all([
+            invoke('get_creator_id').catch(() => '—'),
+            invoke('get_api_token').catch(() => '—'),
+        ]);
+        if (elCreatorId) elCreatorId.textContent = creatorId as string;
+        if (elApiToken)  elApiToken.textContent  = apiToken as string;
+    } catch (_) {}
+
+    try {
+        const tauri = (window as any).__TAURI__;
+        const version = tauri?.app?.getVersion ? await tauri.app.getVersion() : '—';
+        if (elVersion) elVersion.textContent = `v${version}`;
+    } catch (_) {
+        if (elVersion) elVersion.textContent = '—';
+    }
+
+    // Reveal / hide toggles
+    const _setupReveal = (btnId: string, targetId: string, eyeId: string) => {
+        const btn    = document.getElementById(btnId);
+        const target = document.getElementById(targetId) as HTMLElement | null;
+        const eye    = document.getElementById(eyeId);
+        if (!btn || !target) return;
+
+        let revealed = false;
+        btn.addEventListener('click', () => {
+            revealed = !revealed;
+            target.classList.toggle('revealed', revealed);
+            btn.classList.toggle('is-revealed', revealed);
+            if (eye) {
+                eye.innerHTML = revealed
+                    ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>'
+                    : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+            }
+        });
+    };
+    _setupReveal('btn-sic-reveal-creator', 'sic-creator-id', 'sic-eye-creator');
+    _setupReveal('btn-sic-reveal-token',   'sic-api-token',  'sic-eye-token');
+
+    // Copy helpers
+    const _setupCopy = (btnId: string, sourceId: string) => {
+        document.getElementById(btnId)?.addEventListener('click', async () => {
+            const val = document.getElementById(sourceId)?.textContent || '';
+            try {
+                await navigator.clipboard.writeText(val);
+                toast(t('common.copied') || 'Copié !', 'success');
+            } catch (_) {}
+        });
+    };
+    _setupCopy('btn-sic-copy-creator', 'sic-creator-id');
+    _setupCopy('btn-sic-copy-token',   'sic-api-token');
+    _setupCopy('btn-sic-copy-url',     'sic-api-url');
+
+    // Reset API token
+    document.getElementById('btn-sic-reset-token')?.addEventListener('click', async () => {
+        const ok = await (window as any).confirmCustom(
+            t('settings.identity.resetTokenTitle') || 'Régénérer le token ?',
+            t('settings.identity.resetTokenDesc')  || 'L\'ancien token sera immédiatement révoqué. Tous les plugins utilisant ce token devront être mis à jour.',
+            'danger'
+        ).catch(() => false);
+        if (!ok) return;
+        try {
+            const newToken = await invoke('reset_api_token') as string;
+            if (elApiToken) {
+                elApiToken.textContent = newToken;
+                // Re-hide after reset
+                elApiToken.classList.remove('revealed');
+                const btn = document.getElementById('btn-sic-reveal-token');
+                if (btn) btn.classList.remove('is-revealed');
+                const eye = document.getElementById('sic-eye-token');
+                if (eye) eye.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+            }
+            toast(t('settings.identity.tokenReset') || 'Token régénéré avec succès.', 'success');
+        } catch (err) {
+            toast(t('common.error') + ' : ' + err, 'error');
+        }
+    });
+}
+
 // ── Settings Initializer ──────────────────────────────────
 
 export async function initSettings() {
@@ -1234,6 +1320,7 @@ export async function initSettings() {
     await initLanguageSettings();
     await initSecuritySettings();
     await initLaunchPackSettings();
+    initSecurityInfoCard().catch(() => {});
     
     // Tags Settings
     const btnCreateTag = document.getElementById('btn-create-tag');

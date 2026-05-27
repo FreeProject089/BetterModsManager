@@ -26,7 +26,7 @@
 </head>
 
 <body>
-    <div id="app-mascot-container" title="BETTER MOD MANAGER" data-tauri-drag-region>
+    <div id="app-mascot-container" data-tauri-drag-region>
         <img src="assets/Tasky_Happy.png" id="app-mascot" alt="Mascot" data-tauri-drag-region>
     </div>
 
@@ -663,6 +663,28 @@
                     <!-- Action buttons tab: right-aligned, floats above the filter bar (creates notch shape) -->
                     <div class="lib-actions-tab">
                         <div class="view-actions">
+                            <!-- ── Sticky pin — leftmost, icon-only, always visible ── -->
+                            <button class="btn btn-ghost view-action-util" id="btn-toggle-lib-sticky"
+                                onmouseenter="window.showTaskyHelp('lib.stickyHeaderOff', 'icon-pin')"
+                                onmouseleave="window.hideTaskyHelp()">
+                                <!-- Lucide thumbtack / pin icon -->
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="12" y1="17" x2="12" y2="22"/>
+                                    <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
+                                </svg>
+                            </button>
+                            <div class="view-actions-sep"></div>
+                            <!-- Cancel in-progress ops — always visible, disabled when idle -->
+                            <button class="btn btn-ghost view-action-util" id="btn-cancel-mod-ops"
+                                disabled
+                                onmouseenter="window.showTaskyHelp('lib.cancelOpsTip', 'icon-x')"
+                                onmouseleave="window.hideTaskyHelp()">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                                <span data-i18n="lib.cancelOps">Annuler</span>
+                            </button>
+                            <div class="view-actions-sep"></div>
                             <button class="btn btn-ghost view-action-util" id="btn-show-history"
                                 onmouseenter="window.showTaskyHelp('lib.historyTip', 'icon-history')"
                                 onmouseleave="window.hideTaskyHelp()">
@@ -712,6 +734,7 @@
                                 </svg>
                                 <span data-i18n="modpack.quickApplyTitle">Activer un Modpack</span>
                             </button>
+                            <div class="view-actions-sep"></div>
                             <!-- Enable-all always visible; hover reveals Disable-all panel (no click) -->
                             <div class="enable-hover-wrap" id="enable-all-container">
                                 <button class="btn btn-ghost view-action-util" id="btn-enable-all"
@@ -1780,7 +1803,7 @@
                                         <div style="display:flex;gap:6px;align-items:center;">
                                             <div style="flex:1;font-family:var(--font-mono);font-size:10px;color:#d8b4fe;background:rgba(0,0,0,0.35);padding:7px 11px;border-radius:7px;word-break:break-all;border:1px solid rgba(188,116,255,0.15);letter-spacing:0.04em;user-select:all;cursor:text;"
                                                 id="repo-creator-id-value"
-                                                title="Creator ID — cliquez pour sélectionner tout">
+                                                data-tooltip="Creator ID — cliquez pour sélectionner tout">
                                                 <span style="opacity:0.35;animation:pulse-text 1.5s infinite">…</span>
                                             </div>
                                             <button class="btn btn-ghost btn-sm" id="btn-copy-my-creator-id"
@@ -2454,7 +2477,7 @@
                                         </button>
                                     </div>
                                 </div>
-                                <div class="game-path-display" id="mapper-game-path" title="...">...</div>
+                                <div class="game-path-display" id="mapper-game-path" data-tooltip="...">...</div>
                                 <div class="search-box-mini" style="margin-top: 8px;">
                                     <input type="text" id="mapper-game-search"
                                         placeholder="Filtrer le dossier du jeu..."
@@ -4933,7 +4956,7 @@
                                         <span data-i18n="faq.qIo">À quoi sert le limiteur d'E/S disque ?</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.5"
-                                            style="opacity: 0.5; margin-left: auto;" title="Diagram available">
+                                            style="opacity: 0.5; margin-left: auto;" data-tooltip="Diagram available">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z" />
                                             <path d="M2 17l10 5 10-5" />
                                             <path d="M2 12l10 5 10-5" />
@@ -5055,7 +5078,7 @@
                                             valide ?</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.5"
-                                            style="opacity: 0.5; margin-left: auto;" title="Diagram available">
+                                            style="opacity: 0.5; margin-left: auto;" data-tooltip="Diagram available">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z" />
                                             <path d="M2 17l10 5 10-5" />
                                             <path d="M2 12l10 5 10-5" />
@@ -5097,7 +5120,7 @@
                                         <span data-i18n="faq.qSemantic">Classic vs Semantic Search ?</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.5"
-                                            style="opacity: 0.5; margin-left: auto;" title="Diagram available">
+                                            style="opacity: 0.5; margin-left: auto;" data-tooltip="Diagram available">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z" />
                                             <path d="M2 17l10 5 10-5" />
                                             <path d="M2 12l10 5 10-5" />
@@ -5134,7 +5157,7 @@
                                         <span data-i18n="faq.qDiscord">Discord RPC ?</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.5"
-                                            style="opacity: 0.5; margin-left: auto;" title="Diagram available">
+                                            style="opacity: 0.5; margin-left: auto;" data-tooltip="Diagram available">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z" />
                                             <path d="M2 17l10 5 10-5" />
                                             <path d="M2 12l10 5 10-5" />
@@ -5210,7 +5233,7 @@
                                             ?</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.5"
-                                            style="opacity: 0.5; margin-left: auto;" title="Diagram available">
+                                            style="opacity: 0.5; margin-left: auto;" data-tooltip="Diagram available">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z" />
                                             <path d="M2 17l10 5 10-5" />
                                             <path d="M2 12l10 5 10-5" />
@@ -5694,7 +5717,7 @@
                                         <span data-i18n="faq.q3">Que se passe-t-il si je supprime un mod activé ?</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.5"
-                                            style="opacity: 0.5; margin-left: auto;" title="Diagram available">
+                                            style="opacity: 0.5; margin-left: auto;" data-tooltip="Diagram available">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z" />
                                             <path d="M2 17l10 5 10-5" />
                                             <path d="M2 12l10 5 10-5" />
@@ -5735,7 +5758,7 @@
                                         <span data-i18n="faq.q8">Que se passe-t-il si mon disque est plein ?</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.5"
-                                            style="opacity: 0.5; margin-left: auto;" title="Diagram available">
+                                            style="opacity: 0.5; margin-left: auto;" data-tooltip="Diagram available">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z" />
                                             <path d="M2 17l10 5 10-5" />
                                             <path d="M2 12l10 5 10-5" />
@@ -5829,7 +5852,7 @@
                                         <span data-i18n="faq.qRepo">C'est quoi le Server Repo ?</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.5"
-                                            style="opacity: 0.5; margin-left: auto;" title="Diagram available">
+                                            style="opacity: 0.5; margin-left: auto;" data-tooltip="Diagram available">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z" />
                                             <path d="M2 17l10 5 10-5" />
                                             <path d="M2 12l10 5 10-5" />
@@ -5969,7 +5992,7 @@
                                         <span data-i18n="faq.qThreads">Performance & Threads ?</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.5"
-                                            style="opacity: 0.5; margin-left: auto;" title="Diagram available">
+                                            style="opacity: 0.5; margin-left: auto;" data-tooltip="Diagram available">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z" />
                                             <path d="M2 17l10 5 10-5" />
                                             <path d="M2 12l10 5 10-5" />
@@ -6006,7 +6029,7 @@
                                         <span data-i18n="faq.qJsTs">JS vs TS & Imports .js ?</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.5"
-                                            style="opacity: 0.5; margin-left: auto;" title="Diagram available">
+                                            style="opacity: 0.5; margin-left: auto;" data-tooltip="Diagram available">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z" />
                                             <path d="M2 17l10 5 10-5" />
                                             <path d="M2 12l10 5 10-5" />
@@ -6055,7 +6078,7 @@
                                             ?</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.5"
-                                            style="opacity:0.5;margin-left:auto;" title="Diagram available">
+                                            style="opacity:0.5;margin-left:auto;" data-tooltip="Diagram available">
                                             <path d="M12 2L2 7l10 5 10-5-10-5z" />
                                             <path d="M2 17l10 5 10-5" />
                                             <path d="M2 12l10 5 10-5" />
@@ -7532,6 +7555,93 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
                                 </button>
                             </div>
 
+                        </div>
+
+                        <!-- ── Identity & API card ── -->
+                        <div class="glass-card" id="settings-identity-card" style="margin-bottom:24px; border-left:3px solid rgba(139,92,246,0.5);">
+                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                </svg>
+                                <span data-i18n="settings.identityTitle">Identité &amp; API</span>
+                            </h3>
+                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6" data-i18n="settings.identityDesc">
+                                Vos identifiants importants en un seul endroit. Cliquez sur l'œil pour révéler une valeur.
+                            </p>
+
+                            <!-- Creator ID row -->
+                            <div class="sic-row">
+                                <span class="sic-label" data-i18n="settings.identity.creatorId">Creator ID</span>
+                                <div class="sic-value" id="sic-creator-id">…</div>
+                                <div class="sic-actions">
+                                    <button class="sic-btn sic-reveal-btn" id="btn-sic-reveal-creator" data-target="sic-creator-id"
+                                        onmouseenter="window.showTaskyHelp('settings.identity.revealTip','icon-lock')"
+                                        onmouseleave="window.hideTaskyHelp()">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="sic-eye-creator">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                                        </svg>
+                                    </button>
+                                    <button class="sic-btn" id="btn-sic-copy-creator"
+                                        onmouseenter="window.showTaskyHelp('settings.identity.copyTip','icon-copy')"
+                                        onmouseleave="window.hideTaskyHelp()">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- API Token row -->
+                            <div class="sic-row">
+                                <span class="sic-label" data-i18n="settings.identity.apiToken">Token API</span>
+                                <div class="sic-value" id="sic-api-token">…</div>
+                                <div class="sic-actions">
+                                    <button class="sic-btn sic-reveal-btn" id="btn-sic-reveal-token" data-target="sic-api-token"
+                                        onmouseenter="window.showTaskyHelp('settings.identity.revealTip','icon-lock')"
+                                        onmouseleave="window.hideTaskyHelp()">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="sic-eye-token">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                                        </svg>
+                                    </button>
+                                    <button class="sic-btn" id="btn-sic-copy-token"
+                                        onmouseenter="window.showTaskyHelp('settings.identity.copyTip','icon-copy')"
+                                        onmouseleave="window.hideTaskyHelp()">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                        </svg>
+                                    </button>
+                                    <button class="sic-btn danger" id="btn-sic-reset-token"
+                                        onmouseenter="window.showTaskyHelp('settings.identity.resetTokenTip','icon-warning')"
+                                        onmouseleave="window.hideTaskyHelp()">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- API URL row — always visible, read-only -->
+                            <div class="sic-row">
+                                <span class="sic-label" data-i18n="settings.identity.apiUrl">API URL</span>
+                                <div class="sic-value revealed" id="sic-api-url" style="filter:none;pointer-events:auto;color:var(--cyan);">http://127.0.0.1:51274</div>
+                                <div class="sic-actions">
+                                    <button class="sic-btn" id="btn-sic-copy-url"
+                                        onmouseenter="window.showTaskyHelp('settings.identity.copyTip','icon-copy')"
+                                        onmouseleave="window.hideTaskyHelp()">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- BMM Version row -->
+                            <div class="sic-row">
+                                <span class="sic-label" data-i18n="settings.identity.version">Version</span>
+                                <div class="sic-value revealed" id="sic-bmm-version" style="filter:none;pointer-events:auto;color:var(--text-secondary);">…</div>
+                                <div class="sic-actions"></div>
+                            </div>
                         </div>
 
                         <div class="glass-card">
@@ -10118,6 +10228,51 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
             </div>
         </div>
 
+        <!-- ══ Steam-style App Picker for Launchpack ══ -->
+        <div id="modal-app-picker" class="modal-generic-overlay" onclick="if(event.target===this)this.classList.remove('open')" style="z-index:10010;">
+            <div class="modal glass" style="width:700px;max-width:95vw;max-height:88vh;display:flex;flex-direction:column;">
+                <div class="modal-header" style="padding:18px 24px 14px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                        <div style="font-size:15px;font-weight:800;color:var(--text-bright);" data-i18n="settings.appPicker.title">Ajouter une application</div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;" data-i18n="settings.appPicker.subtitle">Sélectionnez un ou plusieurs programmes à ajouter au Launch Pack.</div>
+                    </div>
+                    <button class="modal-close" onclick="document.getElementById('modal-app-picker').classList.remove('open')" style="position:static;font-size:20px;line-height:1;">&times;</button>
+                </div>
+                <!-- Search -->
+                <div style="padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <input id="app-picker-search" type="text" class="form-input"
+                        data-i18n-placeholder="settings.appPicker.search"
+                        placeholder="Rechercher…"
+                        style="width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);font-size:13px;padding:6px 12px;border-radius:6px;">
+                </div>
+                <!-- List -->
+                <div style="flex:1;overflow-y:auto;padding:0;">
+                    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                        <thead>
+                            <tr style="position:sticky;top:0;background:rgba(15,20,35,0.98);z-index:2;">
+                                <th style="width:28px;padding:8px 10px;"></th>
+                                <th style="width:28px;padding:8px 6px;"></th>
+                                <th style="text-align:left;padding:8px 6px;font-size:10px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;" data-i18n="settings.appPicker.colApp">PROGRAMME ▲</th>
+                                <th style="text-align:left;padding:8px 6px;font-size:10px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;" data-i18n="settings.appPicker.colPath">EMPLACEMENT</th>
+                            </tr>
+                        </thead>
+                        <tbody id="app-picker-list">
+                            <tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted);font-size:12px;">
+                                <span id="app-picker-status" data-i18n="settings.appPicker.loading">Chargement des applications installées…</span>
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Footer -->
+                <div style="padding:12px 20px;border-top:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.15);">
+                    <button class="btn btn-secondary btn-sm" id="app-picker-browse" style="font-size:11px;" data-i18n="settings.appPicker.browse">Parcourir…</button>
+                    <span id="app-picker-sel-count" style="font-size:11px;color:var(--text-muted);flex:1;"></span>
+                    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('modal-app-picker').classList.remove('open')" style="font-size:11px;" data-i18n="settings.appPicker.cancel">Annuler</button>
+                    <button class="btn btn-primary btn-sm" id="app-picker-confirm" disabled style="font-size:11px;" data-i18n="settings.appPicker.confirm">Ajouter la sélection</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal for Launch Packs -->
         <div id="modal-launchpack" class="modal-generic-overlay"
             onclick="if(event.target === this) this.classList.remove('open')">
@@ -10144,9 +10299,15 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
                             <label
                                 style="font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em;"
                                 data-i18n="settings.launchPackApps">APPLICATIONS (.EXE)</label>
-                            <button class="btn btn-ghost btn-xs" id="lp-btn-add-exe"
-                                style="color:var(--accent); font-size:10px;" data-i18n="settings.launchPackPickApps">+
-                                Ajouter</button>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <button class="btn btn-ghost btn-xs" id="lp-btn-detect-exe"
+                                    style="color:var(--text-muted); font-size:10px; gap:4px; display:flex; align-items:center;">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                    Détecter</button>
+                                <button class="btn btn-ghost btn-xs" id="lp-btn-add-exe"
+                                    style="color:var(--accent); font-size:10px;" data-i18n="settings.launchPackPickApps">+
+                                    Ajouter</button>
+                            </div>
                         </div>
                         <div id="lp-exe-list"
                             style="display:flex; flex-direction:column; gap:6px; max-height:150px; overflow-y:auto; padding-right:4px;">

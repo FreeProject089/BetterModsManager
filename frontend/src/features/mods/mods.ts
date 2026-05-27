@@ -18,12 +18,13 @@ import {
   checkAllConflicts, 
   restoreConflictCache 
 } from './mods-conflicts.js';
-import { 
-  openAddModModal, 
-  confirmAddMod, 
-  toggleAllMods, 
-  scanModsFolder, 
-  verifyIntegrity 
+import {
+  openAddModModal,
+  confirmAddMod,
+  toggleAllMods,
+  scanModsFolder,
+  verifyIntegrity,
+  requestCancelModOps
 } from './mods-actions.js';
 import { 
   selectMod, 
@@ -51,7 +52,11 @@ export async function initMods() {
   document.getElementById('btn-scan-mods')?.addEventListener('click', scanModsFolder);
   document.getElementById('btn-verify-integrity')?.addEventListener('click', verifyIntegrity);
   document.getElementById('btn-close-detail')?.addEventListener('click', closeModDetail);
-  
+  document.getElementById('btn-cancel-mod-ops')?.addEventListener('click', requestCancelModOps);
+
+  // ── Sticky header toggle ──────────────────────────────────────────────────
+  _initStickyToggle();
+
   // Add Mod folder picker
   document.getElementById('btn-pick-mod-folder')?.addEventListener('click', async () => {
     try {
@@ -607,6 +612,37 @@ function updateTagFilterUI() {
   }
   select.innerHTML = html;
   select.value = currentVal;
+}
+
+// ── Sticky header toggle ──────────────────────────────────────────────────────
+function _initStickyToggle() {
+  const STORAGE_KEY = 'bmm-lib-sticky';
+  const view  = document.getElementById('view-library');
+  const btn   = document.getElementById('btn-toggle-lib-sticky') as HTMLButtonElement | null;
+  if (!view || !btn) return;
+
+  // Restore persisted preference (default: sticky ON)
+  const stored = localStorage.getItem(STORAGE_KEY);
+  let isSticky = stored === null ? true : stored === '1';
+  _applyStickyState(view, btn, isSticky);
+
+  btn.addEventListener('click', () => {
+    isSticky = !isSticky;
+    localStorage.setItem(STORAGE_KEY, isSticky ? '1' : '0');
+    _applyStickyState(view, btn, isSticky);
+  });
+}
+
+function _applyStickyState(view: HTMLElement, btn: HTMLButtonElement, isSticky: boolean) {
+  view.classList.toggle('lib-sticky-header', isSticky);
+  btn.classList.toggle('pinned', isSticky);
+  btn.style.opacity = isSticky ? '1' : '0.45';
+  btn.style.color   = isSticky ? 'var(--accent)' : '';
+  // Update the onmouseenter so Tasky shows the right label
+  const onEnter = isSticky
+    ? "window.showTaskyHelp('lib.stickyHeaderOn','icon-pin')"
+    : "window.showTaskyHelp('lib.stickyHeaderOff','icon-pin')";
+  btn.setAttribute('onmouseenter', onEnter);
 }
 
 export { selectMod, closeModDetail, renderModDetail };

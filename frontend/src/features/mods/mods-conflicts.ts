@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { appState } from '../../core/state.js';
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
@@ -212,10 +212,10 @@ export async function openGlobalConflictModal(preselectModId = null) {
                    return `
                    <div style="display:flex;align-items:center;background:${statusBg};padding:7px 10px;border-radius:6px;border-left:2px solid ${statusColor};gap:8px">
                      <span style="font-size:11.5px;font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help"
-                           title="${escAttr(r.other_mod_name)}"
+                           data-tooltip="${escAttr(r.other_mod_name)}"
                            onmouseenter="window.showTaskyHelp('${escAttr(escJs(r.other_mod_name))}', 'package', true)"
                            onmouseleave="window.hideTaskyHelp()">${escHtml(r.other_mod_name)}</span>
-                     ${isActive ? `<span style="font-size:10px;background:rgba(255,255,255,0.08);color:var(--text-secondary);padding:1px 6px;border-radius:4px;font-family:var(--font-mono);flex-shrink:0" title="${t('conflict.activationOrder')||'Activation order'}">#${r.activation_order}</span>` : ''}
+                     ${isActive ? `<span style="font-size:10px;background:rgba(255,255,255,0.08);color:var(--text-secondary);padding:1px 6px;border-radius:4px;font-family:var(--font-mono);flex-shrink:0" data-tooltip="${t('conflict.activationOrder')||'Activation order'}">#${r.activation_order}</span>` : ''}
                      <button style="font-size:10px;font-family:var(--font-mono);color:var(--accent);background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);padding:2px 7px;border-radius:5px;cursor:pointer;flex-shrink:0" onclick="window.showConflictContextMenu(event,'${item.sourceModId}','${r.other_mod_id}')">${r.file_count} ${t('conflict.files')||'files'}</button>
                      <span style="font-size:9px;font-weight:900;padding:2px 7px;border-radius:10px;text-transform:uppercase;color:${statusColor};border:1px solid ${statusColor};background:${statusBg};flex-shrink:0">${isActive ? (t('conflict.active')||'ACTIVE') : (t('conflict.potential')||'POTENTIAL')}</span>
                    </div>`;
@@ -230,7 +230,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
              <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--border)">
                <div style="width:6px;height:6px;border-radius:50%;background:${activeCount > 0 ? 'var(--danger)' : 'var(--warning)'};flex-shrink:0;box-shadow:0 0 6px ${activeCount > 0 ? 'var(--danger)' : 'var(--warning)'}"></div>
                <span style="font-weight:700;font-size:12.5px;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help"
-                     title="${escAttr(item.sourceModName)}"
+                     data-tooltip="${escAttr(item.sourceModName)}"
                      onmouseenter="window.showTaskyHelp('${escAttr(escJs(item.sourceModName))}', 'package', true)"
                      onmouseleave="window.hideTaskyHelp()">${escHtml(item.sourceModName)}</span>
                <div style="display:flex;align-items:center;gap:5px">${typeBadges}</div>
@@ -308,7 +308,7 @@ export function showConflictContextMenu(e, mod1Id, mod2Id) {
         container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted)">${t('conflict.noTreeFiles')}</div>`;
         return;
       }
-      container.innerHTML = files.map(f => `<div style="padding:4px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escAttr(f)}">${escHtml(f)}</div>`).join('');
+      container.innerHTML = files.map(f => `<div style="padding:4px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" data-tooltip="${escAttr(f)}">${escHtml(f)}</div>`).join('');
     } catch (err) {
       container.innerHTML = `<span style="color:var(--danger)">${t('common.error')||"Error"}: ${err}</span>`;
     }
@@ -336,7 +336,7 @@ export function showActivationWarning(modId, conflicts, onConfirm) {
   list.innerHTML = conflicts.map(c => `
     <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.3);padding:8px 12px;border-radius:6px;border-left:3px solid ${c.status === 'Active' ? 'var(--danger)' : 'var(--warning)'}">
       <div style="flex:1;min-width:0;padding-right:10px">
-        <div style="font-size:12px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-tooltip="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</div>
         <div style="font-size:10px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.other_profile_name)}</div>
       </div>
       <div style="font-size:10px;font-weight:900;padding:2px 6px;border-radius:12px;color:${c.status==='Active'?'var(--danger)':'var(--warning)'};border:1px solid ${c.status==='Active'?'var(--danger)':'var(--warning)'};flex-shrink:0">
@@ -351,7 +351,7 @@ export function showActivationWarning(modId, conflicts, onConfirm) {
     orderList.innerHTML = activeConflicts.map(c => `
       <div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;background:rgba(255,255,255,0.04)">
         <span style="font-size:10px;background:rgba(255,255,255,0.12);color:var(--text-primary);padding:1px 6px;border-radius:4px;font-weight:700;flex-shrink:0">#${c.activation_order}</span>
-        <span style="font-size:11px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</span>
+        <span style="font-size:11px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-tooltip="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</span>
         <span style="font-size:9px;color:var(--text-muted);flex-shrink:0">${escHtml(c.other_profile_name)}</span>
       </div>
     `).join('');

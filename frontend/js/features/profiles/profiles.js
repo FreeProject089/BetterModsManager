@@ -662,7 +662,7 @@ export async function renderProfiles() {
         <div style="width:3px;height:32px;border-radius:2px;background:${escAttr(brandColor)};flex-shrink:0;margin-top:2px"></div>
         <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:8px">
-            <div style="font-weight:700;font-size:16px;color:var(--text-primary);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escAttr(p.name)}">${escHtml(p.name)}</div>
+            <div style="font-weight:700;font-size:16px;color:var(--text-primary);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" data-tooltip="${escAttr(p.name)}">${escHtml(p.name)}</div>
             ${p.icon ? `<div style="color:${escAttr(brandColor)};display:flex;align-items:center;opacity:0.9">${getProfileIconSvg(p.icon, 'margin:0;width:16px;height:16px')}</div>` : ''}
           </div>
           ${p.game_name ? `<div style="font-family:var(--font-mono);font-weight:600;font-size:10px;padding:2px 8px;border-radius:4px;background:${escAttr(brandColor)}15;color:${escAttr(brandColor)};border:1px solid ${escAttr(brandColor)}30;align-self:flex-start;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${escHtml(t(p.game_name) || p.game_name)}</div>` : ''}
@@ -706,7 +706,7 @@ export async function renderProfiles() {
         </button>
         <button class="btn btn-secondary btn-sm btn-copy-profile-id" data-id="${escAttr(p.id)}" data-name="${escAttr(p.name)}"
             onmouseenter="window.showTaskyHelp('prof.copyIdTip', 'hash')" onmouseleave="window.hideTaskyHelp()"
-            title="Copier l'ID du profil (pour API/scripts)">
+            data-tooltip="Copier l'ID du profil (pour API/scripts)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/>
             <line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
@@ -1325,7 +1325,7 @@ function initEditBackgroundSection(profile) {
                 <button type="button" class="btn btn-secondary btn-sm" id="btn-edit-pick-bg" style="gap:6px">
                     ${hasBg ? t('prof.bgChange') : t('prof.bgImage')}
                 </button>
-                ${hasBg ? `<button type="button" class="btn btn-danger btn-sm" id="btn-edit-remove-bg" style="padding:0 8px" title="${t('prof.bgRemove')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}
+                ${hasBg ? `<button type="button" class="btn btn-danger btn-sm" id="btn-edit-remove-bg" style="padding:0 8px" data-tooltip="${t('prof.bgRemove')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}
             </div>
         </div>
     `;

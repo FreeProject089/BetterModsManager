@@ -12,6 +12,69 @@ const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
     set(target, prop, value) { appState.set(prop, value); return true; }
 });
+// ── Cancel-ops state ──────────────────────────────────────────────────────────
+let _preOpSnapshot = [];
+let _cancelRequested = false;
+// Per-mod snapshot: modId → state BEFORE the toggle was fired
+const _indivSnapshots = new Map();
+/**
+ * Called from mods-list.ts just before an individual mod toggle invocation.
+ * `prevEnabled` is the state the mod had BEFORE the user clicked.
+ */
+export function registerSingleModOp(modId, prevEnabled) {
+    _indivSnapshots.set(modId, prevEnabled);
+    _updateCancelBtn();
+}
+/**
+ * Called from mods-list.ts in the finally block after the toggle completes
+ * (or fails), regardless of outcome.
+ */
+export function unregisterSingleModOp(modId) {
+    _indivSnapshots.delete(modId);
+    _updateCancelBtn();
+}
+/** Sync cancel-button state with current ops. */
+function _updateCancelBtn() {
+    const hasOps = S.isGlobalProcessing || _indivSnapshots.size > 0;
+    _setCancelBtnVisible(hasOps);
+}
+/** Called by the cancel button. */
+export function requestCancelModOps() {
+    if (S.isGlobalProcessing) {
+        _cancelRequested = true;
+    }
+    // Revert any in-flight individual toggles
+    if (_indivSnapshots.size > 0) {
+        _revertIndividualOps();
+    }
+}
+async function _revertIndividualOps() {
+    const toRevert = new Map(_indivSnapshots);
+    _indivSnapshots.clear();
+    _updateCancelBtn();
+    for (const [modId, prevEnabled] of toRevert) {
+        try {
+            if (prevEnabled) {
+                await invoke('enable_mod', { modId, bypassSha: true });
+            }
+            else {
+                await invoke('disable_mod', { modId });
+            }
+        }
+        catch (_) { /* best-effort */ }
+    }
+    const { refreshMods } = await import('./mods.js');
+    await refreshMods();
+    toast(t('lib.cancelReverted') || 'Opération annulée — état précédent restauré.', 'info');
+}
+function _setCancelBtnVisible(active) {
+    const btn = document.getElementById('btn-cancel-mod-ops');
+    if (!btn)
+        return;
+    btn.disabled = !active;
+    btn.classList.toggle('btn-danger', active);
+    btn.classList.toggle('btn-ghost', !active);
+}
 export function openAddModModal() {
     ['mod-name', 'mod-folder', 'mod-version', 'mod-author', 'mod-desc'].forEach(id => {
         const el = document.getElementById(id);
@@ -88,11 +151,16 @@ export async function toggleAllMods(forcedEnable = null) {
     const targetMods = enable ? S.allMods.filter(m => !m.enabled) : S.allMods.filter(m => m.enabled);
     if (targetMods.length === 0)
         return;
+    // Snapshot the state of all target mods BEFORE we touch them
+    _preOpSnapshot = targetMods.map(m => ({ id: m.id, enabled: m.enabled }));
+    _cancelRequested = false;
     S.isGlobalProcessing = true;
     targetMods.forEach(m => {
         S.processingMods.add(m.id);
         setModLoading(m.id, true);
     });
+    // Show cancel button (isGlobalProcessing is now true so _updateCancelBtn shows it)
+    _updateCancelBtn();
     // Use the button that corresponds to the current action as the "active" loading button
     const btn = document.getElementById(enable ? 'btn-enable-all' : 'btn-disable-all-alt');
     const altBtn = document.getElementById(enable ? 'btn-disable-all-alt' : 'btn-enable-all');
@@ -106,13 +174,35 @@ export async function toggleAllMods(forcedEnable = null) {
     try {
         await invoke('toggle_all_mods', { enable, bypassSha: false });
         await refreshMods();
-        const key = enable ? 'mod.enabledCount' : 'mod.disabledCount';
-        toast(t(key, { count: String(targetMods.length) }), 'success');
+        if (_cancelRequested) {
+            // Revert: restore each mod to its snapshot state
+            if (btn)
+                btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('common.reverting') || 'Annulation…'}`;
+            for (const snap of _preOpSnapshot) {
+                try {
+                    if (snap.enabled) {
+                        await invoke('enable_mod', { modId: snap.id, bypassSha: false });
+                    }
+                    else {
+                        await invoke('disable_mod', { modId: snap.id });
+                    }
+                }
+                catch (_) { /* best-effort */ }
+            }
+            await refreshMods();
+            toast(t('lib.cancelReverted') || 'Opération annulée — état précédent restauré.', 'info');
+        }
+        else {
+            const key = enable ? 'mod.enabledCount' : 'mod.disabledCount';
+            toast(t(key, { count: String(targetMods.length) }), 'success');
+        }
     }
     catch (err) {
         toast(t('common.error') + ' : ' + err, 'error');
     }
     finally {
+        _cancelRequested = false;
+        _preOpSnapshot = [];
         targetMods.forEach(m => setModLoading(m.id, false));
         await new Promise(r => setTimeout(r, 250));
         targetMods.forEach(m => S.processingMods.delete(m.id));
@@ -123,6 +213,8 @@ export async function toggleAllMods(forcedEnable = null) {
             altBtn.disabled = false;
         if (btn)
             btn.innerHTML = originalHtml;
+        // Re-sync cancel button state (hides it if no individual ops remain either)
+        _updateCancelBtn();
         await refreshMods();
         await updateDiscordStatus();
     }

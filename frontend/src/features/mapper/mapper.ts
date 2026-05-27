@@ -1,4 +1,4 @@
-/**
+﻿/**
  * mapper.ts — Mod Mapper feature
  * Handles file restructuration by mapping mod files to game directory structure
  */
@@ -1232,7 +1232,7 @@ async function showMapperPreview(): Promise<void> {
                     <td class="arrow-cell">→</td>
                     <td>
                         <div class="path-cell">
-                            <span class="path-text muted" title="${targetPath}">${targetPath}</span>
+                            <span class="path-text muted" data-tooltip="${targetPath}">${targetPath}</span>
                         </div>
                     </td>
                 </tr>`;

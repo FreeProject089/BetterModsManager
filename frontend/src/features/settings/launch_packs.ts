@@ -30,6 +30,12 @@ export async function initLaunchPackSettings() {
         });
     }
 
+    // ── App Picker (Steam-style) ───────────────────────────────────────────────
+    const btnDetect = document.getElementById('lp-btn-detect-exe');
+    if (btnDetect) {
+        btnDetect.addEventListener('click', () => openAppPicker());
+    }
+
     const btnSelectIcon = document.getElementById('lp-btn-select-icon');
     if (btnSelectIcon) {
         btnSelectIcon.addEventListener('click', async () => {
@@ -114,7 +120,7 @@ export async function renderLaunchPacks() {
                 </div>
                 <div style="display:flex; gap:8px;">
                     <button class="btn btn-primary btn-xs btn-run-lp" data-id="${pack.id}">${t('settings.launchPackRun')}</button>
-                    <button class="btn btn-ghost btn-xs btn-open-lp" data-id="${pack.id}" title="${t('ctx.openFolder') || 'Open Folder'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
+                    <button class="btn btn-ghost btn-xs btn-open-lp" data-id="${pack.id}" data-tooltip="${t('ctx.openFolder') || 'Open Folder'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
                     <button class="btn btn-ghost btn-xs btn-del-lp" data-id="${pack.id}" style="color:var(--error);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
                 </div>
             `;
@@ -195,7 +201,7 @@ function openLaunchPackModal() {
     
     currentSelectedExes = [];
     currentSelectedIcon = null;
-    
+
     const preview = document.getElementById('lp-icon-preview');
     if (preview) {
         preview.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
@@ -213,10 +219,10 @@ function renderSelectedExes() {
     currentSelectedExes.forEach((path, index) => {
         const item = document.createElement('div');
         item.style.cssText = 'display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:6px; font-size:11px;';
-        
+
         const fileName = path.split(/[\\/]/).pop();
         item.innerHTML = `
-            <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escHtml(path)}">${escHtml(fileName)}</span>
+            <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" data-tooltip="${escHtml(path)}">${escHtml(fileName || path)}</span>
             <button class="btn-del-exe" data-index="${index}" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:14px;">&times;</button>
         `;
         list.appendChild(item);
@@ -228,4 +234,191 @@ function renderSelectedExes() {
             renderSelectedExes();
         });
     });
+}
+
+// ── Steam-style App Picker ────────────────────────────────────────────────────
+
+interface InstalledApp { name: string; exe_path: string; icon_path?: string | null; }
+
+let _appPickerCache: InstalledApp[] | null = null;
+let _appPickerLoading = false;
+
+async function openAppPicker() {
+    const modal = document.getElementById('modal-app-picker');
+    if (!modal) return;
+    modal.classList.add('open');
+    _renderAppPickerList([]);
+    _wireAppPickerEvents();
+
+    if (_appPickerLoading) return;
+    if (_appPickerCache) { _renderAppPickerList(_appPickerCache); return; }
+
+    _appPickerLoading = true;
+    const statusEl = document.getElementById('app-picker-status');
+    if (statusEl) statusEl.textContent = t('settings.appPicker.scanning');
+
+    try {
+        const apps: InstalledApp[] = await invoke('scan_installed_apps');
+        _appPickerCache = apps;
+        _renderAppPickerList(apps);
+    } catch (e) {
+        const tbody = document.getElementById('app-picker-list');
+        if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--error);font-size:12px;">${t('settings.appPicker.error', { err: String(e) })}</td></tr>`;
+    } finally {
+        _appPickerLoading = false;
+    }
+}
+
+// Icon cache: exe_path → data:image/png;base64,...
+const _iconCache = new Map<string, string>();
+// Generic program icon SVG (used as placeholder / fallback)
+const _genericIcon = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`;
+
+function _renderAppPickerList(apps: InstalledApp[], filter = '') {
+    const tbody = document.getElementById('app-picker-list');
+    if (!tbody) return;
+
+    const filtered = filter
+        ? apps.filter(a => a.name.toLowerCase().includes(filter) || a.exe_path.toLowerCase().includes(filter))
+        : apps;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px;">${apps.length === 0 ? `<span id="app-picker-status">${t('settings.appPicker.noApps')}</span>` : t('settings.appPicker.noResults')}</td></tr>`;
+        return;
+    }
+
+    // Build rows with icon placeholder
+    tbody.innerHTML = filtered.map((app) => {
+        const alreadyAdded = currentSelectedExes.includes(app.exe_path);
+        // If we have a cached icon, embed it immediately; otherwise show placeholder
+        const cachedIcon  = _iconCache.get(app.exe_path);
+        const iconContent = cachedIcon
+            ? `<img src="${cachedIcon}" width="20" height="20" style="border-radius:3px;object-fit:contain;">`
+            : _genericIcon;
+        return `<tr class="app-picker-row" data-exe="${escHtml(app.exe_path)}"
+            style="border-bottom:1px solid rgba(255,255,255,0.03);cursor:pointer;transition:background .1s;"
+            onmouseenter="this.style.background='rgba(255,255,255,0.04)'" onmouseleave="this.style.background='transparent'">
+            <td style="padding:5px 10px;text-align:center;width:28px;">
+                <input type="checkbox" class="app-picker-cb" data-path="${escHtml(app.exe_path)}" data-name="${escHtml(app.name)}"
+                    style="accent-color:var(--accent);width:13px;height:13px;cursor:pointer;"
+                    ${alreadyAdded ? 'checked disabled' : ''}>
+            </td>
+            <td style="padding:5px 6px;width:28px;">
+                <span class="app-icon-cell" data-exe="${escHtml(app.exe_path)}"
+                    style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;">${iconContent}</span>
+            </td>
+            <td style="padding:5px 6px;font-weight:600;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;" data-tooltip="${escHtml(app.name)}">${escHtml(app.name)}</td>
+            <td style="padding:5px 6px;color:var(--text-muted);font-size:10px;font-family:'JetBrains Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px;" data-tooltip="${escHtml(app.exe_path)}">${escHtml(app.exe_path)}</td>
+        </tr>`;
+    }).join('');
+
+    // Click row = toggle checkbox
+    tbody.querySelectorAll('.app-picker-row').forEach(row => {
+        row.addEventListener('click', (e) => {
+            const cb = row.querySelector('.app-picker-cb') as HTMLInputElement;
+            if (!cb || cb.disabled) return;
+            if ((e.target as HTMLElement).tagName === 'INPUT') return;
+            cb.checked = !cb.checked;
+            _updateAppPickerCount();
+        });
+        row.querySelector('.app-picker-cb')?.addEventListener('change', () => _updateAppPickerCount());
+    });
+
+    // Lazy icon loading via IntersectionObserver
+    _observeIconCells(tbody);
+    _updateAppPickerCount();
+}
+
+/** Watches icon cells in the tbody and loads icons as they scroll into view */
+function _observeIconCells(tbody: HTMLElement) {
+    const tauri = (window as any).__TAURI__?.tauri;
+    if (!tauri) return; // Not in Tauri context — no icon extraction
+
+    const io = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) return;
+            const cell = entry.target as HTMLElement;
+            const exe   = cell.dataset.exe!;
+            io.unobserve(cell);
+
+            if (_iconCache.has(exe)) {
+                _applyIcon(cell, _iconCache.get(exe)!);
+                return;
+            }
+
+            // Always use extract_exe_icon (runs in Rust, no asset-protocol scope required)
+            _loadExeIcon(cell, exe, tauri);
+        });
+    }, { root: tbody.closest('div'), rootMargin: '100px', threshold: 0 });
+
+    tbody.querySelectorAll<HTMLElement>('.app-icon-cell').forEach(cell => {
+        // Skip if already cached
+        if (_iconCache.has(cell.dataset.exe || '')) {
+            _applyIcon(cell, _iconCache.get(cell.dataset.exe!)!);
+        } else {
+            io.observe(cell);
+        }
+    });
+}
+
+async function _loadExeIcon(cell: HTMLElement, exe: string, tauri: any) {
+    try {
+        const b64: string = await tauri.invoke('extract_exe_icon', { exePath: exe });
+        const dataUrl = `data:image/png;base64,${b64}`;
+        _iconCache.set(exe, dataUrl);
+        _applyIcon(cell, dataUrl);
+    } catch { /* keep generic icon */ }
+}
+
+function _applyIcon(cell: HTMLElement, src: string) {
+    cell.innerHTML = `<img src="${src}" width="20" height="20" style="border-radius:3px;object-fit:contain;" onerror="this.parentElement.innerHTML='${_genericIcon.replace(/'/g, "\\'")}'">`;
+}
+
+function _updateAppPickerCount() {
+    const checked = document.querySelectorAll('#app-picker-list .app-picker-cb:checked:not(:disabled)');
+    const countEl = document.getElementById('app-picker-sel-count');
+    const confirmBtn = document.getElementById('app-picker-confirm') as HTMLButtonElement | null;
+    if (countEl) countEl.textContent = checked.length > 0 ? t('settings.appPicker.selected', { n: String(checked.length) }) : '';
+    if (confirmBtn) confirmBtn.disabled = checked.length === 0;
+}
+
+function _wireAppPickerEvents() {
+    // Search
+    const search = document.getElementById('app-picker-search') as HTMLInputElement | null;
+    if (search && !search.dataset.wired) {
+        search.dataset.wired = '1';
+        search.addEventListener('input', () => {
+            if (_appPickerCache) _renderAppPickerList(_appPickerCache, search.value.toLowerCase().trim());
+        });
+    }
+
+    // Browse fallback
+    const browseBtn = document.getElementById('app-picker-browse');
+    if (browseBtn && !browseBtn.dataset.wired) {
+        browseBtn.dataset.wired = '1';
+        browseBtn.addEventListener('click', async () => {
+            const path = await pickFile(['exe', 'bat', 'ps1', 'cmd', 'lnk']);
+            if (path && !currentSelectedExes.includes(path as string)) {
+                currentSelectedExes.push(path as string);
+                renderSelectedExes();
+                document.getElementById('modal-app-picker')?.classList.remove('open');
+            }
+        });
+    }
+
+    // Confirm: add selected to currentSelectedExes
+    const confirmBtn = document.getElementById('app-picker-confirm');
+    if (confirmBtn && !confirmBtn.dataset.wired) {
+        confirmBtn.dataset.wired = '1';
+        confirmBtn.addEventListener('click', () => {
+            document.querySelectorAll('#app-picker-list .app-picker-cb:checked:not(:disabled)').forEach(cb => {
+                const path = (cb as HTMLElement).dataset.path!;
+                if (path && !currentSelectedExes.includes(path)) {
+                    currentSelectedExes.push(path);
+                }
+            });
+            renderSelectedExes();
+            document.getElementById('modal-app-picker')?.classList.remove('open');
+        });
+    }
 }

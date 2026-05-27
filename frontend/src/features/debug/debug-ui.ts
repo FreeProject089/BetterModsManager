@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { debugHub } from './debug.js';
 import { appState } from '../../core/state.js';
 import { invoke } from '../../core/api.js';
@@ -806,7 +806,23 @@ class DebugUI {
             if (e.key === 'Escape' && this.isInspecting) {
                 this.toggleInspector(false);
             }
+            // 'I' key → toggle inspect (ONLY when devtools overlay is open + focus not in an input)
+            if ((e.key === 'i' || e.key === 'I') && !e.ctrlKey && !e.metaKey && !e.altKey && this.isOpen) {
+                const tag = (document.activeElement as HTMLElement)?.tagName?.toLowerCase();
+                if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') {
+                    e.preventDefault();
+                    (this.container.querySelector('#debug-btn-inspect') as HTMLElement)?.click();
+                }
+            }
         });
+        // Prevent keyboard events from inputs/textareas inside the devtools overlay
+        // from propagating to global shortcuts (e.g. typing in REPL or search)
+        this.container.addEventListener('keydown', e => {
+            const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+            if (tag === 'input' || tag === 'textarea') {
+                e.stopPropagation();
+            }
+        }, true);
         this._get('console-search').addEventListener('input', e => {
             const query = e.target.value.toLowerCase();
             this.container.querySelectorAll('#console-logs .log-entry').forEach(entry => {
@@ -1185,7 +1201,7 @@ class DebugUI {
                     <div class="css-rule-block" style="margin-bottom:12px; font-family:'JetBrains Mono'; font-size:11px; padding:8px; border-radius:4px; background:rgba(255,255,255,0.02); border:1px solid var(--debug-border)">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
                             <div style="color:var(--debug-accent); font-weight:700">${this.escapeHtml(rule.selectorText || '')} {</div>
-                            <button class="rule-inspect-btn" data-selector="${this.escapeHtml(rule.selectorText || '')}" title="Inspect matching element" style="background:none; border:none; color:var(--debug-accent); cursor:pointer; padding:4px; border-radius:4px; display:flex; align-items:center; transition:background 0.2s">
+                            <button class="rule-inspect-btn" data-selector="${this.escapeHtml(rule.selectorText || '')}" data-tooltip="Inspect matching element" style="background:none; border:none; color:var(--debug-accent); cursor:pointer; padding:4px; border-radius:4px; display:flex; align-items:center; transition:background 0.2s">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.94-.49-7-3.85-7-7.93s3.06-7.44 7-7.93V19.93z"></path></svg>
                             </button>
                         </div>
@@ -1288,26 +1304,83 @@ class DebugUI {
 
     updateTimeline(item) {
         const pane = this._get('timeline-list');
+        if (!pane) return;
         let entry = this._get(`timeline-${item.id}`);
-        
-        if (!entry) {
+        const isNew = !entry;
+
+        if (isNew) {
             entry = document.createElement('div');
             entry.id = `timeline-${item.id}`;
-            entry.className = 'ipc-entry'; // Reuse styles
+            entry.className = 'ipc-entry timeline-entry';
             pane.prepend(entry);
         }
 
         const isIPC = !!item.command;
-        const time = item.duration ? item.duration + 'ms' : new Date(item.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const ts   = new Date(item.timestamp);
+        const hms  = ts.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const ms   = String(ts.getMilliseconds()).padStart(3, '0');
+        const timeLabel = item.duration != null && item.duration > 0
+            ? `${item.duration}ms`
+            : `${hms}.${ms}`;
+
+        // Preview: IPC → truncated args JSON; Action → details/target
+        const argsStr = isIPC
+            ? (() => { try { const s = JSON.stringify(item.args); return s.length > 60 ? s.slice(0, 57) + '…' : s; } catch { return ''; } })()
+            : (item.details ? String(item.details).slice(0, 60) : (item.target || ''));
+
+        // Status class
+        const statusCls = item.status === 'success' ? 'success'
+            : item.status === 'error' ? 'error'
+            : item.status === 'pending' ? 'pending'
+            : 'info';
+
+        // Type-specific icon
+        const ipcIcon = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`;
+        const clickIcon = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 9l-4 11 3.5-1.5L10.5 22l4-11"/><path d="M17 2l-1 7 3 1"/></svg>`;
+        const navIcon = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`;
+        const patchIcon = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
+        const actionIcon = item.type?.startsWith('PATCH') ? patchIcon
+            : (item.type === 'CLICK' ? clickIcon : (item.type === 'NAV' ? navIcon
+            : `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>`));
+
+        const icon = isIPC ? ipcIcon : actionIcon;
+        const label = isIPC ? item.command : item.type;
+        const statusLabel = isIPC ? (item.status || 'pending') : (item.target ? String(item.target).slice(0, 18) : '—');
+
+        // Expandable details
+        const expandId = `tl-expand-${item.id}`;
+        let detailBlock = '';
+        if (isIPC) {
+            const argsJson  = (() => { try { return JSON.stringify(item.args, null, 2); } catch { return String(item.args); } })();
+            const resultJson = (() => { try { return JSON.stringify(item.result, null, 2)?.slice(0, 400) || '—'; } catch { return '—'; } })();
+            detailBlock = `<div id="${expandId}" class="timeline-detail" style="display:none;grid-column:1/-1;background:rgba(0,0,0,0.25);border-radius:6px;padding:8px;margin-top:4px;font-family:'JetBrains Mono';font-size:10px;color:var(--text-secondary);white-space:pre-wrap;overflow:hidden;max-height:120px;overflow-y:auto"><span style="color:var(--text-muted);font-size:9px">ARGS</span>\n${argsJson}\n<span style="color:var(--text-muted);font-size:9px">RESULT</span>\n${resultJson}</div>`;
+        } else if (item.details) {
+            detailBlock = `<div id="${expandId}" class="timeline-detail" style="display:none;grid-column:1/-1;background:rgba(0,0,0,0.25);border-radius:6px;padding:8px;margin-top:4px;font-family:'JetBrains Mono';font-size:10px;color:var(--text-secondary);white-space:pre-wrap">${String(item.details).slice(0, 500)}</div>`;
+        }
 
         entry.innerHTML = `
-            <div class="ipc-cmd ${isIPC ? 'rpc' : 'action'}">
-                ${isIPC ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M15 18l-6-6 6-6"/></svg>'}
-                ${isIPC ? item.command : item.type}
+            <div class="ipc-cmd ${isIPC ? 'rpc' : 'action'}" style="overflow:hidden;">
+                ${icon}
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" data-tooltip="${label}">${label}</span>
             </div>
-            <div class="ipc-status ${item.status || 'info'}">${isIPC ? item.status : item.target}</div>
-            <div class="ipc-time">${time}</div>
+            <div class="ipc-status ${statusCls}" data-tooltip="${statusLabel}" style="overflow:hidden;text-overflow:ellipsis;">${statusLabel}</div>
+            <div class="ipc-time" style="display:flex;align-items:center;gap:4px;">
+                ${argsStr ? `<span style="font-size:9px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;flex:1;white-space:nowrap;" data-tooltip="${argsStr}">${argsStr}</span>` : ''}
+                <span>${timeLabel}</span>
+                ${detailBlock || argsStr ? `<span class="timeline-expand-btn" data-target="${expandId}" data-tooltip="Détails" style="cursor:pointer;opacity:0.5;padding:0 2px;flex-shrink:0">▾</span>` : ''}
+            </div>
+            ${detailBlock}
         `;
+
+        // Toggle expand on click
+        entry.querySelector(`.timeline-expand-btn[data-target="${expandId}"]`)?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const detail = document.getElementById(expandId);
+            if (!detail) return;
+            const isHidden = detail.style.display === 'none';
+            detail.style.display = isHidden ? 'block' : 'none';
+            (e.target as HTMLElement).textContent = isHidden ? '▴' : '▾';
+        });
     }
 
     clearSelection() {
@@ -1341,8 +1414,8 @@ class DebugUI {
                         <div style="color:var(--text-muted); font-size:10px">${target.id ? '#' + target.id : ''} ${Array.from(target.classList).map(c => '.' + c).join(' ')}</div>
                     </div>
                     <div style="display:flex; gap:4px">
-                        <button class="debug-btn" id="inspect-copy-node" title="Copy HTML" style="padding:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-                        <button class="debug-btn" id="inspect-send-playground" title="Send to Playground" style="padding:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l2.233 2.233L21 2z"/></svg></button>
+                        <button class="debug-btn" id="inspect-copy-node" data-tooltip="Copy HTML" style="padding:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                        <button class="debug-btn" id="inspect-send-playground" data-tooltip="Send to Playground" style="padding:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l2.233 2.233L21 2z"/></svg></button>
                     </div>
                 </div>
                 <div style="font-size:10px; color:var(--text-muted); margin-bottom:4px">SOURCE GUESS</div>
@@ -1705,9 +1778,21 @@ class DebugUI {
         }
     }
 
+    _fileTypeIcon(name: string): string {
+        const ext = name.split('.').pop()?.toLowerCase() || '';
+        const color = { ts: '#3178c6', js: '#f0db4f', rs: '#ce422b', css: '#264de4', html: '#e34c26',
+            json: '#cbcb41', toml: '#9c4121', md: '#083fa1', svg: '#ffb13b', png: '#a855f7',
+            jpg: '#a855f7', jpeg: '#a855f7', gif: '#a855f7', webp: '#a855f7', ico: '#a855f7' }[ext] || 'var(--text-muted)';
+        if (['png','jpg','jpeg','gif','svg','webp','ico'].includes(ext))
+            return `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+        if (ext === 'rs')
+            return `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2"/></svg>`;
+        return `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`;
+    }
+
     renderFileTree(files, container = document.querySelector('.sources-tree'), level = 0) {
         if (level === 0) container.innerHTML = '';
-        
+
         files.forEach(file => {
             const row = document.createElement('div');
             row.style.paddingLeft = (level * 12 + 4) + 'px';
@@ -1716,30 +1801,31 @@ class DebugUI {
             row.style.display = 'flex';
             row.style.alignItems = 'center';
             row.style.gap = '6px';
-            row.style.paddingY = '2px';
+            row.style.padding = `2px 4px 2px ${(level * 12 + 4)}px`;
             row.className = 'tree-row';
-            
-            const icon = file.is_dir 
-                ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
-                : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>';
-            
-            row.innerHTML = `<span style="color:var(--text-muted); opacity:0.7">${icon}</span> <span>${file.name}</span>`;
-            
+
+            const dirIcon = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--debug-warn)" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
+            const fileIcon = this._fileTypeIcon(file.name);
+            const icon = file.is_dir ? dirIcon : fileIcon;
+
+            row.innerHTML = `<span>${icon}</span> <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</span>`;
+
             if (!file.is_dir) {
                 row.onclick = () => this.openSourceFile(file.path, row);
             } else if (file.children) {
+                let collapsed = false;
                 const childContainer = document.createElement('div');
-                childContainer.style.display = 'block'; // Or 'none' for collapsed by default
+                childContainer.style.display = 'block';
                 row.onclick = () => {
-                    const isHidden = childContainer.style.display === 'none';
-                    childContainer.style.display = isHidden ? 'block' : 'none';
+                    collapsed = !collapsed;
+                    childContainer.style.display = collapsed ? 'none' : 'block';
                 };
                 container.appendChild(row);
                 container.appendChild(childContainer);
                 this.renderFileTree(file.children, childContainer, level + 1);
                 return;
             }
-            
+
             container.appendChild(row);
         });
     }
@@ -1779,7 +1865,49 @@ class DebugUI {
                 `;
             } else {
                 const highlighted = this.highlightCode(data, ext);
-                editorArea.innerHTML = `<pre id="sources-code" style="margin:0; padding:16px; font-family:'JetBrains Mono'; font-size:11px; color:var(--text-primary); white-space:pre-wrap; line-height:1.5">${highlighted}</pre>`;
+                const lines = highlighted.split('\n');
+                const lineCount = lines.length;
+                const gutterW = String(lineCount).length * 8 + 16;
+                const numberedLines = lines.map((line, i) =>
+                    `<span class="src-line" id="src-ln-${i+1}" style="display:flex;"><span class="src-gutter" style="min-width:${gutterW}px;padding-right:12px;text-align:right;color:var(--text-muted);opacity:0.4;user-select:none;flex-shrink:0;">${i+1}</span><span class="src-line-content" style="flex:1;">${line || ' '}</span></span>`
+                ).join('\n');
+                editorArea.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,0.05);background:rgba(0,0,0,0.15);flex-shrink:0;">
+                        <span style="font-size:9px;font-family:'JetBrains Mono';color:var(--text-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${path.split(/[\\/]/).pop()} <span style="opacity:0.5">(${lineCount} lignes)</span></span>
+                        <input id="src-find-input" type="text" placeholder="Rechercher…" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:2px 6px;font-size:10px;color:var(--text-primary);font-family:'JetBrains Mono';width:120px;outline:none;" />
+                        <span id="src-find-count" style="font-size:9px;color:var(--text-muted);min-width:40px;text-align:right;"></span>
+                    </div>
+                    <div id="sources-code-container" style="flex:1;overflow:auto;">
+                        <pre id="sources-code" style="margin:0;padding:8px 0;font-family:'JetBrains Mono';font-size:11px;color:var(--text-primary);white-space:pre;line-height:1.6;min-width:max-content;">${numberedLines}</pre>
+                    </div>`;
+                // Find-in-file
+                const findInput = editorArea.querySelector('#src-find-input') as HTMLInputElement;
+                const findCount = editorArea.querySelector('#src-find-count') as HTMLElement;
+                findInput?.addEventListener('input', () => {
+                    const q = findInput.value.toLowerCase().trim();
+                    editorArea.querySelectorAll('.src-line-content mark.src-hl').forEach(m => {
+                        const parent = m.parentNode;
+                        if (parent) parent.replaceChild(document.createTextNode(m.textContent || ''), m);
+                    });
+                    if (!q) { findCount.textContent = ''; return; }
+                    let hits = 0;
+                    editorArea.querySelectorAll('.src-line-content').forEach(cell => {
+                        const text = cell.textContent || '';
+                        if (text.toLowerCase().includes(q)) {
+                            hits++;
+                            // Simple highlight by re-wrapping matches
+                            cell.innerHTML = (cell.innerHTML || '').replace(
+                                new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+                                m => `<mark class="src-hl" style="background:rgba(245,158,11,0.35);border-radius:2px;">${m}</mark>`
+                            );
+                        }
+                    });
+                    findCount.textContent = hits > 0 ? `${hits} ligne${hits>1?'s':''}` : 'Aucun';
+                    if (hits > 0) {
+                        editorArea.querySelector('.src-hl')?.scrollIntoView({ block: 'nearest' });
+                    }
+                });
+                findInput?.addEventListener('keydown', e => e.stopPropagation());
             }
 
             editorArea.oncontextmenu = (e) => {

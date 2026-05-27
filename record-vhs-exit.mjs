@@ -1,9 +1,10 @@
 import puppeteer from 'puppeteer-core';
 import { execSync } from 'child_process';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync, unlinkSync } from 'fs';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { renderCloseSound, writeWav } from './audio-synth.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CHROME   = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
@@ -20,6 +21,11 @@ const RESOLUTIONS = [
 ];
 
 if (!existsSync(OUT_DIR)) mkdirSync(OUT_DIR);
+
+// Generate close SFX once — same audio for all resolutions
+const AUDIO_PATH = join(OUT_DIR, '_close_sfx.wav');
+console.log('  Synthesising close SFX...');
+writeWav(AUDIO_PATH, renderCloseSound());
 
 for (const res of RESOLUTIONS) {
   console.log(`\n▶  Recording ${res.label}...`);
@@ -78,12 +84,17 @@ for (const res of RESOLUTIONS) {
 
   execSync(
     `"${FFMPEG}" -y -framerate ${actualFps} -i "${join(framesDir, '%06d.jpg')}" ` +
-    `-c:v libx264 -preset slow -crf 14 -pix_fmt yuv420p "${outFile}"`,
+    `-i "${AUDIO_PATH}" ` +
+    `-c:v libx264 -preset slow -crf 14 -pix_fmt yuv420p ` +
+    `-c:a aac -af apad -shortest "${outFile}"`,
     { stdio: 'inherit' }
   );
 
   rmSync(framesDir, { recursive: true });
   console.log(`  ✓ Saved: ${outFile}`);
 }
+
+// Cleanup temporary audio file
+unlinkSync(AUDIO_PATH);
 
 console.log('\n✓ Done. Files in: ' + OUT_DIR);

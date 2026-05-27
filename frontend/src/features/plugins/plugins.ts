@@ -72,6 +72,14 @@ export async function initPlugins() {
         setupPluginTabs();
         renderTab(_tab);
     });
+    // Keep _allModpacks in sync when any modpack is created/updated/deleted
+    window.addEventListener('bmm://modpacks-updated', async () => {
+        try {
+            const mpRes  = await fetch('http://127.0.0.1:51274/api/modpacks');
+            const mpJson = await mpRes.json().catch(() => ({}));
+            _allModpacks = mpJson.data || [];
+        } catch { _allModpacks = []; }
+    });
 }
 
 async function loadInitialData() {
@@ -487,7 +495,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         const updModChecks = _allMods.length
             ? _allMods.map(mod => `<label style="display:flex;align-items:center;gap:8px;padding:3px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
                 <input type="checkbox" class="plug-qt-upd-mod-check" value="${escHtml(mod.id)}" style="accent-color:var(--accent);width:13px;height:13px;">
-                <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(mod.name||mod.id)}">${escHtml(mod.name||mod.id)}</span>
+                <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" data-tooltip="${escHtml(mod.name||mod.id)}">${escHtml(mod.name||mod.id)}</span>
                 ${mod.active ? `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(34,197,94,0.15);color:#4ade80;font-weight:700;">ON</span>` : ''}
               </label>`).join('')
             : `<p style="font-size:12px;color:var(--text-muted);padding:8px;">Aucun mod.</p>`;
@@ -588,7 +596,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         const modCheckboxes = _allMods.length
             ? _allMods.map(mod => `<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
                 <input type="checkbox" class="plug-qt-mod-check" value="${escHtml(mod.id)}" style="accent-color:var(--accent);width:13px;height:13px;">
-                <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(mod.name||mod.id)}">${escHtml(mod.name||mod.id)}</span>
+                <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" data-tooltip="${escHtml(mod.name||mod.id)}">${escHtml(mod.name||mod.id)}</span>
                 ${mod.active ? `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(34,197,94,0.15);color:#4ade80;font-weight:700;">ON</span>` : ''}
               </label>`).join('')
             : `<p style="font-size:12px;color:var(--text-muted);padding:8px;">Aucun mod.</p>`;
@@ -826,15 +834,11 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 <label class="plug-form-label" style="font-size:10px;">seed <span style="color:var(--text-muted);font-size:10px;">(optionnel — stabilité des hachages)</span></label>
                 <input type="text" id="plug-qt-s-seed" class="input input-sm" placeholder="laisser vide pour aléatoire" style="font-family:var(--font-mono);font-size:12px;">
             </div>
-            <!-- zip_output + standalone server -->
+            <!-- zip_output -->
             <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;align-items:center;">
                 <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
                     <input type="checkbox" id="plug-qt-s-zip-output" style="accent-color:var(--accent);">
                     ${IC.upload} zip_output (compresser en .zip)
-                </label>
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
-                    <input type="checkbox" id="plug-qt-s-gen-server" style="accent-color:var(--accent);">
-                    ${IC.globe} Serveur standalone
                 </label>
             </div>
             ${serverPanel}`;
@@ -861,7 +865,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         </div>
         <div class="plug-ov-footer">
             <button class="btn btn-ghost plug-ov-close-btn">${t('common.cancel')}</button>
-            <button class="btn btn-ghost" id="plug-qt-s-copy" title="Copier la requête cURL" style="gap:5px;">${IC.copy} cURL</button>
+            <button class="btn btn-ghost" id="plug-qt-s-copy" data-tooltip="Copier la requête cURL" style="gap:5px;">${IC.copy} cURL</button>
             <button class="btn btn-accent" id="plug-qt-s-run">${IC.play} ${t('plugins.run')}</button>
         </div>`);
 
@@ -878,7 +882,6 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const outputDir = (overlay.querySelector('#plug-qt-s-output-dir')     as HTMLInputElement)?.value?.trim() || '';
             const author    = (overlay.querySelector('#plug-qt-s-author-name')    as HTMLInputElement)?.value?.trim() || '';
             const seed      = (overlay.querySelector('#plug-qt-s-seed')           as HTMLInputElement)?.value?.trim();
-            const genServer = (overlay.querySelector('#plug-qt-s-gen-server')     as HTMLInputElement)?.checked || false;
             const zipOutput = (overlay.querySelector('#plug-qt-s-zip-output')     as HTMLInputElement)?.checked || false;
             const useCf     = (overlay.querySelector('#plug-qt-s-use-cf')         as HTMLInputElement)?.checked || false;
             const useUpnp   = (overlay.querySelector('#plug-qt-s-use-upnp')       as HTMLInputElement)?.checked || false;
@@ -889,7 +892,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const portStr   = (overlay.querySelector('#plug-qt-s-port')           as HTMLInputElement)?.value?.trim();
             const ulStr     = (overlay.querySelector('#plug-qt-s-upload-limit')   as HTMLInputElement)?.value?.trim();
             const adminPw   = (overlay.querySelector('#plug-qt-s-admin-pw')       as HTMLInputElement)?.value?.trim();
-            bodyObj = { profileIds: profIds, outputDir, authorName: author, generateServer: genServer || zipOutput, zipOutput, useCloudflare: useCf, useUpnp, autoStart };
+            bodyObj = { profileIds: profIds, outputDir, authorName: author, generateServer: zipOutput, zipOutput, useCloudflare: useCf, useUpnp, autoStart };
             if (seed)    bodyObj.seed          = seed;
             if (portStr) bodyObj.port          = parseInt(portStr, 10) || 8080;
             if (ulStr)   bodyObj.uploadLimit   = parseInt(ulStr, 10) || 0;
@@ -1073,17 +1076,15 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         // Profile select all / none
         overlay.querySelector('#plug-qt-gen-sel-all')?.addEventListener('click',  () => overlay.querySelectorAll<HTMLInputElement>('.plug-qt-host-prof-check').forEach(c => c.checked = true));
         overlay.querySelector('#plug-qt-gen-sel-none')?.addEventListener('click', () => overlay.querySelectorAll<HTMLInputElement>('.plug-qt-host-prof-check').forEach(c => c.checked = false));
-        // Show/hide server panel when zip_output or genServer is toggled
+        // Show/hide server panel when zip_output is toggled
         const zipCb       = overlay.querySelector('#plug-qt-s-zip-output')    as HTMLInputElement | null;
-        const genServerCb = overlay.querySelector('#plug-qt-s-gen-server')    as HTMLInputElement | null;
         const dockerCb    = overlay.querySelector('#plug-qt-s-use-docker')    as HTMLInputElement | null;
         const serverPanel = overlay.querySelector('#plug-qt-gen-server-panel') as HTMLElement | null;
         const dockerOpts  = overlay.querySelector('#plug-qt-gen-docker-opts') as HTMLElement | null;
         const updateServerPanel = () => {
-            if (serverPanel) serverPanel.style.display = (zipCb?.checked || genServerCb?.checked) ? 'flex' : 'none';
+            if (serverPanel) serverPanel.style.display = zipCb?.checked ? 'flex' : 'none';
         };
         zipCb?.addEventListener('change', updateServerPanel);
-        genServerCb?.addEventListener('change', updateServerPanel);
         dockerCb?.addEventListener('change', () => {
             if (dockerOpts) dockerOpts.style.display = dockerCb.checked ? 'flex' : 'none';
         });
@@ -1351,7 +1352,6 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const outputDir   = (overlay.querySelector('#plug-qt-s-output-dir')     as HTMLInputElement)?.value?.trim() || '';
             const author      = (overlay.querySelector('#plug-qt-s-author-name')    as HTMLInputElement)?.value?.trim() || '';
             const seed        = (overlay.querySelector('#plug-qt-s-seed')           as HTMLInputElement)?.value?.trim();
-            const genServer   = (overlay.querySelector('#plug-qt-s-gen-server')     as HTMLInputElement)?.checked || false;
             const zipOutput   = (overlay.querySelector('#plug-qt-s-zip-output')     as HTMLInputElement)?.checked || false;
             const useCf       = (overlay.querySelector('#plug-qt-s-use-cf')         as HTMLInputElement)?.checked || false;
             const useUpnp     = (overlay.querySelector('#plug-qt-s-use-upnp')       as HTMLInputElement)?.checked || false;
@@ -1370,7 +1370,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 profileIds: profIds,
                 outputDir,
                 authorName: author,
-                generateServer: genServer || zipOutput, // if zip, server config applies
+                generateServer: zipOutput,
                 zipOutput,
                 useCloudflare: useCf,
                 useUpnp,
@@ -1758,7 +1758,7 @@ function renderCreate(container: HTMLElement) {
                                 </div>
                                 <div id="pc-icon-tab-builtin" style="display:none;">
                                     <div class="plug-icon-builtin-grid">
-                                        ${Object.entries(IC).map(([k, svg]) => `<button class="plug-icon-builtin-btn" data-ickey="${k}" title="${k}">${svg}</button>`).join('')}
+                                        ${Object.entries(IC).map(([k, svg]) => `<button class="plug-icon-builtin-btn" data-ickey="${k}" data-tooltip="${k}">${svg}</button>`).join('')}
                                     </div>
                                 </div>
                             </div>
@@ -1784,7 +1784,7 @@ function renderCreate(container: HTMLElement) {
                             <input type="text" id="pc-mod-search" class="docs-search-input" placeholder="${t('plugins.searchMods')}">
                         </div>
                         <div class="plug-mod-selector-filters">
-                            <select id="pc-profile-filter" class="select" style="font-size:11px;padding:4px 8px;height:28px;border-radius:6px;" title="${t('plugins.filterByProfile')}">
+                            <select id="pc-profile-filter" class="select" style="font-size:11px;padding:4px 8px;height:28px;border-radius:6px;" data-tooltip="${t('plugins.filterByProfile')}">
                                 <option value="">${t('plugins.allMods')}</option>
                                 ${_allProfiles.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`).join('')}
                             </select>
@@ -1795,7 +1795,7 @@ function renderCreate(container: HTMLElement) {
                         ${_allMods.length ? _allMods.map(m => `
                             <div class="plug-mod-item" data-id="${escHtml(m.id)}" data-name="${escHtml(m.name || m.id)}">
                                 <span class="plug-mod-item-name">${escHtml(m.name || m.id)}</span>
-                                <span class="plug-mod-profile-badge" style="display:none;" title="${t('plugins.activeInProfile')}">${IC.checkCircle}</span>
+                                <span class="plug-mod-profile-badge" style="display:none;" data-tooltip="${t('plugins.activeInProfile')}">${IC.checkCircle}</span>
                                 <label class="plug-mod-optional-lbl" data-tooltip="${t('plugins.optional')}">
                                     <input type="checkbox" class="plug-mod-optional-cb" tabindex="-1"> opt
                                 </label>
@@ -2043,7 +2043,7 @@ function renderScripts(container: HTMLElement) {
             <div class="plug-section-card plug-token-card">
                 <div class="plug-token-card-top">
                     <h3 class="plug-section-title" style="margin:0;">${IC.lock} ${t('plugins.apiToken')}</h3>
-                    <span class="plug-api-hint">${IC.info} ${t('plugins.apiHint')} <code id="plug-api-base-url" class="plug-api-url-copy" title="${t('plugins.copyApiUrl')}">http://127.0.0.1:51274/api/</code></span>
+                    <span class="plug-api-hint">${IC.info} ${t('plugins.apiHint')} <code id="plug-api-base-url" class="plug-api-url-copy" data-tooltip="${t('plugins.copyApiUrl')}">http://127.0.0.1:51274/api/</code></span>
                 </div>
                 <div class="plug-token-row">
                     <input type="password" id="plug-token-display" class="input plug-token-input" readonly value="${escHtml(_apiToken)}">
@@ -2727,7 +2727,7 @@ function buildEndpointRow(ep: EndpointDef): string {
                 <thead><tr><th>Field</th><th>Type</th><th></th><th>Description</th></tr></thead>
                 <tbody>
                     ${ep.fields.map(f => `<tr>
-                        <td style="white-space:nowrap;min-width:80px;"><code class="plug-ep-fname" title="${escHtml(f.name)}">${escHtml(f.name)}</code></td>
+                        <td style="white-space:nowrap;min-width:80px;"><code class="plug-ep-fname" data-tooltip="${escHtml(f.name)}">${escHtml(f.name)}</code></td>
                         <td style="white-space:nowrap;"><span class="plug-type-tag plug-type-${f.type}">${f.type}</span></td>
                         <td style="text-align:center;">${f.required ? '<span class="plug-req-star">*</span>' : '<span style="color:var(--text-muted)">—</span>'}</td>
                         <td class="plug-ep-fdesc">${escHtml(f.desc)}</td>
@@ -2774,14 +2774,14 @@ function buildEndpointRow(ep: EndpointDef): string {
     };
     const dlEquiv = ENDPOINT_TO_DL[`${ep.method} ${ep.path}`];
     const dlBadge = dlEquiv
-        ? `<span class="plug-ep-dl-badge" data-tooltip="Équivalent bmm:// : ${dlEquiv}" title="Equivalent deeplink"
+        ? `<span class="plug-ep-dl-badge" data-tooltip="Équivalent bmm:// : ${dlEquiv}"
                style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);white-space:nowrap;font-weight:700;cursor:default;user-select:none;">bmm://</span>`
         : '';
     const dlInfoHtml = dlEquiv
         ? `<div class="plug-ep-dl-info" style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:6px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);border-radius:8px;">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" style="flex-shrink:0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                 <span style="font-size:11px;color:var(--text-secondary);white-space:nowrap;flex-shrink:0;">Équivalent deeplink :</span>
-                <code class="plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" title="Cliquer pour copier" style="flex:1;font-size:11px;color:#a78bfa;background:rgba(139,92,246,0.12);padding:2px 8px;border-radius:4px;cursor:pointer;user-select:all;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;" tabindex="0">${escHtml(dlEquiv)}</code>
+                <code class="plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" data-tooltip="Cliquer pour copier" style="flex:1;font-size:11px;color:#a78bfa;background:rgba(139,92,246,0.12);padding:2px 8px;border-radius:4px;cursor:pointer;user-select:all;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;" tabindex="0">${escHtml(dlEquiv)}</code>
                 <button class="btn btn-xs plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" data-tooltip="Copier" style="flex-shrink:0;padding:3px 7px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.25);border-radius:5px;">${IC.copy}</button>
            </div>`
         : '';
@@ -4687,7 +4687,7 @@ async function renderPerms(container: HTMLElement) {
                 <div class="plug-card-icon-default" style="width:28px;height:28px;font-size:14px;">${IC.puzzle}</div>
                 <strong>${escHtml(plugin.manifest.name)}</strong>
                 <span class="plug-perm-id">${escHtml(plugin.manifest.id)}</span>
-                <label class="plug-perm-always" title="${t('plugins.alwaysAllow')}">
+                <label class="plug-perm-always" data-tooltip="${t('plugins.alwaysAllow')}">
                     <input type="checkbox" id="perm-always-${plugin.manifest.id}" ${alwaysAllowed ? 'checked' : ''}>
                     <span>${t('plugins.alwaysAllow')}</span>
                 </label>

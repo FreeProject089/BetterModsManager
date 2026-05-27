@@ -114,7 +114,7 @@ export function initRepoMonitoring(elements) {
                             <td>
                                 <span style="font-size:10px; font-weight:900; background:${protocolBg}; border:1px solid rgba(255,255,255,0.05); padding:3px 8px; border-radius:6px; color:${protocolColor}; letter-spacing:0.05em;">${protocol}</span>
                             </td>
-                            <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500;" title="${escAttr(d.file || '-')}">${escHtml(d.file || '-')}</td>
+                            <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500;" data-tooltip="${escAttr(d.file || '-')}">${escHtml(d.file || '-')}</td>
                             <td>
                                 ${isDownloading ? `
                                 <div class="mon-progress-container">
