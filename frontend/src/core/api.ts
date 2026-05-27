@@ -95,7 +95,14 @@ export async function invoke(command: string, args: Record<string, unknown> = {}
     } catch (err) {
         const duration = Math.round(performance.now() - startTime);
         debugHub.recordIPC(command, args, 'error', err, duration);
-        console.error(`[RPC ERROR] ${command}:`, err);
+        // Suppress console noise for expected "user cancelled" signals — callers handle these gracefully
+        const errStr = String(err);
+        const isCancelled = errStr.includes('cancel') || errStr.includes('Cancel') || errStr === 'repo.errCancel';
+        if (!isCancelled) {
+            console.error(`[RPC ERROR] ${command}:`, err);
+        } else {
+            console.warn(`[RPC CANCEL] ${command}: ${errStr}`);
+        }
         throw err;
     }
 }

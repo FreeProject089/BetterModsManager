@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tokio::sync::oneshot;
@@ -85,6 +86,20 @@ struct UpdateModBody {
     install_notes: Option<String>,
 }
 
+/// Per-mod override for modpack creation (download links, dependencies, etc.)
+#[derive(Deserialize, Default, Clone)]
+struct ModpackModOverride {
+    mod_id: String,
+    #[serde(default)]
+    include_dependencies: bool,
+    #[serde(default)]
+    download_link: Option<String>,
+    #[serde(default)]
+    fallback_link: Option<String>,
+    #[serde(default)]
+    fallback_type: Option<String>,
+}
+
 #[derive(Deserialize)]
 struct CreateModpackRealBody {
     name: String,
@@ -100,6 +115,41 @@ struct CreateModpackRealBody {
     /// Optional Server Repo URL to link with this modpack
     #[serde(default)]
     sr_link: Option<String>,
+    /// Support mods from multiple profiles in one modpack
+    #[serde(default)]
+    multi_profile: bool,
+    /// Skip file integrity check when applying this modpack
+    #[serde(default)]
+    skip_integrity_check: bool,
+    /// Dependency mode: "none" | "all" | "manual"
+    #[serde(default)]
+    dependency_mode: Option<String>,
+    /// Per-mod download links and dependency settings
+    #[serde(default)]
+    mod_overrides: Option<Vec<ModpackModOverride>>,
+}
+
+/// Update an existing modpack
+#[derive(Deserialize)]
+struct UpdateModpackBody {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    multi_profile: Option<bool>,
+    #[serde(default)]
+    skip_integrity_check: Option<bool>,
+    /// "none" | "all" | "manual"
+    #[serde(default)]
+    dependency_mode: Option<String>,
+    #[serde(default)]
+    sr_link: Option<String>,
+    #[serde(default)]
+    game_name: Option<String>,
+    /// Replace the full mod list with these mod IDs (optional)
+    #[serde(default)]
+    mod_ids: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -159,9 +209,10 @@ struct RepoSyncBody {
     download_limit: u32,
 }
 
+/// POST /api/repo/gen — generate repo structure (formerly "host")
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct RepoHostBody {
+struct RepoGenBody {
     profile_ids: Vec<String>,
     output_dir: String,
     author_name: String,
@@ -189,12 +240,47 @@ struct RepoHostBody {
     lang: Option<String>,
     #[serde(default)]
     server_version: Option<u8>,
+    /// Only generate repo.json manifest without copying mod files
+    #[serde(default)]
+    lightweight: bool,
+    /// Compress output directory into a .zip archive after gen
+    #[serde(default)]
+    zip_output: bool,
 }
+
+/// POST /api/repo/host — start a static HTTP file server serving a generated repo
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RepoHttpHostBody {
+    /// Directory to serve (should contain repo.json and mods/)
+    serve_dir: String,
+    /// Port to listen on (default: 8080)
+    #[serde(default)]
+    port: Option<u16>,
+    /// Upload limit in KB/s (informational, 0 = unlimited)
+    #[serde(default)]
+    upload_limit: Option<u32>,
+}
+
+/// Shared shutdown handle for the HTTP repo host server
+type HttpHostShutdown = Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>>;
 
 fn with_data(
     data: Arc<std::sync::Mutex<AppData>>,
 ) -> impl Filter<Extract = (Arc<std::sync::Mutex<AppData>>,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || data.clone())
+}
+
+fn with_atomic(
+    flag: Arc<AtomicBool>,
+) -> impl Filter<Extract = (Arc<AtomicBool>,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || flag.clone())
+}
+
+fn with_http_host_shutdown(
+    val: HttpHostShutdown,
+) -> impl Filter<Extract = (HttpHostShutdown,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || val.clone())
 }
 
 fn with_path(
@@ -252,6 +338,18 @@ pub async fn start_api_server(
         let d = data.lock().unwrap_or_else(|p| p.into_inner());
         Arc::new(d.settings.api_token.clone())
     };
+
+    // ── Concurrency guards ─────────────────────────────────────────────────────
+    // Max 1 sync at a time; set true while running, false when done
+    let sync_running  = Arc::new(AtomicBool::new(false));
+    // Set true to request cancellation of the current sync task
+    let sync_cancel   = Arc::new(AtomicBool::new(false));
+    // Max 1 gen (export) at a time
+    let gen_running   = Arc::new(AtomicBool::new(false));
+    // Set true to request cancellation of the current gen task
+    let gen_cancel    = Arc::new(AtomicBool::new(false));
+    // Holds the shutdown sender for the HTTP repo host server (None = not running)
+    let http_host_shutdown: HttpHostShutdown = Arc::new(std::sync::Mutex::new(None));
 
     // GET /api/health
     let health = warp::path!("api" / "health")
@@ -1008,6 +1106,26 @@ pub async fn start_api_server(
                     .unwrap_or_default()
             };
 
+            // Parse dependency mode
+            let dep_mode = match body.dependency_mode.as_deref() {
+                Some("all")    => crate::models::modpack::DependencyMode::All,
+                Some("manual") => crate::models::modpack::DependencyMode::Manual,
+                _              => crate::models::modpack::DependencyMode::None,
+            };
+
+            // Apply per-mod overrides (download links, include_dependencies)
+            let mods_refs: Vec<crate::models::modpack::ModpackModRef> = if let Some(ref overrides) = body.mod_overrides {
+                mods_refs.into_iter().map(|mut mr| {
+                    if let Some(ov) = overrides.iter().find(|o| o.mod_id == mr.mod_id) {
+                        mr.include_dependencies = ov.include_dependencies;
+                        if ov.download_link.is_some() { mr.download_link = ov.download_link.clone(); }
+                        if ov.fallback_link.is_some()  { mr.fallback_link  = ov.fallback_link.clone(); }
+                        if ov.fallback_type.is_some()  { mr.fallback_type  = ov.fallback_type.clone(); }
+                    }
+                    mr
+                }).collect()
+            } else { mods_refs };
+
             let now = chrono::Local::now().to_rfc3339();
             let new_id = uuid::Uuid::new_v4().to_string();
             let mod_count = mods_refs.len();
@@ -1017,9 +1135,9 @@ pub async fn start_api_server(
                 description: body.description,
                 created_at: now.clone(),
                 updated_at: now,
-                multi_profile: false,
-                dependency_mode: crate::models::modpack::DependencyMode::None,
-                skip_integrity_check: false,
+                multi_profile: body.multi_profile,
+                dependency_mode: dep_mode,
+                skip_integrity_check: body.skip_integrity_check,
                 mods: mods_refs,
                 sr_link: body.sr_link,
                 game_name: body.game_name
@@ -1189,11 +1307,36 @@ pub async fn start_api_server(
             )
         });
 
-     // POST /api/repo/sync  (auth) — background download task
-    let data_repo_sync = data.clone();
-    let path_repo_sync = data_path.clone();
-    let tok_repo_sync = token.clone();
-    let handle_repo_sync = app_handle.clone();
+    // DELETE /api/repo/sync/cancel  (auth) — MUST be registered before POST /api/repo/sync
+    let tok_sync_cancel    = token.clone();
+    let sync_cancel_cancel = sync_cancel.clone();
+    let sync_running_cancel = sync_running.clone();
+    let repo_sync_cancel = warp::path!("api" / "repo" / "sync" / "cancel")
+        .and(warp::delete())
+        .and(require_token(tok_sync_cancel))
+        .and(with_atomic(sync_cancel_cancel))
+        .and(with_atomic(sync_running_cancel))
+        .map(|cancel: Arc<AtomicBool>, running: Arc<AtomicBool>| {
+            if !running.load(Ordering::SeqCst) {
+                return warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": false, "message": "No sync is currently running" })),
+                    StatusCode::OK,
+                );
+            }
+            cancel.store(true, Ordering::SeqCst);
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({ "ok": true, "message": "Cancel signal sent — sync will stop at next checkpoint" })),
+                StatusCode::OK,
+            )
+        });
+
+    // POST /api/repo/sync  (auth, max 1 concurrent) — background download task
+    let data_repo_sync    = data.clone();
+    let path_repo_sync    = data_path.clone();
+    let tok_repo_sync     = token.clone();
+    let handle_repo_sync  = app_handle.clone();
+    let sync_running_sync = sync_running.clone();
+    let sync_cancel_sync  = sync_cancel.clone();
     let repo_sync = warp::path!("api" / "repo" / "sync")
         .and(warp::post())
         .and(require_token(tok_repo_sync))
@@ -1201,10 +1344,23 @@ pub async fn start_api_server(
         .and(with_data(data_repo_sync))
         .and(with_path(path_repo_sync))
         .and(with_app_handle(handle_repo_sync))
-        .map(|body: RepoSyncBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>, handle: tauri::AppHandle| {
+        .and(with_atomic(sync_running_sync))
+        .and(with_atomic(sync_cancel_sync))
+        .map(|body: RepoSyncBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>, handle: tauri::AppHandle, running: Arc<AtomicBool>, cancel: Arc<AtomicBool>| {
+            if running.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "A sync is already running. Cancel it first with DELETE /api/repo/sync/cancel.".into() }),
+                    StatusCode::CONFLICT,
+                );
+            }
+            cancel.store(false, Ordering::SeqCst);
             let job_id = uuid::Uuid::new_v4().to_string();
             let jid = job_id.clone();
-            tokio::spawn(async move { do_api_repo_sync(body, d, path, handle, jid).await; });
+            let running_done = running.clone();
+            tokio::spawn(async move {
+                do_api_repo_sync(body, d, path, handle, jid, cancel).await;
+                running_done.store(false, Ordering::SeqCst);
+            });
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({
                     "ok": true,
@@ -1213,36 +1369,256 @@ pub async fn start_api_server(
                     "progress_event": "bmm://repo-sync-progress",
                     "done_event": "bmm://repo-sync-done",
                     "error_event": "bmm://repo-sync-error",
+                    "cancel_endpoint": "DELETE /api/repo/sync/cancel",
                 })),
                 StatusCode::ACCEPTED,
             )
         });
 
-    // POST /api/repo/host  (auth) — background export task
-    let data_repo_host = data.clone();
-    let tok_repo_host = token.clone();
-    let handle_repo_host = app_handle.clone();
-    let repo_host = warp::path!("api" / "repo" / "host")
+    // DELETE /api/repo/gen/cancel  (auth)
+    let tok_gen_cancel     = token.clone();
+    let gen_cancel_cancel  = gen_cancel.clone();
+    let gen_running_cancel = gen_running.clone();
+    let repo_gen_cancel = warp::path!("api" / "repo" / "gen" / "cancel")
+        .and(warp::delete())
+        .and(require_token(tok_gen_cancel))
+        .and(with_atomic(gen_cancel_cancel))
+        .and(with_atomic(gen_running_cancel))
+        .map(|cancel: Arc<AtomicBool>, running: Arc<AtomicBool>| {
+            if !running.load(Ordering::SeqCst) {
+                return warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": false, "message": "No gen/export is currently running" })),
+                    StatusCode::OK,
+                );
+            }
+            cancel.store(true, Ordering::SeqCst);
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({ "ok": true, "message": "Cancel signal sent — gen will stop at next checkpoint" })),
+                StatusCode::OK,
+            )
+        });
+
+    // POST /api/repo/gen  (auth, max 1 concurrent) — generate repo structure (formerly "host")
+    let data_repo_gen   = data.clone();
+    let tok_repo_gen    = token.clone();
+    let handle_repo_gen = app_handle.clone();
+    let gen_running_gen = gen_running.clone();
+    let gen_cancel_gen  = gen_cancel.clone();
+    let repo_gen = warp::path!("api" / "repo" / "gen")
         .and(warp::post())
-        .and(require_token(tok_repo_host))
-        .and(warp::body::json::<RepoHostBody>())
-        .and(with_data(data_repo_host))
-        .and(with_app_handle(handle_repo_host))
-        .map(|body: RepoHostBody, d: Arc<std::sync::Mutex<AppData>>, handle: tauri::AppHandle| {
+        .and(require_token(tok_repo_gen))
+        .and(warp::body::json::<RepoGenBody>())
+        .and(with_data(data_repo_gen))
+        .and(with_app_handle(handle_repo_gen))
+        .and(with_atomic(gen_running_gen))
+        .and(with_atomic(gen_cancel_gen))
+        .map(|body: RepoGenBody, d: Arc<std::sync::Mutex<AppData>>, handle: tauri::AppHandle, running: Arc<AtomicBool>, cancel: Arc<AtomicBool>| {
+            if running.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "A gen/export is already running. Cancel it first with DELETE /api/repo/gen/cancel.".into() }),
+                    StatusCode::CONFLICT,
+                );
+            }
+            cancel.store(false, Ordering::SeqCst);
             let job_id = uuid::Uuid::new_v4().to_string();
             let jid = job_id.clone();
-            tokio::spawn(async move { do_api_repo_host(body, d, handle, jid).await; });
+            let running_done = running.clone();
+            tokio::spawn(async move {
+                do_api_repo_gen(body, d, handle, jid, cancel).await;
+                running_done.store(false, Ordering::SeqCst);
+            });
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({
                     "ok": true,
-                    "message": "Export started in background",
+                    "message": "Gen started in background",
                     "job_id": job_id,
                     "progress_event": "bmm://repo-export-progress",
                     "done_event": "bmm://repo-export-done",
                     "error_event": "bmm://repo-export-error",
+                    "cancel_endpoint": "DELETE /api/repo/gen/cancel",
                 })),
                 StatusCode::ACCEPTED,
             )
+        });
+
+    // POST /api/repo/host  (auth) — start HTTP static file server for a generated repo
+    let tok_repo_host_start = token.clone();
+    let http_host_start     = http_host_shutdown.clone();
+    let handle_repo_host    = app_handle.clone();
+    let repo_host_start = warp::path!("api" / "repo" / "host")
+        .and(warp::post())
+        .and(require_token(tok_repo_host_start))
+        .and(warp::body::json::<RepoHttpHostBody>())
+        .and(with_http_host_shutdown(http_host_start))
+        .and(with_app_handle(handle_repo_host))
+        .map(|body: RepoHttpHostBody, shutdown: HttpHostShutdown, handle: tauri::AppHandle| {
+            let already_running = shutdown.lock().unwrap_or_else(|p| p.into_inner()).is_some();
+            if already_running {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: "HTTP host server is already running. Stop it first with DELETE /api/repo/host.".into() }),
+                    StatusCode::CONFLICT,
+                );
+            }
+            let serve_dir = body.serve_dir.clone();
+            if !std::path::Path::new(&serve_dir).exists() {
+                return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: format!("serve_dir does not exist: {}", serve_dir) }),
+                    StatusCode::BAD_REQUEST,
+                );
+            }
+            let port = body.port.unwrap_or(8080);
+            let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+            {
+                let mut holder = shutdown.lock().unwrap_or_else(|p| p.into_inner());
+                *holder = Some(tx);
+            }
+            let serve_dir_clone = serve_dir.clone();
+            let shutdown_clone  = shutdown.clone();
+            tokio::spawn(async move {
+                let _ = handle.emit_all("bmm://repo-host-started", serde_json::json!({
+                    "port": port, "serve_dir": &serve_dir_clone,
+                    "url": format!("http://localhost:{}", port),
+                }));
+                let static_files = warp::fs::dir(serve_dir_clone.clone());
+                let cors_srv = warp::cors().allow_any_origin()
+                    .allow_methods(vec!["GET", "HEAD"])
+                    .allow_headers(vec!["Range"]);
+                let routes = static_files.with(cors_srv);
+                let addr: std::net::SocketAddr = ([0, 0, 0, 0], port).into();
+                let (_, server) = warp::serve(routes).bind_with_graceful_shutdown(addr, async {
+                    rx.await.ok();
+                });
+                server.await;
+                // Clear shutdown holder when server stops
+                let mut holder = shutdown_clone.lock().unwrap_or_else(|p| p.into_inner());
+                *holder = None;
+                let _ = handle.emit_all("bmm://repo-host-stopped", serde_json::json!({ "port": port }));
+            });
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({
+                    "ok": true,
+                    "message": format!("HTTP repo server started on port {}", port),
+                    "port": port,
+                    "url": format!("http://localhost:{}", port),
+                    "repo_url": format!("http://localhost:{}/repo.json", port),
+                    "stop_endpoint": "DELETE /api/repo/host",
+                })),
+                StatusCode::CREATED,
+            )
+        });
+
+    // DELETE /api/repo/host  (auth) — stop the HTTP static file server
+    let tok_repo_host_stop = token.clone();
+    let http_host_stop     = http_host_shutdown.clone();
+    let repo_host_stop = warp::path!("api" / "repo" / "host")
+        .and(warp::delete())
+        .and(require_token(tok_repo_host_stop))
+        .and(with_http_host_shutdown(http_host_stop))
+        .map(|shutdown: HttpHostShutdown| {
+            let mut holder = shutdown.lock().unwrap_or_else(|p| p.into_inner());
+            if let Some(tx) = holder.take() {
+                let _ = tx.send(());
+                warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": true, "message": "HTTP repo server stopping…" })),
+                    StatusCode::OK,
+                )
+            } else {
+                warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": false, "message": "No HTTP repo server is currently running" })),
+                    StatusCode::OK,
+                )
+            }
+        });
+
+    // PUT /api/modpacks/:id  (auth) — update an existing modpack
+    let data_mp_update  = data.clone();
+    let path_mp_update  = data_path.clone();
+    let tok_mp_update   = token.clone();
+    let update_modpack = warp::path!("api" / "modpacks" / String)
+        .and(warp::put())
+        .and(require_token(tok_mp_update))
+        .and(warp::body::json::<UpdateModpackBody>())
+        .and(with_data(data_mp_update))
+        .and(with_path(path_mp_update))
+        .map(|modpack_id: String, body: UpdateModpackBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
+            let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
+            // Build mod refs first (immutable borrow) before taking mutable borrow on modpacks
+            let new_mod_refs: Option<Vec<crate::models::modpack::ModpackModRef>> = body.mod_ids.as_ref().map(|ids| {
+                ids.iter().map(|id| {
+                    let m = data.mods.iter().find(|m| &m.id == id);
+                    crate::models::modpack::ModpackModRef {
+                        mod_id: id.clone(),
+                        mod_name: m.map(|m| m.name.clone()).unwrap_or_default(),
+                        mod_version: m.map(|m| m.version.clone()).unwrap_or_default(),
+                        profile_id: None,
+                        profile_name: None,
+                        sha256: String::new(),
+                        file_manifest: Vec::new(),
+                        include_dependencies: false,
+                        download_link: None,
+                        fallback_link: None,
+                        fallback_type: None,
+                    }
+                }).collect()
+            });
+            let mp = match data.modpacks.iter_mut().find(|m| m.id == modpack_id) {
+                Some(m) => m,
+                None => return warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: format!("Modpack '{}' not found", modpack_id) }),
+                    StatusCode::NOT_FOUND,
+                ),
+            };
+            if let Some(n) = body.name              { mp.name = n; }
+            if let Some(d) = body.description       { mp.description = Some(d); }
+            if let Some(g) = body.game_name         { mp.game_name = Some(g); }
+            if let Some(s) = body.sr_link           { mp.sr_link = Some(s); }
+            if let Some(m) = body.multi_profile     { mp.multi_profile = m; }
+            if let Some(s) = body.skip_integrity_check { mp.skip_integrity_check = s; }
+            if let Some(dm) = body.dependency_mode {
+                mp.dependency_mode = match dm.as_str() {
+                    "all"    => crate::models::modpack::DependencyMode::All,
+                    "manual" => crate::models::modpack::DependencyMode::Manual,
+                    _        => crate::models::modpack::DependencyMode::None,
+                };
+            }
+            if let Some(refs) = new_mod_refs { mp.mods = refs; }
+            mp.updated_at = chrono::Local::now().to_rfc3339();
+            let mp_id = mp.id.clone();
+            drop(data);
+            save_data(&d, &path);
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({ "ok": true, "modpack_id": mp_id })),
+                StatusCode::OK,
+            )
+        });
+
+    // DELETE /api/modpacks/:id  (auth) — permanently delete a modpack
+    let data_mp_delete  = data.clone();
+    let path_mp_delete  = data_path.clone();
+    let tok_mp_delete   = token.clone();
+    let delete_modpack = warp::path!("api" / "modpacks" / String)
+        .and(warp::delete())
+        .and(require_token(tok_mp_delete))
+        .and(with_data(data_mp_delete))
+        .and(with_path(path_mp_delete))
+        .map(|modpack_id: String, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
+            let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
+            let before = data.modpacks.len();
+            data.modpacks.retain(|m| m.id != modpack_id);
+            let deleted = data.modpacks.len() < before;
+            drop(data);
+            if deleted {
+                save_data(&d, &path);
+                warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": true, "deleted_id": modpack_id })),
+                    StatusCode::OK,
+                )
+            } else {
+                warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: format!("Modpack '{}' not found", modpack_id) }),
+                    StatusCode::NOT_FOUND,
+                )
+            }
         });
 
     // CORS headers — allow any origin (local-only, Bearer token required)
@@ -1275,11 +1651,16 @@ pub async fn start_api_server(
         .or(get_modpacks)
         .boxed();
 
+    // group_c: repo routes (cancel routes BEFORE the main route they override)
     let group_c = repo_info
         .or(repo_connect)
         .or(repo_list)
+        .or(repo_sync_cancel)   // DELETE must come before POST for same path prefix
         .or(repo_sync)
-        .or(repo_host)
+        .or(repo_gen_cancel)
+        .or(repo_gen)
+        .or(repo_host_stop)     // DELETE /api/repo/host
+        .or(repo_host_start)    // POST /api/repo/host
         .or(repo_remove)
         .boxed();
 
@@ -1289,10 +1670,15 @@ pub async fn start_api_server(
         .or(delete_mod)
         .boxed();
 
+    let group_e = update_modpack
+        .or(delete_modpack)
+        .boxed();
+
     let routes = group_a
         .or(group_b)
         .or(group_c)
         .or(group_d)
+        .or(group_e)
         .with(cors)
         .recover(handle_rejection);
 
@@ -1405,6 +1791,7 @@ async fn do_api_repo_sync(
     data_path: Arc<PathBuf>,
     handle: tauri::AppHandle,
     job_id: String,
+    cancel: Arc<AtomicBool>,
 ) {
     use futures::StreamExt;
 
@@ -1510,7 +1897,17 @@ async fn do_api_repo_sync(
         let total_mods = repo_profile.mods.len().max(1);
         let mut active_mod_ids: Vec<String> = Vec::new();
 
+        let mut consecutive_errors: u32 = 0;
+        const MAX_CONSECUTIVE_ERRORS: u32 = 3;
+
         for (m_idx, repo_mod) in repo_profile.mods.iter().enumerate() {
+            // Check cancellation at each mod boundary
+            if cancel.load(Ordering::SeqCst) {
+                emit!("bmm://repo-sync-error", serde_json::json!({
+                    "job_id": &job_id, "error": "Sync cancelled by user", "cancelled": true,
+                }));
+                return;
+            }
 
             if let Some(ref sel) = choice.selected_mod_ids {
                 if !sel.contains(&repo_mod.id) { continue; }
@@ -1551,6 +1948,7 @@ async fn do_api_repo_sync(
                         file.relative_path.replace('\\', "/"));
                     match client.get(&file_url).send().await {
                         Ok(resp) if resp.status().is_success() => {
+                            consecutive_errors = 0;
                             let mut stream = resp.bytes_stream();
                             match tokio::fs::File::create(&local_path).await {
                                 Ok(mut fout) => {
@@ -1575,16 +1973,41 @@ async fn do_api_repo_sync(
                             }
                         },
                         Ok(resp) if resp.status() == reqwest::StatusCode::FORBIDDEN => {
-                            bail!("Access denied (403) — check creator_id");
+                            bail!("Access denied (403) — repo banned or creator_id invalid. Sync stopped.");
+                        },
+                        Ok(resp) if resp.status() == reqwest::StatusCode::UNAUTHORIZED => {
+                            bail!("Unauthorized (401) — sync stopped.");
+                        },
+                        Ok(resp) if resp.status().as_u16() >= 500 => {
+                            // Server-side error — likely server crashed
+                            consecutive_errors += 1;
+                            emit!("bmm://repo-sync-warning", serde_json::json!({
+                                "job_id": &job_id,
+                                "message": format!("Server error HTTP {} for {} ({}/{})",
+                                    resp.status(), file.relative_path, consecutive_errors, MAX_CONSECUTIVE_ERRORS),
+                            }));
+                            if consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
+                                bail!(format!("Too many server errors ({}×) — repo server may have crashed. Sync stopped.", consecutive_errors));
+                            }
                         },
                         Ok(resp) => emit!("bmm://repo-sync-warning", serde_json::json!({
                             "job_id": &job_id,
                             "message": format!("HTTP {} for {}", resp.status(), file.relative_path),
                         })),
-                        Err(e) => emit!("bmm://repo-sync-warning", serde_json::json!({
-                            "job_id": &job_id,
-                            "message": format!("Network error: {}: {}", file.relative_path, e),
-                        })),
+                        Err(e) => {
+                            // Network / connection error
+                            consecutive_errors += 1;
+                            let is_fatal = e.is_connect() || e.is_timeout();
+                            emit!("bmm://repo-sync-warning", serde_json::json!({
+                                "job_id": &job_id,
+                                "message": format!("Network error ({}/{}): {}: {}",
+                                    consecutive_errors, MAX_CONSECUTIVE_ERRORS, file.relative_path, e),
+                            }));
+                            if is_fatal || consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
+                                bail!(format!("Connection lost ({}{}). Sync stopped.",
+                                    if is_fatal { "fatal: " } else { "" }, e));
+                            }
+                        },
                     }
                 }
             }
@@ -1669,11 +2092,37 @@ async fn do_api_repo_sync(
     }));
 }
 
-async fn do_api_repo_host(
-    body: RepoHostBody,
+/// Zip a directory recursively into a .zip file using the `zip` crate.
+fn zip_directory(src_dir: &std::path::Path, dst_zip: &std::path::Path) -> Result<(), String> {
+    use std::io::Write;
+    let file = std::fs::File::create(dst_zip).map_err(|e| e.to_string())?;
+    let mut writer = zip::ZipWriter::new(file);
+    let options = zip::write::FileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated)
+        .unix_permissions(0o644);
+    for entry in walkdir::WalkDir::new(src_dir).into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+        let rel = path.strip_prefix(src_dir).map_err(|e| e.to_string())?;
+        let rel_str = rel.to_string_lossy().replace('\\', "/");
+        if path.is_dir() {
+            if !rel_str.is_empty() {
+                writer.add_directory(format!("{}/", rel_str), options).map_err(|e| e.to_string())?;
+            }
+        } else {
+            writer.start_file(&rel_str, options).map_err(|e| e.to_string())?;
+            writer.write_all(&std::fs::read(path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        }
+    }
+    writer.finish().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+async fn do_api_repo_gen(
+    body: RepoGenBody,
     data: Arc<std::sync::Mutex<AppData>>,
     handle: tauri::AppHandle,
     job_id: String,
+    cancel: Arc<AtomicBool>,
 ) {
     use crate::models::repo::{RepoFile, RepoMod, RepoProfile, ServerRepo};
 
@@ -1687,20 +2136,20 @@ async fn do_api_repo_host(
         }};
     }
 
-    if body.author_name.trim().is_empty() { bail!("author_name is required"); }
-    if body.profile_ids.is_empty()        { bail!("profile_ids must not be empty"); }
-    if body.output_dir.is_empty()         { bail!("output_dir is required"); }
+    if body.author_name.trim().is_empty() { bail!("authorName is required"); }
+    if body.profile_ids.is_empty()        { bail!("profileIds must not be empty"); }
+    if body.output_dir.is_empty()         { bail!("outputDir is required"); }
 
     let output_path = std::path::PathBuf::from(&body.output_dir);
     if let Err(e) = std::fs::create_dir_all(&output_path) {
-        bail!(format!("Cannot create output_dir: {}", e));
+        bail!(format!("Cannot create outputDir: {}", e));
     }
 
     let (profiles_data, all_tags, game_name) = {
         let d = data.lock().unwrap_or_else(|p| p.into_inner());
         let first_profile = match d.profiles.iter().find(|p| body.profile_ids.contains(&p.id)) {
             Some(p) => p.clone(),
-            None => { drop(d); bail!("None of the specified profile_ids were found"); }
+            None => { drop(d); bail!("None of the specified profileIds were found"); }
         };
         let game_name = first_profile.game_name.clone();
         let mut profiles_data = Vec::new();
@@ -1727,13 +2176,24 @@ async fn do_api_repo_host(
     repo.author = Some(body.author_name.clone());
     repo.seed = Some(seed);
 
+    // In lightweight mode we skip copying files so no mods/ dir needed
     let repo_mods_dir = output_path.join("mods");
-    if let Err(e) = std::fs::create_dir_all(&repo_mods_dir) {
-        bail!(format!("Cannot create mods dir: {}", e));
+    if !body.lightweight {
+        if let Err(e) = std::fs::create_dir_all(&repo_mods_dir) {
+            bail!(format!("Cannot create mods dir: {}", e));
+        }
     }
 
     let total = profiles_data.len();
     for (p_idx, (profile, mods)) in profiles_data.into_iter().enumerate() {
+        // Check cancellation between profiles
+        if cancel.load(Ordering::SeqCst) {
+            emit!("bmm://repo-export-error", serde_json::json!({
+                "job_id": &job_id, "error": "Gen cancelled by user", "cancelled": true,
+            }));
+            return;
+        }
+
         let mut repo_profile = RepoProfile {
             id: profile.id.clone(),
             name: profile.name.clone(),
@@ -1742,15 +2202,27 @@ async fn do_api_repo_host(
         };
         let total_mods = mods.len().max(1);
         for (m_idx, mod_entry) in mods.iter().enumerate() {
+            // Check cancellation between mods
+            if cancel.load(Ordering::SeqCst) {
+                emit!("bmm://repo-export-error", serde_json::json!({
+                    "job_id": &job_id, "error": "Gen cancelled by user", "cancelled": true,
+                }));
+                return;
+            }
+
             let progress = ((p_idx as f32 + m_idx as f32 / total_mods as f32) / total as f32) * 90.0;
+            let mode_label = if body.lightweight { "Indexing" } else { "Exporting" };
             emit!("bmm://repo-export-progress", serde_json::json!({
                 "job_id": &job_id,
-                "step": format!("Exporting {} ({}/{})", mod_entry.name, m_idx + 1, total_mods),
+                "step": format!("{} {} ({}/{})", mode_label, mod_entry.name, m_idx + 1, total_mods),
                 "progress": progress, "current_file": &mod_entry.name,
+                "lightweight": body.lightweight,
             }));
 
             let target_mod_dir = repo_mods_dir.join(&mod_entry.id);
-            std::fs::create_dir_all(&target_mod_dir).ok();
+            if !body.lightweight {
+                std::fs::create_dir_all(&target_mod_dir).ok();
+            }
 
             let resolved_tags: Vec<crate::models::repo::RepoTag> = mod_entry.tags.iter()
                 .filter_map(|tid| all_tags.iter().find(|t| &t.id == tid))
@@ -1773,15 +2245,28 @@ async fn do_api_repo_host(
             if let Ok(files) = crate::fs_utils::list_mod_files(&mod_entry.mod_folder_path) {
                 for rel_path in &files {
                     let src = mod_entry.mod_folder_path.join(rel_path);
-                     let dst = target_mod_dir.join(rel_path);
-                    if let Some(parent) = dst.parent() { std::fs::create_dir_all(parent).ok(); }
-                    if std::fs::copy(&src, &dst).is_err() { continue; }
-                    let size = std::fs::metadata(&dst).map(|m| m.len()).unwrap_or(0);
-                    if let Ok(sha) = api_sha256_file(&dst) {
-                        repo_mod.files.push(RepoFile {
-                            relative_path: rel_path.to_string_lossy().to_string().replace('\\', "/"),
-                            size, sha256_hash: sha, chunks: None,
-                        });
+                    let size_src = std::fs::metadata(&src).map(|m| m.len()).unwrap_or(0);
+
+                    if body.lightweight {
+                        // Lightweight: hash source file in place, don't copy
+                        if let Ok(sha) = api_sha256_file(&src) {
+                            repo_mod.files.push(RepoFile {
+                                relative_path: rel_path.to_string_lossy().to_string().replace('\\', "/"),
+                                size: size_src, sha256_hash: sha, chunks: None,
+                            });
+                        }
+                    } else {
+                        // Full export: copy to output dir
+                        let dst = target_mod_dir.join(rel_path);
+                        if let Some(parent) = dst.parent() { std::fs::create_dir_all(parent).ok(); }
+                        if std::fs::copy(&src, &dst).is_err() { continue; }
+                        let size_dst = std::fs::metadata(&dst).map(|m| m.len()).unwrap_or(0);
+                        if let Ok(sha) = api_sha256_file(&dst) {
+                            repo_mod.files.push(RepoFile {
+                                relative_path: rel_path.to_string_lossy().to_string().replace('\\', "/"),
+                                size: size_dst, sha256_hash: sha, chunks: None,
+                            });
+                        }
                     }
                 }
             }
@@ -1801,6 +2286,25 @@ async fn do_api_repo_host(
             }
         },
         Err(e) => bail!(format!("Serialization error: {}", e)),
+    }
+
+    // Optional: create zip archive
+    if body.zip_output {
+        emit!("bmm://repo-export-progress", serde_json::json!({
+            "job_id": &job_id, "step": "Creating zip archive…", "progress": 93.0, "current_file": "",
+        }));
+        let zip_path = output_path.with_extension("zip");
+        match zip_directory(&output_path, &zip_path) {
+            Ok(_) => emit!("bmm://repo-export-progress", serde_json::json!({
+                "job_id": &job_id,
+                "step": format!("Zip ready: {}", zip_path.display()),
+                "progress": 94.0, "current_file": zip_path.to_string_lossy(),
+                "zip_path": zip_path.to_string_lossy(),
+            })),
+            Err(e) => emit!("bmm://repo-export-progress", serde_json::json!({
+                "job_id": &job_id, "step": format!("Warning: zip failed: {}", e), "progress": 94.0, "current_file": "",
+            })),
+        }
     }
 
     if body.generate_server {
@@ -1829,11 +2333,14 @@ async fn do_api_repo_host(
         }
     }
 
+    let zip_path = if body.zip_output { Some(output_path.with_extension("zip").to_string_lossy().to_string()) } else { None };
     emit!("bmm://repo-export-done", serde_json::json!({
         "job_id": &job_id,
         "output_dir": &body.output_dir,
         "repo_json": repo_json_path.to_string_lossy(),
-        "message": "Export completed successfully",
+        "lightweight": body.lightweight,
+        "zip_path": zip_path,
+        "message": "Gen completed successfully",
     }));
 }
 

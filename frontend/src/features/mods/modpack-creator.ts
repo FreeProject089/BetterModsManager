@@ -77,6 +77,106 @@ export async function initModpackCreator(container) {
             }
         } catch (e) { console.error('[ModpackCreator] live-refresh error', e); }
     });
+
+    // Refresh modpack list when API creates/modifies/deletes a modpack
+    window.addEventListener('bmm://modpacks-updated', async () => {
+        try {
+            await _loadData();
+            if (!_editingPack) _renderModpackList(container);
+        } catch (e) { console.error('[ModpackCreator] modpacks-updated error', e); }
+    });
+
+    // Open modpack editor via event (from QT / external trigger)
+    // detail: { action: 'create'|'update', modpackId?: string, prefill?: {...} }
+    window.addEventListener('bmm:modpack-focus', async (e: any) => {
+        const { action, modpackId, prefill } = e.detail || {};
+        try {
+            await _loadData();
+        } catch (_) {}
+
+        if (action === 'create') {
+            // Build a fresh pack skeleton pre-seeded from prefill
+            const freshPack = {
+                id: '', name: '', description: null, created_at: '', updated_at: '',
+                multi_profile: true, dependency_mode: 'manual', mods: [], sr_link: null, game_name: null,
+                skip_integrity_check: false,
+            };
+            if (prefill) {
+                if (prefill.name)                  freshPack.name                  = prefill.name;
+                if (prefill.description != null)   freshPack.description           = prefill.description;
+                if (prefill.game_name != null)     freshPack.game_name             = prefill.game_name;
+                if (prefill.sr_link != null)       freshPack.sr_link               = prefill.sr_link;
+                if (prefill.multi_profile != null) freshPack.multi_profile         = prefill.multi_profile;
+                if (prefill.skip_integrity_check != null) freshPack.skip_integrity_check = prefill.skip_integrity_check;
+                if (prefill.dependency_mode)       freshPack.dependency_mode       = prefill.dependency_mode;
+                // Pre-seed mods from mod_ids (stubs — just ids, no metadata yet)
+                if (prefill.mod_ids?.length) {
+                    freshPack.mods = prefill.mod_ids.map((id: string) => {
+                        const found = _allMods.find(m => m.id === id);
+                        return { mod_id: id, mod_name: found?.name || id, mod_version: found?.version || '', sha256: '', file_manifest: [] };
+                    });
+                }
+            }
+            // Open in "new pack" mode (pack=null → shows Create title, empty skeleton)
+            _openEditor(container, null);
+            // After editor renders, apply all prefill values + pre-seeded mods
+            requestAnimationFrame(() => {
+                if (prefill?.name && document.getElementById('mp-name'))
+                    (document.getElementById('mp-name') as HTMLInputElement).value = prefill.name;
+                if (prefill?.description != null && document.getElementById('mp-desc'))
+                    (document.getElementById('mp-desc') as HTMLTextAreaElement).value = prefill.description || '';
+                if (prefill?.game_name != null && document.getElementById('mp-game'))
+                    (document.getElementById('mp-game') as HTMLInputElement).value = prefill.game_name || '';
+                if (prefill?.sr_link != null && document.getElementById('mp-srlink'))
+                    (document.getElementById('mp-srlink') as HTMLInputElement).value = prefill.sr_link || '';
+                if (prefill?.dependency_mode && document.getElementById('mp-depmode'))
+                    (document.getElementById('mp-depmode') as HTMLSelectElement).value = prefill.dependency_mode;
+                if (prefill?.multi_profile != null) {
+                    const cb = document.getElementById('mp-multi') as HTMLInputElement;
+                    if (cb) { cb.checked = !!prefill.multi_profile; _editingPack.multi_profile = !!prefill.multi_profile; }
+                }
+                if (prefill?.skip_integrity_check != null) {
+                    const cb = document.getElementById('mp-skip-integrity') as HTMLInputElement;
+                    if (cb) { cb.checked = !!prefill.skip_integrity_check; _editingPack.skip_integrity_check = !!prefill.skip_integrity_check; }
+                }
+                // Populate mods list from prefill.mod_ids
+                if (freshPack.mods.length > 0) {
+                    _packMods = [...freshPack.mods];
+                    _editingPack.mods = [..._packMods];
+                    const modListEl = document.getElementById('mp-modlist');
+                    if (modListEl) _renderPackModList(modListEl);
+                }
+            });
+
+        } else if (action === 'update' && modpackId) {
+            const existing = _modpacks.find(m => m.id === modpackId);
+            if (!existing) {
+                console.warn('[ModpackCreator] bmm:modpack-focus update — pack not found:', modpackId);
+                return;
+            }
+            // Merge prefill overrides onto the existing pack before opening
+            const merged = JSON.parse(JSON.stringify(existing));
+            if (prefill) {
+                if (prefill.name != null)                  merged.name                  = prefill.name;
+                if (prefill.description != null)           merged.description           = prefill.description;
+                if (prefill.game_name != null)             merged.game_name             = prefill.game_name;
+                if (prefill.sr_link != null)               merged.sr_link               = prefill.sr_link;
+                if (prefill.multi_profile != null)         merged.multi_profile         = prefill.multi_profile;
+                if (prefill.skip_integrity_check != null)  merged.skip_integrity_check  = prefill.skip_integrity_check;
+                if (prefill.dependency_mode)               merged.dependency_mode       = prefill.dependency_mode;
+                if (prefill.mod_ids?.length) {
+                    // Replace mods list with the provided ids, preserving existing metadata where possible
+                    merged.mods = prefill.mod_ids.map((id: string) => {
+                        const existing_ref = merged.mods.find((mr: any) => mr.mod_id === id);
+                        if (existing_ref) return existing_ref;
+                        const found = _allMods.find(m => m.id === id);
+                        return { mod_id: id, mod_name: found?.name || id, mod_version: found?.version || '', sha256: '', file_manifest: [] };
+                    });
+                }
+            }
+            _openEditor(container, merged);
+        }
+    });
 }
 
 /** Refreshes the mod picker list inside an open editor without closing it */

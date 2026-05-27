@@ -316,6 +316,224 @@ export function initRepo() {
     initRepoSync(elements);
     initRepoAdmin(elements);
 
+    // ── bmm:repo-focus — auto-launch + pre-fill from Quick Test ──
+    document.addEventListener('bmm:repo-focus', (e: any) => {
+        const section: string  = e.detail?.section ?? '';
+        const prefill: any     = e.detail?.prefill ?? null;
+
+        if (section === 'sync') {
+            // ── Pre-fill sync form fields from QT data ──
+            if (prefill) {
+                if (prefill.url && elements.inputSyncUrl)
+                    (elements.inputSyncUrl as HTMLInputElement).value = prefill.url;
+                if (prefill.gameDir && elements.inputSyncGamePath)
+                    (elements.inputSyncGamePath as HTMLInputElement).value = prefill.gameDir;
+                if (prefill.modsDir && elements.inputSyncModsPath)
+                    (elements.inputSyncModsPath as HTMLInputElement).value = prefill.modsDir;
+                if (prefill.backupDir && elements.inputSyncBackupPath)
+                    (elements.inputSyncBackupPath as HTMLInputElement).value = prefill.backupDir;
+                if (typeof prefill.downloadLimit === 'number' && elements.inputSyncDownloadLimit)
+                    (elements.inputSyncDownloadLimit as HTMLInputElement).value = String(prefill.downloadLimit);
+            }
+
+            // Scroll the sync URL card into view
+            const target = elements.syncUrlCard ?? elements.inputSyncUrl;
+            if (target) (target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // Auto-click Fetch to load remote repo profiles
+            setTimeout(() => {
+                if (elements.btnFetchInfo) (elements.btnFetchInfo as HTMLElement).click();
+            }, 300);
+
+            // If choices were specified, wait for Fetch to complete then auto-select profiles + auto-sync
+            const wantedProfileIds: string[] = (prefill?.choices || [])
+                .map((c: any) => c.repoProfileId)
+                .filter(Boolean);
+            if (wantedProfileIds.length > 0 && elements.profilesSelectionEl) {
+                let attempts = 0;
+                const pollId = setInterval(() => {
+                    attempts++;
+                    const cbs = (elements.profilesSelectionEl as HTMLElement).querySelectorAll<HTMLInputElement>('.repo-sync-choice-cb');
+                    if (cbs.length > 0) {
+                        clearInterval(pollId);
+                        // Auto-select matching profiles
+                        cbs.forEach(cb => {
+                            if (wantedProfileIds.includes(cb.dataset.repoProfileId || '')) {
+                                if (!cb.checked) cb.click();
+                            }
+                        });
+                        // Auto-click Sync after profiles are selected
+                        setTimeout(() => {
+                            if (elements.btnStartSync) (elements.btnStartSync as HTMLElement).click();
+                        }, 400);
+                    }
+                    if (attempts >= 20) clearInterval(pollId); // max 10s
+                }, 500);
+            }
+
+        } else if (section === 'connect') {
+            // Fill URL in sync form and auto-fetch the repo info
+            if (prefill?.url && elements.inputSyncUrl)
+                (elements.inputSyncUrl as HTMLInputElement).value = prefill.url;
+            const connectTarget = elements.syncUrlCard ?? elements.inputSyncUrl;
+            if (connectTarget) (connectTarget as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(() => {
+                if (elements.btnFetchInfo) (elements.btnFetchInfo as HTMLElement).click();
+            }, 300);
+
+        } else if (section === 'disconnect') {
+            // Clear the fetched repo state (equivalent to disconnecting from the UI)
+            const disconnectTarget = elements.syncUrlCard ?? elements.inputSyncUrl;
+            if (disconnectTarget) (disconnectTarget as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(() => {
+                if (elements.btnClearFetchedRepo) (elements.btnClearFetchedRepo as HTMLElement).click();
+            }, 300);
+
+        } else if (section === 'host') {
+            // Pre-fill host server settings and start the server
+            if (prefill) {
+                // repo-host-path is the directory the server serves from
+                const hostPathInput = document.getElementById('repo-host-path') as HTMLInputElement | null;
+                if (prefill.serveDir && hostPathInput)
+                    hostPathInput.value = prefill.serveDir;
+                if (prefill.port && elements.inputServerPort)
+                    (elements.inputServerPort as HTMLInputElement).value = String(prefill.port);
+                if (prefill.uploadLimit !== undefined && elements.inputServerUploadLimit)
+                    (elements.inputServerUploadLimit as HTMLInputElement).value = String(prefill.uploadLimit);
+            }
+            // Scroll to the toggle server button
+            if (elements.btnToggleServer) (elements.btnToggleServer as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => {
+                if (elements.btnToggleServer) (elements.btnToggleServer as HTMLElement).click();
+            }, 300);
+
+        } else if (section === 'gen') {
+            // Switch to export/gen tab if tab system is present
+            const genTab = document.querySelector('[data-repo-tab="export"], [data-repo-tab="gen"]') as HTMLElement | null;
+            if (genTab) genTab.click();
+
+            // ── Pre-fill gen/export form fields from QT data ──
+            if (prefill) {
+                if (prefill.outputDir && elements.inputExportPath)
+                    (elements.inputExportPath as HTMLInputElement).value = prefill.outputDir;
+                if (prefill.authorName && elements.inputExportAuthor)
+                    (elements.inputExportAuthor as HTMLInputElement).value = prefill.authorName;
+                if (prefill.seed && elements.inputExportSeed)
+                    (elements.inputExportSeed as HTMLInputElement).value = prefill.seed;
+
+                // ── Select profiles matching prefill.profileIds ──
+                if (Array.isArray(prefill.profileIds) && prefill.profileIds.length > 0) {
+                    // Wait a tick for the profile list to be rendered
+                    requestAnimationFrame(() => {
+                        const allCbs = document.querySelectorAll<HTMLInputElement>('.repo-profile-cb');
+                        allCbs.forEach(cb => {
+                            cb.checked = prefill.profileIds.includes(cb.value);
+                        });
+                    });
+                }
+
+                // ── Zip output / standalone server — enable server panel ──
+                const needServerPanel = prefill.zipOutput || prefill.generateServer;
+                if (needServerPanel && elements.cbZipEnable) {
+                    (elements.cbZipEnable as HTMLInputElement).checked = true;
+                    // Trigger change to reveal the zip/server options panel
+                    elements.cbZipEnable.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+
+                // ── Server distribution options ──
+                // These only take effect after the panel is visible (requestAnimationFrame)
+                if (needServerPanel) {
+                    requestAnimationFrame(() => {
+                        // Port
+                        if (prefill.port && elements.inputZipPort)
+                            (elements.inputZipPort as HTMLInputElement).value = String(prefill.port);
+                        // Upload limit
+                        if (prefill.uploadLimit !== undefined && elements.inputZipLimit)
+                            (elements.inputZipLimit as HTMLInputElement).value = String(prefill.uploadLimit);
+                        // Admin password
+                        if (prefill.adminPassword && elements.inputZipPass)
+                            (elements.inputZipPass as HTMLInputElement).value = prefill.adminPassword;
+                        // Cloudflare tunnel
+                        if (prefill.useCloudflare && elements.cbZipCloudflare)
+                            (elements.cbZipCloudflare as HTMLInputElement).checked = true;
+                        // UPnP
+                        if (prefill.useUpnp && elements.cbZipUpnp)
+                            (elements.cbZipUpnp as HTMLInputElement).checked = true;
+                        // Docker
+                        if (prefill.useDocker && elements.cbZipDocker) {
+                            (elements.cbZipDocker as HTMLInputElement).checked = true;
+                            // Trigger docker toggle to show sub-options
+                            elements.cbZipDocker.dispatchEvent(new Event('change', { bubbles: true }));
+                            // Docker OS
+                            if (prefill.dockerOs && elements.zipDockerHostSelect)
+                                (elements.zipDockerHostSelect as HTMLSelectElement).value = prefill.dockerOs;
+                        }
+                        // Server version: std/standard → '1' (Hybrid), lux/premium → '2' (V2 Luxe)
+                        if (prefill.serverVersion && elements.selectZipVersion) {
+                            const vmap: Record<string, string> = { std: '1', lux: '2', standard: '1', premium: '2' };
+                            const v = vmap[prefill.serverVersion] ?? prefill.serverVersion;
+                            (elements.selectZipVersion as HTMLSelectElement).value = v;
+                        }
+                    });
+                }
+            }
+
+            // Scroll the export path input or start button into view
+            const target = elements.btnStartExport ?? elements.inputExportPath;
+            if (target) (target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // Auto-click the Start Export / Gen button
+            setTimeout(() => {
+                if (elements.btnStartExport) (elements.btnStartExport as HTMLElement).click();
+            }, 300);
+
+            // ── If standalone server (generateServer without zipOutput), pre-fill the mini server section ──
+            // The mini server section is always visible — pre-fill it so after gen the user just clicks "Generate Server"
+            if (prefill?.generateServer && !prefill?.zipOutput && prefill?.outputDir) {
+                const miniRepoPath = elements.inputMiniRepoPath as HTMLInputElement | null;
+                if (miniRepoPath) miniRepoPath.value = prefill.outputDir;
+
+                const miniPort = document.getElementById('repo-mini-server-port') as HTMLInputElement | null;
+                if (miniPort && prefill.port) miniPort.value = String(prefill.port);
+
+                const miniLimit = document.getElementById('repo-mini-server-upload-limit') as HTMLInputElement | null;
+                if (miniLimit && prefill.uploadLimit !== undefined) miniLimit.value = String(prefill.uploadLimit);
+
+                const miniPass = document.getElementById('repo-mini-server-password') as HTMLInputElement | null;
+                if (miniPass && prefill.adminPassword) miniPass.value = prefill.adminPassword;
+
+                // Version: std→'1', lux→'2'
+                const miniVer = document.getElementById('repo-mini-server-version') as HTMLSelectElement | null;
+                if (miniVer && prefill.serverVersion) {
+                    const vmap2: Record<string, string> = { std: '1', lux: '2', standard: '1', premium: '2' };
+                    miniVer.value = vmap2[prefill.serverVersion] ?? prefill.serverVersion;
+                }
+
+                const miniCf = document.getElementById('repo-mini-server-cloudflare') as HTMLInputElement | null;
+                if (miniCf && prefill.useCloudflare != null) miniCf.checked = !!prefill.useCloudflare;
+
+                const miniUpnp = document.getElementById('repo-mini-server-upnp') as HTMLInputElement | null;
+                if (miniUpnp && prefill.useUpnp != null) miniUpnp.checked = !!prefill.useUpnp;
+
+                const miniAutoStart = elements.cbAutoStart as HTMLInputElement | null;
+                if (miniAutoStart && prefill.autoStart != null) miniAutoStart.checked = !!prefill.autoStart;
+
+                if (prefill.useDocker && elements.cbDocker) {
+                    (elements.cbDocker as HTMLInputElement).checked = true;
+                    elements.cbDocker.dispatchEvent(new Event('change', { bubbles: true }));
+                    if (prefill.dockerOs && elements.dockerHostSelect)
+                        (elements.dockerHostSelect as HTMLSelectElement).value = prefill.dockerOs;
+                }
+
+                // Scroll to mini server section after gen starts (give it a moment)
+                setTimeout(() => {
+                    const miniSection = document.getElementById('repo-mini-server-json-path');
+                    if (miniSection) miniSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 1500);
+            }
+        }
+    });
+
     // ── Load Settings ──
     const loadRepoSettings = async () => {
         try {

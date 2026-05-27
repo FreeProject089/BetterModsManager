@@ -483,6 +483,85 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 + txtInput('plug-qt-s-game-path',   'game_path',   'C:/Games/MonJeu',            true)
                 + txtInput('plug-qt-s-mods-path',   'mods_path',   'C:/Games/MonJeu/Mods',       true)
                 + txtInput('plug-qt-s-backup-path', 'backup_path', 'C:/BMM/Backups/MonJeu',      true);
+    } else if (p === '/api/modpacks/:id' && m === 'PUT') {
+        const updModChecks = _allMods.length
+            ? _allMods.map(mod => `<label style="display:flex;align-items:center;gap:8px;padding:3px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
+                <input type="checkbox" class="plug-qt-upd-mod-check" value="${escHtml(mod.id)}" style="accent-color:var(--accent);width:13px;height:13px;">
+                <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(mod.name||mod.id)}">${escHtml(mod.name||mod.id)}</span>
+                ${mod.active ? `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(34,197,94,0.15);color:#4ade80;font-weight:700;">ON</span>` : ''}
+              </label>`).join('')
+            : `<p style="font-size:12px;color:var(--text-muted);padding:8px;">Aucun mod.</p>`;
+        formHtml = `
+            <!-- Sélection modpack -->
+            <div class="plug-qt-smart-field" style="flex-direction:column;">
+                <label class="plug-form-label" style="margin-bottom:3px;">Modpack <span style="color:var(--danger)">*</span></label>
+                <select id="plug-qt-s-modpack" class="select" style="font-size:13px;">
+                    ${_allModpacks.length ? _allModpacks.map(mp => `<option value="${escHtml(mp.id)}">${escHtml(mp.name)}</option>`).join('') : '<option value="">— aucun modpack —</option>'}
+                </select>
+            </div>
+            <!-- Nom + Game name -->
+            <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+                <div style="flex:2;min-width:130px;display:flex;flex-direction:column;gap:2px;">
+                    <label class="plug-form-label" style="font-size:10px;">name</label>
+                    <input type="text" id="plug-qt-s-name" class="input input-sm" placeholder="Nouveau nom" style="font-size:12px;">
+                </div>
+                <div style="flex:1;min-width:110px;display:flex;flex-direction:column;gap:2px;">
+                    <label class="plug-form-label" style="font-size:10px;">game_name</label>
+                    <input type="text" id="plug-qt-s-game-name" class="input input-sm" placeholder="DCS World…" style="font-size:12px;">
+                </div>
+            </div>
+            <!-- Description + SR link -->
+            <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+                <div style="flex:2;min-width:130px;display:flex;flex-direction:column;gap:2px;">
+                    <label class="plug-form-label" style="font-size:10px;">description</label>
+                    <input type="text" id="plug-qt-s-description" class="input input-sm" placeholder="Description…" style="font-size:12px;">
+                </div>
+                <div style="flex:1;min-width:130px;display:flex;flex-direction:column;gap:2px;">
+                    <label class="plug-form-label" style="font-size:10px;">sr_link</label>
+                    <input type="text" id="plug-qt-s-sr-link" class="input input-sm" placeholder="https://…" style="font-family:var(--font-mono);font-size:11px;">
+                </div>
+            </div>
+            <!-- Options + dep mode -->
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <input type="checkbox" id="plug-qt-s-multi-profile" style="accent-color:var(--accent);"> multi_profile
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <input type="checkbox" id="plug-qt-s-skip-integrity" style="accent-color:var(--accent);"> skip_integrity
+                </label>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <label class="plug-form-label" style="margin:0;font-size:10px;">dep_mode</label>
+                    <select id="plug-qt-s-dep-mode" class="select select-sm">
+                        <option value="none">none</option>
+                        <option value="all">all</option>
+                        <option value="manual">manual</option>
+                    </select>
+                </div>
+            </div>
+            <!-- Mod IDs -->
+            <div class="plug-qt-smart-field" style="flex-direction:column;margin-top:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                    <label class="plug-form-label" style="margin:0;">mod_ids <span style="color:var(--text-muted);font-size:9px;">(optionnel — remplace la liste)</span></label>
+                    <div style="display:flex;gap:4px;">
+                        <button type="button" class="btn btn-xs btn-ghost" id="plug-qt-upd-sel-all"    style="font-size:10px;">Tout</button>
+                        <button type="button" class="btn btn-xs btn-ghost" id="plug-qt-upd-sel-active" style="font-size:10px;">Actifs</button>
+                        <button type="button" class="btn btn-xs btn-ghost" id="plug-qt-upd-sel-none"   style="font-size:10px;">Aucun</button>
+                    </div>
+                </div>
+                <div style="max-height:150px;overflow-y:auto;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:4px;scrollbar-width:thin;">${updModChecks}</div>
+            </div>`;
+    } else if (p === '/api/modpacks/:id' && m === 'DELETE') {
+        formHtml = `
+            <div class="plug-qt-smart-field" style="flex-direction:column;">
+                <label class="plug-form-label" style="margin-bottom:3px;">Modpack à supprimer <span style="color:var(--danger)">*</span></label>
+                <select id="plug-qt-s-modpack" class="select" style="font-size:13px;">
+                    ${_allModpacks.length ? _allModpacks.map(mp => `<option value="${escHtml(mp.id)}">${escHtml(mp.name)} <span style="color:var(--text-muted);font-size:10px;">(${mp.mods?.length ?? 0} mods)</span></option>`).join('') : '<option value="">— aucun modpack —</option>'}
+                </select>
+            </div>
+            <p style="font-size:12px;color:var(--danger);margin:10px 0 0;padding:8px 10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:6px;">
+                ⚠ Cette action est <strong>irréversible</strong>. Le modpack sera définitivement supprimé.
+            </p>`;
+
     } else if (p === '/api/profiles') {
         formHtml = txtInput('plug-qt-s-name', 'name', 'Mon profil')
             + txtInput('plug-qt-s-game-path', 'game_path', 'C:/Games/MyGame')
@@ -499,7 +578,6 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
     } else if (p === '/api/restart') {
         formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">BMM va redémarrer dans 300 ms. L'API sera brièvement indisponible.</p>`;
     } else if (p === '/api/modpacks/create') {
-        // Profile checkboxes (multi-select, used to import mods from multiple profiles)
         const profileChecks = _allProfiles.length
             ? _allProfiles.map(pr => `<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
                 <input type="checkbox" class="plug-qt-prof-check" value="${escHtml(pr.id)}" style="accent-color:var(--accent);width:13px;height:13px;">
@@ -507,56 +585,69 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 <span style="font-size:10px;color:var(--text-muted);">${pr.active_mods?.length || 0} mods actifs</span>
               </label>`).join('')
             : `<p style="font-size:12px;color:var(--text-muted);padding:8px;">Aucun profil.</p>`;
-
-        // Plugin source options
-        const pluginOpts2 = _installedPlugins.length
-            ? _installedPlugins.map(pl => `<option value="plugin:${escHtml(pl.manifest.id)}">${escHtml(pl.manifest.name)} (plugin)</option>`).join('')
-            : '';
-
-        // Mod checkboxes
         const modCheckboxes = _allMods.length
-            ? _allMods.map(mod => `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;transition:background 0.15s;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
-                <input type="checkbox" class="plug-qt-mod-check" value="${escHtml(mod.id)}" style="accent-color:var(--accent);width:14px;height:14px;">
-                <span style="font-size:12px;color:var(--text-primary);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(mod.name || mod.id)}">${escHtml(mod.name || mod.id)}</span>
+            ? _allMods.map(mod => `<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
+                <input type="checkbox" class="plug-qt-mod-check" value="${escHtml(mod.id)}" style="accent-color:var(--accent);width:13px;height:13px;">
+                <span style="font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(mod.name||mod.id)}">${escHtml(mod.name||mod.id)}</span>
                 ${mod.active ? `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(34,197,94,0.15);color:#4ade80;font-weight:700;">ON</span>` : ''}
               </label>`).join('')
-            : `<p style="font-size:12px;color:var(--text-muted);padding:8px;">Aucun mod disponible.</p>`;
-
-        formHtml = txtInput('plug-qt-s-name', 'name (nom du modpack)', 'Mon Modpack')
-            + txtInput('plug-qt-s-desc', 'description (optionnel)', 'Description...', true)
-            + txtInput('plug-qt-s-game', 'game_name (optionnel)', 'DCS World, ArmA 3...', true)
-            + txtInput('plug-qt-s-sr-link', 'sr_link — URL Server Repo (optionnel)', 'https://monserveur.com/repo.json', true)
-            // Multi-profile import
-            + `<div class="plug-qt-smart-field" style="margin-top:8px;flex-direction:column;">
+            : `<p style="font-size:12px;color:var(--text-muted);padding:8px;">Aucun mod.</p>`;
+        formHtml = `
+            <!-- Nom requis -->
+            <div class="plug-qt-smart-field" style="flex-direction:column;">
+                <label class="plug-form-label" style="margin-bottom:3px;">name <span style="color:var(--danger)">*</span></label>
+                <input type="text" id="plug-qt-s-name" class="input" placeholder="Mon Modpack" style="font-size:13px;">
+            </div>
+            <!-- Description + Game name -->
+            <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+                <div style="flex:2;min-width:130px;display:flex;flex-direction:column;gap:2px;">
+                    <label class="plug-form-label" style="font-size:10px;">description <span style="color:var(--text-muted);font-size:9px;">(optionnel)</span></label>
+                    <input type="text" id="plug-qt-s-desc" class="input input-sm" placeholder="Description…" style="font-size:12px;">
+                </div>
+                <div style="flex:1;min-width:110px;display:flex;flex-direction:column;gap:2px;">
+                    <label class="plug-form-label" style="font-size:10px;">game_name <span style="color:var(--text-muted);font-size:9px;">(optionnel)</span></label>
+                    <input type="text" id="plug-qt-s-game" class="input input-sm" placeholder="DCS World…" style="font-size:12px;">
+                </div>
+            </div>
+            <!-- SR link -->
+            <div class="plug-qt-smart-field" style="flex-direction:column;margin-top:6px;">
+                <label class="plug-form-label" style="font-size:10px;margin-bottom:2px;">sr_link <span style="color:var(--text-muted);font-size:9px;">(URL Server Repo — optionnel)</span></label>
+                <input type="text" id="plug-qt-s-sr-link" class="input input-sm" placeholder="https://monserveur.com/repo.json" style="font-family:var(--font-mono);font-size:12px;">
+            </div>
+            <!-- Options (checkboxes + dep mode) -->
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <input type="checkbox" id="plug-qt-s-multi-profile" style="accent-color:var(--accent);"> multi_profile
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <input type="checkbox" id="plug-qt-s-skip-integrity" style="accent-color:var(--accent);"> skip_integrity
+                </label>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <label class="plug-form-label" style="margin:0;white-space:nowrap;font-size:10px;">dep_mode</label>
+                    <select id="plug-qt-s-dep-mode" class="select select-sm" style="flex:1;">
+                        <option value="none">none</option>
+                        <option value="all">all</option>
+                        <option value="manual">manual</option>
+                    </select>
+                </div>
+            </div>
+            <!-- Import depuis profil(s) -->
+            <div class="plug-qt-smart-field" style="flex-direction:column;margin-top:8px;">
+                <label class="plug-form-label" style="margin-bottom:3px;">Importer depuis profil(s) <span style="color:var(--text-muted);font-size:9px;">(coche = inclut les mods actifs)</span></label>
+                <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:4px;max-height:100px;overflow-y:auto;scrollbar-width:thin;">${profileChecks}</div>
+            </div>
+            <!-- Mods à inclure -->
+            <div class="plug-qt-smart-field" style="flex-direction:column;margin-top:6px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                    <label class="plug-form-label" style="margin:0;">Importer depuis profil(s) <span style="color:var(--text-muted);font-size:10px;">(coche = ajoute les mods actifs)</span></label>
-                </div>
-                <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:4px;max-height:110px;overflow-y:auto;scrollbar-width:thin;">
-                    ${profileChecks}
-                </div>
-               </div>`
-            // Plugin import dropdown
-            + (pluginOpts2 ? `<div class="plug-qt-smart-field" style="margin-top:8px;">
-                <label class="plug-form-label" style="margin-bottom:4px;">OU importer depuis plugin <span style="color:var(--text-muted);font-size:10px;">(optionnel)</span></label>
-                <select id="plug-qt-s-plugin-src" class="select">
-                    <option value="">— aucun —</option>
-                    ${pluginOpts2}
-                </select>
-               </div>` : '')
-            // Mod checkboxes
-            + `<div class="plug-qt-smart-field" style="margin-top:8px;flex-direction:column;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                    <label class="plug-form-label" style="margin:0;">Mods à inclure <span style="color:var(--text-muted);font-size:10px;">(sélection manuelle)</span></label>
-                    <div style="display:flex;gap:6px;">
-                        <button type="button" id="plug-qt-sel-all" class="btn btn-xs btn-ghost" style="font-size:10px;">Tout</button>
+                    <label class="plug-form-label" style="margin:0;">Mods à inclure</label>
+                    <div style="display:flex;gap:4px;">
+                        <button type="button" id="plug-qt-sel-all"    class="btn btn-xs btn-ghost" style="font-size:10px;">Tout</button>
                         <button type="button" id="plug-qt-sel-active" class="btn btn-xs btn-ghost" style="font-size:10px;">Actifs</button>
-                        <button type="button" id="plug-qt-sel-none" class="btn btn-xs btn-ghost" style="font-size:10px;">Aucun</button>
+                        <button type="button" id="plug-qt-sel-none"   class="btn btn-xs btn-ghost" style="font-size:10px;">Aucun</button>
                     </div>
                 </div>
-                <div id="plug-qt-mod-checklist" style="max-height:200px;overflow-y:auto;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:6px 4px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.1) transparent;">
-                    ${modCheckboxes}
-                </div>
-               </div>`;
+                <div style="max-height:180px;overflow-y:auto;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:4px;scrollbar-width:thin;">${modCheckboxes}</div>
+            </div>`;
     } else if (p === '/api/modpacks') {
         formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">Requête GET — aucun corps requis.</p>`;
 
@@ -578,69 +669,180 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
     } else if (p === '/api/repo/sync') {
         const profOpts2 = _allProfiles.length
             ? _allProfiles.map(pr => `<option value="${escHtml(pr.id)}">${escHtml(pr.name)}</option>`).join('')
-            : `<option value="">— aucun profil local —</option>`;
-        formHtml = txtInput('plug-qt-s-repo-url', 'url (repo.json URL)', 'https://monserveur.com/repo.json')
-            + txtInput('plug-qt-s-repo-profile-id', 'repo_profile_id (ID du profil dans le repo distant)', 'prof-uuid-from-repo')
-            + `<div class="plug-qt-smart-field" style="margin-top:8px;">
-                <label class="plug-form-label" style="margin-bottom:4px;">target_local_profile_id <span style="color:var(--text-muted);font-size:10px;">(optionnel — profil local existant à mettre à jour)</span></label>
+            : `<option value="">— Créer un nouveau profil —</option>`;
+        formHtml = `
+            <!-- URL (auto-fetch on input) -->
+            <div class="plug-qt-smart-field" style="flex-direction:column;">
+                <label class="plug-form-label" style="margin-bottom:4px;">url (repo.json) <span style="color:var(--danger)">*</span></label>
+                <input type="text" id="plug-qt-s-repo-url" class="input" placeholder="https://monserveur.com/repo.json" style="font-family:var(--font-mono);font-size:12px;">
+            </div>
+            <!-- Repo profiles panel (auto-populated when URL is entered) -->
+            <div id="plug-qt-s-repo-profiles-panel" style="display:none;flex-direction:column;gap:4px;margin-top:6px;background:rgba(0,0,0,0.12);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:8px 10px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                    <span class="plug-form-label">Profils du repo <span style="color:var(--text-muted);font-size:10px;">(cocher = auto-sélectionner + syncer)</span></span>
+                    <div style="display:flex;gap:4px;">
+                        <button id="plug-qt-sync-sel-all" class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 6px;">Tout</button>
+                        <button id="plug-qt-sync-sel-none" class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 6px;">Aucun</button>
+                    </div>
+                </div>
+                <div id="plug-qt-s-repo-profiles-list" style="max-height:130px;overflow-y:auto;scrollbar-width:thin;display:flex;flex-direction:column;gap:2px;">
+                    <p style="font-size:12px;color:var(--text-muted);padding:4px 0;">Entrez une URL pour charger les profils…</p>
+                </div>
+            </div>
+            <!-- Dirs requis -->
+            <div style="margin-top:6px;display:flex;flex-direction:column;gap:4px;">
+                <div class="plug-qt-smart-field" style="flex-direction:column;">
+                    <label class="plug-form-label" style="margin-bottom:4px;">game_dir <span style="color:var(--danger)">*</span></label>
+                    <input type="text" id="plug-qt-s-game-dir" class="input" placeholder="C:/Games/MonJeu" style="font-family:var(--font-mono);font-size:12px;">
+                </div>
+                <div class="plug-qt-smart-field" style="flex-direction:column;">
+                    <label class="plug-form-label" style="margin-bottom:4px;">mods_dir <span style="color:var(--danger)">*</span></label>
+                    <input type="text" id="plug-qt-s-mods-dir" class="input" placeholder="C:/Games/MonJeu/Mods" style="font-family:var(--font-mono);font-size:12px;">
+                </div>
+                <div class="plug-qt-smart-field" style="flex-direction:column;">
+                    <label class="plug-form-label" style="margin-bottom:4px;">backup_dir <span style="color:var(--danger)">*</span></label>
+                    <input type="text" id="plug-qt-s-backup-dir" class="input" placeholder="C:/BMM/Backups" style="font-family:var(--font-mono);font-size:12px;">
+                </div>
+            </div>
+            <!-- Target local profile (optional) -->
+            <div class="plug-qt-smart-field" style="margin-top:6px;">
+                <label class="plug-form-label" style="margin-bottom:4px;">Profil local cible <span style="color:var(--text-muted);font-size:10px;">(optionnel — crée un nouveau si vide)</span></label>
                 <select id="plug-qt-s-local-prof" class="select">
                     <option value="">— Créer un nouveau profil —</option>
                     ${profOpts2}
                 </select>
-              </div>`
-            + txtInput('plug-qt-s-game-dir', 'game_dir (requis si nouveau profil)', 'C:/Games/MonJeu', true)
-            + txtInput('plug-qt-s-mods-dir', 'mods_dir (requis si nouveau profil)', 'C:/Games/MonJeu/Mods', true)
-            + txtInput('plug-qt-s-backup-dir', 'backup_dir (requis si nouveau profil)', 'C:/BMM/Backups', true)
-            + `<div style="display:flex;gap:16px;margin-top:8px;">
-                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
-                    <input type="checkbox" id="plug-qt-s-overwrite" style="accent-color:var(--accent);">
-                    overwrite_all
-                </label>
+            </div>
+            <!-- Sync options row -->
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:flex-end;">
+                <div style="flex:2;min-width:160px;">
+                    <label class="plug-form-label" style="margin-bottom:4px;">Mode de sync</label>
+                    <select id="plug-qt-s-sync-mode" class="select" style="font-size:12px;">
+                        <option value="smart">Manquants / incorrects seulement (rapide)</option>
+                        <option value="all">Réinstallation complète (overwrite_all)</option>
+                    </select>
+                </div>
+                <div style="flex:1;min-width:90px;">
+                    <label class="plug-form-label" style="margin-bottom:4px;">Download limit (KB/s)</label>
+                    <input type="number" id="plug-qt-s-dl-limit" class="input" value="0" min="0" style="font-size:12px;">
+                </div>
+            </div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
                     <input type="checkbox" id="plug-qt-s-delete-extra" style="accent-color:var(--accent);">
-                    delete_extra
+                    Supprimer les mods absents du repo (delete_extra)
                 </label>
-              </div>`;
+            </div>`;
 
-    } else if (p === '/api/repo/host') {
-        const profChecksHost = _allProfiles.length
-            ? _allProfiles.map(pr => `<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
+    } else if (p === '/api/repo/gen') {
+        const profChecksGen = _allProfiles.length
+            ? _allProfiles.map(pr => `
+              <label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
                 <input type="checkbox" class="plug-qt-host-prof-check" value="${escHtml(pr.id)}" style="accent-color:var(--accent);width:13px;height:13px;">
                 <span style="font-size:12px;flex:1;">${escHtml(pr.name)}</span>
                 <span style="font-size:10px;color:var(--text-muted);">${pr.active_mods?.length || 0} mods</span>
               </label>`).join('')
             : `<p style="font-size:12px;color:var(--text-muted);padding:8px;">Aucun profil disponible.</p>`;
-        formHtml = `<div class="plug-qt-smart-field" style="flex-direction:column;">
-                <label class="plug-form-label" style="margin-bottom:4px;">profile_ids <span style="color:var(--danger)">*</span></label>
-                <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:4px;max-height:120px;overflow-y:auto;scrollbar-width:thin;">${profChecksHost}</div>
-              </div>`
-            + txtInput('plug-qt-s-output-dir', 'output_dir (dossier de destination)', 'C:/BMM/Export/Repo')
-            + txtInput('plug-qt-s-author-name', 'author_name', 'Mon Pseudo')
-            + txtInput('plug-qt-s-seed', 'seed (optionnel — stabilité des hachages)', '', true)
-            + `<details style="margin-top:10px;background:rgba(0,0,0,0.1);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:8px 12px;">
-                <summary style="cursor:pointer;font-size:11px;color:var(--text-secondary);user-select:none;">${IC.settings} Options serveur standalone (optionnel)</summary>
-                <div style="padding-top:10px;display:flex;flex-direction:column;gap:6px;">
-                    ${txtInput('plug-qt-s-port', 'port', '8080', true)}
-                    ${txtInput('plug-qt-s-upload-limit', 'upload_limit (KB/s, 0 = illimité)', '0', true)}
-                    ${txtInput('plug-qt-s-admin-pw', 'admin_password', '', true)}
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
-                        <input type="checkbox" id="plug-qt-s-gen-server" style="accent-color:var(--accent);">
-                        generate_server (générer les scripts de serveur)
-                    </label>
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+        // Server distribution panel (shown when zip_output is checked OR standalone server is enabled)
+        const serverPanel = `
+            <div id="plug-qt-gen-server-panel" style="display:none;flex-direction:column;gap:6px;margin-top:8px;padding:10px 12px;background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.07);border-radius:8px;">
+                <div class="plug-form-label" style="margin-bottom:2px;">${IC.globe} Configuration serveur de distribution</div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
                         <input type="checkbox" id="plug-qt-s-use-cf" style="accent-color:var(--accent);">
-                        use_cloudflare (tunnel Cloudflare)
+                        ${IC.globe} Cloudflare Tunnel
                     </label>
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
                         <input type="checkbox" id="plug-qt-s-use-upnp" style="accent-color:var(--accent);">
-                        use_upnp (ouverture de port UPnP)
+                        UPnP (ouverture port)
                     </label>
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                        <input type="checkbox" id="plug-qt-s-use-docker" style="accent-color:var(--accent);">
+                        Docker
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
                         <input type="checkbox" id="plug-qt-s-auto-start" style="accent-color:var(--accent);">
-                        auto_start (démarrage automatique au lancement de BMM)
+                        auto_start
                     </label>
                 </div>
-              </details>`;
+                <!-- Docker sub-options -->
+                <div id="plug-qt-gen-docker-opts" style="display:none;gap:8px;margin-top:4px;padding-left:8px;border-left:2px solid rgba(139,92,246,0.3);">
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                        <div style="flex:1;min-width:120px;">
+                            <label class="plug-form-label" style="font-size:10px;margin-bottom:2px;">OS hôte</label>
+                            <select id="plug-qt-s-docker-os" class="select select-sm">
+                                <option value="linux">Linux</option>
+                                <option value="windows">Windows</option>
+                            </select>
+                        </div>
+                        <div style="flex:1;min-width:120px;">
+                            <label class="plug-form-label" style="font-size:10px;margin-bottom:2px;">Version serveur</label>
+                            <select id="plug-qt-s-server-version" class="select select-sm">
+                                <option value="std">Standard</option>
+                                <option value="lux">Lux (premium)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+                    <div style="flex:1;min-width:100px;">
+                        <label class="plug-form-label" style="font-size:10px;margin-bottom:2px;">Port</label>
+                        <input type="number" id="plug-qt-s-port" class="input input-sm" placeholder="8080" value="8080" style="font-size:12px;">
+                    </div>
+                    <div style="flex:1;min-width:100px;">
+                        <label class="plug-form-label" style="font-size:10px;margin-bottom:2px;">Upload limit (KB/s, 0=∞)</label>
+                        <input type="number" id="plug-qt-s-upload-limit" class="input input-sm" placeholder="0" value="0" style="font-size:12px;">
+                    </div>
+                    <div style="flex:1;min-width:120px;">
+                        <label class="plug-form-label" style="font-size:10px;margin-bottom:2px;">Mot de passe admin</label>
+                        <input type="password" id="plug-qt-s-admin-pw" class="input input-sm" placeholder="(optionnel)" style="font-size:12px;">
+                    </div>
+                </div>
+            </div>`;
+        formHtml = `
+            <!-- Profile selection -->
+            <div class="plug-qt-smart-field" style="flex-direction:column;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                    <label class="plug-form-label" style="margin:0;">profile_ids <span style="color:var(--danger)">*</span></label>
+                    <div style="display:flex;gap:4px;">
+                        <button type="button" id="plug-qt-gen-sel-all"  class="btn btn-xs btn-ghost" style="font-size:10px;">Tout</button>
+                        <button type="button" id="plug-qt-gen-sel-none" class="btn btn-xs btn-ghost" style="font-size:10px;">Aucun</button>
+                    </div>
+                </div>
+                <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:4px;max-height:120px;overflow-y:auto;scrollbar-width:thin;">${profChecksGen}</div>
+            </div>
+            <!-- Output dir + author -->
+            <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+                <div style="flex:2;min-width:160px;display:flex;flex-direction:column;gap:2px;">
+                    <label class="plug-form-label" style="font-size:10px;">output_dir <span style="color:var(--danger)">*</span></label>
+                    <input type="text" id="plug-qt-s-output-dir" class="input" placeholder="C:/BMM/Export/Repo" style="font-family:var(--font-mono);font-size:12px;">
+                </div>
+                <div style="flex:1;min-width:120px;display:flex;flex-direction:column;gap:2px;">
+                    <label class="plug-form-label" style="font-size:10px;">author_name <span style="color:var(--danger)">*</span></label>
+                    <input type="text" id="plug-qt-s-author-name" class="input" placeholder="Mon Pseudo" style="font-size:12px;">
+                </div>
+            </div>
+            <!-- Seed -->
+            <div style="margin-top:6px;display:flex;flex-direction:column;gap:2px;">
+                <label class="plug-form-label" style="font-size:10px;">seed <span style="color:var(--text-muted);font-size:10px;">(optionnel — stabilité des hachages)</span></label>
+                <input type="text" id="plug-qt-s-seed" class="input input-sm" placeholder="laisser vide pour aléatoire" style="font-family:var(--font-mono);font-size:12px;">
+            </div>
+            <!-- zip_output + standalone server -->
+            <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;align-items:center;">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <input type="checkbox" id="plug-qt-s-zip-output" style="accent-color:var(--accent);">
+                    ${IC.upload} zip_output (compresser en .zip)
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <input type="checkbox" id="plug-qt-s-gen-server" style="accent-color:var(--accent);">
+                    ${IC.globe} Serveur standalone
+                </label>
+            </div>
+            ${serverPanel}`;
+
+    } else if (p === '/api/repo/host') {
+        formHtml = txtInput('plug-qt-s-serve-dir', 'serve_dir (dossier à servir)', 'C:/BMM/Export/Repo')
+            + txtInput('plug-qt-s-http-port', 'port', '8080', true)
+            + txtInput('plug-qt-s-http-upload-limit', 'upload_limit (KB/s, 0 = illimité)', '0', true);
 
     } else {
         const pretty = (() => { try { return JSON.stringify(JSON.parse(rawBody), null, 2); } catch { return rawBody; } })();
@@ -659,10 +861,33 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         </div>
         <div class="plug-ov-footer">
             <button class="btn btn-ghost plug-ov-close-btn">${t('common.cancel')}</button>
+            <button class="btn btn-ghost" id="plug-qt-s-copy" title="Copier la requête cURL" style="gap:5px;">${IC.copy} cURL</button>
             <button class="btn btn-accent" id="plug-qt-s-run">${IC.play} ${t('plugins.run')}</button>
         </div>`);
 
     overlay.querySelectorAll('.plug-ov-close-btn').forEach(b => b.addEventListener('click', () => overlay.remove()));
+
+    // ── Copy cURL button ─────────────────────────────────────────────────────
+    overlay.querySelector('#plug-qt-s-copy')?.addEventListener('click', async () => {
+        // Get body: from JSON textarea if present, else from the pre-filled hint body
+        const bodyTa = overlay.querySelector('#plug-qt-s-json') as HTMLTextAreaElement | null;
+        let bodyStr = bodyTa ? bodyTa.value.trim() : (rawBody || '');
+        // For smart forms with no textarea, try to build a representative JSON from visible fields
+        if (!bodyStr && m !== 'GET') bodyStr = '{}';
+        const authHeader = _apiToken ? ` \\\n  -H "Authorization: Bearer ${_apiToken}"` : '';
+        const bodyFlag = (m !== 'GET' && bodyStr && bodyStr !== '{}')
+            ? ` \\\n  -H "Content-Type: application/json" \\\n  -d '${bodyStr.replace(/'/g, "'\\''")}'`
+            : '';
+        const resolvedP = p.replace(/:([a-zA-Z_]+)/g, '<$1>'); // :id → <id>
+        const curl = `curl -X ${m} "http://127.0.0.1:51274${resolvedP}"${authHeader}${bodyFlag}`;
+        try {
+            await navigator.clipboard.writeText(curl);
+            toast('cURL copié ! 📋', 'success');
+        } catch {
+            // Fallback: show in a prompt
+            window.prompt('Copiez la commande cURL :', curl);
+        }
+    });
 
     // ── Create Modpack helpers ────────────────────────────────────────────────
     if (p === '/api/modpacks/create') {
@@ -706,6 +931,124 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 if (mod && reqNames.includes((mod.name || '').toLowerCase())) c.checked = true;
             });
         });
+    }
+
+    // ── Update Modpack helpers ─────────────────────────────────────────────────
+    if (p === '/api/modpacks/:id' && m === 'PUT') {
+        const checkAllUpd  = (v: boolean) => overlay.querySelectorAll<HTMLInputElement>('.plug-qt-upd-mod-check').forEach(c => c.checked = v);
+        overlay.querySelector('#plug-qt-upd-sel-all')?.addEventListener('click',    () => checkAllUpd(true));
+        overlay.querySelector('#plug-qt-upd-sel-none')?.addEventListener('click',   () => checkAllUpd(false));
+        overlay.querySelector('#plug-qt-upd-sel-active')?.addEventListener('click', () => {
+            overlay.querySelectorAll<HTMLInputElement>('.plug-qt-upd-mod-check').forEach(c => {
+                const mod = _allMods.find(m => m.id === c.value);
+                c.checked = !!(mod && mod.active);
+            });
+        });
+
+        // Auto-fill fields when modpack is selected from the dropdown
+        const fillFromModpack = (mpId: string) => {
+            const mp = _allModpacks.find((x: any) => x.id === mpId);
+            if (!mp) return;
+            const nameEl  = overlay.querySelector('#plug-qt-s-name')        as HTMLInputElement;
+            const descEl  = overlay.querySelector('#plug-qt-s-description') as HTMLInputElement;
+            const gnameEl = overlay.querySelector('#plug-qt-s-game-name')   as HTMLInputElement;
+            const srEl    = overlay.querySelector('#plug-qt-s-sr-link')     as HTMLInputElement;
+            const mpEl    = overlay.querySelector('#plug-qt-s-multi-profile')  as HTMLInputElement;
+            const siEl    = overlay.querySelector('#plug-qt-s-skip-integrity') as HTMLInputElement;
+            const dmEl    = overlay.querySelector('#plug-qt-s-dep-mode')    as HTMLSelectElement;
+            if (nameEl)  nameEl.value  = mp.name || '';
+            if (descEl)  descEl.value  = mp.description || '';
+            if (gnameEl) gnameEl.value = mp.game_name || '';
+            if (srEl)    srEl.value    = mp.sr_link || '';
+            if (mpEl)    mpEl.checked  = !!mp.multi_profile;
+            if (siEl)    siEl.checked  = !!mp.skip_integrity_check;
+            if (dmEl)    dmEl.value    = mp.dependency_mode || 'none';
+            // Check mods that belong to this modpack
+            const modIds: string[] = (mp.mods || []).map((x: any) => typeof x === 'string' ? x : x.id);
+            overlay.querySelectorAll<HTMLInputElement>('.plug-qt-upd-mod-check').forEach(c => {
+                c.checked = modIds.includes(c.value);
+            });
+        };
+        const mpSel = overlay.querySelector('#plug-qt-s-modpack') as HTMLSelectElement | null;
+        if (mpSel) {
+            mpSel.addEventListener('change', () => fillFromModpack(mpSel.value));
+            if (mpSel.value) fillFromModpack(mpSel.value); // pre-fill on open
+        }
+    }
+
+    // ── Gen form: profile select all/none + zip/server panel toggles ─────────
+    if (p === '/api/repo/gen') {
+        // Profile select all / none
+        overlay.querySelector('#plug-qt-gen-sel-all')?.addEventListener('click',  () => overlay.querySelectorAll<HTMLInputElement>('.plug-qt-host-prof-check').forEach(c => c.checked = true));
+        overlay.querySelector('#plug-qt-gen-sel-none')?.addEventListener('click', () => overlay.querySelectorAll<HTMLInputElement>('.plug-qt-host-prof-check').forEach(c => c.checked = false));
+        // Show/hide server panel when zip_output or genServer is toggled
+        const zipCb       = overlay.querySelector('#plug-qt-s-zip-output')    as HTMLInputElement | null;
+        const genServerCb = overlay.querySelector('#plug-qt-s-gen-server')    as HTMLInputElement | null;
+        const dockerCb    = overlay.querySelector('#plug-qt-s-use-docker')    as HTMLInputElement | null;
+        const serverPanel = overlay.querySelector('#plug-qt-gen-server-panel') as HTMLElement | null;
+        const dockerOpts  = overlay.querySelector('#plug-qt-gen-docker-opts') as HTMLElement | null;
+        const updateServerPanel = () => {
+            if (serverPanel) serverPanel.style.display = (zipCb?.checked || genServerCb?.checked) ? 'flex' : 'none';
+        };
+        zipCb?.addEventListener('change', updateServerPanel);
+        genServerCb?.addEventListener('change', updateServerPanel);
+        dockerCb?.addEventListener('change', () => {
+            if (dockerOpts) dockerOpts.style.display = dockerCb.checked ? 'flex' : 'none';
+        });
+    }
+
+    // ── Sync form: Tout/Aucun profile selectors ─────────────────────────────
+    if (p === '/api/repo/sync') {
+        overlay.querySelector('#plug-qt-sync-sel-all')?.addEventListener('click', () =>
+            overlay.querySelectorAll<HTMLInputElement>('.plug-qt-sync-prof-check').forEach(c => c.checked = true));
+        overlay.querySelector('#plug-qt-sync-sel-none')?.addEventListener('click', () =>
+            overlay.querySelectorAll<HTMLInputElement>('.plug-qt-sync-prof-check').forEach(c => c.checked = false));
+    }
+
+    // ── Sync form: auto-fetch repo profiles when URL is entered ─────────────
+    if (p === '/api/repo/sync') {
+        const urlInput      = overlay.querySelector('#plug-qt-s-repo-url')           as HTMLInputElement | null;
+        const profilesPanel = overlay.querySelector('#plug-qt-s-repo-profiles-panel') as HTMLElement | null;
+        const profilesList  = overlay.querySelector('#plug-qt-s-repo-profiles-list')  as HTMLElement | null;
+
+        let _syncFetchTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const doFetchRepoProfiles = async (repoUrl: string) => {
+            if (!profilesPanel || !profilesList) return;
+            profilesList.innerHTML = `<p style="font-size:12px;color:var(--text-muted);padding:4px 0;">${IC.refresh} Chargement…</p>`;
+            profilesPanel.style.display = 'flex';
+            try {
+                const res  = await fetch(`http://127.0.0.1:51274/api/repo/info?url=${encodeURIComponent(repoUrl)}`);
+                const json = await res.json().catch(() => ({}));
+                const profiles: any[] = json.profiles || json.data?.profiles || [];
+                if (profiles.length === 0) {
+                    profilesList.innerHTML = `<p style="font-size:12px;color:var(--text-muted);padding:4px 0;">Aucun profil trouvé dans ce repo.</p>`;
+                } else {
+                    profilesList.innerHTML = profiles.map((pr: any) => `
+                        <label style="display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:5px;cursor:pointer;font-size:12px;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
+                            <input type="checkbox" class="plug-qt-sync-prof-check" value="${escHtml(pr.id || pr.name)}" style="accent-color:var(--accent);width:13px;height:13px;">
+                            <span style="flex:1;">${escHtml(pr.name || pr.id)}</span>
+                            <span style="font-size:10px;color:var(--text-muted);">${pr.mods?.length ?? pr.mod_count ?? ''} mods</span>
+                        </label>`).join('');
+                }
+            } catch {
+                profilesList.innerHTML = `<p style="font-size:12px;color:var(--danger);padding:4px 0;">Erreur fetch repo — vérifiez l'URL.</p>`;
+            }
+        };
+
+        if (urlInput) {
+            urlInput.addEventListener('input', () => {
+                if (_syncFetchTimer) clearTimeout(_syncFetchTimer);
+                const url = urlInput.value.trim();
+                if (!url) {
+                    if (profilesPanel) profilesPanel.style.display = 'none';
+                    return;
+                }
+                _syncFetchTimer = setTimeout(() => doFetchRepoProfiles(url), 600);
+            });
+            // If URL is pre-filled (e.g. from prefillTester), fetch immediately
+            if (urlInput.value.trim()) doFetchRepoProfiles(urlInput.value.trim());
+        }
     }
 
     overlay.querySelector('#plug-qt-s-run')?.addEventListener('click', () => {
@@ -752,6 +1095,41 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 if (backupPath) obj.backup_path = backupPath;
                 body = JSON.stringify(obj);
             }
+        } else if (p === '/api/modpacks/:id' && m === 'PUT') {
+            const mpId = (overlay.querySelector('#plug-qt-s-modpack') as HTMLSelectElement)?.value || '';
+            if (!mpId) { toast('Sélectionnez un modpack', 'warning'); return; }
+            const updName    = (overlay.querySelector('#plug-qt-s-name')           as HTMLInputElement)?.value?.trim();
+            const updDesc    = (overlay.querySelector('#plug-qt-s-description')    as HTMLInputElement)?.value?.trim();
+            const updGname   = (overlay.querySelector('#plug-qt-s-game-name')      as HTMLInputElement)?.value?.trim();
+            const updSrLink  = (overlay.querySelector('#plug-qt-s-sr-link')        as HTMLInputElement)?.value?.trim();
+            const updDepMode = (overlay.querySelector('#plug-qt-s-dep-mode')       as HTMLSelectElement)?.value;
+            const updMultiPr = (overlay.querySelector('#plug-qt-s-multi-profile')  as HTMLInputElement)?.checked;
+            const updSkipInt = (overlay.querySelector('#plug-qt-s-skip-integrity') as HTMLInputElement)?.checked;
+            const updMods    = Array.from(overlay.querySelectorAll<HTMLInputElement>('.plug-qt-upd-mod-check:checked')).map(c => c.value).filter(Boolean);
+            const updPrefill: any = { multi_profile: !!updMultiPr, skip_integrity_check: !!updSkipInt };
+            if (updName)          updPrefill.name             = updName;
+            if (updDesc)          updPrefill.description      = updDesc;
+            if (updGname)         updPrefill.game_name        = updGname;
+            if (updSrLink)        updPrefill.sr_link          = updSrLink;
+            if (updDepMode)       updPrefill.dependency_mode  = updDepMode;
+            if (updMods.length)   updPrefill.mod_ids          = updMods;
+            overlay.remove();
+            // Navigate to Modpacks page and open native Update editor
+            const modpackNavBtn2 = document.querySelector('.nav-item[data-view="modpacks"]') as HTMLElement | null;
+            if (modpackNavBtn2) modpackNavBtn2.click();
+            setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('bmm:modpack-focus', {
+                    detail: { action: 'update', modpackId: mpId, prefill: updPrefill },
+                }));
+            }, 350);
+            return;
+
+        } else if (p === '/api/modpacks/:id' && m === 'DELETE') {
+            const mpId = (overlay.querySelector('#plug-qt-s-modpack') as HTMLSelectElement)?.value || '';
+            if (!mpId) { toast('Sélectionnez un modpack', 'warning'); return; }
+            resolvedPath = `/api/modpacks/${mpId}`;
+            body = '';
+
         } else if (p === '/api/profiles') {
             body = JSON.stringify({
                 name:        (overlay.querySelector('#plug-qt-s-name')        as HTMLInputElement)?.value || '',
@@ -768,18 +1146,29 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             body = '{}';
         } else if (p === '/api/modpacks/create') {
             const name = (overlay.querySelector('#plug-qt-s-name') as HTMLInputElement)?.value?.trim() || '';
-            if (!name) return;
-            const desc    = (overlay.querySelector('#plug-qt-s-desc')    as HTMLInputElement)?.value?.trim();
-            const game    = (overlay.querySelector('#plug-qt-s-game')    as HTMLInputElement)?.value?.trim();
-            const srLink  = (overlay.querySelector('#plug-qt-s-sr-link') as HTMLInputElement)?.value?.trim();
-            const checks  = Array.from(overlay.querySelectorAll<HTMLInputElement>('.plug-qt-mod-check:checked'));
-            const modIds  = checks.map(c => c.value).filter(Boolean);
-            const payload: any = { name };
-            if (desc)          payload.description = desc;
-            if (game)          payload.game_name   = game;
-            if (srLink)        payload.sr_link      = srLink;
-            if (modIds.length) payload.mod_ids      = modIds;
-            body = JSON.stringify(payload);
+            if (!name) { toast('Le nom du modpack est requis', 'warning'); return; }
+            const desc     = (overlay.querySelector('#plug-qt-s-desc')          as HTMLInputElement)?.value?.trim();
+            const game     = (overlay.querySelector('#plug-qt-s-game')          as HTMLInputElement)?.value?.trim();
+            const srLink   = (overlay.querySelector('#plug-qt-s-sr-link')       as HTMLInputElement)?.value?.trim();
+            const multiPr  = (overlay.querySelector('#plug-qt-s-multi-profile') as HTMLInputElement)?.checked || false;
+            const skipInt  = (overlay.querySelector('#plug-qt-s-skip-integrity') as HTMLInputElement)?.checked || false;
+            const depMode  = (overlay.querySelector('#plug-qt-s-dep-mode')      as HTMLSelectElement)?.value || 'none';
+            const modIds   = Array.from(overlay.querySelectorAll<HTMLInputElement>('.plug-qt-mod-check:checked')).map(c => c.value).filter(Boolean);
+            const createPrefill: any = { name, multi_profile: multiPr, skip_integrity_check: skipInt, dependency_mode: depMode };
+            if (desc)          createPrefill.description = desc;
+            if (game)          createPrefill.game_name   = game;
+            if (srLink)        createPrefill.sr_link      = srLink;
+            if (modIds.length) createPrefill.mod_ids      = modIds;
+            overlay.remove();
+            // Navigate to Modpacks page and open native Create editor
+            const modpackNavBtn = document.querySelector('.nav-item[data-view="modpacks"]') as HTMLElement | null;
+            if (modpackNavBtn) modpackNavBtn.click();
+            setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('bmm:modpack-focus', {
+                    detail: { action: 'create', prefill: createPrefill },
+                }));
+            }, 350);
+            return;
         } else if (p === '/api/modpacks') {
             body = '';
 
@@ -796,64 +1185,139 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
 
         } else if (p === '/api/repo/connect') {
             const repoUrl  = (overlay.querySelector('#plug-qt-s-repo-url')  as HTMLInputElement)?.value?.trim() || '';
-            if (!repoUrl) return;
-            body = JSON.stringify({ url: repoUrl });
+            if (!repoUrl) { toast('Entrez une URL repo.json', 'warning'); return; }
+            overlay.remove();
+            // Navigate to repo page and auto-fetch the repo (connect = fetch in the page)
+            const repoNavBtnC = document.querySelector('.nav-item[data-view="repo"], .nav-btn[data-view="repo"]') as HTMLElement | null;
+            if (repoNavBtnC) repoNavBtnC.click();
+            setTimeout(() => {
+                document.dispatchEvent(new CustomEvent('bmm:repo-focus', {
+                    detail: { section: 'connect', prefill: { url: repoUrl } },
+                }));
+            }, 350);
+            return;
 
         } else if (p === '/api/repo' && m === 'DELETE') {
-            const repoUrl = (overlay.querySelector('#plug-qt-s-repo-url') as HTMLInputElement)?.value?.trim() || '';
-            if (!repoUrl) return;
-            body = JSON.stringify({ url: repoUrl });
+            overlay.remove();
+            // Navigate to repo page and clear the fetched repo (disconnect in the UI)
+            const repoNavBtnD = document.querySelector('.nav-item[data-view="repo"], .nav-btn[data-view="repo"]') as HTMLElement | null;
+            if (repoNavBtnD) repoNavBtnD.click();
+            setTimeout(() => {
+                document.dispatchEvent(new CustomEvent('bmm:repo-focus', {
+                    detail: { section: 'disconnect' },
+                }));
+            }, 350);
+            return;
 
         } else if (p === '/api/repo/sync') {
-            const repoUrl    = (overlay.querySelector('#plug-qt-s-repo-url')        as HTMLInputElement)?.value?.trim() || '';
-            const repoProfId = (overlay.querySelector('#plug-qt-s-repo-profile-id') as HTMLInputElement)?.value?.trim() || '';
-            const localProf  = (overlay.querySelector('#plug-qt-s-local-prof')      as HTMLSelectElement)?.value?.trim() || '';
-            const gameDir    = (overlay.querySelector('#plug-qt-s-game-dir')        as HTMLInputElement)?.value?.trim() || '';
-            const modsDir    = (overlay.querySelector('#plug-qt-s-mods-dir')        as HTMLInputElement)?.value?.trim() || '';
-            const backupDir  = (overlay.querySelector('#plug-qt-s-backup-dir')      as HTMLInputElement)?.value?.trim() || '';
-            const overwrite  = (overlay.querySelector('#plug-qt-s-overwrite')       as HTMLInputElement)?.checked || false;
-            const deleteEx   = (overlay.querySelector('#plug-qt-s-delete-extra')    as HTMLInputElement)?.checked || false;
-            if (!repoUrl || !repoProfId) return;
-            const choice: any = { repoProfileId: repoProfId };
-            if (localProf) choice.targetLocalProfileId = localProf;
-            body = JSON.stringify({
+            const repoUrl   = (overlay.querySelector('#plug-qt-s-repo-url')    as HTMLInputElement)?.value?.trim() || '';
+            const localProf = (overlay.querySelector('#plug-qt-s-local-prof')  as HTMLSelectElement)?.value?.trim() || '';
+            const gameDir   = (overlay.querySelector('#plug-qt-s-game-dir')    as HTMLInputElement)?.value?.trim() || '';
+            const modsDir   = (overlay.querySelector('#plug-qt-s-mods-dir')    as HTMLInputElement)?.value?.trim() || '';
+            const backupDir = (overlay.querySelector('#plug-qt-s-backup-dir')  as HTMLInputElement)?.value?.trim() || '';
+            const syncMode  = (overlay.querySelector('#plug-qt-s-sync-mode')   as HTMLSelectElement)?.value || 'smart';
+            const dlLimitStr = (overlay.querySelector('#plug-qt-s-dl-limit')   as HTMLInputElement)?.value?.trim() || '0';
+            const deleteEx  = (overlay.querySelector('#plug-qt-s-delete-extra') as HTMLInputElement)?.checked || false;
+            // Collect selected repo profiles (from auto-fetch panel checkboxes)
+            const checkedRepoProfIds = Array.from(overlay.querySelectorAll<HTMLInputElement>('.plug-qt-sync-prof-check:checked')).map(c => c.value).filter(Boolean);
+            if (!repoUrl || !gameDir || !modsDir || !backupDir) {
+                toast('url, game_dir, mods_dir et backup_dir sont obligatoires', 'warning');
+                return;
+            }
+            // Build choices — only include if profiles were explicitly selected
+            // Empty choices = let the user pick in the repo page UI (no auto-sync)
+            const choices: any[] = checkedRepoProfIds.map(pid => {
+                const c: any = { repoProfileId: pid };
+                if (localProf) c.targetLocalProfileId = localProf;
+                return c;
+            });
+            const syncPayload: any = {
                 url: repoUrl,
                 gameDir,
                 modsDir,
                 backupDir,
-                choices: [choice],
-                overwriteAll: overwrite,
+                overwriteAll: syncMode === 'all',
                 deleteExtra: deleteEx,
-                downloadLimit: 0,
-            });
+                downloadLimit: parseInt(dlLimitStr, 10) || 0,
+            };
+            // Only include choices if profiles were selected (otherwise repo page handles it)
+            if (choices.length > 0) syncPayload.choices = choices;
+            else if (localProf) syncPayload.choices = [{ targetLocalProfileId: localProf }];
+            overlay.remove();
+            // Navigate to Server Repo page and pre-fill sync fields
+            const repoNavBtn = document.querySelector('.nav-item[data-view="repo"], .nav-btn[data-view="repo"]') as HTMLElement | null;
+            if (repoNavBtn) repoNavBtn.click();
+            setTimeout(() => {
+                document.dispatchEvent(new CustomEvent('bmm:repo-focus', {
+                    detail: { section: 'sync', prefill: syncPayload },
+                }));
+            }, 350);
+            return;
 
-        } else if (p === '/api/repo/host') {
-            const profIds   = Array.from(overlay.querySelectorAll<HTMLInputElement>('.plug-qt-host-prof-check:checked')).map(c => c.value).filter(Boolean);
-            const outputDir = (overlay.querySelector('#plug-qt-s-output-dir')  as HTMLInputElement)?.value?.trim() || '';
-            const author    = (overlay.querySelector('#plug-qt-s-author-name') as HTMLInputElement)?.value?.trim() || '';
-            const seed      = (overlay.querySelector('#plug-qt-s-seed')        as HTMLInputElement)?.value?.trim();
-            const portStr   = (overlay.querySelector('#plug-qt-s-port')        as HTMLInputElement)?.value?.trim();
-            const ulStr     = (overlay.querySelector('#plug-qt-s-upload-limit') as HTMLInputElement)?.value?.trim();
-            const adminPw   = (overlay.querySelector('#plug-qt-s-admin-pw')    as HTMLInputElement)?.value?.trim();
-            const genServer = (overlay.querySelector('#plug-qt-s-gen-server')  as HTMLInputElement)?.checked || false;
-            const useCf     = (overlay.querySelector('#plug-qt-s-use-cf')      as HTMLInputElement)?.checked || false;
-            const useUpnp   = (overlay.querySelector('#plug-qt-s-use-upnp')    as HTMLInputElement)?.checked || false;
-            const autoStart = (overlay.querySelector('#plug-qt-s-auto-start')  as HTMLInputElement)?.checked || false;
-            if (!profIds.length || !outputDir || !author) return;
-            const pl: any = {
+        } else if (p === '/api/repo/gen') {
+            const profIds     = Array.from(overlay.querySelectorAll<HTMLInputElement>('.plug-qt-host-prof-check:checked')).map(c => c.value).filter(Boolean);
+            const outputDir   = (overlay.querySelector('#plug-qt-s-output-dir')     as HTMLInputElement)?.value?.trim() || '';
+            const author      = (overlay.querySelector('#plug-qt-s-author-name')    as HTMLInputElement)?.value?.trim() || '';
+            const seed        = (overlay.querySelector('#plug-qt-s-seed')           as HTMLInputElement)?.value?.trim();
+            const genServer   = (overlay.querySelector('#plug-qt-s-gen-server')     as HTMLInputElement)?.checked || false;
+            const zipOutput   = (overlay.querySelector('#plug-qt-s-zip-output')     as HTMLInputElement)?.checked || false;
+            const useCf       = (overlay.querySelector('#plug-qt-s-use-cf')         as HTMLInputElement)?.checked || false;
+            const useUpnp     = (overlay.querySelector('#plug-qt-s-use-upnp')       as HTMLInputElement)?.checked || false;
+            const useDocker   = (overlay.querySelector('#plug-qt-s-use-docker')     as HTMLInputElement)?.checked || false;
+            const dockerOs    = (overlay.querySelector('#plug-qt-s-docker-os')      as HTMLSelectElement)?.value || 'linux';
+            const srvVersion  = (overlay.querySelector('#plug-qt-s-server-version') as HTMLSelectElement)?.value || 'std';
+            const autoStart   = (overlay.querySelector('#plug-qt-s-auto-start')     as HTMLInputElement)?.checked || false;
+            const portStr     = (overlay.querySelector('#plug-qt-s-port')           as HTMLInputElement)?.value?.trim();
+            const ulStr       = (overlay.querySelector('#plug-qt-s-upload-limit')   as HTMLInputElement)?.value?.trim();
+            const adminPw     = (overlay.querySelector('#plug-qt-s-admin-pw')       as HTMLInputElement)?.value?.trim();
+            if (!profIds.length || !outputDir || !author) {
+                toast('Profil(s), output_dir et author_name sont obligatoires', 'warning');
+                return;
+            }
+            const genPl: any = {
                 profileIds: profIds,
                 outputDir,
                 authorName: author,
-                generateServer: genServer,
+                generateServer: genServer || zipOutput, // if zip, server config applies
+                zipOutput,
                 useCloudflare: useCf,
                 useUpnp,
                 autoStart,
             };
-            if (seed)    pl.seed          = seed;
-            if (portStr) pl.port          = parseInt(portStr, 10) || 8080;
-            if (ulStr)   pl.uploadLimit   = parseInt(ulStr, 10) || 0;
-            if (adminPw) pl.adminPassword = adminPw;
-            body = JSON.stringify(pl);
+            if (seed)    genPl.seed          = seed;
+            if (portStr) genPl.port          = parseInt(portStr, 10) || 8080;
+            if (ulStr)   genPl.uploadLimit   = parseInt(ulStr, 10) || 0;
+            if (adminPw) genPl.adminPassword = adminPw;
+            if (useDocker) { genPl.useDocker = true; genPl.dockerOs = dockerOs; genPl.serverVersion = srvVersion; }
+            overlay.remove();
+            // Navigate to Server Repo page and pre-fill gen/export fields
+            const repoNavBtn2 = document.querySelector('.nav-item[data-view="repo"], .nav-btn[data-view="repo"]') as HTMLElement | null;
+            if (repoNavBtn2) repoNavBtn2.click();
+            setTimeout(() => {
+                document.dispatchEvent(new CustomEvent('bmm:repo-focus', {
+                    detail: { section: 'gen', prefill: genPl },
+                }));
+            }, 350);
+            return;
+
+        } else if (p === '/api/repo/host') {
+            const serveDir = (overlay.querySelector('#plug-qt-s-serve-dir')          as HTMLInputElement)?.value?.trim() || '';
+            const portStr  = (overlay.querySelector('#plug-qt-s-http-port')          as HTMLInputElement)?.value?.trim();
+            const ulStr    = (overlay.querySelector('#plug-qt-s-http-upload-limit')  as HTMLInputElement)?.value?.trim();
+            if (!serveDir) { toast('serve_dir est obligatoire', 'warning'); return; }
+            const hostPl: any = { serveDir };
+            if (portStr) hostPl.port        = parseInt(portStr, 10) || 8080;
+            if (ulStr)   hostPl.uploadLimit = parseInt(ulStr, 10) || 0;
+            overlay.remove();
+            // Navigate to repo page and start the server via native UI
+            const repoNavBtnH = document.querySelector('.nav-item[data-view="repo"], .nav-btn[data-view="repo"]') as HTMLElement | null;
+            if (repoNavBtnH) repoNavBtnH.click();
+            setTimeout(() => {
+                document.dispatchEvent(new CustomEvent('bmm:repo-focus', {
+                    detail: { section: 'host', prefill: hostPl },
+                }));
+            }, 350);
+            return;
 
         } else {
             body = (overlay.querySelector('#plug-qt-s-json') as HTMLTextAreaElement)?.value || rawBody;
@@ -1464,14 +1928,20 @@ function renderScripts(container: HTMLElement) {
         { m: 'POST',   p: '/api/restart',             l: 'Restart BMM',      icon: IC.refresh,    body: '' },
         { m: 'POST',   p: '/api/repo/connect',         l: 'Connect Repo',     icon: IC.globe,      body: '{"url":"","name":""}' },
         { m: 'POST',   p: '/api/repo/sync',            l: 'Sync Repo',        icon: IC.refresh,    body: '{}' },
-        { m: 'POST',   p: '/api/repo/host',            l: 'Host Repo',        icon: IC.upload,     body: '{}' },
+        { m: 'POST',   p: '/api/repo/gen',             l: 'Gen Repo',         icon: IC.upload,     body: '{}' },
+        { m: 'POST',   p: '/api/repo/host',            l: 'Host HTTP',        icon: IC.globe,      body: '{"serveDir":"C:/BMM/Export","port":8080}' },
         // ── PUT ────────────────────────────────────────────────────
         { m: 'PUT',    p: '/api/mods/:id',            l: 'Update Mod',       icon: IC.editIcon,   body: '{"name":""}' },
         { m: 'PUT',    p: '/api/profiles/:id',        l: 'Update Profile',   icon: IC.editIcon,   body: '{"name":""}' },
+        { m: 'PUT',    p: '/api/modpacks/:id',        l: 'Update Modpack',   icon: IC.editIcon,   body: '{"name":""}' },
         // ── DELETE ─────────────────────────────────────────────────
+        { m: 'DELETE', p: '/api/repo/sync/cancel',     l: 'Cancel Sync',      icon: IC.x },
+        { m: 'DELETE', p: '/api/repo/gen/cancel',      l: 'Cancel Gen',       icon: IC.x },
+        { m: 'DELETE', p: '/api/repo/host',            l: 'Stop Host',        icon: IC.x },
         { m: 'DELETE', p: '/api/repo',                 l: 'Disconnect Repo',  icon: IC.trash,      body: '{"url":""}' },
         { m: 'DELETE', p: '/api/mods/:id',            l: 'Delete Mod',       icon: IC.trash },
         { m: 'DELETE', p: '/api/profiles/:id',        l: 'Delete Profile',   icon: IC.trash },
+        { m: 'DELETE', p: '/api/modpacks/:id',        l: 'Delete Modpack',   icon: IC.trash },
     ];
 
     container.innerHTML = `
@@ -1500,8 +1970,9 @@ function renderScripts(container: HTMLElement) {
                         return QT_ENDPOINTS.map(e => {
                             const mc = e.m.toLowerCase();
                             const badge = `<span class="plug-qt-method-badge plug-qt-${mc}">${e.m}</span>`;
-                            const body = (e as any).body !== undefined ? ` data-body="${escHtml((e as any).body || '')}"` : '';
-                            const nav  = (e as any).navigate ? ` data-navigate="${(e as any).navigate}"` : '';
+                            const body       = (e as any).body !== undefined ? ` data-body="${escHtml((e as any).body || '')}"` : '';
+                            const nav        = (e as any).navigate ? ` data-navigate="${(e as any).navigate}"` : '';
+                            const autoLaunch = (e as any).autoLaunch ? ` data-auto-launch="${(e as any).autoLaunch}"` : '';
                             let sep = '';
                             if (e.m !== lastMethod) {
                                 lastMethod = e.m;
@@ -1509,7 +1980,7 @@ function renderScripts(container: HTMLElement) {
                             }
                             // navigate-type buttons get a distinct visual hint
                             const navHint = (e as any).navigate ? ` <span style="font-size:9px;opacity:.6;vertical-align:middle;">↗ UI</span>` : '';
-                            return sep + `<button class="plug-qt-btn" data-method="${e.m}" data-path="${e.p}"${body}${nav} data-tooltip="${e.m} ${e.p}">
+                            return sep + `<button class="plug-qt-btn" data-method="${e.m}" data-path="${e.p}"${body}${nav}${autoLaunch} data-tooltip="${e.m} ${e.p}">
                                 ${e.icon} <span>${e.l}</span>${navHint}${badge}
                             </button>`;
                         }).join('');
@@ -1556,7 +2027,7 @@ function renderScripts(container: HTMLElement) {
                         const methodOrder: Record<string, number> = { GET: 0, POST: 1, PUT: 2, DELETE: 3, PATCH: 4 };
                         defs.sort((a, b) => (methodOrder[a.method] ?? 9) - (methodOrder[b.method] ?? 9));
                         defs.forEach(ep => {
-                            const sid = ep.path.replace(/\//g,'_').replace(/^_/,'');
+                            const sid = (ep.method.toLowerCase() + '_' + ep.path).replace(/\//g, '_').replace(/^_/, '').replace(/:/g, '');
                             _epCodeCache.set(sid, ep);
                         });
                         let lastMethod = '';
@@ -1689,6 +2160,13 @@ function renderScripts(container: HTMLElement) {
             if (navTarget) {
                 const navBtn = document.querySelector(`.nav-item[data-view="${navTarget}"], .nav-btn[data-view="${navTarget}"]`) as HTMLElement;
                 if (navBtn) navBtn.click();
+                // Dispatch auto-launch event so the target page can focus the right section
+                const autoLaunch = el.dataset.autoLaunch;
+                if (autoLaunch) {
+                    setTimeout(() => {
+                        document.dispatchEvent(new CustomEvent('bmm:repo-focus', { detail: { section: autoLaunch } }));
+                    }, 350);
+                }
                 return;
             }
 
@@ -1731,24 +2209,37 @@ function renderScripts(container: HTMLElement) {
         methodSel.value = method;
         pathInp.value   = path;
         const bodyHints: Record<string, string> = {
-            '/api/mods/enable':           '{\n  "mod_id": ""\n}',
-            '/api/mods/disable':          '{\n  "mod_id": ""\n}',
-            '/api/mods/:id':              '{\n  "name": ""\n}',
-            '/api/profiles/activate':     '{\n  "profile_id": ""\n}',
-            '/api/profiles':              '{\n  "name": "",\n  "game_path": "",\n  "mods_path": "",\n  "backup_path": ""\n}',
-            '/api/profiles/:id':          '{\n  "name": ""\n}',
-            '/api/plugins/compare':       '{\n  "plugin_id": ""\n}',
-            '/api/plugins/apply':         '{\n  "plugin_id": "",\n  "force_strict": false\n}',
-            '/api/modpacks/enable':       '{\n  "modpack_id": ""\n}',
-            '/api/modpacks/disable':      '{\n  "modpack_id": ""\n}',
-            '/api/modpacks/create':       '{\n  "name": "",\n  "profile_id": ""\n}',
-            '/api/restart':               '',
-            '/api/repo/connect':          '{\n  "url": "https://monserveur.com/repo.json",\n  "name": "Mon Serveur"\n}',
-            '/api/repo':                  '{\n  "url": "https://monserveur.com/repo.json"\n}',
-            '/api/repo/sync':             '{\n  "url": "https://monserveur.com/repo.json",\n  "game_dir": "C:/Games/MonJeu",\n  "mods_dir": "C:/Games/MonJeu/Mods",\n  "backup_dir": "C:/BMM/Backups",\n  "choices": [{ "repo_profile_id": "prof-uuid" }],\n  "overwrite_all": false,\n  "delete_extra": false,\n  "download_limit": 0\n}',
-            '/api/repo/host':             '{\n  "profile_ids": ["prof-uuid"],\n  "output_dir": "C:/BMM/Export",\n  "author_name": "MonPseudo",\n  "generate_server": false,\n  "port": 8080,\n  "use_cloudflare": false,\n  "use_upnp": false,\n  "auto_start": false\n}',
+            // POST / PUT
+            '/api/mods/enable':      '{\n  "mod_id": ""\n}',
+            '/api/mods/disable':     '{\n  "mod_id": ""\n}',
+            '/api/mods/:id':         '{\n  "name": ""\n}',
+            '/api/profiles/activate':'{\n  "profile_id": ""\n}',
+            '/api/profiles':         '{\n  "name": "",\n  "game_path": "",\n  "mods_path": "",\n  "backup_path": ""\n}',
+            '/api/profiles/:id':     '{\n  "name": ""\n}',
+            '/api/plugins/compare':  '{\n  "plugin_id": ""\n}',
+            '/api/plugins/apply':    '{\n  "plugin_id": "",\n  "force_strict": false\n}',
+            '/api/modpacks/enable':  '{\n  "modpack_id": ""\n}',
+            '/api/modpacks/disable': '{\n  "modpack_id": ""\n}',
+            '/api/modpacks/create':  '{\n  "name": "",\n  "description": "",\n  "game_name": "",\n  "sr_link": "",\n  "multi_profile": false,\n  "skip_integrity_check": false,\n  "dependency_mode": "none",\n  "mod_ids": []\n}',
+            '/api/modpacks/:id':     '{\n  "name": "",\n  "description": "",\n  "game_name": "",\n  "sr_link": "",\n  "multi_profile": false,\n  "skip_integrity_check": false,\n  "dependency_mode": "none",\n  "mod_ids": []\n}',
+            '/api/restart':          '',
+            '/api/repo/connect':     '{\n  "url": "https://monserveur.com/repo.json",\n  "name": "Mon Serveur"\n}',
+            // camelCase — Rust backend uses #[serde(rename_all = "camelCase")]
+            '/api/repo/sync':        '{\n  "url": "https://monserveur.com/repo.json",\n  "gameDir": "C:/Games/MonJeu",\n  "modsDir": "C:/Games/MonJeu/Mods",\n  "backupDir": "C:/BMM/Backups",\n  "choices": [{ "repoProfileId": "prof-uuid" }],\n  "overwriteAll": false,\n  "deleteExtra": false,\n  "downloadLimit": 0\n}',
+            '/api/repo/gen':         '{\n  "profileIds": ["prof-uuid"],\n  "outputDir": "C:/BMM/Export",\n  "authorName": "MonPseudo",\n  "generateServer": false,\n  "zipOutput": false,\n  "useCloudflare": false,\n  "useUpnp": false,\n  "useDocker": false,\n  "dockerOs": "linux",\n  "serverVersion": "std",\n  "autoStart": false,\n  "port": 8080,\n  "uploadLimit": 0,\n  "adminPassword": ""\n}',
+            '/api/repo/host':        '{\n  "serveDir": "C:/BMM/Export",\n  "port": 8080,\n  "uploadLimit": 0\n}',
+            // DELETE routes that carry a body
+            '/api/repo':             '{\n  "url": "https://monserveur.com/repo.json"\n}',
         };
-        bodyTa.value = (method !== 'GET' && method !== 'DELETE') ? (bodyHints[path] ?? '') : '';
+        // Show body hint if one exists (even for DELETE — some routes need a body)
+        const hint = bodyHints[path];
+        if (hint) {
+            bodyTa.value = hint;
+        } else if (method === 'GET' || method === 'DELETE') {
+            bodyTa.value = '';
+        } else {
+            bodyTa.value = bodyHints[path] ?? '';
+        }
         details.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         details.classList.add('plug-tester-highlight');
         setTimeout(() => details.classList.remove('plug-tester-highlight'), 900);
@@ -2679,9 +3170,9 @@ function getEndpointDefs(): EndpointDef[] {
             ],
         },
         {
-            method: 'POST', path: '/api/repo/host', auth: true,
-            desc: 'Exporter/héberger un repo',
-            about: 'Exporte des profils locaux au format repo serveur BMM (repo.json + mods hachés + structure de fichiers). Si <code>generate_server=true</code>, génère les scripts de démarrage du mini-serveur. Si <code>lightweight=true</code>, ne copie pas les fichiers de mods (manifeste seul). Si <code>zip_output=true</code>, compresse le tout dans un .zip. L\'opération est démarrée en arrière-plan — réponse immédiate (202).',
+            method: 'POST', path: '/api/repo/gen', auth: true,
+            desc: 'Générer la structure repo (Gen)',
+            about: 'Exporte des profils locaux au format repo serveur BMM (repo.json + mods hachés + structure de fichiers). Si <code>generate_server=true</code>, génère les scripts de démarrage du mini-serveur. Si <code>lightweight=true</code>, ne copie pas les fichiers de mods (manifeste seul). Si <code>zip_output=true</code>, compresse le tout dans un .zip. L\'opération est démarrée en arrière-plan — réponse immédiate (202). Annulez avec <code>DELETE /api/repo/gen/cancel</code>.',
             fields: [
                 { name: 'profileIds',    type: 'array',   required: true,  desc: 'Tableau des UUIDs de profils locaux à exporter.' },
                 { name: 'outputDir',     type: 'string',  required: true,  desc: 'Dossier de destination où créer repo.json et le dossier mods/.' },
@@ -2698,16 +3189,46 @@ function getEndpointDefs(): EndpointDef[] {
                 { name: 'serverVersion', type: 'number',  required: false, desc: 'Version cible du serveur BMM à générer (1 ou 2).' },
                 { name: 'enableDocker',  type: 'boolean', required: false, desc: 'Génère un Dockerfile pour le mini-serveur.' },
                 { name: 'dockerHostType',type: 'string',  required: false, desc: 'Type d\'hôte Docker : "linux" ou "windows".' },
-                { name: 'lightweight',   type: 'boolean', required: false, desc: 'Mode léger : génère seulement le manifeste repo.json sans copier les fichiers de mods. Utile si les fichiers sont déjà hébergés ailleurs.' },
-                { name: 'zipOutput',     type: 'boolean', required: false, desc: 'Si true, compresse le dossier de sortie en un fichier .zip après l\'export.' },
+                { name: 'zipOutput',     type: 'boolean', required: false, desc: 'Compresse la sortie en .zip — active également la config serveur de distribution.' },
+                { name: 'useDocker',     type: 'boolean', required: false, desc: 'Génère un Dockerfile pour le mini-serveur de distribution.' },
+                { name: 'dockerOs',      type: 'string',  required: false, desc: 'OS hôte Docker : "linux" (défaut) ou "windows".' },
+                { name: 'serverVersion', type: 'string',  required: false, desc: 'Version serveur : "std" (standard) ou "lux" (premium).' },
             ],
             responseStatuses: [
-                { code: 202, label: 'Accepted', body: '{ "ok": true, "message": "Export started in background", "job_id": "uuid", "progress_event": "bmm://repo-export-progress", "done_event": "bmm://repo-export-done", "error_event": "bmm://repo-export-error" }' },
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "message": "Gen started in background", "job_id": "uuid", "cancel_endpoint": "DELETE /api/repo/gen/cancel" }' },
                 { code: 400, label: 'Bad Request', body: '{ "error": "author_name is required" }' },
                 { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' },
+                { code: 409, label: 'Conflict', body: '{ "error": "A gen is already running. Cancel it first with DELETE /api/repo/gen/cancel." }' },
             ],
         },
-        // ── Modpacks (list + create) ─────────────────────────────────────────
+        {
+            method: 'POST', path: '/api/repo/host', auth: true,
+            desc: 'Démarrer le serveur HTTP statique',
+            about: 'Lance un serveur HTTP de fichiers statiques (warp::fs) sur le dossier spécifié. Utile pour servir un repo généré via <code>POST /api/repo/gen</code> directement sur le réseau local. Stoppez-le avec <code>DELETE /api/repo/host</code>.',
+            fields: [
+                { name: 'serveDir',    type: 'string',  required: true,  desc: 'Chemin absolu du dossier à servir (ex: "C:/BMM/Export").' },
+                { name: 'port',        type: 'number',  required: false, desc: 'Port d\'écoute HTTP. Défaut : 8080.' },
+                { name: 'uploadLimit', type: 'number',  required: false, desc: 'Limite de bande passante KB/s (0 = illimité). Défaut : 0.' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "message": "HTTP host started", "url": "http://192.168.1.x:8080" }' },
+                { code: 400, label: 'Bad Request', body: '{ "error": "serve_dir is required" }' },
+                { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' },
+                { code: 409, label: 'Conflict', body: '{ "error": "An HTTP host is already running. Stop it first with DELETE /api/repo/host." }' },
+            ],
+        },
+        {
+            method: 'DELETE', path: '/api/repo/host', auth: true,
+            desc: 'Arrêter le serveur HTTP statique',
+            about: 'Envoie un signal d\'arrêt gracieux au serveur HTTP lancé par <code>POST /api/repo/host</code>.',
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "message": "HTTP host stopped" }' },
+                { code: 200, label: 'OK (rien en cours)', body: '{ "ok": false, "message": "No HTTP host is currently running" }' },
+                e401,
+            ],
+        },
+        // ── Modpacks (list + create + update) ────────────────────────────────
         {
             method: 'GET', path: '/api/modpacks', auth: false,
             desc: t('plugins.endpointGetModpacks'),
@@ -2738,7 +3259,39 @@ function getEndpointDefs(): EndpointDef[] {
                 e400, e401,
             ],
         },
-        // ── Repo sync cancel ─────────────────────────────────────────────────
+        // ── Update modpack ───────────────────────────────────────────────────
+        {
+            method: 'PUT', path: '/api/modpacks/:id', auth: true,
+            desc: t('plugins.endpointUpdateModpack') || 'Mettre à jour un modpack',
+            about: 'Met à jour les métadonnées d\'un modpack existant (nom, description, liste de mods, options). Remplace uniquement les champs fournis (PATCH-like). Retourne le modpack mis à jour.',
+            fields: [
+                { name: 'name',                 type: 'string',  required: false, desc: 'Nouveau nom affiché du modpack.' },
+                { name: 'description',          type: 'string',  required: false, desc: 'Nouvelle description.' },
+                { name: 'game_name',            type: 'string',  required: false, desc: 'Label du jeu.' },
+                { name: 'sr_link',              type: 'string',  required: false, desc: 'URL du Server Repo lié.' },
+                { name: 'mod_ids',              type: 'array',   required: false, desc: 'Tableau de mod UUIDs pour remplacer la liste de mods.' },
+                { name: 'multi_profile',        type: 'boolean', required: false, desc: 'Autoriser des mods de plusieurs profils.' },
+                { name: 'skip_integrity_check', type: 'boolean', required: false, desc: 'Ignorer la vérification d\'intégrité des fichiers.' },
+                { name: 'dependency_mode',      type: 'string',  required: false, desc: 'Mode de résolution : "none", "all", "manual".' },
+                { name: 'mod_overrides',        type: 'array',   required: false, desc: 'Surcharges par mod (download_link, include_dependencies, etc.).' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "modpack_id": "uuid", "mod_count": 12 }' },
+                e400, e401, e404,
+            ],
+        },
+        // ── Delete modpack ───────────────────────────────────────────────────
+        {
+            method: 'DELETE', path: '/api/modpacks/:id', auth: true,
+            desc: 'Supprimer un modpack',
+            about: 'Supprime définitivement un modpack par son UUID. Cette action est irréversible. Les mods locaux ne sont pas supprimés.',
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "deleted_id": "uuid" }' },
+                e401, e404,
+            ],
+        },
+        // ── Repo cancel endpoints ────────────────────────────────────────────
         {
             method: 'DELETE', path: '/api/repo/sync/cancel', auth: true,
             desc: t('plugins.endpointCancelSync') || 'Annuler la sync en cours',
@@ -2750,36 +3303,110 @@ function getEndpointDefs(): EndpointDef[] {
                 e401,
             ],
         },
+        {
+            method: 'DELETE', path: '/api/repo/gen/cancel', auth: true,
+            desc: t('plugins.endpointCancelGen') || 'Annuler la génération en cours',
+            about: 'Envoie un signal d\'annulation à la tâche de génération de repo actuellement en cours. La gen s\'arrête au prochain point de contrôle. Retourne ok:false si aucune gen n\'est en cours.',
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK (signal envoyé)', body: '{ "ok": true, "message": "Cancel signal sent — gen will stop at next checkpoint" }' },
+                { code: 200, label: 'OK (rien à annuler)', body: '{ "ok": false, "message": "No gen is currently running" }' },
+                e401,
+            ],
+        },
     ];
 }
 
 async function handleApiTest() {
-    const method    = (document.getElementById('pt-method') as HTMLSelectElement).value;
-    const path      = (document.getElementById('pt-path') as HTMLInputElement).value.trim();
-    const bodyText  = (document.getElementById('pt-body') as HTMLTextAreaElement).value.trim();
-    const respDiv   = document.getElementById('pt-response') as HTMLElement;
-    const respPre   = document.getElementById('pt-resp-body') as HTMLElement;
+    const methodSel   = document.getElementById('pt-method') as HTMLSelectElement;
+    const pathInp     = document.getElementById('pt-path') as HTMLInputElement;
+    const bodyTa      = document.getElementById('pt-body') as HTMLTextAreaElement;
+    const respDiv     = document.getElementById('pt-response') as HTMLElement;
+    const respPre     = document.getElementById('pt-resp-body') as HTMLElement;
     const statusBadge = document.getElementById('pt-status-badge') as HTMLElement;
+    if (!methodSel || !pathInp || !respDiv) return;
+
+    const method   = methodSel.value;
+    let   path     = pathInp.value.trim();
+    const bodyText = bodyTa?.value?.trim() || '';
+
+    // Normalize path — must start with /
+    if (path && !path.startsWith('/')) path = '/' + path;
+
+    // Warn if :id placeholder not replaced
+    if (path.includes(':id') || path.includes(':uuid')) {
+        statusBadge.textContent = 'Remplacez :id dans le chemin';
+        statusBadge.className = 'plug-tester-status plug-status-err';
+        respDiv.style.display = 'block';
+        respPre.textContent = 'Le chemin contient encore un placeholder ":id". Remplacez-le par l\'UUID réel.';
+        return;
+    }
 
     respDiv.style.display = 'block';
-    respPre.textContent = t('common.loading');
-    statusBadge.textContent = '...';
+    respPre.textContent = t('common.loading') || 'Chargement…';
+    statusBadge.textContent = '…';
     statusBadge.className = 'plug-tester-status';
 
     try {
-        const opts: RequestInit = { method, headers: { 'Authorization': `Bearer ${_apiToken}`, 'Content-Type': 'application/json' } };
-        if ((method === 'POST' || method === 'PUT' || method === 'PATCH') && bodyText) opts.body = bodyText;
-        const res = await fetch(`http://127.0.0.1:51274${path}`, opts);
-        const json = await res.json().catch(() => null);
+        const headers: Record<string, string> = {
+            'Authorization': `Bearer ${_apiToken}`,
+        };
+        const opts: RequestInit = { method, headers };
+
+        // Send body for POST, PUT, PATCH, and DELETE (some DELETE routes need a body)
+        const canHaveBody = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+        if (canHaveBody && bodyText) {
+            // Validate JSON before sending
+            try { JSON.parse(bodyText); } catch {
+                statusBadge.textContent = 'JSON invalide';
+                statusBadge.className = 'plug-tester-status plug-status-err';
+                respPre.textContent = 'Le corps de la requête n\'est pas un JSON valide. Corrigez-le avant d\'envoyer.';
+                return;
+            }
+            headers['Content-Type'] = 'application/json';
+            opts.body = bodyText;
+        }
+
+        const res  = await fetch(`http://127.0.0.1:51274${path}`, opts);
+        const text = await res.text().catch(() => '');
+
         statusBadge.textContent = `${res.status} ${res.statusText}`;
         statusBadge.className = `plug-tester-status ${res.ok ? 'plug-status-ok' : 'plug-status-err'}`;
-        const pretty = json !== null ? JSON.stringify(json, null, 2) : '';
-        respPre.innerHTML = hlJson(pretty);
 
+        let display: string;
+        if (!text || text.trim() === '') {
+            display = `// (réponse vide — ${res.status} ${res.statusText})`;
+        } else {
+            try {
+                const json = JSON.parse(text);
+                display = JSON.stringify(json, null, 2);
+            } catch {
+                display = text; // plain text response
+            }
+        }
+        const MAX_DISPLAY = 8000;
+        if (display.length > MAX_DISPLAY)
+            display = display.slice(0, MAX_DISPLAY) + `\n\n… [tronqué — ${display.length.toLocaleString()} chars]`;
+
+        respPre.innerHTML = hlJson(display);
+
+        // Live UI refresh after successful mutations
+        if (res.ok && method !== 'GET') {
+            if (path.includes('/profiles')) {
+                window.dispatchEvent(new CustomEvent('bmm:profiles-updated'));
+                window.dispatchEvent(new CustomEvent('bmm:mods-updated'));
+            }
+            if (path.includes('/mods') && !path.includes('/modpacks')) {
+                window.dispatchEvent(new CustomEvent('bmm:mods-updated'));
+            }
+            if (path.includes('/modpacks')) {
+                window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
+            }
+        }
     } catch (e) {
-        statusBadge.textContent = t('common.error');
+        statusBadge.textContent = t('common.error') || 'Erreur';
         statusBadge.className = 'plug-tester-status plug-status-err';
-        respPre.textContent = String(e);
+        respPre.textContent = `Erreur réseau : ${String(e)}\n\nVérifiez que BMM est bien démarré et que l'API tourne sur le port 51274.`;
     }
 }
 
@@ -2817,8 +3444,8 @@ function addActionRow() {
     const profOpts = _allProfiles.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`).join('');
     const plugOpts = _installedPlugins.map(p => `<option value="${escHtml(p.manifest.id)}">${escHtml(p.manifest.name)}</option>`).join('');
 
-    const EXTRA_TYPES = new Set(['wait','close_process','open_url','show_message','launch_game','log','comment','set_variable','if_file_exists','if_var_eq','raw_code']);
-    const NO_INPUT_TYPES = new Set(['else_block','end_block']);
+    const EXTRA_TYPES = new Set(['wait','close_process','open_url','show_message','launch_game','log','comment','set_variable','if_file_exists','if_var_eq','raw_code','sync_repo','gen_repo','http_host','cancel_sync','cancel_gen','stop_http_host','update_modpack']);
+    const NO_INPUT_TYPES = new Set(['else_block','end_block','cancel_sync','cancel_gen','stop_http_host']);
     const EXTRA_PH: Record<string,string> = {
         wait:                t('plugins.waitDuration'),
         close_process:       t('plugins.processName'),
@@ -2831,6 +3458,10 @@ function addActionRow() {
         if_file_exists:      t('plugins.filePathCheck'),
         if_var_eq:           'VARNAME=value',
         raw_code:            t('plugins.rawCodeHint'),
+        sync_repo:           'url=https://… mods_dir=C:/Mods (key=value pairs)',
+        gen_repo:            'output_dir=C:/Export author=MonPseudo lightweight=false zip=false',
+        http_host:           'serve_dir=C:/Export port=8080',
+        update_modpack:      'modpack_id=uuid name=NewName',
     };
 
     const row = document.createElement('div');
@@ -2850,6 +3481,15 @@ function addActionRow() {
                     <option value="disable_modpack">${t('plugins.actionDisableModpack') || 'Désactiver liste de mods du plugin'}</option>
                     <option value="apply_plugin">${t('plugins.actionApplyPlugin')}</option>
                     <option value="compare_plugin">${t('plugins.actionComparePlugin')}</option>
+                    <option value="update_modpack">${t('plugins.actionUpdateModpack') || 'Mettre à jour modpack'}</option>
+                </optgroup>
+                <optgroup label="${t('plugins.actionGroupRepo') || 'Server Repo'}">
+                    <option value="sync_repo">${t('plugins.actionSyncRepo') || 'Synchroniser repo'}</option>
+                    <option value="cancel_sync">${t('plugins.actionCancelSync') || 'Annuler sync'}</option>
+                    <option value="gen_repo">${t('plugins.actionGenRepo') || 'Générer repo'}</option>
+                    <option value="cancel_gen">${t('plugins.actionCancelGen') || 'Annuler gen'}</option>
+                    <option value="http_host">${t('plugins.actionHttpHost') || 'Démarrer serveur HTTP'}</option>
+                    <option value="stop_http_host">${t('plugins.actionStopHttpHost') || 'Arrêter serveur HTTP'}</option>
                 </optgroup>
                 <optgroup label="${t('plugins.actionGroupSystem')}">
                     <option value="wait">${t('plugins.actionWait')}</option>
@@ -3357,7 +3997,21 @@ function genScriptLocal(
 
 // Generic action renderer for simpler languages (Ruby, PHP, Go, Java, C#, Rust)
 function _genericAction(a: any, lang: string, token: string | null, useDeeplink: boolean, base: string): string[] {
-    const apiEps: Record<string, [string, string]> = {
+    // Parse "key=value key2=value2" extra string for repo actions
+    const parseKV = (str: string): Record<string, string> => {
+        const out: Record<string, string> = {};
+        (str || '').split(/\s+/).forEach(part => {
+            const eq = part.indexOf('=');
+            if (eq > 0) out[part.slice(0, eq)] = part.slice(eq + 1);
+        });
+        return out;
+    };
+    const syncKV       = parseKV(a.extra?.expr || '');
+    const genKV        = parseKV(a.extra?.expr || '');
+    const hostKV       = parseKV(a.extra?.expr || '');
+    const updModpackKV = parseKV(a.extra?.expr || '');
+
+    const apiEps: Record<string, [string, string, string?]> = {
         enable_mod:          ['/api/mods/enable',        JSON.stringify({ mod_id: a.target_id })],
         disable_mod:         ['/api/mods/disable',       JSON.stringify({ mod_id: a.target_id })],
         activate_profile:    ['/api/profiles/activate',  JSON.stringify({ profile_id: a.target_id })],
@@ -3365,6 +4019,10 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
         compare_plugin:      ['/api/plugins/compare',    JSON.stringify({ plugin_id: a.target_id })],
         enable_modpack:      ['/api/modpacks/enable',    JSON.stringify({ profile_id: a.target_id })],
         disable_modpack:     ['/api/modpacks/disable',   JSON.stringify({ profile_id: a.target_id })],
+        update_modpack:      [`/api/modpacks/${updModpackKV.modpack_id || 'MODPACK_ID'}`, JSON.stringify({ name: updModpackKV.name || '', dependency_mode: updModpackKV.dependency_mode || 'none' }), 'PUT'],
+        sync_repo:           ['/api/repo/sync',          JSON.stringify({ url: syncKV.url || 'REPO_URL', mods_dir: syncKV.mods_dir || 'C:/Mods' })],
+        gen_repo:            ['/api/repo/gen',           JSON.stringify({ output_dir: genKV.output_dir || 'C:/Export', author_name: genKV.author || 'Author', lightweight: genKV.lightweight === 'true', zip_output: genKV.zip === 'true' })],
+        http_host:           ['/api/repo/host',          JSON.stringify({ serve_dir: hostKV.serve_dir || 'C:/Export', port: parseInt(hostKV.port || '8080') })],
     };
 
     const dlMap: Record<string, string> = {
@@ -3418,14 +4076,45 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
         rs: `Command::new("cmd").args(["/c","start","","${url}"]).spawn().ok();`,
     })[lang] || `// open ${url}`;
 
+    // DELETE helper (cancel / stop)
+    const delFn = (path: string) => ({
+        rb: `bmm_delete('${path}')`,
+        php: `bmm_delete($base, $token, '${path}');`,
+        go: `bmmDelete("${path}")`,
+        java: `bmmDelete("${path}");`,
+        cs: `await Delete("${path}");`,
+        rs: isEnv ? `bmm_delete("${path}", &base, &token);` : `bmm_delete("${path}", BASE, TOKEN);`,
+    })[lang] || `// DELETE ${path}`;
+
+    // PUT helper
+    const putFn = (path: string, body: string) => ({
+        rb: `bmm_put('${path}', ${body})`,
+        php: `bmm_put($base, $token, '${path}', ${body});`,
+        go: `bmmPut("${path}", \`${body}\`)`,
+        java: `bmmPut("${path}", "${body.replace(/"/g, '\\"')}");`,
+        cs: `await Put("${path}", "${body.replace(/"/g, '\\"')}");`,
+        rs: isEnv ? `bmm_put("${path}", r#"${body}"#, &base, &token);` : `bmm_put("${path}", r#"${body}"#, BASE, TOKEN);`,
+    })[lang] || `// PUT ${path}`;
+
     switch (a.action_type) {
         case 'enable_mod': case 'disable_mod': case 'activate_profile':
         case 'apply_plugin': case 'compare_plugin':
-        case 'enable_modpack': case 'disable_modpack': {
+        case 'enable_modpack': case 'disable_modpack':
+        case 'sync_repo': case 'gen_repo': case 'http_host': {
             const dl = dlMap[a.action_type];
             const ep = apiEps[a.action_type];
             return [dl && useDeeplink ? dlFn(dl) : postFn(ep[0], ep[1])];
         }
+        case 'update_modpack': {
+            const ep = apiEps['update_modpack'];
+            return [putFn(ep[0], ep[1])];
+        }
+        case 'cancel_sync':
+            return [delFn('/api/repo/sync/cancel')];
+        case 'cancel_gen':
+            return [delFn('/api/repo/gen/cancel')];
+        case 'stop_http_host':
+            return [delFn('/api/repo/host')];
         case 'wait':
             return [sleepFn(a.extra.duration_ms || 1000)];
         case 'log':
@@ -3512,6 +4201,24 @@ function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: str
         `webbrowser.open(f"bmm://${path}/${id}")`;
     const apiPost = (ep: string, body: object) =>
         `requests.post(f"{BASE}${ep}", json=${JSON.stringify(body)}${auth ? ', ' + auth : ''})`;
+    const apiDelete = (ep: string) =>
+        `requests.delete(f"{BASE}${ep}"${auth ? ', ' + auth : ''})`;
+    const apiPut = (ep: string, body: object) =>
+        `requests.put(f"{BASE}${ep}", json=${JSON.stringify(body)}${auth ? ', ' + auth : ''})`;
+
+    // Parse "key=value" extra string for repo actions
+    const parseKV2 = (str: string): Record<string, string> => {
+        const out: Record<string, string> = {};
+        (str || '').split(/\s+/).forEach(part => {
+            const eq = part.indexOf('=');
+            if (eq > 0) out[part.slice(0, eq)] = part.slice(eq + 1);
+        });
+        return out;
+    };
+    const syncKV  = parseKV2(a.extra?.expr || '');
+    const genKV   = parseKV2(a.extra?.expr || '');
+    const hostKV  = parseKV2(a.extra?.expr || '');
+    const updKV   = parseKV2(a.extra?.expr || '');
 
     switch (a.action_type) {
         case 'enable_mod':
@@ -3534,6 +4241,20 @@ function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: str
             return [useDeeplink ? deeplink('modpack/enable', a.target_id) : `${apiPost('/api/modpacks/enable', { profile_id: a.target_id })}`];
         case 'disable_modpack':
             return [useDeeplink ? deeplink('modpack/disable', a.target_id) : `${apiPost('/api/modpacks/disable', { profile_id: a.target_id })}`];
+        case 'update_modpack':
+            return [`${apiPut(`/api/modpacks/${updKV.modpack_id || 'MODPACK_ID'}`, { name: updKV.name || '', dependency_mode: updKV.dependency_mode || 'none' })}`];
+        case 'sync_repo':
+            return [`${apiPost('/api/repo/sync', { url: syncKV.url || 'REPO_URL', mods_dir: syncKV.mods_dir || 'C:/Mods' })}`];
+        case 'cancel_sync':
+            return [`${apiDelete('/api/repo/sync/cancel')}`];
+        case 'gen_repo':
+            return [`${apiPost('/api/repo/gen', { output_dir: genKV.output_dir || 'C:/Export', author_name: genKV.author || 'Author', lightweight: genKV.lightweight === 'true', zip_output: genKV.zip === 'true' })}`];
+        case 'cancel_gen':
+            return [`${apiDelete('/api/repo/gen/cancel')}`];
+        case 'http_host':
+            return [`${apiPost('/api/repo/host', { serve_dir: hostKV.serve_dir || 'C:/Export', port: parseInt(hostKV.port || '8080') })}`];
+        case 'stop_http_host':
+            return [`${apiDelete('/api/repo/host')}`];
         case 'wait':
             return [`time.sleep(${((a.extra.duration_ms || 1000) / 1000).toFixed(1)})`];
         case 'show_message':
@@ -3572,6 +4293,20 @@ function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: st
     // TOKEN and BASE are always declared as locals at the top of the Lua script
     const curlPost = (ep: string, body: string) =>
         `os.execute(('curl -s -X POST %s%s -H "Content-Type: application/json" -H "Authorization: Bearer %s" -d %q'):format(BASE, ${JSON.stringify(ep)}, TOKEN, ${JSON.stringify(body)}))`;
+    const curlDelete = (ep: string) =>
+        `os.execute(('curl -s -X DELETE %s%s -H "Authorization: Bearer %s"'):format(BASE, ${JSON.stringify(ep)}, TOKEN))`;
+    const curlPut = (ep: string, body: string) =>
+        `os.execute(('curl -s -X PUT %s%s -H "Content-Type: application/json" -H "Authorization: Bearer %s" -d %q'):format(BASE, ${JSON.stringify(ep)}, TOKEN, ${JSON.stringify(body)}))`;
+
+    const parseKV3 = (str: string): Record<string, string> => {
+        const out: Record<string, string> = {};
+        (str || '').split(/\s+/).forEach(part => {
+            const eq = part.indexOf('=');
+            if (eq > 0) out[part.slice(0, eq)] = part.slice(eq + 1);
+        });
+        return out;
+    };
+    const kv = parseKV3(a.extra?.expr || '');
 
     switch (a.action_type) {
         case 'enable_mod':
@@ -3598,6 +4333,20 @@ function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: st
             return [useDeeplink
                 ? `os.execute('start bmm://modpack/disable?id=${a.target_id}')`
                 : curlPost('/api/modpacks/disable', `{"profile_id":"${a.target_id}"}`)];
+        case 'update_modpack':
+            return [curlPut(`/api/modpacks/${kv.modpack_id || 'MODPACK_ID'}`, `{"name":"${kv.name || ''}","dependency_mode":"${kv.dependency_mode || 'none'}"}`)];
+        case 'sync_repo':
+            return [curlPost('/api/repo/sync', `{"url":"${kv.url || 'REPO_URL'}","mods_dir":"${kv.mods_dir || 'C:/Mods'}"}`)];
+        case 'cancel_sync':
+            return [curlDelete('/api/repo/sync/cancel')];
+        case 'gen_repo':
+            return [curlPost('/api/repo/gen', `{"output_dir":"${kv.output_dir || 'C:/Export'}","author_name":"${kv.author || 'Author'}","lightweight":${kv.lightweight === 'true'},"zip_output":${kv.zip === 'true'}}`)];
+        case 'cancel_gen':
+            return [curlDelete('/api/repo/gen/cancel')];
+        case 'http_host':
+            return [curlPost('/api/repo/host', `{"serve_dir":"${kv.serve_dir || 'C:/Export'}","port":${kv.port || '8080'}}`)];
+        case 'stop_http_host':
+            return [curlDelete('/api/repo/host')];
         case 'wait': {
             const secs = Math.round((a.extra.duration_ms || 1000) / 1000);
             return [`os.execute("ping -n ${secs + 1} 127.0.0.1 > nul")  -- wait ~${secs}s`];
@@ -3638,8 +4387,22 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
     // bmmPost is the helper declared in the JS generator header
     const apiCall = (ep: string, body: object) =>
         `await bmmPost('${ep}', ${JSON.stringify(body)});`;
+    const apiDelete = (ep: string) =>
+        `await fetch(BASE + '${ep}', { method: 'DELETE', headers: { Authorization: 'Bearer ' + TOKEN } });`;
+    const apiPut = (ep: string, body: object) =>
+        `await fetch(BASE + '${ep}', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN }, body: JSON.stringify(${JSON.stringify(body)}) });`;
     const deeplink = (scheme: string, id: string) =>
         `execSync('start bmm://${scheme}/${id}');`;
+
+    const parseKV4 = (str: string): Record<string, string> => {
+        const out: Record<string, string> = {};
+        (str || '').split(/\s+/).forEach(part => {
+            const eq = part.indexOf('=');
+            if (eq > 0) out[part.slice(0, eq)] = part.slice(eq + 1);
+        });
+        return out;
+    };
+    const kv = parseKV4(a.extra?.expr || '');
 
     switch (a.action_type) {
         case 'enable_mod':
@@ -3656,6 +4419,20 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
             return [useDeeplink ? deeplink('modpack/enable', a.target_id) : apiCall('/api/modpacks/enable', { profile_id: a.target_id })];
         case 'disable_modpack':
             return [useDeeplink ? deeplink('modpack/disable', a.target_id) : apiCall('/api/modpacks/disable', { profile_id: a.target_id })];
+        case 'update_modpack':
+            return [apiPut(`/api/modpacks/${kv.modpack_id || 'MODPACK_ID'}`, { name: kv.name || '', dependency_mode: kv.dependency_mode || 'none' })];
+        case 'sync_repo':
+            return [apiCall('/api/repo/sync', { url: kv.url || 'REPO_URL', mods_dir: kv.mods_dir || 'C:/Mods' })];
+        case 'cancel_sync':
+            return [apiDelete('/api/repo/sync/cancel')];
+        case 'gen_repo':
+            return [apiCall('/api/repo/gen', { output_dir: kv.output_dir || 'C:/Export', author_name: kv.author || 'Author', lightweight: kv.lightweight === 'true', zip_output: kv.zip === 'true' })];
+        case 'cancel_gen':
+            return [apiDelete('/api/repo/gen/cancel')];
+        case 'http_host':
+            return [apiCall('/api/repo/host', { serve_dir: kv.serve_dir || 'C:/Export', port: parseInt(kv.port || '8080') })];
+        case 'stop_http_host':
+            return [apiDelete('/api/repo/host')];
         case 'wait':
             return [`await new Promise(r => setTimeout(r, ${a.extra.duration_ms || 1000}));`];
         case 'show_message':
