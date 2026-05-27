@@ -18,7 +18,7 @@
             "fr": "Système de Plugins C"
           },
           "status": "progress",
-          "percent": 90
+          "percent": 95
         },
         {
           "label": {
@@ -26,7 +26,7 @@
             "fr": "Interface Commande (CLI)"
           },
           "status": "progress",
-          "percent": 90
+          "percent": 95
         },
         {
           "label": {
@@ -42,7 +42,7 @@
             "fr": "Système P2P Sync"
           },
           "status": "progress",
-          "percent": 3
+          "percent": 2 
         }
       ]
     },
