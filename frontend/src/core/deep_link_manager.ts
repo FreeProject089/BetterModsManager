@@ -52,6 +52,14 @@ export async function initDeepLinks(): Promise<void> {
 async function handleDeepLink(urlStr: string): Promise<void> {
     if (!urlStr || !urlStr.startsWith('bmm://')) return;
 
+    // ── Permission gate ────────────────────────────────────────────────────
+    const deepLinkAllowed = localStorage.getItem('bmm_deeplink_allow_global') !== 'blocked';
+    if (!deepLinkAllowed) {
+        console.warn('[BMM] Deep link blocked by permission settings:', urlStr);
+        toast(t('plugins.deepLinkBlocked') || 'Deep links désactivés dans les paramètres.', 'error');
+        return;
+    }
+
     console.log('[BMM] Processing deep link:', urlStr);
     toast(`Deep Link: ${urlStr.split('?')[0]}`, 'info');
     
@@ -129,6 +137,58 @@ async function handleDeepLink(urlStr: string): Promise<void> {
                 console.error('[BMM-API] Failed to activate profile via deep link:', e);
                 toast(`${t('common.error')}: ${e}`, 'error');
             }
+            return;
+        }
+
+        // ── Repo actions ──────────────────────────────────────────────────
+        if (action === 'repo/connect') {
+            const repoUrl = parsedUrl.searchParams.get('url');
+            if (!repoUrl) {
+                toast(t('plugins.deepLinkMissingUrl') || 'URL manquante dans le deep link.', 'error');
+                return;
+            }
+            const confirmed = await window.confirmCustom!(
+                t('plugins.deepLinkConnectRepoTitle') || 'Connecter un repo ?',
+                `<p style="font-size:13px;line-height:1.5;margin:10px 0 4px;">${t('plugins.deepLinkConnectRepoDesc') || 'Ajouter ce repo à la liste des repos connectés dans BMM ?'}</p>
+                 <div style="font-size:11px;font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:6px 10px;border-radius:6px;word-break:break-all;margin-top:8px;color:var(--text-muted);">${escHtml(repoUrl)}</div>`,
+                'accent',
+                { yesLabel: t('common.yes'), noLabel: t('common.no') }
+            );
+            if (!confirmed) return;
+            try {
+                const res = await fetch(`http://127.0.0.1:51274/api/repo/connect`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: repoUrl }),
+                });
+                if (res.ok) {
+                    toast(t('plugins.deepLinkConnectRepoOk') || 'Repo connecté avec succès.', 'success');
+                    const navBtn = document.querySelector('[data-view="repo"]') as HTMLElement;
+                    navBtn?.click();
+                } else {
+                    const err = await res.json().catch(() => ({})) as { error?: string };
+                    toast(`${t('common.error')}: ${err?.error || res.statusText}`, 'error');
+                }
+            } catch (e) {
+                toast(`${t('common.error')}: ${e}`, 'error');
+            }
+            return;
+        }
+
+        if (action === 'repo/sync') {
+            const repoUrl = parsedUrl.searchParams.get('url');
+            if (!repoUrl) {
+                toast(t('plugins.deepLinkMissingUrl') || 'URL manquante dans le deep link.', 'error');
+                return;
+            }
+            // Navigate to the repo page so the user can complete the sync from there
+            const navBtn = document.querySelector('[data-view="repo"]') as HTMLElement;
+            if (navBtn) navBtn.click();
+            toast(t('plugins.deepLinkSyncRepoNav') || 'Ouvre la page Serveur Repo pour lancer la synchronisation.', 'info');
+            // Dispatch a custom event so the repo page can pre-fill the URL
+            setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('bmm:deeplink-repo-sync', { detail: { url: repoUrl } }));
+            }, 300);
             return;
         }
 

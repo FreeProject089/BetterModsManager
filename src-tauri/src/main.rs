@@ -139,8 +139,9 @@ fn main() {
                 {
                     *state_ref.api_shutdown_tx.lock().unwrap() = Some(tx);
                 }
+                let api_handle = app.handle();
                 tauri::async_runtime::spawn(async move {
-                    crate::api::start_api_server(data_arc, data_path, creator_id, rx).await;
+                    crate::api::start_api_server(data_arc, data_path, creator_id, rx, api_handle).await;
                 });
             }
 

@@ -2636,8 +2636,8 @@
                                     <p style="font-size:12px;color:var(--text-secondary);margin:0;line-height:1.5;" data-i18n="docs.whatIsBmm.feat1.desc">Plusieurs configs par jeu. Passe de "Serveur PvP" à "Solo" en un clic.</p>
                                 </div>
                                 <div style="padding:12px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;">
-                                    <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;" data-i18n="docs.whatIsBmm.feat2.title">Liens symboliques</div>
-                                    <p style="font-size:12px;color:var(--text-secondary);margin:0;line-height:1.5;" data-i18n="docs.whatIsBmm.feat2.desc">Tes fichiers restent au même endroit — BMM crée juste des raccourcis système invisibles pour le jeu.</p>
+                                    <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;" data-i18n="docs.whatIsBmm.feat2.title">Activation par copie</div>
+                                    <p style="font-size:12px;color:var(--text-secondary);margin:0;line-height:1.5;" data-i18n="docs.whatIsBmm.feat2.desc">Activer un mod copie ses fichiers dans le dossier du jeu. Les originaux sont sauvegardés et restaurés à la désactivation.</p>
                                 </div>
                                 <div style="padding:12px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;">
                                     <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;" data-i18n="docs.whatIsBmm.feat3.title">Plugins &amp; Scripts</div>
@@ -2650,70 +2650,121 @@
                             </div>
                         </div>
 
-                        <!-- ── Mod folder structure ── -->
+                        <!-- ── Comment BMM fonctionne vraiment ── -->
                         <div class="glass-card" style="border-left:3px solid #a78bfa;margin-bottom:20px;">
                             <h3 class="card-title" style="display:flex;align-items:center;gap:10px;font-size:15px;text-transform:uppercase;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                                <span data-i18n="docs.modStructure.title">Structure des dossiers de mods</span>
+                                <span data-i18n="docs.modStructure.title">Comment BMM fonctionne</span>
                             </h3>
-                            <p style="color:var(--text-secondary);font-size:13px;line-height:1.7;margin-bottom:14px;" data-i18n="docs.modStructure.desc">
-                                C'est le point le plus important à comprendre. BMM ne modifie pas le dossier du jeu directement — il crée des liens symboliques depuis le dossier de mods vers le dossier du jeu. Pour que ça fonctionne, <strong style="color:var(--text-primary)">chaque mod doit reproduire exactement la même arborescence que le dossier du jeu</strong>.
-                            </p>
 
-                            <div style="background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px 16px;margin-bottom:14px;">
-                                <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;" data-i18n="docs.modStructure.rule">LA RÈGLE D'OR</div>
-                                <p style="font-size:13px;color:var(--text-primary);margin:0;line-height:1.6;" data-i18n="docs.modStructure.ruleDesc">
-                                    Si un fichier de mod doit aller dans <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;">GameFolder/Mods/WeaponPack/</code>, alors dans ton dossier de mod BMM, ce fichier doit se trouver exactement à <code style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;">MonMod/Mods/WeaponPack/</code>. L'arborescence après la racine du mod doit être identique à celle du jeu.
-                                </p>
+                            <!-- 3 chemins du profil -->
+                            <p data-i18n="docs.modStructure.paths3intro" style="color:var(--text-secondary);font-size:13px;line-height:1.7;margin-bottom:12px;">
+                                Chaque profil dans BMM repose sur <strong style="color:var(--text-primary)">3 chemins</strong> que tu configures une seule fois :
+                            </p>
+                            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+                                <div style="padding:10px 12px;background:rgba(96,165,250,0.07);border:1px solid rgba(96,165,250,0.18);border-radius:8px;">
+                                    <div style="font-size:10px;font-weight:700;color:#60a5fa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;display:flex;align-items:center;gap:5px;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                                        <span data-i18n="docs.modStructure.pathGame">Dossier du jeu</span>
+                                    </div>
+                                    <p data-i18n="docs.modStructure.pathGameDesc" style="font-size:12px;color:var(--text-secondary);margin:0;line-height:1.5;">Là où le jeu est installé. BMM y copie les fichiers des mods actifs.</p>
+                                </div>
+                                <div style="padding:10px 12px;background:rgba(167,139,250,0.07);border:1px solid rgba(167,139,250,0.18);border-radius:8px;">
+                                    <div style="font-size:10px;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;display:flex;align-items:center;gap:5px;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+                                        <span data-i18n="docs.modStructure.pathMods">Dossier des mods</span>
+                                    </div>
+                                    <p data-i18n="docs.modStructure.pathModsDesc" style="font-size:12px;color:var(--text-secondary);margin:0;line-height:1.5;">Le dossier où tu stockes tous tes mods. BMM le scanne pour construire ta liste.</p>
+                                </div>
+                                <div style="padding:10px 12px;background:rgba(251,146,60,0.07);border:1px solid rgba(251,146,60,0.18);border-radius:8px;">
+                                    <div style="font-size:10px;font-weight:700;color:#fb923c;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;display:flex;align-items:center;gap:5px;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                                        <span data-i18n="docs.modStructure.pathBackup">Dossier de backup</span>
+                                    </div>
+                                    <p data-i18n="docs.modStructure.pathBackupDesc" style="font-size:12px;color:var(--text-secondary);margin:0;line-height:1.5;">BMM sauvegarde ici les fichiers originaux du jeu avant de les remplacer.</p>
+                                </div>
                             </div>
 
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
-                                <div>
-                                    <div style="font-size:11px;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;" data-i18n="docs.modStructure.game">Dossier du jeu</div>
-                                    <pre style="font-size:11.5px;font-family:var(--font-mono,monospace);color:var(--text-secondary);background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px 12px;margin:0;line-height:1.6;">DCSWorld/
-├── Mods/
-│   ├── aircraft/
-│   │   └── F-16C/
-│   └── terrains/
-└── Scripts/</pre>
+                            <!-- Activation -->
+                            <div style="background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+                                <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                                    <span data-i18n="docs.modStructure.activateTitle">Ce qui se passe quand tu actives un mod</span>
                                 </div>
-                                <div>
-                                    <div style="font-size:11px;font-weight:700;color:#60a5fa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;" data-i18n="docs.modStructure.mod">Ton dossier de mod dans BMM</div>
-                                    <pre style="font-size:11.5px;font-family:var(--font-mono,monospace);color:var(--text-secondary);background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px 12px;margin:0;line-height:1.6;">MonModF16/          ← nom BMM
-├── Mods/           ← même archi
-│   └── aircraft/
-│       └── F-16C/  ← fichiers ici
-└── Scripts/</pre>
+                                <ol data-i18n="docs.modStructure.activateSteps" style="color:var(--text-secondary);font-size:13px;line-height:1.9;padding-left:18px;margin:0;">
+                                    <li>BMM scanne le dossier du mod et liste tous ses fichiers.</li>
+                                    <li>Pour chaque fichier, si un original du jeu existe au même chemin et n'a pas encore été sauvegardé, BMM le copie dans le <em>dossier de backup</em>.</li>
+                                    <li>BMM copie ensuite le fichier du mod dans le <em>dossier du jeu</em>, au chemin exact correspondant.</li>
+                                    <li>Le mod est actif — le jeu voit les fichiers du mod à leur place normale.</li>
+                                </ol>
+                            </div>
+
+                            <!-- Désactivation -->
+                            <div style="background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+                                <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                                    <span data-i18n="docs.modStructure.deactivateTitle">Ce qui se passe quand tu désactives un mod</span>
                                 </div>
+                                <ol data-i18n="docs.modStructure.deactivateSteps" style="color:var(--text-secondary);font-size:13px;line-height:1.9;padding-left:18px;margin:0;">
+                                    <li>BMM supprime les fichiers copiés dans le dossier du jeu.</li>
+                                    <li>Si un backup existait, il est restauré — le jeu retrouve ses fichiers originaux.</li>
+                                    <li>Si plusieurs mods étaient actifs sur le même fichier (stacking), BMM remet le fichier du mod précédent.</li>
+                                </ol>
+                            </div>
+
+                            <!-- Arborescence -->
+                            <div style="background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+                                <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                                    <span data-i18n="docs.modStructure.ruleTitle">La règle d'arborescence</span>
+                                </div>
+                                <p data-i18n="docs.modStructure.ruleDesc" style="font-size:13px;color:var(--text-primary);margin:0 0 8px;line-height:1.6;">
+                                    Chaque fichier du mod doit avoir le <strong>même sous-chemin relatif</strong> que sa cible dans le jeu. BMM s'en sert pour savoir exactement où copier. Le mod n'a besoin de contenir <em>que</em> les fichiers qu'il modifie.
+                                </p>
+                                <!-- Badge "exemple générique" -->
+                                <div style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--text-muted);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:2px 10px;margin-bottom:10px;">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                    <span data-i18n="docs.modStructure.exampleBadge">Exemple générique — les chemins réels dépendent de ton jeu</span>
+                                </div>
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                                    <div>
+                                        <div style="font-size:10px;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">
+                                            <span data-i18n="docs.modStructure.gameColLabel">Dossier du jeu</span>
+                                            <span data-i18n="docs.modStructure.gameColSub" style="color:var(--text-muted);font-weight:400;text-transform:none;"> (tous les fichiers du jeu)</span>
+                                        </div>
+                                        <pre style="font-size:11px;font-family:var(--font-mono,monospace);color:var(--text-secondary);background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:8px 10px;margin:0;line-height:1.8;">MonJeu/                <span data-i18n="docs.modStructure.treeGamePath" style="color:#4ade80">← game_path</span>
+├── game.exe
+├── Data/
+│   └── Skins/
+│       ├── <span style="color:#fbbf24">hero_skin.png</span>  <span data-i18n="docs.modStructure.treeOriginal" style="color:var(--text-muted)">← original</span>
+│       └── <span style="color:#fbbf24">map.png</span>         <span data-i18n="docs.modStructure.treeOriginal" style="color:var(--text-muted)">← original</span>
+└── Config/
+    └── settings.cfg   <span data-i18n="docs.modStructure.treeUntouched" style="color:var(--text-muted)">← non touché</span></pre>
+                                    </div>
+                                    <div>
+                                        <div style="font-size:10px;font-weight:700;color:#60a5fa;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">
+                                            <span data-i18n="docs.modStructure.modColLabel">Dossier du mod dans BMM</span>
+                                            <span data-i18n="docs.modStructure.modColSub" style="color:var(--text-muted);font-weight:400;text-transform:none;"> (seulement les fichiers modifiés)</span>
+                                        </div>
+                                        <pre style="font-size:11px;font-family:var(--font-mono,monospace);color:var(--text-secondary);background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:8px 10px;margin:0;line-height:1.8;">MonMod-HD-Skins/       <span data-i18n="docs.modStructure.treeModPath" style="color:#60a5fa">← dans mods_path</span>
+└── Data/
+    └── Skins/
+        ├── <span style="color:#a78bfa">hero_skin.png</span>  <span data-i18n="docs.modStructure.treeReplaces" style="color:#a78bfa">← remplace</span>
+        └── <span style="color:#a78bfa">map.png</span>         <span data-i18n="docs.modStructure.treeReplaces" style="color:#a78bfa">← remplace</span>
+
+<span data-i18n="docs.modStructure.treeNote1" style="color:var(--text-muted)">  ↑ Pas de game.exe, pas de Config/</span>
+<span data-i18n="docs.modStructure.treeNote2" style="color:var(--text-muted)">    Le mod ne touche QUE les textures.</span></pre>
+                                    </div>
+                                </div>
+                                <p data-i18n="docs.modStructure.ruleFooter" style="font-size:12px;color:var(--text-muted);margin:10px 0 0;line-height:1.5;">
+                                    BMM prend <code style="font-size:11px;background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px;">Data/Skins/hero_skin.png</code> dans le mod et le copie au même chemin dans <code style="font-size:11px;background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px;">game_path</code>. Les fichiers non présents dans le mod (<code style="font-size:11px;background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px;">game.exe</code>, <code style="font-size:11px;background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:3px;">Config/</code>…) ne sont jamais touchés.
+                                </p>
                             </div>
 
                             <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><polyline points="20 6 9 17 4 12"/></svg>
-                                <p style="font-size:12px;color:var(--text-secondary);margin:0;line-height:1.6;" data-i18n="docs.modStructure.tip">
-                                    <strong style="color:var(--text-primary)">En pratique :</strong> la plupart des mods sont distribués déjà dans le bon format. Tu places simplement le dossier du mod dans ton <em>dossier de mods BMM</em> (configuré dans le profil), et BMM le détecte automatiquement. Si un mod n'apparaît pas correctement en jeu, vérifie que son arborescence interne correspond bien à l'arborescence attendue par le jeu.
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- ── How symlinks work ── -->
-                        <div class="glass-card" style="border-left:3px solid #f59e0b;margin-bottom:20px;">
-                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px;font-size:15px;text-transform:uppercase;">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                                <span data-i18n="docs.symlinks.title">Comment fonctionnent les liens symboliques</span>
-                            </h3>
-                            <p style="color:var(--text-secondary);font-size:13px;line-height:1.7;margin-bottom:12px;" data-i18n="docs.symlinks.desc">
-                                Quand tu actives un mod dans BMM, voici ce qui se passe réellement :
-                            </p>
-                            <ol style="color:var(--text-secondary);font-size:13px;line-height:1.9;padding-left:20px;margin:0 0 12px;">
-                                <li data-i18n="docs.symlinks.step1">BMM scanne le dossier du mod et reconstitue l'arborescence</li>
-                                <li data-i18n="docs.symlinks.step2">Pour chaque fichier/dossier, BMM crée un lien symbolique dans le dossier du jeu qui pointe vers ton mod</li>
-                                <li data-i18n="docs.symlinks.step3">Le jeu voit les fichiers comme s'ils étaient vraiment dans son dossier — sans copie</li>
-                                <li data-i18n="docs.symlinks.step4">Désactiver le mod supprime juste les liens symboliques — tes fichiers originaux sont intacts</li>
-                            </ol>
-                            <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:10px;padding:10px 14px;display:flex;gap:10px;align-items:flex-start;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" style="flex-shrink:0;margin-top:2px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                                <p style="font-size:12px;color:var(--text-secondary);margin:0;line-height:1.6;" data-i18n="docs.symlinks.warn">
-                                    Les liens symboliques nécessitent les droits administrateur sur Windows (ou le mode développeur activé). BMM te demandera d'élever les permissions si nécessaire. Ne supprime jamais manuellement les fichiers dans le dossier du jeu si ce sont des liens BMM — utilise toujours le bouton "Désactiver" dans BMM.
+                                <p data-i18n="docs.modStructure.practical" style="font-size:12px;color:var(--text-secondary);margin:0;line-height:1.6;">
+                                    <strong style="color:var(--text-primary)">En pratique :</strong> la plupart des mods sont distribués déjà dans le bon format. Tu places le dossier du mod dans ton <em>dossier de mods BMM</em>, BMM le détecte automatiquement. N'efface jamais manuellement des fichiers dans le dossier du jeu sans passer par BMM — utilise toujours les boutons Activer / Désactiver.
                                 </p>
                             </div>
                         </div>

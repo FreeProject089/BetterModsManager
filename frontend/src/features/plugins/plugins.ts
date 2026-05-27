@@ -559,6 +559,89 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                </div>`;
     } else if (p === '/api/modpacks') {
         formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">Requête GET — aucun corps requis.</p>`;
+
+    // ── Repo API ──────────────────────────────────────────────────────────────
+    } else if (p === '/api/repo/info') {
+        formHtml = txtInput('plug-qt-s-repo-url', 'url (repo.json URL)', 'https://monserveur.com/repo.json');
+
+    } else if (p === '/api/repo/list') {
+        formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">Requête GET — retourne la liste des repos connectés, aucun paramètre requis.</p>`;
+
+    } else if (p === '/api/repo/connect') {
+        formHtml = txtInput('plug-qt-s-repo-url', 'url', 'https://monserveur.com/repo.json')
+            + `<p style="font-size:11px;color:var(--text-muted);margin:6px 0 0;opacity:0.85;">Le nom est récupéré automatiquement depuis le repo.json distant.</p>`;
+
+    } else if (p === '/api/repo' && m === 'DELETE') {
+        formHtml = txtInput('plug-qt-s-repo-url', 'url (URL du repo à déconnecter)', 'https://monserveur.com/repo.json')
+            + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;">⚠ Le repo sera retiré de la liste des repos connectés.</p>`;
+
+    } else if (p === '/api/repo/sync') {
+        const profOpts2 = _allProfiles.length
+            ? _allProfiles.map(pr => `<option value="${escHtml(pr.id)}">${escHtml(pr.name)}</option>`).join('')
+            : `<option value="">— aucun profil local —</option>`;
+        formHtml = txtInput('plug-qt-s-repo-url', 'url (repo.json URL)', 'https://monserveur.com/repo.json')
+            + txtInput('plug-qt-s-repo-profile-id', 'repo_profile_id (ID du profil dans le repo distant)', 'prof-uuid-from-repo')
+            + `<div class="plug-qt-smart-field" style="margin-top:8px;">
+                <label class="plug-form-label" style="margin-bottom:4px;">target_local_profile_id <span style="color:var(--text-muted);font-size:10px;">(optionnel — profil local existant à mettre à jour)</span></label>
+                <select id="plug-qt-s-local-prof" class="select">
+                    <option value="">— Créer un nouveau profil —</option>
+                    ${profOpts2}
+                </select>
+              </div>`
+            + txtInput('plug-qt-s-game-dir', 'game_dir (requis si nouveau profil)', 'C:/Games/MonJeu', true)
+            + txtInput('plug-qt-s-mods-dir', 'mods_dir (requis si nouveau profil)', 'C:/Games/MonJeu/Mods', true)
+            + txtInput('plug-qt-s-backup-dir', 'backup_dir (requis si nouveau profil)', 'C:/BMM/Backups', true)
+            + `<div style="display:flex;gap:16px;margin-top:8px;">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <input type="checkbox" id="plug-qt-s-overwrite" style="accent-color:var(--accent);">
+                    overwrite_all
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <input type="checkbox" id="plug-qt-s-delete-extra" style="accent-color:var(--accent);">
+                    delete_extra
+                </label>
+              </div>`;
+
+    } else if (p === '/api/repo/host') {
+        const profChecksHost = _allProfiles.length
+            ? _allProfiles.map(pr => `<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'">
+                <input type="checkbox" class="plug-qt-host-prof-check" value="${escHtml(pr.id)}" style="accent-color:var(--accent);width:13px;height:13px;">
+                <span style="font-size:12px;flex:1;">${escHtml(pr.name)}</span>
+                <span style="font-size:10px;color:var(--text-muted);">${pr.active_mods?.length || 0} mods</span>
+              </label>`).join('')
+            : `<p style="font-size:12px;color:var(--text-muted);padding:8px;">Aucun profil disponible.</p>`;
+        formHtml = `<div class="plug-qt-smart-field" style="flex-direction:column;">
+                <label class="plug-form-label" style="margin-bottom:4px;">profile_ids <span style="color:var(--danger)">*</span></label>
+                <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:4px;max-height:120px;overflow-y:auto;scrollbar-width:thin;">${profChecksHost}</div>
+              </div>`
+            + txtInput('plug-qt-s-output-dir', 'output_dir (dossier de destination)', 'C:/BMM/Export/Repo')
+            + txtInput('plug-qt-s-author-name', 'author_name', 'Mon Pseudo')
+            + txtInput('plug-qt-s-seed', 'seed (optionnel — stabilité des hachages)', '', true)
+            + `<details style="margin-top:10px;background:rgba(0,0,0,0.1);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:8px 12px;">
+                <summary style="cursor:pointer;font-size:11px;color:var(--text-secondary);user-select:none;">${IC.settings} Options serveur standalone (optionnel)</summary>
+                <div style="padding-top:10px;display:flex;flex-direction:column;gap:6px;">
+                    ${txtInput('plug-qt-s-port', 'port', '8080', true)}
+                    ${txtInput('plug-qt-s-upload-limit', 'upload_limit (KB/s, 0 = illimité)', '0', true)}
+                    ${txtInput('plug-qt-s-admin-pw', 'admin_password', '', true)}
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                        <input type="checkbox" id="plug-qt-s-gen-server" style="accent-color:var(--accent);">
+                        generate_server (générer les scripts de serveur)
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                        <input type="checkbox" id="plug-qt-s-use-cf" style="accent-color:var(--accent);">
+                        use_cloudflare (tunnel Cloudflare)
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                        <input type="checkbox" id="plug-qt-s-use-upnp" style="accent-color:var(--accent);">
+                        use_upnp (ouverture de port UPnP)
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                        <input type="checkbox" id="plug-qt-s-auto-start" style="accent-color:var(--accent);">
+                        auto_start (démarrage automatique au lancement de BMM)
+                    </label>
+                </div>
+              </details>`;
+
     } else {
         const pretty = (() => { try { return JSON.stringify(JSON.parse(rawBody), null, 2); } catch { return rawBody; } })();
         formHtml = `<p style="font-size:11px;color:var(--text-muted);margin:0 0 6px;">${t('plugins.qtBodyHint')}</p>
@@ -699,6 +782,79 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             body = JSON.stringify(payload);
         } else if (p === '/api/modpacks') {
             body = '';
+
+        // ── Repo API ──────────────────────────────────────────────────────────
+        } else if (p === '/api/repo/info') {
+            const repoUrl = (overlay.querySelector('#plug-qt-s-repo-url') as HTMLInputElement)?.value?.trim() || '';
+            if (!repoUrl) return;
+            overlay.remove();
+            handleQuickTest('GET', `/api/repo/info?url=${encodeURIComponent(repoUrl)}`, '');
+            return;
+
+        } else if (p === '/api/repo/list') {
+            body = '';
+
+        } else if (p === '/api/repo/connect') {
+            const repoUrl  = (overlay.querySelector('#plug-qt-s-repo-url')  as HTMLInputElement)?.value?.trim() || '';
+            if (!repoUrl) return;
+            body = JSON.stringify({ url: repoUrl });
+
+        } else if (p === '/api/repo' && m === 'DELETE') {
+            const repoUrl = (overlay.querySelector('#plug-qt-s-repo-url') as HTMLInputElement)?.value?.trim() || '';
+            if (!repoUrl) return;
+            body = JSON.stringify({ url: repoUrl });
+
+        } else if (p === '/api/repo/sync') {
+            const repoUrl    = (overlay.querySelector('#plug-qt-s-repo-url')        as HTMLInputElement)?.value?.trim() || '';
+            const repoProfId = (overlay.querySelector('#plug-qt-s-repo-profile-id') as HTMLInputElement)?.value?.trim() || '';
+            const localProf  = (overlay.querySelector('#plug-qt-s-local-prof')      as HTMLSelectElement)?.value?.trim() || '';
+            const gameDir    = (overlay.querySelector('#plug-qt-s-game-dir')        as HTMLInputElement)?.value?.trim() || '';
+            const modsDir    = (overlay.querySelector('#plug-qt-s-mods-dir')        as HTMLInputElement)?.value?.trim() || '';
+            const backupDir  = (overlay.querySelector('#plug-qt-s-backup-dir')      as HTMLInputElement)?.value?.trim() || '';
+            const overwrite  = (overlay.querySelector('#plug-qt-s-overwrite')       as HTMLInputElement)?.checked || false;
+            const deleteEx   = (overlay.querySelector('#plug-qt-s-delete-extra')    as HTMLInputElement)?.checked || false;
+            if (!repoUrl || !repoProfId) return;
+            const choice: any = { repoProfileId: repoProfId };
+            if (localProf) choice.targetLocalProfileId = localProf;
+            body = JSON.stringify({
+                url: repoUrl,
+                gameDir,
+                modsDir,
+                backupDir,
+                choices: [choice],
+                overwriteAll: overwrite,
+                deleteExtra: deleteEx,
+                downloadLimit: 0,
+            });
+
+        } else if (p === '/api/repo/host') {
+            const profIds   = Array.from(overlay.querySelectorAll<HTMLInputElement>('.plug-qt-host-prof-check:checked')).map(c => c.value).filter(Boolean);
+            const outputDir = (overlay.querySelector('#plug-qt-s-output-dir')  as HTMLInputElement)?.value?.trim() || '';
+            const author    = (overlay.querySelector('#plug-qt-s-author-name') as HTMLInputElement)?.value?.trim() || '';
+            const seed      = (overlay.querySelector('#plug-qt-s-seed')        as HTMLInputElement)?.value?.trim();
+            const portStr   = (overlay.querySelector('#plug-qt-s-port')        as HTMLInputElement)?.value?.trim();
+            const ulStr     = (overlay.querySelector('#plug-qt-s-upload-limit') as HTMLInputElement)?.value?.trim();
+            const adminPw   = (overlay.querySelector('#plug-qt-s-admin-pw')    as HTMLInputElement)?.value?.trim();
+            const genServer = (overlay.querySelector('#plug-qt-s-gen-server')  as HTMLInputElement)?.checked || false;
+            const useCf     = (overlay.querySelector('#plug-qt-s-use-cf')      as HTMLInputElement)?.checked || false;
+            const useUpnp   = (overlay.querySelector('#plug-qt-s-use-upnp')    as HTMLInputElement)?.checked || false;
+            const autoStart = (overlay.querySelector('#plug-qt-s-auto-start')  as HTMLInputElement)?.checked || false;
+            if (!profIds.length || !outputDir || !author) return;
+            const pl: any = {
+                profileIds: profIds,
+                outputDir,
+                authorName: author,
+                generateServer: genServer,
+                useCloudflare: useCf,
+                useUpnp,
+                autoStart,
+            };
+            if (seed)    pl.seed          = seed;
+            if (portStr) pl.port          = parseInt(portStr, 10) || 8080;
+            if (ulStr)   pl.uploadLimit   = parseInt(ulStr, 10) || 0;
+            if (adminPw) pl.adminPassword = adminPw;
+            body = JSON.stringify(pl);
+
         } else {
             body = (overlay.querySelector('#plug-qt-s-json') as HTMLTextAreaElement)?.value || rawBody;
         }
@@ -967,12 +1123,18 @@ async function handleQuickTest(method: string, path: string, body?: string) {
             method,
             headers: { 'Authorization': `Bearer ${_apiToken}`, 'Content-Type': 'application/json' },
         };
-        if ((method === 'POST' || method === 'PUT' || method === 'PATCH') && body) opts.body = body;
+        if ((method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') && body) opts.body = body;
         const res = await fetch(`http://127.0.0.1:51274${path}`, opts);
-        const json = await res.json().catch(() => null);
+        const text = await res.text().catch(() => '');
+        let json: unknown = null;
+        try { json = JSON.parse(text); } catch { /* not JSON */ }
         statusEl.textContent = `${res.status} ${res.statusText}`;
         statusEl.className = `plug-tester-status ${res.ok ? 'plug-status-ok' : 'plug-status-err'}`;
-        const pretty = json !== null ? JSON.stringify(json, null, 2) : '';
+        let pretty = json !== null ? JSON.stringify(json, null, 2) : text;
+        const MAX_DISPLAY = 8000;
+        if (pretty.length > MAX_DISPLAY) {
+            pretty = pretty.slice(0, MAX_DISPLAY) + `\n\n… [tronqué — ${pretty.length.toLocaleString()} caractères au total]`;
+        }
         bodyEl.innerHTML = hlJson(pretty);
 
         // ── Live UI refresh after successful mutations ─────────────────────
@@ -1275,7 +1437,7 @@ function renderCreate(container: HTMLElement) {
 // ── Tab: API & Scripts ─────────────────────────────────────────────────────
 
 function renderScripts(container: HTMLElement) {
-    // Endpoints sorted by method: GET → POST → PUT → DELETE
+    // Endpoints sorted strictly: GET → POST → PUT → DELETE (no method interleaving)
     const QT_ENDPOINTS = [
         // ── GET ────────────────────────────────────────────────────
         { m: 'GET',    p: '/api/health',              l: 'Health',           icon: IC.checkCircle },
@@ -1287,6 +1449,8 @@ function renderScripts(container: HTMLElement) {
         { m: 'GET',    p: '/api/profiles',            l: 'Profiles',         icon: IC.puzzle },
         { m: 'GET',    p: '/api/plugins',             l: 'Plugins',          icon: IC.zap },
         { m: 'GET',    p: '/api/creator-id',          l: 'Creator ID',       icon: IC.shield },
+        { m: 'GET',    p: '/api/repo/info',            l: 'Repo Info',        icon: IC.info,       body: '?url=' },
+        { m: 'GET',    p: '/api/repo/list',            l: 'Connected Repos',  icon: IC.list },
         // ── POST ───────────────────────────────────────────────────
         { m: 'POST',   p: '/api/mods/enable',         l: 'Enable Mod',       icon: IC.check,      body: '{"mod_id":""}' },
         { m: 'POST',   p: '/api/mods/disable',        l: 'Disable Mod',      icon: IC.x,          body: '{"mod_id":""}' },
@@ -1298,10 +1462,14 @@ function renderScripts(container: HTMLElement) {
         { m: 'POST',   p: '/api/modpacks/disable',    l: 'Disable Modpack',  icon: IC.folder,     body: '{"modpack_id":""}' },
         { m: 'POST',   p: '/api/modpacks/create',     l: 'Create Modpack',   icon: IC.plus,       body: '{"name":"","profile_id":""}' },
         { m: 'POST',   p: '/api/restart',             l: 'Restart BMM',      icon: IC.refresh,    body: '' },
+        { m: 'POST',   p: '/api/repo/connect',         l: 'Connect Repo',     icon: IC.globe,      body: '{"url":"","name":""}' },
+        { m: 'POST',   p: '/api/repo/sync',            l: 'Sync Repo',        icon: IC.refresh,    body: '{}' },
+        { m: 'POST',   p: '/api/repo/host',            l: 'Host Repo',        icon: IC.upload,     body: '{}' },
         // ── PUT ────────────────────────────────────────────────────
         { m: 'PUT',    p: '/api/mods/:id',            l: 'Update Mod',       icon: IC.editIcon,   body: '{"name":""}' },
         { m: 'PUT',    p: '/api/profiles/:id',        l: 'Update Profile',   icon: IC.editIcon,   body: '{"name":""}' },
         // ── DELETE ─────────────────────────────────────────────────
+        { m: 'DELETE', p: '/api/repo',                 l: 'Disconnect Repo',  icon: IC.trash,      body: '{"url":""}' },
         { m: 'DELETE', p: '/api/mods/:id',            l: 'Delete Mod',       icon: IC.trash },
         { m: 'DELETE', p: '/api/profiles/:id',        l: 'Delete Profile',   icon: IC.trash },
     ];
@@ -1333,13 +1501,16 @@ function renderScripts(container: HTMLElement) {
                             const mc = e.m.toLowerCase();
                             const badge = `<span class="plug-qt-method-badge plug-qt-${mc}">${e.m}</span>`;
                             const body = (e as any).body !== undefined ? ` data-body="${escHtml((e as any).body || '')}"` : '';
+                            const nav  = (e as any).navigate ? ` data-navigate="${(e as any).navigate}"` : '';
                             let sep = '';
                             if (e.m !== lastMethod) {
                                 lastMethod = e.m;
                                 sep = `<div class="plug-qt-method-sep"><span class="plug-qt-sep-label plug-qt-${mc}">${e.m}</span></div>`;
                             }
-                            return sep + `<button class="plug-qt-btn" data-method="${e.m}" data-path="${e.p}"${body} data-tooltip="${e.m} ${e.p}">
-                                ${e.icon} <span>${e.l}</span>${badge}
+                            // navigate-type buttons get a distinct visual hint
+                            const navHint = (e as any).navigate ? ` <span style="font-size:9px;opacity:.6;vertical-align:middle;">↗ UI</span>` : '';
+                            return sep + `<button class="plug-qt-btn" data-method="${e.m}" data-path="${e.p}"${body}${nav} data-tooltip="${e.m} ${e.p}">
+                                ${e.icon} <span>${e.l}</span>${navHint}${badge}
                             </button>`;
                         }).join('');
                     })()}
@@ -1512,7 +1683,23 @@ function renderScripts(container: HTMLElement) {
             const m = el.dataset.method || 'GET';
             const p = el.dataset.path || '/api/health';
             const rawBody = el.dataset.body;
-            const needsOverlay = p.includes(':id') || ((m === 'POST' || m === 'PUT' || m === 'PATCH') && rawBody !== undefined);
+            const navTarget = el.dataset.navigate;
+
+            // Navigate buttons: open the corresponding BMM page instead of calling API
+            if (navTarget) {
+                const navBtn = document.querySelector(`.nav-item[data-view="${navTarget}"], .nav-btn[data-view="${navTarget}"]`) as HTMLElement;
+                if (navBtn) navBtn.click();
+                return;
+            }
+
+            // GET with body='?url=' needs a query-param form
+            // DELETE with body needs a body form
+            // POST/PUT/PATCH with body defined also need overlay
+            const needsOverlay = p.includes(':id')
+                || ((m === 'POST' || m === 'PUT' || m === 'PATCH') && rawBody !== undefined)
+                || (m === 'DELETE' && rawBody !== undefined)
+                || (m === 'GET' && rawBody !== undefined);
+
             if (needsOverlay) {
                 openSmartQuickTest(m, p, rawBody || '{}');
             } else {
@@ -1556,6 +1743,10 @@ function renderScripts(container: HTMLElement) {
             '/api/modpacks/disable':      '{\n  "modpack_id": ""\n}',
             '/api/modpacks/create':       '{\n  "name": "",\n  "profile_id": ""\n}',
             '/api/restart':               '',
+            '/api/repo/connect':          '{\n  "url": "https://monserveur.com/repo.json",\n  "name": "Mon Serveur"\n}',
+            '/api/repo':                  '{\n  "url": "https://monserveur.com/repo.json"\n}',
+            '/api/repo/sync':             '{\n  "url": "https://monserveur.com/repo.json",\n  "game_dir": "C:/Games/MonJeu",\n  "mods_dir": "C:/Games/MonJeu/Mods",\n  "backup_dir": "C:/BMM/Backups",\n  "choices": [{ "repo_profile_id": "prof-uuid" }],\n  "overwrite_all": false,\n  "delete_extra": false,\n  "download_limit": 0\n}',
+            '/api/repo/host':             '{\n  "profile_ids": ["prof-uuid"],\n  "output_dir": "C:/BMM/Export",\n  "author_name": "MonPseudo",\n  "generate_server": false,\n  "port": 8080,\n  "use_cloudflare": false,\n  "use_upnp": false,\n  "auto_start": false\n}',
         };
         bodyTa.value = (method !== 'GET' && method !== 'DELETE') ? (bodyHints[path] ?? '') : '';
         details.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1943,7 +2134,7 @@ function buildEndpointRow(ep: EndpointDef): string {
         PUT: 'plug-method-put', DELETE: 'plug-method-delete', PATCH: 'plug-method-patch',
     };
     const cls = methodCls[ep.method] || 'plug-method-get';
-    const safeId = ep.path.replace(/\//g, '_').replace(/^_/, '');
+    const safeId = (ep.method.toLowerCase() + '_' + ep.path).replace(/\//g, '_').replace(/^_/, '').replace(/:/g, '');
 
     const fieldsHtml = ep.fields ? `
         <div class="plug-ep-fields">
@@ -1995,6 +2186,8 @@ function buildEndpointRow(ep: EndpointDef): string {
         'POST /api/plugins/compare':   'bmm://plugin/compare?id=<plugin_id>',
         'POST /api/modpacks/enable':   'bmm://modpack/enable?id=<modpack_id>',
         'POST /api/modpacks/disable':  'bmm://modpack/disable?id=<modpack_id>',
+        'POST /api/repo/connect':      'bmm://repo/connect?url=<repo_url>',
+        'POST /api/repo/sync':         'bmm://repo/sync?url=<repo_url>&profile=<repo_profile_id>',
     };
     const dlEquiv = ENDPOINT_TO_DL[`${ep.method} ${ep.path}`];
     const dlBadge = dlEquiv
@@ -2123,6 +2316,31 @@ function getDeepLinkDefs(): DeepLinkDef[] {
             about: 'Déclenche le téléchargement et l\'installation d\'un mod directement depuis une URL externe. BMM ouvre la boîte de dialogue d\'installation.',
             example: 'bmm://install?url=https://example.com/mod.zip&name=MyMod',
         },
+        // ── Server Repo ──────────────────────────────────────────────────────
+        {
+            scheme: 'repo/connect',
+            params: [
+                { name: 'url',  required: true,  desc: 'URL vers le repo.json du serveur à connecter.' },
+                { name: 'name', required: false, desc: 'Nom affiché dans BMM (récupéré automatiquement si omis).' },
+            ],
+            desc: 'Connecter un repo distant',
+            about: 'Enregistre l\'URL d\'un repo distant dans la liste des repos connectés de BMM. Équivalent à POST /api/repo/connect. BMM doit être en cours d\'exécution. Utile depuis un installateur, un launcher, ou un lien de partage.',
+            example: 'bmm://repo/connect?url=https://monserveur.com/repo.json&name=Mon+Serveur',
+        },
+        {
+            scheme: 'repo/sync',
+            params: [
+                { name: 'url',      required: true,  desc: 'URL vers le repo.json distant.' },
+                { name: 'profile',  required: true,  desc: 'ID du profil dans le repo distant (visible dans repo.json).' },
+                { name: 'game_dir', required: false, desc: 'Chemin du dossier jeu (requis si nouveau profil).' },
+                { name: 'mods_dir', required: false, desc: 'Dossier des mods (requis si nouveau profil).' },
+                { name: 'backup_dir', required: false, desc: 'Dossier de backup (requis si nouveau profil).' },
+                { name: 'local_profile', required: false, desc: 'UUID d\'un profil local existant à mettre à jour (omis = crée un nouveau profil).' },
+            ],
+            desc: 'Synchroniser depuis un repo distant',
+            about: 'Déclenche le téléchargement et l\'intégration d\'un profil du repo distant dans BMM. Équivalent à POST /api/repo/sync. BMM ouvre l\'interface de synchronisation avec les paramètres pré-remplis. Utile depuis un launcher pour forcer la mise à jour des mods avant lancement.',
+            example: 'bmm://repo/sync?url=https://monserveur.com/repo.json&profile=prof-uuid&mods_dir=C:/Mods',
+        },
     ];
 }
 
@@ -2188,27 +2406,27 @@ function getEndpointDefs(): EndpointDef[] {
         // ── System ──────────────────────────────────────────────────────────
         {
             method: 'GET', path: '/api/health', auth: false,
-            desc: t('plugins.endpointHealth'), about: 'Lightweight liveness probe — no auth needed. Use this to verify the BMM API server is running.',
+            desc: t('plugins.endpointHealth'), about: 'Sonde légère de disponibilité — aucune authentification requise. Utilise cet endpoint pour vérifier que le serveur API BMM est démarré et accessible.',
             fields: null,
             responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "service": "BMM Plugin API", "port": 51274 }' }],
         },
         {
             method: 'GET', path: '/api/status', auth: false,
-            desc: t('plugins.endpointStatus'), about: 'Returns the application version, active profile, and aggregate counts for mods/profiles/plugins.',
+            desc: t('plugins.endpointStatus'), about: 'Retourne la version de l\'application, le profil actif, et les compteurs agrégés de mods, profils et plugins.',
             fields: null,
             responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "version": "1.2.0", "active_profile": { "id": "abc", "name": "DCS World" }, "mod_count": 42, "profile_count": 3, "plugin_count": 1 }' }],
         },
         {
             method: 'GET', path: '/api/check-update', auth: false,
-            desc: t('plugins.endpointCheckUpdate') || 'Check for BMM updates',
-            about: 'Fetches the latest release from GitHub and compares it to the running version. Returns whether an update is available and the release URL.',
+            desc: t('plugins.endpointCheckUpdate'),
+            about: 'Interroge la dernière release GitHub et la compare à la version en cours d\'exécution. Retourne si une mise à jour est disponible et l\'URL de la release.',
             fields: null,
             responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "current": "1.2.0", "latest": "1.3.0", "has_update": true, "release_url": "https://github.com/FreeProject089/BetterModsManager/releases/latest" }' }],
         },
         {
             method: 'POST', path: '/api/restart', auth: true,
-            desc: t('plugins.endpointRestart') || 'Restart BMM',
-            about: 'Gracefully restarts the BMM application. The process exits and relaunches after a 300 ms delay. The API will become briefly unavailable.',
+            desc: t('plugins.endpointRestart'),
+            about: 'Redémarre proprement l\'application BMM. Le processus se ferme et se relance après un délai de 300 ms. L\'API sera brièvement indisponible pendant le redémarrage.',
             fields: null,
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "message": "Restarting..." }' },
@@ -2218,20 +2436,20 @@ function getEndpointDefs(): EndpointDef[] {
         // ── Mods ────────────────────────────────────────────────────────────
         {
             method: 'GET', path: '/api/mods', auth: false,
-            desc: t('plugins.endpointMods'), about: 'Returns all mods visible in the active profile, including their enabled/active state and folder path.',
+            desc: t('plugins.endpointMods'), about: 'Retourne tous les mods visibles dans le profil actif, incluant leur état activé/actif et le chemin du dossier.',
             fields: null,
             responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "id": "mod-uuid", "name": "MyMod", "active": true, "enabled": true, "path": "C:/mods/MyMod" }] }' }],
         },
         {
             method: 'GET', path: '/api/mods/active', auth: false,
-            desc: t('plugins.endpointModsActive'), about: 'Shorthand for listing only enabled mods in the active profile.',
+            desc: t('plugins.endpointModsActive'), about: 'Raccourci pour lister uniquement les mods activés dans le profil actif.',
             fields: null,
             responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "id": "mod-uuid", "name": "MyMod", "active": true }] }' }],
         },
         {
             method: 'POST', path: '/api/mods/enable', auth: true,
-            desc: t('plugins.endpointEnableMod'), about: 'Enables a single mod by its ID. Applies to the currently active profile.',
-            fields: [{ name: 'mod_id', type: 'string', required: true, desc: 'UUID of the mod to enable (use GET /api/mods to find IDs).' }],
+            desc: t('plugins.endpointEnableMod'), about: 'Active un mod unique par son ID. S\'applique au profil actuellement actif.',
+            fields: [{ name: 'mod_id', type: 'string', required: true, desc: 'UUID du mod à activer (utilise GET /api/mods pour trouver les IDs).' }],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "mod_id": "mod-uuid" }' },
                 e401, e404,
@@ -2239,8 +2457,8 @@ function getEndpointDefs(): EndpointDef[] {
         },
         {
             method: 'POST', path: '/api/mods/disable', auth: true,
-            desc: t('plugins.endpointDisableMod'), about: 'Disables a single mod by its ID. Applies to the currently active profile.',
-            fields: [{ name: 'mod_id', type: 'string', required: true, desc: 'UUID of the mod to disable.' }],
+            desc: t('plugins.endpointDisableMod'), about: 'Désactive un mod unique par son ID. S\'applique au profil actuellement actif.',
+            fields: [{ name: 'mod_id', type: 'string', required: true, desc: 'UUID du mod à désactiver.' }],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "mod_id": "mod-uuid" }' },
                 e401, e404,
@@ -2248,13 +2466,13 @@ function getEndpointDefs(): EndpointDef[] {
         },
         {
             method: 'PUT', path: '/api/mods/:id', auth: true,
-            desc: t('plugins.endpointUpdateMod') || 'Update mod metadata',
-            about: 'Partially updates editable metadata fields on a mod. Replace :id in the URL with the mod UUID. All fields are optional — only the fields you send will be updated.',
+            desc: t('plugins.endpointUpdateMod'),
+            about: 'Met à jour partiellement les métadonnées éditables d\'un mod. Remplace :id dans l\'URL par l\'UUID du mod. Tous les champs sont optionnels — seuls les champs envoyés seront modifiés.',
             fields: [
-                { name: 'name',        type: 'string', required: false, desc: 'New display name shown in the UI.' },
-                { name: 'version',     type: 'string', required: false, desc: 'Version string, e.g. "1.2.3".' },
-                { name: 'author',      type: 'string', required: false, desc: 'Author or creator name.' },
-                { name: 'description', type: 'string', required: false, desc: 'Short description shown in mod details.' },
+                { name: 'name',        type: 'string', required: false, desc: 'Nouveau nom affiché dans l\'interface.' },
+                { name: 'version',     type: 'string', required: false, desc: 'Chaîne de version, ex : "1.2.3".' },
+                { name: 'author',      type: 'string', required: false, desc: 'Nom de l\'auteur ou du créateur.' },
+                { name: 'description', type: 'string', required: false, desc: 'Description courte affichée dans les détails du mod.' },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "mod": { "id": "mod-uuid", "name": "Updated Name" } }' },
@@ -2263,8 +2481,8 @@ function getEndpointDefs(): EndpointDef[] {
         },
         {
             method: 'DELETE', path: '/api/mods/:id', auth: true,
-            desc: t('plugins.endpointDeleteMod') || 'Delete a mod',
-            about: 'Permanently removes a mod record from BMM. Replace :id with the mod UUID. This does NOT delete the files on disk — use the UI for full removal.',
+            desc: t('plugins.endpointDeleteMod'),
+            about: 'Supprime définitivement l\'entrée d\'un mod dans BMM. Remplace :id par l\'UUID du mod. Cela ne supprime PAS les fichiers sur le disque — utilise l\'interface pour une suppression complète.',
             fields: null,
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "mod_id": "mod-uuid" }' },
@@ -2274,22 +2492,22 @@ function getEndpointDefs(): EndpointDef[] {
         // ── Profiles ────────────────────────────────────────────────────────
         {
             method: 'GET', path: '/api/profiles', auth: false,
-            desc: t('plugins.endpointProfiles'), about: 'Returns all profiles, including their mod lists. Useful for discovering profile IDs before activating or updating one.',
+            desc: t('plugins.endpointProfiles'), about: 'Retourne tous les profils, incluant leurs listes de mods. Utile pour trouver les IDs de profils avant d\'en activer ou modifier un.',
             fields: null,
             responseStatuses: [{ code: 200, label: 'OK', body: '[{ "id": "prof-uuid", "name": "DCS World", "active_mods": ["mod-id-1", "mod-id-2"] }]' }],
         },
         {
             method: 'POST', path: '/api/profiles', auth: true,
-            desc: t('plugins.endpointCreateProfile') || 'Create a profile',
-            about: 'Creates a new mod profile. The profile is not automatically set as active — call POST /api/profiles/activate afterwards if needed.',
+            desc: t('plugins.endpointCreateProfile'),
+            about: 'Crée un nouveau profil de mods. Le profil n\'est pas automatiquement défini comme actif — appelle POST /api/profiles/activate ensuite si nécessaire.',
             fields: [
-                { name: 'name',        type: 'string', required: true,  desc: 'Profile display name shown in the sidebar.' },
-                { name: 'game_path',   type: 'string', required: true,  desc: 'Absolute path to the game installation folder.' },
-                { name: 'mods_path',   type: 'string', required: true,  desc: 'Absolute path to the folder where mods are stored.' },
-                { name: 'backup_path', type: 'string', required: true,  desc: 'Absolute path where backup copies are saved.' },
-                { name: 'game_name',   type: 'string', required: false, desc: 'Optional game label, e.g. "DCS World".' },
-                { name: 'color',       type: 'string', required: false, desc: 'Accent color hex, e.g. "#3b82f6". Defaults to blue.' },
-                { name: 'icon',        type: 'string', required: false, desc: 'Icon slug shown next to the profile, e.g. "star".' },
+                { name: 'name',        type: 'string', required: true,  desc: 'Nom du profil affiché dans la barre latérale.' },
+                { name: 'game_path',   type: 'string', required: true,  desc: 'Chemin absolu vers le dossier d\'installation du jeu.' },
+                { name: 'mods_path',   type: 'string', required: true,  desc: 'Chemin absolu vers le dossier où sont stockés les mods.' },
+                { name: 'backup_path', type: 'string', required: true,  desc: 'Chemin absolu où les copies de backup sont sauvegardées.' },
+                { name: 'game_name',   type: 'string', required: false, desc: 'Label du jeu optionnel, ex : "DCS World".' },
+                { name: 'color',       type: 'string', required: false, desc: 'Couleur d\'accentuation hex, ex : "#3b82f6". Bleu par défaut.' },
+                { name: 'icon',        type: 'string', required: false, desc: 'Identifiant d\'icône affiché à côté du profil, ex : "star".' },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "profile": { "id": "prof-uuid", "name": "My Profile" } }' },
@@ -2298,8 +2516,8 @@ function getEndpointDefs(): EndpointDef[] {
         },
         {
             method: 'POST', path: '/api/profiles/activate', auth: true,
-            desc: t('plugins.endpointActivateProfile'), about: 'Switches the active profile. All subsequent mod operations will operate on the newly active profile.',
-            fields: [{ name: 'profile_id', type: 'string', required: true, desc: 'UUID of the profile to activate (use GET /api/profiles to find IDs).' }],
+            desc: t('plugins.endpointActivateProfile'), about: 'Change le profil actif. Toutes les opérations sur les mods suivantes s\'appliqueront au profil nouvellement actif.',
+            fields: [{ name: 'profile_id', type: 'string', required: true, desc: 'UUID du profil à activer (utilise GET /api/profiles pour trouver les IDs).' }],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "profile_id": "prof-uuid" }' },
                 e401, e404,
@@ -2307,15 +2525,15 @@ function getEndpointDefs(): EndpointDef[] {
         },
         {
             method: 'PUT', path: '/api/profiles/:id', auth: true,
-            desc: t('plugins.endpointUpdateProfile') || 'Update a profile',
-            about: 'Partially updates an existing profile. Replace :id with the profile UUID. All fields are optional — only the fields you send will be changed.',
+            desc: t('plugins.endpointUpdateProfile'),
+            about: 'Met à jour partiellement un profil existant. Remplace :id par l\'UUID du profil. Tous les champs sont optionnels — seuls les champs envoyés seront modifiés.',
             fields: [
-                { name: 'name',        type: 'string', required: false, desc: 'New display name.' },
-                { name: 'color',       type: 'string', required: false, desc: 'New accent color hex, e.g. "#ef4444".' },
-                { name: 'icon',        type: 'string', required: false, desc: 'New icon slug.' },
-                { name: 'game_path',   type: 'string', required: false, desc: 'New absolute path to the game folder.' },
-                { name: 'mods_path',   type: 'string', required: false, desc: 'New absolute path to the mods folder.' },
-                { name: 'backup_path', type: 'string', required: false, desc: 'New absolute path to the backup folder.' },
+                { name: 'name',        type: 'string', required: false, desc: 'Nouveau nom d\'affichage.' },
+                { name: 'color',       type: 'string', required: false, desc: 'Nouvelle couleur d\'accentuation hex, ex : "#ef4444".' },
+                { name: 'icon',        type: 'string', required: false, desc: 'Nouvel identifiant d\'icône.' },
+                { name: 'game_path',   type: 'string', required: false, desc: 'Nouveau chemin absolu vers le dossier du jeu.' },
+                { name: 'mods_path',   type: 'string', required: false, desc: 'Nouveau chemin absolu vers le dossier des mods.' },
+                { name: 'backup_path', type: 'string', required: false, desc: 'Nouveau chemin absolu vers le dossier de backup.' },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "profile": { "id": "prof-uuid", "name": "Updated Name" } }' },
@@ -2324,8 +2542,8 @@ function getEndpointDefs(): EndpointDef[] {
         },
         {
             method: 'DELETE', path: '/api/profiles/:id', auth: true,
-            desc: t('plugins.endpointDeleteProfile') || 'Delete a profile',
-            about: 'Permanently deletes a profile and removes all mod associations for that profile. Replace :id with the profile UUID. Cannot delete the currently active profile.',
+            desc: t('plugins.endpointDeleteProfile'),
+            about: 'Supprime définitivement un profil et retire toutes les associations de mods pour ce profil. Remplace :id par l\'UUID du profil. Impossible de supprimer le profil actuellement actif.',
             fields: null,
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "profile_id": "prof-uuid" }' },
@@ -2335,14 +2553,14 @@ function getEndpointDefs(): EndpointDef[] {
         // ── Plugins ─────────────────────────────────────────────────────────
         {
             method: 'GET', path: '/api/plugins', auth: false,
-            desc: t('plugins.endpointPlugins'), about: 'Returns all installed BMM plugins with their manifests and enabled state.',
+            desc: t('plugins.endpointPlugins'), about: 'Retourne tous les plugins BMM installés avec leurs manifestes et leur état activé.',
             fields: null,
             responseStatuses: [{ code: 200, label: 'OK', body: '[{ "manifest": { "id": "my-plugin", "name": "My Plugin", "version": "1.0.0" }, "enabled": true }]' }],
         },
         {
             method: 'POST', path: '/api/plugins/compare', auth: true,
-            desc: t('plugins.endpointCompare'), about: 'Compares the mods a plugin requires against the currently active mods. Returns which required mods are missing and which extra mods are active.',
-            fields: [{ name: 'plugin_id', type: 'string', required: true, desc: 'ID of the installed plugin to compare against.' }],
+            desc: t('plugins.endpointCompare'), about: 'Compare les mods requis par un plugin avec les mods actuellement actifs. Retourne quels mods requis sont manquants et quels mods supplémentaires sont actifs.',
+            fields: [{ name: 'plugin_id', type: 'string', required: true, desc: 'ID du plugin installé à comparer.' }],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "plugin_id": "my-plugin", "all_required_active": false, "missing_required": 2, "required": ["mod-a", "mod-b"], "strict_extra": ["mod-c"] }' },
                 e401, e404,
@@ -2350,10 +2568,10 @@ function getEndpointDefs(): EndpointDef[] {
         },
         {
             method: 'POST', path: '/api/plugins/apply', auth: true,
-            desc: t('plugins.endpointApply'), about: 'Enables all mods required by a plugin. Optionally disable mods not in the plugin\'s list (strict mode). Returns a count of enabled mods and any IDs that were not found.',
+            desc: t('plugins.endpointApply'), about: 'Active tous les mods requis par un plugin. Optionnellement, désactive les mods absents de la liste du plugin (mode strict). Retourne le nombre de mods activés et les IDs introuvables.',
             fields: [
-                { name: 'plugin_id',    type: 'string',  required: true,  desc: 'ID of the installed plugin to apply.' },
-                { name: 'force_strict', type: 'boolean', required: false, desc: 'If true, disables mods not in the plugin list. Default: false.' },
+                { name: 'plugin_id',    type: 'string',  required: true,  desc: 'ID du plugin installé à appliquer.' },
+                { name: 'force_strict', type: 'boolean', required: false, desc: 'Si true, désactive les mods absents de la liste du plugin. Défaut : false.' },
             ],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "enabled": 3, "not_found": [], "strict": false }' },
@@ -2362,15 +2580,15 @@ function getEndpointDefs(): EndpointDef[] {
         },
         {
             method: 'GET', path: '/api/creator-id', auth: false,
-            desc: t('plugins.endpointCreatorId'), about: 'Returns the unique creator ID generated for this BMM installation. Used as the publisher identifier when exporting plugins.',
+            desc: t('plugins.endpointCreatorId'), about: 'Retourne l\'identifiant créateur unique généré pour cette installation BMM. Utilisé comme identifiant éditeur lors de l\'export de plugins.',
             fields: null,
             responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "creator_id": "a1b2c3d4e5f6..." }' }],
         },
         // ── Modpacks ────────────────────────────────────────────────────────
         {
             method: 'POST', path: '/api/modpacks/enable', auth: true,
-            desc: t('plugins.endpointEnableModpack'), about: 'Enables all mods associated with the given modpack. Useful for one-click activation of an entire preset.',
-            fields: [{ name: 'modpack_id', type: 'string', required: true, desc: 'UUID of the LocalModpack to enable all mods for.' }],
+            desc: t('plugins.endpointEnableModpack'), about: 'Active tous les mods associés au modpack donné. Pratique pour activer en un clic l\'ensemble d\'un preset.',
+            fields: [{ name: 'modpack_id', type: 'string', required: true, desc: 'UUID du LocalModpack dont tous les mods seront activés.' }],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "modpack_id": "mp-uuid", "enabled_count": 5 }' },
                 e401, e404,
@@ -2378,17 +2596,121 @@ function getEndpointDefs(): EndpointDef[] {
         },
         {
             method: 'POST', path: '/api/modpacks/disable', auth: true,
-            desc: t('plugins.endpointDisableModpack'), about: 'Disables all mods associated with the given modpack.',
-            fields: [{ name: 'modpack_id', type: 'string', required: true, desc: 'UUID of the LocalModpack to disable all mods for.' }],
+            desc: t('plugins.endpointDisableModpack'), about: 'Désactive tous les mods associés au modpack donné.',
+            fields: [{ name: 'modpack_id', type: 'string', required: true, desc: 'UUID du LocalModpack dont tous les mods seront désactivés.' }],
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "modpack_id": "mp-uuid", "disabled_count": 5 }' },
                 e401, e404,
             ],
         },
+        // ── Server Repo ─────────────────────────────────────────────────────────
+        {
+            method: 'GET', path: '/api/repo/info', auth: false,
+            desc: 'Informations repo distant',
+            about: 'Récupère et retourne le contenu du repo.json distant (métadonnées, profils, liste de mods). Utile pour prévisualiser un repo avant de le connecter ou de le synchroniser. Aucune authentification requise.\n\nQuery string : ?url=<URL_du_repo>',
+            fields: [
+                { name: 'url', type: 'string', required: true, desc: 'URL vers le repo.json distant (query param). Ex : ?url=https://monserveur.com/repo.json' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "data": { "name": "Mon Repo", "version": "1.0.0", "game_name": "DCS World", "profiles": [...], "author": "FreeProject" } }' },
+                { code: 400, label: 'Bad Request', body: '{ "error": "url query param required" }' },
+                { code: 502, label: 'Bad Gateway', body: '{ "error": "Remote returned 404" }' },
+            ],
+        },
+        {
+            method: 'GET', path: '/api/repo/list', auth: false,
+            desc: 'Liste des repos connectés',
+            about: 'Retourne la liste de tous les repos distants enregistrés dans BMM (ajoutés via POST /api/repo/connect ou depuis l\'interface). Chaque entrée contient l\'URL et le nom du repo.',
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "url": "https://monserveur.com/repo.json", "name": "Mon Serveur" }] }' },
+            ],
+        },
+        {
+            method: 'POST', path: '/api/repo/connect', auth: true,
+            desc: 'Connecter un repo distant',
+            about: 'Enregistre l\'URL d\'un repo distant dans la liste des repos connectés de BMM. Si le champ name est omis, BMM tente de récupérer le nom depuis le repo.json distant. Si le repo est déjà dans la liste, aucun doublon n\'est ajouté.\n\nÉquivalent deeplink : bmm://repo/connect?url=<URL>',
+            fields: [
+                { name: 'url',  type: 'string', required: true,  desc: 'URL complète vers le repo.json distant (ou le dossier parent — /repo.json sera ajouté automatiquement).' },
+                { name: 'name', type: 'string', required: false, desc: 'Nom affiché dans BMM. Si omis, récupéré depuis le champ "name" du repo.json distant.' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "url": "https://...", "name": "Mon Serveur" }' },
+                { code: 400, label: 'Bad Request', body: '{ "error": "url required" }' },
+                { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' },
+            ],
+        },
+        {
+            method: 'DELETE', path: '/api/repo', auth: true,
+            desc: 'Déconnecter un repo',
+            about: 'Retire un repo de la liste des repos connectés. Le corps de la requête doit contenir l\'URL exacte du repo tel qu\'il a été ajouté. Les fichiers locaux synchronisés ne sont PAS supprimés.',
+            fields: [
+                { name: 'url', type: 'string', required: true, desc: 'URL exacte du repo à retirer (identique à celle utilisée lors de la connexion).' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "url": "https://..." }' },
+                { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' },
+                { code: 404, label: 'Not Found', body: '{ "error": "Repo \'https://...\' not found in connected list" }' },
+            ],
+        },
+        {
+            method: 'POST', path: '/api/repo/sync', auth: true,
+            desc: 'Synchroniser depuis un repo distant',
+            about: 'Télécharge les mods depuis un repo distant et les intègre dans des profils locaux BMM. L\'opération est démarrée en arrière-plan — la réponse est immédiate (202 Accepted) avec un job_id. <strong>Max 1 sync simultanée</strong> — retourne 409 si une sync est déjà en cours. Annulez avec <code>DELETE /api/repo/sync/cancel</code>.\n\nÉquivalent deeplink : bmm://repo/sync?url=&lt;URL&gt;&amp;profile=&lt;repo_profile_id&gt;',
+            fields: [
+                { name: 'url',                                type: 'string',  required: true,  desc: 'URL du repo.json distant.' },
+                { name: 'choices',                            type: 'array',   required: true,  desc: 'Tableau de profils à synchroniser. Chaque entrée : { repoProfileId, targetLocalProfileId?, selectedModIds? }.' },
+                { name: 'choices[].repoProfileId',            type: 'string',  required: true,  desc: 'ID du profil dans le repo distant (visible via GET /api/repo/info).' },
+                { name: 'choices[].targetLocalProfileId',     type: 'string',  required: false, desc: 'UUID d\'un profil local existant à mettre à jour. Omis = crée un nouveau profil.' },
+                { name: 'choices[].selectedModIds',           type: 'array',   required: false, desc: 'IDs de mods à télécharger (null = tous les mods du profil).' },
+                { name: 'gameDir',                            type: 'string',  required: false, desc: 'Chemin du dossier jeu (requis si création d\'un nouveau profil).' },
+                { name: 'modsDir',                            type: 'string',  required: false, desc: 'Dossier racine des mods (requis si création d\'un nouveau profil).' },
+                { name: 'backupDir',                          type: 'string',  required: false, desc: 'Dossier de backup (requis si création d\'un nouveau profil).' },
+                { name: 'creatorId',                          type: 'string',  required: false, desc: 'Creator ID à envoyer en header X-Creator-ID (pour repos privés).' },
+                { name: 'overwriteAll',                       type: 'boolean', required: false, desc: 'Si true, re-télécharge tous les fichiers même si le hash correspond. Défaut : false.' },
+                { name: 'deleteExtra',                        type: 'boolean', required: false, desc: 'Si true, supprime les fichiers locaux absents du repo distant. Défaut : false.' },
+                { name: 'downloadLimit',                      type: 'number',  required: false, desc: 'Limite de téléchargement en KB/s (0 = illimité). Défaut : 0.' },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "message": "Sync started in background", "job_id": "uuid", "cancel_endpoint": "DELETE /api/repo/sync/cancel" }' },
+                { code: 400, label: 'Bad Request', body: '{ "error": "gameDir is required when creating a new profile" }' },
+                { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' },
+                { code: 409, label: 'Conflict', body: '{ "error": "A sync is already running. Cancel it first with DELETE /api/repo/sync/cancel." }' },
+            ],
+        },
+        {
+            method: 'POST', path: '/api/repo/host', auth: true,
+            desc: 'Exporter/héberger un repo',
+            about: 'Exporte des profils locaux au format repo serveur BMM (repo.json + mods hachés + structure de fichiers). Si <code>generate_server=true</code>, génère les scripts de démarrage du mini-serveur. Si <code>lightweight=true</code>, ne copie pas les fichiers de mods (manifeste seul). Si <code>zip_output=true</code>, compresse le tout dans un .zip. L\'opération est démarrée en arrière-plan — réponse immédiate (202).',
+            fields: [
+                { name: 'profileIds',    type: 'array',   required: true,  desc: 'Tableau des UUIDs de profils locaux à exporter.' },
+                { name: 'outputDir',     type: 'string',  required: true,  desc: 'Dossier de destination où créer repo.json et le dossier mods/.' },
+                { name: 'authorName',    type: 'string',  required: true,  desc: 'Nom de l\'auteur inscrit dans repo.json.' },
+                { name: 'seed',          type: 'string',  required: false, desc: 'Graine de stabilité du repo (réutilisation entre exports). Généré automatiquement si omis.' },
+                { name: 'generateServer',type: 'boolean', required: false, desc: 'Si true, génère également les scripts de démarrage du mini-serveur. Défaut : false.' },
+                { name: 'port',          type: 'number',  required: false, desc: 'Port d\'écoute du mini-serveur. Défaut : 8080.' },
+                { name: 'uploadLimit',   type: 'number',  required: false, desc: 'Limite de bande passante montante KB/s (0 = illimité). Défaut : 0.' },
+                { name: 'adminPassword', type: 'string',  required: false, desc: 'Mot de passe administrateur du mini-serveur.' },
+                { name: 'useCloudflare', type: 'boolean', required: false, desc: 'Active le tunnel Cloudflare (cloudflared doit être installé).' },
+                { name: 'useUpnp',       type: 'boolean', required: false, desc: 'Active l\'ouverture de port automatique via UPnP.' },
+                { name: 'autoStart',     type: 'boolean', required: false, desc: 'Démarre le serveur automatiquement au lancement de BMM.' },
+                { name: 'lang',          type: 'string',  required: false, desc: 'Langue de l\'interface du mini-serveur (ex: "fr", "en"). Défaut : "en".' },
+                { name: 'serverVersion', type: 'number',  required: false, desc: 'Version cible du serveur BMM à générer (1 ou 2).' },
+                { name: 'enableDocker',  type: 'boolean', required: false, desc: 'Génère un Dockerfile pour le mini-serveur.' },
+                { name: 'dockerHostType',type: 'string',  required: false, desc: 'Type d\'hôte Docker : "linux" ou "windows".' },
+                { name: 'lightweight',   type: 'boolean', required: false, desc: 'Mode léger : génère seulement le manifeste repo.json sans copier les fichiers de mods. Utile si les fichiers sont déjà hébergés ailleurs.' },
+                { name: 'zipOutput',     type: 'boolean', required: false, desc: 'Si true, compresse le dossier de sortie en un fichier .zip après l\'export.' },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "message": "Export started in background", "job_id": "uuid", "progress_event": "bmm://repo-export-progress", "done_event": "bmm://repo-export-done", "error_event": "bmm://repo-export-error" }' },
+                { code: 400, label: 'Bad Request', body: '{ "error": "author_name is required" }' },
+                { code: 401, label: 'Unauthorized', body: '{ "error": "Unauthorized" }' },
+            ],
+        },
         // ── Modpacks (list + create) ─────────────────────────────────────────
         {
             method: 'GET', path: '/api/modpacks', auth: false,
-            desc: 'List all modpacks',
+            desc: t('plugins.endpointGetModpacks'),
             about: 'Returns all profiles treated as modpacks, including their mod count and metadata. A modpack in BMM is essentially a named profile with a list of mods.',
             fields: [],
             responseStatuses: [
@@ -2397,18 +2719,35 @@ function getEndpointDefs(): EndpointDef[] {
         },
         {
             method: 'POST', path: '/api/modpacks/create', auth: true,
-            desc: 'Create a new modpack',
-            about: 'Creates a new modpack with a given name. Specify mod_ids to include specific mods directly, or provide a profile_id to snapshot that profile\'s active mod list. Both fields are optional — omit both to create an empty modpack.',
+            desc: t('plugins.endpointCreateModpack') || 'Créer un modpack',
+            about: 'Crée un nouveau modpack avec un nom donné. Spécifie mod_ids pour inclure des mods directement, ou fournis source_profile_id pour capturer les mods actifs d\'un profil. Prend en charge multi_profile, skip_integrity_check, dependency_mode et des surcharges par mod (lien de téléchargement, include_dependencies, etc.).',
             fields: [
-                { name: 'name',              type: 'string', required: true,  desc: 'Display name for the new modpack.' },
-                { name: 'mod_ids',           type: 'array',  required: false, desc: 'Array of mod UUIDs to include directly. Takes precedence over source_profile_id.' },
-                { name: 'source_profile_id', type: 'string', required: false, desc: 'UUID of a profile to snapshot active mods from (used if mod_ids is not provided).' },
-                { name: 'description',       type: 'string', required: false, desc: 'Short description for the modpack.' },
-                { name: 'game_name',         type: 'string', required: false, desc: 'Game name label (inherited from source profile if omitted).' },
+                { name: 'name',                 type: 'string',  required: true,  desc: 'Nom affiché pour le nouveau modpack.' },
+                { name: 'mod_ids',              type: 'array',   required: false, desc: 'Tableau d\'UUIDs de mods à inclure directement. Prioritaire sur source_profile_id.' },
+                { name: 'source_profile_id',    type: 'string',  required: false, desc: 'UUID d\'un profil dont capturer les mods actifs (utilisé si mod_ids n\'est pas fourni).' },
+                { name: 'description',          type: 'string',  required: false, desc: 'Description courte du modpack.' },
+                { name: 'game_name',            type: 'string',  required: false, desc: 'Label du jeu (hérité du profil source si omis).' },
+                { name: 'sr_link',              type: 'string',  required: false, desc: 'URL du Server Repo lié à ce modpack.' },
+                { name: 'multi_profile',        type: 'boolean', required: false, desc: 'Autoriser des mods de plusieurs profils dans un seul modpack.' },
+                { name: 'skip_integrity_check', type: 'boolean', required: false, desc: 'Ignorer la vérification d\'intégrité des fichiers lors de l\'application du modpack.' },
+                { name: 'dependency_mode',      type: 'string',  required: false, desc: 'Mode de résolution des dépendances : "none" (défaut, aucune), "all" (toutes auto-incluses), "manual" (par mod via include_dependencies).' },
+                { name: 'mod_overrides',        type: 'array',   required: false, desc: 'Surcharges par mod : [{ "mod_id": "uuid", "include_dependencies": false, "download_link": "https://…", "fallback_link": "https://…", "fallback_type": "direct|gdrive|…" }]' },
             ],
             responseStatuses: [
                 { code: 201, label: 'Created', body: '{ "ok": true, "modpack_id": "new-uuid", "mod_count": 12 }' },
                 e400, e401,
+            ],
+        },
+        // ── Repo sync cancel ─────────────────────────────────────────────────
+        {
+            method: 'DELETE', path: '/api/repo/sync/cancel', auth: true,
+            desc: t('plugins.endpointCancelSync') || 'Annuler la sync en cours',
+            about: 'Envoie un signal d\'annulation à la tâche de sync de repo actuellement en cours. La sync s\'arrête au prochain point de contrôle (entre deux mods). Retourne ok:false si aucune sync n\'est en cours.',
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK (signal envoyé)', body: '{ "ok": true, "message": "Cancel signal sent — sync will stop at next checkpoint" }' },
+                { code: 200, label: 'OK (rien à annuler)', body: '{ "ok": false, "message": "No sync is currently running" }' },
+                e401,
             ],
         },
     ];
@@ -3355,7 +3694,25 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
 // ── Tab: Permissions ───────────────────────────────────────────────────────
 
 async function renderPerms(container: HTMLElement) {
-    const ALL_PERMS = ['read_mods','enable_mods','disable_mods','switch_profile','apply_modlist','compare_modlist'];
+    const ALL_PERMS = [
+        // ── Mods ──────────────────────
+        'read_mods',
+        'enable_mods',
+        'disable_mods',
+        'download_mods',
+        'delete_mods',
+        // ── Profiles ──────────────────
+        'switch_profile',
+        'manage_profiles',
+        // ── Lists & Modpacks ──────────
+        'apply_modlist',
+        'compare_modlist',
+        'manage_modpacks',
+        // ── Server Repo ───────────────
+        'manage_repo',
+        // ── System ────────────────────
+        'use_api',
+    ];
 
     const globalAllowed   = localStorage.getItem('bmm_plug_allow_global') === 'always';
     const deepLinkAllowed = localStorage.getItem('bmm_deeplink_allow_global') !== 'blocked';
