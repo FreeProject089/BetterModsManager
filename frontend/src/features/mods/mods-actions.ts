@@ -7,81 +7,147 @@ import { t } from '../../core/i18n.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { escHtml } from '../../core/utils.js';
 import { refreshMods, closeModDetail } from './mods.js';
-import { setModLoading } from './mods-list.js';
+import { setModLoading, updateCardState, updateBadge, updateSubtitle, updateToggleAllBtn } from './mods-list.js';
 
 const S = new Proxy(appState.state, {
   get(target, prop) { return target[prop]; },
   set(target, prop, value) { appState.set(prop, value); return true; }
 });
 
-// ── Cancel-ops state ──────────────────────────────────────────────────────────
+// ── Toggle-all cancel state ───────────────────────────────────────────────────
 let _preOpSnapshot: { id: string; enabled: boolean }[] = [];
 let _cancelRequested = false;
 
-// Per-mod snapshot: modId → state BEFORE the toggle was fired
-const _indivSnapshots = new Map<string, boolean>();
+// ── Per-mod cancel state ──────────────────────────────────────────────────────
+interface _OpState {
+  prevEnabled: boolean;
+  cancelled: boolean;
+  modName: string;
+}
 
-/**
- * Called from mods-list.ts just before an individual mod toggle invocation.
- * `prevEnabled` is the state the mod had BEFORE the user clicked.
- */
-export function registerSingleModOp(modId: string, prevEnabled: boolean) {
-  _indivSnapshots.set(modId, prevEnabled);
+interface _QueueItem {
+  modId: string;
+  prevEnabled: boolean;
+  modName: string;
+  /** true → drain shows the cancel toast; false → toggle finalizer shows it */
+  showToast: boolean;
+}
+
+/** Single source of truth for every individual mod operation in flight. */
+const _opState = new Map<string, _OpState>();
+
+/** Sequential revert queue — prevents IPC freeze from parallel calls. */
+const _revertQueue: _QueueItem[] = [];
+let _queueRunning = false;
+
+export function registerSingleModOp(modId: string, prevEnabled: boolean, modName: string) {
+  _opState.set(modId, { prevEnabled, cancelled: false, modName });
   _updateCancelBtn();
 }
 
-/**
- * Called from mods-list.ts in the finally block after the toggle completes
- * (or fails), regardless of outcome.
- */
-export function unregisterSingleModOp(modId: string) {
-  _indivSnapshots.delete(modId);
-  _updateCancelBtn();
+/** Checked from mods-list.ts try block to suppress success toasts. */
+export function isCancelledOp(modId: string): boolean {
+  return _opState.get(modId)?.cancelled ?? false;
 }
 
-/** Sync cancel-button state with current ops. */
+/** Called by the toggle finalizer (330ms after finally). */
+export function consumeAndClearOp(modId: string): _OpState | undefined {
+  const state = _opState.get(modId);
+  _opState.delete(modId);
+  _updateCancelBtn();
+  if (state?.cancelled) {
+    // Toggle finalizer shows the toast, drain just runs the IPC
+    _revertQueue.push({ modId, prevEnabled: state.prevEnabled, modName: state.modName, showToast: false });
+    _drainRevertQueue();
+  }
+  return state;
+}
+
 function _updateCancelBtn() {
-  const hasOps = S.isGlobalProcessing || _indivSnapshots.size > 0;
-  _setCancelBtnVisible(hasOps);
+  const hasOps = S.isGlobalProcessing || _opState.size > 0 || _queueRunning;
+  _setCancelBtnState(hasOps, _queueRunning);
 }
 
-/** Called by the cancel button. */
 export function requestCancelModOps() {
   if (S.isGlobalProcessing) {
     _cancelRequested = true;
   }
-  // Revert any in-flight individual toggles
-  if (_indivSnapshots.size > 0) {
-    _revertIndividualOps();
+  if (_opState.size === 0) return;
+
+  _setCancelBtnState(true, true);
+
+  for (const [modId, state] of Array.from(_opState.entries())) {
+    if (S.processingMods.has(modId)) {
+      // Still in-flight — finalizer handles the revert via consumeAndClearOp
+      state.cancelled = true;
+    } else {
+      // Already finished — enqueue revert; drain shows the toast
+      _revertQueue.push({ modId, prevEnabled: state.prevEnabled, modName: state.modName, showToast: true });
+      _opState.delete(modId);
+    }
   }
+
+  _drainRevertQueue();
 }
 
-async function _revertIndividualOps() {
-  const toRevert = new Map(_indivSnapshots);
-  _indivSnapshots.clear();
-  _updateCancelBtn();
+async function _drainRevertQueue() {
+  if (_queueRunning) return;
+  _queueRunning = true;
+  _setCancelBtnState(true, true);
 
-  for (const [modId, prevEnabled] of toRevert) {
+  while (_revertQueue.length > 0) {
+    const item = _revertQueue.shift()!;
     try {
-      if (prevEnabled) {
-        await invoke('enable_mod', { modId, bypassSha: true });
-      } else {
-        await invoke('disable_mod', { modId });
+      // Sequential IPC — one call at a time
+      if (item.prevEnabled) await invoke('enable_mod', { modId: item.modId, bypassSha: true });
+      else await invoke('disable_mod', { modId: item.modId });
+
+      const modRef = S.allMods.find((m: any) => m.id === item.modId);
+      if (modRef) {
+        modRef.enabled = item.prevEnabled;
+        const card = document.querySelector(`.mod-card[data-id="${item.modId}"]`) as HTMLElement | null;
+        if (card) updateCardState(card, modRef);
+      }
+
+      if (item.showToast) {
+        // prevEnabled=false → user was enabling → "Activation annulée"
+        // prevEnabled=true  → user was disabling → "Désactivation annulée"
+        const actionKey = item.prevEnabled ? 'lib.cancelToastDisable' : 'lib.cancelToastEnable';
+        toast(`${item.modName} : ${t(actionKey)}`, 'info');
       }
     } catch (_) { /* best-effort */ }
   }
 
-  const { refreshMods } = await import('./mods.js');
-  await refreshMods();
-  toast(t('lib.cancelReverted') || 'Opération annulée — état précédent restauré.', 'info');
+  _queueRunning = false;
+  updateBadge();
+  updateSubtitle();
+  updateToggleAllBtn();
+  _updateCancelBtn();
 }
 
-function _setCancelBtnVisible(active: boolean) {
+// ── Cancel button visual state ────────────────────────────────────────────────
+const _CANCEL_SPINNER_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 0.7s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
+let _cancelBtnOriginalHTML: string | null = null;
+
+function _setCancelBtnState(active: boolean, spinning: boolean) {
   const btn = document.getElementById('btn-cancel-mod-ops') as HTMLButtonElement | null;
   if (!btn) return;
-  btn.disabled = !active;
-  btn.classList.toggle('btn-danger', active);
-  btn.classList.toggle('btn-ghost', !active);
+
+  if (spinning) {
+    if (_cancelBtnOriginalHTML === null) _cancelBtnOriginalHTML = btn.innerHTML;
+    btn.innerHTML = _CANCEL_SPINNER_SVG;
+    btn.disabled = false;
+    btn.classList.add('btn-danger');
+    btn.classList.remove('btn-ghost');
+  } else {
+    if (_cancelBtnOriginalHTML !== null) {
+      btn.innerHTML = _cancelBtnOriginalHTML;
+      _cancelBtnOriginalHTML = null;
+    }
+    btn.disabled = !active;
+    btn.classList.toggle('btn-danger', active);
+    btn.classList.toggle('btn-ghost', !active);
+  }
 }
 
 export function openAddModModal() {
@@ -177,7 +243,7 @@ export async function toggleAllMods(forcedEnable = null) {
     setModLoading(m.id, true);
   });
 
-  // Show cancel button (isGlobalProcessing is now true so _updateCancelBtn shows it)
+  // Show cancel button (isGlobalProcessing is now true)
   _updateCancelBtn();
 
   // Use the button that corresponds to the current action as the "active" loading button
@@ -224,7 +290,6 @@ export async function toggleAllMods(forcedEnable = null) {
     if (btn)    btn.disabled = false;
     if (altBtn) altBtn.disabled = false;
     if (btn)    btn.innerHTML = originalHtml;
-    // Re-sync cancel button state (hides it if no individual ops remain either)
     _updateCancelBtn();
     await refreshMods();
     await updateDiscordStatus();

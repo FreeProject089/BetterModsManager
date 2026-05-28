@@ -19,23 +19,27 @@ fn ensure_removed(path: &Path) -> Result<()> {
     fs::remove_file(path).with_context(|| format!("Failed to remove file: {:?}", path))
 }
 
-pub fn copy_file_force_limited(src: &Path, dst: &Path, limit_mb_s: Option<u64>) -> Result<()> {
+/// Smart I/O variant.  When `smart_io` is true, inserts a tiny yield every
+/// few chunks so the OS scheduler can service the UI thread (prevents the
+/// "Ne répond pas" freeze on big mods).
+pub fn copy_file_force_smart(src: &Path, dst: &Path, limit_mb_s: Option<u64>, smart_io: bool) -> Result<()> {
     if let Some(parent) = dst.parent() {
         std::fs::create_dir_all(parent).ok();
     }
     if dst.exists() {
         let _ = ensure_removed(dst); // Clear permissions and delete if possible before overwrite
     }
-    
+
+    // ── Path 1: explicit MB/s throttle (already paces itself, just honor it) ──
     if let Some(limit) = limit_mb_s {
         if limit > 0 {
             use std::io::{Read, Write};
             let mut src_file = std::fs::File::open(src).with_context(|| format!("Failed to open src: {:?}", src))?;
             let mut dst_file = std::fs::File::create(dst).with_context(|| format!("Failed to create dst: {:?}", dst))?;
-            
+
             let chunk_size: usize = 128 * 1024; // 128 KB buffer for smoother limiting
             let mut buffer = vec![0u8; chunk_size];
-            
+
             loop {
                 let start = std::time::Instant::now();
                 let bytes_read = src_file.read(&mut buffer)?;
@@ -43,11 +47,11 @@ pub fn copy_file_force_limited(src: &Path, dst: &Path, limit_mb_s: Option<u64>) 
                     break;
                 }
                 dst_file.write_all(&buffer[..bytes_read])?;
-                
+
                 let elapsed = start.elapsed();
                 let fraction = bytes_read as f64 / 1_048_576.0;
                 let required_duration = std::time::Duration::from_secs_f64(fraction / limit as f64);
-                
+
                 if elapsed < required_duration {
                     std::thread::sleep(required_duration - elapsed);
                 }
@@ -56,6 +60,35 @@ pub fn copy_file_force_limited(src: &Path, dst: &Path, limit_mb_s: Option<u64>) 
         }
     }
 
+    // ── Path 2: Smart I/O — chunked copy with periodic micro-yields ──────────
+    // This keeps disk/CPU at very high throughput while leaving small gaps
+    // for the WebView2 message pump and other OS scheduling.
+    if smart_io {
+        use std::io::{Read, Write};
+        let mut src_file = std::fs::File::open(src).with_context(|| format!("Failed to open src: {:?}", src))?;
+        let mut dst_file = std::fs::File::create(dst).with_context(|| format!("Failed to create dst: {:?}", dst))?;
+
+        let chunk_size: usize = 256 * 1024; // 256 KB — big enough to be fast, small enough to yield often
+        let mut buffer = vec![0u8; chunk_size];
+        let mut chunks_since_yield: u32 = 0;
+
+        loop {
+            let bytes_read = src_file.read(&mut buffer)?;
+            if bytes_read == 0 { break; }
+            dst_file.write_all(&buffer[..bytes_read])?;
+
+            chunks_since_yield += 1;
+            // Every ~2 MB (8 × 256 KB) → 200 µs sleep.  Practically invisible
+            // on throughput (~0.5 % overhead) but huge for UI responsiveness.
+            if chunks_since_yield >= 8 {
+                std::thread::sleep(std::time::Duration::from_micros(200));
+                chunks_since_yield = 0;
+            }
+        }
+        return Ok(());
+    }
+
+    // ── Path 3: full-speed std::fs::copy (Smart I/O off, no MB/s limit) ──────
     std::fs::copy(src, dst)
         .with_context(|| format!("Failed to copy {:?} -> {:?}", src, dst))?;
     Ok(())
@@ -73,18 +106,19 @@ pub fn compute_file_sha256(path: &Path) -> Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-/// Backup a file from `game_path/rel` to `backup_root/_original/rel`. 
+/// Backup a file from `game_path/rel` to `backup_root/_original/rel`.
 /// Only if it's NOT provided by another active mod.
 pub fn backup_original_file(
-    game_path: &Path, 
-    rel: &Path, 
+    game_path: &Path,
+    rel: &Path,
     profile_backup_root: &Path,
     other_mods_files: &HashSet<PathBuf>,
-    backup_path_limit: Option<u64>
+    backup_path_limit: Option<u64>,
+    smart_io: bool,
 ) -> Result<()> {
     let src = game_path.join(rel);
     let dst = profile_backup_root.join("_original").join(rel);
-    
+
     // If it's already backed up, we're good
     if dst.exists() { return Ok(()); }
     if !src.exists() { return Ok(()); }
@@ -96,10 +130,30 @@ pub fn backup_original_file(
     }
 
     // It's a real game file! Secure it.
-    copy_file_force_limited(&src, &dst, backup_path_limit)
+    copy_file_force_smart(&src, &dst, backup_path_limit, smart_io)
         .with_context(|| format!("Failed to backup original file: {:?}", rel))?;
-    
+
     Ok(())
+}
+
+/// Run a closure with rayon's parallelism capped.  When Smart I/O is on we
+/// cap to 2 threads so file copies never saturate every CPU core (which is
+/// what causes the "Ne répond pas" UI freeze).  When off, default rayon
+/// pool (= all cores) is used.
+fn run_with_smart_pool<F, R>(smart_io: bool, f: F) -> R
+where
+    F: FnOnce() -> R + Send,
+    R: Send,
+{
+    if !smart_io {
+        return f();
+    }
+    // Build a local 2-thread pool just for this mod op.  install() blocks
+    // until the closure returns, so threads are dropped right after.
+    match rayon::ThreadPoolBuilder::new().num_threads(2).build() {
+        Ok(pool) => pool.install(f),
+        Err(_)   => f(), // Fallback: still works, just on the default pool
+    }
 }
 
 
@@ -129,18 +183,22 @@ pub fn apply_mod_stacked(
     other_mods_files: &HashSet<PathBuf>,
     game_path_limit: Option<u64>,
     backup_path_limit: Option<u64>,
+    smart_io: bool,
 ) -> Result<Vec<PathBuf>> {
     let files = list_mod_files(mod_folder)?;
 
-    files.par_iter().try_for_each(|rel| {
-        // Backup original if it's the first time BMM touches this file in this profile
-        let _ = backup_original_file(game_path, rel, profile_backup_root, &other_mods_files, backup_path_limit);
-        
-        // Copy mod file to game dir (force overwrite)
-        let src = mod_folder.join(rel);
-        let dst = game_path.join(rel);
-        copy_file_force_limited(&src, &dst, game_path_limit)
-    })?;
+    let result: Result<()> = run_with_smart_pool(smart_io, || {
+        files.par_iter().try_for_each(|rel| {
+            // Backup original if it's the first time BMM touches this file in this profile
+            let _ = backup_original_file(game_path, rel, profile_backup_root, &other_mods_files, backup_path_limit, smart_io);
+
+            // Copy mod file to game dir (force overwrite)
+            let src = mod_folder.join(rel);
+            let dst = game_path.join(rel);
+            copy_file_force_smart(&src, &dst, game_path_limit, smart_io)
+        })
+    });
+    result?;
 
     Ok(files)
 }
@@ -167,40 +225,44 @@ pub fn unapply_mod_stacked(
     files_to_remove: Vec<String>,
     other_active_mods: &[(String, PathBuf)],
     game_path_limit: Option<u64>,
+    smart_io: bool,
 ) -> Result<()> {
     // Canonicalize to follow symlinks/junctions, then normalize to strip UNC prefixes
     let game_path_norm = normalize_path(game_path.canonicalize().unwrap_or_else(|_| game_path.to_path_buf()));
-    
-    // Parallelize restoration/removal
-    files_to_remove.par_iter().try_for_each(|rel_str| {
-        let rel = PathBuf::from(rel_str);
-        let dst_path = game_path.join(&rel);
-        
-        let mut restored = false;
-        // 1. Try to find another mod that provides this file (starting from most recent)
-        for (_, mod_folder) in other_active_mods {
-            let mod_src = mod_folder.join(&rel);
-            if mod_src.exists() && mod_src.is_file() {
-                copy_file_force_limited(&mod_src, &dst_path, game_path_limit)?;
-                restored = true;
-                break;
-            }
-        }
 
-        // 2. If no other mod has it, restore original or DELETE
-        if !restored {
-            let original_src = profile_backup_root.join("_original").join(&rel);
-            if original_src.exists() {
-                copy_file_force_limited(&original_src, &dst_path, game_path_limit)?;
-                // Space optimization: remove the backup file as it has been safely restored
-                let _ = ensure_removed(&original_src);
-            } else {
-                // File was added by mod and no original exists — DELETE IT
-                let _ = ensure_removed(&dst_path); 
+    // Parallelize restoration/removal (bounded pool when Smart I/O is on)
+    let result: Result<()> = run_with_smart_pool(smart_io, || {
+        files_to_remove.par_iter().try_for_each(|rel_str| {
+            let rel = PathBuf::from(rel_str);
+            let dst_path = game_path.join(&rel);
+
+            let mut restored = false;
+            // 1. Try to find another mod that provides this file (starting from most recent)
+            for (_, mod_folder) in other_active_mods {
+                let mod_src = mod_folder.join(&rel);
+                if mod_src.exists() && mod_src.is_file() {
+                    copy_file_force_smart(&mod_src, &dst_path, game_path_limit, smart_io)?;
+                    restored = true;
+                    break;
+                }
             }
-        }
-        Ok::<(), anyhow::Error>(())
-    })?;
+
+            // 2. If no other mod has it, restore original or DELETE
+            if !restored {
+                let original_src = profile_backup_root.join("_original").join(&rel);
+                if original_src.exists() {
+                    copy_file_force_smart(&original_src, &dst_path, game_path_limit, smart_io)?;
+                    // Space optimization: remove the backup file as it has been safely restored
+                    let _ = ensure_removed(&original_src);
+                } else {
+                    // File was added by mod and no original exists — DELETE IT
+                    let _ = ensure_removed(&dst_path);
+                }
+            }
+            Ok::<(), anyhow::Error>(())
+        })
+    });
+    result?;
 
     // Sequential cleanup of empty directories (safer to do sequentially after all files are handled)
     for rel_str in files_to_remove {

@@ -530,7 +530,7 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
     log_line(format!("[MOD] Enabling mod '{}' (recursive if needed)", mod_id));
     
     // 1. Resolve full dependency chain and check for missing dependencies
-    let (mod_ids_to_enable, profile_data, warning_settings, missing_deps, needs_save) = {
+    let (mod_ids_to_enable, profile_data, warning_settings, missing_deps, needs_save, smart_io) = {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
@@ -564,6 +564,7 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
         let critical_pct = data.settings.storage_critical_space_pct;
         let alert_enabled = data.settings.storage_alert_enabled;
         let require_sha = data.settings.require_valid_sha;
+        let smart_io = data.settings.smart_io_enabled;
         let bypass = bypass_sha.unwrap_or(false);
 
         if require_sha && !bypass {
@@ -576,7 +577,7 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
             }
         }
 
-        (to_enable, p, (warning_pct, critical_pct, alert_enabled), missing, needs_save)
+        (to_enable, p, (warning_pct, critical_pct, alert_enabled), missing, needs_save, smart_io)
     };
 
     // Save if dependencies were modified
@@ -691,7 +692,7 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
         let active_files_set_clone = active_files_set.clone();
         let result = tauri::async_runtime::spawn_blocking(move || {
             let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-            fs_utils::apply_mod_stacked(&mod_folder, &game_path, &backup_path, &active_files_set_clone, game_path_limit, backup_path_limit)
+            fs_utils::apply_mod_stacked(&mod_folder, &game_path, &backup_path, &active_files_set_clone, game_path_limit, backup_path_limit, smart_io)
         }).await.map_err(|e| e.to_string())?;
 
         let _ = window.emit("benchmark-event", BenchEventPayload {
@@ -762,6 +763,10 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
     };
 
     let game_path_limit = crate::commands::disk::get_limit_for_path(&state, &game_path);
+    let smart_io = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.settings.smart_io_enabled
+    };
 
     let mut total_bytes = 0;
     for p in &files_to_remove {
@@ -779,10 +784,10 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
         limit_mb_s: game_path_limit,
         finished: false,
     });
-    
+
     let result = tauri::async_runtime::spawn_blocking(move || {
         let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        fs_utils::unapply_mod_stacked(&game_path, &backup_path, files_to_remove, &other_active_mods, game_path_limit)
+        fs_utils::unapply_mod_stacked(&game_path, &backup_path, files_to_remove, &other_active_mods, game_path_limit, smart_io)
     }).await.map_err(|e| e.to_string())?;
 
     let _ = window.emit("benchmark-event", BenchEventPayload {
@@ -1721,9 +1726,14 @@ pub async fn disable_mods_for_profiles(_window: Window, state: State<'_, AppStat
         return Ok(()); 
     }
 
+    let smart_io = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.settings.smart_io_enabled
+    };
+
     for ((game_path, backup_path), mod_ids) in tasks {
         let game_path_limit = crate::commands::disk::get_limit_for_path(&state, &game_path);
-        
+
         for mod_id in mod_ids {
             let (files_to_remove, other_active_mods) = {
                 let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
@@ -1763,7 +1773,7 @@ pub async fn disable_mods_for_profiles(_window: Window, state: State<'_, AppStat
             
             let _ = tauri::async_runtime::spawn_blocking(move || {
                 let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-                fs_utils::unapply_mod_stacked(&gp, &bp, files_to_remove, &other_active_mods, game_path_limit)
+                fs_utils::unapply_mod_stacked(&gp, &bp, files_to_remove, &other_active_mods, game_path_limit, smart_io)
             }).await.map_err(|e| e.to_string())?;
         }
     }

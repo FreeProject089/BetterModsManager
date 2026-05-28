@@ -289,6 +289,7 @@ fn main() {
             commands::omm::import_omm_profile,
             commands::launch_pack::get_launch_packs,
             commands::launch_pack::create_launch_pack,
+            commands::launch_pack::update_launch_pack,
             commands::launch_pack::run_launch_pack,
             commands::launch_pack::delete_launch_pack,
             commands::launch_pack::open_launch_pack_folder,

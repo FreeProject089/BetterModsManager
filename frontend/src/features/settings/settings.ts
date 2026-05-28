@@ -378,6 +378,8 @@ const _renderStorageModal = async () => {
 
         const settings = await getSettings();
         const isAuto = settings.auto_io_calibration || false;
+        // Smart I/O defaults to ON if undefined (matches Rust default_true)
+        const smartIo = settings.smart_io_enabled !== false;
         const alertEnabled = settings.storage_alert_enabled || false;
         const warningPct = settings.storage_warning_space_pct !== undefined ? settings.storage_warning_space_pct : 40;
         const criticalPct = settings.storage_critical_space_pct !== undefined ? settings.storage_critical_space_pct : 30;
@@ -430,6 +432,20 @@ const _renderStorageModal = async () => {
                 </div>
             </div>
 
+            <div style="background:rgba(34,197,94,0.05); border:1px solid rgba(34,197,94,0.2); border-radius:12px; padding:16px; margin-bottom:20px; display:flex; align-items:center; gap:16px">
+                <div style="width:40px; height:40px; background:rgba(34,197,94,0.1); border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                </div>
+                <div style="flex:1">
+                    <div style="font-size:14px; font-weight:800; color:var(--text-bright)">${t('storage.smartIoTitle')}</div>
+                    <div style="font-size:11px; color:var(--text-muted); line-height:1.4">${t('storage.smartIoDesc')}</div>
+                </div>
+                <label class="bmm-switch">
+                    <input type="checkbox" id="chk-smart-io" ${smartIo ? 'checked' : ''}>
+                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                </label>
+            </div>
+
             ${thresholdsBlock}
 
             <div id="disks-list-subcontainer" style="display:flex; flex-direction:column; gap:12px"></div>
@@ -449,6 +465,13 @@ const _renderStorageModal = async () => {
 
         document.getElementById('btn-reset-limits')?.addEventListener('click', () => {
             resetStorageLimits();
+        });
+
+        // Smart I/O toggle
+        document.getElementById('chk-smart-io')?.addEventListener('change', async (e: any) => {
+            settings.smart_io_enabled = e.target.checked;
+            await updateSettings(settings);
+            toast(t(e.target.checked ? 'storage.smartIoOnToast' : 'storage.smartIoOffToast'), 'info');
         });
 
         // Alert enabled toggle

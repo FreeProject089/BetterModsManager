@@ -327,9 +327,9 @@ function _renderModpackList(container) {
                 </div>
             </div>
             <div class="modpack-card-actions">
-                <button class="btn btn-icon btn-ghost btn-export" data-tooltip="${escHtml(t('modpack.exportTitle'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
-                <button class="btn btn-icon btn-ghost btn-edit" data-tooltip="${escHtml(t('modpack.edit'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-                <button class="btn btn-icon btn-ghost btn-delete" style="color:var(--danger)" data-tooltip="${escHtml(t('modpack.delete'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                <button class="btn btn-icon btn-ghost btn-export"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
+                <button class="btn btn-icon btn-ghost btn-edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button class="btn btn-icon btn-ghost btn-delete" style="color:var(--danger)" ><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
             </div>
         `;
 
@@ -1290,24 +1290,121 @@ async function _exportModpack(pack) {
 async function _deleteModpack(container, pack) {
     if (!pack) return;
 
-    const ok = await window.confirmCustom(
-        t('modpack.delete') || 'Delete',
-        t('modpack.deleteConfirm') || 'Are you sure you want to delete this modpack?',
-        'danger'
-    );
-    if (!ok) return;
+    const action = await _showDeleteModal(container, pack);
+    if (action === 'edit') {
+        _openEditor(container, pack);
+        return;
+    }
+    if (!action) return;
 
     try {
         await invoke('delete_modpack', { id: pack.id });
         toast(t('modpack.deletedOk') || 'Modpack supprimé.', 'success');
         await _loadData();
         _renderModpackList(container);
-
-        // Notify other components (like Repo page)
         window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
     } catch (err) {
         toast(String(err), 'error');
     }
+}
+
+/**
+ * Premium delete-confirmation modal.
+ * Returns:  'delete' → user confirmed,  'edit' → user clicked Edit,  null → cancelled.
+ */
+function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' | null> {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = [
+            'position:fixed;inset:0;',
+            'background:rgba(0,0,0,0.82);',
+            'backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);',
+            'z-index:99999;',
+            'display:flex;align-items:center;justify-content:center;',
+            'opacity:0;transition:opacity 0.22s ease;',
+        ].join('');
+
+        const modal = document.createElement('div');
+        modal.style.cssText = [
+            'width:460px;max-width:94vw;',
+            'background:var(--bg-secondary,#0f172a);',
+            'border:1px solid rgba(239,68,68,0.18);',
+            'border-radius:20px;overflow:hidden;',
+            'box-shadow:0 0 0 1px rgba(255,255,255,0.04),0 32px 80px rgba(0,0,0,0.8);',
+            'transform:scale(0.93) translateY(14px);',
+            'transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);',
+        ].join('');
+
+        const modsCount = pack.mods?.length || 0;
+        const gameLine = pack.game_name ? ` · ${escHtml(pack.game_name)}` : '';
+        const descBlock = pack.description
+            ? `<div style="font-size:11px;color:var(--text-muted);line-height:1.55;padding-top:10px;border-top:1px solid rgba(255,255,255,0.05);">${escHtml(pack.description)}</div>`
+            : '';
+
+        modal.innerHTML = `
+            <!-- ── Header ── -->
+            <div style="padding:26px 26px 0;display:flex;align-items:flex-start;gap:16px;">
+                <div style="width:50px;height:50px;border-radius:15px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--danger,#ef4444);">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </div>
+                <div style="flex:1;min-width:0;padding-top:2px;">
+                    <h3 style="margin:0 0 3px;font-size:17px;font-weight:800;color:var(--text-primary);letter-spacing:-0.3px;">${t('modpack.deleteTitle') || 'Supprimer le launchpack'}</h3>
+                    <p style="margin:0;font-size:12px;color:var(--text-muted);">${t('modpack.deleteSubtitle') || 'Cette action est irréversible. Le pack sera définitivement supprimé.'}</p>
+                </div>
+                <button id="dmod-close" style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.03);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);flex-shrink:0;transition:background 0.15s;" onmouseenter="this.style.background='rgba(255,255,255,0.07)'" onmouseleave="this.style.background='rgba(255,255,255,0.03)'">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+
+            <!-- ── Pack preview card ── -->
+            <div style="margin:18px 26px;padding:14px 16px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-radius:12px;">
+                <div style="display:flex;align-items:center;gap:12px;${pack.description ? 'margin-bottom:10px;' : ''}">
+                    <div style="width:34px;height:34px;border-radius:9px;background:rgba(0,194,255,0.09);border:1px solid rgba(0,194,255,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#00c2ff)" stroke-width="2"><path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/><path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/></svg>
+                    </div>
+                    <div style="min-width:0;">
+                        <div style="font-size:14px;font-weight:700;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(pack.name)}</div>
+                        <div style="font-size:10px;color:var(--text-muted);margin-top:2px;font-weight:600;">${modsCount} mod${modsCount !== 1 ? 's' : ''}${gameLine}</div>
+                    </div>
+                </div>
+                ${descBlock}
+            </div>
+
+            <!-- ── Actions ── -->
+            <div style="padding:0 26px 24px;display:flex;align-items:center;gap:10px;">
+                <button id="dmod-edit" style="display:flex;align-items:center;gap:7px;padding:0 14px;height:34px;border-radius:9px;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;margin-right:auto;transition:all 0.15s;" onmouseenter="this.style.background='rgba(0,194,255,0.07)';this.style.borderColor='rgba(0,194,255,0.2)';this.style.color='var(--accent)'" onmouseleave="this.style.background='rgba(255,255,255,0.03)';this.style.borderColor='rgba(255,255,255,0.07)';this.style.color='var(--text-secondary)'">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    ${t('modpack.edit') || 'Modifier'}
+                </button>
+                <button id="dmod-cancel" style="padding:0 16px;height:34px;border-radius:9px;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;" onmouseenter="this.style.background='rgba(255,255,255,0.07)'" onmouseleave="this.style.background='rgba(255,255,255,0.03)'">${t('common.cancel') || 'Annuler'}</button>
+                <button id="dmod-confirm" style="display:flex;align-items:center;gap:7px;padding:0 16px;height:34px;border-radius:9px;border:none;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(239,68,68,0.3);transition:all 0.15s;" onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 20px rgba(239,68,68,0.45)'" onmouseleave="this.style.transform='none';this.style.boxShadow='0 4px 16px rgba(239,68,68,0.3)'">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    ${t('modpack.deleteConfirmBtn') || 'Supprimer'}
+                </button>
+            </div>
+        `;
+
+        const close = (result: 'delete' | 'edit' | null) => {
+            overlay.style.opacity = '0';
+            modal.style.transform = 'scale(0.93) translateY(14px)';
+            setTimeout(() => overlay.remove(), 280);
+            resolve(result);
+        };
+
+        modal.querySelector('#dmod-close').addEventListener('click', () => close(null));
+        modal.querySelector('#dmod-cancel').addEventListener('click', () => close(null));
+        modal.querySelector('#dmod-confirm').addEventListener('click', () => close('delete'));
+        modal.querySelector('#dmod-edit').addEventListener('click', () => close('edit'));
+        overlay.addEventListener('mousedown', (e: MouseEvent) => { if (e.target === overlay) close(null); });
+
+        overlay.appendChild(modal);
+        (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+
+        requestAnimationFrame(() => {
+            overlay.style.opacity = '1';
+            modal.style.transform = 'scale(1) translateY(0)';
+        });
+    });
 }
 
 // ── Quick Apply Modal ────────────────────────────────────────────────────────

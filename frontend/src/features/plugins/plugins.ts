@@ -2380,11 +2380,13 @@ function renderScripts(container: HTMLElement) {
             const activeTab = copyCodeBtn.closest('.plug-ep-code-tabs')?.querySelector('.plug-ep-code-tab.active') as HTMLElement | null;
             const lang = activeTab?.dataset.lang || 'curl';
             const ep = _epCodeCache.get(epid);
-            const text = ep ? (() => {
+            const rawText = ep ? (() => {
                 const div = document.createElement('div');
                 div.innerHTML = _genCode(ep, lang);
                 return div.textContent || '';
             })() : (pre?.textContent || '');
+            // For curl and ps1 → collapse multi-line to a single terminal-ready command
+            const text = _toClipboardLine(rawText, lang);
             navigator.clipboard.writeText(text).catch(() => {});
             toast(t('plugins.epCopyDone'), 'success');
             return;
@@ -2701,14 +2703,33 @@ function _curlEx(ep: EndpointDef): string {
 
 function _ps1Ex(ep: EndpointDef): string {
     const url = `http://127.0.0.1:51274${ep.path}`;
+    // Compact body (single line) so it pastes cleanly
+    const bodyObj = ep.fields
+        ? Object.fromEntries(ep.fields.map(f => [f.name, f.type === 'boolean' ? false : f.type === 'number' ? 0 : '']))
+        : {};
+    const bodyJson = JSON.stringify(bodyObj);
+    // PS1 line-continuation is backtick ` (not backslash)
     if (ep.method === 'GET') {
-        const auth = ep.auth ? `\n  -Headers @{Authorization="Bearer $TOKEN"} \\` : '';
-        return `Invoke-RestMethod \\\n  -Uri "${url}" \\${auth}\n  -Method GET`;
+        const authPart = ep.auth ? ` \`\n  -Headers @{ Authorization = "Bearer $TOKEN" }` : '';
+        return `Invoke-RestMethod \`\n  -Uri "${url}"${authPart} \`\n  -Method GET`;
     }
-    const body = ep.fields
-        ? JSON.stringify(Object.fromEntries(ep.fields.map(f => [f.name, f.type === 'boolean' ? false : f.type === 'number' ? 0 : ''])), null, 2)
-        : '{}';
-    return `Invoke-RestMethod \\\n  -Uri "${url}" \\\n  -Method POST \\\n  -Headers @{Authorization="Bearer $TOKEN"; "Content-Type"="application/json"} \\\n  -Body '${body}'`;
+    const authPart = ep.auth
+        ? ` \`\n  -Headers @{ Authorization = "Bearer $TOKEN"; "Content-Type" = "application/json" }`
+        : ` \`\n  -Headers @{ "Content-Type" = "application/json" }`;
+    return `Invoke-RestMethod \`\n  -Uri "${url}" \`\n  -Method POST${authPart} \`\n  -Body '${bodyJson}'`;
+}
+
+/** Strip line-continuation chars so the copied command works on one line in a terminal. */
+function _toClipboardLine(text: string, lang: string): string {
+    if (lang === 'curl') {
+        // Remove bash  \ + newline + indent
+        return text.replace(/ \\\n\s*/g, ' ').trim();
+    }
+    if (lang === 'ps1') {
+        // Remove PS1 backtick + newline + indent
+        return text.replace(/ `\n\s*/g, ' ').trim();
+    }
+    return text;
 }
 
 function buildEndpointRow(ep: EndpointDef): string {
@@ -3775,6 +3796,11 @@ function _collectActions(): Array<{ action_type: string; target_id: string; extr
                 case 'if_file_exists':      extra.path = val; break;
                 case 'if_var_eq':           extra.cond = val; break;
                 case 'raw_code':            extra.code = val; break;
+                // Repo / modpack actions that use key=value pairs
+                case 'sync_repo':           extra.expr = val; break;
+                case 'gen_repo':            extra.expr = val; break;
+                case 'http_host':           extra.expr = val; break;
+                case 'update_modpack':      extra.expr = val; break;
             }
         }
         return {

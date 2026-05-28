@@ -402,6 +402,7 @@ function showTooltipImpl(key: string, iconClass: string, isLiteral: boolean) {
     if (finalIcon === 'heart' || finalIcon === 'credits') finalIcon = 'icon-heart';
     if (finalIcon === 'settings') finalIcon = 'icon-settings';
     if (finalIcon === 'layers' || finalIcon === 'mapper') finalIcon = 'icon-layers';
+    if (finalIcon === 'pin' || finalIcon === 'sticky') finalIcon = 'icon-toggle';
 
     // Text content logic
     let exp = key;

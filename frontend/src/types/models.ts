@@ -112,6 +112,7 @@ export interface AppSettings {
   onboarding_shown: boolean;
   last_seen_crash: string | null;
   auto_io_calibration: boolean;
+  smart_io_enabled: boolean;
   storage_alert_enabled: boolean;
   storage_warning_space_pct: number;
   storage_critical_space_pct: number;

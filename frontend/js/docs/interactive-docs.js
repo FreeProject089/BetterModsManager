@@ -385,6 +385,8 @@ function showTooltipImpl(key, iconClass, isLiteral) {
         finalIcon = 'icon-settings';
     if (finalIcon === 'layers' || finalIcon === 'mapper')
         finalIcon = 'icon-layers';
+    if (finalIcon === 'pin' || finalIcon === 'sticky')
+        finalIcon = 'icon-toggle';
     // Text content logic
     let exp = key;
     if (!isLiteral) {

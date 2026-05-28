@@ -6,7 +6,7 @@ import { invoke, sendOsNotification } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { updateDiscordStatus } from '../settings/settings.js';
 import { refreshMods, selectMod, closeModDetail } from './mods.js';
-import { registerSingleModOp, unregisterSingleModOp } from './mods-actions.js';
+import { registerSingleModOp, isCancelledOp, consumeAndClearOp } from './mods-actions.js';
 import { escHtml, escAttr, escJs, truncate } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 const S = new Proxy(appState.state, {
@@ -17,6 +17,20 @@ let ghostFilteredMods = [];
 let lastStartIndex = -1;
 let lastEndIndex = -1;
 const CARD_HEIGHTS = { standard: 110, compact: 54 };
+// ── Background sync (debounced) ───────────────────────────────────────────────
+// Called after every individual toggle instead of a full refreshMods().
+// Waits for 2.5 s of idle (no more toggles) before hitting the backend.
+let _bgSyncTimer = null;
+function _scheduleBackgroundSync() {
+    if (_bgSyncTimer)
+        clearTimeout(_bgSyncTimer);
+    _bgSyncTimer = setTimeout(async () => {
+        _bgSyncTimer = null;
+        if (S.processingMods.size === 0) {
+            await refreshMods();
+        }
+    }, 2500);
+}
 export function updateBadge() {
     const badge = document.getElementById('badge-library');
     if (!badge)
@@ -145,29 +159,35 @@ export async function renderModList(force = false) {
     Array.from(viewport.children).forEach(node => {
         existingMap.set(node.dataset.id, node);
     });
+    let _anyNewCard = false;
     for (let i = 0; i < visibleBatch.length; i++) {
         const mod = visibleBatch[i];
         let card = existingMap.get(mod.id);
         const isProcessing = S.processingMods.has(mod.id);
-        // Never recreate a card that's mid-toggle — would overwrite the optimistic visual state
-        // and kill any in-progress animation. Only recreate when forced AND not processing.
-        const shouldRecreate = !card || (force && !isProcessing && mod.tags && mod.tags.length > 0);
-        if (shouldRecreate) {
-            if (card)
-                card.remove();
+        // Only CREATE a card if it doesn't exist yet.
+        // Never destroy + recreate cards that are in the viewport — updateCardState handles
+        // every state change in-place, so recreation would just cause unnecessary DOM churn.
+        if (!card) {
             card = createModCard(mod);
+            _anyNewCard = true;
             if (S.selectedModId === mod.id) {
                 setTimeout(() => import('./mods-details.js').then(m => m.renderModDetail(mod.id)), 0);
             }
         }
-        else {
+        else if (!isProcessing) {
+            // Safe to update in-place (not mid-toggle)
             updateCardState(card, mod);
         }
         if (viewport.children[i] !== card) {
             viewport.insertBefore(card, viewport.children[i] || null);
         }
     }
-    applyTranslations(viewport);
+    // applyTranslations is expensive (many DOM queries). Only run it when:
+    //   • force=true (content truly changed) or
+    //   • new cards were just created (need their data-i18n values resolved)
+    if (force || _anyNewCard) {
+        applyTranslations(viewport);
+    }
 }
 export function createModCard(mod) {
     const card = document.createElement('div');
@@ -213,7 +233,7 @@ export function createModCard(mod) {
         S.processingMods.add(mod.id);
         // Snapshot the PREVIOUS state so the cancel button can revert it.
         // At this point toggle.checked is already the NEW desired state.
-        registerSingleModOp(mod.id, !toggle.checked);
+        registerSingleModOp(mod.id, !toggle.checked, mod.name);
         // 360° spin animation on the toggle when activating
         if (toggle.checked) {
             const toggleLabel = card.querySelector('.mod-toggle');
@@ -232,7 +252,7 @@ export function createModCard(mod) {
                     const parts = warningMsg.split('|');
                     toast(t('storage.alertWarningMod', { label: parts[1], free: parts[2], limit: parts[3] }), 'warning', 5000);
                 }
-                else {
+                else if (!isCancelledOp(mod.id)) {
                     toast(t('mod.activated', { name: mod.name }), 'success');
                     try {
                         if (localStorage.getItem('bmm_sysNotif') === 'true')
@@ -267,13 +287,15 @@ export function createModCard(mod) {
                     }
                 }
                 await invoke('disable_mod', { modId: mod.id });
-                toast(t('mod.deactivated', { name: mod.name }), 'info');
-                try {
-                    if (localStorage.getItem('bmm_sysNotif') === 'true')
-                        sendOsNotification('Better Mod Manager', t('mod.deactivated', { name: mod.name }));
+                if (!isCancelledOp(mod.id)) {
+                    toast(t('mod.deactivated', { name: mod.name }), 'info');
+                    try {
+                        if (localStorage.getItem('bmm_sysNotif') === 'true')
+                            sendOsNotification('Better Mod Manager', t('mod.deactivated', { name: mod.name }));
+                    }
+                    catch (e) { }
+                    dispatchBmmAction(BMM_ACTIONS.MOD_DEACTIVATED, { modId: mod.id, name: mod.name });
                 }
-                catch (e) { }
-                dispatchBmmAction(BMM_ACTIONS.MOD_DEACTIVATED, { modId: mod.id, name: mod.name });
             }
         }
         catch (err) {
@@ -314,18 +336,44 @@ export function createModCard(mod) {
             }
         }
         finally {
-            // Unregister from cancel-ops registry immediately
-            unregisterSingleModOp(mod.id);
-            // Start fade-out animation, then clean up state — does NOT block the event handler
+            // Start fade-out animation (300ms) — does NOT block the event handler
             setModLoading(mod.id, false);
             const _mid = mod.id;
+            const _newEnabled = toggle.checked;
+            const _modName = mod.name;
+            // 330ms > 300ms overlay fade — ensures no visual conflict between
+            // loading-overlay removal and the state-class transition on the card.
             setTimeout(() => {
                 S.processingMods.delete(_mid);
-                // Non-blocking refresh once animation is done
-                refreshMods().then(() => {
-                    S.processingMods.forEach((pid) => setModLoading(pid, true));
-                });
-            }, 250);
+                // ── Honour a cancel that arrived while this toggle was in-flight ────
+                const opResult = consumeAndClearOp(_mid);
+                const wasCancelled = opResult?.cancelled === true;
+                const effectiveEnabled = wasCancelled ? opResult.prevEnabled : _newEnabled;
+                if (wasCancelled) {
+                    // _newEnabled=true → was enabling → "Activation annulée"
+                    // _newEnabled=false → was disabling → "Désactivation annulée"
+                    const actionKey = _newEnabled ? 'lib.cancelToastEnable' : 'lib.cancelToastDisable';
+                    toast(`${_modName} : ${t(actionKey)}`, 'info');
+                }
+                // Sync the toggle checkbox to the effective final state
+                if (toggle.checked !== effectiveEnabled)
+                    toggle.checked = effectiveEnabled;
+                // ── Optimistic UI update (no backend call, no full re-render) ──────
+                const modRef = S.allMods.find((m) => m.id === _mid);
+                if (modRef)
+                    modRef.enabled = effectiveEnabled;
+                if (modRef && card.isConnected)
+                    updateCardState(card, modRef);
+                updateBadge();
+                updateSubtitle();
+                updateToggleAllBtn();
+                // Invalidate cached filter so next virtual-scroll tick re-sorts/filters
+                ghostFilteredMods = [];
+                // Schedule a lazy background sync for eventual consistency
+                _scheduleBackgroundSync();
+                // Re-apply loading overlays for other mods still processing
+                S.processingMods.forEach((pid) => setModLoading(pid, true));
+            }, 330);
             updateDiscordStatus();
         }
     });

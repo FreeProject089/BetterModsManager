@@ -54,6 +54,7 @@ export async function initMods() {
   document.getElementById('btn-close-detail')?.addEventListener('click', closeModDetail);
   document.getElementById('btn-cancel-mod-ops')?.addEventListener('click', requestCancelModOps);
 
+
   // ── Sticky header toggle ──────────────────────────────────────────────────
   _initStickyToggle();
 

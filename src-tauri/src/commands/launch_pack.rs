@@ -122,6 +122,107 @@ pub fn create_launch_pack(
 }
 
 #[tauri::command]
+pub fn update_launch_pack(
+    state: State<AppState>,
+    id: String,
+    name: String,
+    exe_paths: Vec<String>,
+    icon_source_path: Option<String>,
+) -> Result<LaunchPack, AppError> {
+    let app_data_dir = state.data_path.parent().ok_or_else(|| AppError::Internal("Invalid data path".to_string()))?;
+    let pack_dir = app_data_dir.join("LaunchPacks").join(&id);
+
+    // Verify the pack exists in state and capture current icon path
+    let existing_icon_path = {
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        let pack = data.launch_packs.iter().find(|p| p.id == id)
+            .ok_or_else(|| AppError::NotFound("Launch pack not found".to_string()))?;
+        pack.icon_path.clone()
+    };
+
+    if !pack_dir.exists() {
+        std::fs::create_dir_all(&pack_dir)
+            .map_err(|e| AppError::Internal(format!("Failed to create pack directory: {}", e)))?;
+    }
+
+    // 1. Icon handling — replace if a new source provided, keep existing otherwise
+    let icon_path = if let Some(src) = icon_source_path {
+        let src_path = Path::new(&src);
+        if src_path.exists() {
+            let target_ico = pack_dir.join("icon.ico");
+            let img = image::open(src_path)
+                .map_err(|e| AppError::Internal(format!("Failed to open icon image: {}", e)))?;
+            let resized = img.resize(256, 256, image::imageops::FilterType::Lanczos3);
+            resized.save_with_format(&target_ico, image::ImageFormat::Ico)
+                .map_err(|e| AppError::Internal(format!("Failed to save .ico: {}", e)))?;
+            Some(target_ico)
+        } else {
+            existing_icon_path
+        }
+    } else {
+        existing_icon_path
+    };
+
+    // 2. Regenerate the .vbs launcher
+    let vbs_path = pack_dir.join("launcher.vbs");
+    let mut vbs_content = String::from("Set WshShell = CreateObject(\"WScript.Shell\")\n");
+    for exe in &exe_paths {
+        let path = Path::new(exe);
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        let cmd = match ext.as_str() {
+            "ps1" => format!("powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{}\"", exe),
+            _ => format!("cmd /c start \"\" \"{}\"", exe),
+        };
+        let escaped_cmd = cmd.replace("\"", "\"\"");
+        vbs_content.push_str(&format!("WshShell.Run \"{}\", 0, False\n", escaped_cmd));
+    }
+    vbs_content.push_str("Set WshShell = Nothing\n");
+    std::fs::write(&vbs_path, vbs_content)
+        .map_err(|e| AppError::Internal(format!("Failed to write .vbs launcher: {}", e)))?;
+
+    // 3. Regenerate the .lnk shortcut (delete old ones first, since name may have changed)
+    if let Ok(entries) = std::fs::read_dir(&pack_dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().and_then(|e| e.to_str()) == Some("lnk") {
+                let _ = std::fs::remove_file(&p);
+            }
+        }
+    }
+    let lnk_path = pack_dir.join(format!("{}.lnk", name));
+    let powershell_script = format!(
+        "$WshShell = New-Object -ComObject WScript.Shell; \
+         $Shortcut = $WshShell.CreateShortcut('{}'); \
+         $Shortcut.TargetPath = 'wscript.exe'; \
+         $Shortcut.Arguments = '\"{}\"'; \
+         $Shortcut.WorkingDirectory = '{}'; \
+         $Shortcut.IconLocation = '{}'; \
+         $Shortcut.Save()",
+        lnk_path.to_string_lossy().replace("'", "''"),
+        vbs_path.to_string_lossy().replace("'", "''"),
+        pack_dir.to_string_lossy().replace("'", "''"),
+        icon_path.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(String::new).replace("'", "''")
+    );
+    let _ = Command::new("powershell")
+        .args(&["-NoProfile", "-Command", &powershell_script])
+        .output();
+
+    // 4. Update state entry (preserve created_at, replace the rest)
+    let updated_pack = {
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        let pack = data.launch_packs.iter_mut().find(|p| p.id == id)
+            .ok_or_else(|| AppError::NotFound("Launch pack not found".to_string()))?;
+        pack.name = name;
+        pack.executable_paths = exe_paths.into_iter().map(PathBuf::from).collect();
+        pack.icon_path = icon_path;
+        pack.clone()
+    };
+    state.save()?;
+
+    Ok(updated_pack)
+}
+
+#[tauri::command]
 pub fn run_launch_pack(state: State<AppState>, id: String) -> Result<(), AppError> {
     let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     let pack = data.launch_packs.iter().find(|p| p.id == id)

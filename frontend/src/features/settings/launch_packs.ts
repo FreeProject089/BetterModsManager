@@ -8,6 +8,10 @@ import { escHtml } from '../../core/utils.js';
 
 let currentSelectedExes: string[] = [];
 let currentSelectedIcon: string | null = null;
+/** When set, the modal is in EDIT mode for this pack ID. null = CREATE mode. */
+let editingPackId: string | null = null;
+/** Existing icon path of the pack being edited (for the preview when no new icon picked). */
+let editingExistingIconPath: string | null = null;
 
 export async function initLaunchPackSettings() {
     const btnCreate = document.getElementById('btn-create-launchpack');
@@ -68,14 +72,26 @@ export async function initLaunchPackSettings() {
             btnConfirm.innerHTML = `<span>${t('common.loading') || '...'}</span>`;
 
             try {
-                await invoke('create_launch_pack', {
-                    name,
-                    exePaths: currentSelectedExes,
-                    iconSourcePath: currentSelectedIcon
-                });
+                if (editingPackId) {
+                    await invoke('update_launch_pack', {
+                        id: editingPackId,
+                        name,
+                        exePaths: currentSelectedExes,
+                        iconSourcePath: currentSelectedIcon
+                    });
+                    toast(t('settings.launchPackUpdated') || t('settings.launchPackAdded'), 'success');
+                } else {
+                    await invoke('create_launch_pack', {
+                        name,
+                        exePaths: currentSelectedExes,
+                        iconSourcePath: currentSelectedIcon
+                    });
+                    toast(t('settings.launchPackAdded'), 'success');
+                }
 
-                toast(t('settings.launchPackAdded'), 'success');
                 document.getElementById('modal-launchpack')?.classList.remove('open');
+                editingPackId = null;
+                editingExistingIconPath = null;
                 renderLaunchPacks();
             } catch (err) {
                 toast(t('settings.launchPackError', { err: String(err) }), 'error');
@@ -120,8 +136,9 @@ export async function renderLaunchPacks() {
                 </div>
                 <div style="display:flex; gap:8px;">
                     <button class="btn btn-primary btn-xs btn-run-lp" data-id="${pack.id}">${t('settings.launchPackRun')}</button>
-                    <button class="btn btn-ghost btn-xs btn-open-lp" data-id="${pack.id}"}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
-                    <button class="btn btn-ghost btn-xs btn-del-lp" data-id="${pack.id}" style="color:var(--error);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                    <button class="btn btn-ghost btn-xs btn-edit-lp" data-id="${pack.id}" title="${t('common.edit') || 'Edit'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                    <button class="btn btn-ghost btn-xs btn-open-lp" data-id="${pack.id}" title="${t('settings.launchPackOpenFolder') || 'Open folder'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
+                    <button class="btn btn-ghost btn-xs btn-del-lp" data-id="${pack.id}" style="color:var(--error);" title="${t('common.delete') || 'Delete'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
                 </div>
             `;
 
@@ -137,6 +154,14 @@ export async function renderLaunchPacks() {
                 } catch (err) {
                     toast(t('settings.launchPackError', { err: String(err) }), 'error');
                 }
+            });
+        });
+
+        container.querySelectorAll('.btn-edit-lp').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = (btn as HTMLElement).dataset.id;
+                const pack = packs.find(p => p.id === id);
+                if (pack) openEditLaunchPackModal(pack);
             });
         });
 
@@ -195,10 +220,13 @@ function openLaunchPackModal() {
     const modal = document.getElementById('modal-launchpack');
     if (!modal) return;
 
-    // Reset form
+    // CREATE mode
+    editingPackId = null;
+    editingExistingIconPath = null;
+
     const nameInput = document.getElementById('lp-input-name') as HTMLInputElement;
     if (nameInput) nameInput.value = '';
-    
+
     currentSelectedExes = [];
     currentSelectedIcon = null;
 
@@ -207,8 +235,46 @@ function openLaunchPackModal() {
         preview.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
     }
 
+    _setLaunchPackModalTitle(false);
     renderSelectedExes();
     modal.classList.add('open');
+}
+
+function openEditLaunchPackModal(pack: any) {
+    const modal = document.getElementById('modal-launchpack');
+    if (!modal) return;
+
+    editingPackId = pack.id;
+    editingExistingIconPath = pack.icon_path || null;
+
+    const nameInput = document.getElementById('lp-input-name') as HTMLInputElement;
+    if (nameInput) nameInput.value = pack.name || '';
+
+    currentSelectedExes = (pack.executable_paths || []).map((p: any) => typeof p === 'string' ? p : String(p));
+    currentSelectedIcon = null; // null = keep existing on backend side
+
+    const preview = document.getElementById('lp-icon-preview');
+    if (preview) {
+        if (editingExistingIconPath) {
+            const assetUrl = (window as any).__TAURI__?.tauri?.convertFileSrc(editingExistingIconPath) || `asset.localhost/${editingExistingIconPath}`;
+            preview.innerHTML = `<img src="${assetUrl}" style="width:100%;height:100%;object-fit:cover;" />`;
+        } else {
+            preview.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+        }
+    }
+
+    _setLaunchPackModalTitle(true);
+    renderSelectedExes();
+    modal.classList.add('open');
+}
+
+function _setLaunchPackModalTitle(isEdit: boolean) {
+    const titleEl = document.querySelector('#modal-launchpack .modal-title') as HTMLElement | null;
+    if (titleEl) {
+        const key = isEdit ? 'settings.launchPackEditTitle' : 'settings.launchPackCreateTitle';
+        const fallback = isEdit ? 'Edit Launch Pack' : 'Create Launch Pack';
+        titleEl.textContent = t(key) || fallback;
+    }
 }
 
 function renderSelectedExes() {

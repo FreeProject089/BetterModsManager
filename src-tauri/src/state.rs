@@ -27,6 +27,11 @@ pub struct AppSettings {
     pub last_seen_crash: Option<String>,
     #[serde(default)]
     pub auto_io_calibration: bool,
+    /// Smart I/O: when true (default), mod file copies use a bounded
+    /// thread pool + tiny periodic yields so the UI stays fluid.
+    /// When false, copies saturate every CPU core for max speed.
+    #[serde(default = "default_true")]
+    pub smart_io_enabled: bool,
     #[serde(default)]
     pub storage_alert_enabled: bool,
     #[serde(default = "default_storage_warning")]
@@ -74,6 +79,7 @@ impl Default for AppSettings {
             onboarding_shown: false,
             last_seen_crash: None,
             auto_io_calibration: false,
+            smart_io_enabled: true,
             storage_alert_enabled: false,
             storage_warning_space_pct: default_storage_warning(),
             storage_critical_space_pct: default_storage_critical(),
