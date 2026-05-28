@@ -152,11 +152,6 @@ Les gestionnaires classiques utilisent des liens symboliques ou des liens durs �
 | **IPC** | Commandes et événements Tauri | Communication type-safe et asynchrone Rust ↔ TS |
 | **Intégration Windows** | winreg 0.52 | Persistance registre pour le scellage du Creator ID |
 
-**Métriques de performance (approximatif):**
-- RAM au repos : ~30 Mo
-- RAM actif : < 130 Mo
-- Fréquence d'images UI : 60 FPS
-- Démarrage à froid : < 1,5 seconde
 
 ---
 
