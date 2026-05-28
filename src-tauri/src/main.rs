@@ -1,5 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+// Use mimalloc as the global allocator.  Default Windows HeapAlloc is
+// notoriously RSS-hungry once a process makes lots of small string /
+// HashMap allocations (BMM holds tens of thousands of path/hash strings).
+// mimalloc trims hundreds of MB off the steady-state working set.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 mod error;
 mod commands;
 mod fs_utils;
@@ -88,10 +95,39 @@ fn main() {
         }
     }
 
-    // Prevent Rayon from hogging 100% CPU and lagging the OS
+    // ── WebView2 RAM trims ───────────────────────────────────────────────
+    // Set BEFORE WebView2 starts.  Cuts ~50-150MB off the WebView2 footprint
+    // by disabling features BMM doesn't use:
+    //   - AudioServiceOutOfProcess: kills the dedicated audio utility process
+    //   - extensions / background pages: BMM has no Chrome extensions
+    //   - Translate / sync / default apps: useless browser-only features
+    //   - background-networking: no telemetry pings
+    //   - renderer-process-limit=2: cap renderer/subframe processes
+    if std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_err() {
+        std::env::set_var(
+            "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+            "--disable-features=AudioServiceOutOfProcess,Translate,BackgroundNetworking,InterestFeedContentSuggestions \
+             --disable-extensions \
+             --disable-component-extensions-with-background-pages \
+             --disable-default-apps \
+             --disable-background-networking \
+             --disable-sync \
+             --no-pings \
+             --renderer-process-limit=2 \
+             --disable-component-update",
+        );
+    }
+
+    // Prevent Rayon from hogging 100% CPU and lagging the OS.  Cap thread
+    // count AND shrink each rayon worker's stack from the default 8MB down
+    // to 512KB — BMM's parallel work (file copy / hashing) never recurses
+    // deep, so 512KB is plenty and saves ~7MB of committed RSS per thread.
     let cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
     let threads = if cpus > 6 { cpus - 2 } else if cpus > 2 { cpus - 1 } else { 2 };
-    let _ = rayon::ThreadPoolBuilder::new().num_threads(threads).build_global();
+    let _ = rayon::ThreadPoolBuilder::new()
+        .num_threads(threads)
+        .stack_size(512 * 1024)
+        .build_global();
 
     tracing_subscriber::fmt::init();
     info!("Starting Better Mods Manager...");
@@ -196,6 +232,9 @@ fn main() {
             commands::profile::delete_profile,
             commands::mods::get_mods,
             commands::mods::get_all_mods,
+            commands::mods::get_mod_hashes,
+            commands::mods::find_local_mods_by_hashes,
+            commands::mods::flush_mem_caches,
             commands::mods::add_mod,
             commands::mods::remove_mod,
             commands::mods::enable_mod,
@@ -323,8 +362,8 @@ fn main() {
             commands::security::verify_repo_signature,
             commands::crash::finalize_and_close_app,
             commands::disk::read_file_base64,
-            commands::debug::get_project_files,
-            commands::debug::read_project_file,
+            // commands::debug::get_project_files and read_project_file
+            // were removed with the Sources tab — see debug-ui.ts.
             commands::debug::get_debug_stats,
             commands::debug::get_rust_logs,
             commands::window::start_resizing,

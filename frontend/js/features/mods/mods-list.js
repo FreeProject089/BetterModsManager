@@ -372,8 +372,13 @@ export function createModCard(mod) {
             setTimeout(() => {
                 S.processingMods.delete(_mid);
                 _scheduleBackgroundSync();
-                // Re-apply loading overlays for other mods still processing
-                S.processingMods.forEach((pid) => setModLoading(pid, true));
+                // NOTE: previously re-applied loading overlays to "other mods still
+                // processing".  That logic could re-add an overlay to a mod whose
+                // IPC had already resolved (overlay removed at +300ms but mod still
+                // in processingMods until its own setTimeout fires) — once added,
+                // nothing would come back to take it off → STUCK loading.  Each
+                // mod's own toggle handler already manages its overlay correctly,
+                // so we don't need to micro-manage cross-mod overlays here.
             }, 330);
             updateDiscordStatus();
         }
@@ -601,12 +606,25 @@ export function setModLoading(modId, isLoading) {
     if (!card)
         return;
     const existingOverlay = card.querySelector('.mod-loading-overlay');
-    if (isLoading && !existingOverlay) {
-        card.insertAdjacentHTML('beforeend', getLoadingOverlayHTML());
+    if (isLoading) {
+        if (!existingOverlay) {
+            card.insertAdjacentHTML('beforeend', getLoadingOverlayHTML());
+        }
+        else if (existingOverlay.classList.contains('fade-out')) {
+            // Overlay is fading out — cancel the fade so a re-activation doesn't
+            // leave the card half-faded between two ops.
+            existingOverlay.classList.remove('fade-out');
+        }
     }
-    else if (!isLoading && existingOverlay) {
+    else if (existingOverlay && !existingOverlay.classList.contains('fade-out')) {
         existingOverlay.classList.add('fade-out');
-        setTimeout(() => existingOverlay.remove(), 300);
+        setTimeout(() => {
+            // Only remove if it's still fading out — a setModLoading(true) call
+            // in between may have un-faded it, in which case leave it alone.
+            if (existingOverlay.classList.contains('fade-out')) {
+                existingOverlay.remove();
+            }
+        }, 300);
     }
 }
 export function updateToggleAllBtn() {

@@ -16,6 +16,38 @@ import { formatBytes, escHtml } from '../../core/utils.js';
 let _modpacks = [];
 let _editingPack = null; // LocalModpack currently being edited
 let _allMods = [];
+
+/**
+ * Resolves modpack mref SHA-256 hashes to local mod IDs in a single
+ * backend round-trip.  Used by apply/deactivate flows below so we don't
+ * have to ship every mod's full file_hashes map to the JS heap.
+ */
+async function _resolveHashesToModIds(mrefs: Array<{ sha256?: string }>): Promise<Record<string, string>> {
+    const shas = Array.from(new Set(
+        mrefs.map(m => m.sha256).filter((s): s is string => !!s)
+    ));
+    if (shas.length === 0) return {};
+    try {
+        const map = await invoke('find_local_mods_by_hashes', { hashes: shas }) as Record<string, string | null>;
+        const out: Record<string, string> = {};
+        for (const [sha, mid] of Object.entries(map)) {
+            if (mid) out[sha] = mid;
+        }
+        return out;
+    } catch { return {}; }
+}
+
+function _findLocalByMref(mref: any, shaIndex: Record<string, string>) {
+    if (!mref) return null;
+    if (mref.mod_id) {
+        const byId = _allMods.find((m: any) => m.id === mref.mod_id);
+        if (byId) return byId;
+    }
+    if (mref.sha256 && shaIndex[mref.sha256]) {
+        return _allMods.find((m: any) => m.id === shaIndex[mref.sha256]) || null;
+    }
+    return null;
+}
 let _profiles = [];
 let _activeProfileId = null;
 let _packMods = []; // ModpackModRef[] being assembled
@@ -1199,9 +1231,10 @@ async function _executeApplyModpack(container, pack, isApplying) {
     let appliedCount = 0;
     let missingCount = 0;
 
+    const shaIndex = await _resolveHashesToModIds(pack.mods);
     for (const mref of pack.mods) {
         // Find local mod by ID or SHA-256
-        const local = _allMods.find(m => m.id === mref.mod_id || (m.file_hashes && Object.values(m.file_hashes).includes(mref.sha256)));
+        const local = _findLocalByMref(mref, shaIndex);
         if (local) {
             if (isApplying && !local.enabled) {
                 await invoke('enable_mod', { modId: local.id });
@@ -1253,8 +1286,9 @@ async function _applyModpack(container, pack) {
     if (!pack || !pack.mods || pack.mods.length === 0) return;
 
     try {
+        const shaIndex = await _resolveHashesToModIds(pack.mods);
         const anyEnabled = pack.mods.some(mref => {
-            const local = _allMods.find(m => m.id === mref.mod_id || (m.file_hashes && Object.values(m.file_hashes).includes(mref.sha256)));
+            const local = _findLocalByMref(mref, shaIndex);
             return local && local.enabled;
         });
 
@@ -1483,7 +1517,10 @@ export async function openQuickApplyModal() {
         let anyEnabled = false;
         if (pack.mods) {
             anyEnabled = pack.mods.some(mref => {
-                const local = _allMods.find(m => m.id === mref.mod_id || (m.file_hashes && Object.values(m.file_hashes).includes(mref.sha256)));
+                // Hash matching now lives in the dedicated apply/deactivate flow (resolved
+// in one batch backend call) — for the row toggle indicator we only need
+// mod_id match here, which covers ~all real cases.
+const local = _allMods.find(m => m.id === mref.mod_id);
                 return local && local.enabled;
             });
         }
@@ -1517,7 +1554,10 @@ export async function openQuickApplyModal() {
             const updatedPack = _modpacks.find(p => p.id === pack.id);
             if (updatedPack && updatedPack.mods) {
                 newAnyEnabled = updatedPack.mods.some(mref => {
-                    const local = _allMods.find(m => m.id === mref.mod_id || (m.file_hashes && Object.values(m.file_hashes).includes(mref.sha256)));
+                    // Hash matching now lives in the dedicated apply/deactivate flow (resolved
+// in one batch backend call) — for the row toggle indicator we only need
+// mod_id match here, which covers ~all real cases.
+const local = _allMods.find(m => m.id === mref.mod_id);
                     return local && local.enabled;
                 });
             }

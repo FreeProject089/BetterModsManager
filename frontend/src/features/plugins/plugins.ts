@@ -3581,20 +3581,52 @@ function addActionRow() {
     const NO_INPUT_TYPES = new Set(['else_block','end_block','cancel_sync','cancel_gen','stop_http_host']);
     const EXTRA_PH: Record<string,string> = {
         wait:                t('plugins.waitDuration'),
-        close_process:       t('plugins.processName'),
-        open_url:            t('plugins.urlToOpen'),
-        show_message:        t('plugins.messageText'),
-        launch_game:         t('plugins.gameExePath'),
-        log:                 t('plugins.logMessage'),
-        comment:             t('plugins.commentText'),
-        set_variable:        t('plugins.varNameValue'),
-        if_file_exists:      t('plugins.filePathCheck'),
-        if_var_eq:           'VARNAME=value',
-        raw_code:            t('plugins.rawCodeHint'),
-        sync_repo:           'url=https://… mods_dir=C:/Mods (key=value pairs)',
-        gen_repo:            'output_dir=C:/Export author=MonPseudo lightweight=false zip=false',
+        close_process:       'notepad.exe',
+        open_url:            'https://example.com',
+        show_message:        'Hello world',
+        launch_game:         'C:/Games/MyGame/game.exe',
+        log:                 'Step 1 done',
+        comment:             'This part enables the mods',
+        set_variable:        'MY_VAR=hello',
+        if_file_exists:      'C:/path/to/file.txt',
+        if_var_eq:           'MY_VAR=hello',
+        raw_code:            'echo Custom code here',
+        sync_repo:           'url=https://repo.example.com mods_dir=C:/Mods',
+        gen_repo:            'output_dir=C:/Export author=Me lightweight=false zip=true',
         http_host:           'serve_dir=C:/Export port=8080',
-        update_modpack:      'modpack_id=uuid name=NewName',
+        update_modpack:      'modpack_id=ABCD-... name=MyPack dependency_mode=none',
+    };
+
+    // Per-action help: shown as a small line under the input so the user
+    // immediately understands what keys/values are expected.
+    const EXTRA_HELP: Record<string,string> = {
+        wait:                'Number of seconds to wait (e.g. 3).',
+        close_process:       'Executable name (e.g. notepad.exe).',
+        open_url:            'Full URL to open in the default browser.',
+        show_message:        'Text to display in a popup or console.',
+        launch_game:         'Full path to the game .exe to launch.',
+        log:                 'Free-form message written to the script log.',
+        comment:             'A comment line — does not execute.',
+        set_variable:        'Format: NAME=value (no spaces around =).',
+        if_file_exists:      'Path to check; subsequent actions run only if it exists.',
+        if_var_eq:           'Format: NAME=value (compares variable to value).',
+        raw_code:            'Native code in the target language, inserted verbatim.',
+        sync_repo:           'Keys: url (repo URL), mods_dir (local target). Space-separated key=value pairs.',
+        gen_repo:            'Keys: output_dir, author, lightweight (true/false), zip (true/false).',
+        http_host:           'Keys: serve_dir (folder to host), port (default 8080).',
+        update_modpack:      'Keys: modpack_id (required), name, dependency_mode (none/include/exclude).',
+        cancel_sync:         'No parameters needed — cancels an active repo sync.',
+        cancel_gen:          'No parameters needed — cancels an active repo generation.',
+        stop_http_host:      'No parameters needed — stops the running HTTP server.',
+        enable_mod:          'Pick the mod to enable from the dropdown.',
+        disable_mod:         'Pick the mod to disable from the dropdown.',
+        activate_profile:    'Pick the profile to switch to.',
+        enable_modpack:      'Pick the profile whose modpack should be enabled.',
+        disable_modpack:     'Pick the profile whose modpack should be disabled.',
+        apply_plugin:        'Pick the installed plugin to run.',
+        compare_plugin:      'Pick the installed plugin to compare against current mods.',
+        else_block:          'Marks the else branch of the previous if_*. No input.',
+        end_block:           'Closes the previous if_* / else block. No input.',
     };
 
     const row = document.createElement('div');
@@ -3651,13 +3683,26 @@ function addActionRow() {
                 <input type="text" class="input input-sm plug-action-extra-input" style="width:100%;" placeholder="${t('plugins.waitDuration')}">
             </div>
             <button class="btn btn-xs btn-danger plug-remove-action">${IC.x}</button>
-        </div>`;
+        </div>
+        <div class="plug-action-help" style="font-size:11px;color:var(--text-muted);padding:2px 6px 4px 30px;line-height:1.4;display:none;"></div>`;
 
     const typeSelect  = row.querySelector('.plug-action-type') as HTMLSelectElement;
     const targetWrap  = row.querySelector('.plug-action-target-wrap') as HTMLElement;
     const targetSelect = row.querySelector('.plug-action-target') as HTMLSelectElement;
     const extraWrap   = row.querySelector('.plug-action-extra-wrap') as HTMLElement;
     const extraInput  = row.querySelector('.plug-action-extra-input') as HTMLInputElement;
+
+    const helpEl = row.querySelector('.plug-action-help') as HTMLElement;
+
+    const refreshHelp = (type: string) => {
+        const msg = EXTRA_HELP[type];
+        if (msg) {
+            helpEl.textContent = msg;
+            helpEl.style.display = '';
+        } else {
+            helpEl.style.display = 'none';
+        }
+    };
 
     typeSelect.addEventListener('change', () => {
         const type = typeSelect.value;
@@ -3678,7 +3723,11 @@ function addActionRow() {
                 targetSelect.innerHTML = plugOpts || `<option value="">${t('plugins.noPlugins')}</option>`;
             }
         }
+        refreshHelp(type);
     });
+
+    // Initial help (first row default = enable_mod)
+    refreshHelp(typeSelect.value);
 
     row.querySelector('.plug-remove-action')?.addEventListener('click', () => row.remove());
     row.querySelector('.plug-row-up')?.addEventListener('click', () => {

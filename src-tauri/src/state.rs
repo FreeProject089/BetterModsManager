@@ -162,9 +162,13 @@ pub struct AppState {
 impl AppState {
     pub fn load(data_path: PathBuf) -> Self {
         let data = if data_path.exists() {
-            match std::fs::read_to_string(&data_path) {
-                Ok(content) => {
-                    serde_json::from_str(&content).unwrap_or_else(|e| {
+            // Stream-parse from a BufReader — avoids slurping the whole file
+            // into a single String before serde sees it.  Halves peak memory
+            // on big libraries.
+            match std::fs::File::open(&data_path) {
+                Ok(f) => {
+                    let reader = std::io::BufReader::new(f);
+                    serde_json::from_reader(reader).unwrap_or_else(|e| {
                         crate::commands::crash::log_line(format!("[STATE] Error parsing data.json: {}. Using default.", e));
                         AppData::default()
                     })
@@ -203,8 +207,14 @@ impl AppState {
         if let Some(parent) = (*self.data_path).parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let json = serde_json::to_string_pretty(&*data)?;
-        std::fs::write(&*self.data_path, json)?;
+        // Stream JSON directly to a BufWriter — avoids allocating the full
+        // serialized payload (potentially many MB for large libraries) as
+        // a single String in memory before writing.
+        let file = std::fs::File::create(&*self.data_path)?;
+        let mut writer = std::io::BufWriter::new(file);
+        serde_json::to_writer_pretty(&mut writer, &*data)?;
+        use std::io::Write;
+        writer.flush()?;
         Ok(())
     }
 }

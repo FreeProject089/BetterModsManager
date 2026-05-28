@@ -193,6 +193,43 @@ function initNavigation() {
                 if (viewId !== 'library') {
                     appState.flushMemory();
                 }
+
+                // MEMORY OPTIMIZATION: pause/release YouTube iframes when
+                // leaving the docs view, then re-mount them on re-entry.
+                // Removing the <iframe> outright (previous behaviour) broke
+                // the docs page because nothing came back to repaint the
+                // players.  Now we just blank the src, which releases the
+                // WebView2 subframe process while leaving the DOM intact —
+                // and on re-entry we ask the docs UI to rehydrate the players.
+                if (viewId !== 'docs') {
+                    document.querySelectorAll('#view-docs iframe').forEach((f) => {
+                        const iframe = f as HTMLIFrameElement;
+                        // Stash the real src so we can restore it on return
+                        if (iframe.src && iframe.src !== 'about:blank') {
+                            iframe.dataset.bmmPausedSrc = iframe.src;
+                            try { iframe.src = 'about:blank'; } catch {}
+                        }
+                    });
+                    // Also pause any <video> playing to free decoder resources
+                    document.querySelectorAll('#view-docs video').forEach((v) => {
+                        try { (v as HTMLVideoElement).pause(); } catch {}
+                    });
+                } else {
+                    // Entering docs: restore stashed iframes; if the players
+                    // were never set up (first navigation), trigger setup.
+                    let anyRestored = false;
+                    document.querySelectorAll('#view-docs iframe').forEach((f) => {
+                        const iframe = f as HTMLIFrameElement;
+                        if (iframe.dataset.bmmPausedSrc) {
+                            try { iframe.src = iframe.dataset.bmmPausedSrc; } catch {}
+                            delete iframe.dataset.bmmPausedSrc;
+                            anyRestored = true;
+                        }
+                    });
+                    if (!anyRestored) {
+                        try { (window as any).__bmmSetupDocsVideos?.(); } catch {}
+                    }
+                }
             }, 15);
         });
     });

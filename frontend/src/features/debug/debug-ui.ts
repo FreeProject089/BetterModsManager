@@ -59,7 +59,6 @@ class DebugUI {
         this.createContextMenu();
         this.attachListeners();
         this.translateUI();
-        this.loadSources();
         this.startUpdateLoop();
         console.info('[BMM-Debug] UI Initialized. Toggle with Ctrl+Alt+D');
     }
@@ -139,7 +138,6 @@ class DebugUI {
                 <div class="debug-tab" data-tab="timeline" data-i18n="dev.tab.timeline">Timeline</div>
                 <div class="debug-tab" data-tab="debugger" data-i18n="dev.tab.debugger">Debugger</div>
                 <div class="debug-tab" data-tab="inspect-view" data-i18n="dev.tab.inspect">Inspect</div>
-                <div class="debug-tab" data-tab="sources" data-i18n="dev.tab.sources">Sources</div>
                 <div class="debug-tab" data-tab="state" data-i18n="dev.tab.state">State</div>
                 <div class="debug-tab" data-tab="playground" data-i18n="dev.tab.playground">Playground</div>
             </div>
@@ -342,24 +340,6 @@ class DebugUI {
                     </div>
                     <div id="inspect-content" style="padding:16px; border-bottom:1px solid var(--debug-border); overflow-y:auto; height:100%">
                         <div style="color:var(--text-muted); font-size:11px" data-i18n="dev.msg.selectElement">Select an element to inspect...</div>
-                    </div>
-                </div>
-                <div class="debug-pane" id="pane-sources">
-                    <div class="sources-layout">
-                        <div class="sources-tree-container" style="display:flex; flex-direction:column; border-right:1px solid var(--debug-border); background:rgba(0,0,0,0.1)">
-                            <div style="padding:8px; border-bottom:1px solid var(--debug-border); display:flex; justify-content:space-between; align-items:center">
-                                <span style="font-size:10px; font-weight:700; color:var(--text-muted)" data-i18n="dev.label.project">PROJECT</span>
-                                <button class="debug-btn" id="sources-refresh" data-i18n-title="dev.btn.refreshFiles" onmouseenter="window.showTaskyHelp('dev.tool.refreshFilesTip', 'help')" onmouseleave="window.hideTaskyHelp()">
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                                </button>
-                            </div>
-                            <div class="sources-tree" style="flex:1; overflow-y:auto; padding:8px 0"></div>
-                        </div>
-                        <div class="sources-editor">
-                            <div id="sources-code-container" style="height:100%; position:relative">
-                                <pre id="sources-code" style="margin:0; padding:16px; font-family:'JetBrains Mono'; font-size:11px; color:var(--text-muted)" data-i18n="dev.msg.selectSourceFile">Select a file to view source...</pre>
-                            </div>
-                        </div>
                     </div>
                 </div>
                 <div class="debug-pane" id="pane-state"></div>
@@ -788,18 +768,7 @@ class DebugUI {
              debugHub.actions = [];
         });
 
-        this._get('sources-refresh').addEventListener('click', () => this.loadSources());
-
-        // Context Menu in Sources
-        this.container.querySelector('.sources-editor').addEventListener('contextmenu', e => {
-            if (this.currentSource) {
-                e.preventDefault();
-                this.showContextMenu(e.clientX, e.clientY, [
-                    { label: 'Copy Content', action: () => this.copyToClipboard(this.currentSource.data) },
-                    { label: 'Download File', action: () => this.downloadFile(this.currentSource.name, this.currentSource.data) }
-                ]);
-            }
-        });
+        // [Sources tab removed — was laggy and rarely used]
 
         // Keyboard shortcuts
         document.addEventListener('keydown', e => {
@@ -1767,248 +1736,14 @@ class DebugUI {
         console.info('[BMM-Debug] Session exported successfully');
     }
 
-    async loadSources() {
-        try {
-            const { invoke } = window.__TAURI__.tauri;
-            const files = await invoke('get_project_files');
-            this.renderFileTree(files);
-        } catch (e) {
-            console.error('[BMM-Debug] Failed to load sources:', e);
-            document.querySelector('.sources-tree').innerHTML = `<div style="color:var(--debug-error); font-size:10px">Failed to load project files.</div>`;
-        }
-    }
+    // ─────────────────────────────────────────────────────────────
+    // The Sources tab + companion methods (loadSources, _fileTypeIcon,
+    // renderFileTree, openSourceFile, highlightCode) were removed in
+    // 2026-05.  They scanned the project tree on every devtools open
+    // and rendered massive file contents into the DOM — the main
+    // cause of devtools lag.  Use an external editor instead.
+    // ─────────────────────────────────────────────────────────────
 
-    _fileTypeIcon(name: string): string {
-        const ext = name.split('.').pop()?.toLowerCase() || '';
-        const color = { ts: '#3178c6', js: '#f0db4f', rs: '#ce422b', css: '#264de4', html: '#e34c26',
-            json: '#cbcb41', toml: '#9c4121', md: '#083fa1', svg: '#ffb13b', png: '#a855f7',
-            jpg: '#a855f7', jpeg: '#a855f7', gif: '#a855f7', webp: '#a855f7', ico: '#a855f7' }[ext] || 'var(--text-muted)';
-        if (['png','jpg','jpeg','gif','svg','webp','ico'].includes(ext))
-            return `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
-        if (ext === 'rs')
-            return `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2"/></svg>`;
-        return `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`;
-    }
-
-    renderFileTree(files, container = document.querySelector('.sources-tree'), level = 0) {
-        if (level === 0) container.innerHTML = '';
-
-        files.forEach(file => {
-            const row = document.createElement('div');
-            row.style.paddingLeft = (level * 12 + 4) + 'px';
-            row.style.fontSize = '11px';
-            row.style.cursor = 'pointer';
-            row.style.display = 'flex';
-            row.style.alignItems = 'center';
-            row.style.gap = '6px';
-            row.style.padding = `2px 4px 2px ${(level * 12 + 4)}px`;
-            row.className = 'tree-row';
-
-            const dirIcon = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--debug-warn)" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
-            const fileIcon = this._fileTypeIcon(file.name);
-            const icon = file.is_dir ? dirIcon : fileIcon;
-
-            row.innerHTML = `<span>${icon}</span> <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</span>`;
-
-            if (!file.is_dir) {
-                row.onclick = () => this.openSourceFile(file.path, row);
-            } else if (file.children) {
-                let collapsed = false;
-                const childContainer = document.createElement('div');
-                childContainer.style.display = 'block';
-                row.onclick = () => {
-                    collapsed = !collapsed;
-                    childContainer.style.display = collapsed ? 'none' : 'block';
-                };
-                container.appendChild(row);
-                container.appendChild(childContainer);
-                this.renderFileTree(file.children, childContainer, level + 1);
-                return;
-            }
-
-            container.appendChild(row);
-        });
-    }
-
-    async openSourceFile(path, row) {
-        document.querySelectorAll('.tree-row').forEach(r => r.classList.remove('active'));
-        if (row) row.classList.add('active');
-
-        this.currentSource = { path, name: path.split(/[\\/]/).pop(), data: null };
-        const editorArea = document.querySelector('.sources-editor');
-        if (!window.__TAURI__) return;
-        const { invoke } = window.__TAURI__.tauri;
-
-        editorArea.innerHTML = `<div style="padding:20px; color:var(--text-muted)">${t('common.loading')}</div>`;
-
-        try {
-            const data = await invoke('read_project_file', { path });
-            this.currentSource.data = data;
-            
-            const ext = path.split('.').pop().toLowerCase();
-            const isImage = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'].includes(ext);
-            const isVideo = ['mp4', 'webm', 'ogg'].includes(ext);
-
-            if (isImage) {
-                editorArea.innerHTML = `
-                    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:20px; background:rgba(0,0,0,0.3)">
-                        <img src="${data}" style="max-width:90%; max-height:80%; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:4px; margin-bottom:12px">
-                        <div style="color:var(--text-muted); font-size:10px; font-family:'JetBrains Mono'">${path}<br>Clic droit pour télécharger</div>
-                    </div>
-                `;
-            } else if (isVideo) {
-                editorArea.innerHTML = `
-                    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; padding:20px; background:rgba(0,0,0,0.3)">
-                        <video src="${data}" controls style="max-width:90%; max-height:80%; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:4px; margin-bottom:12px"></video>
-                        <div style="color:var(--text-muted); font-size:10px; font-family:'JetBrains Mono'">${path}</div>
-                    </div>
-                `;
-            } else {
-                const highlighted = this.highlightCode(data, ext);
-                const lines = highlighted.split('\n');
-                const lineCount = lines.length;
-                const gutterW = String(lineCount).length * 8 + 16;
-                const numberedLines = lines.map((line, i) =>
-                    `<span class="src-line" id="src-ln-${i+1}" style="display:flex;"><span class="src-gutter" style="min-width:${gutterW}px;padding-right:12px;text-align:right;color:var(--text-muted);opacity:0.4;user-select:none;flex-shrink:0;">${i+1}</span><span class="src-line-content" style="flex:1;">${line || ' '}</span></span>`
-                ).join('\n');
-                editorArea.innerHTML = `
-                    <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,0.05);background:rgba(0,0,0,0.15);flex-shrink:0;">
-                        <span style="font-size:9px;font-family:'JetBrains Mono';color:var(--text-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${path.split(/[\\/]/).pop()} <span style="opacity:0.5">(${lineCount} lignes)</span></span>
-                        <input id="src-find-input" type="text" placeholder="Rechercher…" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:2px 6px;font-size:10px;color:var(--text-primary);font-family:'JetBrains Mono';width:120px;outline:none;" />
-                        <span id="src-find-count" style="font-size:9px;color:var(--text-muted);min-width:40px;text-align:right;"></span>
-                    </div>
-                    <div id="sources-code-container" style="flex:1;overflow:auto;">
-                        <pre id="sources-code" style="margin:0;padding:8px 0;font-family:'JetBrains Mono';font-size:11px;color:var(--text-primary);white-space:pre;line-height:1.6;min-width:max-content;">${numberedLines}</pre>
-                    </div>`;
-                // Find-in-file
-                const findInput = editorArea.querySelector('#src-find-input') as HTMLInputElement;
-                const findCount = editorArea.querySelector('#src-find-count') as HTMLElement;
-                findInput?.addEventListener('input', () => {
-                    const q = findInput.value.toLowerCase().trim();
-                    editorArea.querySelectorAll('.src-line-content mark.src-hl').forEach(m => {
-                        const parent = m.parentNode;
-                        if (parent) parent.replaceChild(document.createTextNode(m.textContent || ''), m);
-                    });
-                    if (!q) { findCount.textContent = ''; return; }
-                    let hits = 0;
-                    editorArea.querySelectorAll('.src-line-content').forEach(cell => {
-                        const text = cell.textContent || '';
-                        if (text.toLowerCase().includes(q)) {
-                            hits++;
-                            // Simple highlight by re-wrapping matches
-                            cell.innerHTML = (cell.innerHTML || '').replace(
-                                new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
-                                m => `<mark class="src-hl" style="background:rgba(245,158,11,0.35);border-radius:2px;">${m}</mark>`
-                            );
-                        }
-                    });
-                    findCount.textContent = hits > 0 ? `${hits} ligne${hits>1?'s':''}` : 'Aucun';
-                    if (hits > 0) {
-                        editorArea.querySelector('.src-hl')?.scrollIntoView({ block: 'nearest' });
-                    }
-                });
-                findInput?.addEventListener('keydown', e => e.stopPropagation());
-            }
-
-            editorArea.oncontextmenu = (e) => {
-                e.preventDefault();
-                
-                this.showContextMenu(e.clientX, e.clientY, [
-                    { 
-                        label: t('common.copy'), 
-                        action: () => {
-                            if (isImage || isVideo) {
-                                this.copyToClipboard(data);
-                            } else {
-                                navigator.clipboard.writeText(data).then(() => {
-                                    this.showAlert(t('common.success'), t('dev.msg.contentCopied'));
-                                });
-                            }
-                        }
-                    },
-                    { 
-                        label: t('common.downloadFile'), 
-                        action: () => this.downloadFile(path.split(/[\\/]/).pop(), data)
-                    }
-                ]);
-            };
-
-        } catch (e) {
-            console.error('[BMM-Debug] Failed to read source file:', e);
-            editorArea.innerHTML = `<div style="padding:20px; color:var(--debug-error)">${t('common.error')}: ${e}</div>`;
-        }
-    }
-
-    highlightCode(code, ext) {
-        if (!code) return '';
-        
-        // Single-pass replacement using a special token mapping to avoid double-processing tags
-        let h = this.escapeHtml(code);
-        let tokens = [];
-        const pushToken = (style, val) => {
-            const id = `___TOKEN_${tokens.length}___`;
-            tokens.push({ id, html: `<span style="color:${style}">${val}</span>` });
-            return id;
-        };
-
-        // Order matters: match larger patterns first
-        if (ext === 'css') {
-            h = h.replace(/(\/\*[\s\S]*?\*\/)/g, m => pushToken('#6a9955', m))
-                 .replace(/(@[\w-]+)/g, m => pushToken('#c586c0', m)) // Media queries
-                 .replace(/([^{}\n;]+)\s*\{/g, (m, p1) => pushToken('#d7ba7d', p1) + ' {')
-                 .replace(/([\w-]+)\s*:/g, (m, p1) => pushToken('#9cdcfe', p1) + ':')
-                 .replace(/:\s*([^;\}]+)/g, (m, p1) => ': ' + pushToken('#ce9178', p1))
-                 .replace(/(#[0-9a-fA-F]{3,8})/g, m => pushToken('#b5cea8', m)) // Hex colors
-                 .replace(/(:hover|:active|:focus|:before|:after|:nth-child\([\w+n-]+\))/g, m => pushToken('#d7ba7d', m));
-        } 
-        else if (ext === 'js' || ext === 'ts' || ext === 'tsx' || ext === 'rust' || ext === 'rs') {
-            const isRust = ext.startsWith('r');
-            const keywords = isRust 
-                ? /\b(fn|let|mut|match|if|else|loop|while|for|return|pub|use|mod|struct|enum|impl|trait|type|where|async|await|dyn|static|crate)\b/g
-                : /\b(const|let|var|function|return|if|else|for|while|import|export|from|class|extends|new|async|await|try|catch|finally|this|super|case|switch|break|continue|default|typeof|instanceof|window|document|console|interface|type|readonly|public|private|protected|implements|static|abstract|keyof|as|any|boolean|number|string|void|never|unknown|enum|declare|module|namespace|infer|intrinsic)\b/g;
-
-            h = h.replace(/(\/\/.*$)/gm, m => pushToken('#6a9955', m))
-                 .replace(/(\/\*[\s\S]*?\*\/)/g, m => pushToken('#6a9955', m))
-                 .replace(/('.*?'|".*?"|`[\s\S]*?`)/g, m => pushToken('#ce9178', m))
-                 .replace(keywords, m => pushToken('#569cd6', m))
-                 .replace(/\b(true|false|null|undefined|None|Some|Ok|Err|Self|self)\b/g, m => pushToken('#569cd6', m))
-                 .replace(/\b(\d+)\b/g, m => pushToken('#b5cea8', m));
-
-            if (isRust) {
-                h = h.replace(/(\w+!)/g, m => pushToken('#dcdcaa', m)) // Macros
-                     .replace(/('[\w]+)/g, m => pushToken('#4ec9b0', m)); // Lifetimes
-            } else {
-                h = h.replace(/(\w+)\(/g, (m, p1) => pushToken('#dcdcaa', p1) + '('); // Function calls
-                if (ext.startsWith('ts')) {
-                    h = h.replace(/(:\s*)([A-Z]\w+)/g, (m, p1, p2) => p1 + pushToken('#4ec9b0', p2)) // Types
-                         .replace(/\b(extends|implements)\s+([A-Z]\w+)/g, (m, p1, p2) => pushToken('#569cd6', p1) + ' ' + pushToken('#4ec9b0', p2));
-                }
-            }
-        }
-        else if (ext === 'html' || ext === 'svg' || ext === 'xml') {
-            h = h.replace(/(&lt;!--[\s\S]*?--&gt;)/g, m => pushToken('#6a9955', m)) // Comments
-                 .replace(/(&lt;\/|&lt;)([\w-]+)/g, (m, p1, p2) => p1 + pushToken('#569cd6', p2)) // Tags
-                 .replace(/(&gt;)/g, m => pushToken('#569cd6', m))
-                 .replace(/(\w+)=/g, (m, p1) => pushToken('#9cdcfe', p1) + '=')
-                 .replace(/(".*?")/g, m => pushToken('#ce9178', m));
-        }
-        else if (ext === 'json') {
-            h = h.replace(/(".*?")\s*:/g, (m, p1) => pushToken('#9cdcfe', p1) + ':')
-                 .replace(/:\s*(".*?")/g, (m, p1) => ': ' + pushToken('#ce9178', p1))
-                 .replace(/\b(true|false|null)\b/g, m => pushToken('#569cd6', m))
-                 .replace(/\b(\d+)\b/g, m => pushToken('#b5cea8', m));
-        }
-
-        // Parenthesis and Brackets (all files)
-        h = h.replace(/([(){}\[\]])/g, m => pushToken('#ffd700', m));
-
-        // Final replacement of tokens
-        tokens.forEach(t => {
-            h = h.replace(t.id, t.html);
-        });
-
-        return h;
-    }
 
     async updateMetrics(metrics) {
         try {

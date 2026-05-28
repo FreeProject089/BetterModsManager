@@ -158,6 +158,10 @@ export function initDocsUI() {
         buildDiagramIndex(); // rebuildSynonymMap() is called inside
         initDocInfoBlockAccent(); // re-apply after possible DOM updates
     });
+
+    // Allow other modules (app.ts navigation handler) to rehydrate the
+    // video players after we paused/blanked them for RAM reasons.
+    (window as any).__bmmSetupDocsVideos = setupVideoPlayers;
 }
 
 // ─────────────────────────────────────────────────────────────

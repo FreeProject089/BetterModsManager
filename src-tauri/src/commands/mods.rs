@@ -384,7 +384,23 @@ pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, AppError> {
                 mod_entry: m.clone(),
                 shared_activations: Vec::new(),
             };
-            
+
+            // RAM/IPC trim: the frontend list never reads these large arrays,
+            // so don't ship them across IPC.  They stay intact in `data.mods`
+            // (the source of truth) — we only blank them in the cloned wire
+            // copy here.  Saves potentially hundreds of MB of JS heap on
+            // large libraries (one map entry per file per mod).
+            enriched.mod_entry.cached_files = None;
+            enriched.mod_entry.installed_files = Vec::new();
+            enriched.mod_entry.file_hashes = match &m.file_hashes {
+                Some(h) if !h.is_empty() => {
+                    let mut sentinel = std::collections::HashMap::with_capacity(1);
+                    sentinel.insert("__present__".to_string(), format!("{}", h.len()));
+                    Some(sentinel)
+                }
+                _ => None,
+            };
+
             // Set 'enabled' based on active profile
             enriched.mod_entry.enabled = active_profile.active_mods.contains(&m.id);
             
@@ -583,7 +599,66 @@ fn get_unique_mod_info(mods_path: &std::path::Path, original_name: &str) -> (Str
 #[tauri::command]
 pub fn get_all_mods(state: State<AppState>) -> Result<Vec<ModEntry>, AppError> {
     let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
-    Ok(data.mods.clone())
+    // RAM trim: strip the big arrays/maps from the wire copy.  Each mod's
+    // file_hashes map can contain thousands of entries; multiplied by
+    // hundreds of mods, this was responsible for hundreds of MB sitting
+    // in the JS heap permanently as `S.allMods`.  Frontend code that
+    // actually needs the hashes (modpack creator) now uses the dedicated
+    // `get_mod_hashes` command to fetch on demand.
+    let mut out: Vec<ModEntry> = Vec::with_capacity(data.mods.len());
+    for m in &data.mods {
+        let mut slim = m.clone();
+        // Keep a marker so frontend's "missing hashes" check still works:
+        //   None  → missing
+        //   Some(map with a single sentinel entry) → present
+        slim.file_hashes = match &m.file_hashes {
+            Some(h) if !h.is_empty() => {
+                let mut sentinel = std::collections::HashMap::with_capacity(1);
+                sentinel.insert("__present__".to_string(), format!("{}", h.len()));
+                Some(sentinel)
+            }
+            _ => None,
+        };
+        slim.cached_files = None;
+        slim.installed_files = Vec::new();
+        out.push(slim);
+    }
+    Ok(out)
+}
+
+/// Returns the actual file_hashes map for a single mod.  Used by features
+/// that need real hash values (modpack creator hash matching, integrity
+/// verification, etc) without the cost of shipping every mod's hashes.
+#[tauri::command]
+pub fn get_mod_hashes(state: State<AppState>, mod_id: String) -> Result<Option<std::collections::HashMap<String, String>>, AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    Ok(data.mods.iter().find(|m| m.id == mod_id).and_then(|m| m.file_hashes.clone()))
+}
+
+/// Batch-resolve a list of SHA-256 strings to local mod IDs.  Lookup runs
+/// entirely in Rust — frontend doesn't need the full hash maps to do this.
+/// Returns a map: sha → Some(mod_id) | None.
+#[tauri::command]
+pub fn find_local_mods_by_hashes(
+    state: State<AppState>,
+    hashes: Vec<String>,
+) -> Result<std::collections::HashMap<String, Option<String>>, AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    // Build a sha → mod_id index once (cheap, ~O(total_files))
+    let mut sha_index: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+    for m in &data.mods {
+        if let Some(h) = &m.file_hashes {
+            for (_, sha) in h.iter() {
+                sha_index.entry(sha.as_str()).or_insert(m.id.as_str());
+            }
+        }
+    }
+    let mut out: std::collections::HashMap<String, Option<String>> = std::collections::HashMap::with_capacity(hashes.len());
+    for sha in hashes {
+        let found = sha_index.get(sha.as_str()).map(|s| s.to_string());
+        out.insert(sha, found);
+    }
+    Ok(out)
 }
 
 #[derive(serde::Deserialize)]
@@ -2257,6 +2332,27 @@ pub fn invalidate_cache(state: &State<AppState>) {
     *last_update = None; // Force re-population on next call
 }
 
+/// Aggressively trim in-memory caches to reclaim RAM during idle periods.
+/// Frontend can call this when nav-switching away from heavy views.
+#[tauri::command]
+pub fn flush_mem_caches(state: State<AppState>) {
+    log_line("[MEM] Flushing in-memory caches");
+    {
+        let mut cache = state.mod_files_cache.lock().unwrap_or_else(|p| p.into_inner());
+        cache.clear();
+        cache.shrink_to_fit();
+    }
+    {
+        let mut index = state.conflict_index.lock().unwrap_or_else(|p| p.into_inner());
+        index.clear();
+        index.shrink_to_fit();
+    }
+    {
+        let mut last_update = state.last_cache_update.lock().unwrap_or_else(|p| p.into_inner());
+        *last_update = None;
+    }
+}
+
 #[tauri::command]
 pub fn get_conflict_file_tree(state: State<AppState>, mod_id: String, other_mod_id: String) -> Result<Vec<String>, String> {
     let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
@@ -2658,7 +2754,10 @@ pub fn start_sha_calculation_background(app_handle: tauri::AppHandle) {
         )
     };
     
-    std::thread::spawn(move || {
+    std::thread::Builder::new()
+        .name("bmm-sha-bg".into())
+        .stack_size(512 * 1024)
+        .spawn(move || {
         // Drop this thread's CPU + IO priority so SHA hashing never competes
         // with the UI thread for disk bandwidth or scheduler time.  Read-only
         // IO so we don't need a separate process — just lower priority.
@@ -2780,7 +2879,7 @@ pub fn start_sha_calculation_background(app_handle: tauri::AppHandle) {
                 std::thread::sleep(std::time::Duration::from_millis(1000));
             }
         }
-    });
+    }).expect("Failed to spawn SHA background thread");
 }
 
 pub fn add_mod_to_priority_sha_queue(state: tauri::State<'_, AppState>, mod_id: String) {
@@ -2953,7 +3052,10 @@ pub fn start_content_id_background(app_handle: tauri::AppHandle) {
     let data_shared = app_handle.state::<AppState>().data.clone();
     let data_path   = app_handle.state::<AppState>().data_path.clone();
 
-    std::thread::spawn(move || {
+    std::thread::Builder::new()
+        .name("bmm-content-id-bg".into())
+        .stack_size(512 * 1024)
+        .spawn(move || {
         #[cfg(target_os = "windows")]
         unsafe {
             extern "system" {
@@ -3006,5 +3108,5 @@ pub fn start_content_id_background(app_handle: tauri::AppHandle) {
                 }
             }
         }
-    });
+    }).expect("Failed to spawn content-id background thread");
 }

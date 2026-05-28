@@ -504,7 +504,7 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             let code = extra_str(&action.extra, "code");
             if !code.is_empty() { out.push(code.to_string()); }
         }
-        _ if use_deeplink => {
+        _ if use_deeplink && action_to_deeplink(action).starts_with("bmm://") && !action_to_deeplink(action).contains("unknown") => {
             out.push(format!("start \"\" \"{}\"", action_to_deeplink(action)));
             out.push("timeout /t 1 /nobreak >nul".to_string());
         }
@@ -522,6 +522,8 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
                         base, body.replace('"', "\\\"")
                     ));
                 }
+            } else {
+                out.push(format!(":: [WARN] Unknown action: {}", action.action_type));
             }
         }
     }
@@ -632,7 +634,7 @@ fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             let code = extra_str(&action.extra, "code");
             if !code.is_empty() { out.push(code.to_string()); }
         }
-        _ if use_deeplink => {
+        _ if use_deeplink && action_to_deeplink(action).starts_with("bmm://") && !action_to_deeplink(action).contains("unknown") => {
             out.push(format!("Start-Process \"{}\"", action_to_deeplink(action)));
             out.push("Start-Sleep -Seconds 1".to_string());
         }
@@ -644,11 +646,15 @@ fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
                         method, path
                     ));
                 } else {
+                    // Escape single-quotes inside body for PS1 single-quoted string
+                    let body_esc = body.replace('\'', "''");
                     out.push(format!(
                         "Invoke-RestMethod -Method {} -Uri \"http://127.0.0.1:51274{}\" -Headers $bmmHeaders -Body '{}'",
-                        method, path, body
+                        method, path, body_esc
                     ));
                 }
+            } else {
+                out.push(format!("# [WARN] Unknown action: {}", action.action_type));
             }
         }
     }
@@ -754,8 +760,13 @@ fn vbs_action(action: &ScriptAction) -> Vec<String> {
             if !code.is_empty() { out.push(code.to_string()); }
         }
         _ => {
-            out.push(format!("shell.Run \"{}\"", action_to_deeplink(action)));
-            out.push("WScript.Sleep 1000".to_string());
+            let dl = action_to_deeplink(action);
+            if dl.contains("unknown") {
+                out.push(format!("' [WARN] Unknown action: {}", action.action_type));
+            } else {
+                out.push(format!("shell.Run \"{}\"", dl));
+                out.push("WScript.Sleep 1000".to_string());
+            }
         }
     }
     out
@@ -768,18 +779,78 @@ fn action_to_deeplink(action: &ScriptAction) -> String {
         "activate_profile" => format!("bmm://profile/activate?id={}", action.target_id),
         "apply_plugin"     => format!("bmm://plugin/activate?id={}", action.target_id),
         "compare_plugin"   => format!("bmm://plugin/compare?id={}", action.target_id),
+        "enable_modpack"   => format!("bmm://modpack/enable?id={}", action.target_id),
+        "disable_modpack"  => format!("bmm://modpack/disable?id={}", action.target_id),
         _                  => format!("bmm://unknown?id={}", action.target_id),
     }
 }
 
+/// Parses an "key=value key2=value2" string into a map.
+fn parse_kv(expr: &str) -> std::collections::HashMap<String, String> {
+    let mut out = std::collections::HashMap::new();
+    for token in expr.split_whitespace() {
+        if let Some((k, v)) = token.split_once('=') {
+            out.insert(k.trim().to_string(), v.trim().to_string());
+        }
+    }
+    out
+}
+
+fn kv_str(map: &std::collections::HashMap<String, String>, k: &str, default: &str) -> String {
+    map.get(k).cloned().unwrap_or_else(|| default.to_string())
+}
+
+/// Returns (method, path, body) for any action that maps to an HTTP call.
+/// Method is one of "POST" | "PUT" | "DELETE".
 fn action_to_api_call(action: &ScriptAction) -> Option<(String, String, String)> {
+    let id = &action.target_id;
+    let expr = action.extra.get("expr").and_then(|v| v.as_str()).unwrap_or("");
+    let kvm = parse_kv(expr);
+
     match action.action_type.as_str() {
-        "enable_mod"       => Some(("POST".into(), "/api/mods/enable".into(),      format!("{{\"mod_id\":\"{}\"}}", action.target_id))),
-        "disable_mod"      => Some(("POST".into(), "/api/mods/disable".into(),     format!("{{\"mod_id\":\"{}\"}}", action.target_id))),
-        "activate_profile" => Some(("POST".into(), "/api/profiles/activate".into(),format!("{{\"profile_id\":\"{}\"}}", action.target_id))),
-        "apply_plugin"     => Some(("POST".into(), "/api/plugins/apply".into(),    format!("{{\"plugin_id\":\"{}\"}}", action.target_id))),
-        "compare_plugin"   => Some(("POST".into(), "/api/plugins/compare".into(),  format!("{{\"plugin_id\":\"{}\"}}", action.target_id))),
-        _                  => None,
+        "enable_mod"        => Some(("POST".into(),   "/api/mods/enable".into(),       format!("{{\"mod_id\":\"{}\"}}", id))),
+        "disable_mod"       => Some(("POST".into(),   "/api/mods/disable".into(),      format!("{{\"mod_id\":\"{}\"}}", id))),
+        "activate_profile"  => Some(("POST".into(),   "/api/profiles/activate".into(), format!("{{\"profile_id\":\"{}\"}}", id))),
+        "apply_plugin"      => Some(("POST".into(),   "/api/plugins/apply".into(),     format!("{{\"plugin_id\":\"{}\",\"force_strict\":false}}", id))),
+        "compare_plugin"    => Some(("POST".into(),   "/api/plugins/compare".into(),   format!("{{\"plugin_id\":\"{}\"}}", id))),
+        "enable_modpack"    => Some(("POST".into(),   "/api/modpacks/enable".into(),   format!("{{\"profile_id\":\"{}\"}}", id))),
+        "disable_modpack"   => Some(("POST".into(),   "/api/modpacks/disable".into(),  format!("{{\"profile_id\":\"{}\"}}", id))),
+        "update_modpack"    => {
+            let modpack_id = kv_str(&kvm, "modpack_id", "MODPACK_ID");
+            let name = kv_str(&kvm, "name", "");
+            let dep_mode = kv_str(&kvm, "dependency_mode", "none");
+            Some(("PUT".into(),
+                  format!("/api/modpacks/{}", modpack_id),
+                  format!("{{\"name\":\"{}\",\"dependency_mode\":\"{}\"}}", name, dep_mode)))
+        }
+        "sync_repo" => {
+            let url = kv_str(&kvm, "url", "REPO_URL");
+            let mods_dir = kv_str(&kvm, "mods_dir", "C:/Mods").replace('\\', "\\\\");
+            Some(("POST".into(),
+                  "/api/repo/sync".into(),
+                  format!("{{\"url\":\"{}\",\"mods_dir\":\"{}\"}}", url, mods_dir)))
+        }
+        "gen_repo" => {
+            let output_dir = kv_str(&kvm, "output_dir", "C:/Export").replace('\\', "\\\\");
+            let author = kv_str(&kvm, "author", "Author");
+            let lightweight = kv_str(&kvm, "lightweight", "false") == "true";
+            let zip_output = kv_str(&kvm, "zip", "false") == "true";
+            Some(("POST".into(),
+                  "/api/repo/gen".into(),
+                  format!("{{\"output_dir\":\"{}\",\"author_name\":\"{}\",\"lightweight\":{},\"zip_output\":{}}}",
+                          output_dir, author, lightweight, zip_output)))
+        }
+        "http_host" => {
+            let serve_dir = kv_str(&kvm, "serve_dir", "C:/Export").replace('\\', "\\\\");
+            let port = kv_str(&kvm, "port", "8080");
+            Some(("POST".into(),
+                  "/api/repo/host".into(),
+                  format!("{{\"serve_dir\":\"{}\",\"port\":{}}}", serve_dir, port)))
+        }
+        "cancel_sync"    => Some(("DELETE".into(), "/api/repo/sync".into(),  String::new())),
+        "cancel_gen"     => Some(("DELETE".into(), "/api/repo/gen".into(),   String::new())),
+        "stop_http_host" => Some(("DELETE".into(), "/api/repo/host".into(),  String::new())),
+        _ => None,
     }
 }
 

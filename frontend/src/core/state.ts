@@ -75,13 +75,19 @@ class StateManager {
     }
 
     /**
-     * Flushes heavy caches to free memory
+     * Flushes heavy caches to free memory — both JS-side state and the
+     * Rust-side mod_files_cache/conflict_index/hash index.
      */
     flushMemory(): void {
         console.log("[STATE] Flushing memory caches...");
         this.state.conflictCache = {};
-        // Trigger a notification so UI components can react if needed
         this.notify('conflictCache', {});
+        // Ask Rust to free its caches too.  Best-effort, silent on error.
+        try {
+            const w: any = window;
+            const inv = w.__TAURI__?.invoke || w.invoke;
+            if (inv) inv('flush_mem_caches').catch(() => {});
+        } catch {}
     }
 }
 
