@@ -170,22 +170,25 @@ export async function renderModList(force = false) {
   });
 
   let _anyNewCard = false;
+  // Scroll-induced renders (force === false) just re-position the viewport
+  // contents.  Card visuals haven't changed because the user scrolled, so
+  // skip the per-card updateCardState (8–10 DOM queries each) — that was
+  // the main scroll-frame cost.  State events still call renderModList(true)
+  // when something actually changes, which DOES run updateCardState.
+  const skipInPlaceUpdates = !force;
+
   for (let i = 0; i < visibleBatch.length; i++) {
     const mod = visibleBatch[i];
     let card = existingMap.get(mod.id);
     const isProcessing = S.processingMods.has(mod.id);
 
-    // Only CREATE a card if it doesn't exist yet.
-    // Never destroy + recreate cards that are in the viewport — updateCardState handles
-    // every state change in-place, so recreation would just cause unnecessary DOM churn.
     if (!card) {
       card = createModCard(mod);
       _anyNewCard = true;
       if (S.selectedModId === mod.id) {
         setTimeout(() => import('./mods-details.js').then(m => m.renderModDetail(mod.id)), 0);
       }
-    } else if (!isProcessing) {
-      // Safe to update in-place (not mid-toggle)
+    } else if (!skipInPlaceUpdates && !isProcessing) {
       updateCardState(card, mod);
     }
 

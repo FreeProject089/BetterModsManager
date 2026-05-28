@@ -2721,15 +2721,35 @@ function _ps1Ex(ep: EndpointDef): string {
 
 /** Strip line-continuation chars so the copied command works on one line in a terminal. */
 function _toClipboardLine(text: string, lang: string): string {
-    if (lang === 'curl') {
-        // Remove bash  \ + newline + indent
-        return text.replace(/ \\\n\s*/g, ' ').trim();
+    // Goal: produce a single-line command that pastes straight into a
+    // terminal and runs.  Handles both the line-continuation char (`\`,
+    // backtick, or `^`) AND any leftover bare newlines inside arguments
+    // (e.g. a pretty-printed JSON body).
+    const collapse = (s: string, contChar: RegExp | null): string => {
+        let out = s;
+        if (contChar) {
+            // " \\<nl><indent>" → single space (eats the continuation token)
+            out = out.replace(contChar, ' ');
+        }
+        // Any remaining newline + indent (newline-only continuations,
+        // or newlines inside a quoted multi-line argument) → single space
+        out = out.replace(/\r?\n\s*/g, ' ');
+        // Collapse runs of spaces
+        out = out.replace(/ {2,}/g, ' ').trim();
+        return out;
+    };
+
+    if (lang === 'curl' || lang === 'bash' || lang === 'sh') {
+        return collapse(text, / \\\r?\n\s*/g);
     }
-    if (lang === 'ps1') {
-        // Remove PS1 backtick + newline + indent
-        return text.replace(/ `\n\s*/g, ' ').trim();
+    if (lang === 'ps1' || lang === 'powershell') {
+        return collapse(text, / `\r?\n\s*/g);
     }
-    return text;
+    if (lang === 'cmd' || lang === 'bat') {
+        return collapse(text, / \^\r?\n\s*/g);
+    }
+    // Generic fallback — still single-line
+    return collapse(text, null);
 }
 
 function buildEndpointRow(ep: EndpointDef): string {
