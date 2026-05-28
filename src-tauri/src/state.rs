@@ -25,7 +25,7 @@ pub struct AppSettings {
     pub onboarding_shown: bool,
     #[serde(default)]
     pub last_seen_crash: Option<String>,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub auto_io_calibration: bool,
     /// Smart I/O: when true (default), mod file copies use a bounded
     /// thread pool + tiny periodic yields so the UI stays fluid.
@@ -78,7 +78,7 @@ impl Default for AppSettings {
             shortcuts: std::collections::HashMap::new(),
             onboarding_shown: false,
             last_seen_crash: None,
-            auto_io_calibration: false,
+            auto_io_calibration: true,
             smart_io_enabled: true,
             storage_alert_enabled: false,
             storage_warning_space_pct: default_storage_warning(),

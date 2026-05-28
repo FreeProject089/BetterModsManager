@@ -387,7 +387,8 @@ const _renderStorageModal = async () => {
             backup: { label: t('storage.backupDir') || 'Backup', color: '#fbbf24' },
         };
         const settings = await getSettings();
-        const isAuto = settings.auto_io_calibration || false;
+        // Auto I/O calibration: defaults to ON when undefined (matches new Rust default).
+        const isAuto = settings.auto_io_calibration !== false;
         // Smart I/O defaults to ON if undefined (matches Rust default_true)
         const smartIo = settings.smart_io_enabled !== false;
         const alertEnabled = settings.storage_alert_enabled || false;

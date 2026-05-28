@@ -12148,3 +12148,84 @@ option   { background: #131825; color: var(--text-primary); }
     cursor: not-allowed;
     pointer-events: none;
 }
+
+/* Cancel ops hover-dropdown ────────────────────────────────────────────── */
+.cancel-ops-wrapper {
+    position: relative;
+    display: inline-flex;
+}
+.cancel-ops-wrapper .cancel-ops-chevron {
+    opacity: 0.55;
+    transition: transform 0.18s ease, opacity 0.18s ease;
+    margin-left: 2px;
+}
+.cancel-ops-wrapper:not(.disabled):hover .cancel-ops-chevron {
+    opacity: 1;
+    transform: rotate(180deg);
+}
+.cancel-ops-wrapper.disabled .cancel-ops-chevron {
+    display: none;
+}
+.cancel-ops-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 200px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-accent);
+    border-radius: var(--radius-btn);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    padding: 4px;
+    z-index: 250;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s linear 0.15s;
+    pointer-events: none;
+}
+/* Invisible "bridge" above the menu so the hover stays alive while the
+   cursor travels from the button down to the items. */
+.cancel-ops-dropdown::before {
+    content: "";
+    position: absolute;
+    top: -8px;
+    left: 0;
+    right: 0;
+    height: 8px;
+}
+.cancel-ops-wrapper:not(.disabled):hover .cancel-ops-dropdown,
+.cancel-ops-wrapper.force-open .cancel-ops-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    transition-delay: 0s;
+    pointer-events: auto;
+}
+.cancel-ops-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    border-radius: calc(var(--radius-btn) - 2px);
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.cancel-ops-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+.cancel-ops-item-danger {
+    color: var(--danger, #e8635c);
+}
+.cancel-ops-item-danger:hover {
+    background: rgba(232, 99, 92, 0.12);
+}

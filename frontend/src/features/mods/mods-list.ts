@@ -312,7 +312,11 @@ export function createModCard(mod) {
         }
       }
     } catch (err) {
-      if (typeof err === 'string' && err.startsWith('CRITICAL_SPACE|')) {
+      if (typeof err === 'string' && (err === 'CANCELLED' || err.includes('CANCELLED'))) {
+        // Cancel path: silent — the per-mod cancel finalizer already shows a toast
+        // and the Rust side already cleaned up any partial files via the inverse undo.
+        // No error toast, no state desync.
+      } else if (typeof err === 'string' && err.startsWith('CRITICAL_SPACE|')) {
         const parts = err.split('|');
         toast(t('storage.alertCriticalMod', { label: parts[1], free: parts[2], limit: parts[3] }), 'error', 6000);
         toggle.checked = false;
@@ -357,39 +361,32 @@ export function createModCard(mod) {
       const _mid = mod.id;
       const _newEnabled = toggle.checked;
       const _modName = mod.name;
-      // 330ms > 300ms overlay fade — ensures no visual conflict between
-      // loading-overlay removal and the state-class transition on the card.
+
+      // ── Resolve cancel state + update model immediately so the UI feels
+      //    instantaneous.  Visual cleanup that has to align with the 300ms
+      //    overlay fade still happens in the setTimeout below.
+      const opResult = consumeAndClearOp(_mid);
+      const wasCancelled = opResult?.cancelled === true;
+      const effectiveEnabled = wasCancelled ? opResult!.prevEnabled : _newEnabled;
+
+      if (wasCancelled) {
+        const actionKey = _newEnabled ? 'lib.cancelToastEnable' : 'lib.cancelToastDisable';
+        toast(`${_modName} : ${t(actionKey)}`, 'info');
+      }
+
+      if (toggle.checked !== effectiveEnabled) toggle.checked = effectiveEnabled;
+
+      const modRef = S.allMods.find((m: any) => m.id === _mid);
+      if (modRef) modRef.enabled = effectiveEnabled;
+      if (modRef && card.isConnected) updateCardState(card, modRef);
+      updateBadge();
+      updateSubtitle();
+      updateToggleAllBtn();
+      ghostFilteredMods = [];
+
       setTimeout(() => {
         S.processingMods.delete(_mid);
-
-        // ── Honour a cancel that arrived while this toggle was in-flight ────
-        const opResult = consumeAndClearOp(_mid);
-        const wasCancelled = opResult?.cancelled === true;
-        const effectiveEnabled = wasCancelled ? opResult!.prevEnabled : _newEnabled;
-
-        if (wasCancelled) {
-          // _newEnabled=true → was enabling → "Activation annulée"
-          // _newEnabled=false → was disabling → "Désactivation annulée"
-          const actionKey = _newEnabled ? 'lib.cancelToastEnable' : 'lib.cancelToastDisable';
-          toast(`${_modName} : ${t(actionKey)}`, 'info');
-        }
-
-        // Sync the toggle checkbox to the effective final state
-        if (toggle.checked !== effectiveEnabled) toggle.checked = effectiveEnabled;
-
-        // ── Optimistic UI update (no backend call, no full re-render) ──────
-        const modRef = S.allMods.find((m: any) => m.id === _mid);
-        if (modRef) modRef.enabled = effectiveEnabled;
-        if (modRef && card.isConnected) updateCardState(card, modRef);
-        updateBadge();
-        updateSubtitle();
-        updateToggleAllBtn();
-        // Invalidate cached filter so next virtual-scroll tick re-sorts/filters
-        ghostFilteredMods = [];
-
-        // Schedule a lazy background sync for eventual consistency
         _scheduleBackgroundSync();
-
         // Re-apply loading overlays for other mods still processing
         S.processingMods.forEach((pid: string) => setModLoading(pid, true));
       }, 330);

@@ -674,16 +674,29 @@
                                 </svg>
                             </button>
                             <div class="view-actions-sep"></div>
-                            <!-- Cancel in-progress ops — disabled when idle -->
-                            <button class="btn btn-ghost view-action-util" id="btn-cancel-mod-ops"
-                                disabled
-                                onmouseenter="window.showTaskyHelp('lib.cancelOpsTip', 'close')"
-                                onmouseleave="window.hideTaskyHelp()">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                                </svg>
-                                <span data-i18n="lib.cancelOps">Annuler</span>
-                            </button>
+                            <!-- Cancel in-progress ops — main button skips current, hover dropdown reverts all -->
+                            <div class="cancel-ops-wrapper disabled" id="cancel-ops-wrapper">
+                                <button class="btn btn-ghost view-action-util" id="btn-cancel-mod-ops"
+                                    disabled
+                                    onmouseenter="window.showTaskyHelp('lib.cancelOpsTip', 'close')"
+                                    onmouseleave="window.hideTaskyHelp()">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                    </svg>
+                                    <span data-i18n="lib.cancelOps">Annuler</span>
+                                    <svg class="cancel-ops-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+                                </button>
+                                <div class="cancel-ops-dropdown" id="cancel-ops-dropdown">
+                                    <button class="cancel-ops-item" id="btn-cancel-current-only">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                        <span data-i18n="lib.cancelOpsCurrent">Annuler l'op en cours</span>
+                                    </button>
+                                    <button class="cancel-ops-item cancel-ops-item-danger" id="btn-cancel-all-ops">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                                        <span data-i18n="lib.cancelOpsAll">Tout annuler (revert)</span>
+                                    </button>
+                                </div>
+                            </div>
                             <div class="view-actions-sep"></div>
                             <button class="btn btn-ghost view-action-util" id="btn-show-history"
                                 onmouseenter="window.showTaskyHelp('lib.historyTip', 'icon-history')"

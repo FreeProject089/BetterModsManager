@@ -138,6 +138,9 @@ pub async fn export_server_repo(
         return Err("repo.errAuthorRequired".to_string());
     }
 
+    let mut _tracker = crate::commands::resource_tracker::OpTracker::start("REPO/export")
+        .with_subject(format!("{} profile(s) → {}", profile_ids.len(), output_dir));
+
     let mut _temp_dir: Option<tempfile::TempDir> = None;
     let output_path = if zip_output {
         let td = tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
@@ -689,6 +692,8 @@ pub async fn generate_standalone_server(
     handle: tauri::AppHandle,
     payload: StandaloneServerConfig,
 ) -> Result<(), String> {
+    let _tracker = crate::commands::resource_tracker::OpTracker::start("REPO/standalone-gen")
+        .with_subject(payload.repo_path.clone());
     let StandaloneServerConfig {
         repo_path,
         port,

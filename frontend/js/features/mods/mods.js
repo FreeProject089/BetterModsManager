@@ -8,7 +8,7 @@ import { appState } from '../../core/state.js';
 // Sub-modules
 import { renderModList, updateBadge, updateSubtitle, updateToggleAllBtn } from './mods-list.js';
 import { checkAllConflicts, restoreConflictCache } from './mods-conflicts.js';
-import { openAddModModal, confirmAddMod, toggleAllMods, scanModsFolder, verifyIntegrity, requestCancelModOps } from './mods-actions.js';
+import { openAddModModal, confirmAddMod, toggleAllMods, scanModsFolder, verifyIntegrity, requestCancelModOps, requestCancelCurrentOnly } from './mods-actions.js';
 import { selectMod, closeModDetail, renderModDetail } from './mods-details.js';
 import { openQuickApplyModal } from './modpack-creator.js';
 const S = new Proxy(appState.state, {
@@ -27,7 +27,19 @@ export async function initMods() {
     document.getElementById('btn-scan-mods')?.addEventListener('click', scanModsFolder);
     document.getElementById('btn-verify-integrity')?.addEventListener('click', verifyIntegrity);
     document.getElementById('btn-close-detail')?.addEventListener('click', closeModDetail);
-    document.getElementById('btn-cancel-mod-ops')?.addEventListener('click', requestCancelModOps);
+    // Main click = cancel CURRENT op only (lets queued/batch ops continue).
+    // Hover dropdown exposes "Cancel all" which fully reverts.
+    document.getElementById('btn-cancel-mod-ops')?.addEventListener('click', (e) => {
+        // Skip the click if the user clicked while the dropdown is open and
+        // they're really targeting a menu item (the menu items are absolutely
+        // positioned siblings, so we just guard against bubble from them).
+        const target = e.target;
+        if (target && target.closest('.cancel-ops-item'))
+            return;
+        requestCancelCurrentOnly();
+    });
+    document.getElementById('btn-cancel-current-only')?.addEventListener('click', requestCancelCurrentOnly);
+    document.getElementById('btn-cancel-all-ops')?.addEventListener('click', requestCancelModOps);
     // ── Sticky header toggle ──────────────────────────────────────────────────
     _initStickyToggle();
     // Add Mod folder picker

@@ -77,6 +77,17 @@ pub fn apply_fs_security_mode(app: tauri::AppHandle) {
 }
 
 fn main() {
+    // Worker subprocess fast-path: do the heavy file IO and exit without
+    // booting Tauri, WebView2, or anything else.  Called by the parent BMM
+    // as: `bmm.exe --mod-worker <in.json> <out.json>`.
+    {
+        let argv: Vec<String> = std::env::args().collect();
+        if argv.len() >= 4 && argv[1] == "--mod-worker" {
+            let code = fs_utils::run_mod_worker(&argv[2], &argv[3]);
+            std::process::exit(code);
+        }
+    }
+
     // Prevent Rayon from hogging 100% CPU and lagging the OS
     let cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
     let threads = if cpus > 6 { cpus - 2 } else if cpus > 2 { cpus - 1 } else { 2 };
@@ -253,6 +264,11 @@ fn main() {
             commands::mods::recalculate_all_hashes,
             commands::mods::recalculate_mod_sha,
             commands::mods::trigger_sha_background_population,
+            commands::mods::cancel_mod_ops,
+            commands::mods::clear_mod_op_cancel,
+            commands::mods::kill_current_mod_op,
+            commands::resource_tracker::get_resource_records,
+            commands::resource_tracker::clear_resource_records,
             commands::crash::open_crash_folder,
             commands::image::crop_and_save_webp,
             commands::image::remove_profile_background,

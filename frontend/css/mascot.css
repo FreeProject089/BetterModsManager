@@ -5,14 +5,18 @@ html, body {
     pointer-events: none; /* Allow click-through on transparent areas */
 }
 
-/* Native-feel Resizing Strips (Inner Frame) */
+/* Native-feel Resizing Strips (Inner Frame).
+   Hit zones are biased OUTSIDE the visible app rectangle so the user
+   doesn't accidentally trigger a resize when clicking near the app
+   border (titlebar buttons, sidebar items, etc).  The strips container
+   is shifted out by 3px on top/left and overflows 3px past the app on
+   bottom/right where there's only a 2px transparent margin. */
 .resize-strips {
     position: absolute;
-    /* Align with #app-window-outer boundaries */
-    top: 40px;
-    left: 40px;
-    right: 2px;
-    bottom: 2px;
+    top: 37px;
+    left: 37px;
+    right: -3px;
+    bottom: -3px;
     pointer-events: none;
     z-index: 10005;
     box-shadow: none !important;
@@ -24,18 +28,23 @@ html, body {
     background: transparent;
 }
 
-/* Edges (Inner boundaries) */
-.rs-top { top: 0; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
-.rs-bottom { bottom: 0; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
-.rs-left { left: 0; top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
-.rs-right { right: 0; top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+/* Edges — slim (4px) and start at the strips container origin, which
+   already lives 3px outside the app, so the bulk of the hit zone is in
+   the transparent margin, not over interactive UI. */
+.rs-top    { top: 0;    left: 14px; right: 14px; height: 4px; cursor: ns-resize; }
+.rs-bottom { bottom: 0; left: 14px; right: 14px; height: 4px; cursor: ns-resize; }
+.rs-left   { left: 0;   top: 14px;  bottom: 14px; width: 4px; cursor: ew-resize; }
+.rs-right  { right: 0;  top: 14px;  bottom: 14px; width: 4px; cursor: ew-resize; }
 
-/* Corners */
-.rs-corner { width: 15px; height: 15px; z-index: 10006; }
-.rs-tl { top: 0; left: 0; cursor: nwse-resize; }
-.rs-tr { top: 0; right: 0; cursor: nesw-resize; }
-.rs-bl { bottom: 0; left: 0; cursor: nesw-resize; }
-.rs-br { bottom: 0; right: 0; cursor: nwse-resize; }
+/* Corners — smaller hit boxes (10×10 instead of 15×15) so brushing a
+   corner of the app no longer flips into diagonal resize mode. */
+.rs-corner { width: 10px; height: 10px; z-index: 10006; }
+.rs-tl { top: 0;    left: 0;    cursor: nwse-resize; }
+.rs-tr { top: 0;    right: 0;   cursor: nesw-resize; }
+.rs-bl { bottom: 0; left: 0;    cursor: nesw-resize; }
+/* Bottom-right has a visible grip icon — keep it a bit larger and
+   intentional, since users *do* want to grab this one on purpose. */
+.rs-br { bottom: 0; right: 0;   cursor: nwse-resize; width: 16px; height: 16px; }
 
 /* Discrete Resize Handle Visual (Bottom Right) */
 #resize-handle-br {

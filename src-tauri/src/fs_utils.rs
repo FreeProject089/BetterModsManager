@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
 use jwalk::WalkDir;
 use std::fs;
@@ -6,6 +6,143 @@ use rayon::prelude::*;
 use std::collections::HashSet;
 use std::io::Read;
 use sha2::{Digest, Sha256};
+use std::sync::atomic::{AtomicBool, Ordering};
+use serde::{Serialize, Deserialize};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-process worker IPC
+// ─────────────────────────────────────────────────────────────────────────────
+// To keep the BMM UI responsive when applying / unapplying big mods on the
+// OS drive, the heavy file IO is delegated to a separate worker process
+// (re-execs the same exe with `--mod-worker IN OUT`).  The worker runs with
+// Windows BACKGROUND IO priority, so the kernel keeps disk bandwidth
+// available for the UI process.  Cancelling is a `taskkill /T` of the
+// worker PID — instant and reliable, no matter how stuck the IO is.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct WorkerInput {
+    pub op: String, // "apply" | "unapply"
+    pub mod_folder: PathBuf,
+    pub game_path: PathBuf,
+    pub backup_path: PathBuf,
+    pub other_mods_files: Vec<PathBuf>,
+    pub files_to_remove: Vec<String>,
+    pub other_active_mods: Vec<(String, PathBuf)>,
+    pub game_path_limit: Option<u64>,
+    pub backup_path_limit: Option<u64>,
+    pub smart_io: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct WorkerOutput {
+    pub applied: Vec<PathBuf>,
+    pub error: Option<String>,
+}
+
+/// Global cancellation flag for active mod-apply / mod-unapply IO operations.
+/// Polled inside the chunked copy loops and parallel iterators so that the
+/// user's cancel click can interrupt big mod copies almost instantly instead
+/// of waiting for the whole file to finish.
+pub static MOD_OP_CANCELLED: AtomicBool = AtomicBool::new(false);
+
+#[inline]
+pub fn is_mod_op_cancelled() -> bool {
+    MOD_OP_CANCELLED.load(Ordering::Relaxed)
+}
+
+#[inline]
+pub fn reset_mod_op_cancel() {
+    MOD_OP_CANCELLED.store(false, Ordering::Relaxed);
+}
+
+#[inline]
+pub fn request_mod_op_cancel() {
+    MOD_OP_CANCELLED.store(true, Ordering::Relaxed);
+}
+
+/// Entry point used by the worker subprocess.  Reads its input JSON,
+/// performs the apply/unapply, writes the output JSON, returns an exit code
+/// (0 = ok, non-zero = error or cancelled).
+pub fn run_mod_worker(input_path: &str, output_path: &str) -> i32 {
+    // Drop our priority class so the OS gives the BMM UI process headroom.
+    #[cfg(target_os = "windows")]
+    unsafe {
+        extern "system" {
+            fn GetCurrentProcess() -> *mut std::ffi::c_void;
+            fn SetPriorityClass(h: *mut std::ffi::c_void, class: u32) -> i32;
+        }
+        // PROCESS_MODE_BACKGROUND_BEGIN — also lowers IO + paging priority.
+        let _ = SetPriorityClass(GetCurrentProcess(), 0x0010_0000);
+    }
+
+    let input_str = match std::fs::read_to_string(input_path) {
+        Ok(s) => s,
+        Err(e) => { eprintln!("worker: read input failed: {}", e); return 2; }
+    };
+    let input: WorkerInput = match serde_json::from_str(&input_str) {
+        Ok(v) => v,
+        Err(e) => { eprintln!("worker: parse input failed: {}", e); return 2; }
+    };
+
+    let result = match input.op.as_str() {
+        "apply" => {
+            let other: HashSet<PathBuf> = input.other_mods_files.into_iter().collect();
+            apply_mod_stacked(
+                &input.mod_folder,
+                &input.game_path,
+                &input.backup_path,
+                &other,
+                input.game_path_limit,
+                input.backup_path_limit,
+                input.smart_io,
+            )
+        }
+        "unapply" => unapply_mod_stacked(
+            &input.game_path,
+            &input.backup_path,
+            input.files_to_remove,
+            &input.other_active_mods,
+            input.game_path_limit,
+            input.smart_io,
+        )
+        .map(|_| Vec::<PathBuf>::new()),
+        _ => {
+            eprintln!("worker: unknown op '{}'", input.op);
+            return 2;
+        }
+    };
+
+    let (output, code) = match result {
+        Ok(applied) => (WorkerOutput { applied, error: None }, 0),
+        Err(e) => {
+            let msg = e.to_string();
+            let code = if msg.contains("CANCELLED") { 3 } else { 1 };
+            (WorkerOutput { applied: vec![], error: Some(msg) }, code)
+        }
+    };
+    if let Ok(json) = serde_json::to_string(&output) {
+        let _ = std::fs::write(output_path, json);
+    }
+    code
+}
+
+/// Returns true if `path` lives on the same drive as the OS (typically C:).
+/// Used to dial parallel IO down to a single thread so Windows itself stays
+/// responsive during big mod copies.
+pub fn is_on_system_drive(path: &Path) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(sys) = std::env::var("SystemDrive") {
+            let p = path.to_string_lossy().to_lowercase();
+            let s = sys.to_lowercase();
+            // "c:" prefix match (drive letter + colon)
+            if !s.is_empty() && p.starts_with(&s) {
+                return true;
+            }
+        }
+    }
+    let _ = path;
+    false
+}
 
 fn ensure_removed(path: &Path) -> Result<()> {
     if !path.exists() { return Ok(()); }
@@ -41,6 +178,11 @@ pub fn copy_file_force_smart(src: &Path, dst: &Path, limit_mb_s: Option<u64>, sm
             let mut buffer = vec![0u8; chunk_size];
 
             loop {
+                if is_mod_op_cancelled() {
+                    drop(dst_file);
+                    let _ = std::fs::remove_file(dst);
+                    return Err(anyhow!("CANCELLED"));
+                }
                 let start = std::time::Instant::now();
                 let bytes_read = src_file.read(&mut buffer)?;
                 if bytes_read == 0 {
@@ -73,6 +215,11 @@ pub fn copy_file_force_smart(src: &Path, dst: &Path, limit_mb_s: Option<u64>, sm
         let mut chunks_since_yield: u32 = 0;
 
         loop {
+            if is_mod_op_cancelled() {
+                drop(dst_file);
+                let _ = std::fs::remove_file(dst);
+                return Err(anyhow!("CANCELLED"));
+            }
             let bytes_read = src_file.read(&mut buffer)?;
             if bytes_read == 0 { break; }
             dst_file.write_all(&buffer[..bytes_read])?;
@@ -89,6 +236,7 @@ pub fn copy_file_force_smart(src: &Path, dst: &Path, limit_mb_s: Option<u64>, sm
     }
 
     // ── Path 3: full-speed std::fs::copy (Smart I/O off, no MB/s limit) ──────
+    if is_mod_op_cancelled() { return Err(anyhow!("CANCELLED")); }
     std::fs::copy(src, dst)
         .with_context(|| format!("Failed to copy {:?} -> {:?}", src, dst))?;
     Ok(())
@@ -140,7 +288,20 @@ pub fn backup_original_file(
 /// cap to 2 threads so file copies never saturate every CPU core (which is
 /// what causes the "Ne répond pas" UI freeze).  When off, default rayon
 /// pool (= all cores) is used.
+#[allow(dead_code)]
 fn run_with_smart_pool<F, R>(smart_io: bool, f: F) -> R
+where
+    F: FnOnce() -> R + Send,
+    R: Send,
+{
+    run_with_smart_pool_threads(smart_io, 2, f)
+}
+
+/// Variant that lets the caller pick the worker count.  When `smart_io` is
+/// off we still go full-speed.  When on, we use the explicit `threads`
+/// count — callers pass 1 when copying to the OS drive so Windows itself
+/// stays responsive.
+fn run_with_smart_pool_threads<F, R>(smart_io: bool, threads: usize, f: F) -> R
 where
     F: FnOnce() -> R + Send,
     R: Send,
@@ -148,11 +309,10 @@ where
     if !smart_io {
         return f();
     }
-    // Build a local 2-thread pool just for this mod op.  install() blocks
-    // until the closure returns, so threads are dropped right after.
-    match rayon::ThreadPoolBuilder::new().num_threads(2).build() {
+    let n = threads.max(1);
+    match rayon::ThreadPoolBuilder::new().num_threads(n).build() {
         Ok(pool) => pool.install(f),
-        Err(_)   => f(), // Fallback: still works, just on the default pool
+        Err(_)   => f(),
     }
 }
 
@@ -187,8 +347,14 @@ pub fn apply_mod_stacked(
 ) -> Result<Vec<PathBuf>> {
     let files = list_mod_files(mod_folder)?;
 
-    let result: Result<()> = run_with_smart_pool(smart_io, || {
+    // If the game dir (or backup dir) sits on the OS drive, force serial IO
+    // so Windows + the BMM window itself never freeze.
+    let on_sys = is_on_system_drive(game_path) || is_on_system_drive(profile_backup_root);
+    let threads = if on_sys { 1 } else { 2 };
+
+    let result: Result<()> = run_with_smart_pool_threads(smart_io || on_sys, threads, || {
         files.par_iter().try_for_each(|rel| {
+            if is_mod_op_cancelled() { return Err(anyhow!("CANCELLED")); }
             // Backup original if it's the first time BMM touches this file in this profile
             let _ = backup_original_file(game_path, rel, profile_backup_root, &other_mods_files, backup_path_limit, smart_io);
 
@@ -230,9 +396,13 @@ pub fn unapply_mod_stacked(
     // Canonicalize to follow symlinks/junctions, then normalize to strip UNC prefixes
     let game_path_norm = normalize_path(game_path.canonicalize().unwrap_or_else(|_| game_path.to_path_buf()));
 
-    // Parallelize restoration/removal (bounded pool when Smart I/O is on)
-    let result: Result<()> = run_with_smart_pool(smart_io, || {
+    // Parallelize restoration/removal (bounded pool when Smart I/O is on,
+    // or single-threaded when the target lives on the OS drive).
+    let on_sys = is_on_system_drive(game_path) || is_on_system_drive(profile_backup_root);
+    let threads = if on_sys { 1 } else { 2 };
+    let result: Result<()> = run_with_smart_pool_threads(smart_io || on_sys, threads, || {
         files_to_remove.par_iter().try_for_each(|rel_str| {
+            if is_mod_op_cancelled() { return Err(anyhow!("CANCELLED")); }
             let rel = PathBuf::from(rel_str);
             let dst_path = game_path.join(&rel);
 

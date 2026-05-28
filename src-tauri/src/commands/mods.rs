@@ -54,6 +54,296 @@ pub struct SharedActivation {
 
 lazy_static::lazy_static! {
     static ref MOD_OP_LOCK: Mutex<()> = Mutex::new(());
+    /// PID of the currently-running CANCELLABLE mod-IO worker subprocess.
+    /// `cancel_mod_ops` kills this PID for near-instant cancellation.
+    static ref MOD_OP_CHILD_PID: Mutex<Option<u32>> = Mutex::new(None);
+}
+
+/// Set to `true` the moment we taskkill the worker.  Independent of the
+/// global cancel flag — survives the frontend's `clear_mod_op_cancel` race
+/// so the parent always knows "this exit was my doing".  Reset to `false`
+/// before each new cancellable worker spawn.
+static MOD_OP_KILLED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn set_mod_op_child_pid(pid: Option<u32>) {
+    *MOD_OP_CHILD_PID.lock().unwrap_or_else(|p| p.into_inner()) = pid;
+}
+
+/// Lightweight per-op resource probe.  Captures current process RSS and
+/// CPU% via `sysinfo`.  Returns `(rss_bytes, cpu_pct)`; falls back to zeros
+/// if the probe fails so logging never blocks an op.
+fn probe_process_stats() -> (u64, f32) {
+    use sysinfo::{System, Pid};
+    let mut sys = System::new();
+    let pid = Pid::from_u32(std::process::id());
+    sys.refresh_process(pid);
+    if let Some(p) = sys.process(pid) {
+        (p.memory(), p.cpu_usage())
+    } else {
+        (0, 0.0)
+    }
+}
+
+/// Spawn the BMM exe in `--mod-worker` mode, wait for it, return the output.
+/// Runs synchronously — callers should put this inside `spawn_blocking`.
+///
+/// `cancellable`:
+///   - `true`  → register the PID for `cancel_mod_ops` to kill, and if
+///                killed, run an inverse-op undo subprocess so any partial
+///                writes are reverted.
+///   - `false` → registered nowhere, cannot be cancelled (used for the
+///                inverse undo itself).
+fn run_mod_io_worker_with_mode(
+    input: crate::fs_utils::WorkerInput,
+    cancellable: bool,
+    op_label: &str,
+) -> Result<crate::fs_utils::WorkerOutput, String> {
+    use std::process::{Command, Stdio};
+    use std::sync::atomic::Ordering;
+    use std::time::Instant;
+
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+
+    let tmpdir = std::env::temp_dir();
+    let uid = uuid::Uuid::new_v4().simple().to_string();
+    let in_path  = tmpdir.join(format!("bmm-mod-worker-in-{}.json",  uid));
+    let out_path = tmpdir.join(format!("bmm-mod-worker-out-{}.json", uid));
+
+    let input_json = serde_json::to_string(&input).map_err(|e| e.to_string())?;
+    std::fs::write(&in_path, input_json).map_err(|e| e.to_string())?;
+
+    let mut cmd = Command::new(&exe);
+    cmd.arg("--mod-worker")
+        .arg(&in_path)
+        .arg(&out_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x0000_4000;
+        const CREATE_NO_WINDOW:            u32 = 0x0800_0000;
+        cmd.creation_flags(BELOW_NORMAL_PRIORITY_CLASS | CREATE_NO_WINDOW);
+    }
+
+    let (rss_before, _) = probe_process_stats();
+    let started = Instant::now();
+
+    // Reset killed flag for the new cancellable op.
+    if cancellable {
+        MOD_OP_KILLED.store(false, Ordering::SeqCst);
+    }
+
+    let mut child = cmd.spawn().map_err(|e| {
+        let _ = std::fs::remove_file(&in_path);
+        format!("Failed to spawn mod worker: {}", e)
+    })?;
+    let pid = child.id();
+    if cancellable {
+        set_mod_op_child_pid(Some(pid));
+    }
+
+    let status = child.wait();
+    if cancellable {
+        set_mod_op_child_pid(None);
+    }
+    let _ = std::fs::remove_file(&in_path);
+
+    let status = match status {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = std::fs::remove_file(&out_path);
+            return Err(format!("Worker wait failed: {}", e));
+        }
+    };
+
+    // Per-op resource log — surfaces in the crash bundle / log file.
+    let elapsed = started.elapsed();
+    let (rss_after, cpu_pct) = probe_process_stats();
+    let rss_delta_kb = (rss_after as i128 - rss_before as i128) / 1024;
+    log_line(format!(
+        "[RESOURCE] {} pid={} dur={}ms exit={:?} rss={}KB Δrss={:+}KB cpu={:.1}%",
+        op_label, pid,
+        elapsed.as_millis(),
+        status.code(),
+        rss_after / 1024,
+        rss_delta_kb,
+        cpu_pct,
+    ));
+
+    let we_killed_it = cancellable && MOD_OP_KILLED.load(Ordering::SeqCst);
+
+    // ── Cancelled path ────────────────────────────────────────────────────
+    // Code 3  → worker noticed cancel flag and exited cleanly.
+    // killed  → parent ran taskkill on the PID.
+    if status.code() == Some(3) || we_killed_it {
+        let _ = std::fs::remove_file(&out_path);
+
+        // Run the inverse op to undo any partial work.  Use a non-cancellable
+        // worker (its child process has its own clean cancellation state, so
+        // it will run to completion).  We deliberately keep the parent's
+        // global cancel flag set so any outer loop (toggle_all_mods, etc.)
+        // still sees the cancel and stops iterating.
+        let undo_input = make_inverse_undo_input(&input);
+        if let Some(u) = undo_input {
+            log_line(format!("[MOD] running inverse undo after cancel ({})", input.op));
+            let _ = run_mod_io_worker_with_mode(u, false, "MOD/undo");
+        }
+
+        return Err("CANCELLED".to_string());
+    }
+
+    if !status.success() {
+        let mut err = format!("Worker exited with code {:?}", status.code());
+        if let Ok(s) = std::fs::read_to_string(&out_path) {
+            if let Ok(out) = serde_json::from_str::<crate::fs_utils::WorkerOutput>(&s) {
+                if let Some(e) = out.error { err = e; }
+            }
+        }
+        let _ = std::fs::remove_file(&out_path);
+        return Err(err);
+    }
+
+    let out_str = std::fs::read_to_string(&out_path).map_err(|e| e.to_string())?;
+    let _ = std::fs::remove_file(&out_path);
+    let out: crate::fs_utils::WorkerOutput = serde_json::from_str(&out_str).map_err(|e| e.to_string())?;
+    if let Some(e) = out.error {
+        return Err(e);
+    }
+    Ok(out)
+}
+
+/// Public wrapper — every call from enable/disable goes through here.
+fn run_mod_io_worker(input: crate::fs_utils::WorkerInput) -> Result<crate::fs_utils::WorkerOutput, String> {
+    let label = match input.op.as_str() {
+        "apply"   => "MOD/apply",
+        "unapply" => "MOD/unapply",
+        other     => { log_line(format!("[MOD] unknown op '{}'", other)); "MOD/?" }
+    };
+    run_mod_io_worker_with_mode(input, true, label)
+}
+
+/// Builds the inverse-op worker input used for "cancel = undo partial work".
+///   apply  → unapply (delete files we just copied, restore originals)
+///   unapply→ apply   (re-copy mod files we'd started restoring)
+fn make_inverse_undo_input(input: &crate::fs_utils::WorkerInput) -> Option<crate::fs_utils::WorkerInput> {
+    match input.op.as_str() {
+        "apply" => {
+            // What we MIGHT have written = full mod file list
+            let files_to_remove: Vec<String> = crate::fs_utils::list_mod_files(&input.mod_folder)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect();
+            if files_to_remove.is_empty() { return None; }
+            Some(crate::fs_utils::WorkerInput {
+                op: "unapply".to_string(),
+                mod_folder: input.mod_folder.clone(),
+                game_path: input.game_path.clone(),
+                backup_path: input.backup_path.clone(),
+                other_mods_files: Vec::new(),
+                files_to_remove,
+                other_active_mods: Vec::new(),
+                game_path_limit: input.game_path_limit,
+                backup_path_limit: input.backup_path_limit,
+                smart_io: input.smart_io,
+            })
+        }
+        "unapply" => {
+            if input.mod_folder.as_os_str().is_empty() { return None; }
+            Some(crate::fs_utils::WorkerInput {
+                op: "apply".to_string(),
+                mod_folder: input.mod_folder.clone(),
+                game_path: input.game_path.clone(),
+                backup_path: input.backup_path.clone(),
+                other_mods_files: Vec::new(),
+                files_to_remove: Vec::new(),
+                other_active_mods: Vec::new(),
+                game_path_limit: input.game_path_limit,
+                backup_path_limit: input.backup_path_limit,
+                smart_io: input.smart_io,
+            })
+        }
+        _ => None,
+    }
+}
+
+/// Frontend "cancel" entry-point.  Flips the global cancellation flag AND
+/// kills the worker subprocess if one is running.  Returns instantly.
+#[tauri::command]
+pub fn cancel_mod_ops() {
+    use std::sync::atomic::Ordering;
+    log_line("[MOD] cancel_mod_ops requested");
+    crate::fs_utils::request_mod_op_cancel();
+
+    let pid_opt = { MOD_OP_CHILD_PID.lock().unwrap_or_else(|p| p.into_inner()).clone() };
+    if let Some(pid) = pid_opt {
+        // Mark as intentionally killed BEFORE issuing taskkill, so the
+        // wait() in `run_mod_io_worker_with_mode` sees `killed=true`
+        // regardless of how the frontend manipulates the global flag.
+        MOD_OP_KILLED.store(true, Ordering::SeqCst);
+
+        log_line(format!("[MOD] killing worker PID {}", pid));
+        #[cfg(target_os = "windows")]
+        {
+            use std::process::Command;
+            // /F = force, /T = kill the whole tree (rayon threads etc.)
+            let _ = Command::new("taskkill")
+                .args(["/F", "/T", "/PID", &pid.to_string()])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn();
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            use std::process::Command;
+            let _ = Command::new("kill")
+                .args(["-9", &pid.to_string()])
+                .spawn();
+        }
+    }
+}
+
+/// Called by the frontend once all revert work after a cancel is finished,
+/// so the next user-initiated toggle can run normally.
+#[tauri::command]
+pub fn clear_mod_op_cancel() {
+    crate::fs_utils::reset_mod_op_cancel();
+}
+
+/// "Cancel current op only" — kills the in-flight worker subprocess but
+/// does NOT raise the global cancel flag.  Used by the cancel button's
+/// default click so a running toggle-all batch can continue with the next
+/// mod after the user skips just the current one.
+#[tauri::command]
+pub fn kill_current_mod_op() {
+    use std::sync::atomic::Ordering;
+    log_line("[MOD] kill_current_mod_op (skip current only)");
+    let pid_opt = { MOD_OP_CHILD_PID.lock().unwrap_or_else(|p| p.into_inner()).clone() };
+    if let Some(pid) = pid_opt {
+        MOD_OP_KILLED.store(true, Ordering::SeqCst);
+        #[cfg(target_os = "windows")]
+        {
+            use std::process::Command;
+            let _ = Command::new("taskkill")
+                .args(["/F", "/T", "/PID", &pid.to_string()])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn();
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            use std::process::Command;
+            let _ = Command::new("kill")
+                .args(["-9", &pid.to_string()])
+                .spawn();
+        }
+    }
 }
 
 #[tauri::command]
@@ -527,6 +817,13 @@ fn resolve_dependencies(
 
 #[tauri::command]
 pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: String, bypass_sha: Option<bool>) -> Result<Option<String>, String> {
+    // NOTE: do NOT clear the cancel flag here — multiple parallel enable_mod
+    // calls would clobber an in-flight cancel.  The frontend explicitly
+    // resets via `clear_mod_op_cancel` once it's done reverting.
+    if crate::fs_utils::is_mod_op_cancelled() {
+        log_line(format!("[MOD] enable_mod '{}' skipped — cancel flag set", mod_id));
+        return Ok(None);
+    }
     log_line(format!("[MOD] Enabling mod '{}' (recursive if needed)", mod_id));
     
     // 1. Resolve full dependency chain and check for missing dependencies
@@ -611,6 +908,10 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
     let disks = sysinfo::Disks::new_with_refreshed_list();
 
     for mid in mod_ids_to_enable {
+        if crate::fs_utils::is_mod_op_cancelled() {
+            log_line(format!("[MOD] Enable loop cancelled before mod '{}'", mid));
+            break;
+        }
         let (mod_folder, game_path, backup_path, mod_name) = {
             let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
             let m = match data.mods.iter().find(|m| m.id == mid) {
@@ -690,16 +991,45 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
         });
 
         let active_files_set_clone = active_files_set.clone();
-        let result = tauri::async_runtime::spawn_blocking(move || {
+        let result: Result<Vec<PathBuf>, String> = tauri::async_runtime::spawn_blocking(move || {
             let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-            fs_utils::apply_mod_stacked(&mod_folder, &game_path, &backup_path, &active_files_set_clone, game_path_limit, backup_path_limit, smart_io)
+            // Re-check cancellation AFTER acquiring the serial lock — if a
+            // cancel landed while we were queued, do not start a new worker.
+            if crate::fs_utils::is_mod_op_cancelled() {
+                return Err("CANCELLED".to_string());
+            }
+            let worker_in = crate::fs_utils::WorkerInput {
+                op: "apply".to_string(),
+                mod_folder,
+                game_path,
+                backup_path,
+                other_mods_files: active_files_set_clone.into_iter().collect(),
+                files_to_remove: Vec::new(),
+                other_active_mods: Vec::new(),
+                game_path_limit,
+                backup_path_limit,
+                smart_io,
+            };
+            run_mod_io_worker(worker_in).map(|out| out.applied)
         }).await.map_err(|e| e.to_string())?;
 
         let _ = window.emit("benchmark-event", BenchEventPayload {
             text: format!("Activated: {}", mod_name), disk_name: "".to_string(), total_mb: 0.0, limit_mb_s: None, finished: true,
         });
 
-        let applied = result.map_err(|e| e.to_string())?;
+        // Cancellation surfaces as an "anyhow" with the literal "CANCELLED" message.
+        // Treat it as a graceful early exit, not an error to bubble to the UI.
+        let applied = match result {
+            Ok(v) => v,
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("CANCELLED") || crate::fs_utils::is_mod_op_cancelled() {
+                    log_line(format!("[MOD] Enable cancelled mid-copy for '{}'", mod_name));
+                    break;
+                }
+                return Err(msg);
+            }
+        };
 
         {
             let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
@@ -736,14 +1066,18 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
 
 #[tauri::command]
 pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
+    if crate::fs_utils::is_mod_op_cancelled() {
+        log_line(format!("[MOD] disable_mod '{}' skipped — cancel flag set", mod_id));
+        return Ok(());
+    }
     log_line(format!("[MOD] Disabling mod '{}'", mod_id));
-    let (game_path, backup_path, active_id, mod_name, files_to_remove, other_active_mods) = {
+    let (mod_folder, game_path, backup_path, active_id, mod_name, files_to_remove, other_active_mods) = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?.clone();
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
         if !p.active_mods.contains(&mod_id) { return Ok(()); }
-        
+
         let mut others = Vec::new();
         for mid in p.active_mods.iter().rev() {
             if mid == &mod_id { continue; }
@@ -751,15 +1085,15 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
                 others.push((other_m.id.clone(), other_m.mod_folder_path.clone()));
             }
         }
-        
+
         // Hybrid cleanup: Tracked files + Current physical files
         let mut unique_files = std::collections::HashSet::new();
         for f in m.installed_files { unique_files.insert(f); }
         if let Ok(scanned) = fs_utils::list_mod_files(&m.mod_folder_path) {
             for s in scanned { unique_files.insert(s.to_string_lossy().to_string()); }
         }
-        
-        (p.game_path.clone(), p.backup_path.clone(), active_id, m.name, unique_files.into_iter().collect::<Vec<String>>(), others)
+
+        (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), active_id, m.name, unique_files.into_iter().collect::<Vec<String>>(), others)
     };
 
     let game_path_limit = crate::commands::disk::get_limit_for_path(&state, &game_path);
@@ -785,9 +1119,25 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
         finished: false,
     });
 
-    let result = tauri::async_runtime::spawn_blocking(move || {
+    let result: Result<(), String> = tauri::async_runtime::spawn_blocking(move || {
         let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-        fs_utils::unapply_mod_stacked(&game_path, &backup_path, files_to_remove, &other_active_mods, game_path_limit, smart_io)
+        if crate::fs_utils::is_mod_op_cancelled() {
+            return Err("CANCELLED".to_string());
+        }
+        let worker_in = crate::fs_utils::WorkerInput {
+            op: "unapply".to_string(),
+            // Pass mod_folder so a cancel-undo can re-apply the mod files.
+            mod_folder,
+            game_path,
+            backup_path,
+            other_mods_files: Vec::new(),
+            files_to_remove,
+            other_active_mods,
+            game_path_limit,
+            backup_path_limit: None,
+            smart_io,
+        };
+        run_mod_io_worker(worker_in).map(|_| ())
     }).await.map_err(|e| e.to_string())?;
 
     let _ = window.emit("benchmark-event", BenchEventPayload {
@@ -801,7 +1151,13 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
         finished: true,
     });
 
-    result.map_err(|e| e.to_string())?;
+    if let Err(msg) = &result {
+        if msg.contains("CANCELLED") || crate::fs_utils::is_mod_op_cancelled() {
+            log_line(format!("[MOD] Disable cancelled mid-copy for '{}'", mod_name));
+            return Ok(());
+        }
+    }
+    result?;
 
     {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
@@ -1671,6 +2027,7 @@ pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>,
 }
 #[tauri::command]
 pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable: bool, bypass_sha: Option<bool>) -> Result<(), String> {
+    crate::fs_utils::reset_mod_op_cancel();
     log_line(format!("[MOD] Toggle all mods: {}", if enable { "ENABLE" } else { "DISABLE" }));
     let mod_ids = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
@@ -1692,11 +2049,18 @@ pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable:
     };
 
     for id in mod_ids {
+        if crate::fs_utils::is_mod_op_cancelled() {
+            log_line("[MOD] toggle_all_mods aborted by cancel flag");
+            break;
+        }
+        // We have to re-prime per iteration because enable_mod/disable_mod
+        // reset the cancel flag on entry.  Check before the call.
         if enable {
             let _ = enable_mod(window.clone(), state.clone(), id, bypass_sha).await;
         } else {
             let _ = disable_mod(window.clone(), state.clone(), id).await;
         }
+        if crate::fs_utils::is_mod_op_cancelled() { break; }
     }
     Ok(())
 }
@@ -2295,8 +2659,21 @@ pub fn start_sha_calculation_background(app_handle: tauri::AppHandle) {
     };
     
     std::thread::spawn(move || {
-        log_line("[SHA-CALC] Background SHA calculation thread started");
-        
+        // Drop this thread's CPU + IO priority so SHA hashing never competes
+        // with the UI thread for disk bandwidth or scheduler time.  Read-only
+        // IO so we don't need a separate process — just lower priority.
+        #[cfg(target_os = "windows")]
+        unsafe {
+            extern "system" {
+                fn GetCurrentThread() -> *mut std::ffi::c_void;
+                fn SetThreadPriority(h: *mut std::ffi::c_void, n: i32) -> i32;
+            }
+            // THREAD_MODE_BACKGROUND_BEGIN = 0x00010000
+            // Drops both CPU and IO priority class for the calling thread.
+            let _ = SetThreadPriority(GetCurrentThread(), 0x0001_0000);
+        }
+        log_line("[SHA-CALC] Background SHA calculation thread started (background priority)");
+
         // Initial delay to let the app settle at startup
         std::thread::sleep(std::time::Duration::from_secs(5));
         
@@ -2464,21 +2841,30 @@ fn process_single_mod_hashing(
     
     if let Some(mod_path) = mod_path_opt {
         if let Ok(current_files) = fs_utils::list_mod_files(&mod_path) {
+            let mut tracker = crate::commands::resource_tracker::OpTracker::start("SHA/compute")
+                .with_subject(id);
             let mut new_hashes = std::collections::HashMap::new();
             let mut calculated = 0;
+            let mut bytes_total: u64 = 0;
 
             for f in current_files {
                 let full_path = mod_path.join(&f);
+                if let Ok(meta) = std::fs::metadata(&full_path) {
+                    bytes_total += meta.len();
+                }
                 if let Ok(hash) = fs_utils::compute_file_sha256(&full_path) {
                     new_hashes.insert(f.to_string_lossy().to_string(), hash);
                     calculated += 1;
                 }
-                
+
                 // Yield occasionally if mod is huge
                 if calculated % 50 == 0 {
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
             }
+            tracker.set("files", calculated as u64);
+            tracker.set("bytes_read", bytes_total);
+            tracker.finish();
 
             let timestamp = chrono::Local::now().to_rfc3339();
             
@@ -2568,7 +2954,15 @@ pub fn start_content_id_background(app_handle: tauri::AppHandle) {
     let data_path   = app_handle.state::<AppState>().data_path.clone();
 
     std::thread::spawn(move || {
-        log_line("[CONTENT-ID] Background fill thread started");
+        #[cfg(target_os = "windows")]
+        unsafe {
+            extern "system" {
+                fn GetCurrentThread() -> *mut std::ffi::c_void;
+                fn SetThreadPriority(h: *mut std::ffi::c_void, n: i32) -> i32;
+            }
+            let _ = SetThreadPriority(GetCurrentThread(), 0x0001_0000); // THREAD_MODE_BACKGROUND_BEGIN
+        }
+        log_line("[CONTENT-ID] Background fill thread started (background priority)");
         // Let the app fully settle before starting
         std::thread::sleep(std::time::Duration::from_secs(8));
 

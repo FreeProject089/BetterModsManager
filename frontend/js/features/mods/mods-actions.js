@@ -44,24 +44,63 @@ function _updateCancelBtn() {
     const hasOps = S.isGlobalProcessing || _opState.size > 0 || _queueRunning;
     _setCancelBtnState(hasOps, _queueRunning);
 }
-export function requestCancelModOps() {
+/** "Cancel current op only" — kill the running worker, let any queued
+ *  ops continue (used by the main cancel button's default click).        */
+export function requestCancelCurrentOnly() {
+    try {
+        invoke('kill_current_mod_op');
+    }
+    catch (_) { }
+    // Brief spinner feedback so the user sees the click registered
+    _setCancelBtnState(true, true);
+    setTimeout(() => _updateCancelBtn(), 500);
+}
+/** True while a "cancel all" gesture is in progress.  Used so the
+ *  drain queue doesn't prematurely clear the Rust cancel flag while
+ *  there are still in-flight ops that should see CANCELLED. */
+let _cancelAllInProgress = false;
+export async function requestCancelModOps() {
+    // Tell the Rust side to abort any running file copy IMMEDIATELY — this is
+    // what makes cancel feel instant instead of "wait for current mod to finish".
+    try {
+        invoke('cancel_mod_ops');
+    }
+    catch (_) { /* best-effort */ }
     if (S.isGlobalProcessing) {
         _cancelRequested = true;
     }
-    if (_opState.size === 0)
+    if (_opState.size === 0) {
+        _setCancelBtnState(S.isGlobalProcessing, true);
         return;
+    }
     _setCancelBtnState(true, true);
+    _cancelAllInProgress = true;
+    // Mark every entry: in-flight gets cancelled flag set (their finalizer
+    // will push to the revert queue); already-completed get pushed now.
     for (const [modId, state] of Array.from(_opState.entries())) {
         if (S.processingMods.has(modId)) {
-            // Still in-flight — finalizer handles the revert via consumeAndClearOp
             state.cancelled = true;
         }
         else {
-            // Already finished — enqueue revert; drain shows the toast
             _revertQueue.push({ modId, prevEnabled: state.prevEnabled, modName: state.modName, showToast: true });
             _opState.delete(modId);
         }
     }
+    // Wait until every in-flight has resolved (worker killed → finalizer
+    // ran → pushed its revert).  Only THEN clear the Rust flag and start
+    // the actual revert pass.  This prevents queued ops from sneaking past
+    // a too-early clear and toggling for real.
+    const waitStart = Date.now();
+    while ((_opState.size > 0 || S.processingMods.size > 0) && Date.now() - waitStart < 15000) {
+        await new Promise(r => setTimeout(r, 50));
+    }
+    try {
+        await invoke('clear_mod_op_cancel');
+    }
+    catch (_) { }
+    _cancelAllInProgress = false;
+    // Drain whatever piled up into the revert queue — single click, all
+    // pending mods revert sequentially without the user clicking again.
     _drainRevertQueue();
 }
 async function _drainRevertQueue() {
@@ -69,6 +108,14 @@ async function _drainRevertQueue() {
         return;
     _queueRunning = true;
     _setCancelBtnState(true, true);
+    // Only clear the flag here if a cancel-all isn't actively waiting for
+    // in-flight ops to settle (it owns the clear in that case).
+    if (!_cancelAllInProgress) {
+        try {
+            await invoke('clear_mod_op_cancel');
+        }
+        catch (_) { }
+    }
     while (_revertQueue.length > 0) {
         const item = _revertQueue.shift();
         try {
@@ -104,6 +151,9 @@ const _CANCEL_SPINNER_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fil
 let _cancelBtnOriginalHTML = null;
 function _setCancelBtnState(active, spinning) {
     const btn = document.getElementById('btn-cancel-mod-ops');
+    const wrapper = document.getElementById('cancel-ops-wrapper');
+    if (wrapper)
+        wrapper.classList.toggle('disabled', !active);
     if (!btn)
         return;
     if (spinning) {
@@ -227,6 +277,11 @@ export async function toggleAllMods(forcedEnable = null) {
             // Revert: restore each mod to its snapshot state
             if (btn)
                 btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:6px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${t('common.reverting') || 'Annulation…'}`;
+            // Clear the backend cancel flag so the revert IPCs themselves run.
+            try {
+                await invoke('clear_mod_op_cancel');
+            }
+            catch (_) { }
             for (const snap of _preOpSnapshot) {
                 try {
                     if (snap.enabled) {
@@ -247,11 +302,22 @@ export async function toggleAllMods(forcedEnable = null) {
         }
     }
     catch (err) {
-        toast(t('common.error') + ' : ' + err, 'error');
+        if (typeof err === 'string' && (err === 'CANCELLED' || err.includes('CANCELLED'))) {
+            // Silent — cancel path already handled
+        }
+        else {
+            toast(t('common.error') + ' : ' + err, 'error');
+        }
     }
     finally {
         _cancelRequested = false;
         _preOpSnapshot = [];
+        // Always make sure the cancel flag is cleared at the end of the batch
+        // so a follow-up toggle isn't accidentally short-circuited.
+        try {
+            await invoke('clear_mod_op_cancel');
+        }
+        catch (_) { }
         targetMods.forEach(m => setModLoading(m.id, false));
         await new Promise(r => setTimeout(r, 250));
         targetMods.forEach(m => S.processingMods.delete(m.id));

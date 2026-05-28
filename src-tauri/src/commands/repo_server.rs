@@ -531,6 +531,14 @@ pub async fn start_repo_server(
                             });
                         }
                         
+                        // Per-download resource record (file served = bandwidth used)
+                        {
+                            let mut t = crate::commands::resource_tracker::OpTracker::start("REPO/host-serve")
+                                .with_subject(file_fin.clone());
+                            t.set("bytes_sent", total);
+                            t.finish();
+                        }
+
                         // Update downloads.json stats
                         let downloads_path = serve_dir_fin.join("downloads.json");
                         let content = tokio::fs::read_to_string(&downloads_path).await.unwrap_or_else(|_| "{}".to_string());
