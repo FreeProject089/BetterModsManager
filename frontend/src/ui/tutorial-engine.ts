@@ -11,6 +11,7 @@
  */
 
 import { t } from '../core/i18n.js';
+import { invoke } from '../core/api.js';
 import { onBmmAction } from './tutorial-events.js';
 import {
     savePosition, markStepComplete, markStepPartial, getStepStatus,
@@ -60,6 +61,43 @@ let _panelTop:  number | null = null;
 // Minimize state
 let _isMinimized = false;
 
+// ── Tutorial demo data (ephemeral example profile + mods) ──────────────────
+let _demoCreated = false;
+let _demoPrevActive: string | null = null;
+// Tutorials whose steps demonstrate mod/profile features and benefit from a
+// concrete example when the user has no real data yet.
+const DEMO_TUTORIALS = new Set(['basics']);
+
+async function _setupDemo(): Promise<void> {
+    try {
+        const res: any = await invoke('tutorial_setup_demo');
+        _demoCreated    = !!res?.created;
+        _demoPrevActive = res?.prevActive ?? null;
+        if (_demoCreated) {
+            // Make the example profile + mods appear in the live UI immediately.
+            (window as any)._refreshProfilesFn?.();
+            (window as any)._refreshModsFn?.(true);
+        }
+    } catch (e) {
+        console.warn('[tutorial] setup demo failed:', e);
+        _demoCreated = false;
+    }
+}
+
+async function _cleanupDemo(): Promise<void> {
+    if (!_demoCreated) return;
+    _demoCreated = false;
+    const prev = _demoPrevActive;
+    _demoPrevActive = null;
+    try {
+        await invoke('tutorial_cleanup_demo', { prevActive: prev });
+        (window as any)._refreshProfilesFn?.();
+        (window as any)._refreshModsFn?.(true);
+    } catch (e) {
+        console.warn('[tutorial] cleanup demo failed:', e);
+    }
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export function startTutorialEngine(
@@ -85,6 +123,11 @@ export function startTutorialEngine(
         }
     }
 
+    // Inject ephemeral example data (profile + mods) so steps about mods,
+    // conflicts, hashes, integrity… have something concrete to point at when
+    // the user has no real data. No-op if real mods already exist.
+    if (DEMO_TUTORIALS.has(tutorial.id)) _setupDemo();
+
     _ensurePanel();
     _renderStep();
     _registerLangListener();
@@ -93,6 +136,7 @@ export function startTutorialEngine(
 export function closeTutorialEngine(): void {
     _unregisterLangListener();
     _cleanup();
+    _cleanupDemo();
     _isMinimized = false;
     const panel = document.getElementById('tut-engine-panel');
     if (panel) {
@@ -356,7 +400,7 @@ function _renderStep(): void {
                 <span class="tut-action-label" style="color:${tut.color}">${t('hub.action.waiting')}</span>
                 <p class="tut-action-desc">${t(step.action.desc_key)}</p>
             </div>
-            ${step.optional ? `<button class="tut-action-skip-btn" id="btn-tut-skip-action">${t('hub.action.skip')}</button>` : ''}
+            <button class="tut-action-skip-btn" id="btn-tut-skip-action">${step.optional ? t('hub.action.skip') : (t('hub.action.skipStep') || t('hub.action.skip'))}</button>
         </div>
     ` : '';
 
@@ -573,6 +617,7 @@ function _renderStep(): void {
 
 function _skipTutorial(): void {
     _cleanup();
+    _cleanupDemo();
     _unregisterLangListener();
     _isMinimized = false;
     const panel = document.getElementById('tut-engine-panel');
@@ -621,6 +666,7 @@ function _finishTutorial(): void {
     `;
 
     document.getElementById('btn-tut-finish-hub')?.addEventListener('click', () => {
+        _cleanupDemo();
         panel.classList.add('closing');
         panel.addEventListener('animationend', () => {
             panel.remove(); _panelLeft = null; _panelTop = null;

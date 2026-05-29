@@ -159,6 +159,9 @@ fn main() {
                 let mut data = app_state.data.lock().unwrap();
                 app_state.previous_session_clean.store(data.settings.last_session_clean, std::sync::atomic::Ordering::SeqCst);
                 data.settings.last_session_clean = false;
+                // Clean up any tutorial demo data left over from a previous session
+                // (e.g. BMM closed mid-tutorial before cleanup could run).
+                crate::commands::tutorial_demo::purge_tutorial_demo(&mut data);
             }
             let _ = app_state.save();
 
@@ -317,6 +320,11 @@ fn main() {
             commands::crash::get_crash_reports,
             commands::crash::trigger_manual_crash_report,
             commands::crash::log_frontend_line,
+            commands::crash::append_api_log,
+            commands::crash::read_api_log,
+            commands::crash::clear_api_log,
+            commands::tutorial_demo::tutorial_setup_demo,
+            commands::tutorial_demo::tutorial_cleanup_demo,
             commands::crash::get_startup_status,
             commands::autoupdate::check_for_update,
             commands::autoupdate::download_and_install_update,

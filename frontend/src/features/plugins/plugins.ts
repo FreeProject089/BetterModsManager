@@ -2030,6 +2030,18 @@ function renderScripts(container: HTMLElement) {
         { m: 'POST',   p: '/api/repo/sync',            l: 'Sync Repo',        icon: IC.refresh,    body: '{}' },
         { m: 'POST',   p: '/api/repo/gen',             l: 'Gen Repo',         icon: IC.upload,     body: '{}' },
         { m: 'POST',   p: '/api/repo/host',            l: 'Host HTTP',        icon: IC.globe,      body: '{"serveDir":"C:/BMM/Export","port":8080}' },
+        // ── Import / Export (UI-driven) ────────────────────────────
+        { m: 'POST',   p: '/api/data/export',          l: 'Export Data',      icon: IC.upload },
+        { m: 'POST',   p: '/api/data/import',          l: 'Import Data',      icon: IC.download },
+        { m: 'POST',   p: '/api/modlists/export',      l: 'Export Mod List',  icon: IC.upload },
+        { m: 'POST',   p: '/api/modlists/import',      l: 'Import Mod List',  icon: IC.download },
+        { m: 'POST',   p: '/api/modpacks/import',      l: 'Import Modpack',   icon: IC.download },
+        { m: 'POST',   p: '/api/modpacks/export',      l: 'Export Modpack',   icon: IC.upload,     body: '{"id":""}' },
+        { m: 'POST',   p: '/api/plugins/import',       l: 'Import Plugin',    icon: IC.download },
+        { m: 'POST',   p: '/api/plugins/export',       l: 'Export Plugin',    icon: IC.upload,     body: '{"id":""}' },
+        { m: 'POST',   p: '/api/language/import',       l: 'Import Language',  icon: IC.download },
+        { m: 'POST',   p: '/api/profiles/import/ovgme', l: 'Import OvGME',     icon: IC.download },
+        { m: 'POST',   p: '/api/profiles/import/omm',   l: 'Import OMM/OMX',   icon: IC.download },
         // ── PUT ────────────────────────────────────────────────────
         { m: 'PUT',    p: '/api/mods/:id',            l: 'Update Mod',       icon: IC.editIcon,   body: '{"name":""}' },
         { m: 'PUT',    p: '/api/profiles/:id',        l: 'Update Profile',   icon: IC.editIcon,   body: '{"name":""}' },
@@ -2124,7 +2136,7 @@ function renderScripts(container: HTMLElement) {
                             <input type="text" id="pt-path" class="input input-sm" value="/api/health" style="flex:1;">
                             <button class="btn btn-sm btn-accent" id="pt-run">${IC.play} ${t('plugins.run')}</button>
                         </div>
-                        <textarea id="pt-body" class="input plug-tester-body" placeholder='{"key": "value"}  — POST only'></textarea>
+                        <textarea id="pt-body" class="input plug-tester-body" placeholder="${(t('plugins.customBodyPlaceholder') || '{\"key\": \"value\"}  — POST only').replace(/"/g, '&quot;')}"></textarea>
                         <div class="plug-tester-resp" id="pt-response" style="display:none;">
                             <div class="plug-tester-resp-header">
                                 <span id="pt-status-badge" class="plug-tester-status"></span>
@@ -2361,38 +2373,67 @@ function renderScripts(container: HTMLElement) {
     epSearch?.addEventListener('input', applyEndpointFilter);
     epSearchClr?.addEventListener('click', () => { if (epSearch) { epSearch.value = ''; applyEndpointFilter(); epSearch.focus(); } });
 
-    // ── API activity log panel — mirrors window.__bmmApiLog, live-updated ──────
+    // ── API activity log panel — disk-backed, rendered incrementally ───────────
+    // The full history is kept on disk (read_api_log / append_api_log). The panel
+    // loads the last N on open and then PREPENDS one row per event (no full
+    // re-render), capping the DOM so it never lags regardless of total volume.
     const apiLogList  = container.querySelector('#plug-api-log-list')  as HTMLElement | null;
     const apiLogCount = container.querySelector('#plug-api-log-count') as HTMLElement | null;
-    const renderApiLog = () => {
-        if (!apiLogList) return;
-        const log = ((window as any).__bmmApiLog as any[]) || [];
-        if (apiLogCount) apiLogCount.textContent = log.length ? String(log.length) : '';
-        if (!log.length) {
-            apiLogList.innerHTML = `<div class="plug-api-log-empty">${t('plugins.apiActivityLogEmpty') || 'No API activity yet.'}</div>`;
-            return;
-        }
-        apiLogList.innerHTML = log.slice().reverse().map((e: any) => {
-            const time = new Date(e.time).toLocaleTimeString();
-            const cls  = e.ok ? 'ok' : 'err';
-            const mc   = String(e.method || '').toLowerCase();
-            return `<div class="plug-api-log-row plug-api-log-${cls}">
-                <span class="plug-api-log-time">${time}</span>
-                <span class="plug-qt-method-badge plug-qt-${mc}">${escHtml(e.method || '')}</span>
-                <span class="plug-api-log-ic">${e.icon || ''}</span>
-                <span class="plug-api-log-label">${escHtml(e.label || e.path || '')}</span>
-                <span class="plug-api-log-status">${escHtml(String(e.status ?? ''))}</span>
-            </div>`;
-        }).join('');
+    const API_LOG_DOM_CAP = 200;   // max rows kept in the DOM
+    const API_LOG_LOAD    = 100;   // how many to load from disk on open
+    const _rowHtml = (e: any): string => {
+        const time = e.time ? new Date(e.time).toLocaleTimeString() : '';
+        const cls  = e.ok ? 'ok' : 'err';
+        const mc   = String(e.method || '').toLowerCase();
+        return `<div class="plug-api-log-row plug-api-log-${cls}">
+            <span class="plug-api-log-time">${time}</span>
+            <span class="plug-qt-method-badge plug-qt-${mc}">${escHtml(e.method || '')}</span>
+            <span class="plug-api-log-ic">${e.icon || ''}</span>
+            <span class="plug-api-log-label">${escHtml(e.label || e.path || '')}</span>
+            <span class="plug-api-log-status">${escHtml(String(e.status ?? ''))}</span>
+        </div>`;
     };
-    renderApiLog();
+    const _setLogCount = () => {
+        if (!apiLogList || !apiLogCount) return;
+        const n = apiLogList.querySelectorAll('.plug-api-log-row').length;
+        apiLogCount.textContent = n ? String(n) : '';
+    };
+    const _emptyLog = () => {
+        if (apiLogList) apiLogList.innerHTML = `<div class="plug-api-log-empty">${t('plugins.apiActivityLogEmpty') || 'No API activity yet.'}</div>`;
+        if (apiLogCount) apiLogCount.textContent = '';
+    };
+    // Load recent history from disk (newest first in the DOM).
+    const loadApiLogFromDisk = async () => {
+        if (!apiLogList) return;
+        try {
+            const lines = (await invoke('read_api_log', { limit: API_LOG_LOAD })) as string[];
+            if (!lines || !lines.length) { _emptyLog(); return; }
+            const rows = lines.map(l => { try { return _rowHtml(JSON.parse(l)); } catch { return ''; } });
+            apiLogList.innerHTML = rows.reverse().join('') || '';
+            if (!apiLogList.querySelector('.plug-api-log-row')) _emptyLog();
+            _setLogCount();
+        } catch { _emptyLog(); }
+    };
+    loadApiLogFromDisk();
+    // Incremental: prepend the single new entry, then trim the DOM.
+    const onApiActivity = (ev: Event) => {
+        if (!apiLogList) return;
+        const e = (ev as CustomEvent).detail;
+        if (!e) return;
+        apiLogList.querySelector('.plug-api-log-empty')?.remove();
+        apiLogList.insertAdjacentHTML('afterbegin', _rowHtml(e));
+        const rows = apiLogList.querySelectorAll('.plug-api-log-row');
+        for (let i = rows.length - 1; i >= API_LOG_DOM_CAP; i--) rows[i].remove();
+        _setLogCount();
+    };
     // Avoid handler accumulation across page re-renders.
     if ((window as any).__bmmApiLogHandler) document.removeEventListener('bmm:api-activity', (window as any).__bmmApiLogHandler);
-    (window as any).__bmmApiLogHandler = renderApiLog;
-    document.addEventListener('bmm:api-activity', renderApiLog);
-    container.querySelector('#plug-api-log-clear')?.addEventListener('click', () => {
+    (window as any).__bmmApiLogHandler = onApiActivity;
+    document.addEventListener('bmm:api-activity', onApiActivity);
+    container.querySelector('#plug-api-log-clear')?.addEventListener('click', async () => {
         (window as any).__bmmApiLog = [];
-        renderApiLog();
+        try { await invoke('clear_api_log'); } catch { /* ignore */ }
+        _emptyLog();
     });
 
     // Custom tester
@@ -3477,6 +3518,121 @@ function getEndpointDefs(): EndpointDef[] {
                 e401,
             ],
         },
+        // ── Import / Export (UI-driven — performed through the BMM interface) ──
+        {
+            method: 'POST', path: '/api/data/export', auth: true,
+            desc: 'Export app data (backup)',
+            about: '<strong>What:</strong> a single <code>.json</code> backup of BMM\'s data — you choose which sections to include (profiles, settings, modpacks, plugins…). <strong>Where:</strong> you pick the destination file in the native save dialog that opens.<br><br>This is UI-driven: the API only opens the in-app "Export data" flow (Settings) — exactly as if you clicked it yourself — so you confirm the options and location.',
+            fields: [],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "data/export" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/data/import', auth: true,
+            desc: 'Import app data (restore)',
+            about: '<strong>What:</strong> a previously exported BMM <code>.json</code> backup. <strong>Where it goes:</strong> it replaces BMM\'s current data store (the app-data file BMM reads at startup), restoring the saved profiles/settings/modpacks/plugins. <strong>Source:</strong> you pick the backup file in the open dialog.<br><br>UI-driven via the Settings "Import data" flow, including its confirmation prompt (this overwrites your current data).',
+            fields: [],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "data/import" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/modlists/export', auth: true,
+            desc: 'Export a mod list (.mmlist)',
+            about: '<strong>What:</strong> a shareable <code>.mmlist</code> describing your current profile\'s mods (names, versions, optional download links/hashes) — it does NOT bundle the mod files themselves. <strong>Where:</strong> you choose the output file in the export form. <strong>Fill in:</strong> list name, description, author.<br><br>UI-driven: opens the in-app mod-list export form so you complete the fields and destination.',
+            fields: [],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "modlist/export" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/modlists/import', auth: true,
+            desc: 'Import a mod list (.mmlist)',
+            about: '<strong>What:</strong> a <code>.mmlist</code> file. BMM reads it, resolves the listed mods and downloads the ones with links. <strong>Where it goes:</strong> resolved mods are added to the active profile and stored in that profile\'s Mods folder. <strong>Source:</strong> you pick the <code>.mmlist</code> in the open dialog.<br><br>UI-driven via the in-app mod-list import flow.',
+            fields: [],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "modlist/import" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/modpacks/import', auth: true,
+            desc: 'Import a modpack (.bmp)',
+            about: '<strong>What:</strong> a Better ModPack <code>.bmp</code> file. <strong>Where it goes:</strong> the imported modpack is added to BMM\'s modpack list (stored in the app-data file) and appears on the Modpacks page. <strong>Source:</strong> you pick the <code>.bmp</code> in the native file dialog.<br><br>UI-driven via the native modpack importer.',
+            fields: [],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "modpack/import" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/modpacks/export', auth: true,
+            desc: 'Export a modpack (.bmp)',
+            about: '<strong>What:</strong> the modpack identified by <code>id</code>, written as a Better ModPack <code>.bmp</code> file. <strong>Where:</strong> you choose the destination in the native save dialog BMM opens.<br><br>Get the id from <code>GET /api/modpacks</code>.',
+            fields: [
+                { name: 'id', type: 'string', required: true, desc: 'UUID of the modpack to export (from GET /api/modpacks).' },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "modpack/export" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/plugins/import', auth: true,
+            desc: 'Import a plugin (.bmmplug)',
+            about: '<strong>What:</strong> a <code>.bmmplug</code> (or <code>.zip</code>) plugin package. <strong>Where it goes:</strong> it is installed into BMM\'s plugins folder and registered as an installed plugin (Plugins page). <strong>Source:</strong> you pick the file in the open dialog.<br><br>UI-driven via the native plugin importer.',
+            fields: [],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "plugin/import" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/plugins/export', auth: true,
+            desc: 'Export a plugin (.bmmplug)',
+            about: '<strong>What:</strong> the installed plugin identified by <code>id</code>, packaged as a <code>.bmmplug</code> file. <strong>Where:</strong> you choose the destination in the native save dialog.<br><br>Get the id from <code>GET /api/plugins</code>.',
+            fields: [
+                { name: 'id', type: 'string', required: true, desc: 'ID of the installed plugin to export (from GET /api/plugins).' },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "plugin/export" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/language/import', auth: true,
+            desc: 'Import a language file',
+            about: '<strong>What:</strong> a translation <code>.json</code> (same shape as BMM\'s built-in <code>Lang/</code> files). <strong>Where it goes:</strong> it is copied into BMM\'s <code>Lang/</code> folder and becomes selectable as a language in Settings. <strong>Source:</strong> you pick the file in the open dialog.',
+            fields: [],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "language/import" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/profiles/import/ovgme', auth: true,
+            desc: 'Import OvGME profiles',
+            about: '<strong>What:</strong> existing OvGME configurations. BMM scans the OvGME data folder (<code>%PROGRAMDATA%/OvGME</code>) automatically — no file to pick. <strong>Where it goes:</strong> each detected OvGME config becomes a new BMM profile (stored in the app-data file, shown on the Profiles page). Returns the number of profiles imported.',
+            fields: [],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "profile/import-ovgme" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/profiles/import/omm', auth: true,
+            desc: 'Import OMM / OMX profile',
+            about: '<strong>What:</strong> an OpenModManager profile/backup file (<code>.omm</code> / <code>.omx</code>). <strong>Where it goes:</strong> a new BMM profile is created from it (stored in the app-data file, shown on the Profiles page). <strong>Source:</strong> you pick the file in the open dialog.',
+            fields: [],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "profile/import-omm" }' },
+                e401,
+            ],
+        },
         // ── Modpacks (list + create + update) ────────────────────────────────
         {
             method: 'GET', path: '/api/modpacks', auth: false,
@@ -3584,10 +3740,10 @@ async function handleApiTest() {
 
     // Warn if :id placeholder not replaced
     if (path.includes(':id') || path.includes(':uuid')) {
-        statusBadge.textContent = 'Remplacez :id dans le chemin';
+        statusBadge.textContent = t('plugins.ptReplaceId') || 'Replace :id in the path';
         statusBadge.className = 'plug-tester-status plug-status-err';
         respDiv.style.display = 'block';
-        respPre.textContent = 'Le chemin contient encore un placeholder ":id". Remplacez-le par l\'UUID réel.';
+        respPre.textContent = t('plugins.ptReplaceIdDesc') || 'The path still contains a ":id" placeholder. Replace it with the real UUID.';
         return;
     }
 
@@ -3627,7 +3783,7 @@ async function handleApiTest() {
 
         let display: string;
         if (!text || text.trim() === '') {
-            display = `// (réponse vide — ${res.status} ${res.statusText})`;
+            display = `// ${(t('plugins.ptEmptyResponse') || '(empty response — {s})').replace('{s}', `${res.status} ${res.statusText}`)}`;
         } else {
             try {
                 const json = JSON.parse(text);
@@ -3638,7 +3794,7 @@ async function handleApiTest() {
         }
         const MAX_DISPLAY = 8000;
         if (display.length > MAX_DISPLAY)
-            display = display.slice(0, MAX_DISPLAY) + `\n\n… [tronqué — ${display.length.toLocaleString()} chars]`;
+            display = display.slice(0, MAX_DISPLAY) + `\n\n… ${(t('plugins.ptTruncated') || '[truncated — {n} chars]').replace('{n}', display.length.toLocaleString())}`;
 
         respPre.innerHTML = hlJson(display);
 
@@ -3656,9 +3812,9 @@ async function handleApiTest() {
             }
         }
     } catch (e) {
-        statusBadge.textContent = t('common.error') || 'Erreur';
+        statusBadge.textContent = t('common.error') || 'Error';
         statusBadge.className = 'plug-tester-status plug-status-err';
-        respPre.textContent = `Erreur réseau : ${String(e)}\n\nVérifiez que BMM est bien démarré et que l'API tourne sur le port 51274.`;
+        respPre.textContent = (t('plugins.ptNetworkError') || 'Network error: {e}\n\nMake sure BMM is running and the API is on port 51274.').replace('{e}', String(e));
     }
 }
 

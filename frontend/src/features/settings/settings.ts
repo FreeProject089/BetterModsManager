@@ -1382,12 +1382,14 @@ export async function initSettings() {
             };
 
             const content = document.createElement('div');
-            content.className = 'modal-content glass';
-            content.style.maxWidth = '400px';
+            // Use the same clean container style as the Launch Pack modal
+            // (solid #111827 background instead of the dark glass blur).
+            content.className = 'modal';
+            content.style.maxWidth = '430px';
+            content.style.width = '430px';
             content.style.padding = '0';
             content.style.overflow = 'hidden';
             content.style.pointerEvents = 'auto';
-            content.style.boxShadow = 'var(--glass-shadow-strong)';
 
             content.innerHTML = `
                 <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border)">
@@ -1400,44 +1402,57 @@ export async function initSettings() {
                     </button>
                 </div>
                 
-                <div class="modal-body" style="padding:24px; display:flex; flex-direction:column; gap:16px">
-                    <div style="background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border); padding:16px; display:flex; flex-direction:column; gap:12px">
-                        <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:4px 0">
-                            <span style="font-size:13px; font-weight:600; color:var(--text-primary)">${t('settings.exportProfiles')}</span>
-                            <label class="bmm-switch" style="transform:scale(0.8)">
+                <div class="modal-body" style="padding:20px 22px; display:flex; flex-direction:column; gap:14px">
+                    <div class="exp-opt-list">
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportProfiles')}</span>
+                                <span class="exp-opt-desc">${t('settings.exportProfilesDesc') || 'Game profiles, paths and active mod lists'}</span>
+                            </span>
+                            <label class="bmm-switch">
                                 <input type="checkbox" id="exp-profiles" checked>
                                 <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
                             </label>
                         </label>
-                        <div style="height:1px; background:rgba(255,255,255,0.05)"></div>
-                        <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:4px 0">
-                            <span style="font-size:13px; font-weight:600; color:var(--text-primary)">${t('settings.exportMods')}</span>
-                            <label class="bmm-switch" style="transform:scale(0.8)">
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportMods')}</span>
+                                <span class="exp-opt-desc">${t('settings.exportModsDesc') || 'Scanned mod entries and metadata'}</span>
+                            </span>
+                            <label class="bmm-switch">
                                 <input type="checkbox" id="exp-mods" checked>
                                 <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
                             </label>
                         </label>
-                        <div style="height:1px; background:rgba(255,255,255,0.05)"></div>
-                        <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:4px 0">
-                            <span style="font-size:13px; font-weight:600; color:var(--text-primary)">${t('settings.exportTags')}</span>
-                            <label class="bmm-switch" style="transform:scale(0.8)">
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportTags')}</span>
+                                <span class="exp-opt-desc">${t('settings.exportTagsDesc') || 'Your custom tags assigned to mods'}</span>
+                            </span>
+                            <label class="bmm-switch">
                                 <input type="checkbox" id="exp-tags" checked>
                                 <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
                             </label>
                         </label>
-                        <div style="height:1px; background:rgba(255,255,255,0.05)"></div>
-                        <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:4px 0">
-                            <span style="font-size:13px; font-weight:600; color:var(--text-primary)">${t('settings.exportSettings')}</span>
-                            <label class="bmm-switch" style="transform:scale(0.8)">
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V12a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportSettings')}</span>
+                                <span class="exp-opt-desc">${t('settings.exportSettingsDesc') || 'App preferences and configuration'}</span>
+                            </span>
+                            <label class="bmm-switch">
                                 <input type="checkbox" id="exp-settings" checked>
                                 <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
                             </label>
                         </label>
                     </div>
-                    
-                    <div style="font-size:11px; color:var(--text-muted); background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.03)">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle; margin-right:6px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                        This will create a JSON file that you can use to restore your configuration later.
+
+                    <div class="exp-note">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        <span>${t('settings.exportNote') || 'This will create a JSON file that you can use to restore your configuration later.'}</span>
                     </div>
                 </div>
                 

@@ -296,6 +296,25 @@ fn with_app_handle(
     warp::any().map(move || handle.clone())
 }
 
+/// Optional `{ "id": "..." }` body for import/export endpoints that target a
+/// specific entity (modpack id, plugin id). Empty is allowed.
+#[derive(Deserialize, Clone, Default)]
+struct IoIdBody {
+    #[serde(default)]
+    id: String,
+}
+
+/// Emit a `bmm://api-exec` event so the frontend performs the action through
+/// the BMM interface (native importer/exporter + file dialog), then reply 202.
+/// Used by all import/export endpoints so they behave "like a human in BMM".
+fn api_exec_reply(handle: &tauri::AppHandle, action: &str, params: serde_json::Value) -> warp::reply::WithStatus<warp::reply::Json> {
+    let _ = handle.emit_all("bmm://api-exec", serde_json::json!({ "action": action, "params": params }));
+    warp::reply::with_status(
+        warp::reply::json(&serde_json::json!({ "ok": true, "driven_by": "bmm-ui", "action": action })),
+        StatusCode::ACCEPTED,
+    )
+}
+
 fn save_data(data: &Arc<std::sync::Mutex<AppData>>, path: &PathBuf) {
     let d = data.lock().unwrap_or_else(|p| p.into_inner());
     if let Some(parent) = path.parent() {
@@ -1593,6 +1612,90 @@ pub async fn start_api_server(
             }
         });
 
+    // ── Import / Export endpoints (UI-driven) ─────────────────────────────────
+    // Each emits `bmm://api-exec` so the frontend performs the action through the
+    // BMM interface (native importer/exporter + file dialog) — exactly as a human
+    // would. Token required. They return 202 (the user completes any file picker).
+
+    // POST /api/data/export — export app data (profiles/settings/etc.)
+    let t1 = token.clone(); let h1 = app_handle.clone();
+    let io_data_export = warp::path!("api" / "data" / "export").and(warp::post())
+        .and(require_token(t1)).and(with_app_handle(h1))
+        .map(|h: tauri::AppHandle| api_exec_reply(&h, "data/export", serde_json::json!({})));
+
+    // POST /api/data/import — import an app-data backup
+    let t2 = token.clone(); let h2 = app_handle.clone();
+    let io_data_import = warp::path!("api" / "data" / "import").and(warp::post())
+        .and(require_token(t2)).and(with_app_handle(h2))
+        .map(|h: tauri::AppHandle| api_exec_reply(&h, "data/import", serde_json::json!({})));
+
+    // POST /api/modlists/export — export a .mmlist mod list
+    let t3 = token.clone(); let h3 = app_handle.clone();
+    let io_modlist_export = warp::path!("api" / "modlists" / "export").and(warp::post())
+        .and(require_token(t3)).and(with_app_handle(h3))
+        .map(|h: tauri::AppHandle| api_exec_reply(&h, "modlist/export", serde_json::json!({})));
+
+    // POST /api/modlists/import — import a .mmlist mod list
+    let t4 = token.clone(); let h4 = app_handle.clone();
+    let io_modlist_import = warp::path!("api" / "modlists" / "import").and(warp::post())
+        .and(require_token(t4)).and(with_app_handle(h4))
+        .map(|h: tauri::AppHandle| api_exec_reply(&h, "modlist/import", serde_json::json!({})));
+
+    // POST /api/modpacks/import — import a .bmp modpack
+    let t5 = token.clone(); let h5 = app_handle.clone();
+    let io_modpack_import = warp::path!("api" / "modpacks" / "import").and(warp::post())
+        .and(require_token(t5)).and(with_app_handle(h5))
+        .map(|h: tauri::AppHandle| api_exec_reply(&h, "modpack/import", serde_json::json!({})));
+
+    // POST /api/modpacks/export — export a modpack to .bmp (body: { id })
+    let t6 = token.clone(); let h6 = app_handle.clone();
+    let io_modpack_export = warp::path!("api" / "modpacks" / "export").and(warp::post())
+        .and(require_token(t6)).and(warp::body::json::<IoIdBody>()).and(with_app_handle(h6))
+        .map(|b: IoIdBody, h: tauri::AppHandle| api_exec_reply(&h, "modpack/export", serde_json::json!({ "id": b.id })));
+
+    // POST /api/plugins/import — import a .bmmplug plugin
+    let t7 = token.clone(); let h7 = app_handle.clone();
+    let io_plugin_import = warp::path!("api" / "plugins" / "import").and(warp::post())
+        .and(require_token(t7)).and(with_app_handle(h7))
+        .map(|h: tauri::AppHandle| api_exec_reply(&h, "plugin/import", serde_json::json!({})));
+
+    // POST /api/plugins/export — export a plugin to .bmmplug (body: { id })
+    let t8 = token.clone(); let h8 = app_handle.clone();
+    let io_plugin_export = warp::path!("api" / "plugins" / "export").and(warp::post())
+        .and(require_token(t8)).and(warp::body::json::<IoIdBody>()).and(with_app_handle(h8))
+        .map(|b: IoIdBody, h: tauri::AppHandle| api_exec_reply(&h, "plugin/export", serde_json::json!({ "id": b.id })));
+
+    // POST /api/language/import — import a language .json file
+    let t10 = token.clone(); let h10 = app_handle.clone();
+    let io_lang_import = warp::path!("api" / "language" / "import").and(warp::post())
+        .and(require_token(t10)).and(with_app_handle(h10))
+        .map(|h: tauri::AppHandle| api_exec_reply(&h, "language/import", serde_json::json!({})));
+
+    // POST /api/profiles/import/ovgme — import OvGME profiles
+    let t11 = token.clone(); let h11 = app_handle.clone();
+    let io_prof_ovgme = warp::path!("api" / "profiles" / "import" / "ovgme").and(warp::post())
+        .and(require_token(t11)).and(with_app_handle(h11))
+        .map(|h: tauri::AppHandle| api_exec_reply(&h, "profile/import-ovgme", serde_json::json!({})));
+
+    // POST /api/profiles/import/omm — import an OMM / OMX profile
+    let t12 = token.clone(); let h12 = app_handle.clone();
+    let io_prof_omm = warp::path!("api" / "profiles" / "import" / "omm").and(warp::post())
+        .and(require_token(t12)).and(with_app_handle(h12))
+        .map(|h: tauri::AppHandle| api_exec_reply(&h, "profile/import-omm", serde_json::json!({})));
+
+    let group_io = io_data_export
+        .or(io_data_import)
+        .or(io_modlist_export)
+        .or(io_modlist_import)
+        .or(io_modpack_import)
+        .or(io_modpack_export)
+        .or(io_plugin_import)
+        .or(io_plugin_export)
+        .or(io_lang_import)
+        .or(io_prof_ovgme)
+        .or(io_prof_omm)
+        .boxed();
+
     // CORS headers — allow any origin (local-only, Bearer token required)
     let cors = warp::cors()
         .allow_any_origin()
@@ -1651,6 +1754,7 @@ pub async fn start_api_server(
         .or(group_c)
         .or(group_d)
         .or(group_e)
+        .or(group_io)
         .with(cors)
         .recover(handle_rejection);
 

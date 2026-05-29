@@ -402,6 +402,69 @@ pub fn log_frontend_line(line: String) {
     log_line(format!("[UI] {}", line));
 }
 
+// ─── API ACTIVITY LOG (disk-backed, used by the Plugins & API panel) ─────────
+// Each line is one JSON entry. Stored on disk so it never grows in RAM and
+// survives restarts; the frontend keeps only a tiny in-memory window.
+
+fn get_api_log_path() -> PathBuf {
+    // <appdata>/com.bettermm.app/api-activity.log  (sibling of the Crashes dir)
+    get_crash_dir(None)
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("api-activity.log")
+}
+
+const API_LOG_MAX_LINES: usize = 5000;
+
+/// Append one JSON entry (single line) to the API activity log on disk.
+#[tauri::command]
+pub fn append_api_log(line: String) -> Result<(), String> {
+    let path = get_api_log_path();
+    if let Some(parent) = path.parent() { let _ = fs::create_dir_all(parent); }
+    {
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .map_err(|e| e.to_string())?;
+        // Keep it strictly one line per entry
+        let _ = writeln!(file, "{}", line.replace('\n', " ").replace('\r', " "));
+    }
+    // Trim occasionally so the file stays bounded (cheap metadata check).
+    if let Ok(meta) = fs::metadata(&path) {
+        if meta.len() > 1_500_000 {
+            if let Ok(content) = fs::read_to_string(&path) {
+                let lines: Vec<&str> = content.lines().collect();
+                if lines.len() > API_LOG_MAX_LINES {
+                    let keep = &lines[lines.len() - API_LOG_MAX_LINES..];
+                    let _ = fs::write(&path, format!("{}\n", keep.join("\n")));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Return the last `limit` API activity log entries (JSON strings, oldest→newest).
+#[tauri::command]
+pub fn read_api_log(limit: usize) -> Vec<String> {
+    let path = get_api_log_path();
+    let content = match fs::read_to_string(&path) { Ok(c) => c, Err(_) => return Vec::new() };
+    let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+    let n = limit.min(lines.len());
+    if n == 0 { return Vec::new(); }
+    lines[lines.len() - n..].iter().map(|s| s.to_string()).collect()
+}
+
+/// Clear the API activity log file.
+#[tauri::command]
+pub fn clear_api_log() -> Result<(), String> {
+    let path = get_api_log_path();
+    if path.exists() { fs::write(&path, "").map_err(|e| e.to_string())?; }
+    Ok(())
+}
+
 #[derive(serde::Serialize)]
 pub struct StartupStatus {
     pub backend_crashed: bool,

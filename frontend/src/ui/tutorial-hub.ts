@@ -57,6 +57,9 @@ export function closeTutorialHub(): void {
     if (overlay) {
         overlay.classList.add('closing');
         overlay.addEventListener('animationend', () => overlay.remove(), { once: true });
+        // Fallback: if the closing animation never fires (display change, reduced
+        // motion, etc.) force-remove so the hub can never stay stuck on screen.
+        setTimeout(() => { document.getElementById('tut-hub-overlay')?.remove(); }, 450);
     }
 }
 

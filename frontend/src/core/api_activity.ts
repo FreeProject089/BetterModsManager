@@ -43,7 +43,10 @@ const ICN = {
     server:  sv('<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'),
 };
 
-const MAX_LOG = 300;
+// Keep only a tiny window in RAM — the full history lives on disk (see
+// append_api_log / read_api_log). This prevents both memory growth and the
+// render lag that came from re-drawing a large in-memory array.
+const MAX_LOG = 50;
 
 declare global {
     interface Window {
@@ -92,14 +95,17 @@ function describe(method: string, path: string): { label: string; icon: string }
     return { label: `${method} ${p}`, icon: ICN.globe };
 }
 
-/** Push an entry to the global API log (ring buffer) and mirror to console. */
+/** Record an entry: persist to disk, keep a tiny RAM window, notify the panel. */
 function pushLog(entry: ApiLogEntry): void {
+    // 1. Persist to disk (full history, bounded by the backend). Fire-and-forget.
+    try { invoke('append_api_log', { line: JSON.stringify(entry) }).catch(() => {}); } catch { /* ignore */ }
+    // 2. Tiny in-memory window for instant display only.
     if (!window.__bmmApiLog) window.__bmmApiLog = [];
     window.__bmmApiLog.push(entry);
     if (window.__bmmApiLog.length > MAX_LOG) window.__bmmApiLog.shift();
     const tag = entry.ok ? '[API ✓]' : '[API ✗]';
     console.info(`${tag} ${entry.method} ${entry.path} → ${entry.status} (${entry.label})`);
-    // Let any UI panel (e.g. Plugins & API page) render the latest entry.
+    // 3. Let the panel append just this one row (no full re-render).
     try { document.dispatchEvent(new CustomEvent('bmm:api-activity', { detail: entry })); } catch { /* ignore */ }
 }
 
@@ -192,21 +198,95 @@ export async function initApiActivity(): Promise<void> {
         const action: string = event.payload?.action || '';
         const params: any    = event.payload?.params || {};
         if (!action) return;
-        gotoRepoPage();
-        const driveRepo = (section: string, prefill: any) => setTimeout(() => {
-            document.dispatchEvent(new CustomEvent('bmm:repo-focus', { detail: { section, prefill } }));
-        }, 450);
-        if (action === 'repo/host')      driveRepo('host', params);
-        else if (action === 'repo/sync') driveRepo('sync', params);
-        else if (action === 'repo/gen')  driveRepo('gen', params);
-        else if (action === 'repo/host-stop') {
-            setTimeout(async () => {
-                try {
-                    const status = await invoke('get_repo_server_status');
-                    if (status) (document.getElementById('btn-toggle-repo-server') as HTMLElement | null)?.click();
-                    else toast(t('plugins.actionStopHttpHost') || 'No HTTP host running', 'info');
-                } catch { /* ignore */ }
+
+        const driveRepo = (section: string, prefill: any) => {
+            gotoRepoPage();
+            setTimeout(() => {
+                document.dispatchEvent(new CustomEvent('bmm:repo-focus', { detail: { section, prefill } }));
             }, 450);
+        };
+        // Navigate to a page, then click one of its buttons — reuses the exact
+        // native flow (dialogs, options, confirmations) a human would trigger.
+        const navClick = (view: string, btnId: string) => {
+            const nav = document.querySelector(`.nav-item[data-view="${view}"], .nav-btn[data-view="${view}"], [data-view="${view}"]`) as HTMLElement | null;
+            nav?.click();
+            setTimeout(() => {
+                const btn = document.getElementById(btnId) as HTMLElement | null;
+                if (btn) btn.click();
+                else toast(`${t('plugins.apiActionPrefix') || 'API'}: ${action}`, 'info');
+            }, 500);
+        };
+        // Run a Tauri command directly (the command opens its own native dialog).
+        const run = async (cmd: string, args?: any, okMsg?: string) => {
+            try {
+                await invoke(cmd, args);
+                if (okMsg) toast(okMsg, 'success', 3000, ICN.check);
+            } catch (e) {
+                const s = String(e);
+                if (!/cancel/i.test(s)) toast(`${t('common.error') || 'Error'}: ${s}`, 'error', 4000, ICN.ban);
+            }
+        };
+
+        switch (action) {
+            // ── Repo (existing UI-driven flows) ──────────────────────────────
+            case 'repo/host': driveRepo('host', params); break;
+            case 'repo/sync': driveRepo('sync', params); break;
+            case 'repo/gen':  driveRepo('gen', params);  break;
+            case 'repo/host-stop':
+                gotoRepoPage();
+                setTimeout(async () => {
+                    try {
+                        const status = await invoke('get_repo_server_status');
+                        if (status) (document.getElementById('btn-toggle-repo-server') as HTMLElement | null)?.click();
+                        else toast(t('plugins.actionStopHttpHost') || 'No HTTP host running', 'info');
+                    } catch { /* ignore */ }
+                }, 450);
+                break;
+
+            // ── Data management (Settings page) ──────────────────────────────
+            case 'data/export':    navClick('settings', 'btn-export-data'); break;
+            case 'data/import':     navClick('settings', 'btn-import-data'); break;
+
+            // ── Mod lists (.mmlist) — Settings page export/import ─────────────
+            case 'modlist/export':  navClick('settings', 'btn-export-mm'); break;
+            case 'modlist/import':  navClick('settings', 'btn-import-mm'); break;
+
+            // ── Language file ────────────────────────────────────────────────
+            case 'language/import': run('import_language', undefined,
+                t('settings.langImported') || 'Language imported'); break;
+
+            // ── Modpacks (.bmp) — self-contained file dialogs ────────────────
+            case 'modpack/import':  run('import_modpack', undefined,
+                t('plugins.actionCreateModpack') || 'Modpack imported'); break;
+            case 'modpack/export':
+                if (params.id) run('export_modpack', { id: params.id });
+                else navClick('modpacks', 'btn-import-modpack'); // fallback: open modpacks page
+                break;
+
+            // ── Profiles (OVGME / OMM / OMX) — Profiles page ─────────────────
+            case 'profile/import-ovgme': navClick('profiles', 'btn-import-ovgme'); break;
+            case 'profile/import-omm':   navClick('profiles', 'btn-import-omm'); break;
+
+            // ── Plugins (.bmmplug) ───────────────────────────────────────────
+            case 'plugin/import': {
+                const tauri = (window as any).__TAURI__;
+                try {
+                    const file = await tauri?.dialog?.open({ multiple: false, filters: [{ name: 'BMM Plugin', extensions: ['bmmplug', 'zip'] }] });
+                    if (file) await run('install_plugin_from_file', { filePath: file },
+                        t('plugins.imported') || 'Plugin imported');
+                } catch (e) { console.warn('[api-exec] plugin/import', e); }
+                break;
+            }
+            case 'plugin/export': {
+                if (!params.id) { navClick('plugins', ''); break; }
+                const tauri = (window as any).__TAURI__;
+                try {
+                    const dest = await tauri?.dialog?.save({ defaultPath: `${params.id}.bmmplug`, filters: [{ name: 'BMM Plugin', extensions: ['bmmplug'] }] });
+                    if (dest) await run('export_plugin', { pluginId: params.id, destPath: dest },
+                        t('plugins.exported') || 'Plugin exported');
+                } catch (e) { console.warn('[api-exec] plugin/export', e); }
+                break;
+            }
         }
     });
 
