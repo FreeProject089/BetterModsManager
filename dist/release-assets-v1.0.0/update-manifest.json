@@ -3,21 +3,21 @@
   "files": [
     {
       "path": "_up_/frontend/Lang/en.json",
-      "sha256": "c922ab8b102f6f7a337b81b4c961109dc112aed37e60e8381e3e8d56b3c32445",
+      "sha256": "0232dea88059dca36d17252edc5a2a20b4e424aec6d86ee6ba5b9ea1aa65cbae",
       "download_url": "https://github.com/FreeProject089/BetterModsManager/releases/download/v1.0.0/lang-en.json",
-      "size": 243072
+      "size": 287456
     },
     {
       "path": "_up_/frontend/Lang/fr.json",
-      "sha256": "5029f697fc497dcbfee6c9cc3b1c3299177690863654f552d99d3bc9b4d72ac7",
+      "sha256": "c9f2c37393b51365fe93c48dc5f71eda31528609ee566dad7667c8338e802b5a",
       "download_url": "https://github.com/FreeProject089/BetterModsManager/releases/download/v1.0.0/lang-fr.json",
-      "size": 271001
+      "size": 319812
     },
     {
       "path": "_up_/frontend/Lang/template.json",
-      "sha256": "9295a8ca5d31ba7530b660e59368bfb2263e8a8d525c1666c3d9327b6388c06f",
+      "sha256": "99923561a8d82a0fb8645086275fe98a32ebb274421a7b269c9ee92241b95651",
       "download_url": "https://github.com/FreeProject089/BetterModsManager/releases/download/v1.0.0/lang-template.json",
-      "size": 210903
+      "size": 287473
     }
   ]
 }

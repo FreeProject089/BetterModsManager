@@ -127,6 +127,39 @@ async function handleDeepLink(urlStr) {
             }
             return;
         }
+        // ── Modpack actions ───────────────────────────────────────────────
+        if (action === 'modpack/enable' || action === 'modpack/disable') {
+            const profileId = parsedUrl.searchParams.get('id');
+            if (!profileId) {
+                toast(t('plugins.deepLinkMissingId'), 'error');
+                return;
+            }
+            const isEnable = action === 'modpack/enable';
+            console.log(`[BMM-API] bmm:// ${isEnable ? 'enable' : 'disable'} modpack (profile): ${profileId}`);
+            try {
+                const token = await invoke('get_api_token');
+                const res = await fetch(`http://127.0.0.1:51274/api/modpacks/${isEnable ? 'enable' : 'disable'}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ profile_id: profileId }),
+                });
+                if (res.ok) {
+                    toast(isEnable
+                        ? (t('plugins.deepLinkModpackEnabled') || 'Modpack activé.')
+                        : (t('plugins.deepLinkModpackDisabled') || 'Modpack désactivé.'), 'success');
+                    await refreshMods(true);
+                }
+                else {
+                    const err = await res.json().catch(() => ({}));
+                    toast(`${t('common.error')}: ${err?.error || res.statusText}`, 'error');
+                }
+            }
+            catch (e) {
+                console.error('[BMM-API] Failed to toggle modpack via deep link:', e);
+                toast(`${t('common.error')}: ${e}`, 'error');
+            }
+            return;
+        }
         // ── Repo actions ──────────────────────────────────────────────────
         if (action === 'repo/connect') {
             const repoUrl = parsedUrl.searchParams.get('url');

@@ -6459,44 +6459,129 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
                                 <svg class="plug-doc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
                             </summary>
                             <div class="plug-doc-body">
-                                <p class="plug-doc-p" data-i18n="docs.scriptGenDesc">The Script Generator lets you build automation scripts from a visual action editor — no coding required. Choose a format, add actions, and export.</p>
+                                <p class="plug-doc-p">Build automation scripts visually from a card-based action editor and export to one of 12 supported languages. No coding required — each action is a labelled form that maps to either a <code>bmm://</code> deep-link or an HTTP call to the local API.</p>
 
-                                <p class="plug-doc-h" data-i18n="docs.scriptGenFormats">Supported Formats</p>
+                                <p class="plug-doc-h">How it works</p>
+                                <div class="plug-doc-steps">
+                                    <div class="plug-doc-step">
+                                        <span class="plug-doc-step-num">1</span>
+                                        <span class="plug-doc-step-txt">Pick an output <strong>Format</strong> (.bat, .ps1, Python, Node.js, Go, Rust, …) and a <strong>Mode</strong> (deep-link or API token).</span>
+                                    </div>
+                                    <div class="plug-doc-step">
+                                        <span class="plug-doc-step-num">2</span>
+                                        <span class="plug-doc-step-txt">Click <strong>+ Add action</strong>. A grouped picker opens — choose from <em>BMM</em>, <em>Repo</em>, <em>System</em> or <em>Control</em> categories. Each pick spawns a card with the right labelled fields.</span>
+                                    </div>
+                                    <div class="plug-doc-step">
+                                        <span class="plug-doc-step-num">3</span>
+                                        <span class="plug-doc-step-txt">Reorder cards with the ▲▼ buttons, delete with ✕. Each card explains what it does inline — no manual <code>key=value</code> typing.</span>
+                                    </div>
+                                    <div class="plug-doc-step">
+                                        <span class="plug-doc-step-num">4</span>
+                                        <span class="plug-doc-step-txt"><strong>Preview</strong> the resulting script, then <strong>Save</strong> a single file or a <strong>ZIP</strong> bundle that includes a ready-to-edit <code>.env</code> and a README.</span>
+                                    </div>
+                                </div>
+
+                                <p class="plug-doc-h">Modes — deep-link vs. API</p>
                                 <table class="plug-doc-perm-table">
-                                    <thead><tr><th>Format</th><th data-i18n="docs.scriptGenFmtDesc">Description</th><th data-i18n="docs.scriptGenFmtNote">Notes</th></tr></thead>
+                                    <thead><tr><th>Mode</th><th>When to use</th><th>Auth required</th></tr></thead>
                                     <tbody>
-                                        <tr><td><code>.bat</code></td><td>Windows CMD</td><td data-i18n="docs.scriptGenFmtBat">Native Windows — no runtime needed</td></tr>
-                                        <tr><td><code>.ps1</code></td><td>PowerShell</td><td data-i18n="docs.scriptGenFmtPs1">Requires PowerShell 5+</td></tr>
-                                        <tr><td><code>.vbs</code></td><td>VBScript</td><td data-i18n="docs.scriptGenFmtVbs">Legacy Windows scripting</td></tr>
+                                        <tr>
+                                            <td><strong>Deep-link</strong></td>
+                                            <td>BMM is installed locally on the same machine. Best for end users — opens <code>bmm://</code> URLs that BMM intercepts.</td>
+                                            <td>None — user grants permission once.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>API</strong></td>
+                                            <td>Headless automation, CI, remote scripts. Talks to the local HTTP API on <code>127.0.0.1:51274</code>.</td>
+                                            <td>Bearer token — paste in script or read from <code>$BMM_TOKEN</code>.</td>
+                                        </tr>
                                     </tbody>
                                 </table>
 
-                                <p class="plug-doc-h" data-i18n="docs.scriptGenActions">Action Types</p>
+                                <p class="plug-doc-h">Supported output formats</p>
                                 <table class="plug-doc-perm-table">
-                                    <thead><tr><th data-i18n="docs.scriptGenActionName">Action</th><th data-i18n="docs.scriptGenActionDesc">What it does</th></tr></thead>
+                                    <thead><tr><th>Format</th><th>Runtime</th><th>Notes</th></tr></thead>
                                     <tbody>
-                                        <tr><td><code>Enable / Disable Mod</code></td><td data-i18n="docs.scriptGenActMod">Enable or disable a specific mod via deeplink or API call</td></tr>
-                                        <tr><td><code>Activate Profile</code></td><td data-i18n="docs.scriptGenActProfile">Switch the active profile</td></tr>
-                                        <tr><td><code>Apply / Compare Plugin</code></td><td data-i18n="docs.scriptGenActPlugin">Apply or compare a plugin modlist</td></tr>
-                                        <tr><td><code>Wait</code></td><td data-i18n="docs.scriptGenActWait">Pause execution for N seconds</td></tr>
-                                        <tr><td><code>Close Process</code></td><td data-i18n="docs.scriptGenActClose">Kill a named process (e.g. game.exe)</td></tr>
-                                        <tr><td><code>Open URL</code></td><td data-i18n="docs.scriptGenActUrl">Open a URL in the default browser</td></tr>
-                                        <tr><td><code>Show Message</code></td><td data-i18n="docs.scriptGenActMsg">Display a popup message box</td></tr>
-                                        <tr><td><code>Launch Game / Exe</code></td><td data-i18n="docs.scriptGenActLaunch">Start an executable</td></tr>
-                                        <tr><td><code>Print / Log</code></td><td data-i18n="docs.scriptGenActLog">Print a message to stdout / console</td></tr>
-                                        <tr><td><code>Comment</code></td><td data-i18n="docs.scriptGenActComment">Insert a code comment or visual separator</td></tr>
-                                        <tr><td><code>Set Variable</code></td><td data-i18n="docs.scriptGenActVar">Declare a named variable — format: <em>name=value</em></td></tr>
-                                        <tr><td><code>If File Exists</code></td><td data-i18n="docs.scriptGenActIf">Open a conditional block if a file path exists</td></tr>
-                                        <tr><td><code>If Variable Equals</code></td><td data-i18n="docs.scriptGenActIfVar">Open a conditional block if a variable equals a value — format: <em>name=value</em></td></tr>
-                                        <tr><td><code>Else</code></td><td data-i18n="docs.scriptGenActElse">Insert an else branch for the current conditional</td></tr>
-                                        <tr><td><code>End Block</code></td><td data-i18n="docs.scriptGenActEnd">Close an open if / else block</td></tr>
-                                        <tr><td><code>Raw Code</code></td><td data-i18n="docs.scriptGenActRaw">Insert any raw code verbatim — use for language-specific logic not covered above</td></tr>
+                                        <tr><td><code>.bat</code></td><td>Windows CMD</td><td>Built-in — no install required</td></tr>
+                                        <tr><td><code>.ps1</code></td><td>PowerShell 5+</td><td>Built-in on Windows 10/11</td></tr>
+                                        <tr><td><code>.vbs</code></td><td>cscript.exe</td><td>Legacy, but always present on Windows</td></tr>
+                                        <tr><td><code>.py</code></td><td>Python 3.x</td><td>Requires <code>pip install requests</code></td></tr>
+                                        <tr><td><code>.js</code></td><td>Node.js 18+</td><td>Uses native <code>fetch</code> — no deps</td></tr>
+                                        <tr><td><code>.lua</code></td><td>Lua 5.x</td><td>Requires <code>luarocks install http</code></td></tr>
+                                        <tr><td><code>.rb</code></td><td>Ruby 3.x</td><td>Stdlib only</td></tr>
+                                        <tr><td><code>.php</code></td><td>PHP 7.4+ with cURL</td><td>Stdlib only</td></tr>
+                                        <tr><td><code>.go</code></td><td>Go 1.18+</td><td>Stdlib only</td></tr>
+                                        <tr><td><code>.java</code></td><td>Java 11+</td><td>Stdlib only</td></tr>
+                                        <tr><td><code>.cs</code></td><td>.NET 6+</td><td>Stdlib only</td></tr>
+                                        <tr><td><code>.rs</code></td><td>Rust + cargo</td><td>Uses <code>reqwest</code> blocking</td></tr>
+                                    </tbody>
+                                </table>
+
+                                <p class="plug-doc-h">Action categories</p>
+                                <table class="plug-doc-perm-table">
+                                    <thead><tr><th>Category</th><th>Actions</th><th>Use case</th></tr></thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><span style="color:#3b82f6;font-weight:700;">BMM</span></td>
+                                            <td>Enable / Disable mod, Switch profile, Enable / Disable modpack, Apply / Compare plugin, Update modpack</td>
+                                            <td>Drive BMM state — what most users want.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span style="color:#a855f7;font-weight:700;">Repo</span></td>
+                                            <td>Sync repo, Cancel sync, Generate repo, Cancel gen, Start HTTP host, Stop HTTP host</td>
+                                            <td>Automate server sharing and remote-pulling of modsets.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span style="color:#10b981;font-weight:700;">System</span></td>
+                                            <td>Wait, Kill process, Open URL, Show message, Launch game, Log line</td>
+                                            <td>Glue around BMM — wait for a process, then start a game, etc.</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span style="color:#f59e0b;font-weight:700;">Control</span></td>
+                                            <td>Comment, Set variable, If file exists, If variable ==, Else, End block, Raw code</td>
+                                            <td>Branching logic and escape hatches when the visual editor isn't enough.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+
+                                <p class="plug-doc-h">Action quick-reference</p>
+                                <table class="plug-doc-perm-table">
+                                    <thead><tr><th>Action</th><th>Fields you fill in</th><th>What gets generated</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><code>Enable / Disable mod</code></td><td>Mod (dropdown)</td><td><code>bmm://mod/enable?id=…</code> or <code>POST /api/mods/enable</code></td></tr>
+                                        <tr><td><code>Switch profile</code></td><td>Profile (dropdown)</td><td><code>bmm://profile/activate?id=…</code> / <code>POST /api/profiles/activate</code></td></tr>
+                                        <tr><td><code>Enable / Disable modpack</code></td><td>Profile (the one whose modpack)</td><td><code>POST /api/modpacks/enable</code> (or disable)</td></tr>
+                                        <tr><td><code>Apply plugin</code></td><td>Plugin (dropdown)</td><td><code>bmm://plugin/activate?id=…</code> / <code>POST /api/plugins/apply</code></td></tr>
+                                        <tr><td><code>Update modpack</code></td><td>Modpack ID, New name, Dependency mode (select)</td><td><code>PUT /api/modpacks/&lt;id&gt;</code></td></tr>
+                                        <tr><td><code>Sync repo</code></td><td>Repo URL, Mods folder</td><td><code>POST /api/repo/sync</code></td></tr>
+                                        <tr><td><code>Cancel sync</code></td><td>—</td><td><code>DELETE /api/repo/sync</code></td></tr>
+                                        <tr><td><code>Generate repo</code></td><td>Output folder, Author, Lightweight (switch), Zip (switch)</td><td><code>POST /api/repo/gen</code></td></tr>
+                                        <tr><td><code>Cancel gen</code></td><td>—</td><td><code>DELETE /api/repo/gen</code></td></tr>
+                                        <tr><td><code>Start HTTP host</code></td><td>Folder to host, Port</td><td><code>POST /api/repo/host</code></td></tr>
+                                        <tr><td><code>Stop HTTP host</code></td><td>—</td><td><code>DELETE /api/repo/host</code></td></tr>
+                                        <tr><td><code>Wait</code></td><td>Seconds</td><td>Language-native sleep call</td></tr>
+                                        <tr><td><code>Kill process</code></td><td>Process name (e.g. <code>notepad.exe</code>)</td><td><code>taskkill</code> / <code>Stop-Process</code></td></tr>
+                                        <tr><td><code>Open URL</code></td><td>URL</td><td>Default browser open</td></tr>
+                                        <tr><td><code>Show message</code></td><td>Message</td><td>Popup / console + pause</td></tr>
+                                        <tr><td><code>Launch game</code></td><td>Full .exe path</td><td>Start process + 1s wait</td></tr>
+                                        <tr><td><code>Log line</code></td><td>Message</td><td>Print to stdout</td></tr>
+                                        <tr><td><code>Comment</code></td><td>Text</td><td>Comment line — does not execute</td></tr>
+                                        <tr><td><code>Set variable</code></td><td>Variable name, Value</td><td>Language-native assignment</td></tr>
+                                        <tr><td><code>If file exists</code></td><td>Path to check</td><td>Opens an <code>if</code> block</td></tr>
+                                        <tr><td><code>If variable ==</code></td><td>Variable, Value to compare</td><td>Opens an <code>if</code> block</td></tr>
+                                        <tr><td><code>Else</code></td><td>—</td><td>Else branch of previous <code>if</code></td></tr>
+                                        <tr><td><code>End block</code></td><td>—</td><td>Closes the previous <code>if</code> / else</td></tr>
+                                        <tr><td><code>Raw code</code></td><td>Code (textarea)</td><td>Inserted verbatim in the target language</td></tr>
                                     </tbody>
                                 </table>
 
                                 <div class="plug-doc-tip">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                    <span data-i18n="docs.scriptGenTip">Scripts .bat, .ps1 et .vbs sont générés nativement. Les endpoints sont documentés en cURL et PS1.</span>
+                                    <span>Pick <strong>Save as ZIP</strong> for API-mode scripts: BMM writes <code>.env</code>, <code>.gitignore</code> and a README next to your script so the project is self-contained and the token never lands in your code.</span>
+                                </div>
+                                <div class="plug-doc-tip" style="margin-top:8px;">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                    <span>The endpoint blocks in the right panel can be <strong>copied as one line</strong> straight to a terminal — line-continuation chars (<code>\</code>, backtick, <code>^</code>) and JSON whitespace are collapsed on copy.</span>
                                 </div>
                             </div>
                         </details>

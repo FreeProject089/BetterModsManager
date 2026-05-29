@@ -259,6 +259,7 @@ struct RepoHttpHostBody {
     port: Option<u16>,
     /// Upload limit in KB/s (informational, 0 = unlimited)
     #[serde(default)]
+    #[allow(dead_code)]
     upload_limit: Option<u32>,
 }
 
@@ -306,11 +307,17 @@ fn save_data(data: &Arc<std::sync::Mutex<AppData>>, path: &PathBuf) {
 }
 
 fn require_token(
-    token: Arc<String>,
+    data: Arc<std::sync::Mutex<AppData>>,
 ) -> impl Filter<Extract = (), Error = warp::Rejection> + Clone {
     warp::header::optional::<String>("authorization")
         .and_then(move |auth: Option<String>| {
-            let expected = format!("Bearer {}", token);
+            // Read the LIVE token from settings on every request so that
+            // regenerating the token (reset_api_token) takes effect immediately
+            // without needing to restart the API server.
+            let expected = {
+                let d = data.lock().unwrap_or_else(|p| p.into_inner());
+                format!("Bearer {}", d.settings.api_token)
+            };
             let provided = auth.unwrap_or_default();
             async move {
                 if provided == expected {
@@ -334,10 +341,9 @@ pub async fn start_api_server(
     shutdown_rx: oneshot::Receiver<()>,
     app_handle: tauri::AppHandle,
 ) {
-    let token = {
-        let d = data.lock().unwrap_or_else(|p| p.into_inner());
-        Arc::new(d.settings.api_token.clone())
-    };
+    // Token filters now read the LIVE token from `data` per-request (see
+    // require_token), so this is just a clonable handle to the shared state.
+    let token = data.clone();
 
     // ── Concurrency guards ─────────────────────────────────────────────────────
     // Max 1 sync at a time; set true while running, false when done

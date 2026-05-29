@@ -1661,12 +1661,15 @@ function hlJson(raw: string): string {
         .replace(/:\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g, ': <span class="hlj-num">$1</span>');
 }
 
-async function handleQuickTest(method: string, path: string, body?: string) {
+async function handleQuickTest(method: string, path: string, body?: string, btnEl?: HTMLElement) {
     const resultDiv = document.getElementById('plug-qt-result') as HTMLElement;
     const statusEl  = document.getElementById('plug-qt-status') as HTMLElement;
     const pathEl    = document.getElementById('plug-qt-path') as HTMLElement;
     const bodyEl    = document.getElementById('plug-qt-body') as HTMLElement;
     if (!resultDiv) return;
+
+    const btnOrigHtml = btnEl?.innerHTML;
+    if (btnEl) { btnEl.setAttribute('disabled', 'true'); btnEl.style.opacity = '0.6'; }
 
     resultDiv.style.display = 'block';
     statusEl.textContent = '...';
@@ -1696,20 +1699,22 @@ async function handleQuickTest(method: string, path: string, body?: string) {
         // ── Live UI refresh after successful mutations ─────────────────────
         if (res.ok && method !== 'GET') {
             if (path.includes('/profiles')) {
-                window.dispatchEvent(new CustomEvent('bmm:profiles-updated'));
-                window.dispatchEvent(new CustomEvent('bmm:mods-updated')); // profile change may affect active mods display
+                (window as any)._refreshProfilesFn?.();
+                (window as any)._refreshModsFn?.();
             }
             if (path.includes('/mods') && !path.includes('/modpacks')) {
-                window.dispatchEvent(new CustomEvent('bmm:mods-updated'));
+                (window as any)._refreshModsFn?.();
             }
-            if (path.includes('/modpacks')) {
-                window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
+            if (path.includes('/modpacks') || path.includes('/plugins/apply')) {
+                (window as any)._refreshModsFn?.();
             }
         }
     } catch (e) {
         statusEl.textContent = t('common.error');
         statusEl.className = 'plug-tester-status plug-status-err';
         bodyEl.textContent = String(e);
+    } finally {
+        if (btnEl && btnOrigHtml !== undefined) { btnEl.removeAttribute('disabled'); btnEl.style.opacity = ''; btnEl.innerHTML = btnOrigHtml; }
     }
 }
 
@@ -2192,10 +2197,10 @@ function renderScripts(container: HTMLElement) {
                         <div class="plug-gen-token-env-row">
                             <label class="plug-form-label" style="margin:0;white-space:nowrap;">${IC.lock} ${t('plugins.genTokenEnv')}</label>
                             <label class="plug-toggle" data-tooltip="${t('plugins.genTokenEnvTip')}">
-                                <input type="checkbox" id="plug-gen-use-env" checked>
+                                <input type="checkbox" id="plug-gen-use-env">
                                 <span class="plug-toggle-slider"></span>
                             </label>
-                            <span id="plug-gen-token-hint" class="plug-mode-hint-txt" style="flex:1;">${t('plugins.genTokenEnvOn')}</span>
+                            <span id="plug-gen-token-hint" class="plug-mode-hint-txt" style="flex:1;">${t('plugins.genTokenEnvOff')}</span>
                         </div>
                         <div class="plug-gen-buttons">
                             <button class="btn btn-secondary" id="plug-gen-preview">${IC.eye} ${t('plugins.preview')}</button>
@@ -2213,7 +2218,7 @@ function renderScripts(container: HTMLElement) {
                                 <span class="plug-form-label" style="margin:0;">${t('plugins.preview')}</span>
                                 <button class="btn btn-xs btn-ghost" id="plug-copy-script">${IC.copy} ${t('common.copy')}</button>
                             </div>
-                            <pre id="plug-gen-code" class="plug-code-pre" style="flex:1;overflow:auto;"></pre>
+                            <pre id="plug-gen-code" class="plug-code-pre" style="overflow:auto;"></pre>
                         </div>
                     </div>
                 </div>
@@ -2273,7 +2278,7 @@ function renderScripts(container: HTMLElement) {
             if (needsOverlay) {
                 openSmartQuickTest(m, p, rawBody || '{}');
             } else {
-                handleQuickTest(m, p, '');
+                handleQuickTest(m, p, '', el);
             }
         });
     });
@@ -2466,7 +2471,9 @@ function renderScripts(container: HTMLElement) {
     });
 
     // Script gen
-    container.querySelector('#plug-add-action')?.addEventListener('click', addActionRow);
+    container.querySelector('#plug-add-action')?.addEventListener('click', (e) => {
+        _openActionPicker(e.currentTarget as HTMLElement);
+    });
     container.querySelector('#plug-gen-preview')?.addEventListener('click', handlePreviewScript);
     container.querySelector('#plug-gen-save')?.addEventListener('click', handleSaveScript);
     container.querySelector('#plug-gen-zip')?.addEventListener('click', handleSaveScriptZip);
@@ -2477,6 +2484,8 @@ function renderScripts(container: HTMLElement) {
         toast(t('common.copy'), 'success');
     });
 
+    _actionDndInstalled = false; // container was re-rendered → re-arm DnD
+    _ensureActionDnd();
     addActionRow();
 }
 
@@ -3489,15 +3498,18 @@ async function handleApiTest() {
         // Send body for POST, PUT, PATCH, and DELETE (some DELETE routes need a body)
         const canHaveBody = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
         if (canHaveBody && bodyText) {
-            // Validate JSON before sending
-            try { JSON.parse(bodyText); } catch {
-                statusBadge.textContent = 'JSON invalide';
-                statusBadge.className = 'plug-tester-status plug-status-err';
-                respPre.textContent = 'Le corps de la requête n\'est pas un JSON valide. Corrigez-le avant d\'envoyer.';
-                return;
-            }
+            // Be lenient like the quick test: tolerate // and /* */ comments and
+            // trailing commas, then re-serialize to clean JSON. If it still won't
+            // parse, send the raw text as-is and let the server respond — never
+            // block the request on client-side validation.
+            const cleaned = bodyText
+                .replace(/\/\*[\s\S]*?\*\//g, '')      // /* block */ comments
+                .replace(/(^|[^:])\/\/.*$/gm, '$1')    // // line comments (keep http://)
+                .replace(/,(\s*[}\]])/g, '$1');        // trailing commas
+            let sendBody = bodyText;
+            try { sendBody = JSON.stringify(JSON.parse(cleaned)); } catch { sendBody = bodyText; }
             headers['Content-Type'] = 'application/json';
-            opts.body = bodyText;
+            opts.body = sendBody;
         }
 
         const res  = await fetch(`http://127.0.0.1:51274${path}`, opts);
@@ -3569,177 +3581,583 @@ function _showServerRepoAuthModal() {
     ov.querySelectorAll('.plug-ov-close-btn').forEach(b => b.addEventListener('click', () => ov.remove()));
 }
 
-function addActionRow() {
+// ─────────────────────────────────────────────────────────────────────────
+// Script generator — card-based action editor
+// Each action becomes a self-contained card with category, title,
+// description, properly labelled inputs (no more "key=value key=value"
+// strings) and inline drag/delete controls.  `_collectActions` reads
+// from these typed fields and rebuilds the backend `extra` payload.
+// ─────────────────────────────────────────────────────────────────────────
+
+type _Field = {
+    key: string;
+    label: string;
+    type: 'text' | 'number' | 'select' | 'switch' | 'textarea';
+    placeholder?: string;
+    default?: any;
+    options?: Array<{ value: string; label: string }>;
+    half?: boolean; // render half-width
+};
+
+type _ActionDef = {
+    id: string;
+    cat: 'mods' | 'repo' | 'read' | 'system' | 'control';
+    label: string;
+    desc: string;
+    iconSvg: string;
+    /** Pick from dropdown of mods / profiles / plugins. */
+    target?: 'mod' | 'profile' | 'plugin';
+    fields?: _Field[];
+};
+
+const _CAT_META: Record<string, { color: string; label: string }> = {
+    mods:    { color: '#3b82f6', label: 'BMM' },
+    repo:    { color: '#a855f7', label: 'Repo' },
+    read:    { color: '#06b6d4', label: 'Read' },
+    system:  { color: '#10b981', label: 'System' },
+    control: { color: '#f59e0b', label: 'Control' },
+};
+
+function _actionCatalog(): _ActionDef[] {
+    const sv = (p: string) => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+    return [
+        // ── BMM ─────────────────────────────────────────────────────────
+        { id: 'enable_mod',       cat: 'mods', label: t('plugins.actionEnableMod') || 'Enable mod',
+          desc: 'Activates the selected mod for the current profile.',
+          iconSvg: sv('<polyline points="20 6 9 17 4 12"/>'), target: 'mod' },
+        { id: 'disable_mod',      cat: 'mods', label: t('plugins.actionDisableMod') || 'Disable mod',
+          desc: 'Deactivates the selected mod for the current profile.',
+          iconSvg: sv('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'), target: 'mod' },
+        { id: 'activate_profile', cat: 'mods', label: t('plugins.actionActivateProfile') || 'Switch profile',
+          desc: 'Makes the selected profile the active one.',
+          iconSvg: sv('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'), target: 'profile' },
+        { id: 'enable_modpack',   cat: 'mods', label: t('plugins.actionEnableModpack') || 'Enable modpack',
+          desc: "Enables the modpack tied to a profile.",
+          iconSvg: sv('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>'), target: 'profile' },
+        { id: 'disable_modpack',  cat: 'mods', label: t('plugins.actionDisableModpack') || 'Disable modpack',
+          desc: "Disables the modpack tied to a profile.",
+          iconSvg: sv('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><line x1="3" y1="3" x2="21" y2="21"/>'), target: 'profile' },
+        { id: 'apply_plugin',     cat: 'mods', label: t('plugins.actionApplyPlugin') || 'Apply plugin',
+          desc: 'Runs an installed plugin.',
+          iconSvg: sv('<path d="M5 3v18l14-9z"/>'), target: 'plugin' },
+        { id: 'compare_plugin',   cat: 'mods', label: t('plugins.actionComparePlugin') || 'Compare plugin',
+          desc: 'Compares the plugin\'s modlist against currently-enabled mods.',
+          iconSvg: sv('<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/>'), target: 'plugin' },
+        { id: 'update_modpack',   cat: 'mods', label: t('plugins.actionUpdateModpack') || 'Update modpack',
+          desc: 'Renames a modpack and/or changes its dependency mode.',
+          iconSvg: sv('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>'),
+          fields: [
+            { key: 'modpack_id', label: 'Modpack ID', type: 'text', placeholder: 'UUID of the modpack to update' },
+            { key: 'name',       label: 'New name',   type: 'text', placeholder: 'My pack', half: true },
+            { key: 'dependency_mode', label: 'Dependencies', type: 'select', half: true,
+              options: [
+                { value: 'none',    label: 'None — leave deps alone' },
+                { value: 'include', label: 'Include all deps' },
+                { value: 'exclude', label: 'Exclude all deps' },
+              ], default: 'none' },
+          ] },
+        { id: 'delete_mod',       cat: 'mods', label: t('plugins.actionDeleteMod') || 'Delete mod',
+          desc: 'Permanently removes the selected mod.',
+          iconSvg: sv('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'), target: 'mod' },
+        { id: 'update_mod',       cat: 'mods', label: t('plugins.actionUpdateMod') || 'Update mod',
+          desc: 'Edits metadata (name/version/author/description) of the selected mod.',
+          iconSvg: sv('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>'), target: 'mod',
+          fields: [
+            { key: 'name',        label: 'Name',        type: 'text', placeholder: '(leave empty = keep)', half: true },
+            { key: 'version',     label: 'Version',     type: 'text', placeholder: '(leave empty = keep)', half: true },
+            { key: 'author',      label: 'Author',      type: 'text', placeholder: '(leave empty = keep)', half: true },
+            { key: 'description', label: 'Description',  type: 'text', placeholder: '(leave empty = keep)', half: true },
+          ] },
+        { id: 'create_profile',   cat: 'mods', label: t('plugins.actionCreateProfile') || 'Create profile',
+          desc: 'Creates a new profile.',
+          iconSvg: sv('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>'),
+          fields: [
+            { key: 'name',        label: 'Name',        type: 'text', placeholder: 'My profile' },
+            { key: 'game_name',   label: 'Game name',   type: 'text', placeholder: 'Skyrim', half: true },
+            { key: 'game_path',   label: 'Game path',   type: 'text', placeholder: 'C:/Games/Skyrim', half: true },
+            { key: 'mods_path',   label: 'Mods path',   type: 'text', placeholder: 'C:/Mods', half: true },
+            { key: 'backup_path', label: 'Backup path', type: 'text', placeholder: 'C:/Backups', half: true },
+          ] },
+        { id: 'update_profile',   cat: 'mods', label: t('plugins.actionUpdateProfile') || 'Update profile',
+          desc: 'Edits the selected profile. Empty fields are left unchanged.',
+          iconSvg: sv('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>'), target: 'profile',
+          fields: [
+            { key: 'name',        label: 'Name',        type: 'text', placeholder: '(keep)', half: true },
+            { key: 'game_name',   label: 'Game name',   type: 'text', placeholder: '(keep)', half: true },
+            { key: 'color',       label: 'Color',       type: 'text', placeholder: '#3b82f6', half: true },
+            { key: 'icon',        label: 'Icon',        type: 'text', placeholder: '(keep)', half: true },
+            { key: 'game_path',   label: 'Game path',   type: 'text', placeholder: '(keep)', half: true },
+            { key: 'mods_path',   label: 'Mods path',   type: 'text', placeholder: '(keep)', half: true },
+            { key: 'backup_path', label: 'Backup path', type: 'text', placeholder: '(keep)', half: true },
+          ] },
+        { id: 'delete_profile',   cat: 'mods', label: t('plugins.actionDeleteProfile') || 'Delete profile',
+          desc: 'Permanently removes the selected profile.',
+          iconSvg: sv('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'), target: 'profile' },
+        { id: 'create_modpack',   cat: 'mods', label: t('plugins.actionCreateModpack') || 'Create modpack',
+          desc: 'Creates a new modpack.',
+          iconSvg: sv('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><line x1="12" y1="22" x2="12" y2="12"/>'),
+          fields: [
+            { key: 'name',        label: 'Name',        type: 'text', placeholder: 'My pack' },
+            { key: 'description', label: 'Description', type: 'text', placeholder: '(optional)', half: true },
+            { key: 'game_name',   label: 'Game name',   type: 'text', placeholder: '(optional)', half: true },
+            { key: 'sr_link',     label: 'Server Repo link', type: 'text', placeholder: '(optional)', half: true },
+            { key: 'dependency_mode', label: 'Dependencies', type: 'select', half: true,
+              options: [
+                { value: 'none',    label: 'None' },
+                { value: 'include', label: 'Include all deps' },
+                { value: 'exclude', label: 'Exclude all deps' },
+              ], default: 'none' },
+          ] },
+        { id: 'delete_modpack',   cat: 'mods', label: t('plugins.actionDeleteModpack') || 'Delete modpack',
+          desc: 'Permanently removes a modpack by ID.',
+          iconSvg: sv('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'),
+          fields: [ { key: 'modpack_id', label: 'Modpack ID', type: 'text', placeholder: 'UUID of the modpack' } ] },
+
+        // ── Repo ────────────────────────────────────────────────────────
+        { id: 'sync_repo',      cat: 'repo', label: t('plugins.actionSyncRepo') || 'Sync repo',
+          desc: 'Pulls a remote BMM repo into a local mods folder.',
+          iconSvg: sv('<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>'),
+          fields: [
+            { key: 'url',            label: 'Repo URL',       type: 'text',   placeholder: 'https://repo.example.com' },
+            { key: 'mods_dir',       label: 'Mods folder',    type: 'text',   placeholder: 'C:/Mods/MyGame' },
+            { key: 'backup_dir',     label: 'Backup folder',  type: 'text',   placeholder: 'C:/BMM/Backups' },
+            { key: 'game_dir',       label: 'Game root (opt)',type: 'text',   placeholder: 'C:/Games/MyGame', half: true },
+            { key: 'download_limit', label: 'DL limit (KB/s)', type: 'number', placeholder: '0 = unlimited', default: '0', half: true },
+            { key: 'overwrite_all',  label: 'Overwrite all',  type: 'switch', default: false, half: true },
+            { key: 'delete_extra',   label: 'Delete extra',   type: 'switch', default: false, half: true },
+          ] },
+        { id: 'cancel_sync',    cat: 'repo', label: t('plugins.actionCancelSync') || 'Cancel sync',
+          desc: 'Stops a running repo sync. No parameters.',
+          iconSvg: sv('<rect x="6" y="6" width="12" height="12" rx="1"/>') },
+        { id: 'gen_repo',       cat: 'repo', label: t('plugins.actionGenRepo') || 'Generate repo',
+          desc: 'Exports your active profile as a redistributable repo folder/zip.',
+          iconSvg: sv('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/>'),
+          fields: [
+            { key: 'profile_id',   label: 'Profile UUID',   type: 'text',   placeholder: 'Leave empty = active profile' },
+            { key: 'output_dir',   label: 'Output folder',  type: 'text',   placeholder: 'C:/Export' },
+            { key: 'author',       label: 'Author name',    type: 'text',   placeholder: 'Your name', half: true },
+            { key: 'port',         label: 'Port (server)',  type: 'number', placeholder: '8080', default: '8080', half: true },
+            { key: 'admin_pass',   label: 'Admin password', type: 'text',   placeholder: '(optional)', half: true },
+            { key: 'upload_limit', label: 'UL limit (KB/s)',type: 'number', placeholder: '0 = unlimited', default: '0', half: true },
+            { key: 'lightweight',      label: 'Lightweight',      type: 'switch', default: false, half: true },
+            { key: 'zip',              label: 'Zip output',       type: 'switch', default: true,  half: true },
+            { key: 'generate_server',  label: 'Generate server',  type: 'switch', default: false, half: true },
+            { key: 'auto_start',       label: 'Auto start',       type: 'switch', default: false, half: true },
+          ] },
+        { id: 'cancel_gen',     cat: 'repo', label: t('plugins.actionCancelGen') || 'Cancel gen',
+          desc: 'Stops a running repo generation. No parameters.',
+          iconSvg: sv('<rect x="6" y="6" width="12" height="12" rx="1"/>') },
+        { id: 'http_host',      cat: 'repo', label: t('plugins.actionHttpHost') || 'Start HTTP host',
+          desc: 'Starts the local repo HTTP server so others can sync from you.',
+          iconSvg: sv('<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'),
+          fields: [
+            { key: 'serve_dir',    label: 'Folder to host',  type: 'text',   placeholder: 'C:/Export' },
+            { key: 'port',         label: 'Port',            type: 'number', placeholder: '8080', default: '8080', half: true },
+            { key: 'upload_limit', label: 'UL limit (KB/s)', type: 'number', placeholder: '0 = unlimited', default: '0', half: true },
+          ] },
+        { id: 'stop_http_host', cat: 'repo', label: t('plugins.actionStopHttpHost') || 'Stop HTTP host',
+          desc: 'Stops the local HTTP server. No parameters.',
+          iconSvg: sv('<rect x="6" y="6" width="12" height="12" rx="1"/>') },
+        { id: 'repo_connect',   cat: 'repo', label: t('plugins.actionRepoConnect') || 'Connect repo',
+          desc: 'Registers a remote BMM repo by URL.',
+          iconSvg: sv('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
+          fields: [ { key: 'url', label: 'Repo URL', type: 'text', placeholder: 'https://repo.example.com' } ] },
+        { id: 'repo_remove',    cat: 'repo', label: t('plugins.actionRepoRemove') || 'Remove repo',
+          desc: 'Unregisters a connected repo by URL.',
+          iconSvg: sv('<path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/>'),
+          fields: [ { key: 'url', label: 'Repo URL', type: 'text', placeholder: 'https://repo.example.com' } ] },
+
+        // ── Read (GET — no token required) ────────────────────────────────
+        { id: 'get_status',       cat: 'read', label: t('plugins.actionGetStatus') || 'Get status',
+          desc: 'Fetches the current BMM status. Prints the JSON response.',
+          iconSvg: sv('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>') },
+        { id: 'list_mods',        cat: 'read', label: t('plugins.actionListMods') || 'List mods',
+          desc: 'Lists all mods. Prints the JSON response.',
+          iconSvg: sv('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>') },
+        { id: 'list_active_mods', cat: 'read', label: t('plugins.actionListActiveMods') || 'List active mods',
+          desc: 'Lists currently-enabled mods. Prints the JSON response.',
+          iconSvg: sv('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') },
+        { id: 'list_profiles',    cat: 'read', label: t('plugins.actionListProfiles') || 'List profiles',
+          desc: 'Lists all profiles. Prints the JSON response.',
+          iconSvg: sv('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') },
+        { id: 'list_plugins',     cat: 'read', label: t('plugins.actionListPlugins') || 'List plugins',
+          desc: 'Lists installed plugins. Prints the JSON response.',
+          iconSvg: sv('<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>') },
+        { id: 'list_modpacks',    cat: 'read', label: t('plugins.actionListModpacks') || 'List modpacks',
+          desc: 'Lists all modpacks. Prints the JSON response.',
+          iconSvg: sv('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>') },
+        { id: 'check_update',     cat: 'read', label: t('plugins.actionCheckUpdate') || 'Check for update',
+          desc: 'Checks whether a BMM update is available. Prints the JSON response.',
+          iconSvg: sv('<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>') },
+        { id: 'get_creator_id',   cat: 'read', label: t('plugins.actionGetCreatorId') || 'Get creator ID',
+          desc: 'Fetches the creator ID. Prints the JSON response.',
+          iconSvg: sv('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>') },
+        { id: 'api_health',       cat: 'read', label: t('plugins.actionApiHealth') || 'API health',
+          desc: 'Pings the API health endpoint. Prints the JSON response.',
+          iconSvg: sv('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>') },
+        { id: 'repo_list',        cat: 'read', label: t('plugins.actionRepoList') || 'List repos',
+          desc: 'Lists connected repos. Prints the JSON response.',
+          iconSvg: sv('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>') },
+        { id: 'repo_info',        cat: 'read', label: t('plugins.actionRepoInfo') || 'Repo info',
+          desc: 'Fetches metadata for a repo by URL. Prints the JSON response.',
+          iconSvg: sv('<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>'),
+          fields: [ { key: 'url', label: 'Repo URL', type: 'text', placeholder: 'https://repo.example.com' } ] },
+
+        // ── System ──────────────────────────────────────────────────────
+        { id: 'wait',          cat: 'system', label: t('plugins.actionWait') || 'Wait',
+          desc: 'Pauses the script for N seconds.',
+          iconSvg: sv('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'),
+          fields: [ { key: 'duration_s', label: 'Seconds', type: 'number', placeholder: '3', default: '3' } ] },
+        { id: 'close_process', cat: 'system', label: t('plugins.actionCloseProcess') || 'Kill process',
+          desc: 'Force-terminates a running process by executable name.',
+          iconSvg: sv('<path d="M18 6L6 18M6 6l12 12"/>'),
+          fields: [ { key: 'process_name', label: 'Process name', type: 'text', placeholder: 'notepad.exe' } ] },
+        { id: 'open_url',      cat: 'system', label: t('plugins.actionOpenUrl') || 'Open URL',
+          desc: 'Opens a URL in the default browser.',
+          iconSvg: sv('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
+          fields: [ { key: 'url', label: 'URL', type: 'text', placeholder: 'https://example.com' } ] },
+        { id: 'show_message',  cat: 'system', label: t('plugins.actionShowMessage') || 'Show message',
+          desc: 'Displays a message popup or console line, then waits for the user.',
+          iconSvg: sv('<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'),
+          fields: [ { key: 'message', label: 'Message', type: 'textarea', placeholder: 'Hello world' } ] },
+        { id: 'launch_game',   cat: 'system', label: t('plugins.actionLaunchGame') || 'Launch game',
+          desc: 'Starts a game executable then waits 1 second.',
+          iconSvg: sv('<polygon points="5 3 19 12 5 21 5 3"/>'),
+          fields: [ { key: 'exe_path', label: 'Game executable', type: 'text', placeholder: 'C:/Games/MyGame/game.exe' } ] },
+        { id: 'log',           cat: 'system', label: t('plugins.actionLog') || 'Log line',
+          desc: 'Writes a message to the script\'s standard output / log.',
+          iconSvg: sv('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>'),
+          fields: [ { key: 'message', label: 'Message', type: 'text', placeholder: 'Step 1 done' } ] },
+        { id: 'restart',       cat: 'system', label: t('plugins.actionRestart') || 'Restart BMM',
+          desc: 'Restarts the BetterModsManager app. No parameters.',
+          iconSvg: sv('<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>') },
+
+        // ── Control flow ────────────────────────────────────────────────
+        { id: 'comment',        cat: 'control', label: t('plugins.actionComment') || 'Comment',
+          desc: 'Inserts a comment line — does not execute.',
+          iconSvg: sv('<polyline points="3 6 5 6 21 6"/><path d="M9 14h6"/><path d="M9 10h6"/>'),
+          fields: [ { key: 'text', label: 'Comment', type: 'text', placeholder: 'This part enables the mods' } ] },
+        { id: 'set_variable',   cat: 'control', label: t('plugins.actionSetVariable') || 'Set variable',
+          desc: 'Defines a named variable usable later via if_var_eq.',
+          iconSvg: sv('<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>'),
+          fields: [
+            { key: 'var_name',  label: 'Variable name', type: 'text', placeholder: 'MY_VAR', half: true },
+            { key: 'var_value', label: 'Value',         type: 'text', placeholder: 'hello',  half: true },
+          ] },
+        { id: 'if_file_exists', cat: 'control', label: t('plugins.actionIfFileExists') || 'If file exists',
+          desc: 'Subsequent actions run only if the given path exists. Pair with end_block.',
+          iconSvg: sv('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>'),
+          fields: [ { key: 'path', label: 'File path', type: 'text', placeholder: 'C:/path/to/file.txt' } ] },
+        { id: 'if_var_eq',      cat: 'control', label: t('plugins.actionIfVarEq') || 'If variable ==',
+          desc: 'Subsequent actions run only if the variable equals the given value.',
+          iconSvg: sv('<path d="M18 13a3 3 0 1 0-3-3"/><path d="M6 13a3 3 0 1 1 3-3"/><line x1="3" y1="20" x2="21" y2="20"/>'),
+          fields: [
+            { key: 'var_name',  label: 'Variable', type: 'text', placeholder: 'MY_VAR', half: true },
+            { key: 'var_value', label: 'Equals',   type: 'text', placeholder: 'hello',  half: true },
+          ] },
+        { id: 'else_block',     cat: 'control', label: t('plugins.actionElse') || 'Else',
+          desc: 'Marks the else branch of the previous if_*. No parameters.',
+          iconSvg: sv('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>') },
+        { id: 'end_block',      cat: 'control', label: t('plugins.actionEnd') || 'End block',
+          desc: 'Closes the previous if_* / else block. No parameters.',
+          iconSvg: sv('<polyline points="20 6 9 17 4 12"/>') },
+        { id: 'raw_code',       cat: 'control', label: t('plugins.actionRawCode') || 'Raw code',
+          desc: 'Inserts native code in the target language verbatim.',
+          iconSvg: sv('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'),
+          fields: [ { key: 'code', label: 'Code', type: 'textarea', placeholder: 'echo Custom code here' } ] },
+    ];
+}
+
+function _renderField(cardId: string, f: _Field): string {
+    const id = `${cardId}-f-${f.key}`;
+    const wcls = f.half ? 'half' : 'full';
+    if (f.type === 'select') {
+        const opts = (f.options || []).map(o =>
+            `<option value="${escHtml(o.value)}"${o.value === (f.default ?? '') ? ' selected' : ''}>${escHtml(o.label)}</option>`
+        ).join('');
+        return `<div class="plug-act-field ${wcls}">
+            <label for="${id}">${escHtml(f.label)}</label>
+            <select id="${id}" class="select select-sm" data-field="${f.key}">${opts}</select>
+        </div>`;
+    }
+    if (f.type === 'switch') {
+        const checked = (f.default === true || f.default === 'true') ? 'checked' : '';
+        return `<div class="plug-act-field ${wcls} plug-act-field-switch">
+            <label for="${id}">${escHtml(f.label)}</label>
+            <label class="plug-toggle">
+                <input type="checkbox" id="${id}" data-field="${f.key}" ${checked}>
+                <span class="plug-toggle-slider"></span>
+            </label>
+        </div>`;
+    }
+    if (f.type === 'textarea') {
+        return `<div class="plug-act-field full">
+            <label for="${id}">${escHtml(f.label)}</label>
+            <textarea id="${id}" class="input input-sm" data-field="${f.key}" rows="2"
+                placeholder="${escHtml(f.placeholder || '')}">${escHtml(String(f.default ?? ''))}</textarea>
+        </div>`;
+    }
+    // text or number
+    const val = f.default !== undefined ? escHtml(String(f.default)) : '';
+    return `<div class="plug-act-field ${wcls}">
+        <label for="${id}">${escHtml(f.label)}</label>
+        <input id="${id}" type="${f.type === 'number' ? 'number' : 'text'}" class="input input-sm"
+            data-field="${f.key}" placeholder="${escHtml(f.placeholder || '')}" value="${val}">
+    </div>`;
+}
+
+function _renderTargetSelect(cardId: string, kind: 'mod' | 'profile' | 'plugin'): string {
+    let opts = '';
+    let emptyLabel = '';
+    if (kind === 'mod') {
+        opts = _allMods.map(m => `<option value="${escHtml(m.id)}">${escHtml(m.name || m.id)}</option>`).join('');
+        emptyLabel = t('plugins.noMods') || 'No mods available';
+    } else if (kind === 'profile') {
+        opts = _allProfiles.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`).join('');
+        emptyLabel = t('plugins.noProfiles') || 'No profiles available';
+    } else {
+        opts = _installedPlugins.map(p => `<option value="${escHtml(p.manifest.id)}">${escHtml(p.manifest.name)}</option>`).join('');
+        emptyLabel = t('plugins.noPlugins') || 'No plugins installed';
+    }
+    if (!opts) opts = `<option value="">${escHtml(emptyLabel)}</option>`;
+    return `<div class="plug-act-field full">
+        <label for="${cardId}-target">${kind === 'mod' ? 'Mod' : kind === 'profile' ? 'Profile' : 'Plugin'}</label>
+        <select id="${cardId}-target" class="select select-sm plug-act-target">${opts}</select>
+    </div>`;
+}
+
+let _actionCardCounter = 0;
+
+function _renderActionCard(def: _ActionDef): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'plug-act-card';
+    card.dataset.actionId = def.id;
+    const meta = _CAT_META[def.cat] || _CAT_META.system;
+    const cardId = `act-${++_actionCardCounter}`;
+    card.dataset.cardId = cardId;
+
+    const fieldsHtml = (def.fields || []).map(f => _renderField(cardId, f)).join('');
+    const targetHtml = def.target ? _renderTargetSelect(cardId, def.target) : '';
+    const bodyHtml = (targetHtml + fieldsHtml) || `<div class="plug-act-noparam">${t('plugins.noParams') || 'No parameters needed.'}</div>`;
+
+    card.innerHTML = `
+        <div class="plug-act-stripe" style="background:${meta.color};"></div>
+        <div class="plug-act-grip" title="${t('common.move') || 'Move'}">
+            <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="2" cy="3" r="1.2"/><circle cx="8" cy="3" r="1.2"/><circle cx="2" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="2" cy="13" r="1.2"/><circle cx="8" cy="13" r="1.2"/></svg>
+        </div>
+        <div class="plug-act-main">
+            <div class="plug-act-head">
+                <span class="plug-act-cat-badge" style="background:${meta.color}22;color:${meta.color};border-color:${meta.color}55;">${meta.label}</span>
+                <span class="plug-act-icon" style="color:${meta.color};">${def.iconSvg}</span>
+                <span class="plug-act-title">${escHtml(def.label)}</span>
+                <div class="plug-act-toolbar">
+                    <button class="plug-act-btn plug-act-up" title="${t('common.moveUp') || 'Move up'}">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+                    </button>
+                    <button class="plug-act-btn plug-act-down" title="${t('common.moveDown') || 'Move down'}">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <button class="plug-act-btn plug-act-del" title="${t('common.delete') || 'Delete'}">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="plug-act-desc">${escHtml(def.desc)}</div>
+            <div class="plug-act-body">${bodyHtml}</div>
+        </div>
+    `;
+
+    const container = document.getElementById('plug-actions-container');
+    card.querySelector('.plug-act-del')?.addEventListener('click', () => card.remove());
+    card.querySelector('.plug-act-up')?.addEventListener('click', () => {
+        const prev = card.previousElementSibling;
+        if (prev && container) container.insertBefore(card, prev);
+    });
+    card.querySelector('.plug-act-down')?.addEventListener('click', () => {
+        const next = card.nextElementSibling;
+        if (next && container) container.insertBefore(next, card);
+    });
+
+    // Drag-to-reorder via pointer events (native HTML5 DnD is unreliable inside
+    // the Tauri webview and was swallowed by the inner form inputs). Dragging is
+    // armed only from the grip so the form fields stay fully usable.
+    const grip = card.querySelector('.plug-act-grip') as HTMLElement;
+    grip?.addEventListener('pointerdown', (e) => _startCardDrag(card, e as PointerEvent));
+
+    return card;
+}
+
+/** Find the card that the pointer (at vertical position `y`) should be inserted
+ *  before. Returns null when the pointer is past the last card. */
+function _cardAfter(container: HTMLElement, y: number): HTMLElement | null {
+    const cards = Array.from(
+        container.querySelectorAll('.plug-act-card:not(.plug-act-dragging)')
+    ) as HTMLElement[];
+    let closest: { offset: number; el: HTMLElement | null } = { offset: -Infinity, el: null };
+    for (const child of cards) {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) closest = { offset, el: child };
+    }
+    return closest.el;
+}
+
+/** Pointer-based drag: live-reorders the card as the pointer moves, finalising
+ *  on pointerup. Works reliably where native drag events do not. */
+function _startCardDrag(card: HTMLElement, downEvt: PointerEvent) {
+    const container = document.getElementById('plug-actions-container');
+    if (!container) return;
+    downEvt.preventDefault();
+
+    let active = false;
+    const startY = downEvt.clientY;
+    const THRESH = 4; // px before a real drag starts (so plain clicks do nothing)
+
+    const onMove = (e: PointerEvent) => {
+        if (!active) {
+            if (Math.abs(e.clientY - startY) < THRESH) return;
+            active = true;
+            card.classList.add('plug-act-dragging');
+        }
+        const after = _cardAfter(container, e.clientY);
+        if (after == null) {
+            if (card.nextElementSibling !== null) container.appendChild(card);
+        } else if (after !== card) {
+            container.insertBefore(card, after);
+        }
+    };
+
+    const onUp = () => {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        card.classList.remove('plug-act-dragging');
+    };
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+}
+
+let _actionDndInstalled = false;
+/** Reordering is handled per-card via pointer events (see _startCardDrag), so
+ *  no container-level handler is needed. Kept as a no-op for call-site compat. */
+function _ensureActionDnd() {
+    _actionDndInstalled = true;
+}
+
+/** Open the action picker — a popover anchored to the "+Action" button.
+ *  Lets the user pick from a grouped catalog, then appends the card. */
+function _openActionPicker(anchorBtn: HTMLElement) {
+    const existing = document.getElementById('plug-act-picker');
+    if (existing) { existing.remove(); return; }
+
     const container = document.getElementById('plug-actions-container');
     if (!container) return;
 
-    const modOpts  = _allMods.map(m => `<option value="${escHtml(m.id)}">${escHtml(m.name || m.id)}</option>`).join('');
-    const profOpts = _allProfiles.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`).join('');
-    const plugOpts = _installedPlugins.map(p => `<option value="${escHtml(p.manifest.id)}">${escHtml(p.manifest.name)}</option>`).join('');
+    const catalog = _actionCatalog();
+    const grouped: Record<string, _ActionDef[]> = {};
+    catalog.forEach(a => { (grouped[a.cat] ||= []).push(a); });
 
-    const EXTRA_TYPES = new Set(['wait','close_process','open_url','show_message','launch_game','log','comment','set_variable','if_file_exists','if_var_eq','raw_code','sync_repo','gen_repo','http_host','cancel_sync','cancel_gen','stop_http_host','update_modpack']);
-    const NO_INPUT_TYPES = new Set(['else_block','end_block','cancel_sync','cancel_gen','stop_http_host']);
-    const EXTRA_PH: Record<string,string> = {
-        wait:                t('plugins.waitDuration'),
-        close_process:       'notepad.exe',
-        open_url:            'https://example.com',
-        show_message:        'Hello world',
-        launch_game:         'C:/Games/MyGame/game.exe',
-        log:                 'Step 1 done',
-        comment:             'This part enables the mods',
-        set_variable:        'MY_VAR=hello',
-        if_file_exists:      'C:/path/to/file.txt',
-        if_var_eq:           'MY_VAR=hello',
-        raw_code:            'echo Custom code here',
-        sync_repo:           'url=https://repo.example.com mods_dir=C:/Mods',
-        gen_repo:            'output_dir=C:/Export author=Me lightweight=false zip=true',
-        http_host:           'serve_dir=C:/Export port=8080',
-        update_modpack:      'modpack_id=ABCD-... name=MyPack dependency_mode=none',
-    };
-
-    // Per-action help: shown as a small line under the input so the user
-    // immediately understands what keys/values are expected.
-    const EXTRA_HELP: Record<string,string> = {
-        wait:                'Number of seconds to wait (e.g. 3).',
-        close_process:       'Executable name (e.g. notepad.exe).',
-        open_url:            'Full URL to open in the default browser.',
-        show_message:        'Text to display in a popup or console.',
-        launch_game:         'Full path to the game .exe to launch.',
-        log:                 'Free-form message written to the script log.',
-        comment:             'A comment line — does not execute.',
-        set_variable:        'Format: NAME=value (no spaces around =).',
-        if_file_exists:      'Path to check; subsequent actions run only if it exists.',
-        if_var_eq:           'Format: NAME=value (compares variable to value).',
-        raw_code:            'Native code in the target language, inserted verbatim.',
-        sync_repo:           'Keys: url (repo URL), mods_dir (local target). Space-separated key=value pairs.',
-        gen_repo:            'Keys: output_dir, author, lightweight (true/false), zip (true/false).',
-        http_host:           'Keys: serve_dir (folder to host), port (default 8080).',
-        update_modpack:      'Keys: modpack_id (required), name, dependency_mode (none/include/exclude).',
-        cancel_sync:         'No parameters needed — cancels an active repo sync.',
-        cancel_gen:          'No parameters needed — cancels an active repo generation.',
-        stop_http_host:      'No parameters needed — stops the running HTTP server.',
-        enable_mod:          'Pick the mod to enable from the dropdown.',
-        disable_mod:         'Pick the mod to disable from the dropdown.',
-        activate_profile:    'Pick the profile to switch to.',
-        enable_modpack:      'Pick the profile whose modpack should be enabled.',
-        disable_modpack:     'Pick the profile whose modpack should be disabled.',
-        apply_plugin:        'Pick the installed plugin to run.',
-        compare_plugin:      'Pick the installed plugin to compare against current mods.',
-        else_block:          'Marks the else branch of the previous if_*. No input.',
-        end_block:           'Closes the previous if_* / else block. No input.',
-    };
-
-    const row = document.createElement('div');
-    row.className = 'plug-action-row';
-    row.innerHTML = `
-        <div class="plug-action-row-inner">
-            <div class="plug-action-reorder">
-                <button class="btn btn-xs btn-ghost plug-row-up">${IC.arrowUp}</button>
-                <button class="btn btn-xs btn-ghost plug-row-down">${IC.arrowDown}</button>
-            </div>
-            <select class="select select-sm plug-action-type" style="min-width:148px;" data-tooltip="${t('plugins.actionTypeTip')}">
-                <optgroup label="${t('plugins.actionGroupBmm')}">
-                    <option value="enable_mod">${t('plugins.actionEnableMod')}</option>
-                    <option value="disable_mod">${t('plugins.actionDisableMod')}</option>
-                    <option value="activate_profile">${t('plugins.actionActivateProfile')}</option>
-                    <option value="enable_modpack">${t('plugins.actionEnableModpack') || 'Activer liste de mods du plugin'}</option>
-                    <option value="disable_modpack">${t('plugins.actionDisableModpack') || 'Désactiver liste de mods du plugin'}</option>
-                    <option value="apply_plugin">${t('plugins.actionApplyPlugin')}</option>
-                    <option value="compare_plugin">${t('plugins.actionComparePlugin')}</option>
-                    <option value="update_modpack">${t('plugins.actionUpdateModpack') || 'Mettre à jour modpack'}</option>
-                </optgroup>
-                <optgroup label="${t('plugins.actionGroupRepo') || 'Server Repo'}">
-                    <option value="sync_repo">${t('plugins.actionSyncRepo') || 'Synchroniser repo'}</option>
-                    <option value="cancel_sync">${t('plugins.actionCancelSync') || 'Annuler sync'}</option>
-                    <option value="gen_repo">${t('plugins.actionGenRepo') || 'Générer repo'}</option>
-                    <option value="cancel_gen">${t('plugins.actionCancelGen') || 'Annuler gen'}</option>
-                    <option value="http_host">${t('plugins.actionHttpHost') || 'Démarrer serveur HTTP'}</option>
-                    <option value="stop_http_host">${t('plugins.actionStopHttpHost') || 'Arrêter serveur HTTP'}</option>
-                </optgroup>
-                <optgroup label="${t('plugins.actionGroupSystem')}">
-                    <option value="wait">${t('plugins.actionWait')}</option>
-                    <option value="close_process">${t('plugins.actionCloseProcess')}</option>
-                    <option value="open_url">${t('plugins.actionOpenUrl')}</option>
-                    <option value="show_message">${t('plugins.actionShowMessage')}</option>
-                    <option value="launch_game">${t('plugins.actionLaunchGame')}</option>
-                    <option value="log">${t('plugins.actionLog')}</option>
-                </optgroup>
-                <optgroup label="${t('plugins.actionGroupControl')}">
-                    <option value="comment">${t('plugins.actionComment')}</option>
-                    <option value="set_variable">${t('plugins.actionSetVariable')}</option>
-                    <option value="if_file_exists">${t('plugins.actionIfFileExists')}</option>
-                    <option value="if_var_eq">${t('plugins.actionIfVarEq')}</option>
-                    <option value="else_block">${t('plugins.actionElse')}</option>
-                    <option value="end_block">${t('plugins.actionEnd')}</option>
-                    <option value="raw_code">${t('plugins.actionRawCode')}</option>
-                </optgroup>
-            </select>
-            <div class="plug-action-target-wrap" style="flex:1;">
-                <select class="select select-sm plug-action-target" style="width:100%;">
-                    ${modOpts || `<option value="">${t('plugins.noMods')}</option>`}
-                </select>
-            </div>
-            <div class="plug-action-extra-wrap" style="flex:1;display:none;">
-                <input type="text" class="input input-sm plug-action-extra-input" style="width:100%;" placeholder="${t('plugins.waitDuration')}">
-            </div>
-            <button class="btn btn-xs btn-danger plug-remove-action">${IC.x}</button>
+    const pop = document.createElement('div');
+    pop.id = 'plug-act-picker';
+    pop.className = 'plug-act-picker';
+    pop.innerHTML = `
+        <div class="plug-act-picker-head">
+            <input type="text" class="input input-sm plug-act-picker-search" placeholder="${t('common.search') || 'Search action…'}" autofocus>
         </div>
-        <div class="plug-action-help" style="font-size:11px;color:var(--text-muted);padding:2px 6px 4px 30px;line-height:1.4;display:none;"></div>`;
+        <div class="plug-act-picker-body">
+            ${(['mods','repo','read','system','control'] as const).map(cat => {
+                const meta = _CAT_META[cat];
+                const items = (grouped[cat] || []).map(a => `
+                    <button class="plug-act-pick-item" data-id="${a.id}">
+                        <span class="plug-act-pick-icon" style="color:${meta.color};">${a.iconSvg}</span>
+                        <span class="plug-act-pick-text">
+                            <span class="plug-act-pick-label">${escHtml(a.label)}</span>
+                            <span class="plug-act-pick-desc">${escHtml(a.desc)}</span>
+                        </span>
+                    </button>
+                `).join('');
+                return `<div class="plug-act-pick-section">
+                    <div class="plug-act-pick-section-h" style="color:${meta.color};">${meta.label}</div>
+                    <div class="plug-act-pick-list">${items}</div>
+                </div>`;
+            }).join('')}
+        </div>
+    `;
 
-    const typeSelect  = row.querySelector('.plug-action-type') as HTMLSelectElement;
-    const targetWrap  = row.querySelector('.plug-action-target-wrap') as HTMLElement;
-    const targetSelect = row.querySelector('.plug-action-target') as HTMLSelectElement;
-    const extraWrap   = row.querySelector('.plug-action-extra-wrap') as HTMLElement;
-    const extraInput  = row.querySelector('.plug-action-extra-input') as HTMLInputElement;
+    // Position popover — smart: flip above if not enough space below
+    document.body.appendChild(pop);
+    const rect     = anchorBtn.getBoundingClientRect();
+    const vw       = window.innerWidth;
+    const vh       = window.innerHeight;
+    const popW     = 420;
+    const popMaxH  = 480;
+    const gap      = 6;
+    const spaceBelow = vh - rect.bottom - gap;
+    const spaceAbove = rect.top - gap;
+    let top: number, maxH: number;
+    if (spaceBelow >= 220 || spaceBelow >= spaceAbove) {
+        top  = rect.bottom + gap;
+        maxH = Math.max(160, Math.min(popMaxH, spaceBelow - 4));
+    } else {
+        maxH = Math.max(160, Math.min(popMaxH, spaceAbove - 4));
+        top  = rect.top - maxH - gap;
+    }
+    let left = Math.max(8, rect.right - popW);
+    if (left + popW > vw - 8) left = vw - popW - 8;
+    pop.style.top       = `${top}px`;
+    pop.style.left      = `${left}px`;
+    pop.style.maxHeight = `${maxH}px`;
 
-    const helpEl = row.querySelector('.plug-action-help') as HTMLElement;
+    const search = pop.querySelector('.plug-act-picker-search') as HTMLInputElement;
+    search.addEventListener('input', () => {
+        const q = search.value.toLowerCase().trim();
+        pop.querySelectorAll('.plug-act-pick-item').forEach(el => {
+            const item = el as HTMLElement;
+            const text = (item.textContent || '').toLowerCase();
+            item.style.display = !q || text.includes(q) ? '' : 'none';
+        });
+    });
+    setTimeout(() => search.focus(), 0);
 
-    const refreshHelp = (type: string) => {
-        const msg = EXTRA_HELP[type];
-        if (msg) {
-            helpEl.textContent = msg;
-            helpEl.style.display = '';
-        } else {
-            helpEl.style.display = 'none';
-        }
+    const dismiss = () => {
+        pop.remove();
+        document.removeEventListener('mousedown', onOutsideClick, true);
     };
 
-    typeSelect.addEventListener('change', () => {
-        const type = typeSelect.value;
-        const isExtra = EXTRA_TYPES.has(type);
-        const isNoInput = NO_INPUT_TYPES.has(type);
-        targetWrap.style.display  = (!isExtra && !isNoInput) ? '' : 'none';
-        extraWrap.style.display   = isExtra ? '' : 'none';
-        extraInput.placeholder    = EXTRA_PH[type] || '';
-        extraInput.type           = type === 'wait' ? 'number' : 'text';
-        if (type === 'wait' && !extraInput.value) extraInput.value = '3';
-
-        if (!isExtra && !isNoInput) {
-            if (type === 'enable_mod' || type === 'disable_mod') {
-                targetSelect.innerHTML = modOpts || `<option value="">${t('plugins.noMods')}</option>`;
-            } else if (type === 'activate_profile' || type === 'enable_modpack' || type === 'disable_modpack') {
-                targetSelect.innerHTML = profOpts || `<option value="">${t('plugins.noProfiles')}</option>`;
-            } else {
-                targetSelect.innerHTML = plugOpts || `<option value="">${t('plugins.noPlugins')}</option>`;
-            }
+    // Event delegation so dynamic items + bubbling SVG/span children
+    // all reach the handler.  stopPropagation prevents the outside-click
+    // detector from also seeing the same event.
+    pop.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        const item = target.closest('.plug-act-pick-item') as HTMLElement | null;
+        if (!item) return;
+        e.stopPropagation();
+        e.preventDefault();
+        const id = item.dataset.id;
+        const def = catalog.find(a => a.id === id);
+        if (def) {
+            const card = _renderActionCard(def);
+            container.appendChild(card);
+            card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
-        refreshHelp(type);
+        dismiss();
     });
 
-    // Initial help (first row default = enable_mod)
-    refreshHelp(typeSelect.value);
+    const onOutsideClick = (ev: MouseEvent) => {
+        const target = ev.target as Node;
+        if (pop.contains(target)) return;
+        if (anchorBtn.contains(target as Node) || target === anchorBtn) return;
+        dismiss();
+    };
+    setTimeout(() => document.addEventListener('mousedown', onOutsideClick, true), 0);
+}
 
-    row.querySelector('.plug-remove-action')?.addEventListener('click', () => row.remove());
-    row.querySelector('.plug-row-up')?.addEventListener('click', () => {
-        const prev = row.previousElementSibling;
-        if (prev) container.insertBefore(row, prev);
-    });
-    row.querySelector('.plug-row-down')?.addEventListener('click', () => {
-        const next = row.nextElementSibling;
-        if (next) container.insertBefore(next, row);
-    });
-
-    container.appendChild(row);
+function addActionRow() {
+    // Backwards-compatible default add: appends an "enable_mod" card so the
+    // existing init flow that calls addActionRow() at startup still works.
+    const def = _actionCatalog().find(a => a.id === 'enable_mod');
+    const container = document.getElementById('plug-actions-container');
+    if (def && container) container.appendChild(_renderActionCard(def));
 }
 
 async function handlePreviewScript() {
@@ -3774,8 +4192,10 @@ async function handleSaveScriptZip() {
 
     const format    = (document.getElementById('plug-gen-format') as HTMLSelectElement)?.value || 'bat';
     const mode      = (document.getElementById('plug-gen-mode') as HTMLSelectElement)?.value || 'deeplink';
-    const useEnv    = (document.getElementById('plug-gen-use-env') as HTMLInputElement)?.checked ?? true;
-    const needsEnv  = mode === 'api' && useEnv;
+    const useEnv    = (document.getElementById('plug-gen-use-env') as HTMLInputElement)?.checked ?? false;
+    const actions   = _collectActions() || [];
+    const needApi   = mode === 'api' || _actionsNeedApi(actions, mode === 'deeplink');
+    const needsEnv  = needApi && useEnv;
 
     const zipPath = await saveFile({ defaultPath: `bmm-plugin.zip`, filters: [{ name: 'ZIP Archive', extensions: ['zip'] }] });
     if (!zipPath) return;
@@ -3844,39 +4264,125 @@ function _genFormatReqs(fmt: string): string {
 }
 
 function _collectActions(): Array<{ action_type: string; target_id: string; extra: Record<string,any> }> | null {
-    const rows = document.querySelectorAll('.plug-action-row');
-    if (!rows.length) { toast(t('plugins.addActionFirst'), 'warning'); return null; }
-    return Array.from(rows).map(row => {
-        const type = (row.querySelector('.plug-action-type') as HTMLSelectElement).value;
-        const extra: Record<string, any> = {};
-        const extraWrap = row.querySelector('.plug-action-extra-wrap') as HTMLElement;
-        const extraInp  = row.querySelector('.plug-action-extra-input') as HTMLInputElement;
-        if (extraInp && extraWrap?.style.display !== 'none') {
-            const val = extraInp.value.trim();
-            switch (type) {
-                case 'wait':                extra.duration_ms = (parseFloat(val) || 1) * 1000; break;
-                case 'close_process':       extra.process_name = val; break;
-                case 'open_url':            extra.url = val; break;
-                case 'show_message':        extra.message = val; break;
-                case 'launch_game':         extra.exe_path = val; break;
-                case 'log':                 extra.message = val; break;
-                case 'comment':             extra.text = val; break;
-                case 'set_variable':        extra.expr = val; break;
-                case 'if_file_exists':      extra.path = val; break;
-                case 'if_var_eq':           extra.cond = val; break;
-                case 'raw_code':            extra.code = val; break;
-                // Repo / modpack actions that use key=value pairs
-                case 'sync_repo':           extra.expr = val; break;
-                case 'gen_repo':            extra.expr = val; break;
-                case 'http_host':           extra.expr = val; break;
-                case 'update_modpack':      extra.expr = val; break;
+    const cards = document.querySelectorAll('.plug-act-card');
+    if (!cards.length) { toast(t('plugins.addActionFirst'), 'warning'); return null; }
+
+    return Array.from(cards).map(card => {
+        const type = (card as HTMLElement).dataset.actionId || '';
+        const targetEl = card.querySelector('.plug-act-target') as HTMLSelectElement | null;
+        const target_id = targetEl?.value || '';
+
+        // Read all labelled inputs in the card → raw key/value map
+        const raw: Record<string, string> = {};
+        card.querySelectorAll('[data-field]').forEach(el => {
+            const key = (el as HTMLElement).dataset.field || '';
+            if (!key) return;
+            if (el instanceof HTMLInputElement && el.type === 'checkbox') {
+                raw[key] = el.checked ? 'true' : 'false';
+            } else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
+                raw[key] = (el as any).value || '';
             }
+        });
+
+        // Map per-action raw fields → backend `extra` shape
+        const extra: Record<string, any> = {};
+        switch (type) {
+            case 'wait':
+                extra.duration_ms = (parseFloat(raw.duration_s) || 1) * 1000; break;
+            case 'close_process':
+                extra.process_name = raw.process_name || ''; break;
+            case 'open_url':
+                extra.url = raw.url || ''; break;
+            case 'show_message':
+            case 'log':
+                extra.message = raw.message || ''; break;
+            case 'launch_game':
+                extra.exe_path = raw.exe_path || ''; break;
+            case 'comment':
+                extra.text = raw.text || ''; break;
+            case 'set_variable':
+                // Backend wants legacy "NAME=value" in extra.expr
+                extra.expr = `${raw.var_name || ''}=${raw.var_value || ''}`; break;
+            case 'if_file_exists':
+                extra.path = raw.path || ''; break;
+            case 'if_var_eq':
+                extra.cond = `${raw.var_name || ''}=${raw.var_value || ''}`; break;
+            case 'raw_code':
+                extra.code = raw.code || ''; break;
+            // Repo / modpack actions — store individual typed keys so values
+            // with spaces (paths, names) survive intact. Booleans as real
+            // booleans, numbers as real numbers.
+            case 'sync_repo':
+                extra.url            = raw.url || '';
+                extra.mods_dir       = raw.mods_dir || '';
+                extra.backup_dir     = raw.backup_dir || '';
+                extra.game_dir       = raw.game_dir || '';
+                extra.overwrite_all  = raw.overwrite_all === 'true';
+                extra.delete_extra   = raw.delete_extra === 'true';
+                extra.download_limit = parseInt(raw.download_limit || '0', 10) || 0;
+                break;
+            case 'gen_repo':
+                extra.profile_id      = raw.profile_id || '';
+                extra.output_dir      = raw.output_dir || '';
+                extra.author          = raw.author || '';
+                extra.port            = parseInt(raw.port || '8080', 10) || 8080;
+                extra.admin_pass      = raw.admin_pass || '';
+                extra.upload_limit    = parseInt(raw.upload_limit || '0', 10) || 0;
+                extra.lightweight     = raw.lightweight === 'true';
+                extra.zip             = raw.zip === 'true';
+                extra.generate_server = raw.generate_server === 'true';
+                extra.auto_start      = raw.auto_start === 'true';
+                break;
+            case 'http_host':
+                extra.serve_dir    = raw.serve_dir || '';
+                extra.port         = parseInt(raw.port || '8080', 10) || 8080;
+                extra.upload_limit = parseInt(raw.upload_limit || '0', 10) || 0;
+                break;
+            case 'update_modpack':
+                extra.modpack_id      = raw.modpack_id || '';
+                extra.name            = raw.name || '';
+                extra.dependency_mode = raw.dependency_mode || 'none';
+                break;
+            // ── New write/read endpoints ──────────────────────────────────
+            case 'update_mod':
+                extra.name        = raw.name || '';
+                extra.version     = raw.version || '';
+                extra.author      = raw.author || '';
+                extra.description = raw.description || '';
+                break;
+            case 'create_profile':
+                extra.name        = raw.name || '';
+                extra.game_name   = raw.game_name || '';
+                extra.game_path   = raw.game_path || '';
+                extra.mods_path   = raw.mods_path || '';
+                extra.backup_path = raw.backup_path || '';
+                break;
+            case 'update_profile':
+                extra.name        = raw.name || '';
+                extra.game_name   = raw.game_name || '';
+                extra.color       = raw.color || '';
+                extra.icon        = raw.icon || '';
+                extra.game_path   = raw.game_path || '';
+                extra.mods_path   = raw.mods_path || '';
+                extra.backup_path = raw.backup_path || '';
+                break;
+            case 'create_modpack':
+                extra.name            = raw.name || '';
+                extra.description     = raw.description || '';
+                extra.game_name       = raw.game_name || '';
+                extra.sr_link         = raw.sr_link || '';
+                extra.dependency_mode = raw.dependency_mode || 'none';
+                break;
+            case 'delete_modpack':
+                extra.modpack_id = raw.modpack_id || '';
+                break;
+            case 'repo_connect':
+            case 'repo_remove':
+            case 'repo_info':
+                extra.url = raw.url || '';
+                break;
         }
-        return {
-            action_type: type,
-            target_id:   (row.querySelector('.plug-action-target') as HTMLSelectElement)?.value || '',
-            extra,
-        };
+        return { action_type: type, target_id, extra };
     });
 }
 
@@ -3884,17 +4390,20 @@ async function buildScript(): Promise<string | null> {
     const format    = (document.getElementById('plug-gen-format') as HTMLSelectElement)?.value || 'bat';
     const mode      = (document.getElementById('plug-gen-mode') as HTMLSelectElement)?.value || 'deeplink';
     const launchBmm = (document.getElementById('plug-gen-launch') as HTMLInputElement)?.checked ?? true;
-    const useEnv    = (document.getElementById('plug-gen-use-env') as HTMLInputElement)?.checked ?? true;
+    const useEnv    = (document.getElementById('plug-gen-use-env') as HTMLInputElement)?.checked ?? false;
     const actions   = _collectActions();
     if (!actions) return null;
 
+    // A token is needed when in API mode OR when deeplink-mode actions have to
+    // fall back to HTTP (repo/host/etc. with no bmm:// equivalent).
+    const needApi = mode === 'api' || _actionsNeedApi(actions, mode === 'deeplink');
     // Token: if useEnv → pass null so generators use env-var placeholder; else inline token
-    const tokenArg = mode === 'api' ? (useEnv ? null : _apiToken) : null;
+    const tokenArg = needApi ? (useEnv ? null : _apiToken) : null;
 
     // TS-side generation for non-native formats
     const TS_FORMATS = new Set(['py', 'lua', 'js', 'rb', 'php', 'go', 'java', 'cs', 'rs']);
     if (TS_FORMATS.has(format)) {
-        return genScriptLocal(format, actions, tokenArg, mode === 'deeplink', launchBmm, _exePath, useEnv && mode === 'api');
+        return genScriptLocal(format, actions, tokenArg, mode === 'deeplink', launchBmm, _exePath, useEnv && needApi);
     }
 
     try {
@@ -4029,6 +4538,24 @@ function genScriptLocal(
             '  req.body = body.to_json',
             '  Net::HTTP.start(uri.host, uri.port) { |h| h.request(req) }',
             'end', '',
+            'def bmm_put(path, body)',
+            '  uri = URI(BASE + path)',
+            '  req = Net::HTTP::Put.new(uri)',
+            "  req['Authorization'] = \"Bearer #{TOKEN}\"",
+            "  req['Content-Type'] = 'application/json'",
+            '  req.body = body.to_json',
+            '  Net::HTTP.start(uri.host, uri.port) { |h| h.request(req) }',
+            'end', '',
+            'def bmm_delete(path, body = nil)',
+            '  uri = URI(BASE + path)',
+            '  req = Net::HTTP::Delete.new(uri)',
+            "  req['Authorization'] = \"Bearer #{TOKEN}\"",
+            '  if body',
+            "    req['Content-Type'] = 'application/json'",
+            '    req.body = body.to_json',
+            '  end',
+            '  Net::HTTP.start(uri.host, uri.port) { |h| h.request(req) }',
+            'end', '',
         ];
         if (launchBmm && exePath) {
             lines.push(`system('start "" "${exePath.replace(/\\/g, '\\\\')}"')`);
@@ -4045,14 +4572,19 @@ function genScriptLocal(
             `$base  = getenv('BMM_API_BASE') ?: '${BASE}';`,
             `$token = ${tok};`,
             '',
-            'function bmm_post($base, $token, $path, $body) {',
+            'function bmm_req($base, $token, $method, $path, $body = null) {',
             '    $ch = curl_init($base . $path);',
-            `    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json', 'Authorization: Bearer ' . $token]);`,
-            '    curl_setopt($ch, CURLOPT_POST, 1);',
-            '    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));',
+            `    $h = ['Authorization: Bearer ' . $token];`,
+            `    if ($body !== null) { $h[] = 'Content-Type: application/json'; curl_setopt($ch, CURLOPT_POSTFIELDS, $body); }`,
+            '    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);',
+            '    curl_setopt($ch, CURLOPT_HTTPHEADER, $h);',
             '    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);',
-            '    curl_close($ch);',
-            '}', '',
+            '    $r = curl_exec($ch); curl_close($ch); return $r;',
+            '}',
+            'function bmm_post($base, $token, $path, $body)   { return bmm_req($base, $token, "POST",   $path, $body); }',
+            'function bmm_put($base, $token, $path, $body)    { return bmm_req($base, $token, "PUT",    $path, $body); }',
+            'function bmm_delete($base, $token, $path, $body = null) { return bmm_req($base, $token, "DELETE", $path, $body); }',
+            '',
         ];
         if (launchBmm && exePath) {
             lines.push(`pclose(popen('start "" "${exePath.replace(/\\/g, '\\\\')}"', 'r'));`);
@@ -4073,12 +4605,15 @@ function genScriptLocal(
             'import ("bytes";"fmt";"net/http";"os";"os/exec";"time")',
             `var bmmBase  = func() string { if v := os.Getenv("BMM_API_BASE"); v != "" { return v }; return "${BASE}" }()`,
             `var bmmToken = ${goTok}`,
-            'func bmmPost(path, body string) {',
-            '\treq,_:=http.NewRequest("POST",bmmBase+path,bytes.NewBufferString(body))',
+            'func bmmReq(method, path, body string) {',
+            '\treq,_:=http.NewRequest(method,bmmBase+path,bytes.NewBufferString(body))',
             '\treq.Header.Set("Content-Type","application/json")',
             '\treq.Header.Set("Authorization","Bearer "+bmmToken)',
             '\thttp.DefaultClient.Do(req)',
             '}',
+            'func bmmPost(path, body string)   { bmmReq("POST", path, body) }',
+            'func bmmPut(path, body string)    { bmmReq("PUT", path, body) }',
+            'func bmmDelete(path, body string) { bmmReq("DELETE", path, body) }',
             'func main() {',
             ...(launchBmm && exePath ? [
                 `\texec.Command("cmd","/c","start","","${exePath.replace(/\\/g, '\\\\')}").Start()`,
@@ -4100,11 +4635,14 @@ function genScriptLocal(
             'public class BmmScript {',
             `    static final String BASE=System.getenv("BMM_API_BASE")!=null?System.getenv("BMM_API_BASE"):"${BASE}";`,
             `    static final String TOKEN=${javaTok};`,
-            '    static void bmmPost(String p,String b) throws Exception{',
-            '        var r=HttpRequest.newBuilder(URI.create(BASE+p)).POST(HttpRequest.BodyPublishers.ofString(b))',
+            '    static void bmmReq(String m,String p,String b) throws Exception{',
+            '        var r=HttpRequest.newBuilder(URI.create(BASE+p)).method(m,HttpRequest.BodyPublishers.ofString(b))',
             '            .header("Content-Type","application/json").header("Authorization","Bearer "+TOKEN).build();',
             '        HttpClient.newHttpClient().send(r,HttpResponse.BodyHandlers.discarding());',
             '    }',
+            '    static void bmmPost(String p,String b) throws Exception{ bmmReq("POST",p,b); }',
+            '    static void bmmPut(String p,String b) throws Exception{ bmmReq("PUT",p,b); }',
+            '    static void bmmDelete(String p,String b) throws Exception{ bmmReq("DELETE",p,b); }',
             '    public static void main(String[] a) throws Exception{',
             ...(launchBmm && exePath ? [
                 `        Runtime.getRuntime().exec(new String[]{"cmd","/c","start","","${exePath.replace(/\\/g, '\\\\')}"}); Thread.sleep(2000);`,
@@ -4127,12 +4665,15 @@ function genScriptLocal(
             '    static readonly HttpClient Http=new();',
             `    static string Base=Environment.GetEnvironmentVariable("BMM_API_BASE")??"${BASE}";`,
             `    static string Token=${csTok};`,
-            '    static async Task Post(string p,string b){',
-            '        var r=new HttpRequestMessage(HttpMethod.Post,Base+p);',
+            '    static async Task Req(HttpMethod m,string p,string b){',
+            '        var r=new HttpRequestMessage(m,Base+p);',
             '        r.Headers.Add("Authorization","Bearer "+Token);',
             '        r.Content=new StringContent(b,Encoding.UTF8,"application/json");',
             '        await Http.SendAsync(r);',
             '    }',
+            '    static Task Post(string p,string b)=>Req(HttpMethod.Post,p,b);',
+            '    static Task Put(string p,string b)=>Req(HttpMethod.Put,p,b);',
+            '    static Task Delete(string p,string b)=>Req(HttpMethod.Delete,p,b);',
             '    static async Task Main(){',
             ...(launchBmm && exePath ? [
                 `        Process.Start("${exePath.replace(/\\/g, '\\\\')}"); await Task.Delay(2000);`,
@@ -4157,13 +4698,16 @@ function genScriptLocal(
             '// Cargo.toml: reqwest = { version = "0.11", features = ["blocking"] }',
             'use std::process::Command;',
             ...(useEnvFile ? [] : [rsStaticBase, rsStaticTok]),
-            'fn bmm_post(path:&str,body:&str,base:&str,token:&str){',
+            'fn bmm_req(method:reqwest::Method,path:&str,body:&str,base:&str,token:&str){',
             '    let _=reqwest::blocking::Client::new()',
-            '        .post(format!("{}{}",base,path))',
+            '        .request(method,format!("{}{}",base,path))',
             '        .bearer_auth(token)',
             '        .header("Content-Type","application/json")',
             '        .body(body.to_string()).send();',
             '}',
+            'fn bmm_post(path:&str,body:&str,base:&str,token:&str){ bmm_req(reqwest::Method::POST,path,body,base,token); }',
+            'fn bmm_put(path:&str,body:&str,base:&str,token:&str){ bmm_req(reqwest::Method::PUT,path,body,base,token); }',
+            'fn bmm_delete(path:&str,body:&str,base:&str,token:&str){ bmm_req(reqwest::Method::DELETE,path,body,base,token); }',
             'fn main(){',
             ...(useEnvFile ? [
                 `    let base  = std::env::var("BMM_API_BASE").unwrap_or_else(|_| "${BASE}".to_string());`,
@@ -4182,36 +4726,102 @@ function genScriptLocal(
     return '# Unsupported format';
 }
 
+// Maps a repo/modpack/mod action to its HTTP call. Bodies use the exact
+// camelCase field names the warp API expects (see src-tauri/src/api/mod.rs).
+// Reads individual typed keys from `extra` (set in _collectActions) so values
+// with spaces survive intact. Returns null for non-API actions.
+function _apiBodyFor(a: any): { method: string; path: string; body: Record<string, any> } | null {
+    const ex = a.extra || {};
+    const s = (k: string) => (typeof ex[k] === 'string' ? ex[k] : (ex[k] != null ? String(ex[k]) : ''));
+    const bool = (k: string) => ex[k] === true || ex[k] === 'true';
+    const num = (k: string, d = 0) => { const v = parseInt(ex[k], 10); return isNaN(v) ? d : v; };
+    switch (a.action_type) {
+        case 'enable_mod':       return { method: 'POST', path: '/api/mods/enable',       body: { mod_id: a.target_id } };
+        case 'disable_mod':      return { method: 'POST', path: '/api/mods/disable',      body: { mod_id: a.target_id } };
+        case 'activate_profile': return { method: 'POST', path: '/api/profiles/activate', body: { profile_id: a.target_id } };
+        case 'apply_plugin':     return { method: 'POST', path: '/api/plugins/apply',     body: { plugin_id: a.target_id, force_strict: false } };
+        case 'compare_plugin':   return { method: 'POST', path: '/api/plugins/compare',   body: { plugin_id: a.target_id } };
+        case 'enable_modpack':   return { method: 'POST', path: '/api/modpacks/enable',   body: { profile_id: a.target_id } };
+        case 'disable_modpack':  return { method: 'POST', path: '/api/modpacks/disable',  body: { profile_id: a.target_id } };
+        case 'update_modpack':   return { method: 'PUT', path: `/api/modpacks/${s('modpack_id') || 'MODPACK_ID'}`,
+            body: { name: s('name'), dependency_mode: s('dependency_mode') || 'none' } };
+        case 'sync_repo':        return { method: 'POST', path: '/api/repo/sync', body: {
+            url: s('url') || 'REPO_URL', modsDir: s('mods_dir'), backupDir: s('backup_dir'), gameDir: s('game_dir'),
+            choices: [], overwriteAll: bool('overwrite_all'), deleteExtra: bool('delete_extra'), downloadLimit: num('download_limit') } };
+        case 'gen_repo':         return { method: 'POST', path: '/api/repo/gen', body: {
+            profileIds: s('profile_id') ? [s('profile_id')] : [], outputDir: s('output_dir'), authorName: s('author') || 'Author',
+            lightweight: bool('lightweight'), zipOutput: bool('zip'), generateServer: bool('generate_server'),
+            autoStart: bool('auto_start'), port: num('port', 8080) || 8080, adminPassword: s('admin_pass'), uploadLimit: num('upload_limit') } };
+        case 'http_host':        return { method: 'POST', path: '/api/repo/host', body: {
+            serveDir: s('serve_dir'), port: num('port', 8080) || 8080, uploadLimit: num('upload_limit') } };
+        case 'cancel_sync':      return { method: 'DELETE', path: '/api/repo/sync/cancel', body: {} };
+        case 'cancel_gen':       return { method: 'DELETE', path: '/api/repo/gen/cancel',  body: {} };
+        case 'stop_http_host':   return { method: 'DELETE', path: '/api/repo/host',        body: {} };
+
+        // ── Read-only (GET, unauthenticated) ──────────────────────────────
+        case 'get_status':       return { method: 'GET', path: '/api/status',       body: {} };
+        case 'list_mods':        return { method: 'GET', path: '/api/mods',         body: {} };
+        case 'list_active_mods': return { method: 'GET', path: '/api/mods/active',  body: {} };
+        case 'list_profiles':    return { method: 'GET', path: '/api/profiles',     body: {} };
+        case 'list_plugins':     return { method: 'GET', path: '/api/plugins',      body: {} };
+        case 'list_modpacks':    return { method: 'GET', path: '/api/modpacks',     body: {} };
+        case 'check_update':     return { method: 'GET', path: '/api/check-update', body: {} };
+        case 'get_creator_id':   return { method: 'GET', path: '/api/creator-id',   body: {} };
+        case 'api_health':       return { method: 'GET', path: '/api/health',       body: {} };
+        case 'repo_list':        return { method: 'GET', path: '/api/repo/list',    body: {} };
+        case 'repo_info':        return { method: 'GET',
+            path: `/api/repo/info?url=${encodeURIComponent(s('url') || 'REPO_URL')}`, body: {} };
+
+        // ── Mods / profiles / modpacks (writes — snake_case bodies) ───────
+        case 'delete_mod':       return { method: 'DELETE', path: `/api/mods/${a.target_id || 'MOD_ID'}`, body: {} };
+        case 'update_mod':       return { method: 'PUT', path: `/api/mods/${a.target_id || 'MOD_ID'}`,
+            body: _prune({ name: s('name'), version: s('version'), author: s('author'), description: s('description') }) };
+        case 'create_profile':   return { method: 'POST', path: '/api/profiles', body: {
+            name: s('name'), game_name: s('game_name'), game_path: s('game_path'),
+            mods_path: s('mods_path'), backup_path: s('backup_path') } };
+        case 'update_profile':   return { method: 'PUT', path: `/api/profiles/${a.target_id || 'PROFILE_ID'}`,
+            body: _prune({ name: s('name'), game_name: s('game_name'), color: s('color'), icon: s('icon'),
+                game_path: s('game_path'), mods_path: s('mods_path'), backup_path: s('backup_path') }) };
+        case 'delete_profile':   return { method: 'DELETE', path: `/api/profiles/${a.target_id || 'PROFILE_ID'}`, body: {} };
+        case 'restart':          return { method: 'POST', path: '/api/restart', body: {} };
+        case 'create_modpack':   return { method: 'POST', path: '/api/modpacks/create',
+            body: _prune({ name: s('name'), description: s('description'), game_name: s('game_name'),
+                sr_link: s('sr_link'), dependency_mode: s('dependency_mode') || 'none' }) };
+        case 'delete_modpack':   return { method: 'DELETE', path: `/api/modpacks/${s('modpack_id') || 'MODPACK_ID'}`, body: {} };
+        case 'repo_connect':     return { method: 'POST', path: '/api/repo/connect', body: { url: s('url') || 'REPO_URL' } };
+        case 'repo_remove':      return { method: 'DELETE', path: '/api/repo', body: { url: s('url') || 'REPO_URL' } };
+        default: return null;
+    }
+}
+
+// Drops empty-string keys so PUT/update calls don't overwrite fields with "".
+function _prune(o: Record<string, any>): Record<string, any> {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(o)) if (v !== '' && v != null) out[k] = v;
+    return out;
+}
+
+// Actions that have a native bmm:// deeplink. Anything else that has an API
+// call must fall back to HTTP (and therefore needs a token) even in deeplink
+// mode. Mirrors action_to_deeplink in src-tauri/src/commands/plugins.rs.
+const _DEEPLINKABLE = new Set([
+    'enable_mod', 'disable_mod', 'activate_profile',
+    'apply_plugin', 'compare_plugin', 'enable_modpack', 'disable_modpack',
+]);
+
+// Returns true if any action will issue an authenticated HTTP call given the
+// chosen mode. Mirrors actions_need_api in the Rust backend so the generated
+// token block (deeplink fallback) always gets a real token.
+function _actionsNeedApi(actions: Array<{ action_type: string }>, useDeeplink: boolean): boolean {
+    return actions.some(a => {
+        const hasApi = _apiBodyFor(a) !== null;
+        if (!hasApi) return false;
+        return useDeeplink ? !_DEEPLINKABLE.has(a.action_type) : true;
+    });
+}
+
 // Generic action renderer for simpler languages (Ruby, PHP, Go, Java, C#, Rust)
 function _genericAction(a: any, lang: string, token: string | null, useDeeplink: boolean, base: string): string[] {
-    // Parse "key=value key2=value2" extra string for repo actions
-    const parseKV = (str: string): Record<string, string> => {
-        const out: Record<string, string> = {};
-        (str || '').split(/\s+/).forEach(part => {
-            const eq = part.indexOf('=');
-            if (eq > 0) out[part.slice(0, eq)] = part.slice(eq + 1);
-        });
-        return out;
-    };
-    const syncKV       = parseKV(a.extra?.expr || '');
-    const genKV        = parseKV(a.extra?.expr || '');
-    const hostKV       = parseKV(a.extra?.expr || '');
-    const updModpackKV = parseKV(a.extra?.expr || '');
-
-    const apiEps: Record<string, [string, string, string?]> = {
-        enable_mod:          ['/api/mods/enable',        JSON.stringify({ mod_id: a.target_id })],
-        disable_mod:         ['/api/mods/disable',       JSON.stringify({ mod_id: a.target_id })],
-        activate_profile:    ['/api/profiles/activate',  JSON.stringify({ profile_id: a.target_id })],
-        apply_plugin:        ['/api/plugins/apply',      JSON.stringify({ plugin_id: a.target_id, force_strict: false })],
-        compare_plugin:      ['/api/plugins/compare',    JSON.stringify({ plugin_id: a.target_id })],
-        enable_modpack:      ['/api/modpacks/enable',    JSON.stringify({ profile_id: a.target_id })],
-        disable_modpack:     ['/api/modpacks/disable',   JSON.stringify({ profile_id: a.target_id })],
-        update_modpack:      [`/api/modpacks/${updModpackKV.modpack_id || 'MODPACK_ID'}`, JSON.stringify({ name: updModpackKV.name || '', dependency_mode: updModpackKV.dependency_mode || 'none' }), 'PUT'],
-        sync_repo:           ['/api/repo/sync',          JSON.stringify({ url: syncKV.url || 'REPO_URL', mods_dir: syncKV.mods_dir || 'C:/Mods' })],
-        gen_repo:            ['/api/repo/gen',           JSON.stringify({ output_dir: genKV.output_dir || 'C:/Export', author_name: genKV.author || 'Author', lightweight: genKV.lightweight === 'true', zip_output: genKV.zip === 'true' })],
-        http_host:           ['/api/repo/host',          JSON.stringify({ serve_dir: hostKV.serve_dir || 'C:/Export', port: parseInt(hostKV.port || '8080') })],
-    };
-
     const dlMap: Record<string, string> = {
         enable_mod:       `bmm://mod/enable?id=${a.target_id}`,
         disable_mod:      `bmm://mod/disable?id=${a.target_id}`,
@@ -4245,9 +4855,11 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
     };
 
     const isEnv = token === '__ENV__';
+    // PHP single-quoted string literal: only \ and ' need escaping.
+    const phpStr = (s: string) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
     const postFn = (path: string, body: string) => ({
         rb: `bmm_post('${path}', ${body})`,
-        php: `bmm_post($base, $token, '${path}', ${body});`,
+        php: `bmm_post($base, $token, '${path}', ${phpStr(body)});`,
         go: `bmmPost("${path}", \`${body}\`)`,
         java: `bmmPost("${path}", "${body.replace(/"/g, '\\"')}");`,
         cs: `await Post("${path}", "${body.replace(/"/g, '\\"')}");`,
@@ -4263,25 +4875,53 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
         rs: `Command::new("cmd").args(["/c","start","","${url}"]).spawn().ok();`,
     })[lang] || `// open ${url}`;
 
-    // DELETE helper (cancel / stop)
-    const delFn = (path: string) => ({
-        rb: `bmm_delete('${path}')`,
-        php: `bmm_delete($base, $token, '${path}');`,
-        go: `bmmDelete("${path}")`,
-        java: `bmmDelete("${path}");`,
-        cs: `await Delete("${path}");`,
-        rs: isEnv ? `bmm_delete("${path}", &base, &token);` : `bmm_delete("${path}", BASE, TOKEN);`,
-    })[lang] || `// DELETE ${path}`;
+    // DELETE helper (cancel / stop / delete). Optional JSON body for the few
+    // DELETE routes that require one (e.g. DELETE /api/repo needs { url }).
+    const delFn = (path: string, body?: string) => {
+        const b = body && body !== '{}' ? body : '';
+        return ({
+            rb: b ? `bmm_delete('${path}', ${b})` : `bmm_delete('${path}')`,
+            php: b ? `bmm_delete($base, $token, '${path}', ${phpStr(b)});` : `bmm_delete($base, $token, '${path}');`,
+            go: b ? `bmmDelete("${path}", \`${b}\`)` : `bmmDelete("${path}", "")`,
+            java: b ? `bmmDelete("${path}", "${b.replace(/"/g, '\\"')}");` : `bmmDelete("${path}", "");`,
+            cs: b ? `await Delete("${path}", "${b.replace(/"/g, '\\"')}");` : `await Delete("${path}", "");`,
+            rs: isEnv
+                ? `bmm_delete("${path}", r#"${b}"#, &base, &token);`
+                : `bmm_delete("${path}", r#"${b}"#, BASE, TOKEN);`,
+        })[lang] || `// DELETE ${path}`;
+    };
 
     // PUT helper
     const putFn = (path: string, body: string) => ({
         rb: `bmm_put('${path}', ${body})`,
-        php: `bmm_put($base, $token, '${path}', ${body});`,
+        php: `bmm_put($base, $token, '${path}', ${phpStr(body)});`,
         go: `bmmPut("${path}", \`${body}\`)`,
         java: `bmmPut("${path}", "${body.replace(/"/g, '\\"')}");`,
         cs: `await Put("${path}", "${body.replace(/"/g, '\\"')}");`,
         rs: isEnv ? `bmm_put("${path}", r#"${body}"#, &base, &token);` : `bmm_put("${path}", r#"${body}"#, BASE, TOKEN);`,
     })[lang] || `// PUT ${path}`;
+
+    // GET helper — GET endpoints are unauthenticated, so emit a simple inline
+    // request (no shared helper / token needed).
+    const getFn = (path: string) => ({
+        rb: `puts Net::HTTP.get(URI("#{BASE}${path}"))`,
+        php: `echo file_get_contents($base . '${path}');`,
+        go: `if r, e := http.Get(BASE+"${path}"); e==nil { b,_:=io.ReadAll(r.Body); fmt.Println(string(b)) }`,
+        java: `System.out.println(new String(new java.net.URL(BASE + "${path}").openStream().readAllBytes()));`,
+        cs: `Console.WriteLine(await new HttpClient().GetStringAsync(BASE + "${path}"));`,
+        rs: isEnv ? `if let Ok(r)=reqwest::blocking::get(format!("{}{}",base,"${path}")){ println!("{}", r.text().unwrap_or_default()); }`
+                  : `if let Ok(r)=reqwest::blocking::get(format!("{}{}",BASE,"${path}")){ println!("{}", r.text().unwrap_or_default()); }`,
+    })[lang] || `// GET ${path}`;
+
+    // Generic dispatch for any API-mapped action without a dedicated case above.
+    const genericApi = (): string[] | null => {
+        const ep = _apiBodyFor(a);
+        if (!ep) return null;
+        if (ep.method === 'GET')    return [getFn(ep.path)];
+        if (ep.method === 'DELETE') return [delFn(ep.path, JSON.stringify(ep.body))];
+        if (ep.method === 'PUT')    return [putFn(ep.path, JSON.stringify(ep.body))];
+        return [postFn(ep.path, JSON.stringify(ep.body))];
+    };
 
     switch (a.action_type) {
         case 'enable_mod': case 'disable_mod': case 'activate_profile':
@@ -4289,12 +4929,12 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
         case 'enable_modpack': case 'disable_modpack':
         case 'sync_repo': case 'gen_repo': case 'http_host': {
             const dl = dlMap[a.action_type];
-            const ep = apiEps[a.action_type];
-            return [dl && useDeeplink ? dlFn(dl) : postFn(ep[0], ep[1])];
+            const ep = _apiBodyFor(a)!;
+            return [dl && useDeeplink ? dlFn(dl) : postFn(ep.path, JSON.stringify(ep.body))];
         }
         case 'update_modpack': {
-            const ep = apiEps['update_modpack'];
-            return [putFn(ep[0], ep[1])];
+            const ep = _apiBodyFor(a)!;
+            return [putFn(ep.path, JSON.stringify(ep.body))];
         }
         case 'cancel_sync':
             return [delFn('/api/repo/sync/cancel')];
@@ -4375,7 +5015,7 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
             return [dlFn(exe)];
         }
         default:
-            return [comment(`Unknown action: ${a.action_type}`)];
+            return genericApi() || [comment(`Unknown action: ${a.action_type}`)];
     }
 }
 
@@ -4388,24 +5028,12 @@ function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: str
         `webbrowser.open(f"bmm://${path}/${id}")`;
     const apiPost = (ep: string, body: object) =>
         `requests.post(f"{BASE}${ep}", json=${JSON.stringify(body)}${auth ? ', ' + auth : ''})`;
-    const apiDelete = (ep: string) =>
-        `requests.delete(f"{BASE}${ep}"${auth ? ', ' + auth : ''})`;
+    const apiDelete = (ep: string, body?: object) =>
+        body && Object.keys(body).length
+            ? `requests.delete(f"{BASE}${ep}", json=${JSON.stringify(body)}${auth ? ', ' + auth : ''})`
+            : `requests.delete(f"{BASE}${ep}"${auth ? ', ' + auth : ''})`;
     const apiPut = (ep: string, body: object) =>
         `requests.put(f"{BASE}${ep}", json=${JSON.stringify(body)}${auth ? ', ' + auth : ''})`;
-
-    // Parse "key=value" extra string for repo actions
-    const parseKV2 = (str: string): Record<string, string> => {
-        const out: Record<string, string> = {};
-        (str || '').split(/\s+/).forEach(part => {
-            const eq = part.indexOf('=');
-            if (eq > 0) out[part.slice(0, eq)] = part.slice(eq + 1);
-        });
-        return out;
-    };
-    const syncKV  = parseKV2(a.extra?.expr || '');
-    const genKV   = parseKV2(a.extra?.expr || '');
-    const hostKV  = parseKV2(a.extra?.expr || '');
-    const updKV   = parseKV2(a.extra?.expr || '');
 
     switch (a.action_type) {
         case 'enable_mod':
@@ -4428,18 +5056,18 @@ function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: str
             return [useDeeplink ? deeplink('modpack/enable', a.target_id) : `${apiPost('/api/modpacks/enable', { profile_id: a.target_id })}`];
         case 'disable_modpack':
             return [useDeeplink ? deeplink('modpack/disable', a.target_id) : `${apiPost('/api/modpacks/disable', { profile_id: a.target_id })}`];
-        case 'update_modpack':
-            return [`${apiPut(`/api/modpacks/${updKV.modpack_id || 'MODPACK_ID'}`, { name: updKV.name || '', dependency_mode: updKV.dependency_mode || 'none' })}`];
-        case 'sync_repo':
-            return [`${apiPost('/api/repo/sync', { url: syncKV.url || 'REPO_URL', mods_dir: syncKV.mods_dir || 'C:/Mods' })}`];
+        case 'update_modpack': {
+            const ep = _apiBodyFor(a)!;
+            return [`${apiPut(ep.path, ep.body)}`];
+        }
+        case 'sync_repo': case 'gen_repo': case 'http_host': {
+            const ep = _apiBodyFor(a)!;
+            return [`${apiPost(ep.path, ep.body)}`];
+        }
         case 'cancel_sync':
             return [`${apiDelete('/api/repo/sync/cancel')}`];
-        case 'gen_repo':
-            return [`${apiPost('/api/repo/gen', { output_dir: genKV.output_dir || 'C:/Export', author_name: genKV.author || 'Author', lightweight: genKV.lightweight === 'true', zip_output: genKV.zip === 'true' })}`];
         case 'cancel_gen':
             return [`${apiDelete('/api/repo/gen/cancel')}`];
-        case 'http_host':
-            return [`${apiPost('/api/repo/host', { serve_dir: hostKV.serve_dir || 'C:/Export', port: parseInt(hostKV.port || '8080') })}`];
         case 'stop_http_host':
             return [`${apiDelete('/api/repo/host')}`];
         case 'wait':
@@ -4471,8 +5099,16 @@ function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: str
             return ['# end'];
         case 'raw_code':
             return [a.extra.code || ''];
-        default:
+        default: {
+            const ep = _apiBodyFor(a);
+            if (ep) {
+                if (ep.method === 'GET')    return [`print(requests.get(f"{BASE}${ep.path}").text)`];
+                if (ep.method === 'DELETE') return [apiDelete(ep.path, ep.body)];
+                if (ep.method === 'PUT')    return [apiPut(ep.path, ep.body)];
+                return [apiPost(ep.path, ep.body)];
+            }
             return [`# Unknown action: ${a.action_type}`];
+        }
     }
 }
 
@@ -4480,20 +5116,14 @@ function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: st
     // TOKEN and BASE are always declared as locals at the top of the Lua script
     const curlPost = (ep: string, body: string) =>
         `os.execute(('curl -s -X POST %s%s -H "Content-Type: application/json" -H "Authorization: Bearer %s" -d %q'):format(BASE, ${JSON.stringify(ep)}, TOKEN, ${JSON.stringify(body)}))`;
-    const curlDelete = (ep: string) =>
-        `os.execute(('curl -s -X DELETE %s%s -H "Authorization: Bearer %s"'):format(BASE, ${JSON.stringify(ep)}, TOKEN))`;
+    const curlDelete = (ep: string, body?: string) =>
+        body
+            ? `os.execute(('curl -s -X DELETE %s%s -H "Content-Type: application/json" -H "Authorization: Bearer %s" -d %q'):format(BASE, ${JSON.stringify(ep)}, TOKEN, ${JSON.stringify(body)}))`
+            : `os.execute(('curl -s -X DELETE %s%s -H "Authorization: Bearer %s"'):format(BASE, ${JSON.stringify(ep)}, TOKEN))`;
     const curlPut = (ep: string, body: string) =>
         `os.execute(('curl -s -X PUT %s%s -H "Content-Type: application/json" -H "Authorization: Bearer %s" -d %q'):format(BASE, ${JSON.stringify(ep)}, TOKEN, ${JSON.stringify(body)}))`;
-
-    const parseKV3 = (str: string): Record<string, string> => {
-        const out: Record<string, string> = {};
-        (str || '').split(/\s+/).forEach(part => {
-            const eq = part.indexOf('=');
-            if (eq > 0) out[part.slice(0, eq)] = part.slice(eq + 1);
-        });
-        return out;
-    };
-    const kv = parseKV3(a.extra?.expr || '');
+    const curlGet = (ep: string) =>
+        `os.execute(('curl -s %s%s'):format(BASE, ${JSON.stringify(ep)}))`;
 
     switch (a.action_type) {
         case 'enable_mod':
@@ -4520,18 +5150,18 @@ function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: st
             return [useDeeplink
                 ? `os.execute('start bmm://modpack/disable?id=${a.target_id}')`
                 : curlPost('/api/modpacks/disable', `{"profile_id":"${a.target_id}"}`)];
-        case 'update_modpack':
-            return [curlPut(`/api/modpacks/${kv.modpack_id || 'MODPACK_ID'}`, `{"name":"${kv.name || ''}","dependency_mode":"${kv.dependency_mode || 'none'}"}`)];
-        case 'sync_repo':
-            return [curlPost('/api/repo/sync', `{"url":"${kv.url || 'REPO_URL'}","mods_dir":"${kv.mods_dir || 'C:/Mods'}"}`)];
+        case 'update_modpack': {
+            const ep = _apiBodyFor(a)!;
+            return [curlPut(ep.path, JSON.stringify(ep.body))];
+        }
+        case 'sync_repo': case 'gen_repo': case 'http_host': {
+            const ep = _apiBodyFor(a)!;
+            return [curlPost(ep.path, JSON.stringify(ep.body))];
+        }
         case 'cancel_sync':
             return [curlDelete('/api/repo/sync/cancel')];
-        case 'gen_repo':
-            return [curlPost('/api/repo/gen', `{"output_dir":"${kv.output_dir || 'C:/Export'}","author_name":"${kv.author || 'Author'}","lightweight":${kv.lightweight === 'true'},"zip_output":${kv.zip === 'true'}}`)];
         case 'cancel_gen':
             return [curlDelete('/api/repo/gen/cancel')];
-        case 'http_host':
-            return [curlPost('/api/repo/host', `{"serve_dir":"${kv.serve_dir || 'C:/Export'}","port":${kv.port || '8080'}}`)];
         case 'stop_http_host':
             return [curlDelete('/api/repo/host')];
         case 'wait': {
@@ -4565,8 +5195,16 @@ function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: st
             return ['end'];
         case 'raw_code':
             return [a.extra.code || ''];
-        default:
+        default: {
+            const ep = _apiBodyFor(a);
+            if (ep) {
+                if (ep.method === 'GET')    return [curlGet(ep.path)];
+                if (ep.method === 'DELETE') return [curlDelete(ep.path, Object.keys(ep.body).length ? JSON.stringify(ep.body) : undefined)];
+                if (ep.method === 'PUT')    return [curlPut(ep.path, JSON.stringify(ep.body))];
+                return [curlPost(ep.path, JSON.stringify(ep.body))];
+            }
             return [`-- Unknown action: ${a.action_type}`];
+        }
     }
 }
 
@@ -4574,22 +5212,16 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
     // bmmPost is the helper declared in the JS generator header
     const apiCall = (ep: string, body: object) =>
         `await bmmPost('${ep}', ${JSON.stringify(body)});`;
-    const apiDelete = (ep: string) =>
-        `await fetch(BASE + '${ep}', { method: 'DELETE', headers: { Authorization: 'Bearer ' + TOKEN } });`;
+    const apiDelete = (ep: string, body?: object) =>
+        body && Object.keys(body).length
+            ? `await fetch(BASE + '${ep}', { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN }, body: JSON.stringify(${JSON.stringify(body)}) });`
+            : `await fetch(BASE + '${ep}', { method: 'DELETE', headers: { Authorization: 'Bearer ' + TOKEN } });`;
     const apiPut = (ep: string, body: object) =>
         `await fetch(BASE + '${ep}', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN }, body: JSON.stringify(${JSON.stringify(body)}) });`;
+    const apiGet = (ep: string) =>
+        `console.log(await (await fetch(BASE + '${ep}')).text());`;
     const deeplink = (scheme: string, id: string) =>
         `execSync('start bmm://${scheme}/${id}');`;
-
-    const parseKV4 = (str: string): Record<string, string> => {
-        const out: Record<string, string> = {};
-        (str || '').split(/\s+/).forEach(part => {
-            const eq = part.indexOf('=');
-            if (eq > 0) out[part.slice(0, eq)] = part.slice(eq + 1);
-        });
-        return out;
-    };
-    const kv = parseKV4(a.extra?.expr || '');
 
     switch (a.action_type) {
         case 'enable_mod':
@@ -4606,18 +5238,18 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
             return [useDeeplink ? deeplink('modpack/enable', a.target_id) : apiCall('/api/modpacks/enable', { profile_id: a.target_id })];
         case 'disable_modpack':
             return [useDeeplink ? deeplink('modpack/disable', a.target_id) : apiCall('/api/modpacks/disable', { profile_id: a.target_id })];
-        case 'update_modpack':
-            return [apiPut(`/api/modpacks/${kv.modpack_id || 'MODPACK_ID'}`, { name: kv.name || '', dependency_mode: kv.dependency_mode || 'none' })];
-        case 'sync_repo':
-            return [apiCall('/api/repo/sync', { url: kv.url || 'REPO_URL', mods_dir: kv.mods_dir || 'C:/Mods' })];
+        case 'update_modpack': {
+            const ep = _apiBodyFor(a)!;
+            return [apiPut(ep.path, ep.body)];
+        }
+        case 'sync_repo': case 'gen_repo': case 'http_host': {
+            const ep = _apiBodyFor(a)!;
+            return [apiCall(ep.path, ep.body)];
+        }
         case 'cancel_sync':
             return [apiDelete('/api/repo/sync/cancel')];
-        case 'gen_repo':
-            return [apiCall('/api/repo/gen', { output_dir: kv.output_dir || 'C:/Export', author_name: kv.author || 'Author', lightweight: kv.lightweight === 'true', zip_output: kv.zip === 'true' })];
         case 'cancel_gen':
             return [apiDelete('/api/repo/gen/cancel')];
-        case 'http_host':
-            return [apiCall('/api/repo/host', { serve_dir: kv.serve_dir || 'C:/Export', port: parseInt(kv.port || '8080') })];
         case 'stop_http_host':
             return [apiDelete('/api/repo/host')];
         case 'wait':
@@ -4650,8 +5282,16 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
             return ['}'];
         case 'raw_code':
             return [a.extra.code || ''];
-        default:
+        default: {
+            const ep = _apiBodyFor(a);
+            if (ep) {
+                if (ep.method === 'GET')    return [apiGet(ep.path)];
+                if (ep.method === 'DELETE') return [apiDelete(ep.path, ep.body)];
+                if (ep.method === 'PUT')    return [apiPut(ep.path, ep.body)];
+                return [apiCall(ep.path, ep.body)];
+            }
             return [`// Unknown action: ${a.action_type}`];
+        }
     }
 }
 

@@ -192,6 +192,7 @@ impl OpTracker {
     }
 
     /// Accumulate into a metric (allocates only if the key is new).
+    #[allow(dead_code)]
     pub fn add(&mut self, key: impl Into<Cow<'static, str>>, value: u64) {
         let k: Cow<'static, str> = key.into();
         if let Some(slot) = self.metrics.iter_mut().find(|(kk, _)| *kk == k) {
@@ -215,6 +216,7 @@ impl OpTracker {
         self.into_record("ok");
     }
 
+    #[allow(dead_code)]
     pub fn finish_with(self, status: impl AsRef<str>) {
         let s = status.as_ref().to_string();
         self.into_record(&s);
