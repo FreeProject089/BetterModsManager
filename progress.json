@@ -3,8 +3,8 @@
     "en": "May 16th 2026",
     "fr": "16 Mai 2026"
   },
-  "art": 85,
-  "code": 87,
+  "art": 87,
+  "code": 89,
   "categories": [
     {
       "name": {
@@ -18,7 +18,7 @@
             "fr": "Système de Plugins C"
           },
           "status": "progress",
-          "percent": 95
+          "percent": 97
         },
         {
           "label": {
@@ -42,7 +42,7 @@
             "fr": "Système P2P Sync"
           },
           "status": "progress",
-          "percent": 2 
+          "percent": 3
         }
       ]
     },
@@ -58,7 +58,7 @@
             "fr": "Refonte Complète de la Doc"
           },
           "status": "progress",
-          "percent": 70
+          "percent": 75
         },
         {
           "label": {
@@ -66,7 +66,7 @@
             "fr": "Série de Vidéos Tutoriels"
           },
           "status": "progress",
-          "percent": 45
+          "percent": 50
         }
       ]
     },
@@ -82,7 +82,7 @@
             "fr": "Interface Glassmorphism v2"
           },
           "status": "progress",
-          "percent": 85
+          "percent": 90
         },
         {
           "label": {
@@ -90,7 +90,7 @@
             "fr": "Optimisation Performances Rust"
           },
           "status": "progress",
-          "percent": 95
+          "percent": 96
         }
       ]
     }
