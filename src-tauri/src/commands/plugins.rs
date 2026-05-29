@@ -490,12 +490,31 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
                 out.push(format!("if exist \"{}\" (", path));
             }
         }
+        "if_file_not_exists" => {
+            let path = extra_str(&action.extra, "path");
+            if !path.is_empty() {
+                out.push(format!("if not exist \"{}\" (", path));
+            }
+        }
         "if_var_eq" => {
             let cond = extra_str(&action.extra, "cond");
             let parts: Vec<&str> = cond.splitn(2, '=').collect();
             if parts.len() == 2 {
                 out.push(format!("if \"%{}%\"==\"{}\" (", parts[0].trim(), parts[1].trim()));
             }
+        }
+        "if_var_neq" => {
+            let cond = extra_str(&action.extra, "cond");
+            let parts: Vec<&str> = cond.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                out.push(format!("if not \"%{}%\"==\"{}\" (", parts[0].trim(), parts[1].trim()));
+            }
+        }
+        "pause_key" => {
+            out.push("pause".to_string());
+        }
+        "stop_script" => {
+            out.push("exit /b 0".to_string());
         }
         "else_block" => {
             out.push(") else (".to_string());
@@ -620,12 +639,31 @@ fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
                 out.push(format!("if (Test-Path \"{}\") {{", path));
             }
         }
+        "if_file_not_exists" => {
+            let path = extra_str(&action.extra, "path");
+            if !path.is_empty() {
+                out.push(format!("if (-not (Test-Path \"{}\")) {{", path));
+            }
+        }
         "if_var_eq" => {
             let cond = extra_str(&action.extra, "cond");
             let parts: Vec<&str> = cond.splitn(2, '=').collect();
             if parts.len() == 2 {
                 out.push(format!("if (${} -eq \"{}\") {{", parts[0].trim(), parts[1].trim()));
             }
+        }
+        "if_var_neq" => {
+            let cond = extra_str(&action.extra, "cond");
+            let parts: Vec<&str> = cond.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                out.push(format!("if (${} -ne \"{}\") {{", parts[0].trim(), parts[1].trim()));
+            }
+        }
+        "pause_key" => {
+            out.push("$null = Read-Host 'Press Enter to continue'".to_string());
+        }
+        "stop_script" => {
+            out.push("exit 0".to_string());
         }
         "else_block" => {
             out.push("} else {".to_string());
@@ -763,12 +801,32 @@ fn vbs_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
                 out.push(format!("If fso.FileExists(\"{}\") Then", path));
             }
         }
+        "if_file_not_exists" => {
+            let path = extra_str(&action.extra, "path");
+            if !path.is_empty() {
+                out.push("Dim fso : Set fso = CreateObject(\"Scripting.FileSystemObject\")".to_string());
+                out.push(format!("If Not fso.FileExists(\"{}\") Then", path));
+            }
+        }
         "if_var_eq" => {
             let cond = extra_str(&action.extra, "cond");
             let parts: Vec<&str> = cond.splitn(2, '=').collect();
             if parts.len() == 2 {
                 out.push(format!("If {} = \"{}\" Then", parts[0].trim(), parts[1].trim()));
             }
+        }
+        "if_var_neq" => {
+            let cond = extra_str(&action.extra, "cond");
+            let parts: Vec<&str> = cond.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                out.push(format!("If {} <> \"{}\" Then", parts[0].trim(), parts[1].trim()));
+            }
+        }
+        "pause_key" => {
+            out.push("MsgBox \"Press OK to continue...\"".to_string());
+        }
+        "stop_script" => {
+            out.push("WScript.Quit 0".to_string());
         }
         "else_block" => {
             out.push("Else".to_string());

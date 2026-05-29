@@ -14,6 +14,7 @@ import { appState } from '../core/state.js';
 import { initInteractiveDocs, openDiagram } from '../docs/interactive-docs.js';
 import { initDocsUI } from '../docs/docs-ui.js';
 import { initDeepLinks } from '../core/deep_link_manager.js';
+import { initApiActivity } from '../core/api_activity.js';
 import { initTitlebar } from './titlebar.js';
 import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
 import { initModals } from './modals.js';
@@ -75,15 +76,24 @@ async function waitForModalClosed(id) {
 import { loadTauri, invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification } from '../core/api.js';
 export { invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification };
 // ── Toast ─────────────────────────────────────────────────
-export function toast(message, type = 'info', duration = 3000) {
+export function toast(message, type = 'info', duration = 3000, icon = '') {
     const container = document.getElementById('toast-container');
     const el = document.createElement('div');
     el.className = `toast ${type}`;
-    const dot = document.createElement('div');
-    dot.className = 'toast-dot';
+    if (icon) {
+        // Custom SVG icon (replaces the default colored dot)
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'toast-icon';
+        iconSpan.innerHTML = icon;
+        el.appendChild(iconSpan);
+    }
+    else {
+        const dot = document.createElement('div');
+        dot.className = 'toast-dot';
+        el.appendChild(dot);
+    }
     const textSpan = document.createElement('span');
     textSpan.textContent = message;
-    el.appendChild(dot);
     el.appendChild(textSpan);
     container.appendChild(el);
     const remove = () => {
@@ -628,6 +638,7 @@ async function main() {
     initInteractiveDocs();
     initDocsUI();
     initDeepLinks();
+    initApiActivity();
     const modpackContainer = document.getElementById('modpack-container');
     if (modpackContainer) {
         initModpackCreator(modpackContainer);

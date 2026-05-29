@@ -14,6 +14,8 @@ pub struct UpdateInfo {
     pub download_url: String,
     /// URL of the incremental update manifest (if present in release assets)
     pub manifest_url: Option<String>,
+    /// True when the selected release is a GitHub pre-release.
+    pub is_prerelease: bool,
 }
 
 /// A single file entry in the incremental update manifest.
@@ -56,12 +58,10 @@ pub struct IncrementalResult {
 /// Checks GitHub releases API for a newer version.
 /// Compares version strings using semver-like logic.
 #[tauri::command]
-pub async fn check_for_update(app_handle: tauri::AppHandle) -> Result<UpdateInfo, String> {
+pub async fn check_for_update(app_handle: tauri::AppHandle, include_prerelease: Option<bool>) -> Result<UpdateInfo, String> {
     let current_version = app_handle.package_info().version.to_string();
-    log_line(format!("[UPDATE] Checking for updates (current: v{})", current_version));
-
-    // GitHub API endpoint for latest release
-    let url = "https://api.github.com/repos/FreeProject089/BetterModsManager/releases/latest";
+    let include_pre = include_prerelease.unwrap_or(false);
+    log_line(format!("[UPDATE] Checking for updates (current: v{}, prerelease: {})", current_version, include_pre));
 
     let client = reqwest::Client::builder()
         .user_agent("BetterModManager")
@@ -69,36 +69,47 @@ pub async fn check_for_update(app_handle: tauri::AppHandle) -> Result<UpdateInfo
         .build()
         .map_err(|e| format!("HTTP client error: {}", e))?;
 
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| {
-            // Timeout or network error — not a crash, just silently fail
+    // Choose the release object to inspect:
+    //  - prerelease ON  → list releases (newest first) and take the first
+    //    non-draft one, which may be a pre-release.
+    //  - prerelease OFF → use /releases/latest (GitHub excludes pre-releases).
+    let body: serde_json::Value = if include_pre {
+        let url = "https://api.github.com/repos/FreeProject089/BetterModsManager/releases?per_page=20";
+        let response = client.get(url).send().await.map_err(|e| {
             log_line(format!("[UPDATE] Network error (skipped): {}", e));
-            format!("NETWORK_ERROR")
+            "NETWORK_ERROR".to_string()
         })?;
-
-    let status = response.status();
-    if !status.is_success() {
-        if status.as_u16() == 404 {
-            return Err("NO_RELEASE".to_string());
+        let status = response.status();
+        if !status.is_success() {
+            if status.as_u16() == 404 { return Err("NO_RELEASE".to_string()); }
+            if status.as_u16() >= 500 { return Err("NETWORK_ERROR".to_string()); }
+            return Err(format!("GitHub API returned status {}", status));
         }
-        if status.as_u16() >= 500 {
-            // GitHub is having issues — fail silently
-            log_line(format!("[UPDATE] GitHub returned {} — skipped", status));
-            return Err("NETWORK_ERROR".to_string());
+        let arr: serde_json::Value = response.json().await.map_err(|e| format!("JSON parse error: {}", e))?;
+        let releases = arr.as_array().cloned().unwrap_or_default();
+        match releases.into_iter().find(|r| !r["draft"].as_bool().unwrap_or(false)) {
+            Some(r) => r,
+            None => return Err("NO_RELEASE".to_string()),
         }
-        return Err(format!(
-            "GitHub API returned status {}",
-            status
-        ));
-    }
+    } else {
+        let url = "https://api.github.com/repos/FreeProject089/BetterModsManager/releases/latest";
+        let response = client.get(url).send().await.map_err(|e| {
+            log_line(format!("[UPDATE] Network error (skipped): {}", e));
+            "NETWORK_ERROR".to_string()
+        })?;
+        let status = response.status();
+        if !status.is_success() {
+            if status.as_u16() == 404 { return Err("NO_RELEASE".to_string()); }
+            if status.as_u16() >= 500 {
+                log_line(format!("[UPDATE] GitHub returned {} — skipped", status));
+                return Err("NETWORK_ERROR".to_string());
+            }
+            return Err(format!("GitHub API returned status {}", status));
+        }
+        response.json().await.map_err(|e| format!("JSON parse error: {}", e))?
+    };
 
-    let body: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("JSON parse error: {}", e))?;
+    let is_prerelease = body["prerelease"].as_bool().unwrap_or(false);
 
     let tag_name = body["tag_name"]
         .as_str()
@@ -145,6 +156,7 @@ pub async fn check_for_update(app_handle: tauri::AppHandle) -> Result<UpdateInfo
         release_notes,
         download_url,
         manifest_url,
+        is_prerelease,
     })
 }
 

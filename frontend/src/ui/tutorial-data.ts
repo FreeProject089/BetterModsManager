@@ -147,6 +147,35 @@ const BASICS: TutorialDef = {
                 },
             ],
         },
+        // ── Part 2b : Mod Details ──────────────────────────────────
+        {
+            id: 'moddetails',
+            title_key: 'tut.basics.moddetails.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.basics.moddetails.s1.title',
+                    text_key:  'tut.basics.moddetails.s1.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'library',
+                    icon: ICON.library,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.basics.moddetails.s2.title',
+                    text_key:  'tut.basics.moddetails.s2.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'library',
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.basics.moddetails.s3.title',
+                    text_key:  'tut.basics.moddetails.s3.text',
+                    img: 'assets/Tasky_Happy.png',
+                    nav: 'library',
+                },
+            ],
+        },
         // ── Part 3 : Mapping ───────────────────────────────────────
         {
             id: 'map',
@@ -288,10 +317,18 @@ const BASICS: TutorialDef = {
                     id: 's2',
                     title_key: 'tut.basics.integrity.s2.title',
                     text_key:  'tut.basics.integrity.s2.text',
-                    img: 'assets/Tasky_Happy.png',
+                    img: 'assets/Tasky.png',
                     nav: 'library',
                     selector: 'btn-verify-integrity',
                     action: { event: BMM_ACTIONS.INTEGRITY_CHECK, desc_key: 'tut.basics.integrity.s2.action' },
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.basics.integrity.s3.title',
+                    text_key:  'tut.basics.integrity.s3.text',
+                    img: 'assets/Tasky_Happy.png',
+                    nav: 'library',
+                    icon: ICON.shield,
                 },
             ],
         },

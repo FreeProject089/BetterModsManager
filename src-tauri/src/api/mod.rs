@@ -1352,30 +1352,32 @@ pub async fn start_api_server(
         .and(with_app_handle(handle_repo_sync))
         .and(with_atomic(sync_running_sync))
         .and(with_atomic(sync_cancel_sync))
-        .map(|body: RepoSyncBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>, handle: tauri::AppHandle, running: Arc<AtomicBool>, cancel: Arc<AtomicBool>| {
-            if running.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
-                return warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: "A sync is already running. Cancel it first with DELETE /api/repo/sync/cancel.".into() }),
-                    StatusCode::CONFLICT,
-                );
-            }
-            cancel.store(false, Ordering::SeqCst);
-            let job_id = uuid::Uuid::new_v4().to_string();
-            let jid = job_id.clone();
-            let running_done = running.clone();
-            tokio::spawn(async move {
-                do_api_repo_sync(body, d, path, handle, jid, cancel).await;
-                running_done.store(false, Ordering::SeqCst);
-            });
+        .map(|body: RepoSyncBody, _d: Arc<std::sync::Mutex<AppData>>, _path: Arc<PathBuf>, handle: tauri::AppHandle, _running: Arc<AtomicBool>, _cancel: Arc<AtomicBool>| {
+            // Drive the sync through the BMM interface — exactly as if a human
+            // filled the Server Repo sync form and clicked "Sync" — instead of
+            // running it headless in the background.
+            let choices: Vec<serde_json::Value> = body.choices.iter().map(|c| serde_json::json!({
+                "repoProfileId": c.repo_profile_id,
+                "targetLocalProfileId": c.target_local_profile_id,
+            })).collect();
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "repo/sync",
+                "params": {
+                    "url": body.url,
+                    "gameDir": body.game_dir,
+                    "modsDir": body.mods_dir,
+                    "backupDir": body.backup_dir,
+                    "overwriteAll": body.overwrite_all,
+                    "deleteExtra": body.delete_extra,
+                    "downloadLimit": body.download_limit,
+                    "choices": choices,
+                }
+            }));
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({
                     "ok": true,
-                    "message": "Sync started in background",
-                    "job_id": job_id,
-                    "progress_event": "bmm://repo-sync-progress",
-                    "done_event": "bmm://repo-sync-done",
-                    "error_event": "bmm://repo-sync-error",
-                    "cancel_endpoint": "DELETE /api/repo/sync/cancel",
+                    "driven_by": "bmm-ui",
+                    "message": "Sync requested through the BMM interface.",
                 })),
                 StatusCode::ACCEPTED,
             )
@@ -1418,30 +1420,31 @@ pub async fn start_api_server(
         .and(with_app_handle(handle_repo_gen))
         .and(with_atomic(gen_running_gen))
         .and(with_atomic(gen_cancel_gen))
-        .map(|body: RepoGenBody, d: Arc<std::sync::Mutex<AppData>>, handle: tauri::AppHandle, running: Arc<AtomicBool>, cancel: Arc<AtomicBool>| {
-            if running.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
-                return warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: "A gen/export is already running. Cancel it first with DELETE /api/repo/gen/cancel.".into() }),
-                    StatusCode::CONFLICT,
-                );
-            }
-            cancel.store(false, Ordering::SeqCst);
-            let job_id = uuid::Uuid::new_v4().to_string();
-            let jid = job_id.clone();
-            let running_done = running.clone();
-            tokio::spawn(async move {
-                do_api_repo_gen(body, d, handle, jid, cancel).await;
-                running_done.store(false, Ordering::SeqCst);
-            });
+        .map(|body: RepoGenBody, _d: Arc<std::sync::Mutex<AppData>>, handle: tauri::AppHandle, _running: Arc<AtomicBool>, _cancel: Arc<AtomicBool>| {
+            // Drive the export/gen through the BMM interface (Server Repo page),
+            // as if a human filled the export form — instead of running headless.
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "repo/gen",
+                "params": {
+                    "profileIds": body.profile_ids,
+                    "outputDir": body.output_dir,
+                    "authorName": body.author_name,
+                    "seed": body.seed,
+                    "port": body.port,
+                    "uploadLimit": body.upload_limit,
+                    "adminPassword": body.admin_password,
+                    "useCloudflare": body.use_cloudflare,
+                    "useUpnp": body.use_upnp,
+                    "autoStart": body.auto_start,
+                    "generateServer": body.generate_server,
+                    "zipOutput": body.zip_output,
+                }
+            }));
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({
                     "ok": true,
-                    "message": "Gen started in background",
-                    "job_id": job_id,
-                    "progress_event": "bmm://repo-export-progress",
-                    "done_event": "bmm://repo-export-done",
-                    "error_event": "bmm://repo-export-error",
-                    "cancel_endpoint": "DELETE /api/repo/gen/cancel",
+                    "driven_by": "bmm-ui",
+                    "message": "Repo export requested through the BMM interface.",
                 })),
                 StatusCode::ACCEPTED,
             )
@@ -1457,83 +1460,46 @@ pub async fn start_api_server(
         .and(warp::body::json::<RepoHttpHostBody>())
         .and(with_http_host_shutdown(http_host_start))
         .and(with_app_handle(handle_repo_host))
-        .map(|body: RepoHttpHostBody, shutdown: HttpHostShutdown, handle: tauri::AppHandle| {
-            let already_running = shutdown.lock().unwrap_or_else(|p| p.into_inner()).is_some();
-            if already_running {
-                return warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: "HTTP host server is already running. Stop it first with DELETE /api/repo/host.".into() }),
-                    StatusCode::CONFLICT,
-                );
-            }
-            let serve_dir = body.serve_dir.clone();
-            if !std::path::Path::new(&serve_dir).exists() {
-                return warp::reply::with_status(
-                    warp::reply::json(&ApiError { error: format!("serve_dir does not exist: {}", serve_dir) }),
-                    StatusCode::BAD_REQUEST,
-                );
-            }
-            let port = body.port.unwrap_or(8080);
-            let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-            {
-                let mut holder = shutdown.lock().unwrap_or_else(|p| p.into_inner());
-                *holder = Some(tx);
-            }
-            let serve_dir_clone = serve_dir.clone();
-            let shutdown_clone  = shutdown.clone();
-            tokio::spawn(async move {
-                let _ = handle.emit_all("bmm://repo-host-started", serde_json::json!({
-                    "port": port, "serve_dir": &serve_dir_clone,
-                    "url": format!("http://localhost:{}", port),
-                }));
-                let static_files = warp::fs::dir(serve_dir_clone.clone());
-                let cors_srv = warp::cors().allow_any_origin()
-                    .allow_methods(vec!["GET", "HEAD"])
-                    .allow_headers(vec!["Range"]);
-                let routes = static_files.with(cors_srv);
-                let addr: std::net::SocketAddr = ([0, 0, 0, 0], port).into();
-                let (_, server) = warp::serve(routes).bind_with_graceful_shutdown(addr, async {
-                    rx.await.ok();
-                });
-                server.await;
-                // Clear shutdown holder when server stops
-                let mut holder = shutdown_clone.lock().unwrap_or_else(|p| p.into_inner());
-                *holder = None;
-                let _ = handle.emit_all("bmm://repo-host-stopped", serde_json::json!({ "port": port }));
-            });
+        .map(|body: RepoHttpHostBody, _shutdown: HttpHostShutdown, handle: tauri::AppHandle| {
+            // Start the HTTP host through the BMM interface (the native Server
+            // Repo server), exactly as if a human filled the form and clicked
+            // "Start" — NOT a detached background server. This makes the running
+            // server visible & controllable from the Server Repo page.
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "repo/host",
+                "params": {
+                    "serveDir": body.serve_dir,
+                    "port": body.port.unwrap_or(8080),
+                    "uploadLimit": body.upload_limit.unwrap_or(0),
+                }
+            }));
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({
                     "ok": true,
-                    "message": format!("HTTP repo server started on port {}", port),
-                    "port": port,
-                    "url": format!("http://localhost:{}", port),
-                    "repo_url": format!("http://localhost:{}/repo.json", port),
-                    "stop_endpoint": "DELETE /api/repo/host",
+                    "driven_by": "bmm-ui",
+                    "message": "HTTP host start requested through the BMM interface.",
                 })),
-                StatusCode::CREATED,
+                StatusCode::ACCEPTED,
             )
         });
 
-    // DELETE /api/repo/host  (auth) — stop the HTTP static file server
+    // DELETE /api/repo/host  (auth) — stop the HTTP server via the BMM interface
     let tok_repo_host_stop = token.clone();
     let http_host_stop     = http_host_shutdown.clone();
+    let handle_repo_host_stop = app_handle.clone();
     let repo_host_stop = warp::path!("api" / "repo" / "host")
         .and(warp::delete())
         .and(require_token(tok_repo_host_stop))
         .and(with_http_host_shutdown(http_host_stop))
-        .map(|shutdown: HttpHostShutdown| {
-            let mut holder = shutdown.lock().unwrap_or_else(|p| p.into_inner());
-            if let Some(tx) = holder.take() {
-                let _ = tx.send(());
-                warp::reply::with_status(
-                    warp::reply::json(&serde_json::json!({ "ok": true, "message": "HTTP repo server stopping…" })),
-                    StatusCode::OK,
-                )
-            } else {
-                warp::reply::with_status(
-                    warp::reply::json(&serde_json::json!({ "ok": false, "message": "No HTTP repo server is currently running" })),
-                    StatusCode::OK,
-                )
-            }
+        .and(with_app_handle(handle_repo_host_stop))
+        .map(|_shutdown: HttpHostShutdown, handle: tauri::AppHandle| {
+            // Stop the native repo server through the BMM interface (toggles the
+            // Server Repo "Stop" button) — mirrors the human action.
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({ "action": "repo/host-stop" }));
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({ "ok": true, "driven_by": "bmm-ui", "message": "HTTP host stop requested through the BMM interface." })),
+                StatusCode::OK,
+            )
         });
 
     // PUT /api/modpacks/:id  (auth) — update an existing modpack
@@ -1688,6 +1654,24 @@ pub async fn start_api_server(
         .with(cors)
         .recover(handle_rejection);
 
+    // Per-request activity notifier: emit one `bmm://api-action` event for every
+    // API call so the frontend can show a toast + keep a log — mirroring the
+    // quick-test behavior for actions triggered by external scripts / curl /
+    // other apps. Runs after `.recover`, so the final status code is reported.
+    let activity_handle = app_handle.clone();
+    let routes = routes.with(warp::log::custom(move |info| {
+        let method = info.method().as_str().to_string();
+        let path = info.path().to_string();
+        let status = info.status().as_u16();
+        if method != "OPTIONS" && path.starts_with("/api/") {
+            let _ = activity_handle.emit_all("bmm://api-action", serde_json::json!({
+                "method": method,
+                "path": path,
+                "status": status,
+            }));
+        }
+    }));
+
     let addr: SocketAddr = ([127, 0, 0, 1], API_PORT).into();
 
     let (_, server) = warp::serve(routes)
@@ -1791,6 +1775,7 @@ fn api_sha256_file(path: &std::path::Path) -> Result<String, String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
+#[allow(dead_code)] // Retained for reference; sync is now driven through the BMM UI.
 async fn do_api_repo_sync(
     body: RepoSyncBody,
     data: Arc<std::sync::Mutex<AppData>>,
@@ -2123,6 +2108,7 @@ fn zip_directory(src_dir: &std::path::Path, dst_zip: &std::path::Path) -> Result
     Ok(())
 }
 
+#[allow(dead_code)] // Retained for reference; gen is now driven through the BMM UI.
 async fn do_api_repo_gen(
     body: RepoGenBody,
     data: Arc<std::sync::Mutex<AppData>>,

@@ -848,6 +848,9 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             + txtInput('plug-qt-s-http-port', 'port', '8080', true)
             + txtInput('plug-qt-s-http-upload-limit', 'upload_limit (KB/s, 0 = illimité)', '0', true);
 
+    } else if (m === 'GET' || (m === 'DELETE' && !rawBody)) {
+        // Parameterless GET / DELETE: no body form — just Send + Copy cURL in the footer.
+        formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">${t('plugins.qtNoBody') || `${escHtml(m)} request — no parameters required. Use “Send” to run it, or “cURL” to copy the command.`}</p>`;
     } else {
         const pretty = (() => { try { return JSON.stringify(JSON.parse(rawBody), null, 2); } catch { return rawBody; } })();
         formHtml = `<p style="font-size:11px;color:var(--text-muted);margin:0 0 6px;">${t('plugins.qtBodyHint')}</p>
@@ -2061,6 +2064,13 @@ function renderScripts(container: HTMLElement) {
             <!-- Quick test + endpoints (full width) -->
             <div class="plug-section-card">
                 <h3 class="plug-section-title">${IC.zap} ${t('plugins.quickTest')}</h3>
+                <div class="plug-qt-search-row">
+                    <span class="plug-qt-search-ic">${IC.search || ''}</span>
+                    <input type="text" id="plug-qt-search" class="input input-sm plug-qt-search-input"
+                        placeholder="${t('plugins.quickTestSearch') || 'Search quick tests… (GET, /api/mods, modpack…)'}" spellcheck="false">
+                    <button class="btn btn-xs btn-ghost" id="plug-qt-search-clear" data-tooltip="${t('common.clear') || 'Clear'}" style="display:none;">${IC.x}</button>
+                    <span class="plug-qt-search-count" id="plug-qt-search-count"></span>
+                </div>
                 <div class="plug-qt-grid">
                     ${(() => {
                         let lastMethod = '';
@@ -2093,6 +2103,17 @@ function renderScripts(container: HTMLElement) {
                     <pre id="plug-qt-body" class="plug-code-pre plug-qt-pre"></pre>
                 </div>
 
+                <details class="plug-details-section" id="plug-api-log" style="margin-top:12px;">
+                    <summary class="plug-details-summary">${IC.list} ${t('plugins.apiActivityLog') || 'API activity log'}
+                        <span class="plug-api-log-count" id="plug-api-log-count"></span>
+                    </summary>
+                    <div class="plug-api-log-toolbar">
+                        <span class="plug-api-log-hint">${t('plugins.apiActivityLogHint') || 'Every call to the local API is recorded here (newest first).'}</span>
+                        <button class="btn btn-xs btn-ghost" id="plug-api-log-clear">${IC.trash} ${t('common.clear') || 'Clear'}</button>
+                    </div>
+                    <div class="plug-api-log-list" id="plug-api-log-list"></div>
+                </details>
+
                 <details class="plug-details-section" id="plug-custom-tester" style="margin-top:12px;">
                     <summary class="plug-details-summary">${IC.terminal} ${t('plugins.customRequest')}</summary>
                     <div class="plug-tester">
@@ -2117,6 +2138,13 @@ function renderScripts(container: HTMLElement) {
 
                 <h3 class="plug-section-title" style="margin-top:18px;">${IC.list} ${t('plugins.apiEndpoints')}</h3>
                 <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px;">${t('plugins.epHint')}</p>
+                <div class="plug-qt-search-row">
+                    <span class="plug-qt-search-ic">${IC.search || ''}</span>
+                    <input type="text" id="plug-ep-search" class="input input-sm plug-qt-search-input"
+                        placeholder="${t('plugins.endpointSearch') || 'Search endpoints… (GET, /api/mods, modpack…)'}" spellcheck="false">
+                    <button class="btn btn-xs btn-ghost" id="plug-ep-search-clear" data-tooltip="${t('common.clear') || 'Clear'}" style="display:none;">${IC.x}</button>
+                    <span class="plug-qt-search-count" id="plug-ep-search-count"></span>
+                </div>
                 <div class="plug-endpoint-list" id="plug-ep-list">
                     ${(() => {
                         const defs = getEndpointDefs();
@@ -2267,25 +2295,104 @@ function renderScripts(container: HTMLElement) {
                 return;
             }
 
-            // GET with body='?url=' needs a query-param form
-            // DELETE with body needs a body form
-            // POST/PUT/PATCH with body defined also need overlay
-            const needsOverlay = p.includes(':id')
-                || ((m === 'POST' || m === 'PUT' || m === 'PATCH') && rawBody !== undefined)
-                || (m === 'DELETE' && rawBody !== undefined)
-                || (m === 'GET' && rawBody !== undefined);
-
-            if (needsOverlay) {
-                openSmartQuickTest(m, p, rawBody || '{}');
-            } else {
-                handleQuickTest(m, p, '', el);
-            }
+            // Every endpoint opens the quick-config overlay: it lets the user
+            // fill parameters, Send, AND copy the ready-to-use cURL — even for
+            // parameterless GETs (which show just the Send / Copy cURL footer).
+            openSmartQuickTest(m, p, rawBody ?? '');
         });
     });
     container.querySelector('#plug-qt-copy')?.addEventListener('click', () => {
         const txt = document.getElementById('plug-qt-body')?.textContent || '';
         navigator.clipboard.writeText(txt).catch(() => {});
         toast(t('common.copy'), 'success');
+    });
+
+    // ── Endpoint search bar — filters the quick-test buttons live ──────────────
+    const qtSearch    = container.querySelector('#plug-qt-search')       as HTMLInputElement | null;
+    const qtSearchClr = container.querySelector('#plug-qt-search-clear') as HTMLElement | null;
+    const qtCount     = container.querySelector('#plug-qt-search-count') as HTMLElement | null;
+    const applyEpFilter = () => {
+        const q = (qtSearch?.value || '').trim().toLowerCase();
+        const btns = Array.from(container.querySelectorAll<HTMLElement>('.plug-qt-btn'));
+        let shown = 0;
+        btns.forEach(b => {
+            const hay = `${b.dataset.method || ''} ${b.dataset.path || ''} ${b.textContent || ''}`.toLowerCase();
+            const match = !q || hay.includes(q);
+            b.style.display = match ? '' : 'none';
+            if (match) shown++;
+        });
+        // Hide method separators while searching (they break up a filtered list)
+        container.querySelectorAll<HTMLElement>('.plug-qt-method-sep').forEach(s => {
+            s.style.display = q ? 'none' : '';
+        });
+        if (qtSearchClr) qtSearchClr.style.display = q ? '' : 'none';
+        if (qtCount) qtCount.textContent = q ? `${shown}/${btns.length}` : '';
+    };
+    qtSearch?.addEventListener('input', applyEpFilter);
+    qtSearchClr?.addEventListener('click', () => { if (qtSearch) { qtSearch.value = ''; applyEpFilter(); qtSearch.focus(); } });
+
+    // ── Available-endpoints search bar — filters the documented endpoint rows ──
+    const epSearch    = container.querySelector('#plug-ep-search')       as HTMLInputElement | null;
+    const epSearchClr = container.querySelector('#plug-ep-search-clear') as HTMLElement | null;
+    const epCount     = container.querySelector('#plug-ep-search-count') as HTMLElement | null;
+    const epList      = container.querySelector('#plug-ep-list')         as HTMLElement | null;
+    const applyEndpointFilter = () => {
+        if (!epList) return;
+        const q = (epSearch?.value || '').trim().toLowerCase();
+        const rows = Array.from(epList.querySelectorAll<HTMLElement>('.plug-ep-wrap'));
+        let shown = 0;
+        rows.forEach(w => {
+            const row = w.querySelector('.plug-endpoint-row') as HTMLElement | null;
+            const method = row?.dataset.method || '';
+            const path   = row?.dataset.path || '';
+            const desc   = (w.querySelector('.plug-endpoint-desc')?.textContent || '');
+            const hay = `${method} ${path} ${desc}`.toLowerCase();
+            const match = !q || hay.includes(q);
+            w.style.display = match ? '' : 'none';
+            if (match) shown++;
+        });
+        // Hide method group headers while searching (a filtered list spans groups)
+        epList.querySelectorAll<HTMLElement>('.plug-ep-group-header').forEach(h => {
+            h.style.display = q ? 'none' : '';
+        });
+        if (epSearchClr) epSearchClr.style.display = q ? '' : 'none';
+        if (epCount) epCount.textContent = q ? `${shown}/${rows.length}` : '';
+    };
+    epSearch?.addEventListener('input', applyEndpointFilter);
+    epSearchClr?.addEventListener('click', () => { if (epSearch) { epSearch.value = ''; applyEndpointFilter(); epSearch.focus(); } });
+
+    // ── API activity log panel — mirrors window.__bmmApiLog, live-updated ──────
+    const apiLogList  = container.querySelector('#plug-api-log-list')  as HTMLElement | null;
+    const apiLogCount = container.querySelector('#plug-api-log-count') as HTMLElement | null;
+    const renderApiLog = () => {
+        if (!apiLogList) return;
+        const log = ((window as any).__bmmApiLog as any[]) || [];
+        if (apiLogCount) apiLogCount.textContent = log.length ? String(log.length) : '';
+        if (!log.length) {
+            apiLogList.innerHTML = `<div class="plug-api-log-empty">${t('plugins.apiActivityLogEmpty') || 'No API activity yet.'}</div>`;
+            return;
+        }
+        apiLogList.innerHTML = log.slice().reverse().map((e: any) => {
+            const time = new Date(e.time).toLocaleTimeString();
+            const cls  = e.ok ? 'ok' : 'err';
+            const mc   = String(e.method || '').toLowerCase();
+            return `<div class="plug-api-log-row plug-api-log-${cls}">
+                <span class="plug-api-log-time">${time}</span>
+                <span class="plug-qt-method-badge plug-qt-${mc}">${escHtml(e.method || '')}</span>
+                <span class="plug-api-log-ic">${e.icon || ''}</span>
+                <span class="plug-api-log-label">${escHtml(e.label || e.path || '')}</span>
+                <span class="plug-api-log-status">${escHtml(String(e.status ?? ''))}</span>
+            </div>`;
+        }).join('');
+    };
+    renderApiLog();
+    // Avoid handler accumulation across page re-renders.
+    if ((window as any).__bmmApiLogHandler) document.removeEventListener('bmm:api-activity', (window as any).__bmmApiLogHandler);
+    (window as any).__bmmApiLogHandler = renderApiLog;
+    document.addEventListener('bmm:api-activity', renderApiLog);
+    container.querySelector('#plug-api-log-clear')?.addEventListener('click', () => {
+        (window as any).__bmmApiLog = [];
+        renderApiLog();
     });
 
     // Custom tester
@@ -3620,251 +3727,270 @@ const _CAT_META: Record<string, { color: string; label: string }> = {
 
 function _actionCatalog(): _ActionDef[] {
     const sv = (p: string) => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+    // i18n helper: t('plugins.<key>') with an English fallback when the key is missing.
+    const d = (k: string, fb: string) => t('plugins.' + k) || fb;
     return [
         // ── BMM ─────────────────────────────────────────────────────────
-        { id: 'enable_mod',       cat: 'mods', label: t('plugins.actionEnableMod') || 'Enable mod',
-          desc: 'Activates the selected mod for the current profile.',
+        { id: 'enable_mod',       cat: 'mods', label: d('actionEnableMod', 'Enable mod'),
+          desc: d('actionEnableModDesc', 'Activates the selected mod for the current profile.'),
           iconSvg: sv('<polyline points="20 6 9 17 4 12"/>'), target: 'mod' },
-        { id: 'disable_mod',      cat: 'mods', label: t('plugins.actionDisableMod') || 'Disable mod',
-          desc: 'Deactivates the selected mod for the current profile.',
+        { id: 'disable_mod',      cat: 'mods', label: d('actionDisableMod', 'Disable mod'),
+          desc: d('actionDisableModDesc', 'Deactivates the selected mod for the current profile.'),
           iconSvg: sv('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'), target: 'mod' },
-        { id: 'activate_profile', cat: 'mods', label: t('plugins.actionActivateProfile') || 'Switch profile',
-          desc: 'Makes the selected profile the active one.',
+        { id: 'activate_profile', cat: 'mods', label: d('actionActivateProfile', 'Switch profile'),
+          desc: d('actionActivateProfileDesc', 'Makes the selected profile the active one.'),
           iconSvg: sv('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'), target: 'profile' },
-        { id: 'enable_modpack',   cat: 'mods', label: t('plugins.actionEnableModpack') || 'Enable modpack',
-          desc: "Enables the modpack tied to a profile.",
+        { id: 'enable_modpack',   cat: 'mods', label: d('actionEnableModpack', 'Enable modpack'),
+          desc: d('actionEnableModpackDesc', 'Enables the modpack tied to a profile.'),
           iconSvg: sv('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>'), target: 'profile' },
-        { id: 'disable_modpack',  cat: 'mods', label: t('plugins.actionDisableModpack') || 'Disable modpack',
-          desc: "Disables the modpack tied to a profile.",
+        { id: 'disable_modpack',  cat: 'mods', label: d('actionDisableModpack', 'Disable modpack'),
+          desc: d('actionDisableModpackDesc', 'Disables the modpack tied to a profile.'),
           iconSvg: sv('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><line x1="3" y1="3" x2="21" y2="21"/>'), target: 'profile' },
-        { id: 'apply_plugin',     cat: 'mods', label: t('plugins.actionApplyPlugin') || 'Apply plugin',
-          desc: 'Runs an installed plugin.',
+        { id: 'apply_plugin',     cat: 'mods', label: d('actionApplyPlugin', 'Apply plugin'),
+          desc: d('actionApplyPluginDesc', 'Runs an installed plugin.'),
           iconSvg: sv('<path d="M5 3v18l14-9z"/>'), target: 'plugin' },
-        { id: 'compare_plugin',   cat: 'mods', label: t('plugins.actionComparePlugin') || 'Compare plugin',
-          desc: 'Compares the plugin\'s modlist against currently-enabled mods.',
+        { id: 'compare_plugin',   cat: 'mods', label: d('actionComparePlugin', 'Compare plugin'),
+          desc: d('actionComparePluginDesc', 'Compares the plugin\'s modlist against currently-enabled mods.'),
           iconSvg: sv('<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/>'), target: 'plugin' },
-        { id: 'update_modpack',   cat: 'mods', label: t('plugins.actionUpdateModpack') || 'Update modpack',
-          desc: 'Renames a modpack and/or changes its dependency mode.',
+        { id: 'update_modpack',   cat: 'mods', label: d('actionUpdateModpack', 'Update modpack'),
+          desc: d('actionUpdateModpackDesc', 'Renames a modpack and/or changes its dependency mode.'),
           iconSvg: sv('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>'),
           fields: [
-            { key: 'modpack_id', label: 'Modpack ID', type: 'text', placeholder: 'UUID of the modpack to update' },
-            { key: 'name',       label: 'New name',   type: 'text', placeholder: 'My pack', half: true },
-            { key: 'dependency_mode', label: 'Dependencies', type: 'select', half: true,
+            { key: 'modpack_id', label: d('fldModpackId', 'Modpack ID'), type: 'text', placeholder: d('phModpackIdUpdate', 'UUID of the modpack to update') },
+            { key: 'name',       label: d('fldNewName', 'New name'),   type: 'text', placeholder: 'My pack', half: true },
+            { key: 'dependency_mode', label: d('fldDependencies', 'Dependencies'), type: 'select', half: true,
               options: [
-                { value: 'none',    label: 'None — leave deps alone' },
-                { value: 'include', label: 'Include all deps' },
-                { value: 'exclude', label: 'Exclude all deps' },
+                { value: 'none',    label: d('optDepNoneLeave', 'None — leave deps alone') },
+                { value: 'include', label: d('optDepInclude', 'Include all deps') },
+                { value: 'exclude', label: d('optDepExclude', 'Exclude all deps') },
               ], default: 'none' },
           ] },
-        { id: 'delete_mod',       cat: 'mods', label: t('plugins.actionDeleteMod') || 'Delete mod',
-          desc: 'Permanently removes the selected mod.',
+        { id: 'delete_mod',       cat: 'mods', label: d('actionDeleteMod', 'Delete mod'),
+          desc: d('actionDeleteModDesc', 'Permanently removes the selected mod.'),
           iconSvg: sv('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'), target: 'mod' },
-        { id: 'update_mod',       cat: 'mods', label: t('plugins.actionUpdateMod') || 'Update mod',
-          desc: 'Edits metadata (name/version/author/description) of the selected mod.',
+        { id: 'update_mod',       cat: 'mods', label: d('actionUpdateMod', 'Update mod'),
+          desc: d('actionUpdateModDesc', 'Edits metadata (name/version/author/description) of the selected mod.'),
           iconSvg: sv('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>'), target: 'mod',
           fields: [
-            { key: 'name',        label: 'Name',        type: 'text', placeholder: '(leave empty = keep)', half: true },
-            { key: 'version',     label: 'Version',     type: 'text', placeholder: '(leave empty = keep)', half: true },
-            { key: 'author',      label: 'Author',      type: 'text', placeholder: '(leave empty = keep)', half: true },
-            { key: 'description', label: 'Description',  type: 'text', placeholder: '(leave empty = keep)', half: true },
+            { key: 'name',        label: d('fldName', 'Name'),        type: 'text', placeholder: d('phKeepEmpty', '(leave empty = keep)'), half: true },
+            { key: 'version',     label: d('fldVersion', 'Version'),     type: 'text', placeholder: d('phKeepEmpty', '(leave empty = keep)'), half: true },
+            { key: 'author',      label: d('fldAuthor', 'Author'),      type: 'text', placeholder: d('phKeepEmpty', '(leave empty = keep)'), half: true },
+            { key: 'description', label: d('fldDescription', 'Description'),  type: 'text', placeholder: d('phKeepEmpty', '(leave empty = keep)'), half: true },
           ] },
-        { id: 'create_profile',   cat: 'mods', label: t('plugins.actionCreateProfile') || 'Create profile',
-          desc: 'Creates a new profile.',
+        { id: 'create_profile',   cat: 'mods', label: d('actionCreateProfile', 'Create profile'),
+          desc: d('actionCreateProfileDesc', 'Creates a new profile.'),
           iconSvg: sv('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>'),
           fields: [
-            { key: 'name',        label: 'Name',        type: 'text', placeholder: 'My profile' },
-            { key: 'game_name',   label: 'Game name',   type: 'text', placeholder: 'Skyrim', half: true },
-            { key: 'game_path',   label: 'Game path',   type: 'text', placeholder: 'C:/Games/Skyrim', half: true },
-            { key: 'mods_path',   label: 'Mods path',   type: 'text', placeholder: 'C:/Mods', half: true },
-            { key: 'backup_path', label: 'Backup path', type: 'text', placeholder: 'C:/Backups', half: true },
+            { key: 'name',        label: d('fldName', 'Name'),        type: 'text', placeholder: 'My profile' },
+            { key: 'game_name',   label: d('fldGameName', 'Game name'),   type: 'text', placeholder: 'Skyrim', half: true },
+            { key: 'game_path',   label: d('fldGamePath', 'Game path'),   type: 'text', placeholder: 'C:/Games/Skyrim', half: true },
+            { key: 'mods_path',   label: d('fldModsPath', 'Mods path'),   type: 'text', placeholder: 'C:/Mods', half: true },
+            { key: 'backup_path', label: d('fldBackupPath', 'Backup path'), type: 'text', placeholder: 'C:/Backups', half: true },
           ] },
-        { id: 'update_profile',   cat: 'mods', label: t('plugins.actionUpdateProfile') || 'Update profile',
-          desc: 'Edits the selected profile. Empty fields are left unchanged.',
+        { id: 'update_profile',   cat: 'mods', label: d('actionUpdateProfile', 'Update profile'),
+          desc: d('actionUpdateProfileDesc', 'Edits the selected profile. Empty fields are left unchanged.'),
           iconSvg: sv('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>'), target: 'profile',
           fields: [
-            { key: 'name',        label: 'Name',        type: 'text', placeholder: '(keep)', half: true },
-            { key: 'game_name',   label: 'Game name',   type: 'text', placeholder: '(keep)', half: true },
-            { key: 'color',       label: 'Color',       type: 'text', placeholder: '#3b82f6', half: true },
-            { key: 'icon',        label: 'Icon',        type: 'text', placeholder: '(keep)', half: true },
-            { key: 'game_path',   label: 'Game path',   type: 'text', placeholder: '(keep)', half: true },
-            { key: 'mods_path',   label: 'Mods path',   type: 'text', placeholder: '(keep)', half: true },
-            { key: 'backup_path', label: 'Backup path', type: 'text', placeholder: '(keep)', half: true },
+            { key: 'name',        label: d('fldName', 'Name'),        type: 'text', placeholder: d('phKeep', '(keep)'), half: true },
+            { key: 'game_name',   label: d('fldGameName', 'Game name'),   type: 'text', placeholder: d('phKeep', '(keep)'), half: true },
+            { key: 'color',       label: d('fldColor', 'Color'),       type: 'text', placeholder: '#3b82f6', half: true },
+            { key: 'icon',        label: d('fldIcon', 'Icon'),        type: 'text', placeholder: d('phKeep', '(keep)'), half: true },
+            { key: 'game_path',   label: d('fldGamePath', 'Game path'),   type: 'text', placeholder: d('phKeep', '(keep)'), half: true },
+            { key: 'mods_path',   label: d('fldModsPath', 'Mods path'),   type: 'text', placeholder: d('phKeep', '(keep)'), half: true },
+            { key: 'backup_path', label: d('fldBackupPath', 'Backup path'), type: 'text', placeholder: d('phKeep', '(keep)'), half: true },
           ] },
-        { id: 'delete_profile',   cat: 'mods', label: t('plugins.actionDeleteProfile') || 'Delete profile',
-          desc: 'Permanently removes the selected profile.',
+        { id: 'delete_profile',   cat: 'mods', label: d('actionDeleteProfile', 'Delete profile'),
+          desc: d('actionDeleteProfileDesc', 'Permanently removes the selected profile.'),
           iconSvg: sv('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'), target: 'profile' },
-        { id: 'create_modpack',   cat: 'mods', label: t('plugins.actionCreateModpack') || 'Create modpack',
-          desc: 'Creates a new modpack.',
+        { id: 'create_modpack',   cat: 'mods', label: d('actionCreateModpack', 'Create modpack'),
+          desc: d('actionCreateModpackDesc', 'Creates a new modpack.'),
           iconSvg: sv('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><line x1="12" y1="22" x2="12" y2="12"/>'),
           fields: [
-            { key: 'name',        label: 'Name',        type: 'text', placeholder: 'My pack' },
-            { key: 'description', label: 'Description', type: 'text', placeholder: '(optional)', half: true },
-            { key: 'game_name',   label: 'Game name',   type: 'text', placeholder: '(optional)', half: true },
-            { key: 'sr_link',     label: 'Server Repo link', type: 'text', placeholder: '(optional)', half: true },
-            { key: 'dependency_mode', label: 'Dependencies', type: 'select', half: true,
+            { key: 'name',        label: d('fldName', 'Name'),        type: 'text', placeholder: 'My pack' },
+            { key: 'description', label: d('fldDescription', 'Description'), type: 'text', placeholder: d('phOptional', '(optional)'), half: true },
+            { key: 'game_name',   label: d('fldGameName', 'Game name'),   type: 'text', placeholder: d('phOptional', '(optional)'), half: true },
+            { key: 'sr_link',     label: d('fldSrLink', 'Server Repo link'), type: 'text', placeholder: d('phOptional', '(optional)'), half: true },
+            { key: 'dependency_mode', label: d('fldDependencies', 'Dependencies'), type: 'select', half: true,
               options: [
-                { value: 'none',    label: 'None' },
-                { value: 'include', label: 'Include all deps' },
-                { value: 'exclude', label: 'Exclude all deps' },
+                { value: 'none',    label: d('optDepNone', 'None') },
+                { value: 'include', label: d('optDepInclude', 'Include all deps') },
+                { value: 'exclude', label: d('optDepExclude', 'Exclude all deps') },
               ], default: 'none' },
           ] },
-        { id: 'delete_modpack',   cat: 'mods', label: t('plugins.actionDeleteModpack') || 'Delete modpack',
-          desc: 'Permanently removes a modpack by ID.',
+        { id: 'delete_modpack',   cat: 'mods', label: d('actionDeleteModpack', 'Delete modpack'),
+          desc: d('actionDeleteModpackDesc', 'Permanently removes a modpack by ID.'),
           iconSvg: sv('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'),
-          fields: [ { key: 'modpack_id', label: 'Modpack ID', type: 'text', placeholder: 'UUID of the modpack' } ] },
+          fields: [ { key: 'modpack_id', label: d('fldModpackId', 'Modpack ID'), type: 'text', placeholder: d('phModpackId', 'UUID of the modpack') } ] },
 
         // ── Repo ────────────────────────────────────────────────────────
-        { id: 'sync_repo',      cat: 'repo', label: t('plugins.actionSyncRepo') || 'Sync repo',
-          desc: 'Pulls a remote BMM repo into a local mods folder.',
+        { id: 'sync_repo',      cat: 'repo', label: d('actionSyncRepo', 'Sync repo'),
+          desc: d('actionSyncRepoDesc', 'Pulls a remote BMM repo into a local mods folder.'),
           iconSvg: sv('<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>'),
           fields: [
-            { key: 'url',            label: 'Repo URL',       type: 'text',   placeholder: 'https://repo.example.com' },
-            { key: 'mods_dir',       label: 'Mods folder',    type: 'text',   placeholder: 'C:/Mods/MyGame' },
-            { key: 'backup_dir',     label: 'Backup folder',  type: 'text',   placeholder: 'C:/BMM/Backups' },
-            { key: 'game_dir',       label: 'Game root (opt)',type: 'text',   placeholder: 'C:/Games/MyGame', half: true },
-            { key: 'download_limit', label: 'DL limit (KB/s)', type: 'number', placeholder: '0 = unlimited', default: '0', half: true },
-            { key: 'overwrite_all',  label: 'Overwrite all',  type: 'switch', default: false, half: true },
-            { key: 'delete_extra',   label: 'Delete extra',   type: 'switch', default: false, half: true },
+            { key: 'url',            label: d('fldRepoUrl', 'Repo URL'),       type: 'text',   placeholder: 'https://repo.example.com' },
+            { key: 'mods_dir',       label: d('fldModsFolder', 'Mods folder'),    type: 'text',   placeholder: 'C:/Mods/MyGame' },
+            { key: 'backup_dir',     label: d('fldBackupFolder', 'Backup folder'),  type: 'text',   placeholder: 'C:/BMM/Backups' },
+            { key: 'game_dir',       label: d('fldGameRootOpt', 'Game root (opt)'),type: 'text',   placeholder: 'C:/Games/MyGame', half: true },
+            { key: 'download_limit', label: d('fldDlLimit', 'DL limit (KB/s)'), type: 'number', placeholder: d('phUnlimited', '0 = unlimited'), default: '0', half: true },
+            { key: 'overwrite_all',  label: d('fldOverwriteAll', 'Overwrite all'),  type: 'switch', default: false, half: true },
+            { key: 'delete_extra',   label: d('fldDeleteExtra', 'Delete extra'),   type: 'switch', default: false, half: true },
           ] },
-        { id: 'cancel_sync',    cat: 'repo', label: t('plugins.actionCancelSync') || 'Cancel sync',
-          desc: 'Stops a running repo sync. No parameters.',
+        { id: 'cancel_sync',    cat: 'repo', label: d('actionCancelSync', 'Cancel sync'),
+          desc: d('actionCancelSyncDesc', 'Stops a running repo sync. No parameters.'),
           iconSvg: sv('<rect x="6" y="6" width="12" height="12" rx="1"/>') },
-        { id: 'gen_repo',       cat: 'repo', label: t('plugins.actionGenRepo') || 'Generate repo',
-          desc: 'Exports your active profile as a redistributable repo folder/zip.',
+        { id: 'gen_repo',       cat: 'repo', label: d('actionGenRepo', 'Generate repo'),
+          desc: d('actionGenRepoDesc', 'Exports your active profile as a redistributable repo folder/zip.'),
           iconSvg: sv('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/>'),
           fields: [
-            { key: 'profile_id',   label: 'Profile UUID',   type: 'text',   placeholder: 'Leave empty = active profile' },
-            { key: 'output_dir',   label: 'Output folder',  type: 'text',   placeholder: 'C:/Export' },
-            { key: 'author',       label: 'Author name',    type: 'text',   placeholder: 'Your name', half: true },
-            { key: 'port',         label: 'Port (server)',  type: 'number', placeholder: '8080', default: '8080', half: true },
-            { key: 'admin_pass',   label: 'Admin password', type: 'text',   placeholder: '(optional)', half: true },
-            { key: 'upload_limit', label: 'UL limit (KB/s)',type: 'number', placeholder: '0 = unlimited', default: '0', half: true },
-            { key: 'lightweight',      label: 'Lightweight',      type: 'switch', default: false, half: true },
-            { key: 'zip',              label: 'Zip output',       type: 'switch', default: true,  half: true },
-            { key: 'generate_server',  label: 'Generate server',  type: 'switch', default: false, half: true },
-            { key: 'auto_start',       label: 'Auto start',       type: 'switch', default: false, half: true },
+            { key: 'profile_id',   label: d('fldProfileUuid', 'Profile UUID'),   type: 'text',   placeholder: d('phActiveProfile', 'Leave empty = active profile') },
+            { key: 'output_dir',   label: d('fldOutputFolder', 'Output folder'),  type: 'text',   placeholder: 'C:/Export' },
+            { key: 'author',       label: d('fldAuthorName', 'Author name'),    type: 'text',   placeholder: d('phYourName', 'Your name'), half: true },
+            { key: 'port',         label: d('fldPortServer', 'Port (server)'),  type: 'number', placeholder: '8080', default: '8080', half: true },
+            { key: 'admin_pass',   label: d('fldAdminPass', 'Admin password'), type: 'text',   placeholder: d('phOptional', '(optional)'), half: true },
+            { key: 'upload_limit', label: d('fldUlLimit', 'UL limit (KB/s)'),type: 'number', placeholder: d('phUnlimited', '0 = unlimited'), default: '0', half: true },
+            { key: 'lightweight',      label: d('fldLightweight', 'Lightweight'),      type: 'switch', default: false, half: true },
+            { key: 'zip',              label: d('fldZipOutput', 'Zip output'),       type: 'switch', default: true,  half: true },
+            { key: 'generate_server',  label: d('fldGenerateServer', 'Generate server'),  type: 'switch', default: false, half: true },
+            { key: 'auto_start',       label: d('fldAutoStart', 'Auto start'),       type: 'switch', default: false, half: true },
           ] },
-        { id: 'cancel_gen',     cat: 'repo', label: t('plugins.actionCancelGen') || 'Cancel gen',
-          desc: 'Stops a running repo generation. No parameters.',
+        { id: 'cancel_gen',     cat: 'repo', label: d('actionCancelGen', 'Cancel gen'),
+          desc: d('actionCancelGenDesc', 'Stops a running repo generation. No parameters.'),
           iconSvg: sv('<rect x="6" y="6" width="12" height="12" rx="1"/>') },
-        { id: 'http_host',      cat: 'repo', label: t('plugins.actionHttpHost') || 'Start HTTP host',
-          desc: 'Starts the local repo HTTP server so others can sync from you.',
+        { id: 'http_host',      cat: 'repo', label: d('actionHttpHost', 'Start HTTP host'),
+          desc: d('actionHttpHostDesc', 'Starts the local repo HTTP server so others can sync from you.'),
           iconSvg: sv('<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'),
           fields: [
-            { key: 'serve_dir',    label: 'Folder to host',  type: 'text',   placeholder: 'C:/Export' },
-            { key: 'port',         label: 'Port',            type: 'number', placeholder: '8080', default: '8080', half: true },
-            { key: 'upload_limit', label: 'UL limit (KB/s)', type: 'number', placeholder: '0 = unlimited', default: '0', half: true },
+            { key: 'serve_dir',    label: d('fldFolderToHost', 'Folder to host'),  type: 'text',   placeholder: 'C:/Export' },
+            { key: 'port',         label: d('fldPort', 'Port'),            type: 'number', placeholder: '8080', default: '8080', half: true },
+            { key: 'upload_limit', label: d('fldUlLimit', 'UL limit (KB/s)'), type: 'number', placeholder: d('phUnlimited', '0 = unlimited'), default: '0', half: true },
           ] },
-        { id: 'stop_http_host', cat: 'repo', label: t('plugins.actionStopHttpHost') || 'Stop HTTP host',
-          desc: 'Stops the local HTTP server. No parameters.',
+        { id: 'stop_http_host', cat: 'repo', label: d('actionStopHttpHost', 'Stop HTTP host'),
+          desc: d('actionStopHttpHostDesc', 'Stops the local HTTP server. No parameters.'),
           iconSvg: sv('<rect x="6" y="6" width="12" height="12" rx="1"/>') },
-        { id: 'repo_connect',   cat: 'repo', label: t('plugins.actionRepoConnect') || 'Connect repo',
-          desc: 'Registers a remote BMM repo by URL.',
+        { id: 'repo_connect',   cat: 'repo', label: d('actionRepoConnect', 'Connect repo'),
+          desc: d('actionRepoConnectDesc', 'Registers a remote BMM repo by URL.'),
           iconSvg: sv('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
-          fields: [ { key: 'url', label: 'Repo URL', type: 'text', placeholder: 'https://repo.example.com' } ] },
-        { id: 'repo_remove',    cat: 'repo', label: t('plugins.actionRepoRemove') || 'Remove repo',
-          desc: 'Unregisters a connected repo by URL.',
+          fields: [ { key: 'url', label: d('fldRepoUrl', 'Repo URL'), type: 'text', placeholder: 'https://repo.example.com' } ] },
+        { id: 'repo_remove',    cat: 'repo', label: d('actionRepoRemove', 'Remove repo'),
+          desc: d('actionRepoRemoveDesc', 'Unregisters a connected repo by URL.'),
           iconSvg: sv('<path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/>'),
-          fields: [ { key: 'url', label: 'Repo URL', type: 'text', placeholder: 'https://repo.example.com' } ] },
+          fields: [ { key: 'url', label: d('fldRepoUrl', 'Repo URL'), type: 'text', placeholder: 'https://repo.example.com' } ] },
 
         // ── Read (GET — no token required) ────────────────────────────────
-        { id: 'get_status',       cat: 'read', label: t('plugins.actionGetStatus') || 'Get status',
-          desc: 'Fetches the current BMM status. Prints the JSON response.',
+        { id: 'get_status',       cat: 'read', label: d('actionGetStatus', 'Get status'),
+          desc: d('actionGetStatusDesc', 'Fetches the current BMM status. Prints the JSON response.'),
           iconSvg: sv('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>') },
-        { id: 'list_mods',        cat: 'read', label: t('plugins.actionListMods') || 'List mods',
-          desc: 'Lists all mods. Prints the JSON response.',
+        { id: 'list_mods',        cat: 'read', label: d('actionListMods', 'List mods'),
+          desc: d('actionListModsDesc', 'Lists all mods. Prints the JSON response.'),
           iconSvg: sv('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>') },
-        { id: 'list_active_mods', cat: 'read', label: t('plugins.actionListActiveMods') || 'List active mods',
-          desc: 'Lists currently-enabled mods. Prints the JSON response.',
+        { id: 'list_active_mods', cat: 'read', label: d('actionListActiveMods', 'List active mods'),
+          desc: d('actionListActiveModsDesc', 'Lists currently-enabled mods. Prints the JSON response.'),
           iconSvg: sv('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') },
-        { id: 'list_profiles',    cat: 'read', label: t('plugins.actionListProfiles') || 'List profiles',
-          desc: 'Lists all profiles. Prints the JSON response.',
+        { id: 'list_profiles',    cat: 'read', label: d('actionListProfiles', 'List profiles'),
+          desc: d('actionListProfilesDesc', 'Lists all profiles. Prints the JSON response.'),
           iconSvg: sv('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') },
-        { id: 'list_plugins',     cat: 'read', label: t('plugins.actionListPlugins') || 'List plugins',
-          desc: 'Lists installed plugins. Prints the JSON response.',
+        { id: 'list_plugins',     cat: 'read', label: d('actionListPlugins', 'List plugins'),
+          desc: d('actionListPluginsDesc', 'Lists installed plugins. Prints the JSON response.'),
           iconSvg: sv('<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>') },
-        { id: 'list_modpacks',    cat: 'read', label: t('plugins.actionListModpacks') || 'List modpacks',
-          desc: 'Lists all modpacks. Prints the JSON response.',
+        { id: 'list_modpacks',    cat: 'read', label: d('actionListModpacks', 'List modpacks'),
+          desc: d('actionListModpacksDesc', 'Lists all modpacks. Prints the JSON response.'),
           iconSvg: sv('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>') },
-        { id: 'check_update',     cat: 'read', label: t('plugins.actionCheckUpdate') || 'Check for update',
-          desc: 'Checks whether a BMM update is available. Prints the JSON response.',
+        { id: 'check_update',     cat: 'read', label: d('actionCheckUpdate', 'Check for update'),
+          desc: d('actionCheckUpdateDesc', 'Checks whether a BMM update is available. Prints the JSON response.'),
           iconSvg: sv('<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>') },
-        { id: 'get_creator_id',   cat: 'read', label: t('plugins.actionGetCreatorId') || 'Get creator ID',
-          desc: 'Fetches the creator ID. Prints the JSON response.',
+        { id: 'get_creator_id',   cat: 'read', label: d('actionGetCreatorId', 'Get creator ID'),
+          desc: d('actionGetCreatorIdDesc', 'Fetches the creator ID. Prints the JSON response.'),
           iconSvg: sv('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>') },
-        { id: 'api_health',       cat: 'read', label: t('plugins.actionApiHealth') || 'API health',
-          desc: 'Pings the API health endpoint. Prints the JSON response.',
+        { id: 'api_health',       cat: 'read', label: d('actionApiHealth', 'API health'),
+          desc: d('actionApiHealthDesc', 'Pings the API health endpoint. Prints the JSON response.'),
           iconSvg: sv('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>') },
-        { id: 'repo_list',        cat: 'read', label: t('plugins.actionRepoList') || 'List repos',
-          desc: 'Lists connected repos. Prints the JSON response.',
+        { id: 'repo_list',        cat: 'read', label: d('actionRepoList', 'List repos'),
+          desc: d('actionRepoListDesc', 'Lists connected repos. Prints the JSON response.'),
           iconSvg: sv('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>') },
-        { id: 'repo_info',        cat: 'read', label: t('plugins.actionRepoInfo') || 'Repo info',
-          desc: 'Fetches metadata for a repo by URL. Prints the JSON response.',
+        { id: 'repo_info',        cat: 'read', label: d('actionRepoInfo', 'Repo info'),
+          desc: d('actionRepoInfoDesc', 'Fetches metadata for a repo by URL. Prints the JSON response.'),
           iconSvg: sv('<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>'),
-          fields: [ { key: 'url', label: 'Repo URL', type: 'text', placeholder: 'https://repo.example.com' } ] },
+          fields: [ { key: 'url', label: d('fldRepoUrl', 'Repo URL'), type: 'text', placeholder: 'https://repo.example.com' } ] },
 
         // ── System ──────────────────────────────────────────────────────
-        { id: 'wait',          cat: 'system', label: t('plugins.actionWait') || 'Wait',
-          desc: 'Pauses the script for N seconds.',
+        { id: 'wait',          cat: 'system', label: d('actionWait', 'Wait'),
+          desc: d('actionWaitDesc', 'Pauses the script for N seconds.'),
           iconSvg: sv('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'),
-          fields: [ { key: 'duration_s', label: 'Seconds', type: 'number', placeholder: '3', default: '3' } ] },
-        { id: 'close_process', cat: 'system', label: t('plugins.actionCloseProcess') || 'Kill process',
-          desc: 'Force-terminates a running process by executable name.',
+          fields: [ { key: 'duration_s', label: d('fldSeconds', 'Seconds'), type: 'number', placeholder: '3', default: '3' } ] },
+        { id: 'close_process', cat: 'system', label: d('actionCloseProcess', 'Kill process'),
+          desc: d('actionCloseProcessDesc', 'Force-terminates a running process by executable name.'),
           iconSvg: sv('<path d="M18 6L6 18M6 6l12 12"/>'),
-          fields: [ { key: 'process_name', label: 'Process name', type: 'text', placeholder: 'notepad.exe' } ] },
-        { id: 'open_url',      cat: 'system', label: t('plugins.actionOpenUrl') || 'Open URL',
-          desc: 'Opens a URL in the default browser.',
+          fields: [ { key: 'process_name', label: d('fldProcessName', 'Process name'), type: 'text', placeholder: 'notepad.exe' } ] },
+        { id: 'open_url',      cat: 'system', label: d('actionOpenUrl', 'Open URL'),
+          desc: d('actionOpenUrlDesc', 'Opens a URL in the default browser.'),
           iconSvg: sv('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
-          fields: [ { key: 'url', label: 'URL', type: 'text', placeholder: 'https://example.com' } ] },
-        { id: 'show_message',  cat: 'system', label: t('plugins.actionShowMessage') || 'Show message',
-          desc: 'Displays a message popup or console line, then waits for the user.',
+          fields: [ { key: 'url', label: d('fldUrl', 'URL'), type: 'text', placeholder: 'https://example.com' } ] },
+        { id: 'show_message',  cat: 'system', label: d('actionShowMessage', 'Show message'),
+          desc: d('actionShowMessageDesc', 'Displays a message popup or console line, then waits for the user.'),
           iconSvg: sv('<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'),
-          fields: [ { key: 'message', label: 'Message', type: 'textarea', placeholder: 'Hello world' } ] },
-        { id: 'launch_game',   cat: 'system', label: t('plugins.actionLaunchGame') || 'Launch game',
-          desc: 'Starts a game executable then waits 1 second.',
+          fields: [ { key: 'message', label: d('fldMessage', 'Message'), type: 'textarea', placeholder: 'Hello world' } ] },
+        { id: 'launch_game',   cat: 'system', label: d('actionLaunchGame', 'Launch game'),
+          desc: d('actionLaunchGameDesc', 'Starts a game executable then waits 1 second.'),
           iconSvg: sv('<polygon points="5 3 19 12 5 21 5 3"/>'),
-          fields: [ { key: 'exe_path', label: 'Game executable', type: 'text', placeholder: 'C:/Games/MyGame/game.exe' } ] },
-        { id: 'log',           cat: 'system', label: t('plugins.actionLog') || 'Log line',
-          desc: 'Writes a message to the script\'s standard output / log.',
+          fields: [ { key: 'exe_path', label: d('fldGameExe', 'Game executable'), type: 'text', placeholder: 'C:/Games/MyGame/game.exe' } ] },
+        { id: 'log',           cat: 'system', label: d('actionLog', 'Log line'),
+          desc: d('actionLogDesc', 'Writes a message to the script\'s standard output / log.'),
           iconSvg: sv('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>'),
-          fields: [ { key: 'message', label: 'Message', type: 'text', placeholder: 'Step 1 done' } ] },
-        { id: 'restart',       cat: 'system', label: t('plugins.actionRestart') || 'Restart BMM',
-          desc: 'Restarts the BetterModsManager app. No parameters.',
+          fields: [ { key: 'message', label: d('fldMessage', 'Message'), type: 'text', placeholder: 'Step 1 done' } ] },
+        { id: 'restart',       cat: 'system', label: d('actionRestart', 'Restart BMM'),
+          desc: d('actionRestartDesc', 'Restarts the BetterModsManager app. No parameters.'),
           iconSvg: sv('<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>') },
 
         // ── Control flow ────────────────────────────────────────────────
-        { id: 'comment',        cat: 'control', label: t('plugins.actionComment') || 'Comment',
-          desc: 'Inserts a comment line — does not execute.',
+        { id: 'comment',        cat: 'control', label: d('actionComment', 'Comment'),
+          desc: d('actionCommentDesc', 'Inserts a comment line — does not execute.'),
           iconSvg: sv('<polyline points="3 6 5 6 21 6"/><path d="M9 14h6"/><path d="M9 10h6"/>'),
-          fields: [ { key: 'text', label: 'Comment', type: 'text', placeholder: 'This part enables the mods' } ] },
-        { id: 'set_variable',   cat: 'control', label: t('plugins.actionSetVariable') || 'Set variable',
-          desc: 'Defines a named variable usable later via if_var_eq.',
+          fields: [ { key: 'text', label: d('fldComment', 'Comment'), type: 'text', placeholder: 'This part enables the mods' } ] },
+        { id: 'set_variable',   cat: 'control', label: d('actionSetVariable', 'Set variable'),
+          desc: d('actionSetVariableDesc', 'Defines a named variable usable later via if_var_eq.'),
           iconSvg: sv('<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>'),
           fields: [
-            { key: 'var_name',  label: 'Variable name', type: 'text', placeholder: 'MY_VAR', half: true },
-            { key: 'var_value', label: 'Value',         type: 'text', placeholder: 'hello',  half: true },
+            { key: 'var_name',  label: d('fldVarName', 'Variable name'), type: 'text', placeholder: 'MY_VAR', half: true },
+            { key: 'var_value', label: d('fldValue', 'Value'),         type: 'text', placeholder: 'hello',  half: true },
           ] },
-        { id: 'if_file_exists', cat: 'control', label: t('plugins.actionIfFileExists') || 'If file exists',
-          desc: 'Subsequent actions run only if the given path exists. Pair with end_block.',
+        { id: 'if_file_exists', cat: 'control', label: d('actionIfFileExists', 'If file exists'),
+          desc: d('actionIfFileExistsDesc', 'Subsequent actions run only if the given path exists. Pair with end_block.'),
           iconSvg: sv('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>'),
-          fields: [ { key: 'path', label: 'File path', type: 'text', placeholder: 'C:/path/to/file.txt' } ] },
-        { id: 'if_var_eq',      cat: 'control', label: t('plugins.actionIfVarEq') || 'If variable ==',
-          desc: 'Subsequent actions run only if the variable equals the given value.',
+          fields: [ { key: 'path', label: d('fldFilePath', 'File path'), type: 'text', placeholder: 'C:/path/to/file.txt' } ] },
+        { id: 'if_file_not_exists', cat: 'control', label: d('actionIfFileNotExists', 'If file is missing'),
+          desc: d('actionIfFileNotExistsDesc', 'Subsequent actions run only if the given path does NOT exist. Pair with end_block.'),
+          iconSvg: sv('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/>'),
+          fields: [ { key: 'path', label: d('fldFilePath', 'File path'), type: 'text', placeholder: 'C:/path/to/file.txt' } ] },
+        { id: 'if_var_eq',      cat: 'control', label: d('actionIfVarEq', 'If variable =='),
+          desc: d('actionIfVarEqDesc', 'Subsequent actions run only if the variable equals the given value.'),
           iconSvg: sv('<path d="M18 13a3 3 0 1 0-3-3"/><path d="M6 13a3 3 0 1 1 3-3"/><line x1="3" y1="20" x2="21" y2="20"/>'),
           fields: [
-            { key: 'var_name',  label: 'Variable', type: 'text', placeholder: 'MY_VAR', half: true },
-            { key: 'var_value', label: 'Equals',   type: 'text', placeholder: 'hello',  half: true },
+            { key: 'var_name',  label: d('fldVariable', 'Variable'), type: 'text', placeholder: 'MY_VAR', half: true },
+            { key: 'var_value', label: d('fldEquals', 'Equals'),   type: 'text', placeholder: 'hello',  half: true },
           ] },
-        { id: 'else_block',     cat: 'control', label: t('plugins.actionElse') || 'Else',
-          desc: 'Marks the else branch of the previous if_*. No parameters.',
+        { id: 'if_var_neq',     cat: 'control', label: d('actionIfVarNeq', 'If variable !='),
+          desc: d('actionIfVarNeqDesc', 'Subsequent actions run only if the variable does NOT equal the given value.'),
+          iconSvg: sv('<path d="M18 13a3 3 0 1 0-3-3"/><path d="M6 13a3 3 0 1 1 3-3"/><line x1="3" y1="20" x2="21" y2="20"/><line x1="4" y1="4" x2="20" y2="20"/>'),
+          fields: [
+            { key: 'var_name',  label: d('fldVariable', 'Variable'),     type: 'text', placeholder: 'MY_VAR', half: true },
+            { key: 'var_value', label: d('fldNotEquals', 'Not equals'), type: 'text', placeholder: 'hello',  half: true },
+          ] },
+        { id: 'else_block',     cat: 'control', label: d('actionElse', 'Else'),
+          desc: d('actionElseDesc', 'Marks the else branch of the previous if_*. No parameters.'),
           iconSvg: sv('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>') },
-        { id: 'end_block',      cat: 'control', label: t('plugins.actionEnd') || 'End block',
-          desc: 'Closes the previous if_* / else block. No parameters.',
+        { id: 'end_block',      cat: 'control', label: d('actionEnd', 'End block'),
+          desc: d('actionEndDesc', 'Closes the previous if_* / else block. No parameters.'),
           iconSvg: sv('<polyline points="20 6 9 17 4 12"/>') },
-        { id: 'raw_code',       cat: 'control', label: t('plugins.actionRawCode') || 'Raw code',
-          desc: 'Inserts native code in the target language verbatim.',
+        { id: 'pause_key',      cat: 'control', label: d('actionPauseKey', 'Pause (wait for key)'),
+          desc: d('actionPauseKeyDesc', 'Pauses the script until the user presses a key / Enter. No parameters.'),
+          iconSvg: sv('<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>') },
+        { id: 'stop_script',    cat: 'control', label: d('actionStopScript', 'Stop script'),
+          desc: d('actionStopScriptDesc', 'Exits the script immediately. No parameters.'),
+          iconSvg: sv('<rect x="5" y="5" width="14" height="14" rx="2"/>') },
+        { id: 'raw_code',       cat: 'control', label: d('actionRawCode', 'Raw code'),
+          desc: d('actionRawCodeDesc', 'Inserts native code in the target language verbatim.'),
           iconSvg: sv('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'),
-          fields: [ { key: 'code', label: 'Code', type: 'textarea', placeholder: 'echo Custom code here' } ] },
+          fields: [ { key: 'code', label: d('fldCode', 'Code'), type: 'textarea', placeholder: 'echo Custom code here' } ] },
     ];
 }
 
@@ -4304,8 +4430,10 @@ function _collectActions(): Array<{ action_type: string; target_id: string; extr
                 // Backend wants legacy "NAME=value" in extra.expr
                 extra.expr = `${raw.var_name || ''}=${raw.var_value || ''}`; break;
             case 'if_file_exists':
+            case 'if_file_not_exists':
                 extra.path = raw.path || ''; break;
             case 'if_var_eq':
+            case 'if_var_neq':
                 extra.cond = `${raw.var_name || ''}=${raw.var_value || ''}`; break;
             case 'raw_code':
                 extra.code = raw.code || ''; break;
@@ -4972,6 +5100,17 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
                 rs: [`if std::path::Path::new(${JSON.stringify(p)}).exists() {`],
             })[lang] || [`// if file exists: ${p}`];
         }
+        case 'if_file_not_exists': {
+            const p = a.extra.path || '';
+            return ({
+                rb: [`if !File.exist?(${JSON.stringify(p)})`],
+                php: [`if (!file_exists(${JSON.stringify(p)})) {`],
+                go: [`if _, err := os.Stat(${JSON.stringify(p)}); os.IsNotExist(err) {`],
+                java: [`if (!new java.io.File(${JSON.stringify(p)}).exists()) {`],
+                cs: [`if (!File.Exists(${JSON.stringify(p)})) {`],
+                rs: [`if !std::path::Path::new(${JSON.stringify(p)}).exists() {`],
+            })[lang] || [`// if file missing: ${p}`];
+        }
         case 'if_var_eq': {
             const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
             const n = vn.trim(), v = JSON.stringify(vr.join('=').trim());
@@ -4984,6 +5123,36 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
                 rs: [`if ${n} == ${v} {`],
             })[lang] || [`// if ${n} == ${v}`];
         }
+        case 'if_var_neq': {
+            const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
+            const n = vn.trim(), v = JSON.stringify(vr.join('=').trim());
+            return ({
+                rb: [`if ${n} != ${v}`],
+                php: [`if ($${n} != ${v}) {`],
+                go: [`if ${n} != ${v} {`],
+                java: [`if (!${n}.equals(${v})) {`],
+                cs: [`if (${n} != ${v}) {`],
+                rs: [`if ${n} != ${v} {`],
+            })[lang] || [`// if ${n} != ${v}`];
+        }
+        case 'pause_key':
+            return ({
+                rb: ['puts "Press Enter to continue..."; STDIN.gets'],
+                php: ['echo "Press Enter to continue..."; fgets(STDIN);'],
+                go: ['fmt.Println("Press Enter to continue..."); fmt.Scanln()'],
+                java: ['System.out.println("Press Enter to continue..."); new java.util.Scanner(System.in).nextLine();'],
+                cs: ['Console.WriteLine("Press Enter to continue..."); Console.ReadLine();'],
+                rs: ['{ println!("Press Enter to continue..."); let mut _s = String::new(); std::io::stdin().read_line(&mut _s).ok(); }'],
+            })[lang] || ['// pause'];
+        case 'stop_script':
+            return ({
+                rb: ['exit 0'],
+                php: ['exit(0);'],
+                go: ['os.Exit(0)'],
+                java: ['System.exit(0);'],
+                cs: ['Environment.Exit(0);'],
+                rs: ['std::process::exit(0);'],
+            })[lang] || ['// stop'];
         case 'else_block':
             return ({
                 rb: ['else'],
@@ -5089,10 +5258,20 @@ function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: str
         }
         case 'if_file_exists':
             return [`if os.path.exists(${JSON.stringify(a.extra.path || '')}):`];
+        case 'if_file_not_exists':
+            return [`if not os.path.exists(${JSON.stringify(a.extra.path || '')}):`];
         case 'if_var_eq': {
             const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
             return [`if ${vn.trim()} == ${JSON.stringify(vr.join('=').trim())}:`];
         }
+        case 'if_var_neq': {
+            const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
+            return [`if ${vn.trim()} != ${JSON.stringify(vr.join('=').trim())}:`];
+        }
+        case 'pause_key':
+            return [`input("Press Enter to continue...")`];
+        case 'stop_script':
+            return [`raise SystemExit(0)`];
         case 'else_block':
             return ['else:'];
         case 'end_block':
@@ -5185,10 +5364,20 @@ function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: st
         }
         case 'if_file_exists':
             return [`local f = io.open(${JSON.stringify(a.extra.path || '')}, "r")`, `if f then f:close()`];
+        case 'if_file_not_exists':
+            return [`local f = io.open(${JSON.stringify(a.extra.path || '')}, "r")`, `if f == nil then`];
         case 'if_var_eq': {
             const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
             return [`if ${vn.trim()} == ${JSON.stringify(vr.join('=').trim())} then`];
         }
+        case 'if_var_neq': {
+            const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
+            return [`if ${vn.trim()} ~= ${JSON.stringify(vr.join('=').trim())} then`];
+        }
+        case 'pause_key':
+            return [`io.write("Press Enter to continue...")`, `io.read()`];
+        case 'stop_script':
+            return [`os.exit(0)`];
         case 'else_block':
             return ['else'];
         case 'end_block':
@@ -5272,10 +5461,20 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
         case 'if_file_exists':
             // existsSync imported at top by the JS generator header
             return [`if (existsSync(${JSON.stringify(a.extra.path || '')})) {`];
+        case 'if_file_not_exists':
+            return [`if (!existsSync(${JSON.stringify(a.extra.path || '')})) {`];
         case 'if_var_eq': {
             const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
             return [`if (${vn.trim()} === ${JSON.stringify(vr.join('=').trim())}) {`];
         }
+        case 'if_var_neq': {
+            const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
+            return [`if (${vn.trim()} !== ${JSON.stringify(vr.join('=').trim())}) {`];
+        }
+        case 'pause_key':
+            return [`try { execSync('pause', { shell: 'cmd.exe', stdio: 'inherit' }); } catch (e) {}`];
+        case 'stop_script':
+            return [`process.exit(0);`];
         case 'else_block':
             return ['} else {'];
         case 'end_block':

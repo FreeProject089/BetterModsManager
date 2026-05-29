@@ -148,23 +148,40 @@ async function handleDeepLink(urlStr: string): Promise<void> {
                 return;
             }
             const isEnable = action === 'modpack/enable';
-            console.log(`[BMM-API] bmm:// ${isEnable ? 'enable' : 'disable'} modpack (profile): ${profileId}`);
+            console.log(`[BMM-API] bmm:// ${isEnable ? 'enable' : 'disable'} modpack/profile (in-app): ${profileId}`);
             try {
-                const token = await invoke('get_api_token') as string;
-                const res = await fetch(`http://127.0.0.1:51274/api/modpacks/${isEnable ? 'enable' : 'disable'}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ profile_id: profileId }),
-                });
-                if (res.ok) {
-                    toast(isEnable
-                        ? (t('plugins.deepLinkModpackEnabled') || 'Modpack activé.')
-                        : (t('plugins.deepLinkModpackDisabled') || 'Modpack désactivé.'), 'success');
-                    await refreshMods(true);
+                // Resolve the list of mod IDs IN-APP (like the quick action does), without
+                // hitting the local HTTP server: `id` may be a modpack id or a profile id.
+                const [modpacks, profiles] = await Promise.all([
+                    invoke('load_modpacks').catch(() => []) as Promise<any[]>,
+                    invoke('get_profiles').catch(() => []) as Promise<Profile[]>,
+                ]);
+                let modIds: string[] = [];
+                const mp = (modpacks || []).find((m: any) => m.id === profileId);
+                if (mp) {
+                    modIds = (mp.mods || []).map((mr: any) => mr.mod_id).filter(Boolean);
                 } else {
-                    const err = await res.json().catch(() => ({})) as { error?: string };
-                    toast(`${t('common.error')}: ${err?.error || res.statusText}`, 'error');
+                    const prof = (profiles || []).find((p) => p.id === profileId);
+                    if (prof) modIds = [...(prof.active_mods || [])];
                 }
+                if (!mp && modIds.length === 0) {
+                    toast(`${t('common.error')}: ${profileId}`, 'error');
+                    return;
+                }
+                // Apply each mod via the native in-app commands (same path as quick actions).
+                for (const modId of modIds) {
+                    try {
+                        if (isEnable) await invoke('enable_mod', { modId, dependencies: [] });
+                        else await invoke('disable_mod', { modId });
+                    } catch (err) {
+                        console.warn(`[BMM-API] modpack toggle: failed for ${modId}:`, err);
+                    }
+                }
+                toast(isEnable
+                    ? (t('plugins.deepLinkModpackEnabled') || 'Modpack activé.')
+                    : (t('plugins.deepLinkModpackDisabled') || 'Modpack désactivé.'), 'success');
+                await refreshMods(true);
+                if (window._refreshProfilesFn) await window._refreshProfilesFn();
             } catch (e) {
                 console.error('[BMM-API] Failed to toggle modpack via deep link:', e);
                 toast(`${t('common.error')}: ${e}`, 'error');
@@ -188,19 +205,16 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             );
             if (!confirmed) return;
             try {
-                const res = await fetch(`http://127.0.0.1:51274/api/repo/connect`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: repoUrl }),
-                });
-                if (res.ok) {
-                    toast(t('plugins.deepLinkConnectRepoOk') || 'Repo connecté avec succès.', 'success');
-                    const navBtn = document.querySelector('[data-view="repo"]') as HTMLElement;
-                    navBtn?.click();
-                } else {
-                    const err = await res.json().catch(() => ({})) as { error?: string };
-                    toast(`${t('common.error')}: ${err?.error || res.statusText}`, 'error');
-                }
+                // Do the action IN-APP (like the quick action): navigate to the repo page
+                // and let the native UI fetch/connect the repo — no background HTTP call.
+                const navBtn = document.querySelector('.nav-item[data-view="repo"], .nav-btn[data-view="repo"], [data-view="repo"]') as HTMLElement | null;
+                navBtn?.click();
+                setTimeout(() => {
+                    document.dispatchEvent(new CustomEvent('bmm:repo-focus', {
+                        detail: { section: 'connect', prefill: { url: repoUrl } },
+                    }));
+                }, 350);
+                toast(t('plugins.deepLinkConnectRepoOk') || 'Repo connecté avec succès.', 'success');
             } catch (e) {
                 toast(`${t('common.error')}: ${e}`, 'error');
             }

@@ -84,11 +84,18 @@ export async function invoke(command, args = {}) {
         // Suppress console noise for expected "user cancelled" signals — callers handle these gracefully
         const errStr = String(err);
         const isCancelled = errStr.includes('cancel') || errStr.includes('Cancel') || errStr === 'repo.errCancel';
-        if (!isCancelled) {
-            console.error(`[RPC ERROR] ${command}:`, err);
+        // Network/DNS failures (unreachable repo URL, dead tunnel, offline) are
+        // expected runtime conditions the caller surfaces via a toast — don't
+        // log them as hard errors.
+        const isNetwork = /dns error|error sending request|error trying to connect|connection (refused|reset|closed)|failed to connect|timed out|os error 11001|Hôte inconnu|name resolution|no address/i.test(errStr);
+        if (isCancelled) {
+            console.warn(`[RPC CANCEL] ${command}: ${errStr}`);
+        }
+        else if (isNetwork) {
+            console.warn(`[RPC NET] ${command}: ${errStr}`);
         }
         else {
-            console.warn(`[RPC CANCEL] ${command}: ${errStr}`);
+            console.error(`[RPC ERROR] ${command}:`, err);
         }
         throw err;
     }

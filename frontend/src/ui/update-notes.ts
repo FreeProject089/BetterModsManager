@@ -473,6 +473,7 @@ export function renderMarkdown(md) {
 // ── Auto Update System ──────────────────────────────────
 
 const AUTO_UPDATE_KEY = 'bmm_auto_update_enabled';
+const PRERELEASE_KEY  = 'bmm_prerelease_enabled';
 
 function isAutoUpdateEnabled() {
     const val = localStorage.getItem(AUTO_UPDATE_KEY);
@@ -481,6 +482,14 @@ function isAutoUpdateEnabled() {
 
 function setAutoUpdateEnabled(enabled) {
     localStorage.setItem(AUTO_UPDATE_KEY, enabled ? 'true' : 'false');
+}
+
+export function isPreReleaseEnabled() {
+    return localStorage.getItem(PRERELEASE_KEY) === 'true'; // Default OFF
+}
+
+function setPreReleaseEnabled(enabled) {
+    localStorage.setItem(PRERELEASE_KEY, enabled ? 'true' : 'false');
 }
 
 export async function initAutoUpdate() {
@@ -536,6 +545,25 @@ export async function initAutoUpdate() {
         }
     }
 
+    // Pre-release toggle
+    const chkPre = document.getElementById('chk-prerelease') as HTMLInputElement | null;
+    if (chkPre) {
+        if (isDisabled) {
+            chkPre.checked = false;
+            chkPre.disabled = true;
+        } else {
+            chkPre.checked = isPreReleaseEnabled();
+            chkPre.addEventListener('change', () => {
+                setPreReleaseEnabled(chkPre.checked);
+                toast(chkPre.checked
+                    ? (t('settings.preReleaseEnabled') || 'Pre-releases enabled — you will receive beta builds')
+                    : (t('settings.preReleaseDisabled') || 'Pre-releases disabled'), 'info');
+                // Re-check immediately so the user sees the effect
+                performUpdateCheck(true);
+            });
+        }
+    }
+
     // Sidebar button listener
     const sidebarBtn = document.getElementById('btn-check-updates');
     if (sidebarBtn && !isDisabled) {
@@ -572,7 +600,7 @@ async function performUpdateCheck(showNoUpdateToast = false) {
     }
 
     try {
-        const info = await invoke('check_for_update');
+        const info = await invoke('check_for_update', { includePrerelease: isPreReleaseEnabled() });
 
         if (info.has_update) {
             showUpdateAvailableModal(info);
@@ -626,9 +654,10 @@ function showUpdateAvailableModal(info) {
     const existing = document.getElementById('update-available-modal');
     if (existing) existing.remove();
 
-    const releaseNotes = info.release_notes
-        ? (typeof marked !== 'undefined' ? marked.parse(info.release_notes) : info.release_notes.replace(/\n/g, '<br>'))
-        : '';
+    // Use the rich markdown renderer (badges, GitHub-style alerts, code copy
+    // buttons, tables…) instead of a raw marked.parse — much nicer notes.
+    const releaseNotes = info.release_notes ? renderMarkdown(info.release_notes) : '';
+    const isPre = !!info.is_prerelease;
 
     const modal = document.createElement('div');
     modal.id = 'update-available-modal';
@@ -681,9 +710,9 @@ function showUpdateAvailableModal(info) {
                     animation:float 3s ease-in-out infinite;
                 ">
                 <div>
-                    <div style="font-size:9px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#10b981;margin-bottom:4px;display:flex;align-items:center;gap:5px;">
-                        <svg width="9" height="9" viewBox="0 0 24 24" fill="#10b981"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                        ${t('update.newVersion') || 'NEW VERSION'}
+                    <div style="font-size:9px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:${isPre ? '#f59e0b' : '#10b981'};margin-bottom:4px;display:flex;align-items:center;gap:5px;">
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="${isPre ? '#f59e0b' : '#10b981'}"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                        ${isPre ? (t('update.preReleaseTag') || 'PRE-RELEASE') : (t('update.newVersion') || 'NEW VERSION')}
                     </div>
                     <div style="font-size:18px;font-weight:800;color:#fff;letter-spacing:-0.01em;line-height:1.2;">
                         ${t('settings.updateAvailableTitle') || 'Update Available!'}
@@ -714,12 +743,14 @@ function showUpdateAvailableModal(info) {
 
                 <!-- Release notes -->
                 ${releaseNotes ? `
-                <div style="border-radius:10px;border:1px solid rgba(255,255,255,0.07);overflow:hidden;">
-                    <div style="display:flex;align-items:center;gap:7px;padding:8px 12px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <div style="border-radius:12px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;background:rgba(0,0,0,0.18);">
+                    <div style="display:flex;align-items:center;gap:7px;padding:9px 13px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.45);">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                         ${t('settings.releaseNotes') || "WHAT'S NEW"}
+                        <span style="flex:1;"></span>
+                        <span style="font-weight:700;color:#10b981;letter-spacing:0;">v${escHtml(info.latest_version)}</span>
                     </div>
-                    <div style="max-height:160px;overflow-y:auto;padding:10px 14px;font-size:12px;line-height:1.65;color:rgba(255,255,255,0.55);scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.1) transparent;">
+                    <div class="upd-notes-scroll" style="max-height:230px;overflow-y:auto;padding:6px 16px 12px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;">
                         ${releaseNotes}
                     </div>
                 </div>
