@@ -31,6 +31,30 @@ fn get_pending_deep_link() -> Option<String> {
     PENDING_DEEP_LINK.lock().unwrap().take()
 }
 
+/// Open the native WebView2 DevTools on demand (only when the user asks).
+#[tauri::command]
+fn open_devtools(_window: tauri::Window) {
+    #[cfg(debug_assertions)]
+    _window.open_devtools();
+}
+
+/// Close the native WebView2 DevTools — frees the heavy DevTools process (the
+/// ~480 MB msedgewebview2 "DevTools" process) so it's only resident while open.
+#[tauri::command]
+fn close_devtools(_window: tauri::Window) {
+    #[cfg(debug_assertions)]
+    _window.close_devtools();
+}
+
+/// Whether the native DevTools window is currently open.
+#[tauri::command]
+fn is_devtools_open(_window: tauri::Window) -> bool {
+    #[cfg(debug_assertions)]
+    { return _window.is_devtools_open(); }
+    #[allow(unreachable_code)]
+    false
+}
+
 fn register_bmm_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let path = "Software\\Classes\\bmm";
@@ -389,6 +413,9 @@ fn main() {
             commands::discord::init_discord_rpc,
             commands::discord::set_discord_presence,
             get_pending_deep_link,
+            open_devtools,
+            close_devtools,
+            is_devtools_open,
             commands::crash::get_dxdiag_report,
             commands::crash::list_crash_reports,
             commands::modpack::save_modpack,

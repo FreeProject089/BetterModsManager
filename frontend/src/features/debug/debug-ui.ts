@@ -179,7 +179,10 @@ class DebugUI {
                                         <div style="font-size:13px; font-weight:600; color:white; margin-bottom:2px" data-i18n="dev.title.js">Vanilla JS Debugger</div>
                                         <div style="font-size:11px; color:var(--text-muted)" data-i18n="dev.msg.jsDesc">Press F12 to open Chrome DevTools or inspect below.</div>
                                     </div>
-                                    <button class="debug-btn debug-btn-primary" id="js-open-devtools" style="font-size:10px; padding:4px 12px" data-i18n="dev.btn.openDevtools">OPEN DEVTOOLS</button>
+                                    <div style="display:flex; gap:6px;">
+                                        <button class="debug-btn debug-btn-primary" id="js-open-devtools" style="font-size:10px; padding:4px 12px" data-i18n="dev.btn.openDevtools">OPEN DEVTOOLS</button>
+                                        <button class="debug-btn" id="js-close-devtools" style="font-size:10px; padding:4px 12px" data-i18n="dev.btn.closeDevtools">CLOSE DEVTOOLS</button>
+                                    </div>
                                 </div>
                                 <div style="flex:1; overflow-y:auto; padding:8px" id="js-errors">
                                     <div style="color:var(--text-muted); font-size:10px" data-i18n="dev.msg.noJsErrors">No JS errors recorded.</div>
@@ -589,13 +592,14 @@ class DebugUI {
         // Debugger JS
         this._get('js-open-devtools')?.addEventListener('click', async () => {
             try {
-                if (window.__TAURI__ && window.__TAURI__.tauri) {
-                    await window.__TAURI__.tauri.invoke('plugin:devtools|open');
-                }
+                await invoke('open_devtools');
             } catch (e) {
                 console.log("F12 is the standard fallback for opening DevTools.", e);
                 this.showAlert('Vanilla JS Debugger', "Tauri devtools API couldn't be invoked automatically. Please press F12 on your keyboard to open the Chrome DevTools inspector.");
             }
+        });
+        this._get('js-close-devtools')?.addEventListener('click', async () => {
+            try { await invoke('close_devtools'); } catch (_) { /* ignore */ }
         });
 
         this._get('js-add-watcher')?.addEventListener('click', () => {
@@ -1974,6 +1978,8 @@ class DebugUI {
     destroy() {
         this.isOpen = false;
         try { this.toggleInspector(false); } catch { /* ignore */ }
+        // Free the heavy native WebView2 DevTools process when we close.
+        try { invoke('close_devtools'); } catch { /* ignore */ }
         if (this._updateInterval) { clearInterval(this._updateInterval); this._updateInterval = null; }
         if (this.a11yInterval)    { clearInterval(this.a11yInterval);    this.a11yInterval = null; }
         if (this.mutationObserver) { try { this.mutationObserver.disconnect(); } catch {} this.mutationObserver = null; }

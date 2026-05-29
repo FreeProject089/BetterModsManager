@@ -4241,5 +4241,6 @@
   "plugins.actionIfApiErrDesc": "Les actions suivantes ne s'exécutent que si l'appel API précédent a ÉCHOUÉ (ex. arrêter le serveur HTTP en cas d'erreur). À associer à Fin de bloc.",
   "repo.errPortInUse": "Le port {port} est déjà utilisé par une autre application.",
   "plugins.fldLinkedApi": "API liée",
-  "plugins.optApiLast": "— vérifier l'appel API précédent —"
+  "plugins.optApiLast": "— vérifier l'appel API précédent —",
+  "dev.btn.closeDevtools": "FERMER DEVTOOLS"
 }

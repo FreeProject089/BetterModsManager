@@ -4243,5 +4243,6 @@
   "docs.diagram.label.throttle": "Throttle",
   "docs.diagram.profile.node.CREATE": "Create Profile",
   "plugins.fldLinkedApi": "Linked API",
-  "plugins.optApiLast": "— check the previous API call —"
+  "plugins.optApiLast": "— check the previous API call —",
+  "dev.btn.closeDevtools": "CLOSE DEVTOOLS"
 }
