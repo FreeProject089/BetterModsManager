@@ -705,8 +705,7 @@ export async function renderProfiles() {
           ${isActive ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="vertical-align:middle;margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg>' + t('prof.active') : t('mod.activate')}
         </button>
         <button class="btn btn-secondary btn-sm btn-copy-profile-id" data-id="${escAttr(p.id)}" data-name="${escAttr(p.name)}"
-            onmouseenter="window.showTaskyHelp('prof.copyIdTip', 'hash')" onmouseleave="window.hideTaskyHelp()"
-            data-tooltip="Copier l'ID du profil (pour API/scripts)">
+            onmouseenter="window.showTaskyHelp('prof.copyIdTip', 'hash')" onmouseleave="window.hideTaskyHelp()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/>
             <line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
