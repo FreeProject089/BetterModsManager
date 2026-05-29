@@ -1473,7 +1473,7 @@ export async function initSettings() {
                     disk_limits: true
                 };
                 close();
-                const destPath = await saveFile([{ name: 'App Data Backup', extensions: ['json'] }]);
+                const destPath = await saveFile({ defaultPath: 'bmm-backup.json', filters: [{ name: 'App Data Backup', extensions: ['json'] }] });
                 if (destPath) {
                     try {
                         await invoke('export_app_data', { destPath, options });

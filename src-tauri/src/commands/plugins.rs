@@ -8,6 +8,22 @@ use crate::commands::crash::log_line;
 
 const CATALOG_URL: &str = "https://raw.githubusercontent.com/BetterDCS/BetterModsManager_Plugins/main/catalog.json";
 
+/// Recursively copy a directory tree from `src` to `dst`.
+fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let target = dst.join(entry.file_name());
+        if path.is_dir() {
+            copy_dir_recursive(&path, &target)?;
+        } else {
+            std::fs::copy(&path, &target)?;
+        }
+    }
+    Ok(())
+}
+
 // ── Catalog ────────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -1147,7 +1163,10 @@ pub fn create_local_plugin(
     manifest: PluginManifest,
     icon_src_path: Option<String>,
     icon_svg: Option<String>,
+    script_src_paths: Option<Vec<String>>,
+    folder_src_paths: Option<Vec<String>>,
 ) -> Result<InstalledPlugin, String> {
+    let mut manifest = manifest;
     if manifest.id.is_empty() || manifest.name.is_empty() {
         return Err("Plugin id and name are required".to_string());
     }
@@ -1156,6 +1175,44 @@ pub fn create_local_plugin(
         .ok_or_else(|| "Cannot resolve app data dir".to_string())?;
     let plugin_dir = app_dir.join("plugins").join(&manifest.id);
     std::fs::create_dir_all(&plugin_dir).map_err(|e| e.to_string())?;
+
+    // ── Import folders: copy each chosen directory into the plugin's bundle/.
+    if let Some(dirs) = folder_src_paths {
+        let bundle_dir = plugin_dir.join("bundle");
+        let mut names: Vec<String> = Vec::new();
+        for src in dirs.iter().filter(|s| !s.trim().is_empty()) {
+            let src_path = std::path::Path::new(src);
+            if let Some(fname) = src_path.file_name().and_then(|f| f.to_str()) {
+                let dest = bundle_dir.join(fname);
+                if copy_dir_recursive(src_path, &dest).is_ok() {
+                    names.push(format!("bundle/{}", fname));
+                }
+            }
+        }
+        if !names.is_empty() { manifest.folders = names; }
+    }
+
+    // ── Import script files: copy each into the plugin folder and record its
+    //    filename in manifest.scripts. Presence of scripts flips has_scripts on.
+    if let Some(srcs) = script_src_paths {
+        let scripts_dir = plugin_dir.join("scripts");
+        let mut names: Vec<String> = Vec::new();
+        for src in srcs.iter().filter(|s| !s.trim().is_empty()) {
+            let src_path = std::path::Path::new(src);
+            if let Some(fname) = src_path.file_name().and_then(|f| f.to_str()) {
+                let _ = std::fs::create_dir_all(&scripts_dir);
+                let dest = scripts_dir.join(fname);
+                if std::fs::copy(src_path, &dest).is_ok() {
+                    names.push(format!("scripts/{}", fname));
+                }
+            }
+        }
+        if !names.is_empty() {
+            manifest.scripts = names;
+            manifest.has_scripts = true;
+        }
+    }
+    if !manifest.scripts.is_empty() { manifest.has_scripts = true; }
 
     // Determine icon path: prefer file copy, fall back to SVG, then existing
     let icon_path = if let Some(ref src) = icon_src_path {
@@ -1211,6 +1268,78 @@ pub fn open_plugin_folder(state: State<'_, AppState>, plugin_id: String) -> Resu
     };
     let dir = install_dir.ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?;
     crate::commands::mods::open_folder(dir)
+}
+
+// ── Run plugin scripts (UNSAFE — gated by permission + confirmation in UI) ──
+
+/// Launch the external scripts bundled with a plugin. This executes arbitrary
+/// code, so the frontend must only call it after the user granted the "unsafe
+/// plugins" permission AND confirmed. Returns the list of scripts launched.
+/// Extensions that are actually executable as plugin scripts.
+fn is_runnable_script(ext: &str) -> bool {
+    matches!(ext, "bat" | "cmd" | "ps1" | "vbs")
+}
+
+#[tauri::command]
+pub fn run_plugin_scripts(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    script: Option<String>,
+) -> Result<Vec<String>, String> {
+    let (install_dir, scripts) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let p = data.installed_plugins.iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?;
+        (p.install_dir.clone(), p.manifest.scripts.clone())
+    };
+    if scripts.is_empty() {
+        return Err("This plugin has no scripts.".to_string());
+    }
+    let base = PathBuf::from(&install_dir);
+
+    // Determine which scripts to run: the chosen one (if given & valid) or all
+    // runnable ones. Only .bat/.cmd/.ps1/.vbs are ever executed.
+    let to_run: Vec<String> = match script {
+        Some(sel) => {
+            if !scripts.iter().any(|s| s == &sel) {
+                return Err(format!("Script '{}' is not part of this plugin.", sel));
+            }
+            vec![sel]
+        }
+        None => scripts.clone(),
+    };
+
+    let mut launched: Vec<String> = Vec::new();
+    for rel in &to_run {
+        let path = base.join(rel);
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        if !is_runnable_script(&ext) {
+            log_line(format!("[PLUGINS] Skipped non-runnable script (only .bat/.ps1/.vbs run): {}", rel));
+            continue;
+        }
+        if !path.exists() {
+            log_line(format!("[PLUGINS] Script missing, skipped: {}", rel));
+            continue;
+        }
+        let p_str = path.to_string_lossy().to_string();
+
+        #[cfg(target_os = "windows")]
+        let spawn = match ext.as_str() {
+            "ps1" => std::process::Command::new("powershell")
+                .args(["-ExecutionPolicy", "Bypass", "-File", &p_str]).spawn(),
+            "vbs" => std::process::Command::new("wscript").arg(&p_str).spawn(),
+            _      => std::process::Command::new("cmd").args(["/C", "start", "", &p_str]).spawn(),
+        };
+        #[cfg(not(target_os = "windows"))]
+        let spawn = std::process::Command::new("sh").arg(&p_str).spawn();
+
+        match spawn {
+            Ok(_) => { launched.push(rel.clone()); log_line(format!("[PLUGINS] Ran script '{}' for plugin '{}'", rel, plugin_id)); }
+            Err(e) => { log_line(format!("[PLUGINS] Failed to run script '{}': {}", rel, e)); }
+        }
+    }
+    Ok(launched)
 }
 
 // ── Compute SHA-256 of all files in plugin directory ─────────────────────

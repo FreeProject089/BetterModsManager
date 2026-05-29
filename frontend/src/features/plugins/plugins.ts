@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { invoke, pickFile, saveFile, convertFileSrc } from '../../core/api.js';
+import { invoke, pickFile, saveFile, pickFolder, convertFileSrc } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { escHtml } from '../../core/utils.js';
@@ -66,6 +66,7 @@ export async function initPlugins() {
     renderPluginsView();
     setupPluginTabs();
     await loadInitialData();
+    checkPluginUpdates(); // auto-update catalog plugins (per-plugin opt-out)
     // Re-render when user switches language — no full-page refresh needed
     document.addEventListener('langChanged', () => {
         renderPluginsView();
@@ -80,6 +81,47 @@ export async function initPlugins() {
             _allModpacks = mpJson.data || [];
         } catch { _allModpacks = []; }
     });
+}
+
+/**
+ * Auto-update plugins installed from the catalog. For each installed plugin that
+ * has a stored catalog source and whose auto-update is not turned off, compare
+ * the catalog version (matched by id) with the installed version; if it differs,
+ * reinstall from the catalog download URL. Verifies both id and version.
+ */
+async function checkPluginUpdates(): Promise<void> {
+    const candidates = (_installedPlugins || []).filter(p => {
+        const id = p?.manifest?.id;
+        return id
+            && localStorage.getItem('bmm_plugin_src_' + id)            // came from the catalog
+            && localStorage.getItem('bmm_plugin_au_' + id) !== 'off';  // auto-update not disabled
+    });
+    if (!candidates.length) return;
+
+    let catalog: any;
+    try { catalog = _catalog || await invoke('fetch_plugin_catalog'); _catalog = catalog; }
+    catch { return; }
+    const entries: any[] = catalog?.plugins || [];
+
+    let updated = 0;
+    for (const p of candidates) {
+        const id = p.manifest.id;
+        const entry = entries.find(e => e.id === id);                 // verify id
+        if (!entry || !entry.version) continue;
+        if (entry.version === p.manifest.version) continue;           // verify version differs
+        const url = entry.download_url || localStorage.getItem('bmm_plugin_src_' + id);
+        if (!url) continue;
+        try {
+            const fresh = await invoke('install_plugin', { downloadUrl: url }) as any;
+            _installedPlugins = _installedPlugins.filter(x => x.manifest.id !== fresh.manifest.id);
+            _installedPlugins.push(fresh);
+            localStorage.setItem('bmm_plugin_src_' + fresh.manifest.id, url);
+            updated++;
+            toast((t('plugins.autoUpdated') || 'Plugin "{name}" updated to v{v}')
+                .replace('{name}', fresh.manifest.name).replace('{v}', fresh.manifest.version), 'success');
+        } catch (e) { console.warn('[plugins] auto-update failed for', id, e); }
+    }
+    if (updated && (_tab === 'installed' || _tab === 'manage')) renderTab(_tab);
 }
 
 async function loadInitialData() {
@@ -225,6 +267,9 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
 
     const manifest = source === 'installed' ? plugin.manifest : plugin;
     const hasModlist = !!(manifest.modlist?.required_mods?.length);
+    const hasScripts = !!manifest.has_scripts || ((manifest.scripts?.length || 0) > 0);
+    const fromCatalog = source === 'installed' && !!localStorage.getItem('bmm_plugin_src_' + manifest.id);
+    const auOn = localStorage.getItem('bmm_plugin_au_' + manifest.id) !== 'off';
 
     card.innerHTML = `
         <div class="plug-card-header">
@@ -261,7 +306,8 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
                 ${hasModlist ? `
                     <button class="btn btn-sm btn-accent plug-btn-compare" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.compareTip')}">
                         ${IC.search} ${t('plugins.compare')}
-                    </button>
+                    </button>` : ''}
+                ${(hasModlist || hasScripts) ? `
                     <button class="btn btn-sm btn-secondary plug-btn-apply" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.applyTip')}">
                         ${IC.play} ${t('plugins.apply')}
                     </button>` : ''}
@@ -270,6 +316,11 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
                     <span class="plug-sha-badge plug-sha-badge--pending plug-btn-sha" data-id="${escHtml(manifest.id)}" data-tooltip="${t('plugins.checksumTitle')}">
                         ${IC.hash} SHA
                     </span>` : ''}
+                    ${fromCatalog ? `
+                    <button class="btn btn-xs btn-ghost plug-btn-au ${auOn ? 'plug-au-on' : ''}" data-id="${escHtml(manifest.id)}"
+                        data-tooltip="${auOn ? (t('plugins.autoUpdateOn') || 'Auto-update: ON (re-installs when the catalog version changes)') : (t('plugins.autoUpdateOff') || 'Auto-update: OFF')}">
+                        ${IC.refresh}
+                    </button>` : ''}
                     <button class="btn btn-xs btn-ghost plug-btn-folder" data-id="${escHtml(manifest.id)}" data-dir="${escHtml(plugin.install_dir || '')}" data-tooltip="${t('plugins.openFolder')}">
                         ${IC.folder}
                     </button>
@@ -310,6 +361,19 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
     card.querySelector('.plug-btn-inspect')?.addEventListener('click', () => handleInspect(plugin));
     card.querySelector('.plug-btn-edit')?.addEventListener('click', () => handleEditPlugin(manifest));
     card.querySelector('.plug-btn-duplicate')?.addEventListener('click', () => handleDuplicatePlugin(manifest));
+    card.querySelector('.plug-btn-au')?.addEventListener('click', (e) => {
+        const btn = e.currentTarget as HTMLElement;
+        const nowOn = localStorage.getItem('bmm_plugin_au_' + manifest.id) === 'off'; // toggling to ON
+        if (nowOn) localStorage.removeItem('bmm_plugin_au_' + manifest.id);
+        else localStorage.setItem('bmm_plugin_au_' + manifest.id, 'off');
+        btn.classList.toggle('plug-au-on', nowOn);
+        btn.setAttribute('data-tooltip', nowOn
+            ? (t('plugins.autoUpdateOn') || 'Auto-update: ON (re-installs when the catalog version changes)')
+            : (t('plugins.autoUpdateOff') || 'Auto-update: OFF'));
+        toast(nowOn
+            ? (t('plugins.autoUpdateEnabledP') || 'Auto-update enabled for this plugin')
+            : (t('plugins.autoUpdateDisabledP') || 'Auto-update disabled for this plugin'), 'info');
+    });
     card.querySelector('.plug-btn-folder')?.addEventListener('click', () => {
         const dir = (card.querySelector('.plug-btn-folder') as HTMLElement)?.dataset.dir || plugin.install_dir || '';
         if (dir) invoke('open_folder', { path: dir }).catch(() => {});
@@ -1780,6 +1844,42 @@ function renderCreate(container: HTMLElement) {
                         </label>
                         <span class="plug-toggle-hint" id="pc-strict-hint">${t('plugins.strictOff')}</span>
                     </div>
+
+                    <!-- Contains external scripts -->
+                    <div class="plug-form-row" style="flex-direction:row;align-items:center;gap:12px;">
+                        <label class="plug-form-label" style="margin:0;">${t('plugins.pluginHasScripts') || 'Contains scripts'}</label>
+                        <label class="plug-toggle">
+                            <input type="checkbox" id="pc-has-scripts">
+                            <span class="plug-toggle-slider"></span>
+                        </label>
+                        <span class="plug-toggle-hint" id="pc-has-scripts-hint">${t('plugins.pluginHasScriptsHint') || 'This plugin bundles external scripts'}</span>
+                    </div>
+                    <div class="plug-form-row" id="pc-scripts-row" style="display:none;">
+                        <label class="plug-form-label">${t('plugins.pluginScripts') || 'Scripts'} <span style="color:var(--text-muted);font-size:10px;">(.bat .ps1 .vbs .py .js)</span></label>
+                        <button class="btn btn-xs btn-ghost" id="pc-import-scripts" style="align-self:flex-start;">${IC.download} ${t('plugins.importScripts') || 'Import scripts…'}</button>
+                        <div id="pc-scripts-list" class="plug-scripts-list"></div>
+                        <p style="font-size:10.5px;color:var(--warning);margin:6px 0 0;display:flex;gap:6px;align-items:flex-start;line-height:1.4;">
+                            ${IC.lock}<span>${t('plugins.unsafeScriptWarn') || 'Scripts run real programs on your PC. They only execute after you grant the unsafe-plugins permission and confirm.'}</span>
+                        </p>
+                    </div>
+
+                    <!-- Import folders (bundled with the plugin) -->
+                    <div class="plug-form-row">
+                        <label class="plug-form-label">${t('plugins.pluginFolders') || 'Bundled folders'} <span style="color:var(--text-muted);font-size:10px;">${t('plugins.optional') || '(optional)'}</span></label>
+                        <button class="btn btn-xs btn-ghost" id="pc-import-folders" style="align-self:flex-start;">${IC.folder} ${t('plugins.importFolders') || 'Import folder…'}</button>
+                        <div id="pc-folders-list" class="plug-scripts-list"></div>
+                    </div>
+
+                    <!-- What happens on apply -->
+                    <div class="plug-form-row">
+                        <label class="plug-form-label">${t('plugins.applyMode') || 'On apply'}</label>
+                        <select id="pc-apply-mode" class="select select-sm">
+                            <option value="modlist">${t('plugins.applyModeModlist') || 'Apply mod list (default)'}</option>
+                            <option value="script">${t('plugins.applyModeScript') || 'Run scripts only'}</option>
+                            <option value="both">${t('plugins.applyModeBoth') || 'Apply mod list + run scripts'}</option>
+                        </select>
+                        <span class="plug-toggle-hint">${t('plugins.applyModeHint') || 'Choose what activating this plugin does.'}</span>
+                    </div>
                 </div>
             </div>
 
@@ -1830,6 +1930,59 @@ function renderCreate(container: HTMLElement) {
     const selectedMods: Map<string, { name: string; optional: boolean }> = new Map();
     let iconSrcPath = '';
     let iconBuiltinSvg = ''; // SVG string when user picks a builtin icon
+    const scriptPaths: string[] = []; // absolute paths of scripts to bundle
+
+    // ── Scripts: toggle row + import ──────────────────────────────────────────
+    const renderScriptsList = () => {
+        const list = document.getElementById('pc-scripts-list');
+        if (!list) return;
+        list.innerHTML = scriptPaths.length
+            ? scriptPaths.map((p, i) => {
+                const fname = p.split(/[\\/]/).pop() || p;
+                return `<div class="plug-script-chip"><span>${escHtml(fname)}</span><button class="plug-script-rm" data-i="${i}" data-tooltip="${t('common.remove') || 'Remove'}">${IC.x}</button></div>`;
+            }).join('')
+            : `<span style="font-size:11px;color:var(--text-muted);">${t('plugins.noScripts') || 'No script imported yet.'}</span>`;
+        list.querySelectorAll('.plug-script-rm').forEach(b => b.addEventListener('click', () => {
+            scriptPaths.splice(parseInt((b as HTMLElement).dataset.i!, 10), 1);
+            renderScriptsList();
+        }));
+    };
+    container.querySelector('#pc-has-scripts')?.addEventListener('change', (e) => {
+        const on = (e.target as HTMLInputElement).checked;
+        const row = document.getElementById('pc-scripts-row');
+        if (row) row.style.display = on ? '' : 'none';
+        const hint = document.getElementById('pc-has-scripts-hint');
+        if (hint) hint.textContent = on
+            ? (t('plugins.pluginHasScriptsOn') || 'Scripts will be bundled and offered on activation')
+            : (t('plugins.pluginHasScriptsHint') || 'This plugin bundles external scripts');
+        if (on) renderScriptsList();
+    });
+    container.querySelector('#pc-import-scripts')?.addEventListener('click', async () => {
+        const picked = await pickFile([{ name: 'Scripts', extensions: ['bat', 'cmd', 'ps1', 'vbs', 'py', 'js', 'sh'] }]);
+        if (picked) { scriptPaths.push(picked); renderScriptsList(); }
+    });
+
+    // ── Folders: import directories to bundle with the plugin ────────────────
+    const folderPaths: string[] = [];
+    const renderFoldersList = () => {
+        const list = document.getElementById('pc-folders-list');
+        if (!list) return;
+        list.innerHTML = folderPaths.length
+            ? folderPaths.map((p, i) => {
+                const fname = p.split(/[\\/]/).filter(Boolean).pop() || p;
+                return `<div class="plug-script-chip"><span>${escHtml(fname)}/</span><button class="plug-folder-rm" data-i="${i}" data-tooltip="${t('common.remove') || 'Remove'}">${IC.x}</button></div>`;
+            }).join('')
+            : `<span style="font-size:11px;color:var(--text-muted);">${t('plugins.noFolders') || 'No folder imported yet.'}</span>`;
+        list.querySelectorAll('.plug-folder-rm').forEach(b => b.addEventListener('click', () => {
+            folderPaths.splice(parseInt((b as HTMLElement).dataset.i!, 10), 1);
+            renderFoldersList();
+        }));
+    };
+    renderFoldersList();
+    container.querySelector('#pc-import-folders')?.addEventListener('click', async () => {
+        const dir = await pickFolder();
+        if (dir) { folderPaths.push(dir); renderFoldersList(); }
+    });
 
     // Icon tab switching
     container.querySelectorAll('.plug-icon-tab-btn').forEach(btn => {
@@ -1959,6 +2112,10 @@ function renderCreate(container: HTMLElement) {
             description: (document.getElementById('pc-desc') as HTMLTextAreaElement)?.value.trim() || '',
             game: (document.getElementById('pc-game') as HTMLInputElement)?.value.trim() || '',
             official: false, permissions: [], tags: [], website: '',
+            has_scripts: (document.getElementById('pc-has-scripts') as HTMLInputElement)?.checked || false,
+            scripts: [],
+            folders: [],
+            apply_mode: (document.getElementById('pc-apply-mode') as HTMLSelectElement)?.value || 'modlist',
             modlist: {
                 strict: (document.getElementById('pc-strict') as HTMLInputElement)?.checked || false,
                 required_mods: Array.from(selectedMods.entries()).map(([_id, { name, optional }]) => ({ name, optional, sha256: null })),
@@ -1974,6 +2131,8 @@ function renderCreate(container: HTMLElement) {
                 manifest,
                 iconSrcPath: iconSrcPath || null,
                 iconSvg: iconBuiltinSvg || null,
+                scriptSrcPaths: scriptPaths.length ? scriptPaths : null,
+                folderSrcPaths: folderPaths.length ? folderPaths : null,
             });
             _installedPlugins = _installedPlugins.filter(p => p.manifest.id !== manifest.id);
             _installedPlugins.push(plugin);
@@ -1991,6 +2150,8 @@ function renderCreate(container: HTMLElement) {
                 manifest,
                 iconSrcPath: iconSrcPath || null,
                 iconSvg: iconBuiltinSvg || null,
+                scriptSrcPaths: scriptPaths.length ? scriptPaths : null,
+                folderSrcPaths: folderPaths.length ? folderPaths : null,
             });
             await invoke('export_plugin', { pluginId: manifest.id, destPath: path });
             toast(t('plugins.exportSuccess', { name: manifest.name }), 'success');
@@ -5676,6 +5837,7 @@ async function renderPerms(container: HTMLElement) {
     const globalAllowed   = localStorage.getItem('bmm_plug_allow_global') === 'always';
     const deepLinkAllowed = localStorage.getItem('bmm_deeplink_allow_global') !== 'blocked';
     const apiNoAuthAllow  = localStorage.getItem('bmm_api_public_allow') !== 'blocked';
+    const unsafeAllowed   = localStorage.getItem('bmm_unsafe_plugins_allow') === 'allowed';
 
     container.innerHTML = `
         <p class="plug-perms-desc">${IC.shield} ${t('plugins.permsDesc')}</p>
@@ -5727,6 +5889,21 @@ async function renderPerms(container: HTMLElement) {
                     </label>
                 </div>
             </div>
+
+            <div class="plug-perm-global-card" style="margin-top:8px;border-color:rgba(239,68,68,0.25);">
+                <div class="plug-perm-global-inner">
+                    <div class="plug-perm-global-icon" style="color:var(--danger);">${IC.alert}</div>
+                    <div class="plug-perm-global-text">
+                        <strong>${t('plugins.unsafePluginsTitle') || 'Allow unsafe plugins (scripts)'}</strong>
+                        <span class="plug-perm-global-sub">${t('plugins.unsafePluginsDesc') || 'Required to run external scripts (.bat, .ps1, …) bundled in a plugin. Each run still asks for confirmation.'}</span>
+                    </div>
+                    <label class="plug-toggle" style="margin-left:auto;">
+                        <input type="checkbox" id="plug-unsafe-allow" ${unsafeAllowed ? 'checked' : ''}>
+                        <span class="plug-toggle-slider"></span>
+                    </label>
+                </div>
+                <p class="plug-perm-global-warn">${IC.alert} ${t('plugins.unsafePluginsWarn') || 'Scripts execute real programs on your PC. Only enable this for plugins you fully trust.'}</p>
+            </div>
         </div>
 
         <!-- ── Per-plugin permissions ──────────────────────────── -->
@@ -5755,6 +5932,14 @@ async function renderPerms(container: HTMLElement) {
         }
         toast(t('plugins.apiPublicPermRestart') || 'Redémarrez BMM pour appliquer ce changement.', 'info');
     });
+    container.querySelector('#plug-unsafe-allow')?.addEventListener('change', (e) => {
+        const on = (e.target as HTMLInputElement).checked;
+        if (on) localStorage.setItem('bmm_unsafe_plugins_allow', 'allowed');
+        else    localStorage.removeItem('bmm_unsafe_plugins_allow');
+        toast(on
+            ? (t('plugins.unsafePluginsEnabled') || 'Unsafe plugins enabled — scripts can run after confirmation.')
+            : (t('plugins.unsafePluginsDisabled') || 'Unsafe plugins disabled.'), on ? 'warning' : 'info');
+    });
 
     const list = document.getElementById('plug-perms-list') as HTMLElement;
 
@@ -5763,53 +5948,56 @@ async function renderPerms(container: HTMLElement) {
         return;
     }
 
-    for (const plugin of _installedPlugins) {
-        let currentPerms: string[] = [];
-        try { currentPerms = await invoke('get_plugin_permissions', { pluginId: plugin.manifest.id }); } catch (_) {}
+    // Fetch every plugin's permissions IN PARALLEL (was N sequential awaits,
+    // which made the page janky), then render the whole list in one pass.
+    const permsArr: string[][] = await Promise.all(
+        _installedPlugins.map(p =>
+            (invoke('get_plugin_permissions', { pluginId: p.manifest.id }).catch(() => []) as Promise<string[]>)
+        )
+    );
 
-        const alwaysKey = `bmm_plug_allow_${plugin.manifest.id}`;
-        const alwaysAllowed = localStorage.getItem(alwaysKey) === 'always';
+    list.innerHTML = _installedPlugins.map((plugin, i) => {
+        const currentPerms = permsArr[i] || [];
+        const id = plugin.manifest.id;
+        const alwaysAllowed = localStorage.getItem(`bmm_plug_allow_${id}`) === 'always';
+        return `
+            <div class="plug-perm-block" data-pid="${escHtml(id)}">
+                <div class="plug-perm-header">
+                    <div class="plug-card-icon-default" style="width:28px;height:28px;font-size:14px;">${IC.puzzle}</div>
+                    <strong>${escHtml(plugin.manifest.name)}</strong>
+                    <span class="plug-perm-id">${escHtml(id)}</span>
+                    <label class="plug-perm-always" data-tooltip="${t('plugins.alwaysAllow')}">
+                        <input type="checkbox" class="plug-perm-always-cb" ${alwaysAllowed ? 'checked' : ''}>
+                        <span>${t('plugins.alwaysAllow')}</span>
+                    </label>
+                </div>
+                <div class="plug-perm-grid">
+                    ${ALL_PERMS.map(perm => `
+                        <label class="plug-perm-item">
+                            <input type="checkbox" class="plug-perm-check" data-perm="${perm}"
+                                ${(currentPerms.includes(perm) || plugin.manifest.permissions?.includes(perm)) ? 'checked' : ''}>
+                            <span>${t('plugins.perm_' + perm)}</span>
+                        </label>`).join('')}
+                </div>
+                <button class="btn btn-sm btn-accent plug-save-perms" data-id="${escHtml(id)}">${IC.save} ${t('plugins.savePerms')}</button>
+            </div>`;
+    }).join('');
 
-        const block = document.createElement('div');
-        block.className = 'plug-perm-block';
-        block.innerHTML = `
-            <div class="plug-perm-header">
-                <div class="plug-card-icon-default" style="width:28px;height:28px;font-size:14px;">${IC.puzzle}</div>
-                <strong>${escHtml(plugin.manifest.name)}</strong>
-                <span class="plug-perm-id">${escHtml(plugin.manifest.id)}</span>
-                <label class="plug-perm-always" data-tooltip="${t('plugins.alwaysAllow')}">
-                    <input type="checkbox" id="perm-always-${plugin.manifest.id}" ${alwaysAllowed ? 'checked' : ''}>
-                    <span>${t('plugins.alwaysAllow')}</span>
-                </label>
-            </div>
-            <div class="plug-perm-grid">
-                ${ALL_PERMS.map(perm => `
-                    <label class="plug-perm-item">
-                        <input type="checkbox" class="plug-perm-check" data-perm="${perm}"
-                            ${(currentPerms.includes(perm) || plugin.manifest.permissions?.includes(perm)) ? 'checked' : ''}>
-                        <span>${t('plugins.perm_' + perm)}</span>
-                    </label>`).join('')}
-            </div>
-            <button class="btn btn-sm btn-accent plug-save-perms" data-id="${escHtml(plugin.manifest.id)}">${IC.save} ${t('plugins.savePerms')}</button>
-        `;
-
-        block.querySelector(`#perm-always-${plugin.manifest.id}`)?.addEventListener('change', (e) => {
-            if ((e.target as HTMLInputElement).checked) localStorage.setItem(alwaysKey, 'always');
-            else localStorage.removeItem(alwaysKey);
+    // Wire listeners once (single pass over the rendered blocks).
+    list.querySelectorAll('.plug-perm-block').forEach(block => {
+        const id = (block as HTMLElement).dataset.pid || '';
+        block.querySelector('.plug-perm-always-cb')?.addEventListener('change', (e) => {
+            if ((e.target as HTMLInputElement).checked) localStorage.setItem(`bmm_plug_allow_${id}`, 'always');
+            else localStorage.removeItem(`bmm_plug_allow_${id}`);
         });
-
-        block.querySelector('.plug-save-perms')?.addEventListener('click', async (e) => {
-            const id = (e.target as HTMLElement).closest('.plug-save-perms')?.dataset.id;
-            const checks = block.querySelectorAll('.plug-perm-check:checked');
-            const perms = Array.from(checks).map(c => (c as HTMLInputElement).dataset.perm);
+        block.querySelector('.plug-save-perms')?.addEventListener('click', async () => {
+            const perms = Array.from(block.querySelectorAll('.plug-perm-check:checked')).map(c => (c as HTMLInputElement).dataset.perm);
             try {
                 await invoke('set_plugin_permissions', { pluginId: id, permissions: perms });
                 toast(t('plugins.permsSaved'), 'success');
             } catch (err) { toast(`${t('common.error')}: ${err}`, 'error'); }
         });
-
-        list.appendChild(block);
-    }
+    });
 }
 
 // ── Permission Dialog ──────────────────────────────────────────────────────
@@ -5926,6 +6114,8 @@ async function handleInstall(downloadUrl: string, name: string) {
         const plugin = await invoke('install_plugin', { downloadUrl });
         _installedPlugins = _installedPlugins.filter(p => p.manifest.id !== plugin.manifest.id);
         _installedPlugins.push(plugin);
+        // Remember the catalog source so this plugin can be auto-updated later.
+        try { localStorage.setItem('bmm_plugin_src_' + plugin.manifest.id, downloadUrl); } catch { /* ignore */ }
         toast(t('plugins.installSuccess', { name }), 'success');
         dispatchBmmAction(BMM_ACTIONS.PLUGIN_INSTALLED, { name });
         renderTab(_tab);
@@ -5973,7 +6163,15 @@ async function handleCompare(pluginId: string) {
 
 async function handleApply(pluginId: string) {
     const plugin = _installedPlugins.find(p => p.manifest.id === pluginId);
+    const pluginHasScripts = !!plugin?.manifest?.has_scripts || ((plugin?.manifest?.scripts?.length || 0) > 0);
+    const applyMode = plugin?.manifest?.apply_mode || 'modlist';
+
+    // "Run scripts only" mode: activating the plugin just runs its scripts.
+    if (applyMode === 'script') { await maybeRunPluginScripts(pluginId); return; }
+
     if (!plugin?.manifest?.modlist?.required_mods?.length) {
+        // No mod list: fall back to scripts if the plugin has any.
+        if (pluginHasScripts) { await maybeRunPluginScripts(pluginId); return; }
         toast(t('plugins.noModlist'), 'warning');
         return;
     }
@@ -6029,7 +6227,70 @@ async function doApply(pluginId: string, cmp?: any) {
             const { refreshMods } = await import('../../features/mods/mods.js');
             await refreshMods(true);
         } catch (_) {}
+
+        // Run bundled scripts only when the plugin's apply mode is "both".
+        const applyMode = _installedPlugins.find(p => p.manifest.id === pluginId)?.manifest?.apply_mode || 'modlist';
+        if (applyMode === 'both') await maybeRunPluginScripts(pluginId);
     } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+}
+
+// ── Unsafe plugin scripts ───────────────────────────────────────────────────
+const UNSAFE_PLUGINS_KEY = 'bmm_unsafe_plugins_allow';
+export function unsafePluginsAllowed(): boolean {
+    return localStorage.getItem(UNSAFE_PLUGINS_KEY) === 'allowed';
+}
+
+/** If the plugin ships external scripts, confirm + run them — but only when the
+ *  "unsafe plugins" permission is granted. */
+async function maybeRunPluginScripts(pluginId: string): Promise<void> {
+    const plugin = _installedPlugins.find(p => p.manifest.id === pluginId);
+    const allScripts: string[] = plugin?.manifest?.scripts || [];
+    const hasScripts = !!plugin?.manifest?.has_scripts || allScripts.length > 0;
+    if (!hasScripts) return;
+
+    // Only .bat / .ps1 / .vbs are launchable (imported files can be anything,
+    // but only these execute).
+    const RUNNABLE = /\.(bat|cmd|ps1|vbs)$/i;
+    const runnable = allScripts.filter(s => RUNNABLE.test(s));
+    if (!runnable.length) {
+        toast(t('plugins.noRunnableScripts') || 'This plugin has no runnable script (.bat / .ps1 / .vbs).', 'warning');
+        return;
+    }
+
+    if (!unsafePluginsAllowed()) {
+        toast(t('plugins.unsafeBlocked') || 'This plugin contains scripts. Enable "Allow unsafe plugins" in Plugins → Permissions to run them.', 'warning');
+        return;
+    }
+
+    const runOne = async (script: string) => {
+        try {
+            const launched = await invoke('run_plugin_scripts', { pluginId, script }) as string[];
+            toast((t('plugins.scriptsRan') || 'Ran {n} script(s).').replace('{n}', String(launched?.length ?? 0)), 'success');
+        } catch (e) {
+            toast(`${t('common.error')}: ${e}`, 'error');
+        }
+    };
+
+    // Let the user pick which script to launch.
+    const rows = runnable.map(s =>
+        `<button class="plug-script-run-row" data-script="${escHtml(s)}">${IC.play}<code>${escHtml(s)}</code></button>`
+    ).join('');
+    const ov = createOverlay(`
+        <div class="plug-ov-header">
+            <span class="plug-ov-title">${IC.terminal} ${t('plugins.chooseScriptTitle') || 'Choose a script to run'}</span>
+            <button class="btn btn-xs btn-ghost plug-ov-close-btn">${IC.x}</button>
+        </div>
+        <div class="plug-ov-body" style="padding:16px 18px;display:flex;flex-direction:column;gap:10px;">
+            <p style="font-size:12.5px;color:var(--text-secondary);margin:0;line-height:1.5;">${(t('plugins.chooseScriptDesc') || '"{name}" — pick a script to launch. It runs a real program on your PC.').replace('{name}', escHtml(plugin.manifest.name))}</p>
+            <div class="plug-script-run-list">${rows}</div>
+            <p style="font-size:10.5px;color:var(--warning);display:flex;gap:6px;align-items:flex-start;margin:2px 0 0;line-height:1.4;">${IC.lock}<span>${t('plugins.unsafeScriptWarn') || 'Scripts run real programs on your PC.'}</span></p>
+        </div>`);
+    ov.querySelectorAll('.plug-ov-close-btn').forEach(b => b.addEventListener('click', () => ov.remove()));
+    ov.querySelectorAll('.plug-script-run-row').forEach(b => b.addEventListener('click', async () => {
+        const s = (b as HTMLElement).dataset.script!;
+        ov.remove();
+        await runOne(s);
+    }));
 }
 
 async function handleExport(pluginId: string, name: string) {

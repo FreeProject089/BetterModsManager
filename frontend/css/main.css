@@ -3437,6 +3437,57 @@ body.is-maximized .titlebar-spacer {
 }
 .exp-note svg { flex-shrink: 0; margin-top: 1px; color: var(--accent); }
 
+/* ── Plugin scripts (create plugin) ── */
+.plug-scripts-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.plug-script-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 3px 6px 3px 9px;
+}
+.plug-script-rm {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: inline-flex;
+    padding: 2px;
+    border-radius: 4px;
+}
+.plug-script-rm:hover { color: var(--danger); background: rgba(239, 68, 68, 0.12); }
+.plug-script-rm svg { width: 11px; height: 11px; }
+.plug-folder-rm { background: none; border: none; color: var(--text-muted); cursor: pointer; display: inline-flex; padding: 2px; border-radius: 4px; }
+.plug-folder-rm:hover { color: var(--danger); background: rgba(239, 68, 68, 0.12); }
+.plug-folder-rm svg { width: 11px; height: 11px; }
+/* Auto-update toggle on installed catalog plugin cards */
+.plug-btn-au.plug-au-on { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* Script chooser (run plugin scripts) */
+.plug-script-run-list { display: flex; flex-direction: column; gap: 6px; }
+.plug-script-run-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    text-align: left;
+    padding: 9px 12px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-bright);
+    cursor: pointer;
+    font-size: 12.5px;
+    transition: background .15s ease, border-color .15s ease;
+}
+.plug-script-run-row:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.plug-script-run-row svg { width: 14px; height: 14px; color: var(--accent); flex-shrink: 0; }
+.plug-script-run-row code { font-family: var(--font-mono); font-size: 11.5px; }
+
 /* ── Util ── */
 .mono {
     font-family: var(--font-mono);

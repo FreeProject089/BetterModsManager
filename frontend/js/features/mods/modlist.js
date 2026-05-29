@@ -44,7 +44,7 @@ export function initModlist() {
         const description = document.getElementById('mm-description').value.trim();
         const author = document.getElementById('mm-author').value.trim();
         const includeHashes = document.getElementById('mm-include-hashes')?.checked ?? true;
-        const path = await saveFile([{ name: 'Mod List', extensions: ['mm', 'json'] }]);
+        const path = await saveFile({ defaultPath: 'modlist.mm', filters: [{ name: 'Mod List', extensions: ['mm', 'json'] }] });
         if (!path)
             return;
         const progressOverlay = document.getElementById('export-progress-overlay');

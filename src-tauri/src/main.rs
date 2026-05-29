@@ -424,6 +424,7 @@ fn main() {
             commands::plugins::write_zip_files,
             commands::plugins::get_app_exe_path,
             commands::plugins::create_local_plugin,
+            commands::plugins::run_plugin_scripts,
             commands::plugins::open_plugin_folder,
             commands::plugins::compute_plugin_checksum,
         ])

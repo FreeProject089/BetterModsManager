@@ -25,6 +25,7 @@ class DebugUI {
         this.jsDynamic = false;
         this.mutationObserver = null;
         this.a11yInterval = null;
+        this._updateInterval = null;
     }
     // Helper to find elements within devtools containers
     _get(id) {
@@ -60,19 +61,19 @@ class DebugUI {
         // Strict lock check
         if (!appState.get('debugMode') && force !== true)
             return;
-        if (!this.container)
-            this.init();
-        this.isOpen = force !== undefined ? force : !this.isOpen;
-        this.container.classList.toggle('open', this.isOpen);
-        if (this.isOpen) {
+        const willOpen = force !== undefined ? force : !this.isOpen;
+        if (willOpen) {
+            if (!this.container)
+                this.init(); // lazy build on first open
+            this.isOpen = true;
+            this.container.classList.add('open');
             this.refreshAllPanes();
             this.translateUI();
-            // Adjust z-index to be on top when opened
             this.container.style.zIndex = '200000';
         }
         else {
-            this.toggleInspector(false);
-            this.container.style.zIndex = '2000';
+            // Closing → fully unload to free RAM (rebuilt next time it opens).
+            this.destroy();
         }
     }
     refreshAllPanes() {
@@ -1877,10 +1878,47 @@ class DebugUI {
     }
     startUpdateLoop() {
         // Refresh state view periodically when open if we aren't using deep Proxies for everything
-        setInterval(() => {
+        if (this._updateInterval)
+            clearInterval(this._updateInterval);
+        this._updateInterval = setInterval(() => {
             if (this.isOpen && this.activeTab === 'state')
                 this.updateStateView();
         }, 1000);
+    }
+    /** Fully unload the DevTools: remove all DOM + stop all timers/observers so
+     *  it returns to ~0 resource usage when closed. Rebuilt on next open. */
+    destroy() {
+        this.isOpen = false;
+        try {
+            this.toggleInspector(false);
+        }
+        catch { /* ignore */ }
+        if (this._updateInterval) {
+            clearInterval(this._updateInterval);
+            this._updateInterval = null;
+        }
+        if (this.a11yInterval) {
+            clearInterval(this.a11yInterval);
+            this.a11yInterval = null;
+        }
+        if (this.mutationObserver) {
+            try {
+                this.mutationObserver.disconnect();
+            }
+            catch { }
+            this.mutationObserver = null;
+        }
+        for (const el of [this.container, this.modalOverlay, this.crashOverlay, this.highlightEl, this.tooltipEl]) {
+            try {
+                el?.remove();
+            }
+            catch { /* ignore */ }
+        }
+        this.container = null;
+        this.modalOverlay = null;
+        this.crashOverlay = null;
+        this.highlightEl = null;
+        this.tooltipEl = null;
     }
 }
 export const debugUI = new DebugUI();

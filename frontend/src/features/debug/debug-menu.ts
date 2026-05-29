@@ -14,10 +14,9 @@ export function initDebugMenu() {
         window.bmmDebugEnabled = isDebug || isFSDM;
         window.bmmFSDMEnabled = isFSDM;
 
-        // CRITICAL: Initialize the Debug UI if any debug mode is active
-        if (window.bmmDebugEnabled) {
-            debugUI.init();
-        }
+        // NOTE: do NOT eagerly init the Debug UI — it builds a heavy panel + a
+        // refresh loop. It is now lazily built on first open (debugUI.toggle)
+        // and fully unloaded when closed, so it takes ~0 resources until used.
 
         const card = document.getElementById('debug-menu-card');
         if (card) {

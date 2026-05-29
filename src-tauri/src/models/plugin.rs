@@ -39,7 +39,24 @@ pub struct PluginManifest {
     pub tags: Vec<String>,
     #[serde(default)]
     pub website: String,
+    /// Relative paths (within the plugin folder) of external scripts this plugin
+    /// ships. Running them is gated behind the "unsafe plugins" permission.
+    #[serde(default)]
+    pub scripts: Vec<String>,
+    /// Marks this plugin as containing external scripts (set via the "contains
+    /// scripts" checkbox). When true, activating it prompts to run the scripts.
+    #[serde(default)]
+    pub has_scripts: bool,
+    /// Relative paths of folders bundled inside the plugin (under "bundle/").
+    #[serde(default)]
+    pub folders: Vec<String>,
+    /// What happens when the plugin is applied: "modlist" (default), "script",
+    /// or "both".
+    #[serde(default = "default_apply_mode")]
+    pub apply_mode: String,
 }
+
+fn default_apply_mode() -> String { "modlist".to_string() }
 
 fn default_version() -> String { "1.0.0".to_string() }
 
