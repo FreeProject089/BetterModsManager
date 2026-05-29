@@ -325,6 +325,7 @@ fn main() {
             commands::crash::clear_api_log,
             commands::tutorial_demo::tutorial_setup_demo,
             commands::tutorial_demo::tutorial_cleanup_demo,
+            commands::repo_server::set_repo_busy,
             commands::crash::get_startup_status,
             commands::autoupdate::check_for_update,
             commands::autoupdate::download_and_install_update,

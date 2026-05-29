@@ -1266,19 +1266,24 @@ class DebugUI {
             catch {
                 return '—';
             } })();
-            detailBlock = `<div id="${expandId}" class="timeline-detail" style="display:none;grid-column:1/-1;background:rgba(0,0,0,0.25);border-radius:6px;padding:8px;margin-top:4px;font-family:'JetBrains Mono';font-size:10px;color:var(--text-secondary);white-space:pre-wrap;overflow:hidden;max-height:120px;overflow-y:auto"><span style="color:var(--text-muted);font-size:9px">ARGS</span>\n${argsJson}\n<span style="color:var(--text-muted);font-size:9px">RESULT</span>\n${resultJson}</div>`;
+            // Escape — args/results may contain HTML/SVG (e.g. icon markup) that
+            // must NOT be parsed as DOM, or the browser logs SVG-parse errors.
+            detailBlock = `<div id="${expandId}" class="timeline-detail" style="display:none;grid-column:1/-1;background:rgba(0,0,0,0.25);border-radius:6px;padding:8px;margin-top:4px;font-family:'JetBrains Mono';font-size:10px;color:var(--text-secondary);white-space:pre-wrap;overflow:hidden;max-height:120px;overflow-y:auto"><span style="color:var(--text-muted);font-size:9px">ARGS</span>\n${this.escapeHtml(argsJson)}\n<span style="color:var(--text-muted);font-size:9px">RESULT</span>\n${this.escapeHtml(resultJson)}</div>`;
         }
         else if (item.details) {
-            detailBlock = `<div id="${expandId}" class="timeline-detail" style="display:none;grid-column:1/-1;background:rgba(0,0,0,0.25);border-radius:6px;padding:8px;margin-top:4px;font-family:'JetBrains Mono';font-size:10px;color:var(--text-secondary);white-space:pre-wrap">${String(item.details).slice(0, 500)}</div>`;
+            detailBlock = `<div id="${expandId}" class="timeline-detail" style="display:none;grid-column:1/-1;background:rgba(0,0,0,0.25);border-radius:6px;padding:8px;margin-top:4px;font-family:'JetBrains Mono';font-size:10px;color:var(--text-secondary);white-space:pre-wrap">${this.escapeHtml(String(item.details).slice(0, 500))}</div>`;
         }
+        const labelEsc = this.escapeHtml(String(label ?? ''));
+        const statusLabelEsc = this.escapeHtml(String(statusLabel ?? ''));
+        const argsStrEsc = this.escapeHtml(String(argsStr ?? ''));
         entry.innerHTML = `
             <div class="ipc-cmd ${isIPC ? 'rpc' : 'action'}" style="overflow:hidden;">
                 ${icon}
-                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" data-tooltip="${label}">${label}</span>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" data-tooltip="${labelEsc}">${labelEsc}</span>
             </div>
-            <div class="ipc-status ${statusCls}" data-tooltip="${statusLabel}" style="overflow:hidden;text-overflow:ellipsis;">${statusLabel}</div>
+            <div class="ipc-status ${statusCls}" data-tooltip="${statusLabelEsc}" style="overflow:hidden;text-overflow:ellipsis;">${statusLabelEsc}</div>
             <div class="ipc-time" style="display:flex;align-items:center;gap:4px;">
-                ${argsStr ? `<span style="font-size:9px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;flex:1;white-space:nowrap;" data-tooltip="${argsStr}">${argsStr}</span>` : ''}
+                ${argsStr ? `<span style="font-size:9px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;flex:1;white-space:nowrap;" data-tooltip="${argsStrEsc}">${argsStrEsc}</span>` : ''}
                 <span>${timeLabel}</span>
                 ${detailBlock || argsStr ? `<span class="timeline-expand-btn" data-target="${expandId}" data-tooltip="Détails" style="cursor:pointer;opacity:0.5;padding:0 2px;flex-shrink:0">▾</span>` : ''}
             </div>

@@ -79,6 +79,10 @@ pub struct RepoServerState {
     pub session_download_started: Arc<Mutex<HashMap<String, bool>>>,
     /// Track session completion notifications per client - only notify when all downloads complete
     pub session_download_completed: Arc<Mutex<HashMap<String, bool>>>,
+    /// True while a repo sync is in progress (set by the API, cleared by the UI flow).
+    pub sync_busy: Arc<std::sync::atomic::AtomicBool>,
+    /// True while a repo generation/export is in progress.
+    pub gen_busy: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Default for RepoServerState {
@@ -98,7 +102,21 @@ impl Default for RepoServerState {
             connected_clients: Arc::new(Mutex::new(HashMap::new())),
             session_download_started: Arc::new(Mutex::new(HashMap::new())),
             session_download_completed: Arc::new(Mutex::new(HashMap::new())),
+            sync_busy: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            gen_busy: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
+    }
+}
+
+/// Set/clear the sync/gen busy flags (called by the UI flow to release the
+/// guard the API endpoints use to reject concurrent processes).
+#[tauri::command]
+pub fn set_repo_busy(state: tauri::State<'_, RepoServerState>, kind: String, busy: bool) {
+    use std::sync::atomic::Ordering;
+    match kind.as_str() {
+        "sync" => state.sync_busy.store(busy, Ordering::SeqCst),
+        "gen"  => state.gen_busy.store(busy, Ordering::SeqCst),
+        _ => {}
     }
 }
 

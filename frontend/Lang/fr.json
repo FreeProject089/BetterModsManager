@@ -4234,5 +4234,12 @@
   "plugins.autoUpdated": "Plugin « {name} » mis à jour en v{v}",
   "plugins.noRunnableScripts": "Ce plugin n'a aucun script exécutable (.bat / .ps1 / .vbs).",
   "plugins.chooseScriptTitle": "Choisir un script à lancer",
-  "plugins.chooseScriptDesc": "« {name} » — choisis un script à lancer. Il exécute un vrai programme sur ton PC."
+  "plugins.chooseScriptDesc": "« {name} » — choisis un script à lancer. Il exécute un vrai programme sur ton PC.",
+  "plugins.actionIfApiOk": "Si dernier appel API OK",
+  "plugins.actionIfApiOkDesc": "Les actions suivantes ne s'exécutent que si l'appel API précédent a RÉUSSI. À associer à Fin de bloc.",
+  "plugins.actionIfApiErr": "Si dernier appel API échoué",
+  "plugins.actionIfApiErrDesc": "Les actions suivantes ne s'exécutent que si l'appel API précédent a ÉCHOUÉ (ex. arrêter le serveur HTTP en cas d'erreur). À associer à Fin de bloc.",
+  "repo.errPortInUse": "Le port {port} est déjà utilisé par une autre application.",
+  "plugins.fldLinkedApi": "API liée",
+  "plugins.optApiLast": "— vérifier l'appel API précédent —"
 }

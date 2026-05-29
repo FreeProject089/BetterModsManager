@@ -1241,6 +1241,11 @@ export function initRepo() {
                 return toast(t('repo.errNoProfile'), 'warning');
             let unlisten;
             try {
+                // Mark the API guard busy so external API gen calls are rejected.
+                try {
+                    invoke('set_repo_busy', { kind: 'gen', busy: true });
+                }
+                catch (_) { }
                 elements.btnStartExport.disabled = true;
                 elements.exportProgressContainer.style.display = 'block';
                 elements.exportStatus.textContent = t('repo.exporting');
@@ -1317,6 +1322,11 @@ export function initRepo() {
                     elements.btnCancelExport.style.display = 'none';
                 if (unlisten)
                     unlisten();
+                // Release the API "generation in progress" guard.
+                try {
+                    invoke('set_repo_busy', { kind: 'gen', busy: false });
+                }
+                catch (_) { }
                 // Hide progress bar if it was a cancellation
                 if (elements.exportStatus.textContent === t('repo.cancelled')) {
                     elements.exportProgressContainer.style.display = 'none';

@@ -4227,5 +4227,21 @@
   "plugins.autoUpdated": "Plugin \"{name}\" updated to v{v}",
   "plugins.noRunnableScripts": "This plugin has no runnable script (.bat / .ps1 / .vbs).",
   "plugins.chooseScriptTitle": "Choose a script to run",
-  "plugins.chooseScriptDesc": "\"{name}\" — pick a script to launch. It runs a real program on your PC."
+  "plugins.chooseScriptDesc": "\"{name}\" — pick a script to launch. It runs a real program on your PC.",
+  "plugins.actionIfApiOk": "If last API call OK",
+  "plugins.actionIfApiOkDesc": "Subsequent actions run only if the previous API call SUCCEEDED. Pair with End block.",
+  "plugins.actionIfApiErr": "If last API call failed",
+  "plugins.actionIfApiErrDesc": "Subsequent actions run only if the previous API call FAILED (e.g. stop the HTTP host on error). Pair with End block.",
+  "detail.version": "Version",
+  "docs.diagram.docsLogic.node.INTERSECT": "Intersection",
+  "docs.diagram.docsLogic.node.INTERSECT.desc": "Searches for occurrences of these words across all diagram nodes and Tasky explanation texts.",
+  "docs.diagram.docsLogic.node.SCORE": "Weighted Scoring",
+  "docs.diagram.label.execute": "Execute",
+  "docs.diagram.label.queue": "Queue",
+  "docs.diagram.label.render": "Render",
+  "docs.diagram.label.scan": "Scan",
+  "docs.diagram.label.throttle": "Throttle",
+  "docs.diagram.profile.node.CREATE": "Create Profile",
+  "plugins.fldLinkedApi": "Linked API",
+  "plugins.optApiLast": "— check the previous API call —"
 }

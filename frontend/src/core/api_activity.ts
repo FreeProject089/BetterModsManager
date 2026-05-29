@@ -290,6 +290,17 @@ export async function initApiActivity(): Promise<void> {
         }
     });
 
+    // ── API rejected (e.g. a process is already running) → toast reason + code ─
+    await listen('bmm://api-rejected', (event: { payload: any }) => {
+        const action: string = event.payload?.action || '';
+        const reason: string = event.payload?.reason || (t('common.error') || 'Error');
+        const code = event.payload?.code;
+        const prefix = t('plugins.apiActionPrefix') || 'API';
+        const label = action ? describe('POST', '/api/' + action).label : prefix;
+        const codePart = code != null ? ` (${code})` : '';
+        toast(`${prefix}: ${label} — ${reason}${codePart}`, 'error', 5000, ICN.ban);
+    });
+
     // ── Persistent repo listeners (visible even when API-triggered) ───────────
     await listen('bmm://repo-sync-progress', (event: { payload: any }) => {
         updateSyncProgressDom(event.payload || {});

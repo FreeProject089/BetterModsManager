@@ -526,6 +526,22 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
                 out.push(format!("if not \"%{}%\"==\"{}\" (", parts[0].trim(), parts[1].trim()));
             }
         }
+        "if_api_ok" => {
+            // Optionally run a linked API call first, then branch on its result.
+            let linked = extra_str(&action.extra, "api_action");
+            if !linked.is_empty() {
+                out.extend(bat_action(&ScriptAction { action_type: linked.to_string(), target_id: String::new(), extra: serde_json::Value::Null }, false));
+            }
+            // curl uses -f below, so a failed HTTP call sets ERRORLEVEL != 0.
+            out.push("if %ERRORLEVEL% EQU 0 (".to_string());
+        }
+        "if_api_err" => {
+            let linked = extra_str(&action.extra, "api_action");
+            if !linked.is_empty() {
+                out.extend(bat_action(&ScriptAction { action_type: linked.to_string(), target_id: String::new(), extra: serde_json::Value::Null }, false));
+            }
+            out.push("if %ERRORLEVEL% NEQ 0 (".to_string());
+        }
         "pause_key" => {
             out.push("pause".to_string());
         }
@@ -548,8 +564,10 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
         }
         _ => {
             if let Some((method, path, body)) = action_to_api_call(action) {
+                // -f makes curl exit non-zero on HTTP >= 400 so `if_api_ok` /
+                // `if_api_err` can branch on %ERRORLEVEL%.
                 let base = format!(
-                    "curl -s -X {} \"http://127.0.0.1:51274{}\" -H \"Authorization: Bearer %BMM_TOKEN%\"",
+                    "curl -s -f -X {} \"http://127.0.0.1:51274{}\" -H \"Authorization: Bearer %BMM_TOKEN%\"",
                     method, path
                 );
                 if body.is_empty() {
@@ -587,6 +605,7 @@ fn gen_ps1(req: &GenerateScriptRequest) -> String {
     if !req.use_deeplink || actions_need_api(req) {
         lines.push(format!("$bmmToken = \"{}\"", token));
         lines.push("$bmmHeaders = @{ Authorization = \"Bearer $bmmToken\"; \"Content-Type\" = \"application/json\" }".to_string());
+        lines.push("$bmmOk = $true  # set after each API call for if_api_ok / if_api_err".to_string());
         lines.push(String::new());
     }
 
@@ -675,6 +694,20 @@ fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
                 out.push(format!("if (${} -ne \"{}\") {{", parts[0].trim(), parts[1].trim()));
             }
         }
+        "if_api_ok" => {
+            let linked = extra_str(&action.extra, "api_action");
+            if !linked.is_empty() {
+                out.extend(ps1_action(&ScriptAction { action_type: linked.to_string(), target_id: String::new(), extra: serde_json::Value::Null }, false));
+            }
+            out.push("if ($bmmOk) {".to_string());
+        }
+        "if_api_err" => {
+            let linked = extra_str(&action.extra, "api_action");
+            if !linked.is_empty() {
+                out.extend(ps1_action(&ScriptAction { action_type: linked.to_string(), target_id: String::new(), extra: serde_json::Value::Null }, false));
+            }
+            out.push("if (-not $bmmOk) {".to_string());
+        }
         "pause_key" => {
             out.push("$null = Read-Host 'Press Enter to continue'".to_string());
         }
@@ -697,16 +730,18 @@ fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
         }
         _ => {
             if let Some((method, path, body)) = action_to_api_call(action) {
+                // -ErrorAction SilentlyContinue + `$bmmOk = $?` so a failed call
+                // doesn't halt the script and `if_api_ok`/`if_api_err` can branch.
                 if body.is_empty() {
                     out.push(format!(
-                        "Invoke-RestMethod -Method {} -Uri \"http://127.0.0.1:51274{}\" -Headers $bmmHeaders",
+                        "Invoke-RestMethod -Method {} -Uri \"http://127.0.0.1:51274{}\" -Headers $bmmHeaders -ErrorAction SilentlyContinue; $bmmOk = $?",
                         method, path
                     ));
                 } else {
                     // Escape single-quotes inside body for PS1 single-quoted string
                     let body_esc = body.replace('\'', "''");
                     out.push(format!(
-                        "Invoke-RestMethod -Method {} -Uri \"http://127.0.0.1:51274{}\" -Headers $bmmHeaders -Body '{}'",
+                        "Invoke-RestMethod -Method {} -Uri \"http://127.0.0.1:51274{}\" -Headers $bmmHeaders -Body '{}' -ErrorAction SilentlyContinue; $bmmOk = $?",
                         method, path, body_esc
                     ));
                 }
@@ -738,16 +773,20 @@ fn gen_vbs(req: &GenerateScriptRequest) -> String {
 
     if need_api {
         lines.push(format!("Dim bmmToken : bmmToken = \"{}\"", token.replace('"', "\"\"")));
+        lines.push("Dim bmmLastStatus : bmmLastStatus = 0  ' set after each API call for if_api_ok / if_api_err".to_string());
         lines.push("Sub BmmApi(method, path, body)".to_string());
         lines.push("    Dim http : Set http = CreateObject(\"MSXML2.XMLHTTP\")".to_string());
         lines.push("    http.open method, \"http://127.0.0.1:51274\" & path, False".to_string());
         lines.push("    http.setRequestHeader \"Authorization\", \"Bearer \" & bmmToken".to_string());
+        lines.push("    On Error Resume Next".to_string());
         lines.push("    If Len(body) > 0 Then".to_string());
         lines.push("        http.setRequestHeader \"Content-Type\", \"application/json\"".to_string());
         lines.push("        http.send body".to_string());
         lines.push("    Else".to_string());
         lines.push("        http.send".to_string());
         lines.push("    End If".to_string());
+        lines.push("    If Err.Number <> 0 Then bmmLastStatus = 0 Else bmmLastStatus = http.status".to_string());
+        lines.push("    On Error Goto 0".to_string());
         lines.push("End Sub".to_string());
         lines.push(String::new());
     }
@@ -837,6 +876,20 @@ fn vbs_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             if parts.len() == 2 {
                 out.push(format!("If {} <> \"{}\" Then", parts[0].trim(), parts[1].trim()));
             }
+        }
+        "if_api_ok" => {
+            let linked = extra_str(&action.extra, "api_action");
+            if !linked.is_empty() {
+                out.extend(vbs_action(&ScriptAction { action_type: linked.to_string(), target_id: String::new(), extra: serde_json::Value::Null }, false));
+            }
+            out.push("If bmmLastStatus >= 200 And bmmLastStatus < 400 Then".to_string());
+        }
+        "if_api_err" => {
+            let linked = extra_str(&action.extra, "api_action");
+            if !linked.is_empty() {
+                out.extend(vbs_action(&ScriptAction { action_type: linked.to_string(), target_id: String::new(), extra: serde_json::Value::Null }, false));
+            }
+            out.push("If bmmLastStatus >= 400 Or bmmLastStatus = 0 Then".to_string());
         }
         "pause_key" => {
             out.push("MsgBox \"Press OK to continue...\"".to_string());

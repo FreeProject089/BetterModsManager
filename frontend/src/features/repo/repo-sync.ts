@@ -480,6 +480,8 @@ export function initRepoSync(elements) {
 
             let unlisten;
             try {
+                // Mark the API guard busy so external API sync calls are rejected.
+                try { invoke('set_repo_busy', { kind: 'sync', busy: true }); } catch (_) {}
                 btnStartSync.disabled = true;
                 syncProgressContainer.style.display = 'block';
                 syncStatus.textContent = t('repo.syncing') || "Synchronisation...";
@@ -572,6 +574,8 @@ export function initRepoSync(elements) {
                     pauseText.textContent = "Pause";
                 }
                 if (btnCancelSync) btnCancelSync.style.display = 'none';
+                // Release the API "sync in progress" guard.
+                try { invoke('set_repo_busy', { kind: 'sync', busy: false }); } catch (_) {}
             }
         });
     }

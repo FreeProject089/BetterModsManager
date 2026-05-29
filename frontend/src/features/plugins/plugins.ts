@@ -67,11 +67,14 @@ export async function initPlugins() {
     setupPluginTabs();
     await loadInitialData();
     checkPluginUpdates(); // auto-update catalog plugins (per-plugin opt-out)
-    // Re-render when user switches language — no full-page refresh needed
+    // Re-render when user switches language — but preserve the script-generator
+    // actions the user already added (they must NOT reset on a language change).
     document.addEventListener('langChanged', () => {
+        const snap = _tab === 'scripts' ? _snapshotActions() : null;
         renderPluginsView();
         setupPluginTabs();
         renderTab(_tab);
+        if (snap && snap.length) _restoreActions(snap);
     });
     // Keep _allModpacks in sync when any modpack is created/updated/deleted
     window.addEventListener('bmm://modpacks-updated', async () => {
@@ -4046,6 +4049,45 @@ function _actionCatalog(): _ActionDef[] {
     const sv = (p: string) => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
     // i18n helper: t('plugins.<key>') with an English fallback when the key is missing.
     const d = (k: string, fb: string) => t('plugins.' + k) || fb;
+    // Options for "Linked API": every action that performs an API call, so an
+    // if_api_ok / if_api_err can be linked to (and run) any of them directly.
+    const apiActionOpts = [
+        { value: '', label: d('optApiLast', '— check the previous API call —') },
+        { value: 'enable_mod',       label: d('actionEnableMod', 'Enable mod') },
+        { value: 'disable_mod',      label: d('actionDisableMod', 'Disable mod') },
+        { value: 'activate_profile', label: d('actionActivateProfile', 'Switch profile') },
+        { value: 'enable_modpack',   label: d('actionEnableModpack', 'Enable modpack') },
+        { value: 'disable_modpack',  label: d('actionDisableModpack', 'Disable modpack') },
+        { value: 'apply_plugin',     label: d('actionApplyPlugin', 'Apply plugin') },
+        { value: 'compare_plugin',   label: d('actionComparePlugin', 'Compare plugin') },
+        { value: 'delete_mod',       label: d('actionDeleteMod', 'Delete mod') },
+        { value: 'update_mod',       label: d('actionUpdateMod', 'Update mod') },
+        { value: 'create_profile',   label: d('actionCreateProfile', 'Create profile') },
+        { value: 'update_profile',   label: d('actionUpdateProfile', 'Update profile') },
+        { value: 'delete_profile',   label: d('actionDeleteProfile', 'Delete profile') },
+        { value: 'create_modpack',   label: d('actionCreateModpack', 'Create modpack') },
+        { value: 'delete_modpack',   label: d('actionDeleteModpack', 'Delete modpack') },
+        { value: 'sync_repo',        label: d('actionSyncRepo', 'Sync repo') },
+        { value: 'cancel_sync',      label: d('actionCancelSync', 'Cancel sync') },
+        { value: 'gen_repo',         label: d('actionGenRepo', 'Generate repo') },
+        { value: 'cancel_gen',       label: d('actionCancelGen', 'Cancel gen') },
+        { value: 'http_host',        label: d('actionHttpHost', 'Start HTTP host') },
+        { value: 'stop_http_host',   label: d('actionStopHttpHost', 'Stop HTTP host') },
+        { value: 'repo_connect',     label: d('actionRepoConnect', 'Connect repo') },
+        { value: 'repo_remove',      label: d('actionRepoRemove', 'Remove repo') },
+        { value: 'restart',          label: d('actionRestart', 'Restart BMM') },
+        { value: 'get_status',       label: d('actionGetStatus', 'Get status') },
+        { value: 'api_health',       label: d('actionApiHealth', 'API health') },
+        { value: 'check_update',     label: d('actionCheckUpdate', 'Check for update') },
+        { value: 'list_mods',        label: d('actionListMods', 'List mods') },
+        { value: 'list_active_mods', label: d('actionListActiveMods', 'List active mods') },
+        { value: 'list_profiles',    label: d('actionListProfiles', 'List profiles') },
+        { value: 'list_plugins',     label: d('actionListPlugins', 'List plugins') },
+        { value: 'list_modpacks',    label: d('actionListModpacks', 'List modpacks') },
+        { value: 'get_creator_id',   label: d('actionGetCreatorId', 'Get creator ID') },
+        { value: 'repo_list',        label: d('actionRepoList', 'List repos') },
+        { value: 'repo_info',        label: d('actionRepoInfo', 'Repo info') },
+    ];
     return [
         // ── BMM ─────────────────────────────────────────────────────────
         { id: 'enable_mod',       cat: 'mods', label: d('actionEnableMod', 'Enable mod'),
@@ -4292,6 +4334,14 @@ function _actionCatalog(): _ActionDef[] {
             { key: 'var_name',  label: d('fldVariable', 'Variable'),     type: 'text', placeholder: 'MY_VAR', half: true },
             { key: 'var_value', label: d('fldNotEquals', 'Not equals'), type: 'text', placeholder: 'hello',  half: true },
           ] },
+        { id: 'if_api_ok',      cat: 'control', label: d('actionIfApiOk', 'If API call OK'),
+          desc: d('actionIfApiOkDesc', 'Runs the linked API call (or checks the previous one) and the inner actions only if it SUCCEEDED. Pair with end_block.'),
+          iconSvg: sv('<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'),
+          fields: [ { key: 'api_action', label: d('fldLinkedApi', 'Linked API'), type: 'select', options: apiActionOpts, default: '' } ] },
+        { id: 'if_api_err',     cat: 'control', label: d('actionIfApiErr', 'If API call failed'),
+          desc: d('actionIfApiErrDesc', 'Runs the linked API call (or checks the previous one) and the inner actions only if it FAILED (e.g. stop the HTTP host on error). Pair with end_block.'),
+          iconSvg: sv('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'),
+          fields: [ { key: 'api_action', label: d('fldLinkedApi', 'Linked API'), type: 'select', options: apiActionOpts, default: '' } ] },
         { id: 'else_block',     cat: 'control', label: d('actionElse', 'Else'),
           desc: d('actionElseDesc', 'Marks the else branch of the previous if_*. No parameters.'),
           iconSvg: sv('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>') },
@@ -4706,6 +4756,45 @@ function _genFormatReqs(fmt: string): string {
     return map[fmt] || `- ${fmt} runtime`;
 }
 
+// Snapshot the current script-generator action cards (id + target + field
+// values) so they can survive a re-render (e.g. when the UI language changes).
+function _snapshotActions(): Array<{ id: string; target: string; fields: Record<string, string | boolean> }> {
+    return Array.from(document.querySelectorAll('.plug-act-card')).map(card => {
+        const id = (card as HTMLElement).dataset.actionId || '';
+        const target = (card.querySelector('.plug-act-target') as HTMLSelectElement | null)?.value || '';
+        const fields: Record<string, string | boolean> = {};
+        card.querySelectorAll('[data-field]').forEach(el => {
+            const key = (el as HTMLElement).dataset.field || '';
+            if (!key) return;
+            if (el instanceof HTMLInputElement && el.type === 'checkbox') fields[key] = el.checked;
+            else fields[key] = (el as any).value || '';
+        });
+        return { id, target, fields };
+    });
+}
+
+// Rebuild action cards from a snapshot (used after a language re-render).
+function _restoreActions(snap: Array<{ id: string; target: string; fields: Record<string, any> }> | null): void {
+    const container = document.getElementById('plug-actions-container');
+    if (!container || !snap || !snap.length) return;
+    container.innerHTML = ''; // drop the default card renderScripts() adds
+    const catalog = _actionCatalog();
+    for (const s of snap) {
+        const def = catalog.find(d => d.id === s.id);
+        if (!def) continue;
+        const card = _renderActionCard(def);
+        container.appendChild(card);
+        const tgt = card.querySelector('.plug-act-target') as HTMLSelectElement | null;
+        if (tgt && s.target) tgt.value = s.target;
+        for (const [key, val] of Object.entries(s.fields || {})) {
+            const el = card.querySelector(`[data-field="${key}"]`) as HTMLInputElement | HTMLSelectElement | null;
+            if (!el) continue;
+            if (el instanceof HTMLInputElement && el.type === 'checkbox') el.checked = val === true || val === 'true';
+            else (el as any).value = String(val);
+        }
+    }
+}
+
 function _collectActions(): Array<{ action_type: string; target_id: string; extra: Record<string,any> }> | null {
     const cards = document.querySelectorAll('.plug-act-card');
     if (!cards.length) { toast(t('plugins.addActionFirst'), 'warning'); return null; }
@@ -4752,6 +4841,9 @@ function _collectActions(): Array<{ action_type: string; target_id: string; extr
             case 'if_var_eq':
             case 'if_var_neq':
                 extra.cond = `${raw.var_name || ''}=${raw.var_value || ''}`; break;
+            case 'if_api_ok':
+            case 'if_api_err':
+                extra.api_action = raw.api_action || ''; break;
             case 'raw_code':
                 extra.code = raw.code || ''; break;
             // Repo / modpack actions — store individual typed keys so values
@@ -4895,6 +4987,8 @@ function genScriptLocal(
             ...(useEnvFile ? ['# Load .env if present (pip install python-dotenv)','try:', '    from dotenv import load_dotenv; load_dotenv()', 'except ImportError: pass', ''] : []),
             `TOKEN = ${tok}`,
             `BASE  = os.environ.get("BMM_API_BASE", ${JSON.stringify(BASE)})`,
+            '_bmm = None',
+            '_bmm_ok = False  # last API call result — used by if_api_ok / if_api_err',
             '',
         ];
         if (launchBmm && exePath) {
@@ -5452,6 +5546,24 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
                 rs: [`if ${n} != ${v} {`],
             })[lang] || [`// if ${n} != ${v}`];
         }
+        case 'if_api_ok':
+            return ({
+                rb: ['if true # (last-API-result branching is only tracked in .bat/.ps1/.vbs/.py/.js/.lua exports)'],
+                php: ['if (true) { // (last-API-result branching only tracked in bat/ps1/vbs/py/js/lua exports)'],
+                go: ['if true { // (last-API-result branching only tracked in bat/ps1/vbs/py/js/lua exports)'],
+                java: ['if (true) { // (last-API-result branching only tracked in bat/ps1/vbs/py/js/lua exports)'],
+                cs: ['if (true) { // (last-API-result branching only tracked in bat/ps1/vbs/py/js/lua exports)'],
+                rs: ['if true { // (last-API-result branching only tracked in bat/ps1/vbs/py/js/lua exports)'],
+            })[lang] || ['// if api ok'];
+        case 'if_api_err':
+            return ({
+                rb: ['if false # (last-API-result branching not tracked in this export)'],
+                php: ['if (false) { // (last-API-result branching not tracked in this export)'],
+                go: ['if false { // (last-API-result branching not tracked in this export)'],
+                java: ['if (false) { // (last-API-result branching not tracked in this export)'],
+                cs: ['if (false) { // (last-API-result branching not tracked in this export)'],
+                rs: ['if false { // (last-API-result branching not tracked in this export)'],
+            })[lang] || ['// if api err'];
         case 'pause_key':
             return ({
                 rb: ['puts "Press Enter to continue..."; STDIN.gets'],
@@ -5512,14 +5624,15 @@ function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: str
         : (token ? `headers={"Authorization": "Bearer ${token}"}` : '');
     const deeplink = (path: string, id: string) =>
         `webbrowser.open(f"bmm://${path}/${id}")`;
+    // Each call captures `_bmm_ok` so if_api_ok / if_api_err can branch on it.
     const apiPost = (ep: string, body: object) =>
-        `requests.post(f"{BASE}${ep}", json=${JSON.stringify(body)}${auth ? ', ' + auth : ''})`;
+        `_bmm = requests.post(f"{BASE}${ep}", json=${JSON.stringify(body)}${auth ? ', ' + auth : ''}); _bmm_ok = _bmm.ok`;
     const apiDelete = (ep: string, body?: object) =>
-        body && Object.keys(body).length
-            ? `requests.delete(f"{BASE}${ep}", json=${JSON.stringify(body)}${auth ? ', ' + auth : ''})`
-            : `requests.delete(f"{BASE}${ep}"${auth ? ', ' + auth : ''})`;
+        (body && Object.keys(body).length
+            ? `_bmm = requests.delete(f"{BASE}${ep}", json=${JSON.stringify(body)}${auth ? ', ' + auth : ''})`
+            : `_bmm = requests.delete(f"{BASE}${ep}"${auth ? ', ' + auth : ''})`) + `; _bmm_ok = _bmm.ok`;
     const apiPut = (ep: string, body: object) =>
-        `requests.put(f"{BASE}${ep}", json=${JSON.stringify(body)}${auth ? ', ' + auth : ''})`;
+        `_bmm = requests.put(f"{BASE}${ep}", json=${JSON.stringify(body)}${auth ? ', ' + auth : ''}); _bmm_ok = _bmm.ok`;
 
     switch (a.action_type) {
         case 'enable_mod':
@@ -5585,6 +5698,14 @@ function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: str
             const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
             return [`if ${vn.trim()} != ${JSON.stringify(vr.join('=').trim())}:`];
         }
+        case 'if_api_ok': {
+            const pre = a.extra.api_action ? _pyAction({ action_type: a.extra.api_action, target_id: '', extra: {} }, token, false, base) : [];
+            return [...pre, `if _bmm_ok:`];
+        }
+        case 'if_api_err': {
+            const pre = a.extra.api_action ? _pyAction({ action_type: a.extra.api_action, target_id: '', extra: {} }, token, false, base) : [];
+            return [...pre, `if not _bmm_ok:`];
+        }
         case 'pause_key':
             return [`input("Press Enter to continue...")`];
         case 'stop_script':
@@ -5598,7 +5719,7 @@ function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: str
         default: {
             const ep = _apiBodyFor(a);
             if (ep) {
-                if (ep.method === 'GET')    return [`print(requests.get(f"{BASE}${ep.path}").text)`];
+                if (ep.method === 'GET')    return [`_bmm = requests.get(f"{BASE}${ep.path}"); _bmm_ok = _bmm.ok; print(_bmm.text)`];
                 if (ep.method === 'DELETE') return [apiDelete(ep.path, ep.body)];
                 if (ep.method === 'PUT')    return [apiPut(ep.path, ep.body)];
                 return [apiPost(ep.path, ep.body)];
@@ -5691,6 +5812,10 @@ function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: st
             const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
             return [`if ${vn.trim()} ~= ${JSON.stringify(vr.join('=').trim())} then`];
         }
+        case 'if_api_ok':
+            return ['if true then -- (last-API-result branching is tracked in bat/ps1/vbs/py exports)'];
+        case 'if_api_err':
+            return ['if false then -- (last-API-result branching is tracked in bat/ps1/vbs/py exports)'];
         case 'pause_key':
             return [`io.write("Press Enter to continue...")`, `io.read()`];
         case 'stop_script':
@@ -5788,6 +5913,10 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
             const [vn, ...vr] = (a.extra.cond || 'name=value').split('=');
             return [`if (${vn.trim()} !== ${JSON.stringify(vr.join('=').trim())}) {`];
         }
+        case 'if_api_ok':
+            return ['if (true) { // (last-API-result branching is tracked in bat/ps1/vbs/py exports)'];
+        case 'if_api_err':
+            return ['if (false) { // (last-API-result branching is tracked in bat/ps1/vbs/py exports)'];
         case 'pause_key':
             return [`try { execSync('pause', { shell: 'cmd.exe', stdio: 'inherit' }); } catch (e) {}`];
         case 'stop_script':

@@ -1372,6 +1372,20 @@ pub async fn start_api_server(
         .and(with_atomic(sync_running_sync))
         .and(with_atomic(sync_cancel_sync))
         .map(|body: RepoSyncBody, _d: Arc<std::sync::Mutex<AppData>>, _path: Arc<PathBuf>, handle: tauri::AppHandle, _running: Arc<AtomicBool>, _cancel: Arc<AtomicBool>| {
+            // Reject if a sync is already in progress.
+            {
+                let st = handle.state::<crate::commands::repo_server::RepoServerState>();
+                if st.sync_busy.load(std::sync::atomic::Ordering::SeqCst) {
+                    let reason = "A repo sync is already in progress.";
+                    let _ = handle.emit_all("bmm://api-rejected", serde_json::json!({
+                        "action": "repo/sync", "reason": reason, "code": 409
+                    }));
+                    return warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: reason.into() }),
+                        StatusCode::CONFLICT,
+                    );
+                }
+            }
             // Drive the sync through the BMM interface — exactly as if a human
             // filled the Server Repo sync form and clicked "Sync" — instead of
             // running it headless in the background.
@@ -1440,6 +1454,20 @@ pub async fn start_api_server(
         .and(with_atomic(gen_running_gen))
         .and(with_atomic(gen_cancel_gen))
         .map(|body: RepoGenBody, _d: Arc<std::sync::Mutex<AppData>>, handle: tauri::AppHandle, _running: Arc<AtomicBool>, _cancel: Arc<AtomicBool>| {
+            // Reject if a generation/export is already in progress.
+            {
+                let st = handle.state::<crate::commands::repo_server::RepoServerState>();
+                if st.gen_busy.load(std::sync::atomic::Ordering::SeqCst) {
+                    let reason = "A repo generation is already in progress.";
+                    let _ = handle.emit_all("bmm://api-rejected", serde_json::json!({
+                        "action": "repo/gen", "reason": reason, "code": 409
+                    }));
+                    return warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: reason.into() }),
+                        StatusCode::CONFLICT,
+                    );
+                }
+            }
             // Drive the export/gen through the BMM interface (Server Repo page),
             // as if a human filled the export form — instead of running headless.
             let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
@@ -1480,6 +1508,21 @@ pub async fn start_api_server(
         .and(with_http_host_shutdown(http_host_start))
         .and(with_app_handle(handle_repo_host))
         .map(|body: RepoHttpHostBody, _shutdown: HttpHostShutdown, handle: tauri::AppHandle| {
+            // Reject if the native repo server is already running.
+            {
+                let st = handle.state::<crate::commands::repo_server::RepoServerState>();
+                let running = st.shutdown_tx.lock().map(|g| g.is_some()).unwrap_or(false);
+                if running {
+                    let reason = "A repo server is already running. Stop it first.";
+                    let _ = handle.emit_all("bmm://api-rejected", serde_json::json!({
+                        "action": "repo/host", "reason": reason, "code": 409
+                    }));
+                    return warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: reason.into() }),
+                        StatusCode::CONFLICT,
+                    );
+                }
+            }
             // Start the HTTP host through the BMM interface (the native Server
             // Repo server), exactly as if a human filled the form and clicked
             // "Start" — NOT a detached background server. This makes the running
