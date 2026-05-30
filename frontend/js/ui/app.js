@@ -611,11 +611,30 @@ export function updateSelectProfileIcon(selectEl, profiles, iconPaths, iconEl) {
         iconEl.innerHTML = getProfileIconSvg(p?.icon || 'user', 'width:14px;height:14px;vertical-align:middle');
     }
 }
+// ── Link patcher ──────────────────────────────────────────
+// Updates every [data-link-key] element in the HTML with the
+// value from links.json, so no URL is hardcoded in static HTML.
+function patchHtmlLinks() {
+    const links = getLinks();
+    document.querySelectorAll('[data-link-key]').forEach(el => {
+        const key = el.getAttribute('data-link-key');
+        if (!key || !(key in links))
+            return;
+        const url = links[key];
+        // <a href="...">
+        if (el instanceof HTMLAnchorElement)
+            el.href = url;
+        // <div data-url="..."> (quicklink cards)
+        if (el.dataset.url !== undefined)
+            el.dataset.url = url;
+    });
+}
 // ── Boot ──────────────────────────────────────────────────
 async function main() {
     console.log('[BMM] App starting from generated TypeScript!');
     // Load external link registry first so every module can call getLinks() safely
     await loadLinks();
+    patchHtmlLinks();
     // Initialize Offline Detection
     initOfflineDetection();
     const initVersionDisplay = async () => {
