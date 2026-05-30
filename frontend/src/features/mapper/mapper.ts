@@ -1267,26 +1267,120 @@ async function showMapperPreview(): Promise<void> {
         if (confirmTitle && confirmMsg && confirmModal) {
             confirmTitle.textContent = t("mapper.preview");
             confirmMsg.innerHTML = html;
-            
+
             confirmModal.classList.add('modal-large');
             confirmModal.classList.add('open');
-            
+
             const yesBtn = document.getElementById('btn-confirm-yes') as HTMLButtonElement;
             const noBtn = document.getElementById('btn-confirm-cancel') as HTMLButtonElement;
-            
+
             if (yesBtn) yesBtn.style.display = 'none';
             if (noBtn) noBtn.textContent = t("common.close");
+
+            // Fixed-position tooltip for cells inside the overflow scroll container
+            // (CSS ::after tooltips get clipped by overflow:auto on .preview-list-wrapper)
+            attachPreviewTooltip(confirmMsg);
 
             const closeFn = () => {
                 confirmModal.classList.remove('open');
                 confirmModal.classList.remove('modal-large');
+                detachPreviewTooltip();
                 if (yesBtn) yesBtn.style.display = 'block';
                 if (noBtn) noBtn.textContent = t("common.cancel");
             };
-            
+
             noBtn.addEventListener('click', closeFn, { once: true });
         }
     } catch (e: any) {
         toast(e.message || e, 'error');
     }
+}
+
+// ── Fixed-position tooltip for the preview modal ──────────────────────────
+// CSS ::after tooltips get clipped by overflow:auto on .preview-list-wrapper,
+// and can disappear behind the sticky table header. This JS approach appends
+// the tooltip to <body> at position:fixed so it's never clipped.
+
+let _previewTipEl: HTMLElement | null = null;
+let _previewTipContainer: HTMLElement | null = null;
+
+function attachPreviewTooltip(container: HTMLElement): void {
+    if (!_previewTipEl) {
+        _previewTipEl = document.createElement('div');
+        _previewTipEl.id = 'mapper-preview-tip';
+        Object.assign(_previewTipEl.style, {
+            position: 'fixed',
+            background: 'rgba(10,10,20,0.97)',
+            color: 'var(--text-primary)',
+            fontSize: '11px',
+            padding: '4px 10px',
+            borderRadius: '6px',
+            border: '1px solid var(--border)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            pointerEvents: 'none',
+            zIndex: '9999999',
+            whiteSpace: 'nowrap',
+            display: 'none',
+            maxWidth: '600px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+        });
+        document.body.appendChild(_previewTipEl);
+    }
+
+    _previewTipContainer = container;
+
+    container.addEventListener('mouseover', _previewTipOver);
+    container.addEventListener('mousemove', _previewTipMove);
+    container.addEventListener('mouseout', _previewTipOut);
+}
+
+function detachPreviewTooltip(): void {
+    if (_previewTipContainer) {
+        _previewTipContainer.removeEventListener('mouseover', _previewTipOver);
+        _previewTipContainer.removeEventListener('mousemove', _previewTipMove);
+        _previewTipContainer.removeEventListener('mouseout', _previewTipOut);
+        _previewTipContainer = null;
+    }
+    if (_previewTipEl) _previewTipEl.style.display = 'none';
+}
+
+function _previewTipOver(e: MouseEvent): void {
+    const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
+    if (!el || !_previewTipEl) return;
+    const tip = el.getAttribute('data-tooltip');
+    if (!tip) return;
+    _previewTipEl.textContent = tip;
+    _previewTipEl.style.display = 'block';
+    _positionPreviewTip(e.clientX, e.clientY);
+}
+
+function _previewTipMove(e: MouseEvent): void {
+    if (!_previewTipEl || _previewTipEl.style.display === 'none') return;
+    _positionPreviewTip(e.clientX, e.clientY);
+}
+
+function _previewTipOut(e: MouseEvent): void {
+    const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
+    if (el && !el.contains(e.relatedTarget as Node)) {
+        if (_previewTipEl) _previewTipEl.style.display = 'none';
+    }
+}
+
+function _positionPreviewTip(mx: number, my: number): void {
+    if (!_previewTipEl) return;
+    const tipW = _previewTipEl.offsetWidth;
+    const tipH = _previewTipEl.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const gap = 12;
+
+    let x = mx + gap;
+    let y = my - tipH - gap;
+
+    if (x + tipW > vw - 8) x = mx - tipW - gap;
+    if (y < 8) y = my + gap;
+
+    _previewTipEl.style.left = x + 'px';
+    _previewTipEl.style.top  = y + 'px';
 }

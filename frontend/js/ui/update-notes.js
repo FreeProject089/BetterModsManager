@@ -7,6 +7,7 @@ import { invoke } from '../core/api.js';
 import { t } from '../core/i18n.js';
 import { toast } from './app.js';
 import { escHtml, escAttr } from '../core/utils.js';
+import { getLinks } from '../core/links-config.js';
 // Persistence for expanded folders in the release notes tree
 const expandedFolders = new Set();
 // ── Navbar Version Button ────────────────────────────────
@@ -569,7 +570,7 @@ async function performUpdateCheck(showNoUpdateToast = false) {
         statusMsg.innerHTML = `<span style="color:var(--accent)">${t('settings.checking') || 'Checking...'}</span>`;
     }
     try {
-        const info = await invoke('check_for_update', { includePrerelease: isPreReleaseEnabled() });
+        const info = await invoke('check_for_update', { includePrerelease: isPreReleaseEnabled(), apiBaseUrl: getLinks().autoupdate_api });
         if (info.has_update) {
             showUpdateAvailableModal(info);
             [sidebarBtn, document.getElementById('btn-settings-check-update')].forEach(btn => {

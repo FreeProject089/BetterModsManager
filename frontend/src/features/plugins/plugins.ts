@@ -4,6 +4,7 @@ import { toast, fetchProfileIconPaths, updateSelectProfileIcon } from '../../ui/
 import { t } from '../../core/i18n.js';
 import { escHtml } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
+import { getLinks } from '../../core/links-config.js';
 
 // ── SVG Icons (no unicode emoji) ───────────────────────────────────────────
 
@@ -102,7 +103,7 @@ async function checkPluginUpdates(): Promise<void> {
     if (!candidates.length) return;
 
     let catalog: any;
-    try { catalog = _catalog || await invoke('fetch_plugin_catalog'); _catalog = catalog; }
+    try { catalog = _catalog || await invoke('fetch_plugin_catalog', { catalogUrl: getLinks().plugin_catalog }); _catalog = catalog; }
     catch { return; }
     const entries: any[] = catalog?.plugins || [];
 
@@ -435,7 +436,7 @@ async function renderCatalog(container: HTMLElement) {
     });
 
     try {
-        if (!_catalog) _catalog = await invoke('fetch_plugin_catalog');
+        if (!_catalog) _catalog = await invoke('fetch_plugin_catalog', { catalogUrl: getLinks().plugin_catalog });
         renderCatalogGrid(_catalog.plugins);
     } catch (e) {
         const grid = document.getElementById('plug-catalog-grid');
@@ -444,7 +445,7 @@ async function renderCatalog(container: HTMLElement) {
                 <div class="plug-catalog-unavail-icon">${IC.globe}</div>
                 <strong>${t('plugins.catalogUnavailTitle')}</strong>
                 <p>${t('plugins.catalogUnavailDesc')}</p>
-                <a class="btn btn-sm btn-ghost" href="https://github.com/BetterDCS/BetterModsManager_Plugins" target="_blank">${IC.globe} GitHub</a>
+                <a class="btn btn-sm btn-ghost" href="${getLinks().plugin_github}" target="_blank">${IC.globe} GitHub</a>
             </div>`;
     }
 }

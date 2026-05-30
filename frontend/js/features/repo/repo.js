@@ -2,6 +2,7 @@
 import { invoke, pickFolder } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
+import { getLinks } from '../../core/links-config.js';
 import { t } from '../../core/i18n.js';
 // Sub-modules
 import { initRepoServer } from './repo-server.js';
@@ -773,14 +774,13 @@ export function initRepo() {
         let whitelistFilter = 'all'; // 'all' | 'whitelist' | 'no-whitelist'
         let repoList = [];
         let repoPingData = new Map();
-        const REPO_LIST_URL = 'https://raw.githubusercontent.com/BetterDCS/Better_ModManager_ServerBrowse/main/repos.json';
         const fetchRepoList = async () => {
             loadingEl.style.display = 'block';
             contentEl.style.display = 'none';
             errorEl.style.display = 'none';
             try {
                 // Bypass browser and GitHub caching to get the absolute latest list
-                const bustUrl = `${REPO_LIST_URL}?t=${Date.now()}`;
+                const bustUrl = `${getLinks().server_browse}?t=${Date.now()}`;
                 const response = await fetch(bustUrl, { cache: 'no-store' });
                 if (!response.ok)
                     throw new Error('Failed to fetch');

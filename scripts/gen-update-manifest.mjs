@@ -71,6 +71,11 @@ const TRACKED_FILES = [
         installedPath: '_up_/frontend/Lang/template.json',
         assetName:     'lang-template.json',
     },
+    {
+        source:        'frontend/assets/links.json',
+        installedPath: '_up_/frontend/assets/links.json',
+        assetName:     'links.json',
+    },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

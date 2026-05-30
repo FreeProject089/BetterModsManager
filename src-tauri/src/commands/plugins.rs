@@ -27,14 +27,15 @@ fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::
 // ── Catalog ────────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn fetch_plugin_catalog() -> Result<CatalogResponse, String> {
+pub async fn fetch_plugin_catalog(catalog_url: Option<String>) -> Result<CatalogResponse, String> {
+    let url = catalog_url.as_deref().unwrap_or(CATALOG_URL);
     let client = reqwest::Client::builder()
         .user_agent("BetterModsManager/1.0")
         .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| format!("Client build error: {}", e))?;
 
-    let resp = client.get(CATALOG_URL)
+    let resp = client.get(url)
         .send()
         .await
         .map_err(|e| format!("Network error: {}", e))?;

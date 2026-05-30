@@ -671,3 +671,7 @@
 .preview-table tr.ok-path td {
     background: rgba(16, 185, 129, 0.01);
 }
+
+/* JS tooltip replaces CSS ::after for cells inside the overflow scroll area */
+.preview-list-wrapper [data-tooltip]::after,
+.preview-list-wrapper [data-tooltip]::before { display: none !important; }

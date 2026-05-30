@@ -55,12 +55,15 @@ pub struct IncrementalResult {
     pub errors: Vec<String>,
 }
 
+const DEFAULT_UPDATE_API: &str = "https://api.github.com/repos/FreeProject089/BetterModsManager/releases";
+
 /// Checks GitHub releases API for a newer version.
 /// Compares version strings using semver-like logic.
 #[tauri::command]
-pub async fn check_for_update(app_handle: tauri::AppHandle, include_prerelease: Option<bool>) -> Result<UpdateInfo, String> {
+pub async fn check_for_update(app_handle: tauri::AppHandle, include_prerelease: Option<bool>, api_base_url: Option<String>) -> Result<UpdateInfo, String> {
     let current_version = app_handle.package_info().version.to_string();
     let include_pre = include_prerelease.unwrap_or(false);
+    let api_base = api_base_url.as_deref().unwrap_or(DEFAULT_UPDATE_API);
     log_line(format!("[UPDATE] Checking for updates (current: v{}, prerelease: {})", current_version, include_pre));
 
     let client = reqwest::Client::builder()
@@ -74,8 +77,8 @@ pub async fn check_for_update(app_handle: tauri::AppHandle, include_prerelease: 
     //    non-draft one, which may be a pre-release.
     //  - prerelease OFF → use /releases/latest (GitHub excludes pre-releases).
     let body: serde_json::Value = if include_pre {
-        let url = "https://api.github.com/repos/FreeProject089/BetterModsManager/releases?per_page=20";
-        let response = client.get(url).send().await.map_err(|e| {
+        let url = format!("{}?per_page=20", api_base);
+        let response = client.get(&url).send().await.map_err(|e| {
             log_line(format!("[UPDATE] Network error (skipped): {}", e));
             "NETWORK_ERROR".to_string()
         })?;
@@ -92,8 +95,8 @@ pub async fn check_for_update(app_handle: tauri::AppHandle, include_prerelease: 
             None => return Err("NO_RELEASE".to_string()),
         }
     } else {
-        let url = "https://api.github.com/repos/FreeProject089/BetterModsManager/releases/latest";
-        let response = client.get(url).send().await.map_err(|e| {
+        let url = format!("{}/latest", api_base);
+        let response = client.get(&url).send().await.map_err(|e| {
             log_line(format!("[UPDATE] Network error (skipped): {}", e));
             "NETWORK_ERROR".to_string()
         })?;

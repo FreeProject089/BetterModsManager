@@ -31,6 +31,7 @@ import { initDebugMenu } from '../features/debug/debug-menu.js';
 import { checkSecurityMode } from './security-modal.js';
 import { initPlugins } from '../features/plugins/plugins.js';
 import { escHtml, escAttr, formatBytes } from '../core/utils.js';
+import { loadLinks, getLinks } from '../core/links-config.js';
 import { initMapper } from '../features/mapper/mapper.js';
 import { openAdvancedPerfModal } from '../features/bench/benchmark.js';
 import { playBootSound, playCloseSound, setSoundEnabled, setSoundVolume } from './sound-engine.js';
@@ -637,6 +638,9 @@ export function updateSelectProfileIcon(
 async function main() {
     console.log('[BMM] App starting from generated TypeScript!');
 
+    // Load external link registry first so every module can call getLinks() safely
+    await loadLinks();
+
     // Initialize Offline Detection
     initOfflineDetection();
 
@@ -1072,7 +1076,6 @@ let CREDITS_MESSAGES: string[] = [
     'credits.msg6',
     'credits.msg7'
 ];
-const CONTRIBUTORS_REMOTE_URL = 'https://raw.githubusercontent.com/BetterDCS/BMM_Contributors/refs/heads/main/contributors.json';
 const CONTRIBUTORS_LOCAL_FALLBACK = 'assets/contributors.json';
 
 async function fetchContributors() {
@@ -1087,7 +1090,7 @@ async function fetchContributors() {
 
     try {
         console.log("[BMM] Fetching contributors from remote...");
-        const response = await fetch(CONTRIBUTORS_REMOTE_URL, { cache: 'no-cache' });
+        const response = await fetch(getLinks().contributors, { cache: 'no-cache' });
         if (response.ok) {
             const data = await response.json();
             applyData(data);
