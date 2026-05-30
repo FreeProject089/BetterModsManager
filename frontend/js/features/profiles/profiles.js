@@ -168,6 +168,11 @@ export async function initProfiles() {
     // Initialize Icon Pickers
     renderIconPicker('prof-icon-grid', 'prof-icon');
     renderIconPicker('edit-prof-icon-grid', 'edit-prof-icon');
+    // Custom imported icon: import / remove for both forms
+    document.getElementById('prof-import-icon')?.addEventListener('click', () => pickProfileIconFile('prof'));
+    document.getElementById('prof-remove-icon')?.addEventListener('click', () => clearProfileIconUI('prof'));
+    document.getElementById('edit-prof-import-icon')?.addEventListener('click', () => pickProfileIconFile('edit-prof'));
+    document.getElementById('edit-prof-remove-icon')?.addEventListener('click', () => clearProfileIconUI('edit-prof'));
     window._refreshProfilesFn = renderProfiles;
     // Global Active Mods actions
     const btnDisableAllGlobal = document.getElementById('btn-disable-all-global');
@@ -305,7 +310,7 @@ async function disableGlobalMods(modIds) {
         await refreshMods(true);
     }
     catch (err) {
-        toast(t('common.error') + ' : ' + err, 'error');
+        toast(cleanRustErr(err) || t('common.error'), 'error');
     }
     finally {
         if (!wasLoading)
@@ -370,6 +375,13 @@ function renderIconPicker(gridId, hiddenInputId) {
         grid.appendChild(item);
     });
 }
+/** Strip Rust AppError wrapper prefixes so the user sees a human message. */
+function cleanRustErr(err) {
+    return String(err)
+        .replace(/^Ressource non trouvée:\s*/i, '')
+        .replace(/^Resource not found:\s*/i, '')
+        .replace(/^AppError\(\w+\):\s*/i, '');
+}
 function updateIconPickerSelection(gridId, iconName) {
     const grid = document.getElementById(gridId);
     if (!grid)
@@ -378,6 +390,55 @@ function updateIconPickerSelection(gridId, iconName) {
         el.classList.toggle('selected', el.dataset.icon === iconName);
     });
 }
+// ── Custom imported profile icon helpers (prefix = 'prof' | 'edit-prof') ──────
+async function pickProfileIconFile(prefix) {
+    const path = await pickFile([{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'] }]);
+    if (!path)
+        return;
+    const hidden = document.getElementById(prefix + '-icon-image');
+    if (hidden)
+        hidden.value = path; // source path to import on save
+    const prev = document.getElementById(prefix + '-custom-icon-preview');
+    if (prev) {
+        prev.style.display = 'flex';
+        prev.innerHTML = `<img src="${convertFileSrc(path)}?t=${Date.now()}" style="width:32px;height:32px;border-radius:6px;object-fit:cover" alt="">`;
+    }
+    const rm = document.getElementById(prefix + '-remove-icon');
+    if (rm)
+        rm.style.display = '';
+    // A custom icon takes precedence — clear the built-in selection.
+    const iconInput = document.getElementById(prefix + '-icon');
+    if (iconInput)
+        iconInput.value = '';
+    updateIconPickerSelection(prefix + '-icon-grid', '');
+}
+function clearProfileIconUI(prefix) {
+    const hidden = document.getElementById(prefix + '-icon-image');
+    if (hidden)
+        hidden.value = '__REMOVE__'; // signal removal on save
+    const prev = document.getElementById(prefix + '-custom-icon-preview');
+    if (prev) {
+        prev.style.display = 'none';
+        prev.innerHTML = '';
+    }
+    const rm = document.getElementById(prefix + '-remove-icon');
+    if (rm)
+        rm.style.display = 'none';
+}
+// Reset the custom-icon UI for a fresh form (no selection).
+function resetProfileIconUI(prefix) {
+    const hidden = document.getElementById(prefix + '-icon-image');
+    if (hidden)
+        hidden.value = '';
+    const prev = document.getElementById(prefix + '-custom-icon-preview');
+    if (prev) {
+        prev.style.display = 'none';
+        prev.innerHTML = '';
+    }
+    const rm = document.getElementById(prefix + '-remove-icon');
+    if (rm)
+        rm.style.display = 'none';
+}
 export function openNewProfileModal() {
     // Clear fields
     ['prof-name', 'prof-game', 'prof-game-path', 'prof-mods-path', 'prof-backup-path']
@@ -385,6 +446,7 @@ export function openNewProfileModal() {
     document.getElementById('prof-color').value = '#3b82f6';
     document.getElementById('prof-icon').value = '';
     updateIconPickerSelection('prof-icon-grid', '');
+    resetProfileIconUI('prof');
     document.getElementById('modal-new-profile').classList.add('open');
 }
 async function checkDuplicateModsFolder(targetPath, currentProfileId = null) {
@@ -459,6 +521,16 @@ async function confirmCreateProfile() {
     }
     try {
         const profile = await invoke('create_profile', { payload: { name, gameName, gamePath, modsPath, backupPath, color, icon } });
+        // Import a custom icon image if the user picked one.
+        const newIconSrc = document.getElementById('prof-icon-image')?.value || '';
+        if (newIconSrc && newIconSrc !== '__REMOVE__') {
+            try {
+                await invoke('import_profile_icon', { profileId: profile.id, sourcePath: newIconSrc });
+            }
+            catch (e) {
+                console.warn('[profiles] import icon failed', e);
+            }
+        }
         document.getElementById('modal-new-profile').classList.remove('open');
         toast(t('prof.created').replace('{name}', profile.name), 'success');
         dispatchBmmAction(BMM_ACTIONS.PROFILE_CREATED, { profileId: profile.id, name: profile.name });
@@ -476,7 +548,7 @@ async function confirmCreateProfile() {
         }
     }
     catch (err) {
-        toast(t('common.error') + ' : ' + err, 'error');
+        toast(cleanRustErr(err) || t('common.error'), 'error');
     }
 }
 async function confirmEditProfile() {
@@ -501,6 +573,24 @@ async function confirmEditProfile() {
     }
     try {
         await invoke('update_profile', { profileId, payload: { name, gameName, gamePath, modsPath, backupPath, color, icon } });
+        // Apply a custom icon change (import a new one or remove the existing).
+        const editIconSrc = document.getElementById('edit-prof-icon-image')?.value || '';
+        if (editIconSrc === '__REMOVE__') {
+            try {
+                await invoke('remove_profile_icon', { profileId });
+            }
+            catch (e) {
+                console.warn('[profiles] remove icon failed', e);
+            }
+        }
+        else if (editIconSrc) {
+            try {
+                await invoke('import_profile_icon', { profileId, sourcePath: editIconSrc });
+            }
+            catch (e) {
+                console.warn('[profiles] import icon failed', e);
+            }
+        }
         // Handle pending background updates
         if (window.pendingBgState.action === 'apply') {
             await invoke('apply_profile_background', { profileId });
@@ -519,7 +609,7 @@ async function confirmEditProfile() {
         await refreshMods(true);
     }
     catch (err) {
-        toast(t('common.error') + ' : ' + err, 'error');
+        toast(cleanRustErr(err) || t('common.error'), 'error');
     }
 }
 export async function renderProfiles() {
@@ -608,12 +698,21 @@ export async function renderProfiles() {
     emptyEl.style.display = 'none';
     // Prefetch background paths for all profiles
     const bgPaths = {};
+    const iconPaths = {};
     await Promise.all(profiles.map(async (p) => {
         if (p.background_image) {
             try {
                 const path = await invoke('get_profile_background_path', { profileId: p.id });
                 if (path)
                     bgPaths[p.id] = path;
+            }
+            catch { }
+        }
+        if (p.icon_image) {
+            try {
+                const ipath = await invoke('get_profile_icon_path', { profileId: p.id });
+                if (ipath)
+                    iconPaths[p.id] = ipath;
             }
             catch { }
         }
@@ -663,7 +762,9 @@ export async function renderProfiles() {
         <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:8px">
             <div style="font-weight:700;font-size:16px;color:var(--text-primary);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" data-tooltip="${escAttr(p.name)}">${escHtml(p.name)}</div>
-            ${p.icon ? `<div style="color:${escAttr(brandColor)};display:flex;align-items:center;opacity:0.9">${getProfileIconSvg(p.icon, 'margin:0;width:16px;height:16px')}</div>` : ''}
+            ${iconPaths[p.id]
+            ? `<img src="${convertFileSrc(iconPaths[p.id])}?t=${cb}" style="width:18px;height:18px;border-radius:4px;object-fit:cover;flex-shrink:0" alt="">`
+            : (p.icon ? `<div style="color:${escAttr(brandColor)};display:flex;align-items:center;opacity:0.9">${getProfileIconSvg(p.icon, 'margin:0;width:16px;height:16px')}</div>` : '')}
           </div>
           ${p.game_name ? `<div style="font-family:var(--font-mono);font-weight:600;font-size:10px;padding:2px 8px;border-radius:4px;background:${escAttr(brandColor)}15;color:${escAttr(brandColor)};border:1px solid ${escAttr(brandColor)}30;align-self:flex-start;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${escHtml(t(p.game_name) || p.game_name)}</div>` : ''}
         </div>
@@ -769,7 +870,7 @@ export async function renderProfiles() {
         const { updateDiscordStatus } = await import('../settings/settings.js');
         await updateDiscordStatus();
     }
-    function openEditProfile(id) {
+    async function openEditProfile(id) {
         const profile = profiles.find(p => p.id === id);
         if (profile) {
             document.getElementById('edit-prof-id').value = profile.id;
@@ -781,6 +882,22 @@ export async function renderProfiles() {
             document.getElementById('edit-prof-color').value = profile.color || '#3b82f6';
             document.getElementById('edit-prof-icon').value = profile.icon || '';
             updateIconPickerSelection('edit-prof-icon-grid', profile.icon || '');
+            // Custom imported icon preview
+            resetProfileIconUI('edit-prof');
+            if (profile.icon_image) {
+                try {
+                    const ip = await invoke('get_profile_icon_path', { profileId: profile.id });
+                    const prev = document.getElementById('edit-prof-custom-icon-preview');
+                    if (ip && prev) {
+                        prev.style.display = 'flex';
+                        prev.innerHTML = `<img src="${convertFileSrc(ip)}?t=${Date.now()}" style="width:32px;height:32px;border-radius:6px;object-fit:cover" alt="">`;
+                        const rm = document.getElementById('edit-prof-remove-icon');
+                        if (rm)
+                            rm.style.display = '';
+                    }
+                }
+                catch (e) { /* ignore */ }
+            }
             window.pendingBgState = { action: null, tmpPath: null };
             // Background image section
             initEditBackgroundSection(profile);

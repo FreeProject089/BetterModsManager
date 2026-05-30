@@ -2366,9 +2366,11 @@
                                 pour qu'elle corresponde au jeu</p>
                         </div>
                         <div class="view-actions">
+                            <div class="profile-select-icon-wrap" style="display:flex;align-items:center;gap:6px;">
                             <select id="mapper-profile-select" class="profile-select" style="width: 200px;">
                                 <option value="" data-i18n="mapper.selectProfile">— Sélectionner un profil —</option>
                             </select>
+                            </div>
                             <button class="btn btn-secondary" id="btn-mapper-refresh"
                                 data-i18n-title="mapper.refreshTip">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -8894,6 +8896,12 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
                             <label class="form-label" data-i18n="prof.iconPickerTitle">ICÔNE VISUELLE</label>
                             <div class="icon-picker-grid" id="prof-icon-grid"></div>
                             <input type="hidden" id="prof-icon" value="" />
+                            <div class="prof-custom-icon-row" style="display:flex;align-items:center;gap:10px;margin-top:10px">
+                                <div id="prof-custom-icon-preview" class="prof-custom-icon-preview" style="display:none"></div>
+                                <button type="button" class="btn btn-sm btn-ghost" id="prof-import-icon" data-i18n="prof.importIcon">Import an icon…</button>
+                                <button type="button" class="btn btn-sm btn-ghost" id="prof-remove-icon" style="display:none" data-i18n="prof.removeIcon">Remove icon</button>
+                            </div>
+                            <input type="hidden" id="prof-icon-image" value="" />
                         </div>
                     </div>
                     <div class="form-group">
@@ -8978,6 +8986,12 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
                             <label class="form-label" data-i18n="prof.iconPickerTitle">ICÔNE VISUELLE</label>
                             <div class="icon-picker-grid" id="edit-prof-icon-grid"></div>
                             <input type="hidden" id="edit-prof-icon" value="" />
+                            <div class="prof-custom-icon-row" style="display:flex;align-items:center;gap:10px;margin-top:10px">
+                                <div id="edit-prof-custom-icon-preview" class="prof-custom-icon-preview" style="display:none"></div>
+                                <button type="button" class="btn btn-sm btn-ghost" id="edit-prof-import-icon" data-i18n="prof.importIcon">Import an icon…</button>
+                                <button type="button" class="btn btn-sm btn-ghost" id="edit-prof-remove-icon" style="display:none" data-i18n="prof.removeIcon">Remove icon</button>
+                            </div>
+                            <input type="hidden" id="edit-prof-icon-image" value="" />
                         </div>
                     </div>
                     <div class="form-group">

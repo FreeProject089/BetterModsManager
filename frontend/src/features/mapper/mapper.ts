@@ -4,7 +4,7 @@
  */
 
 import { invoke } from '../../core/api.js';
-import { toast } from '../../ui/app.js';
+import { toast, fetchProfileIconPaths, updateSelectProfileIcon } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { dispatchBmmAction, BMM_ACTIONS, onBmmAction } from '../../ui/tutorial-events.js';
 import type { Profile, ModEntry, FileTreeNode, EnrichedMod } from '../../types/models.js';
@@ -193,6 +193,8 @@ async function refreshMapperData(): Promise<void> {
 
         const profileSelect = document.getElementById('mapper-profile-select') as HTMLSelectElement;
         if (profileSelect) {
+            // Fetch custom icons in parallel then populate options.
+            const iconPaths = await fetchProfileIconPaths(profiles);
             profileSelect.innerHTML = `<option value="">— ${t('mapper.selectProfile') || 'Changer de profil'} —</option>`;
             profiles.forEach(p => {
                 const opt = document.createElement('option');
@@ -201,6 +203,19 @@ async function refreshMapperData(): Promise<void> {
                 if (p.id === activeId) opt.selected = true;
                 profileSelect.appendChild(opt);
             });
+            // Show the selected profile's icon in the sibling display element.
+            const wrap = profileSelect.closest('.profile-select-icon-wrap');
+            if (wrap) {
+                let iconEl = wrap.querySelector('.profile-icon-display') as HTMLElement | null;
+                if (!iconEl) {
+                    iconEl = document.createElement('span');
+                    iconEl.className = 'profile-icon-display';
+                    wrap.insertBefore(iconEl, profileSelect);
+                }
+                updateSelectProfileIcon(profileSelect, profiles, iconPaths, iconEl);
+                profileSelect.addEventListener('change', () =>
+                    updateSelectProfileIcon(profileSelect, profiles, iconPaths, iconEl));
+            }
         }
 
         if (activeProfile) {

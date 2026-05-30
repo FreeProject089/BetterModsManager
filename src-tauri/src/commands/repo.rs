@@ -234,11 +234,29 @@ pub async fn export_server_repo(
         if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
             return Err("repo.cancelled".to_string());
         }
+        // Embed the custom icon (if any) as a data-URI so it ships with the repo.
+        let icon_image_data: Option<String> = profile.icon_image.as_ref().and_then(|fname| {
+            let data_dir = state.data_path.parent().unwrap_or(std::path::Path::new("."));
+            let icon_path = data_dir.join(fname);
+            std::fs::read(&icon_path).ok().map(|bytes| {
+                use base64::{Engine as _, engine::general_purpose};
+                let ext = icon_path.extension().and_then(|e| e.to_str()).unwrap_or("png").to_lowercase();
+                let mime = match ext.as_str() {
+                    "png" => "image/png", "jpg" | "jpeg" => "image/jpeg",
+                    "webp" => "image/webp", "gif" => "image/gif", "svg" => "image/svg+xml",
+                    _ => "application/octet-stream",
+                };
+                format!("data:{};base64,{}", mime, general_purpose::STANDARD.encode(&bytes))
+            })
+        });
         let mut repo_profile = crate::models::repo::RepoProfile {
             id: profile.id.clone(),
             name: profile.name.clone(),
             game_name: profile.game_name.clone(),
             mods: Vec::new(),
+            icon: profile.icon.clone(),
+            color: profile.color.clone(),
+            icon_image: icon_image_data,
         };
 
         let total_mods = exported_mods.len();
@@ -1114,14 +1132,36 @@ pub async fn sync_server_repo(
             }
         }
 
+        // Materialize a shared custom icon (data-URI) into a local file so it's
+        // restored alongside the profile.
+        let restored_icon_image: Option<String> = repo_profile.icon_image.as_ref().and_then(|data_uri| {
+            use base64::{Engine as _, engine::general_purpose};
+            let comma = data_uri.find(',')?;
+            let meta = &data_uri[..comma];
+            let bytes = general_purpose::STANDARD.decode(data_uri[comma + 1..].as_bytes()).ok()?;
+            let ext = if meta.contains("image/png") { "png" }
+                else if meta.contains("image/jpeg") { "jpg" }
+                else if meta.contains("image/webp") { "webp" }
+                else if meta.contains("image/gif") { "gif" }
+                else if meta.contains("svg") { "svg" }
+                else { "png" };
+            let fname = format!("icon_{}.{}", profile_id, ext);
+            let data_dir = state.data_path.parent().unwrap_or(std::path::Path::new("."));
+            std::fs::write(data_dir.join(&fname), &bytes).ok()?;
+            Some(fname)
+        });
+
         // Add or update this specific profile in AppState
         {
             let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
-            
+
             if let Some(p) = data.profiles.iter_mut().find(|p| p.id == profile_id) {
                 p.name = format!("{} - {}", repo.name, repo_profile.name);
                 p.game_name = repo_profile.game_name.clone();
                 p.origin_repo_profile_id = Some(repo_profile.id.clone());
+                if repo_profile.icon.is_some() { p.icon = repo_profile.icon.clone(); }
+                if repo_profile.color.is_some() { p.color = repo_profile.color.clone(); }
+                if restored_icon_image.is_some() { p.icon_image = restored_icon_image.clone(); }
             } else {
                 let mut new_profile = crate::models::profile::Profile::new(
                     format!("{} - {}", repo.name, repo_profile.name),
@@ -1132,6 +1172,9 @@ pub async fn sync_server_repo(
                 );
                 new_profile.id = profile_id.clone();
                 new_profile.origin_repo_profile_id = Some(repo_profile.id.clone());
+                new_profile.icon = repo_profile.icon.clone();
+                new_profile.color = repo_profile.color.clone();
+                new_profile.icon_image = restored_icon_image.clone();
                 data.profiles.push(new_profile);
             }
             

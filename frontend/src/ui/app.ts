@@ -78,7 +78,7 @@ async function waitForModalClosed(id: string): Promise<void> {
 }
 
 // ── Tauri bridge ──────────────────────────────────────────
-import { loadTauri, invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification } from '../core/api.js';
+import { loadTauri, invoke, pickFolder, pickFile, saveFile, convertFileSrc, listenFileDrop, sendOsNotification } from '../core/api.js';
 
 export { invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification };
 
@@ -516,8 +516,11 @@ export async function updateLibraryProfileSelector() {
     if (!select) return;
 
     try {
-        const profiles = await invoke('get_profiles');
-        const activeId = await invoke('get_active_profile_id');
+        const profiles = await invoke('get_profiles') as any[];
+        const activeId = await invoke('get_active_profile_id') as string | null;
+
+        // Fetch custom icon paths in parallel.
+        const iconPaths = await fetchProfileIconPaths(profiles);
 
         // Always include/reset to the placeholder as the first option
         select.innerHTML = `<option value="" data-i18n="lib.selectProfile">${t('lib.selectProfile') || '— Select a profile —'}</option>`;
@@ -530,7 +533,7 @@ export async function updateLibraryProfileSelector() {
             select.appendChild(opt);
         });
 
-        // Update the dynamic profile icon in the wrapper
+        // Update the dynamic profile icon in the wrapper (supports custom icon img).
         const wrapper = (select as HTMLElement).closest('.profile-select-icon-wrap');
         if (wrapper) {
             let iconEl = wrapper.querySelector('.profile-icon-display') as HTMLElement | null;
@@ -539,9 +542,27 @@ export async function updateLibraryProfileSelector() {
                 iconEl.className = 'profile-icon-display';
                 wrapper.insertBefore(iconEl, select);
             }
-            const activeProfile = (profiles as any[]).find(p => p.id === activeId);
-            const iconName: string = activeProfile?.icon || 'user';
-            iconEl.innerHTML = getProfileIconSvg(iconName, 'width:14px;height:14px;vertical-align:middle');
+            updateSelectProfileIcon(select as HTMLSelectElement, profiles, iconPaths, iconEl);
+        }
+
+        // On change, refresh the icon next to the select.
+        const wrp = (select as HTMLElement).closest('.profile-select-icon-wrap');
+        const onChangeIconRefresh = () => {
+            if (wrp) {
+                const el = wrp.querySelector('.profile-icon-display') as HTMLElement | null;
+                updateSelectProfileIcon(select as HTMLSelectElement, profiles, iconPaths, el);
+            }
+        };
+
+        // Refresh icon when the user changes selection (no page reload needed).
+        if (!(select as any)._iconChangeListener) {
+            (select as any)._iconChangeListener = onChangeIconRefresh;
+            select.addEventListener('change', onChangeIconRefresh);
+        } else {
+            // Already wired — just update to use the freshly fetched iconPaths.
+            select.removeEventListener('change', (select as any)._iconChangeListener);
+            (select as any)._iconChangeListener = onChangeIconRefresh;
+            select.addEventListener('change', onChangeIconRefresh);
         }
 
         // Add change listener only once
@@ -570,6 +591,45 @@ export async function updateLibraryProfileSelector() {
         }
     } catch (err) {
         console.warn("Profile selector update failed:", err);
+    }
+}
+
+// ── Reusable profile-select icon helpers ──────────────────────────────────────
+// Enriches <option> elements and maintains a sibling icon/thumbnail that
+// reflects the currently selected profile's custom icon (or builtin SVG).
+// Works for any <select> that lists profiles.
+
+/** Fetch the custom icon path for every profile that has one (parallel). */
+export async function fetchProfileIconPaths(profiles: any[]): Promise<Map<string, string>> {
+    const entries = await Promise.all(
+        profiles
+            .filter(p => p.icon_image)
+            .map(async p => {
+                try {
+                    const path = await invoke('get_profile_icon_path', { profileId: p.id }) as string | null;
+                    return path ? [p.id, path] as [string, string] : null;
+                } catch { return null; }
+            })
+    );
+    return new Map(entries.filter(Boolean) as [string, string][]);
+}
+
+/** Update an icon element next to a <select> to show the selected profile's icon. */
+export function updateSelectProfileIcon(
+    selectEl: HTMLSelectElement | null,
+    profiles: any[],
+    iconPaths: Map<string, string>,
+    iconEl: HTMLElement | null
+): void {
+    if (!selectEl || !iconEl) return;
+    const id = selectEl.value;
+    const p = profiles.find(x => x.id === id);
+    const imgSrc = id && iconPaths.get(id) ? convertFileSrc(iconPaths.get(id)!) : null;
+    const ts = Date.now();
+    if (imgSrc) {
+        iconEl.innerHTML = `<img src="${imgSrc}?t=${ts}" style="width:16px;height:16px;border-radius:3px;object-fit:cover;vertical-align:middle;display:block;" alt="">`;
+    } else {
+        iconEl.innerHTML = getProfileIconSvg(p?.icon || 'user', 'width:14px;height:14px;vertical-align:middle');
     }
 }
 

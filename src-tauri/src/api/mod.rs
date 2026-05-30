@@ -907,6 +907,7 @@ pub async fn start_api_server(
                 color: body.color,
                 icon: body.icon,
                 background_image: None,
+                icon_image: None,
                 created_at: chrono::Local::now().to_rfc3339(),
                 origin_repo_profile_id: None,
             };
@@ -2207,9 +2208,10 @@ async fn do_api_repo_sync(
                     mods_path,
                     backup_path: target_backup_path,
                     active_mods: active_mod_ids,
-                    color: None,
-                    icon: None,
+                    color: repo_profile.color.clone(),
+                    icon: repo_profile.icon.clone(),
                     background_image: None,
+                    icon_image: None,
                     created_at: chrono::Local::now().to_rfc3339(),
                     origin_repo_profile_id: Some(repo_profile.id.clone()),
                 });
@@ -2338,6 +2340,9 @@ async fn do_api_repo_gen(
             name: profile.name.clone(),
             game_name: profile.game_name.clone(),
             mods: Vec::new(),
+            icon: profile.icon.clone(),
+            color: profile.color.clone(),
+            icon_image: None,
         };
         let total_mods = mods.len().max(1);
         for (m_idx, mod_entry) in mods.iter().enumerate() {

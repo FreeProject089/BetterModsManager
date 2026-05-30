@@ -4244,5 +4244,11 @@
   "docs.diagram.profile.node.CREATE": "Create Profile",
   "plugins.fldLinkedApi": "Linked API",
   "plugins.optApiLast": "— check the previous API call —",
-  "dev.btn.closeDevtools": "CLOSE DEVTOOLS"
+  "dev.btn.closeDevtools": "CLOSE DEVTOOLS",
+  "prof.importIcon": "Import an icon…",
+  "prof.removeIcon": "Remove icon",
+  "plugins.fldProfile": "Profile",
+  "plugins.genMultiProfile": "Active profile",
+  "plugins.genProfileAll": "— Use each action's own profile —",
+  "plugins.genMultiProfileTip": "Pre-activate a profile so all mod actions run in that profile context"
 }

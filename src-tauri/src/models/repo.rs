@@ -30,6 +30,16 @@ pub struct RepoProfile {
     pub name: String,
     pub game_name: String,
     pub mods: Vec<RepoMod>,
+    /// Built-in icon name (shared so the receiver sees the same icon).
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// Accent color (shared).
+    #[serde(default)]
+    pub color: Option<String>,
+    /// Custom imported icon, embedded as a data-URI (`data:image/png;base64,…`)
+    /// so it travels with the repo and is restored on sync.
+    #[serde(default)]
+    pub icon_image: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

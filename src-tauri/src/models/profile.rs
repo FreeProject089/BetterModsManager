@@ -14,6 +14,9 @@ pub struct Profile {
     pub icon: Option<String>,
     #[serde(default)]
     pub background_image: Option<String>,
+    /// Filename (next to data.json) of a custom imported icon image, if any.
+    #[serde(default)]
+    pub icon_image: Option<String>,
     pub created_at: String,
     pub origin_repo_profile_id: Option<String>,
 }
@@ -37,6 +40,7 @@ impl Profile {
             color: None,
             icon: None,
             background_image: None,
+            icon_image: None,
             created_at: chrono::Local::now().to_rfc3339(),
             origin_repo_profile_id: None,
         }

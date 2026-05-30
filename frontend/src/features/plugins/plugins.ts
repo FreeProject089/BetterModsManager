@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { invoke, pickFile, saveFile, pickFolder, convertFileSrc } from '../../core/api.js';
-import { toast } from '../../ui/app.js';
+import { toast, fetchProfileIconPaths, updateSelectProfileIcon } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { escHtml } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
@@ -2391,6 +2391,20 @@ function renderScripts(container: HTMLElement) {
                                 <span class="plug-toggle-slider"></span>
                             </label>
                         </div>
+                        <!-- Multi-profile context for the generator -->
+                        <div class="plug-form-row" style="flex-direction:row;align-items:center;gap:12px;flex-wrap:wrap;">
+                            <label class="plug-form-label" style="margin:0;white-space:nowrap;">${t('plugins.genMultiProfile') || 'Active profile'}</label>
+                            <div class="profile-select-icon-wrap" style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">
+                                <span class="profile-icon-display" id="plug-gen-profile-icon" style="flex-shrink:0;"></span>
+                                <select id="plug-gen-profile" class="select select-sm" style="flex:1;min-width:0;">
+                                    <option value="">${t('plugins.genProfileAll') || '— Use each action’s own profile —'}</option>
+                                </select>
+                            </div>
+                            <label class="plug-toggle" data-tooltip="${t('plugins.genMultiProfileTip') || 'Enable mods from a specific profile context for each API call'}">
+                                <input type="checkbox" id="plug-gen-multi-profile">
+                                <span class="plug-toggle-slider"></span>
+                            </label>
+                        </div>
                         <div class="plug-gen-actions-section">
                             <div class="plug-gen-actions-header">
                                 <span class="plug-form-label" style="margin:0;">${t('plugins.genActions')}</span>
@@ -2767,6 +2781,23 @@ function renderScripts(container: HTMLElement) {
             toast(t('plugins.epCopyDone'), 'success');
         });
     });
+
+    // Multi-profile selector: populate + wire icon
+    const genProfileSel = container.querySelector('#plug-gen-profile') as HTMLSelectElement | null;
+    const genProfileIcon = document.getElementById('plug-gen-profile-icon');
+    if (genProfileSel && _allProfiles.length) {
+        fetchProfileIconPaths(_allProfiles).then(iconPaths => {
+            _allProfiles.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name;
+                genProfileSel.appendChild(opt);
+            });
+            updateSelectProfileIcon(genProfileSel, _allProfiles, iconPaths, genProfileIcon);
+            genProfileSel.addEventListener('change', () =>
+                updateSelectProfileIcon(genProfileSel, _allProfiles, iconPaths, genProfileIcon));
+        });
+    }
 
     // Mode hint update
     container.querySelector('#plug-gen-mode')?.addEventListener('change', (e) => {
@@ -4413,9 +4444,17 @@ function _renderTargetSelect(cardId: string, kind: 'mod' | 'profile' | 'plugin')
         emptyLabel = t('plugins.noPlugins') || 'No plugins installed';
     }
     if (!opts) opts = `<option value="">${escHtml(emptyLabel)}</option>`;
+    const labelTxt = kind === 'mod' ? 'Mod' : kind === 'profile' ? t('plugins.fldProfile') || 'Profile' : 'Plugin';
+    // Profile selects include an icon display element; icon is wired after insertion.
+    const inner = kind === 'profile'
+        ? `<div class="profile-select-icon-wrap" style="display:flex;align-items:center;gap:5px;">
+               <span class="profile-icon-display" style="flex-shrink:0;"></span>
+               <select id="${cardId}-target" class="select select-sm plug-act-target">${opts}</select>
+           </div>`
+        : `<select id="${cardId}-target" class="select select-sm plug-act-target">${opts}</select>`;
     return `<div class="plug-act-field full">
-        <label for="${cardId}-target">${kind === 'mod' ? 'Mod' : kind === 'profile' ? 'Profile' : 'Plugin'}</label>
-        <select id="${cardId}-target" class="select select-sm plug-act-target">${opts}</select>
+        <label for="${cardId}-target">${escHtml(labelTxt)}</label>
+        ${inner}
     </div>`;
 }
 
@@ -4476,6 +4515,19 @@ function _renderActionCard(def: _ActionDef): HTMLElement {
     // armed only from the grip so the form fields stay fully usable.
     const grip = card.querySelector('.plug-act-grip') as HTMLElement;
     grip?.addEventListener('pointerdown', (e) => _startCardDrag(card, e as PointerEvent));
+
+    // Wire custom icon display for profile target selects (async, non-blocking).
+    if (def.target === 'profile') {
+        const profileSel = card.querySelector('.plug-act-target') as HTMLSelectElement | null;
+        const iconEl     = card.querySelector('.profile-icon-display') as HTMLElement | null;
+        if (profileSel && iconEl && _allProfiles.length) {
+            fetchProfileIconPaths(_allProfiles).then(iconPaths => {
+                updateSelectProfileIcon(profileSel, _allProfiles, iconPaths, iconEl);
+                profileSel.addEventListener('change', () =>
+                    updateSelectProfileIcon(profileSel, _allProfiles, iconPaths, iconEl));
+            });
+        }
+    }
 
     return card;
 }
@@ -4928,8 +4980,20 @@ async function buildScript(): Promise<string | null> {
     const mode      = (document.getElementById('plug-gen-mode') as HTMLSelectElement)?.value || 'deeplink';
     const launchBmm = (document.getElementById('plug-gen-launch') as HTMLInputElement)?.checked ?? true;
     const useEnv    = (document.getElementById('plug-gen-use-env') as HTMLInputElement)?.checked ?? false;
-    const actions   = _collectActions();
+    const multiProfile = (document.getElementById('plug-gen-multi-profile') as HTMLInputElement)?.checked ?? false;
+    const contextProfileId = (document.getElementById('plug-gen-profile') as HTMLSelectElement)?.value || '';
+    let actions   = _collectActions();
     if (!actions) return null;
+
+    // If "multi-profile" is enabled and a profile is selected, prepend an
+    // "activate profile" action so every subsequent enable_mod/disable_mod
+    // operates in the correct profile context.
+    if (multiProfile && contextProfileId) {
+        actions = [
+            { action_type: 'activate_profile', target_id: contextProfileId, extra: {} },
+            ...actions,
+        ];
+    }
 
     // A token is needed when in API mode OR when deeplink-mode actions have to
     // fall back to HTTP (repo/host/etc. with no bmm:// equivalent).

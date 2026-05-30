@@ -4242,5 +4242,11 @@
   "repo.errPortInUse": "Le port {port} est déjà utilisé par une autre application.",
   "plugins.fldLinkedApi": "API liée",
   "plugins.optApiLast": "— vérifier l'appel API précédent —",
-  "dev.btn.closeDevtools": "FERMER DEVTOOLS"
+  "dev.btn.closeDevtools": "FERMER DEVTOOLS",
+  "prof.importIcon": "Importer une icône…",
+  "prof.removeIcon": "Retirer l'icône",
+  "plugins.fldProfile": "Profil",
+  "plugins.genMultiProfile": "Profil actif",
+  "plugins.genProfileAll": "— Utiliser le profil de chaque action —",
+  "plugins.genMultiProfileTip": "Pré-active un profil pour que toutes les actions de mods s'exécutent dans ce contexte"
 }

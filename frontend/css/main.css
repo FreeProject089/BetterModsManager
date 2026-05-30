@@ -3488,6 +3488,21 @@ body.is-maximized .titlebar-spacer {
 .plug-script-run-row svg { width: 14px; height: 14px; color: var(--accent); flex-shrink: 0; }
 .plug-script-run-row code { font-family: var(--font-mono); font-size: 11.5px; }
 
+/* Custom imported profile icon preview */
+.prof-custom-icon-preview {
+    width: 34px;
+    height: 34px;
+    border-radius: 7px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.03);
+}
+.prof-custom-icon-preview img { width: 100%; height: 100%; object-fit: cover; }
+
 /* ── Util ── */
 .mono {
     font-family: var(--font-mono);
