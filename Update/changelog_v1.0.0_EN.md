@@ -142,5 +142,74 @@ This version represents the transition to the 1.0 milestone, focusing on cross-p
 - Files that already match the expected SHA-256 are skipped without re-downloading.
 - Atomic file replacement: files are written to a temp location first, then moved atomically to their final destination (with a copy fallback for cross-drive scenarios).
 
+## [MAJOR] Plugin System (Core Plugins / Cplugins)
+### Extensible Plugin Architecture
+- Introduced a full plugin system with a manifest format (`PluginManifest`): `id`, `name`, `version`, `author`, `description`, `game`, `permissions`, `tags`, `website`, bundled `folders`, and a declarative `modlist`.
+- **Apply modes**: a plugin can apply a `modlist` (declaratively require/enable a set of mods), run bundled `scripts`, or `both`.
+- **Modlist enforcement**: `PluginModList` supports a `strict` flag and `required_mods` entries with optional `sha256` pinning. `compare_plugin_mods` reports what's missing/mismatched before applying; `apply_plugin_modlist` activates the required set.
+- **Installation paths**: install from the remote plugin catalog (`fetch_plugin_catalog` → `install_plugin`) or from a local `.bmmplug` file (`install_plugin_from_file`). Plugins can also be authored in-app (`create_local_plugin`) and exported (`export_plugin`).
+- **Permission gating**: `set_plugin_permissions` / `get_plugin_permissions` control what a plugin may do; running bundled external scripts is gated behind an explicit "unsafe plugins" permission (`run_plugin_scripts`).
+- **Integrity**: `compute_plugin_checksum` validates plugin contents; `toggle_plugin`, `uninstall_plugin`, `get_installed_plugins`, and `open_plugin_folder` round out lifecycle management.
+- **Script generation**: `generate_script` produces ready-to-run automation snippets (cURL / PowerShell) targeting the local API.
+
+## [NEW] Local REST API Server
+- Added an embedded **Warp**-based HTTP server on `127.0.0.1:51274`, letting external tools and plugins drive BMM programmatically.
+- **~40 endpoints** under `/api/` covering: health/status, mods (list, active, enable, disable, get/delete by id), profiles (list, get, create, update, delete, activate), plugins (list, compare, apply), modpacks (list, create, enable, disable, import, get/delete), repository (info, connect, list, sync, generate, host), data/modlist export & import, `creator-id`, `check-update`, and `restart`.
+- **Token authentication**: `get_api_token` / `reset_api_token` manage a per-install API token; the `generate_script` helper builds authenticated request snippets.
+- Powers the in-app API explorer and external automation (e.g. Stream Deck, companion scripts).
+
+## [NEW] ContentID — Deterministic Mod Identity
+- Implemented a deterministic content-identity system: `derive_content_id()` and `content_id_from_file_hashes()` produce a stable `content_id` from a mod's actual file hashes — the **same files on any machine yield the same ID**.
+- Enables reliable cross-machine mod recognition (matching mods by content rather than folder name), powering accurate `.MM` / modpack / repository matching and the "already present" detection in the import flow.
+- `update_content_id_from_hashes()` keeps the ID in sync with the SHA-256 fingerprints computed by the integrity engine.
+
+## [IMPROVED] Onboarding V2
+- Reworked the first-run onboarding into a modular tutorial engine (`tutorial-engine`, `tutorial-store`, `tutorial-hub`, `tutorial-data`, `tutorial-events`).
+- Step-driven, event-aware flow with a restartable Tutorial Hub, dispatched BMM actions, and Tasky-guided contextual help.
+
+## [IMPROVED] Memory & Performance
+- Major memory-footprint reduction (~1.5 GB → ~500 MB average in dev) through aggressive cleanup of video/marquee resources and view teardown.
+- **Lazy loading** added to heavy views (Credits, Mapper): media and large DOM trees are built/destroyed on demand rather than kept resident.
+- Mapper lag fixes and reduced idle CPU usage.
+
+## [IMPROVED] Server Repository — GitHub Browse & Cross-Platform
+- Added a **GitHub-repo browse** mode so users can discover server repositories hosted on GitHub directly from the browser.
+- Added **`.zip` support** to the Server Repo flow and **full Linux support** for the lightweight standalone server.
+- Repository history tracking and assorted server-mode UX refinements.
+
+## [MAJOR] App Catalog Module (One-Click App Installation)
+### Browse, Install & Track Apps
+- Added a dedicated **App Catalog** view in the sidebar — a one-click installer for companion apps and tools.
+- **Install engine** supporting `zip`, `exe`, `msi`, and `script` (`.ps1`/`.bat`/`.cmd`/`.py`/`.vbs`/`.sh`):
+  - **Portable zip** → extracted to a BMM-managed folder, main `.exe` auto-picked by name match (skips installers/uninstallers).
+  - **Installer (exe/msi, or an installer bundled inside a zip)** → BMM runs the installer's own wizard, then **auto-detects** the result with **zero user action** by diffing install folders + the Windows registry (`DisplayIcon`, `InstallLocation`, `UninstallString`) before and after.
+  - **Script** → saved and launched through the correct interpreter.
+- **Usage tracking**: launch time is recorded automatically by waiting for the launched process to exit — no manual stop needed.
+- **Smart uninstall**: managed apps offer "keep files" / "delete everything"; setup-installed apps can **run their real Windows uninstaller** (resolved live from the registry, even for apps installed before tracking).
+- **History & Favorites**: per-app install/launch/uninstall log with SVG icons, and a favorites tab.
+- **Catalog Creator**: build a `catalog.json` in-app (add apps, preview JSON, copy or download) to host and share your own catalog.
+- **Detail modal**: image gallery (thumb + screenshots), full Markdown README renderer (headings, lists, code, links, images), info table, and category-accented actions.
+
+### Trust Model & Community Catalogs
+- Badges (`Official`, `Partner`) are assigned by **catalog source**, never by the JSON — a community catalog claiming `"official": true` is silently overridden.
+- The official catalog's `partner_catalogs` list grants the Partner badge; `community_imports` chains additional catalogs without granting badges.
+- Users can add their own community catalog sources; the official catalog can auto-import partner/community catalogs.
+
+## [NEW] Centralized Link Registry (`links.json`)
+- Every external URL (plugin catalog, server-browse list, contributors, auto-update API, app catalog, Discord/Reddit/Ko-fi/GitHub/ED-forum social links) now lives in a single editable file: `frontend/assets/links.json`.
+- Loaded at startup with a 3-tier fallback: **remote URL → bundled local file → built-in defaults**, with a clear log line stating which source was used.
+- Social links in the Credits page, BetaHub modal and repo-browser quick-links are patched into the HTML at runtime via `data-link-key` attributes — change one JSON entry and it propagates everywhere, no recompile.
+- `links.json` is tracked by the incremental update manifest, so URLs can be changed via a release without shipping a new build.
+
+## [FIXED] Mapper — Final Preview Tooltip Clipping
+- The structure-diagnostic preview tooltips in the Mapper's final preview modal were being clipped behind the modal's overflow container and sticky table header.
+- Replaced the CSS `::after` tooltip with a fixed-position, body-attached tooltip that follows the cursor and is never clipped.
+
+## [IMPROVED] Tooling & Minor Additions
+- **Advanced Benchmark Mode**: reworked the performance benchmark with an advanced perf modal (`set_advanced_benchmark_mode`, `openAdvancedPerfModal`) and **CSV export** of results (`export_benchmark_csv`).
+- **Developer Tools toggle**: added `open_devtools` / `close_devtools` / `is_devtools_open` commands to toggle the WebView dev tools from within the app (debug menu).
+- **Profile "Disable All (Global)"**: added a one-click action on the Profiles page to disable every active mod at once (`disableAllRequestedMods()`), with a confirmation step; removed the now-redundant legacy "Active Mods (Global)" button.
+- **Tasky tooltip accuracy**: contextual help tooltips now track the cursor correctly even when the mouse stops before the debounce fires.
+
 ---
 *Release 1.0.0 represents the final consolidation of the core feature set.*

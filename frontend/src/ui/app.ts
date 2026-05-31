@@ -33,6 +33,7 @@ import { initPlugins } from '../features/plugins/plugins.js';
 import { escHtml, escAttr, formatBytes } from '../core/utils.js';
 import { loadLinks, getLinks } from '../core/links-config.js';
 import { initMapper } from '../features/mapper/mapper.js';
+import { initAppsCatalog } from '../features/apps/apps-catalog.js';
 import { openAdvancedPerfModal } from '../features/bench/benchmark.js';
 import { playBootSound, playCloseSound, setSoundEnabled, setSoundVolume } from './sound-engine.js';
 export { setSoundEnabled, setSoundVolume, playCloseSound };
@@ -764,6 +765,7 @@ async function main() {
     initUpdateNotes();
     initMapper();
     initPlugins();
+    initAppsCatalog();
 
     document.getElementById('btn-restart-onboarding')?.addEventListener('click', () => {
         openTutorialHub();

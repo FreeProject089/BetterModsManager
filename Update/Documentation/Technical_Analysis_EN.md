@@ -612,5 +612,89 @@ The public repository browser enforces a `hash` field gate.
 
 ---
 
+## 42. Centralized Link Registry (v1.0.0)
+
+All external URLs are decoupled from code into `frontend/assets/links.json`, loaded through `frontend/src/core/links-config.ts`.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Schema** | `BmmLinks` interface: `plugin_catalog`, `plugin_github`, `server_browse`, `contributors`, `autoupdate_api`, `apps_catalog`, plus social links (`github_repo`, `discord`, `reddit`, `kofi`, `kofi_community`, `ed_forum`). |
+| **Load order** | `loadLinks()` tries `REMOTE_LINKS_URL` → local `assets/links.json` → hardcoded `DEFAULTS`. First success wins; each merge is spread over `DEFAULTS` so missing keys never break. |
+| **Observability** | A single `console.log` reports the resolved source (`remote (...)`, `local file (...)`, or `built-in defaults`). |
+| **Accessor** | `getLinks()` returns the cached `Readonly<BmmLinks>`; called by `repo.ts`, `plugins.ts`, `update-notes.ts`, `apps-catalog.ts` and `app.ts`. |
+| **Backend pass-through** | `fetch_plugin_catalog(catalog_url)` and `check_for_update(api_base_url)` accept the URL from the frontend, falling back to a Rust constant. |
+| **Runtime HTML patching** | `patchHtmlLinks()` runs after `loadLinks()` and rewrites every `[data-link-key]` element's `href` / `data-url`, so static links in `index.html` track the JSON. |
+| **Update integration** | `links.json` is listed in `TRACKED_FILES` of `scripts/gen-update-manifest.mjs`, so the incremental updater can patch URLs without a new installer. |
+
+---
+
+## 43. App Catalog Engine (v1.0.0)
+
+The App Catalog is implemented in `src-tauri/src/commands/apps.rs` (+ `models/app_catalog.rs`) and `frontend/src/features/apps/apps-catalog.ts`. State persists to `apps_state.json` in the app data directory.
+
+### Catalog Fetch & Trust Chain
+- `fetch_app_catalogs(catalog_url, extra_community_urls)` merges multiple catalogs in tiers and assigns trust **by source**, never by JSON content (`apply_trust()` overwrites `official`/`partner` and truncates `tags` to 3).
+  - **Tier 0 — Official**: the `apps_catalog` URL → `official = true`. Its `partner_catalogs` defines Tier 1; its `community_imports` feed Tier 2.
+  - **Tier 1 — Partner**: URLs in the official `partner_catalogs` → `partner = true`.
+  - **Tier 2 — Community**: `community_imports` + user-added sources → no badge.
+- Entries are de-duplicated by `id` (higher tier wins). A visited-set + a 30-source cap prevent loops.
+
+### Install Engine
+- `install_app(...)` downloads to a managed `<install_path>/<id>/` folder, then branches on type:
+  - **zip** → extracted; if it contains a portable exe it's kept (`is_managed = true`) and the main exe chosen by `pick_main_exe()` (name-score, skips installers). If it contains **only** an installer, that installer is run via `run_installer_and_detect()`.
+  - **exe/msi** (or filename containing `setup`/`install`) → `run_installer_and_detect()`.
+  - **script** → kept and registered as the launch target.
+- `run_installer_and_detect()` snapshots `common_install_roots()` (Program Files, Program Files (x86), LocalAppData\Programs) **before** launch, `child.wait()`s on a `spawn_blocking` task, then resolves exe/dir/uninstaller from `find_registry_app()` (registry `DisplayIcon` / `InstallLocation` / `UninstallString`) with a folder-diff fallback (`auto_detect_installed_exe()` + `match_score()`).
+
+### Launch, Usage Tracking & Uninstall
+- `launch_app()` selects an interpreter by extension (`.ps1`→PowerShell `-ExecutionPolicy Bypass`, `.bat`/`.cmd`→cmd, `.py`→python, `.vbs`→wscript, `.sh`→bash, else direct), then spawns a background thread that `wait()`s for exit and adds the elapsed seconds to `usage_seconds`.
+- `uninstall_app(app_id, delete_files, run_uninstaller)`:
+  - `run_uninstaller` → resolves the command from state or a live `find_registry_app()` lookup, parses it with `parse_command()` (handles quoted paths + args), and spawns it directly (OS handles UAC).
+  - else deletes the managed folder **before** mutating state (so a failed delete leaves state intact).
+- Commands registered: `fetch_app_catalogs`, `install_app`, `detect_app_executables`, `launch_app`, `get_apps_state`, `uninstall_app`, `toggle_app_favorite`, `add/remove_community_source`, `get_default_apps_path`, `set_app_exe_path`, `register_installed_exe`, `app_has_uninstaller`, `open_app_folder`, `clear_app_history`.
+
+### Frontend
+- Tabs: Browse / Installed / Favorites / History / Sources / Create. State is refreshed via a lightweight `get_apps_state` read after every mutation (no polling).
+- `renderMarkdown()` is a dependency-free Markdown→HTML renderer (headings, bold/italic, inline + fenced code, lists, blockquotes, links, images) used in the detail modal; README URLs are normalized to raw via `toRawUrl()` to avoid CORS.
+
+---
+
+## 44. Plugin System Architecture (v1.0.0)
+
+Implemented in `src-tauri/src/commands/plugins.rs` with models in `models/plugin.rs`; the catalog is fetched from `links.json`'s `plugin_catalog`.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Manifest** | `PluginManifest` (id/name/version/author/description/game/permissions/tags/website/folders) plus `apply_mode` (`modlist`/`script`/`both`) and `has_scripts`/`scripts`. |
+| **Modlist model** | `PluginModList { strict, required_mods }`; each `PluginModRequirement { name, optional, sha256 }`. `compare_plugin_mods` diffs the active library vs. requirements; `apply_plugin_modlist` enables the set. |
+| **Install** | `install_plugin` (from catalog), `install_plugin_from_file` (`.bmmplug`), `create_local_plugin` (in-app authoring), `export_plugin`. `compute_plugin_checksum` validates contents. |
+| **Permissions** | `get_plugin_permissions` / `set_plugin_permissions`; external script execution (`run_plugin_scripts`) is gated behind an "unsafe plugins" permission. |
+| **Lifecycle** | `toggle_plugin`, `uninstall_plugin`, `get_installed_plugins`, `open_plugin_folder`. |
+| **Automation** | `generate_script` emits cURL / PowerShell snippets; `get_app_exe_path`, `write_text_file`, `write_zip_files` support authoring/export flows. |
+
+## 45. Local REST API Server (v1.0.0)
+
+`src-tauri/src/api/mod.rs` runs a **Warp** server on `API_PORT = 51274` (`127.0.0.1`), started on app boot.
+
+| Aspect | Detail |
+| :--- | :--- |
+| **Routes** | ~40 endpoints via `path!("api" / ...)`: `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
+| **Auth** | A per-install token (`get_api_token` / `reset_api_token`) guards mutating routes; SHA-256 is used for token handling. |
+| **Concurrency** | Shares `AppData` via `Arc`; uses a `oneshot` channel + `AtomicBool` for graceful shutdown. |
+| **Consumers** | The in-app API explorer, generated automation scripts, and external companion tools. |
+
+## 46. ContentID Engine (v1.0.0)
+
+Deterministic mod identity lives in `models/mod_entry.rs`.
+
+| Function | Behaviour |
+| :--- | :--- |
+| `derive_content_id(folder_path)` | Computes a stable id from the mod's file set — deterministic across machines for identical content. |
+| `content_id_from_file_hashes(hashes)` | Folds the per-file SHA-256 map into a single content id. |
+| `update_content_id_from_hashes(entry)` | Refreshes `entry.content_id` from already-computed `file_hashes`, keeping it in lockstep with the integrity engine. |
+| **Usage** | Mod matching for `.MM` lists, modpacks, repository sync, and the import "already present" check — all keyed on `content_id` rather than folder name. |
+
+---
+
 *Better Mod Manager is developed by FreeProject089 — Engineered for uncompromising performance, file safety, and modern mod management.*
 

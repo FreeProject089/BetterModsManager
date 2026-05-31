@@ -120,5 +120,74 @@ Cette version marque la transition vers l'étape 1.0, en se concentrant sur l'ut
 - Nouvelles commandes Rust : `fetch_update_manifest` et `apply_incremental_update`.
 - La modale de mise à jour affiche un bouton "Mise à jour rapide (incrémentale)" avec barre de progression en temps réel. Les fichiers inchangés (hash SHA-256 identique) sont ignorés.
 
+## [MAJEUR] Système de Plugins (Core Plugins / Cplugins)
+### Architecture de plugins extensible
+- Introduction d'un système de plugins complet avec un format de manifeste (`PluginManifest`) : `id`, `name`, `version`, `author`, `description`, `game`, `permissions`, `tags`, `website`, `folders` embarqués et une `modlist` déclarative.
+- **Modes d'application** : un plugin peut appliquer une `modlist` (exiger/activer un ensemble de mods), exécuter des `scripts` embarqués, ou `both`.
+- **Application stricte de la modlist** : `PluginModList` supporte un flag `strict` et des `required_mods` avec épinglage `sha256` optionnel. `compare_plugin_mods` rapporte ce qui manque/diffère avant l'application ; `apply_plugin_modlist` active l'ensemble requis.
+- **Chemins d'installation** : installation depuis le catalogue de plugins distant (`fetch_plugin_catalog` → `install_plugin`) ou depuis un fichier `.bmmplug` local (`install_plugin_from_file`). Les plugins peuvent aussi être créés dans l'app (`create_local_plugin`) et exportés (`export_plugin`).
+- **Permissions** : `set_plugin_permissions` / `get_plugin_permissions` contrôlent ce qu'un plugin peut faire ; l'exécution des scripts externes embarqués est protégée derrière une permission explicite "plugins non sûrs" (`run_plugin_scripts`).
+- **Intégrité** : `compute_plugin_checksum` valide le contenu d'un plugin ; `toggle_plugin`, `uninstall_plugin`, `get_installed_plugins` et `open_plugin_folder` complètent la gestion du cycle de vie.
+- **Génération de scripts** : `generate_script` produit des extraits d'automatisation prêts à l'emploi (cURL / PowerShell) ciblant l'API locale.
+
+## [NOUVEAU] Serveur API REST local
+- Ajout d'un serveur HTTP embarqué basé sur **Warp** sur `127.0.0.1:51274`, permettant aux outils externes et aux plugins de piloter BMM par programmation.
+- **~40 endpoints** sous `/api/` couvrant : health/status, mods (liste, actifs, enable, disable, get/delete par id), profils (liste, get, create, update, delete, activate), plugins (liste, compare, apply), modpacks (liste, create, enable, disable, import, get/delete), dépôt (info, connect, list, sync, generate, host), export/import de données et de modlists, `creator-id`, `check-update` et `restart`.
+- **Authentification par token** : `get_api_token` / `reset_api_token` gèrent un token d'API par installation ; le helper `generate_script` construit des extraits de requêtes authentifiées.
+- Alimente l'explorateur d'API intégré et l'automatisation externe (ex : Stream Deck, scripts compagnons).
+
+## [NOUVEAU] ContentID — Identité de mod déterministe
+- Implémentation d'un système d'identité de contenu déterministe : `derive_content_id()` et `content_id_from_file_hashes()` produisent un `content_id` stable à partir des hash réels des fichiers d'un mod — les **mêmes fichiers sur n'importe quelle machine donnent le même ID**.
+- Permet une reconnaissance fiable des mods entre machines (correspondance par contenu plutôt que par nom de dossier), alimentant la correspondance précise `.MM` / modpack / dépôt et la détection "déjà présent" dans le flux d'import.
+- `update_content_id_from_hashes()` garde l'ID synchronisé avec les empreintes SHA-256 calculées par le moteur d'intégrité.
+
+## [AMÉLIORÉ] Onboarding V2
+- Refonte de l'onboarding de premier lancement en un moteur de tutoriel modulaire (`tutorial-engine`, `tutorial-store`, `tutorial-hub`, `tutorial-data`, `tutorial-events`).
+- Flux piloté par étapes et événements, avec un Hub de tutoriel relançable, des actions BMM dispatchées et une aide contextuelle guidée par Tasky.
+
+## [AMÉLIORÉ] Mémoire & Performance
+- Réduction majeure de l'empreinte mémoire (~1,5 Go → ~500 Mo en moyenne en dev) grâce à un nettoyage agressif des ressources vidéo/marquee et au démontage des vues.
+- **Chargement paresseux (lazy loading)** ajouté aux vues lourdes (Crédits, Mapper) : les médias et grands arbres DOM sont construits/détruits à la demande plutôt que gardés en mémoire.
+- Corrections de lag du Mapper et réduction de l'usage CPU au repos.
+
+## [AMÉLIORÉ] Dépôt Serveur — Browse GitHub & multi-plateforme
+- Ajout d'un mode **browse de dépôts GitHub** pour découvrir les dépôts de serveurs hébergés sur GitHub directement depuis le navigateur.
+- Ajout du **support `.zip`** au flux Server Repo et du **support Linux complet** pour le serveur autonome léger.
+- Suivi de l'historique des dépôts et diverses améliorations UX du mode serveur.
+
+## [MAJEUR] Module Catalogue d'Apps (Installation en un clic)
+### Parcourir, installer & suivre des apps
+- Ajout d'une vue dédiée **Catalogue d'Apps** dans la sidebar — un installeur en un clic pour les applications et outils compagnons.
+- **Moteur d'installation** supportant `zip`, `exe`, `msi` et `script` (`.ps1`/`.bat`/`.cmd`/`.py`/`.vbs`/`.sh`) :
+  - **Zip portable** → extrait dans un dossier géré par BMM, l'`.exe` principal est choisi automatiquement par correspondance de nom (ignore les installeurs/désinstalleurs).
+  - **Installeur (exe/msi, ou installeur dans un zip)** → BMM lance l'assistant de l'installeur, puis **auto-détecte** le résultat avec **zéro action utilisateur** en comparant les dossiers d'installation + le registre Windows (`DisplayIcon`, `InstallLocation`, `UninstallString`) avant/après.
+  - **Script** → sauvegardé et lancé via le bon interpréteur.
+- **Suivi d'utilisation** : le temps de jeu est enregistré automatiquement en attendant la fin du processus lancé — aucune action manuelle.
+- **Désinstallation intelligente** : les apps gérées proposent "garder les fichiers" / "tout supprimer" ; les apps installées par setup peuvent **lancer leur vrai désinstalleur Windows** (résolu en direct depuis le registre, même pour les apps installées avant le suivi).
+- **Historique & Favoris** : journal install/lancement/désinstallation par app avec icônes SVG, et un onglet favoris.
+- **Créateur de Catalogue** : construisez un `catalog.json` dans l'app (ajout d'apps, aperçu JSON, copie ou téléchargement) pour héberger et partager votre propre catalogue.
+- **Modale de détail** : galerie d'images (miniature + captures), rendu Markdown complet du README (titres, listes, code, liens, images), table d'infos et actions colorées par catégorie.
+
+### Modèle de confiance & catalogues communautaires
+- Les badges (`Official`, `Partner`) sont attribués selon la **source du catalogue**, jamais par le JSON — un catalogue communautaire prétendant `"official": true` est silencieusement écrasé.
+- La liste `partner_catalogs` du catalogue officiel accorde le badge Partner ; `community_imports` chaîne d'autres catalogues sans accorder de badge.
+- Les utilisateurs peuvent ajouter leurs propres sources de catalogues communautaires ; le catalogue officiel peut importer automatiquement les catalogues partenaires/communautaires.
+
+## [NOUVEAU] Registre de liens centralisé (`links.json`)
+- Chaque URL externe (catalogue plugins, liste server-browse, contributeurs, API de mise à jour, catalogue d'apps, liens sociaux Discord/Reddit/Ko-fi/GitHub/forum ED) vit désormais dans un seul fichier éditable : `frontend/assets/links.json`.
+- Chargé au démarrage avec un repli à 3 niveaux : **URL distante → fichier local intégré → valeurs par défaut**, avec une ligne de log indiquant la source utilisée.
+- Les liens sociaux de la page Crédits, de la modale BetaHub et des liens rapides du navigateur de dépôts sont injectés dans le HTML à l'exécution via des attributs `data-link-key` — changez une entrée JSON et elle se propage partout, sans recompilation.
+- `links.json` est suivi par le manifeste de mise à jour incrémentale, donc les URLs peuvent être changées via une release sans nouvelle build.
+
+## [CORRIGÉ] Mapper — Tooltip de l'aperçu final masqué
+- Les tooltips de diagnostic de structure dans la modale d'aperçu final du Mapper étaient masqués derrière le conteneur overflow de la modale et l'en-tête de tableau collant.
+- Remplacement du tooltip CSS `::after` par un tooltip en position fixe attaché au body, qui suit le curseur et n'est jamais masqué.
+
+## [AMÉLIORÉ] Outillage & Ajouts mineurs
+- **Mode Benchmark avancé** : refonte du benchmark de performance avec une modale de perf avancée (`set_advanced_benchmark_mode`, `openAdvancedPerfModal`) et **export CSV** des résultats (`export_benchmark_csv`).
+- **Bascule des Dev Tools** : ajout des commandes `open_devtools` / `close_devtools` / `is_devtools_open` pour ouvrir/fermer les outils de développement de la WebView depuis l'app (menu debug).
+- **"Tout désactiver (Global)" sur les profils** : action en un clic sur la page Profils pour désactiver tous les mods actifs d'un coup (`disableAllRequestedMods()`), avec confirmation ; suppression de l'ancien bouton redondant "Mods Actifs (Global)".
+- **Précision des tooltips Tasky** : les tooltips d'aide contextuelle suivent désormais le curseur correctement même si la souris s'arrête avant le déclenchement du debounce.
+
 ---
 *La version 1.0.0 représente la consolidation finale de l'ensemble des fonctionnalités de base.*

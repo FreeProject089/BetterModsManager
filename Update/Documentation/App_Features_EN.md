@@ -590,5 +590,80 @@ The Updates History system provides a detailed audit log of all changes made to 
 
 ---
 
+## 43. App Catalog (v1.0.0)
+
+The App Catalog is a one-click installer for companion apps and tools, driven by a hostable `catalog.json`.
+
+| Feature | Description |
+| :--- | :--- |
+| **Browse & Filter** | Grid of app cards with thumbnail, badges, search, and category/price filters (Game/Utility/Other · Free/Freemium/Paid). |
+| **One-Click Install** | Supports `zip`, `exe`, `msi`, and `script`. Portable zips are extracted and the main executable is auto-picked; installers run their own wizard. |
+| **Zero-Action Detection** | For any installer, BMM snapshots install folders + the Windows registry before running it, then diffs afterward to find the launch executable and uninstaller — no manual file picking. |
+| **Choose Install Path** | Portable apps can be installed to a custom folder, defaulting to BMM's managed `Apps` directory. |
+| **Usage Tracking** | Time spent in each launched app is recorded automatically when the app closes. |
+| **Smart Uninstall** | Managed apps offer keep-files / delete-everything; setup-installed apps can run their real Windows uninstaller (resolved from the registry). |
+| **History & Favorites** | Per-app activity log (install/launch/uninstall) with icons, plus a favorites tab. |
+| **Detail Modal** | Image gallery (thumbnail + screenshots), full Markdown README renderer, requirements, usage stats, and source label. |
+| **Catalog Creator** | Build a `catalog.json` in-app — add apps via a form, preview the JSON, then copy or download it to host your own catalog. |
+| **Trust Model** | `Official` / `Partner` badges are granted by catalog source (the official catalog and its `partner_catalogs`), never by what a JSON claims. |
+| **Community Sources** | Add any community catalog URL; the official catalog can auto-import partner and community catalogs. |
+
+---
+
+## 44. Centralized Link Registry (v1.0.0)
+
+All external URLs used by the app are consolidated into a single editable file, `assets/links.json`, so links can be changed without recompiling.
+
+| Feature | Description |
+| :--- | :--- |
+| **Single Source** | Plugin catalog, server-browse list, contributors, auto-update API, app catalog, and all social links (Discord, Reddit, Ko-fi, GitHub, ED forum) live in one JSON file. |
+| **3-Tier Loading** | Loaded at startup from a remote URL, falling back to the bundled local file, then built-in defaults. A log line states which source was used. |
+| **Runtime HTML Patching** | Static links in the Credits page, BetaHub modal, and repo-browser quick-links update from the JSON via `data-link-key` attributes. |
+| **Update-Friendly** | `links.json` is tracked by the incremental update manifest, so URLs can change through a release without a full rebuild. |
+
+---
+
+## 45. Plugin System (v1.0.0)
+
+Plugins extend BMM with curated mod sets, automation scripts, and bundled content, described by a manifest.
+
+| Feature | Description |
+| :--- | :--- |
+| **Manifest Format** | Each plugin declares id, name, version, author, description, target game, permissions, tags, website, bundled folders, and an optional modlist. |
+| **Apply Modes** | A plugin can apply a declarative **modlist**, run bundled **scripts**, or **both**. |
+| **Modlist Enforcement** | Required mods can be marked strict and pinned to a SHA-256. BMM compares your library against the requirements and reports what's missing before applying. |
+| **Install Sources** | Install from the remote plugin catalog, from a local `.bmmplug` file, or author your own plugin in-app and export it. |
+| **Permission Gating** | Plugins request permissions; running bundled external scripts requires an explicit "unsafe plugins" opt-in. |
+| **Lifecycle** | Enable/disable, uninstall, open plugin folder, and checksum validation are all built in. |
+| **Script Generation** | Generate ready-to-run cURL / PowerShell snippets that drive BMM through the local API. |
+
+---
+
+## 46. Local REST API (v1.0.0)
+
+BMM runs a local HTTP server on `127.0.0.1:51274`, letting external tools and plugins control it programmatically.
+
+| Feature | Description |
+| :--- | :--- |
+| **~40 Endpoints** | Mods, profiles, plugins, modpacks, repository, and data import/export are all controllable over `/api/`. |
+| **Token Auth** | A per-install API token protects the endpoints; it can be viewed or regenerated from the Plugins view. |
+| **Automation Ready** | Powers companion tools and macro setups (e.g. Stream Deck), and the in-app API explorer. |
+| **Script Helpers** | One click generates authenticated request snippets for any action. |
+
+---
+
+## 47. ContentID — Mod Identity (v1.0.0)
+
+Every mod gets a deterministic content fingerprint so BMM recognizes the same mod across machines, regardless of its folder name.
+
+| Feature | Description |
+| :--- | :--- |
+| **Deterministic ID** | The same files always produce the same `content_id`, derived from the mod's actual file hashes. |
+| **Cross-Machine Matching** | Modpacks, `.MM` lists, and repository sync match mods by content, not by name — eliminating false mismatches. |
+| **"Already Present" Detection** | The import flow uses ContentID to detect mods you already have, avoiding duplicates. |
+| **Integrity-Linked** | The ID stays in sync with the SHA-256 fingerprints from the integrity engine. |
+
+---
+
 *Better Mod Manager is developed by FreeProject089.*
 

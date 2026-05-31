@@ -19,6 +19,7 @@
     <link rel="stylesheet" href="css/betahub.css" />
     <link rel="stylesheet" href="css/modpack.css" />
     <link rel="stylesheet" href="css/mapper.css" />
+    <link rel="stylesheet" href="css/apps.css" />
     <link rel="stylesheet" href="assets/cropper/cropper.min.css">
     <script src="assets/cropper/cropper.min.js"></script>
     <!-- GSAP — used for boot loader animation -->
@@ -551,6 +552,19 @@
                             </svg>
                         </span>
                         <span class="nav-label" data-i18n="nav.modlists">Listes .MM</span>
+                    </button>
+
+                    <button class="nav-item" data-view="apps" id="nav-apps"
+                        onmouseenter="window.showTaskyHelp('nav.apps', 'grid')" onmouseleave="window.hideTaskyHelp()">
+                        <span class="nav-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <rect x="2" y="3" width="7" height="7" rx="1"/>
+                                <rect x="15" y="3" width="7" height="7" rx="1"/>
+                                <rect x="2" y="14" width="7" height="7" rx="1"/>
+                                <rect x="15" y="14" width="7" height="7" rx="1"/>
+                            </svg>
+                        </span>
+                        <span class="nav-label" data-i18n="nav.apps">App Catalog</span>
                     </button>
 
                     <button class="nav-item" data-view="plugins" id="nav-plugins"
@@ -7979,6 +7993,11 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
                 <!-- ══ MODPACKS VIEW ══ -->
                 <section class="view" id="view-plugins">
                     <!-- Rendered by plugins.ts -->
+                </section>
+
+                <!-- ══ APP CATALOG VIEW ══ -->
+                <section class="view" id="view-apps">
+                    <!-- Rendered by apps-catalog.ts -->
                 </section>
 
                 <section class="view" id="view-modpacks">

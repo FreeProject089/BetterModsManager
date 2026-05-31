@@ -486,5 +486,80 @@ Le système d'Historique des Modifications fournit un journal d'audit détaillé
 
 ---
 
+## 43. Catalogue d'Apps (v1.0.0)
+
+Le Catalogue d'Apps est un installeur en un clic pour les applications et outils compagnons, piloté par un `catalog.json` hébergeable.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Parcourir & Filtrer** | Grille de cartes avec miniature, badges, recherche et filtres catégorie/prix (Jeu/Utilitaire/Autre · Gratuit/Freemium/Payant). |
+| **Installation en un clic** | Supporte `zip`, `exe`, `msi` et `script`. Les zips portables sont extraits et l'exécutable principal choisi automatiquement ; les installeurs lancent leur propre assistant. |
+| **Détection zéro action** | Pour tout installeur, BMM prend un instantané des dossiers d'installation + du registre Windows avant de le lancer, puis compare après pour trouver l'exécutable à lancer et le désinstalleur — aucune sélection manuelle. |
+| **Choix du dossier** | Les apps portables peuvent être installées dans un dossier personnalisé, par défaut le répertoire `Apps` géré par BMM. |
+| **Suivi d'utilisation** | Le temps passé dans chaque app lancée est enregistré automatiquement à sa fermeture. |
+| **Désinstallation intelligente** | Les apps gérées proposent garder/supprimer les fichiers ; les apps installées par setup peuvent lancer leur vrai désinstalleur Windows (résolu depuis le registre). |
+| **Historique & Favoris** | Journal d'activité par app (install/lancement/désinstallation) avec icônes, plus un onglet favoris. |
+| **Modale de détail** | Galerie d'images (miniature + captures), rendu Markdown complet du README, prérequis, statistiques d'usage et label de source. |
+| **Créateur de Catalogue** | Construisez un `catalog.json` dans l'app — ajout d'apps via un formulaire, aperçu du JSON, puis copie ou téléchargement pour héberger votre propre catalogue. |
+| **Modèle de confiance** | Les badges `Official` / `Partner` sont accordés selon la source du catalogue (le catalogue officiel et ses `partner_catalogs`), jamais par ce que prétend un JSON. |
+| **Sources communautaires** | Ajoutez n'importe quelle URL de catalogue communautaire ; le catalogue officiel peut auto-importer les catalogues partenaires et communautaires. |
+
+---
+
+## 44. Registre de liens centralisé (v1.0.0)
+
+Toutes les URLs externes utilisées par l'app sont regroupées dans un seul fichier éditable, `assets/links.json`, pour pouvoir changer les liens sans recompiler.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Source unique** | Catalogue plugins, liste server-browse, contributeurs, API de mise à jour, catalogue d'apps et tous les liens sociaux (Discord, Reddit, Ko-fi, GitHub, forum ED) dans un seul fichier JSON. |
+| **Chargement à 3 niveaux** | Chargé au démarrage depuis une URL distante, avec repli sur le fichier local intégré, puis les valeurs par défaut. Une ligne de log indique la source utilisée. |
+| **Injection HTML à l'exécution** | Les liens statiques de la page Crédits, de la modale BetaHub et des liens rapides du navigateur de dépôts se mettent à jour depuis le JSON via des attributs `data-link-key`. |
+| **Compatible mises à jour** | `links.json` est suivi par le manifeste de mise à jour incrémentale, donc les URLs peuvent changer via une release sans rebuild complète. |
+
+---
+
+## 45. Système de Plugins (v1.0.0)
+
+Les plugins étendent BMM avec des ensembles de mods curés, des scripts d'automatisation et du contenu embarqué, décrits par un manifeste.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **Format de manifeste** | Chaque plugin déclare id, nom, version, auteur, description, jeu cible, permissions, tags, site web, dossiers embarqués et une modlist optionnelle. |
+| **Modes d'application** | Un plugin peut appliquer une **modlist** déclarative, exécuter des **scripts** embarqués, ou **les deux**. |
+| **Application stricte** | Les mods requis peuvent être marqués stricts et épinglés à un SHA-256. BMM compare votre bibliothèque aux exigences et rapporte ce qui manque avant d'appliquer. |
+| **Sources d'installation** | Installation depuis le catalogue de plugins distant, depuis un fichier `.bmmplug` local, ou création de votre propre plugin dans l'app puis export. |
+| **Permissions** | Les plugins demandent des permissions ; l'exécution de scripts externes embarqués nécessite un opt-in explicite "plugins non sûrs". |
+| **Cycle de vie** | Activation/désactivation, désinstallation, ouverture du dossier du plugin et validation par checksum sont intégrés. |
+| **Génération de scripts** | Génère des extraits cURL / PowerShell prêts à l'emploi qui pilotent BMM via l'API locale. |
+
+---
+
+## 46. API REST locale (v1.0.0)
+
+BMM lance un serveur HTTP local sur `127.0.0.1:51274`, permettant aux outils externes et aux plugins de le contrôler par programmation.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **~40 endpoints** | Mods, profils, plugins, modpacks, dépôt et import/export de données sont tous contrôlables via `/api/`. |
+| **Auth par token** | Un token d'API par installation protège les endpoints ; il peut être consulté ou régénéré depuis la vue Plugins. |
+| **Prêt pour l'automatisation** | Alimente les outils compagnons et les configurations de macros (ex : Stream Deck), ainsi que l'explorateur d'API intégré. |
+| **Aides aux scripts** | Un clic génère des extraits de requêtes authentifiées pour n'importe quelle action. |
+
+---
+
+## 47. ContentID — Identité de mod (v1.0.0)
+
+Chaque mod reçoit une empreinte de contenu déterministe pour que BMM reconnaisse le même mod entre machines, peu importe le nom de son dossier.
+
+| Fonctionnalité | Description |
+| :--- | :--- |
+| **ID déterministe** | Les mêmes fichiers produisent toujours le même `content_id`, dérivé des hash réels des fichiers du mod. |
+| **Correspondance entre machines** | Les modpacks, listes `.MM` et la synchro de dépôt font correspondre les mods par contenu, pas par nom — éliminant les fausses différences. |
+| **Détection "déjà présent"** | Le flux d'import utilise ContentID pour détecter les mods que vous possédez déjà, évitant les doublons. |
+| **Lié à l'intégrité** | L'ID reste synchronisé avec les empreintes SHA-256 du moteur d'intégrité. |
+
+---
+
 *Better Mod Manager est développé par FreeProject089.*
 

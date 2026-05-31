@@ -24,6 +24,7 @@ export interface BmmLinks {
     server_browse:    string;
     contributors:     string;
     autoupdate_api:   string;
+    apps_catalog:     string;
     // Community / social links (patched into HTML at runtime)
     github_repo:      string;
     discord:          string;
@@ -39,6 +40,7 @@ const DEFAULTS: BmmLinks = {
     server_browse:    'https://raw.githubusercontent.com/BetterDCS/Better_ModManager_ServerBrowse/main/repos.json',
     contributors:     'https://raw.githubusercontent.com/BetterDCS/BMM_Contributors/refs/heads/main/contributors.json',
     autoupdate_api:   'https://api.github.com/repos/FreeProject089/BetterModsManager/releases',
+    apps_catalog:     'https://raw.githubusercontent.com/BetterDCS/BMM_App_Catalogue/main/catalog.json',
     github_repo:      'https://github.com/FreeProject089/BetterModsManager',
     discord:          'https://discord.com/invite/CTaaEF9R75',
     reddit:           'https://www.reddit.com/r/BetterModManager/',

@@ -29,6 +29,7 @@ import { checkSecurityMode } from './security-modal.js';
 import { initPlugins } from '../features/plugins/plugins.js';
 import { loadLinks, getLinks } from '../core/links-config.js';
 import { initMapper } from '../features/mapper/mapper.js';
+import { initAppsCatalog } from '../features/apps/apps-catalog.js';
 import { playBootSound, playCloseSound, setSoundEnabled, setSoundVolume } from './sound-engine.js';
 export { setSoundEnabled, setSoundVolume, playCloseSound };
 // Expose boot sound to inline loader script. If the loader already fired before this module
@@ -731,6 +732,7 @@ async function main() {
     initUpdateNotes();
     initMapper();
     initPlugins();
+    initAppsCatalog();
     document.getElementById('btn-restart-onboarding')?.addEventListener('click', () => {
         openTutorialHub();
     });

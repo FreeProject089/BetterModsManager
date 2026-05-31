@@ -458,6 +458,21 @@ fn main() {
             commands::plugins::run_plugin_scripts,
             commands::plugins::open_plugin_folder,
             commands::plugins::compute_plugin_checksum,
+            commands::apps::fetch_app_catalogs,
+            commands::apps::install_app,
+            commands::apps::detect_app_executables,
+            commands::apps::launch_app,
+            commands::apps::get_apps_state,
+            commands::apps::uninstall_app,
+            commands::apps::toggle_app_favorite,
+            commands::apps::add_community_source,
+            commands::apps::remove_community_source,
+            commands::apps::get_default_apps_path,
+            commands::apps::set_app_exe_path,
+            commands::apps::open_app_folder,
+            commands::apps::clear_app_history,
+            commands::apps::register_installed_exe,
+            commands::apps::app_has_uninstaller,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

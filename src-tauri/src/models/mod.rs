@@ -7,3 +7,4 @@ pub mod repo;
 pub mod modpack;
 pub mod launch_pack;
 pub mod plugin;
+pub mod app_catalog;

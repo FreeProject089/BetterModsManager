@@ -539,5 +539,89 @@ Le navigateur public de dépôts applique un filtre sur le champ `hash`.
 
 ---
 
+## 42. Registre de liens centralisé (v1.0.0)
+
+Toutes les URLs externes sont découplées du code dans `frontend/assets/links.json`, chargé via `frontend/src/core/links-config.ts`.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Schéma** | Interface `BmmLinks` : `plugin_catalog`, `plugin_github`, `server_browse`, `contributors`, `autoupdate_api`, `apps_catalog`, plus les liens sociaux (`github_repo`, `discord`, `reddit`, `kofi`, `kofi_community`, `ed_forum`). |
+| **Ordre de chargement** | `loadLinks()` tente `REMOTE_LINKS_URL` → `assets/links.json` local → `DEFAULTS` codés en dur. Le premier succès gagne ; chaque fusion est étalée sur `DEFAULTS` donc une clé manquante ne casse rien. |
+| **Observabilité** | Un unique `console.log` rapporte la source résolue (`remote (...)`, `local file (...)` ou `built-in defaults`). |
+| **Accesseur** | `getLinks()` retourne le `Readonly<BmmLinks>` en cache ; appelé par `repo.ts`, `plugins.ts`, `update-notes.ts`, `apps-catalog.ts` et `app.ts`. |
+| **Passe-plat backend** | `fetch_plugin_catalog(catalog_url)` et `check_for_update(api_base_url)` acceptent l'URL du frontend, avec repli sur une constante Rust. |
+| **Injection HTML à l'exécution** | `patchHtmlLinks()` s'exécute après `loadLinks()` et réécrit le `href` / `data-url` de chaque élément `[data-link-key]`, donc les liens statiques d'`index.html` suivent le JSON. |
+| **Intégration mises à jour** | `links.json` est listé dans `TRACKED_FILES` de `scripts/gen-update-manifest.mjs`, donc l'updater incrémental peut patcher les URLs sans nouvel installeur. |
+
+---
+
+## 43. Moteur du Catalogue d'Apps (v1.0.0)
+
+Le Catalogue d'Apps est implémenté dans `src-tauri/src/commands/apps.rs` (+ `models/app_catalog.rs`) et `frontend/src/features/apps/apps-catalog.ts`. L'état persiste dans `apps_state.json` dans le répertoire de données de l'app.
+
+### Récupération du catalogue & chaîne de confiance
+- `fetch_app_catalogs(catalog_url, extra_community_urls)` fusionne plusieurs catalogues par niveaux et attribue la confiance **par source**, jamais par le contenu JSON (`apply_trust()` écrase `official`/`partner` et tronque `tags` à 3).
+  - **Niveau 0 — Officiel** : l'URL `apps_catalog` → `official = true`. Ses `partner_catalogs` définissent le Niveau 1 ; ses `community_imports` alimentent le Niveau 2.
+  - **Niveau 1 — Partenaire** : les URLs dans les `partner_catalogs` officiels → `partner = true`.
+  - **Niveau 2 — Communauté** : `community_imports` + sources ajoutées par l'utilisateur → aucun badge.
+- Les entrées sont dédupliquées par `id` (le niveau le plus élevé gagne). Un ensemble de visites + un plafond de 30 sources empêchent les boucles.
+
+### Moteur d'installation
+- `install_app(...)` télécharge dans un dossier géré `<install_path>/<id>/`, puis branche selon le type :
+  - **zip** → extrait ; s'il contient un exe portable il est conservé (`is_managed = true`) et l'exe principal choisi par `pick_main_exe()` (score de nom, ignore les installeurs). S'il contient **seulement** un installeur, celui-ci est lancé via `run_installer_and_detect()`.
+  - **exe/msi** (ou nom contenant `setup`/`install`) → `run_installer_and_detect()`.
+  - **script** → conservé et enregistré comme cible de lancement.
+- `run_installer_and_detect()` prend un instantané de `common_install_roots()` (Program Files, Program Files (x86), LocalAppData\Programs) **avant** le lancement, fait un `child.wait()` sur une tâche `spawn_blocking`, puis résout exe/dossier/désinstalleur depuis `find_registry_app()` (registre `DisplayIcon` / `InstallLocation` / `UninstallString`) avec un repli par diff de dossiers (`auto_detect_installed_exe()` + `match_score()`).
+
+### Lancement, suivi d'utilisation & désinstallation
+- `launch_app()` sélectionne un interpréteur selon l'extension (`.ps1`→PowerShell `-ExecutionPolicy Bypass`, `.bat`/`.cmd`→cmd, `.py`→python, `.vbs`→wscript, `.sh`→bash, sinon direct), puis lance un thread d'arrière-plan qui `wait()` la fin et ajoute les secondes écoulées à `usage_seconds`.
+- `uninstall_app(app_id, delete_files, run_uninstaller)` :
+  - `run_uninstaller` → résout la commande depuis l'état ou un lookup `find_registry_app()` en direct, la parse avec `parse_command()` (gère chemins entre guillemets + args) et la lance directement (l'OS gère l'UAC).
+  - sinon supprime le dossier géré **avant** de modifier l'état (donc une suppression échouée laisse l'état intact).
+- Commandes enregistrées : `fetch_app_catalogs`, `install_app`, `detect_app_executables`, `launch_app`, `get_apps_state`, `uninstall_app`, `toggle_app_favorite`, `add/remove_community_source`, `get_default_apps_path`, `set_app_exe_path`, `register_installed_exe`, `app_has_uninstaller`, `open_app_folder`, `clear_app_history`.
+
+### Frontend
+- Onglets : Browse / Installées / Favoris / Historique / Sources / Créer. L'état est rafraîchi via une lecture légère `get_apps_state` après chaque mutation (pas de polling).
+- `renderMarkdown()` est un convertisseur Markdown→HTML sans dépendance (titres, gras/italique, code inline + bloc, listes, citations, liens, images) utilisé dans la modale de détail ; les URLs de README sont normalisées en raw via `toRawUrl()` pour éviter le CORS.
+
+---
+
+## 44. Architecture du Système de Plugins (v1.0.0)
+
+Implémenté dans `src-tauri/src/commands/plugins.rs` avec les modèles dans `models/plugin.rs` ; le catalogue est récupéré depuis `plugin_catalog` de `links.json`.
+
+| Composant | Implémentation |
+| :--- | :--- |
+| **Manifeste** | `PluginManifest` (id/name/version/author/description/game/permissions/tags/website/folders) plus `apply_mode` (`modlist`/`script`/`both`) et `has_scripts`/`scripts`. |
+| **Modèle de modlist** | `PluginModList { strict, required_mods }` ; chaque `PluginModRequirement { name, optional, sha256 }`. `compare_plugin_mods` compare la bibliothèque active aux exigences ; `apply_plugin_modlist` active l'ensemble. |
+| **Installation** | `install_plugin` (depuis le catalogue), `install_plugin_from_file` (`.bmmplug`), `create_local_plugin` (création dans l'app), `export_plugin`. `compute_plugin_checksum` valide le contenu. |
+| **Permissions** | `get_plugin_permissions` / `set_plugin_permissions` ; l'exécution de scripts externes (`run_plugin_scripts`) est protégée derrière une permission "plugins non sûrs". |
+| **Cycle de vie** | `toggle_plugin`, `uninstall_plugin`, `get_installed_plugins`, `open_plugin_folder`. |
+| **Automatisation** | `generate_script` émet des extraits cURL / PowerShell ; `get_app_exe_path`, `write_text_file`, `write_zip_files` supportent les flux de création/export. |
+
+## 45. Serveur API REST local (v1.0.0)
+
+`src-tauri/src/api/mod.rs` lance un serveur **Warp** sur `API_PORT = 51274` (`127.0.0.1`), démarré au lancement de l'app.
+
+| Aspect | Détail |
+| :--- | :--- |
+| **Routes** | ~40 endpoints via `path!("api" / ...)` : `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
+| **Auth** | Un token par installation (`get_api_token` / `reset_api_token`) protège les routes mutantes ; SHA-256 est utilisé pour la gestion du token. |
+| **Concurrence** | Partage `AppData` via `Arc` ; utilise un canal `oneshot` + `AtomicBool` pour un arrêt propre. |
+| **Consommateurs** | L'explorateur d'API intégré, les scripts d'automatisation générés et les outils compagnons externes. |
+
+## 46. Moteur ContentID (v1.0.0)
+
+L'identité de mod déterministe se trouve dans `models/mod_entry.rs`.
+
+| Fonction | Comportement |
+| :--- | :--- |
+| `derive_content_id(folder_path)` | Calcule un id stable à partir de l'ensemble des fichiers du mod — déterministe entre machines pour un contenu identique. |
+| `content_id_from_file_hashes(hashes)` | Réduit la map de SHA-256 par fichier en un seul content id. |
+| `update_content_id_from_hashes(entry)` | Rafraîchit `entry.content_id` depuis les `file_hashes` déjà calculés, le gardant synchronisé avec le moteur d'intégrité. |
+| **Usage** | Correspondance de mods pour les listes `.MM`, modpacks, synchro de dépôt et la vérification "déjà présent" à l'import — le tout indexé sur `content_id` plutôt que sur le nom de dossier. |
+
+---
+
 *Better Mod Manager est développé par FreeProject089 — Conçu pour une performance sans compromis, la sécurité des fichiers et une gestion moderne des mods.*
 
