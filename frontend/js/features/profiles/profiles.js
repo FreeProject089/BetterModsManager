@@ -795,9 +795,12 @@ export async function renderProfiles() {
       <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px;margin-top:auto;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
           <span style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${escHtml(modCountLabel)}</span>
-          <span class="profile-disk-usage" data-mods-path="${escAttr(p.mods_path)}" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);opacity:0.7">
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:middle;margin-right:2px;animation:spin 1.2s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-          </span>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <span class="profile-disk-warn" data-profile-id="${escAttr(p.id)}" data-mods-path="${escAttr(p.mods_path)}" style="display:none;"></span>
+            <span class="profile-disk-usage" data-mods-path="${escAttr(p.mods_path)}" style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);opacity:0.7">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:middle;margin-right:2px;animation:spin 1.2s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            </span>
+          </div>
         </div>
         ${activeModsHtml}
       </div>
@@ -829,31 +832,109 @@ export async function renderProfiles() {
         grid.appendChild(card);
         applyTranslations(card);
     });
-    // Async: load disk usage for each profile mods folder
+    // Async: load disk usage for each profile mods folder + check disk space warnings
     (async () => {
         const diskSpans = grid.querySelectorAll('.profile-disk-usage');
-        const formatBytes = (bytes) => {
+        const warnSpans = grid.querySelectorAll('.profile-disk-warn');
+        const fmtBytes = (bytes) => {
             if (bytes === 0)
                 return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const k = 1024, s = ['B', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + s[i];
         };
+        // 1. Collect profile sizes in parallel
+        const sizeMap = new Map(); // modsPath → bytes
         await Promise.allSettled(Array.from(diskSpans).map(async (span) => {
-            const modsPath = span.dataset.modsPath;
-            if (!modsPath) {
+            const p = span.dataset.modsPath;
+            if (!p) {
                 span.textContent = '';
                 return;
             }
             try {
-                const size = await invoke('get_folder_size', { path: modsPath });
-                span.innerHTML = `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:middle;margin-right:2px"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>${formatBytes(size)}`;
+                const sz = await invoke('get_folder_size', { path: p });
+                sizeMap.set(p, sz);
+                span.innerHTML = `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:middle;margin-right:2px"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>${fmtBytes(sz)}`;
             }
             catch {
                 span.textContent = '';
             }
         }));
+        // Publish sizes globally so storage manager can use them without extra IPC
+        window.__profileDiskSizes = sizeMap;
+        // 2. Fetch disk info to know available space per drive
+        let disks = [];
+        try {
+            disks = await invoke('get_system_disks');
+        }
+        catch {
+            return;
+        }
+        // Build mount-point → disk map (simple: check path prefix)
+        const diskForPath = (path) => {
+            const lower = path.toLowerCase().replace(/\\/g, '/');
+            // Sort by mount length desc so longest match wins
+            return disks.slice().sort((a, b) => b.mount_point.length - a.mount_point.length)
+                .find(d => lower.startsWith(d.mount_point.toLowerCase().replace(/\\/g, '/')));
+        };
+        // 3. For each profile, build total profile sizes per disk
+        const totalPerDisk = new Map();
+        sizeMap.forEach((sz, path) => {
+            const d = diskForPath(path);
+            if (!d)
+                return;
+            totalPerDisk.set(d.mount_point, (totalPerDisk.get(d.mount_point) || 0) + sz);
+        });
+        window.__profileTotalPerDisk = totalPerDisk;
+        // 4. Compute warning level per profile and show icon
+        warnSpans.forEach(span => {
+            const modsPath = span.dataset.modsPath;
+            if (!modsPath)
+                return;
+            const d = diskForPath(modsPath);
+            if (!d)
+                return;
+            const available = d.available_space_bytes;
+            const total = totalPerDisk.get(d.mount_point) || 0;
+            if (total === 0 || available === 0)
+                return;
+            const ratio = total / available; // 1.0 = exactly fills available space
+            // Critical: profiles need MORE space than is available
+            // Warning: profiles use >80% of available space (configurable, 80% default)
+            const isCritical = total > available;
+            const warnThreshold = window.__storageWarnPct ?? 0.6;
+            const isWarning = !isCritical && ratio > warnThreshold;
+            if (!isCritical && !isWarning)
+                return;
+            const color = isCritical ? '#ef4444' : '#f59e0b';
+            const bgColor = isCritical ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.1)';
+            const tipKey = isCritical ? 'storage.profileWarnCritical' : 'storage.profileWarnWarning';
+            const tipText = isCritical
+                ? `Profiles need ${fmtBytes(total)} but only ${fmtBytes(available)} free on this disk!`
+                : `Profiles use ${fmtBytes(total)} — ${Math.round(ratio * 100)}% of available space (${fmtBytes(available)})`;
+            span.style.display = 'inline-flex';
+            span.style.alignItems = 'center';
+            span.innerHTML = `
+              <button
+                class="profile-disk-warn-btn"
+                style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;background:${bgColor};border:1px solid ${color}44;cursor:pointer;padding:0;transition:opacity 0.15s;"
+                onmouseenter="window.showTaskyHelp('${tipKey}', 'alert', false)"
+                onmouseleave="window.hideTaskyHelp()"
+                onclick="(function(){
+                  document.querySelectorAll('.nav-item[data-view]').forEach(n=>n.classList.remove('active'));
+                  document.querySelector('.nav-item[data-view=settings]')?.classList.add('active');
+                  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+                  document.getElementById('view-settings')?.classList.add('active');
+                  setTimeout(()=>{const el=document.getElementById('btn-storage-manager');if(el){el.click();}},150);
+                })()"
+              >
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="3">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              </button>`;
+        });
     })();
     // Functions for card actions
     async function activateProfile(id) {

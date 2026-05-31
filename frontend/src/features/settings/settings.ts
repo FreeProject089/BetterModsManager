@@ -384,6 +384,8 @@ const _renderStorageModal = async () => {
         const alertEnabled = settings.storage_alert_enabled || false;
         const warningPct = settings.storage_warning_space_pct !== undefined ? settings.storage_warning_space_pct : 40;
         const criticalPct = settings.storage_critical_space_pct !== undefined ? settings.storage_critical_space_pct : 30;
+        // Publish threshold so profile cards use the same value (converted: warningPct% free → ratio)
+        (window as any).__storageWarnPct = Math.max(0, Math.min(99, 100 - warningPct)) / 100;
 
         // Storage alert thresholds block
         const thresholdsBlock = `
@@ -572,15 +574,44 @@ const _renderStorageModal = async () => {
                 </div>
 
                 ${(() => {
-                    const freePct = disk.total_space_bytes > 0 ? (disk.available_space_bytes / disk.total_space_bytes) * 100 : 0;
-                    const hasProfiles = disk.profiles_using && disk.profiles_using.length > 0;
-                    if (hasProfiles && freePct <= criticalPct) {
-                        return `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:12px;font-size:11px;color:#f87171;font-weight:700;animation:pulse-danger 2s infinite;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${t('storage.critical')}</div>`;
-                    } else if (hasProfiles && freePct <= warningPct) {
-                        return `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:12px;font-size:11px;color:#fbbf24;font-weight:600;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>${t('storage.warning')}</div>`;
-                    }
-                    return '';
+                    // Profile-aware section: show how much available space profiles need
+                    const profileTotal: number = ((window as any).__profileTotalPerDisk
+                        ?.get(disk.mount_point)) || 0;
+                    if (profileTotal === 0) return '';
+
+                    const avail   = disk.available_space_bytes;
+                    const ratio   = avail > 0 ? profileTotal / avail : 1;
+                    const barPct  = Math.min(ratio * 100, 100);
+                    const isCrit  = profileTotal > avail;
+                    // Use configurable warningPct: warn when profiles use more than (100 - warningPct)% of available space
+                    // e.g. warningPct=40 → warn when profiles use > 60% of available space
+                    const warnThreshold = Math.max(0, Math.min(99, 100 - warningPct)) / 100;
+                    const isWarn  = !isCrit && ratio > warnThreshold;
+                    const barCol  = isCrit ? '#ef4444' : isWarn ? '#f59e0b' : '#10b981';
+                    const labelCol = isCrit ? '#f87171' : isWarn ? '#fbbf24' : 'var(--text-muted)';
+
+                    return `
+                    <div class="storage-usage-container" style="margin-top:8px;">
+                        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:6px;font-family:var(--font-mono);">
+                            <span style="font-weight:500;display:flex;align-items:center;gap:5px;">
+                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="7" height="7" rx="1"/><rect x="15" y="3" width="7" height="7" rx="1"/><rect x="2" y="14" width="7" height="7" rx="1"/><rect x="15" y="14" width="7" height="7" rx="1"/></svg>
+                                PROFILES: <span style="color:var(--text-secondary);">${formatBytes(profileTotal)}</span> / ${formatBytes(avail)} ${t('storage.available') || 'available'}
+                            </span>
+                            <span style="color:${labelCol};font-weight:900;">${Math.round(ratio * 100)}%</span>
+                        </div>
+                        <div class="storage-usage-bar">
+                            <div class="storage-usage-fill" style="width:${barPct}%;background:${barCol};box-shadow:0 0 12px ${barCol}55;transition:width 0.4s ease;"></div>
+                        </div>
+                        ${isCrit ? `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:10px;font-size:11px;color:#f87171;font-weight:700;animation:pulse-danger 2s infinite;">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            ${t('storage.profilesCritical') || 'Profile mods ('+ formatBytes(profileTotal) +') exceed available space ('+ formatBytes(avail) +')'}
+                        </div>` : isWarn ? `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:10px;font-size:11px;color:#fbbf24;font-weight:600;">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                            ${t('storage.profilesWarning') || 'Profile mods are using '+ Math.round(ratio*100) +'% of available disk space'}
+                        </div>` : ''}
+                    </div>`;
                 })()}
+
 
                 ${profilePills ? `<div style="display:flex;flex-wrap:wrap;gap:8px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.03);">${profilePills}</div>` : ''}
 
