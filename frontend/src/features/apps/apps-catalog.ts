@@ -302,7 +302,8 @@ function renderAppCard(app: AppEntry) {
     return `
     <div class="apps-card${installed?' apps-card-installed':''}" data-app-id="${escAttr(app.id)}">
       <div class="apps-card-thumb">
-        ${thumb ? `<img src="${escAttr(thumb)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=apps-card-thumb-placeholder>${thumbIcon(app.category)}</div>'">` : `<div class="apps-card-thumb-placeholder">${thumbIcon(app.category)}</div>`}
+        <div class="apps-card-thumb-placeholder">${thumbIcon(app.category)}</div>
+        ${thumb ? `<img class="apps-card-thumb-img" src="${escAttr(thumb)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
         <div class="apps-card-badges">
           ${app.official ? `<span class="apps-official-badge">✦ Official</span>` : ''}
           ${app.partner && !app.official ? `<span class="apps-partner-badge">Partner</span>` : ''}
@@ -332,6 +333,54 @@ function thumbIcon(cat: string) {
     if (cat === 'game') return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4m-2-2v4"/><circle cx="16" cy="10" r="1" fill="currentColor"/><circle cx="18" cy="12" r="1" fill="currentColor"/></svg>`;
     if (cat === 'utility') return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
     return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>`;
+}
+
+// ── Shared uninstall flow (used by Installed tab + detail modal) ───────────────
+// Renders the keep/delete (managed) or run-uninstaller/forget (setup) choice
+// into `container`, then calls onDone() after the action or onCancel() on cancel.
+function renderUninstallChoiceInto(
+    container: HTMLElement,
+    info: InstalledAppInfo,
+    onDone: () => void | Promise<void>,
+    onCancel: () => void,
+) {
+    const appId = info.id;
+    const isManaged = (info as any).is_managed !== false; // default true (legacy state)
+
+    const run = async (opts: { deleteFiles?: boolean; runUninstaller?: boolean }) => {
+        try {
+            await invoke('uninstall_app', {
+                appId,
+                deleteFiles: opts.deleteFiles ?? false,
+                runUninstaller: opts.runUninstaller ?? false,
+            });
+            toast(opts.runUninstaller ? (t('apps.uninstall.launched')||'Uninstaller launched')
+                : opts.deleteFiles ? (t('apps.uninstalled')||'App uninstalled')
+                : (t('apps.uninstall.keptFiles')||'Removed from BMM (files kept)'), 'success');
+            await onDone();
+        } catch (e) { toast(String(e), 'error'); }
+    };
+
+    const buttons = isManaged
+        ? `<button class="adm-uc-btn" data-u="keep">${t('apps.uninstall.keepFiles')||'Keep files'}</button>
+           <button class="adm-uc-btn adm-uc-danger" data-u="delete">${IC.trash} ${t('apps.uninstall.deleteFiles')||'Delete everything'}</button>`
+        : `<button class="adm-uc-btn adm-uc-danger" data-u="run">${IC.trash} ${t('apps.uninstall.runUninstaller')||'Run uninstaller'}</button>
+           <button class="adm-uc-btn" data-u="forget">${t('apps.uninstall.forget')||'Remove from BMM only'}</button>`;
+
+    container.innerHTML = `
+    <div class="adm-uninstall-choice">
+      <span class="adm-uninstall-label">${t('apps.uninstall.choice')||'Uninstall'} "${escHtml(info.title)}"?</span>
+      <div class="adm-uninstall-buttons">
+        ${buttons}
+        <button class="adm-uc-btn adm-uc-ghost" data-u="cancel">${t('common.cancel')||'Cancel'}</button>
+      </div>
+    </div>`;
+
+    container.querySelector('[data-u="cancel"]')?.addEventListener('click', onCancel);
+    container.querySelector('[data-u="keep"]')?.addEventListener('click', () => run({ deleteFiles: false }));
+    container.querySelector('[data-u="delete"]')?.addEventListener('click', () => run({ deleteFiles: true }));
+    container.querySelector('[data-u="run"]')?.addEventListener('click', () => run({ runUninstaller: true }));
+    container.querySelector('[data-u="forget"]')?.addEventListener('click', () => run({ deleteFiles: false }));
 }
 
 // ── Installed ─────────────────────────────────────────────────────────────────
@@ -398,12 +447,17 @@ function renderInstalled() {
                 await invoke('open_app_folder', { installPath: el.dataset.path }).catch(() => {});
             }
             if (action === 'uninstall') {
-                if (!confirm(`${t('apps.confirmUninstall')||'Uninstall'} "${_state.installed[id]?.title}"?`)) return;
-                try {
-                    await invoke('uninstall_app', { appId: id });
-                    toast(t('apps.uninstalled')||'App uninstalled', 'success');
-                    await refreshAndRender();
-                } catch (err) { toast(String(err), 'error'); }
+                const info = _state.installed[id];
+                if (!info) return;
+                // Expand this row into the same inline choice the detail modal uses (full width)
+                const row = el.closest('.apps-installed-row') as HTMLElement | null;
+                if (!row) return;
+                renderUninstallChoiceInto(
+                    row,
+                    info,
+                    () => refreshAndRender(),   // re-render the Installed tab after action
+                    () => renderInstalled(),    // cancel → restore the rows
+                );
             }
         });
     });

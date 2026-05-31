@@ -165,12 +165,23 @@
     background: var(--bg-tertiary);
     overflow: hidden;
 }
-.apps-card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Image sits on top of the placeholder; hidden by onerror if it fails to load.
+   `contain` shows the whole logo/screenshot without cropping. */
+.apps-card-thumb-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    padding: 8px;
+}
 .apps-card-thumb-placeholder {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 100%;
     color: var(--text-muted);
     opacity: 0.4;
 }
@@ -443,7 +454,14 @@
 
 /* ── Gallery ── */
 .adm-gallery { flex-shrink: 0; background: #0a0a0f; border-radius: 14px 14px 0 0; overflow: hidden; }
-.adm-hero { width: 100%; max-height: 280px; object-fit: cover; display: block; }
+/* `contain` keeps logos at a sane size and never crops screenshots */
+.adm-hero {
+    width: 100%;
+    height: 170px;
+    object-fit: contain;
+    display: block;
+    background: #0a0a0f;
+}
 .adm-thumbs { display: flex; gap: 6px; padding: 8px 10px; background: rgba(0,0,0,0.35); overflow-x: auto; }
 .adm-thumb {
     width: 60px; height: 40px; object-fit: cover; border-radius: 5px;
@@ -458,6 +476,9 @@
     padding: 18px 22px;
     display: flex; flex-direction: column; gap: 12px;
 }
+/* Stop flex children from being crushed when the README expands — each keeps
+   its natural height and the body scrolls instead. */
+.adm-body > * { flex-shrink: 0; }
 
 /* ── Header ── */
 .adm-header { display: flex; align-items: flex-start; gap: 14px; }
