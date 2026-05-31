@@ -40,8 +40,24 @@ let _activeTab = 'browse';
 let _searchQ = '';
 let _filterCat = 'all';
 let _filterPrice = 'all';
+let _filterTag  = 'all';
+let _historyFilter = 'all'; // all | install | launch | uninstall
+let _favSearch = '';
+let _favFilterCat = 'all';
+let _favFilterSource = 'all';
+let _favCollection = 'all'; // 'all' or collection id
 let _defaultPath = '';
 let _loading = false;
+
+// ── Favorite Collections (stored in localStorage, no Rust changes needed) ─────
+interface FavCollection { id: string; name: string; appIds: string[]; }
+function loadCollections(): FavCollection[] {
+    try { return JSON.parse(localStorage.getItem('bmm_fav_collections') || '[]'); } catch { return []; }
+}
+function saveCollections(cols: FavCollection[]) {
+    localStorage.setItem('bmm_fav_collections', JSON.stringify(cols));
+}
+let _collections: FavCollection[] = loadCollections();
 
 // ── SVG icon helpers ──────────────────────────────────────────────────────────
 const IC = {
@@ -74,6 +90,9 @@ export async function initAppsCatalog() {
     _defaultPath = await invoke('get_default_apps_path').catch(() => '');
     setupEvents(view);
     await loadCatalog();
+
+    // Lazy tracking: if any installed app was already running when BMM started
+    invoke('scan_and_track_running_apps').catch(() => {});
 
     document.addEventListener('langChanged', () => {
         renderShell(view);
@@ -289,10 +308,11 @@ function filteredApps() {
     return _catalog.filter(a => {
         if (_filterCat !== 'all' && a.category !== _filterCat) return false;
         if (_filterPrice !== 'all' && a.price !== _filterPrice) return false;
+        if (_filterTag !== 'all' && !a.tags.includes(_filterTag)) return false;
         if (_searchQ) {
             const q = _searchQ.toLowerCase();
             return a.title.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)
-                || a.tags.some(t => t.toLowerCase().includes(q));
+                || a.tags.some(tg => tg.toLowerCase().includes(q));
         }
         return true;
     });
@@ -303,12 +323,31 @@ function renderBrowse() {
     if (!content) return;
     const apps = filteredApps();
 
-    if (!apps.length) {
-        content.innerHTML = `<div class="apps-empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><p>${_searchQ ? (t('apps.noResults')||'No results') : (t('apps.emptyBrowse')||'Catalog is empty')}</p></div>`;
-        return;
+    // Build tag chips from all catalog tags
+    const allTags = [...new Set(_catalog.flatMap(a => a.tags))].sort();
+
+    let html = '';
+    if (allTags.length) {
+        html += `<div class="apps-tags-row">
+          <button class="apps-tag-chip${_filterTag === 'all' ? ' active' : ''}" data-tag="all">${t('apps.filter.allTags')||'All tags'}</button>
+          ${allTags.map(tag => `<button class="apps-tag-chip${_filterTag === tag ? ' active' : ''}" data-tag="${escAttr(tag)}">${escHtml(tag)}</button>`).join('')}
+        </div>`;
     }
 
-    content.innerHTML = `<div class="apps-grid">${apps.map(renderAppCard).join('')}</div>`;
+    if (!apps.length) {
+        html += `<div class="apps-empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><p>${_searchQ || _filterTag !== 'all' ? (t('apps.noResults')||'No results') : (t('apps.emptyBrowse')||'Catalog is empty')}</p></div>`;
+    } else {
+        html += `<div class="apps-grid">${apps.map(renderAppCard).join('')}</div>`;
+    }
+
+    content.innerHTML = html;
+
+    content.querySelectorAll('.apps-tag-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            _filterTag = (chip as HTMLElement).dataset.tag || 'all';
+            renderBrowse();
+        });
+    });
     content.querySelectorAll('[data-app-id]').forEach(card => {
         card.addEventListener('click', () => openDetailModal((card as HTMLElement).dataset.appId || ''));
     });
@@ -431,6 +470,9 @@ function renderInstalled() {
           </div>
         </div>
         <div class="apps-installed-actions">
+          <button class="apps-inst-fav-btn${_state.favorites.includes(app.id)?' active':''}" data-action="fav" data-id="${escAttr(app.id)}" title="${_state.favorites.includes(app.id)?(t('apps.unfavorite')||'Unfavorite'):(t('apps.favorite')||'Favorite')}">
+            ${_state.favorites.includes(app.id) ? IC.starFill : IC.star}
+          </button>
           ${app.exe_path
             ? `<button class="btn btn-sm btn-accent" data-action="launch" data-id="${escAttr(app.id)}" data-exe="${escAttr(app.exe_path)}">${IC.play} ${t('apps.launch')||'Launch'}</button>`
             : `<button class="btn btn-sm btn-ghost" data-action="pick-exe" data-id="${escAttr(app.id)}">${IC.monitor} ${t('apps.pickExe')||'Set exe'}</button>`}
@@ -447,6 +489,14 @@ function renderInstalled() {
             const action = el.dataset.action;
             const id = el.dataset.id || '';
 
+            if (action === 'fav') {
+                try {
+                    _state.favorites = await invoke('toggle_app_favorite', { appId: id });
+                    await refreshState();
+                    renderInstalled();
+                } catch (err) { toast(String(err), 'error'); }
+                return;
+            }
             if (action === 'launch') {
                 try {
                     await invoke('launch_app', { appId: id, exePath: el.dataset.exe });
@@ -488,57 +538,275 @@ function renderInstalled() {
 function renderFavorites() {
     const content = document.getElementById('apps-content');
     if (!content) return;
-    const apps = _catalog.filter(a => _state.favorites.includes(a.id));
+
+    // Base: all favorited apps present in catalog
+    let apps = _catalog.filter(a => _state.favorites.includes(a.id));
 
     if (!apps.length) {
         content.innerHTML = `<div class="apps-empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><p>${t('apps.noFavorites')||'No favorites yet'}</p></div>`;
         return;
     }
 
-    content.innerHTML = `<div class="apps-grid">${apps.map(renderAppCard).join('')}</div>`;
-    content.querySelectorAll('[data-app-id]').forEach(card => {
-        card.addEventListener('click', () => openDetailModal((card as HTMLElement).dataset.appId || ''));
+    // All unique sources in favorites
+    const allSources = [...new Set(apps.map(a => a.source_label || '').filter(Boolean))];
+    // All unique categories in favorites
+    const allCats = [...new Set(apps.map(a => a.category))];
+
+    // Apply collection filter
+    if (_favCollection !== 'all') {
+        const col = _collections.find(c => c.id === _favCollection);
+        apps = col ? apps.filter(a => col.appIds.includes(a.id)) : apps;
+    }
+    // Apply search
+    if (_favSearch) {
+        const q = _favSearch.toLowerCase();
+        apps = apps.filter(a => a.title.toLowerCase().includes(q) || a.tags.some(tg => tg.toLowerCase().includes(q)));
+    }
+    // Apply category filter
+    if (_favFilterCat !== 'all') apps = apps.filter(a => a.category === _favFilterCat);
+    // Apply source filter
+    if (_favFilterSource !== 'all') apps = apps.filter(a => a.source_label === _favFilterSource);
+
+    const chip = (val: string, cur: string, label: string, cb: string) =>
+        `<button class="apps-tag-chip${cur === val ? ' active' : ''}" data-ffc="${cb}" data-ffv="${escAttr(val)}">${escHtml(label)}</button>`;
+
+    content.innerHTML = `
+    <div class="apps-fav-toolbar">
+      <div class="apps-fav-search-wrap">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input class="apps-fav-search" id="fav-search" type="text" placeholder="${t('common.search')||'Search...'}" value="${escAttr(_favSearch)}">
+      </div>
+      ${allCats.length > 1 ? `<select class="apps-filter" id="fav-filter-cat">
+        <option value="all"${_favFilterCat==='all'?' selected':''}>${t('apps.filter.allCat')||'All categories'}</option>
+        ${allCats.map(c => `<option value="${escAttr(c)}"${_favFilterCat===c?' selected':''}>${escHtml(c)}</option>`).join('')}
+      </select>` : ''}
+      ${allSources.length > 1 ? `<select class="apps-filter" id="fav-filter-source">
+        <option value="all"${_favFilterSource==='all'?' selected':''}>${t('apps.fav.allSources')||'All sources'}</option>
+        ${allSources.map(s => `<option value="${escAttr(s)}"${_favFilterSource===s?' selected':''}>${escHtml(labelFromUrl(s))}</option>`).join('')}
+      </select>` : ''}
+    </div>
+
+    <div class="apps-collections">
+      <div class="apps-collection-row${_favCollection==='all'?' active':''}" data-coll="all">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <span class="apps-collection-name">${t('apps.fav.allFavs')||'All favorites'}</span>
+        <span class="apps-collection-count">${_state.favorites.length}</span>
+      </div>
+      ${_collections.map(col => `
+      <div class="apps-collection-row${_favCollection===col.id?' active':''}" data-coll="${escAttr(col.id)}">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span class="apps-collection-name">${escHtml(col.name)}</span>
+        <span class="apps-collection-count">${col.appIds.filter(id => _state.favorites.includes(id)).length}</span>
+        <button class="btn btn-xs btn-ghost btn-danger-ghost" data-del-coll="${escAttr(col.id)}" style="margin-left:auto">${IC.trash}</button>
+      </div>`).join('')}
+      <div class="apps-coll-add-row">
+        <input class="apps-path-input" id="new-coll-name" type="text" placeholder="${t('apps.fav.newCollection')||'New collection name…'}" style="font-size:12px">
+        <button class="btn btn-sm btn-ghost" id="add-coll-btn">${IC.plus}</button>
+      </div>
+    </div>
+
+    ${apps.length === 0
+      ? `<div class="apps-empty" style="height:140px"><p>${t('apps.fav.noMatch')||'No matching favorites'}</p></div>`
+      : `<div class="apps-grid">${apps.map(a => renderAppCardWithCollMenu(a)).join('')}</div>`}`;
+
+    // Search
+    document.getElementById('fav-search')?.addEventListener('input', e => { _favSearch = (e.target as HTMLInputElement).value; renderFavorites(); });
+    // Category filter
+    document.getElementById('fav-filter-cat')?.addEventListener('change', e => { _favFilterCat = (e.target as HTMLSelectElement).value; renderFavorites(); });
+    // Source filter
+    document.getElementById('fav-filter-source')?.addEventListener('change', e => { _favFilterSource = (e.target as HTMLSelectElement).value; renderFavorites(); });
+
+    // Collection select
+    content.querySelectorAll('[data-coll]').forEach(r => {
+        r.addEventListener('click', e => {
+            if ((e.target as HTMLElement).closest('[data-del-coll]')) return;
+            _favCollection = (r as HTMLElement).dataset.coll || 'all';
+            renderFavorites();
+        });
     });
+    // Delete collection
+    content.querySelectorAll('[data-del-coll]').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const id = (btn as HTMLElement).dataset.delColl!;
+            _collections = _collections.filter(c => c.id !== id);
+            saveCollections(_collections);
+            if (_favCollection === id) _favCollection = 'all';
+            renderFavorites();
+        });
+    });
+    // Add collection
+    document.getElementById('add-coll-btn')?.addEventListener('click', () => {
+        const inp = document.getElementById('new-coll-name') as HTMLInputElement;
+        const name = inp.value.trim();
+        if (!name) return;
+        _collections.push({ id: `coll_${Date.now()}`, name, appIds: [] });
+        saveCollections(_collections);
+        inp.value = '';
+        renderFavorites();
+    });
+    // Card click + "add to collection" context
+    content.querySelectorAll('[data-app-id]').forEach(card => {
+        card.addEventListener('click', e => {
+            if ((e.target as HTMLElement).closest('[data-add-to-coll]')) return;
+            openDetailModal((card as HTMLElement).dataset.appId || '');
+        });
+    });
+    // Add to collection button
+    content.querySelectorAll('[data-add-to-coll]').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const el = btn as HTMLElement;
+            const appId = el.dataset.addToColl!;
+            const collId = el.dataset.collTarget!;
+            if (!collId) return;
+            const col = _collections.find(c => c.id === collId);
+            if (!col) return;
+            if (!col.appIds.includes(appId)) col.appIds.push(appId);
+            else col.appIds = col.appIds.filter(id => id !== appId);
+            saveCollections(_collections);
+            renderFavorites();
+        });
+    });
+}
+
+// App card with "add to collection" mini-menu
+function renderAppCardWithCollMenu(app: AppEntry) {
+    const base = renderAppCard(app);
+    if (!_collections.length) return base;
+
+    // Inject a small "folder+" button at the bottom of the card body
+    const menuId = `coll-menu-${app.id}`;
+    const inColls = _collections.filter(c => c.appIds.includes(app.id));
+    return base.replace('</div>\n    </div>', `
+      <div style="margin-top:4px;position:relative">
+        <button class="apps-tag-chip" id="btn-${menuId}" title="${t('apps.fav.addToCollection')||'Add to collection'}">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          ${inColls.length ? inColls.map(c => escHtml(c.name)).join(', ') : (t('apps.fav.addToCollection')||'Collection')}
+        </button>
+        <div id="${menuId}" style="display:none;position:absolute;bottom:28px;left:0;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:100;min-width:140px">
+          ${_collections.map(c => `
+          <button class="apps-hist-row" data-add-to-coll="${escAttr(app.id)}" data-coll-target="${escAttr(c.id)}" style="width:100%;text-align:left;border:none;cursor:pointer">
+            ${c.appIds.includes(app.id) ? IC.check : '<svg width="13" height="13" viewBox="0 0 24 24"></svg>'}
+            ${escHtml(c.name)}
+          </button>`).join('')}
+        </div>
+      </div>
+    </div>\n    </div>`);
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
 
+const HIST_CFG: Record<string, { svg: string; cls: string; label: string }> = {
+    install:   { svg: IC.histInstall, cls: 'apps-action-install',   label: 'Installed' },
+    launch:    { svg: IC.histLaunch,  cls: 'apps-action-launch',    label: 'Launched' },
+    uninstall: { svg: IC.histRemove,  cls: 'apps-action-uninstall', label: 'Uninstalled' },
+};
+
+function parseTs(ts: string): Date | null {
+    // Rust format: "YYYY-MM-DD HH:MM:SS UTC"
+    const m = ts.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+    if (!m) return null;
+    return new Date(Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]));
+}
+
+function histDayLabel(ts: string): string {
+    const d = parseTs(ts);
+    if (!d) return ts;
+    const now = new Date();
+    const dayDiff = Math.floor((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+        - Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+    if (dayDiff <= 0)  return t('apps.history.today')     || 'Today';
+    if (dayDiff === 1) return t('apps.history.yesterday') || 'Yesterday';
+    return d.toLocaleDateString(undefined, { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+}
+
+function histTime(ts: string): string {
+    const d = parseTs(ts);
+    if (!d) return '';
+    return d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
+}
+
 function renderHistory() {
     const content = document.getElementById('apps-content');
     if (!content) return;
-    const entries = [..._state.history].reverse();
 
-    if (!entries.length) {
-        content.innerHTML = `<div class="apps-empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4"><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 1 .5 4M3 16v-5h5"/></svg><p>${t('apps.noHistory')||'No activity yet'}</p></div>`;
+    const all = [..._state.history].reverse();
+
+    if (!all.length) {
+        content.innerHTML = `<div class="apps-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3"><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 1 .5 4M3 16v-5h5"/></svg>
+          <p>${t('apps.noHistory')||'No activity yet'}</p>
+        </div>`;
         return;
     }
 
-    const actionSvg: Record<string, string> = {
-        install:   IC.histInstall,
-        launch:    IC.histLaunch,
-        uninstall: IC.histRemove,
-    };
-    const actionClass: Record<string, string> = {
-        install: 'apps-action-install', launch: 'apps-action-launch', uninstall: 'apps-action-uninstall'
-    };
+    // Counts per action
+    const cnt: Record<string, number> = { all: all.length, install: 0, launch: 0, uninstall: 0 };
+    all.forEach(e => { if (cnt[e.action] !== undefined) cnt[e.action]++; });
+
+    // Filter
+    const entries = _historyFilter === 'all' ? all : all.filter(e => e.action === _historyFilter);
+
+    // Group by day
+    const days: { label: string; rows: typeof entries }[] = [];
+    entries.forEach(e => {
+        const label = histDayLabel(e.timestamp);
+        const last = days[days.length - 1];
+        if (last && last.label === label) last.rows.push(e);
+        else days.push({ label, rows: [e] });
+    });
+
+    const chip = (id: string, label: string) => `
+      <button class="apps-hist-chip${_historyFilter === id ? ' active' : ''}" data-hf="${id}">
+        ${label}
+        <span class="apps-hist-chip-n">${cnt[id] ?? 0}</span>
+      </button>`;
 
     content.innerHTML = `
-    <div class="apps-history-header">
+    <div class="apps-hist-toolbar">
+      <div class="apps-hist-chips">
+        ${chip('all',       t('apps.history.all')        || 'All')}
+        ${chip('install',   t('apps.history.installed')  || 'Installed')}
+        ${chip('launch',    t('apps.history.launched')   || 'Launched')}
+        ${chip('uninstall', t('apps.history.uninstalled')|| 'Uninstalled')}
+      </div>
       <button class="btn btn-sm btn-ghost" id="apps-clear-history">
-        ${IC.trash} ${t('apps.clearHistory')||'Clear'}
+        ${IC.trash} ${t('apps.clearHistory') || 'Clear'}
       </button>
     </div>
-    <div class="apps-history-list">
-      ${entries.map(e => `
-      <div class="apps-history-row">
-        <span class="apps-history-action ${actionClass[e.action]||''}">${actionSvg[e.action]||IC.info}</span>
-        <span class="apps-history-title">${escHtml(e.app_title)}</span>
-        <span class="apps-history-time">${escHtml(e.timestamp)}</span>
-      </div>`).join('')}
-    </div>`;
+
+    ${entries.length === 0
+        ? `<div class="apps-empty" style="height:120px"><p>${t('apps.history.noneFilter')||'No entries for this filter'}</p></div>`
+        : days.map(day => `
+      <div class="apps-hist-day">
+        <div class="apps-hist-day-label">${escHtml(day.label)}</div>
+        <div class="apps-hist-day-rows">
+          ${day.rows.map(e => {
+              const cfg = HIST_CFG[e.action] || { svg: IC.info, cls: '', label: e.action };
+              return `<div class="apps-hist-entry">
+                <div class="apps-hist-icon ${cfg.cls}">${cfg.svg}</div>
+                <div class="apps-hist-body">
+                  <span class="apps-hist-action-label">${cfg.label}</span>
+                  <span class="apps-hist-app-name">${escHtml(e.app_title)}</span>
+                </div>
+                <span class="apps-hist-clock">${escHtml(histTime(e.timestamp))}</span>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`).join('')
+    }`;
+
+    content.querySelectorAll('.apps-hist-chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+            _historyFilter = (btn as HTMLElement).dataset.hf || 'all';
+            renderHistory();
+        });
+    });
 
     document.getElementById('apps-clear-history')?.addEventListener('click', async () => {
         await invoke('clear_app_history').catch(() => {});
+        _historyFilter = 'all';
         await refreshAndRender();
     });
 }
@@ -561,7 +829,7 @@ function renderSources() {
       </div>
       <div class="apps-sources-list">
         <div class="apps-source-row apps-source-official">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
           <span class="apps-source-url">${escHtml(getLinks().apps_catalog)}</span>
           <span class="apps-source-label">${t('apps.sources.official')||'Official'}</span>
         </div>

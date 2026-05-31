@@ -310,30 +310,183 @@
 .apps-installed-meta { display: flex; gap: 10px; font-size: 11px; color: var(--text-muted); margin-top: 3px; }
 .apps-installed-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
-/* ── History ── */
-.apps-history-header { display: flex; justify-content: flex-end; margin-bottom: 10px; }
-.apps-history-list { display: flex; flex-direction: column; gap: 4px; }
-.apps-history-row {
+/* ── History — old classes (kept for fallback) ── */
+.apps-history-header { display: none; }
+.apps-history-list   { display: none; }
+
+/* ── History (new design) ── */
+.apps-hist-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+.apps-hist-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.apps-hist-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.apps-hist-chip:hover { border-color: var(--accent); color: var(--text-primary); }
+.apps-hist-chip.active { background: rgba(var(--accent-rgb), 0.12); border-color: var(--accent); color: var(--accent); }
+.apps-hist-chip-n {
+    font-size: 10px;
+    background: rgba(255,255,255,0.08);
+    padding: 1px 5px;
+    border-radius: 8px;
+    font-weight: 700;
+}
+.apps-hist-chip.active .apps-hist-chip-n { background: rgba(var(--accent-rgb), 0.2); }
+
+/* Day group */
+.apps-hist-day { margin-bottom: 20px; }
+.apps-hist-day-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    padding: 0 4px 8px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.apps-hist-day-rows { display: flex; flex-direction: column; gap: 2px; }
+
+/* Entry row */
+.apps-hist-entry {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 8px 14px;
-    border-radius: 8px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    font-size: 12px;
+    padding: 9px 10px;
+    border-radius: 9px;
+    transition: background 0.12s;
+    cursor: default;
 }
-.apps-history-action {
-    width: 22px;
-    text-align: center;
-    font-weight: 700;
+.apps-hist-entry:hover { background: rgba(255,255,255,0.04); }
+
+/* Icon badge */
+.apps-hist-icon {
+    width: 32px; height: 32px;
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
 }
-.apps-action-install   { color: #10b981; }
-.apps-action-launch    { color: #60a5fa; }
-.apps-action-uninstall { color: #f87171; }
-.apps-history-title { flex: 1; color: var(--text-primary); }
-.apps-history-time { color: var(--text-muted); font-size: 11px; flex-shrink: 0; }
+.apps-action-install   { background: rgba(16,185,129,0.14); color: #10b981; }
+.apps-action-launch    { background: rgba(96,165,250,0.14); color: #60a5fa; }
+.apps-action-uninstall { background: rgba(248,113,113,0.14); color: #f87171; }
+
+/* Text */
+.apps-hist-body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.apps-hist-action-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    opacity: 0.65;
+    color: var(--text-secondary);
+}
+.apps-hist-app-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.apps-hist-clock {
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Keep old selectors for anything still using them */
+.apps-hist-group { display: none; }
+.apps-hist-date  { display: none; }
+.apps-hist-row   { display: none; }
+
+/* ── Favorites (search + filter toolbar) ── */
+.apps-fav-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.apps-fav-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 11px;
+    flex: 1;
+    min-width: 140px;
+    color: var(--text-muted);
+}
+.apps-fav-search { border: none; background: none; outline: none; color: var(--text-primary); font-size: 12px; flex: 1; min-width: 0; }
+
+/* Collections */
+.apps-collections { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.apps-collection-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+.apps-collection-row:hover, .apps-collection-row.active { border-color: var(--accent); }
+.apps-collection-row.active { background: rgba(var(--accent-rgb), 0.06); }
+.apps-collection-name { flex: 1; font-weight: 600; color: var(--text-primary); }
+.apps-collection-count { font-size: 10px; color: var(--text-muted); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 8px; }
+.apps-coll-add-row { display: flex; gap: 6px; margin-bottom: 10px; }
+
+/* Browse tag chips */
+.apps-tags-row {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    padding: 0 1px;
+}
+.apps-tag-chip {
+    padding: 3px 10px;
+    border-radius: 16px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.apps-tag-chip:hover { border-color: var(--accent); color: var(--text-primary); }
+.apps-tag-chip.active { background: rgba(var(--accent-rgb), 0.12); border-color: var(--accent); color: var(--accent); }
+
+/* Installed: fav button */
+.apps-inst-fav-btn {
+    background: none; border: none; cursor: pointer; padding: 4px;
+    color: var(--text-muted); border-radius: 6px;
+    transition: color 0.15s;
+    flex-shrink: 0;
+}
+.apps-inst-fav-btn:hover, .apps-inst-fav-btn.active { color: #f59e0b; }
 
 /* ── Sources ── */
 .apps-sources-wrap { max-width: 680px; }

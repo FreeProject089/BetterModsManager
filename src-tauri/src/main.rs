@@ -473,6 +473,7 @@ fn main() {
             commands::apps::clear_app_history,
             commands::apps::register_installed_exe,
             commands::apps::app_has_uninstaller,
+            commands::apps::scan_and_track_running_apps,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

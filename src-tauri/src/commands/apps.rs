@@ -753,33 +753,39 @@ pub fn launch_app(
     push_history(&mut state, "launch", &app_id, &title);
     let _ = save_state(&app_handle, &state);
 
-    // Usage tracking by process-name polling.
-    // We can't rely on the spawned Child exiting: launchers, Electron apps and
-    // single-instance apps fork a new process and the launched one returns
-    // immediately. Instead we watch the process list for the app's exe name.
+    // Usage tracking by process-name polling (via shared helper).
     let exe_name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
     let exe_full = exe_path.to_lowercase();
-    let app_handle_bg = app_handle.clone();
-    let app_id_bg = app_id.clone();
+    spawn_usage_tracker(app_handle, app_id, exe_name, exe_full, false);
 
+    Ok(())
+}
+
+/// Shared tracking loop — polls every `poll_secs` to check if the exe is
+/// still running. Accumulates usage incrementally (survives BMM closing
+/// before the app). `already_seen` = true when the app was already running
+/// at the time we start tracking (lazy startup detection — skips the appear-grace).
+fn spawn_usage_tracker(
+    app_handle: AppHandle,
+    app_id: String,
+    exe_name: String,
+    exe_full: String,
+    already_seen: bool,
+) {
     std::thread::spawn(move || {
         use sysinfo::{System, ProcessRefreshKind, UpdateKind};
         use std::time::Duration;
 
-        // Minimal refresh: only enumerate processes + resolve the exe path.
-        // We do NOT compute CPU/memory/disk (the expensive parts), so each poll
-        // is just a cheap process-list walk.
         let refresh_kind = ProcessRefreshKind::new().with_exe(UpdateKind::OnlyIfNotSet);
-
         let mut sys = System::new();
-        let poll_secs = 10u64;            // usage time doesn't need fine precision
+        let poll_secs = 10u64;
         let poll = Duration::from_secs(poll_secs);
-        let appear_grace_secs = 40u64;    // time allowed for the app window to appear
-        let mut seen = false;
+        let appear_grace_secs = 40u64;
+        let mut seen = already_seen;
         let mut waited = 0u64;
         let mut total = 0u64;
 
-        log_line(format!("[APPS] Tracking usage for '{}' (exe='{}')", app_id_bg, exe_name));
+        log_line(format!("[APPS] Usage tracker started for '{}' (already_seen={})", app_id, already_seen));
 
         loop {
             std::thread::sleep(poll);
@@ -795,28 +801,62 @@ pub fn launch_app(
 
             if running {
                 seen = true;
-                // Accumulate this interval immediately so usage updates live and
-                // survives BMM closing before the app.
-                let mut s = load_state(&app_handle_bg);
-                match s.installed.get_mut(&app_id_bg) {
+                let mut s = load_state(&app_handle);
+                match s.installed.get_mut(&app_id) {
                     Some(info) => { info.usage_seconds += poll_secs; total += poll_secs; }
-                    None => break, // app was uninstalled — stop tracking
+                    None => break,
                 }
-                let _ = save_state(&app_handle_bg, &s);
+                let _ = save_state(&app_handle, &s);
             } else if seen {
-                break; // app was running and has now closed
+                break;
             } else if waited >= appear_grace_secs {
-                log_line(format!("[APPS] '{}' process never appeared — usage not tracked", app_id_bg));
+                log_line(format!("[APPS] '{}' process never appeared — usage not tracked", app_id));
                 break;
             }
         }
 
         if seen {
-            log_line(format!("[APPS] '{}' closed — tracked {}s this session", app_id_bg, total));
+            log_line(format!("[APPS] '{}' closed — tracked {}s this session", app_id, total));
         }
     });
+}
 
-    Ok(())
+/// Called once at BMM startup: for every installed app whose exe is already
+/// running, start a usage tracker immediately (covers the case where the user
+/// launched the app before/outside BMM).
+#[tauri::command]
+pub fn scan_and_track_running_apps(app_handle: AppHandle) {
+    use sysinfo::{System, ProcessRefreshKind, UpdateKind};
+
+    let state = load_state(&app_handle);
+    if state.installed.is_empty() { return; }
+
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(ProcessRefreshKind::new().with_exe(UpdateKind::OnlyIfNotSet));
+
+    for (app_id, info) in &state.installed {
+        let exe_path = match &info.exe_path {
+            Some(p) => p.clone(),
+            None => continue,
+        };
+        let path = std::path::Path::new(&exe_path);
+        let exe_name = path.file_name()
+            .map(|n| n.to_string_lossy().to_lowercase())
+            .unwrap_or_default();
+        let exe_full = exe_path.to_lowercase();
+
+        let running = sys.processes().values().any(|p| {
+            let pname = p.name().to_lowercase();
+            pname == exe_name
+                || pname.trim_end_matches(".exe") == exe_name.trim_end_matches(".exe")
+                || p.exe().map(|e| e.to_string_lossy().to_lowercase() == exe_full).unwrap_or(false)
+        });
+
+        if running {
+            log_line(format!("[APPS] Lazy tracking started for already-running app '{}'", app_id));
+            spawn_usage_tracker(app_handle.clone(), app_id.clone(), exe_name, exe_full, true);
+        }
+    }
 }
 
 // ── State queries ─────────────────────────────────────────────────────────────
