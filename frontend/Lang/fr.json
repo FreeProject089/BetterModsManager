@@ -4276,6 +4276,7 @@
   "apps.noResults":      "Aucun résultat",
   "apps.emptyBrowse":    "Le catalogue est vide",
   "apps.catalogUnavail": "Catalogue indisponible — vérifiez votre connexion",
+  "apps.allSourcesFailed": "Impossible de charger une source de catalogue",
 
   "apps.noneInstalled": "Aucune application installée",
   "apps.noFavorites":   "Aucun favori — étoilez une app pour l'ajouter ici",

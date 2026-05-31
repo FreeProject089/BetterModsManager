@@ -1,4 +1,4 @@
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::AppHandle;
 use crate::models::app_catalog::*;
 use crate::commands::crash::log_line;
@@ -742,12 +742,10 @@ pub fn launch_app(
         _ => std::process::Command::new(&exe_path), // exe / msi / portable
     };
 
-    let child = cmd
+    let _child = cmd
         .current_dir(&work_dir)
         .spawn()
         .map_err(|e| format!("Launch failed: {}", e))?;
-
-    let start = Instant::now();
 
     // Record in history
     let mut state = load_state(&app_handle);
@@ -755,21 +753,66 @@ pub fn launch_app(
     push_history(&mut state, "launch", &app_id, &title);
     let _ = save_state(&app_handle, &state);
 
-    // Background thread: wait for the process to exit, then save usage time automatically.
-    // No manual stop_app_tracking needed.
+    // Usage tracking by process-name polling.
+    // We can't rely on the spawned Child exiting: launchers, Electron apps and
+    // single-instance apps fork a new process and the launched one returns
+    // immediately. Instead we watch the process list for the app's exe name.
+    let exe_name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+    let exe_full = exe_path.to_lowercase();
     let app_handle_bg = app_handle.clone();
-    let app_id_bg    = app_id.clone();
+    let app_id_bg = app_id.clone();
+
     std::thread::spawn(move || {
-        let mut child = child;
-        let _ = child.wait(); // blocks until the launched process exits
-        let elapsed = start.elapsed().as_secs();
-        if elapsed > 0 {
-            let mut s = load_state(&app_handle_bg);
-            if let Some(info) = s.installed.get_mut(&app_id_bg) {
-                info.usage_seconds += elapsed;
+        use sysinfo::{System, ProcessRefreshKind, UpdateKind};
+        use std::time::Duration;
+
+        // Minimal refresh: only enumerate processes + resolve the exe path.
+        // We do NOT compute CPU/memory/disk (the expensive parts), so each poll
+        // is just a cheap process-list walk.
+        let refresh_kind = ProcessRefreshKind::new().with_exe(UpdateKind::OnlyIfNotSet);
+
+        let mut sys = System::new();
+        let poll_secs = 10u64;            // usage time doesn't need fine precision
+        let poll = Duration::from_secs(poll_secs);
+        let appear_grace_secs = 40u64;    // time allowed for the app window to appear
+        let mut seen = false;
+        let mut waited = 0u64;
+        let mut total = 0u64;
+
+        log_line(format!("[APPS] Tracking usage for '{}' (exe='{}')", app_id_bg, exe_name));
+
+        loop {
+            std::thread::sleep(poll);
+            waited += poll_secs;
+            sys.refresh_processes_specifics(refresh_kind);
+
+            let running = sys.processes().values().any(|p| {
+                let pname = p.name().to_lowercase();
+                pname == exe_name
+                    || pname.trim_end_matches(".exe") == exe_name.trim_end_matches(".exe")
+                    || p.exe().map(|e| e.to_string_lossy().to_lowercase() == exe_full).unwrap_or(false)
+            });
+
+            if running {
+                seen = true;
+                // Accumulate this interval immediately so usage updates live and
+                // survives BMM closing before the app.
+                let mut s = load_state(&app_handle_bg);
+                match s.installed.get_mut(&app_id_bg) {
+                    Some(info) => { info.usage_seconds += poll_secs; total += poll_secs; }
+                    None => break, // app was uninstalled — stop tracking
+                }
+                let _ = save_state(&app_handle_bg, &s);
+            } else if seen {
+                break; // app was running and has now closed
+            } else if waited >= appear_grace_secs {
+                log_line(format!("[APPS] '{}' process never appeared — usage not tracked", app_id_bg));
+                break;
             }
-            let _ = save_state(&app_handle_bg, &s);
-            log_line(format!("[APPS] {} exited after {}s", app_id_bg, elapsed));
+        }
+
+        if seen {
+            log_line(format!("[APPS] '{}' closed — tracked {}s this session", app_id_bg, total));
         }
     });
 

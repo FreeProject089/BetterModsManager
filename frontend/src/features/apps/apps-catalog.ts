@@ -80,6 +80,15 @@ export async function initAppsCatalog() {
         setupEvents(view);
         renderCurrentTab();
     });
+
+    // When BMM regains focus (e.g. returning from a launched app), refresh the
+    // state-dependent tabs so accumulated usage time / installs show up.
+    window.addEventListener('focus', () => {
+        if (!view.classList.contains('active')) return;
+        if (_activeTab === 'installed' || _activeTab === 'favorites' || _activeTab === 'history') {
+            refreshAndRender();
+        }
+    });
 }
 
 // ── Smart state refresh ───────────────────────────────────────────────────────
@@ -189,12 +198,16 @@ function tabLabel(tab: string) {
 
 function setupEvents(view: HTMLElement) {
     view.querySelectorAll('.apps-tab').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
             _activeTab = (btn as HTMLElement).dataset.tab || 'browse';
             view.querySelectorAll('.apps-tab').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             const toolbar = document.getElementById('apps-toolbar');
             if (toolbar) toolbar.style.display = _activeTab === 'browse' ? 'flex' : 'none';
+            // Re-read disk state so usage time / installs update after returning from an app
+            if (_activeTab === 'installed' || _activeTab === 'favorites' || _activeTab === 'history') {
+                await refreshState();
+            }
             renderCurrentTab();
         });
     });
@@ -238,7 +251,14 @@ async function loadCatalog(force = false) {
             extraCommunityUrls: _state.community_sources,
         });
         _catalog = result.apps;
-        if (result.sources_failed.length) toast(`${result.sources_failed.length} source(s) failed`, 'warning');
+        // Only alert if EVERY source failed; partial failures (e.g. a placeholder
+        // partner URL) are just logged, not shown as a noisy toast.
+        if (result.sources_failed.length) {
+            console.warn('[BMM] App catalog sources failed:', result.sources_failed);
+            if (result.sources_loaded.length === 0) {
+                toast(t('apps.allSourcesFailed') || 'Could not load any catalog source', 'error');
+            }
+        }
     } catch {
         _catalog = [];
         if (content) content.innerHTML = `<div class="apps-empty">${IC.info}<p>${t('apps.catalogUnavail') || 'Catalog unavailable'}</p></div>`;
@@ -1286,9 +1306,17 @@ function labelFromUrl(url: string): string {
 }
 
 function formatDuration(secs: number): string {
+    // Shows the two largest units, dropping the second when it's zero:
+    // 30s · 1min30 · 5min · 1h30 · 5h 
     if (secs < 60) return `${secs}s`;
-    if (secs < 3600) return `${Math.floor(secs / 60)}min`;
-    return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}min`;
+    if (secs < 3600) {
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        return s > 0 ? `${m}min${String(s).padStart(2, '0')}` : `${m}min`;
+    }
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
 }
 
 function formatBytes(bytes: number): string {

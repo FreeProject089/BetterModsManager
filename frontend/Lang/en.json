@@ -4278,6 +4278,7 @@
   "apps.noResults":      "No results",
   "apps.emptyBrowse":    "Catalog is empty",
   "apps.catalogUnavail": "Catalog unavailable — check your connection",
+  "apps.allSourcesFailed": "Could not load any catalog source",
 
   "apps.noneInstalled": "No apps installed yet",
   "apps.noFavorites":   "No favorites yet — star an app to add it here",
