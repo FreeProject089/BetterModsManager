@@ -240,6 +240,8 @@ struct RepoGenBody {
     lang: Option<String>,
     #[serde(default)]
     server_version: Option<u8>,
+    #[serde(default)]
+    server_type: Option<String>,
     /// Only generate repo.json manifest without copying mod files
     #[serde(default)]
     lightweight: bool,
@@ -2432,48 +2434,50 @@ async fn do_api_repo_gen(
         Err(e) => bail!(format!("Serialization error: {}", e)),
     }
 
-    // Optional: create zip archive
-    if body.zip_output {
-        emit!("bmm://repo-export-progress", serde_json::json!({
-            "job_id": &job_id, "step": "Creating zip archive…", "progress": 93.0, "current_file": "",
-        }));
-        let zip_path = output_path.with_extension("zip");
-        match zip_directory(&output_path, &zip_path) {
-            Ok(_) => emit!("bmm://repo-export-progress", serde_json::json!({
-                "job_id": &job_id,
-                "step": format!("Zip ready: {}", zip_path.display()),
-                "progress": 94.0, "current_file": zip_path.to_string_lossy(),
-                "zip_path": zip_path.to_string_lossy(),
-            })),
-            Err(e) => emit!("bmm://repo-export-progress", serde_json::json!({
-                "job_id": &job_id, "step": format!("Warning: zip failed: {}", e), "progress": 94.0, "current_file": "",
-            })),
-        }
-    }
-
     if body.generate_server {
         emit!("bmm://repo-export-progress", serde_json::json!({
-            "job_id": &job_id, "step": "Generating server scripts…", "progress": 95.0, "current_file": "",
+            "job_id": &job_id, "step": "Generating server scripts…", "progress": 93.0, "current_file": "",
         }));
+        let is_server = body.server_type.as_deref() == Some("server");
         let cfg = crate::commands::repo::StandaloneServerConfig {
             repo_path: body.output_dir.clone(),
             port: body.port.unwrap_or(8080),
-            auto_start: body.auto_start,
-            use_cloudflare: body.use_cloudflare,
-            use_upnp: body.use_upnp,
+            auto_start: if is_server { false } else { body.auto_start },
+            use_cloudflare: if is_server { false } else { body.use_cloudflare },
+            use_upnp: if is_server { false } else { body.use_upnp },
             lang: body.lang.clone().unwrap_or_else(|| "en".to_string()),
             upload_limit: body.upload_limit.unwrap_or(0),
             server_version: body.server_version,
             admin_password: body.admin_password.clone(),
             enable_docker: body.enable_docker,
             docker_host_type: body.docker_host_type.clone(),
+            server_type: body.server_type.clone(),
         };
         if let Err(e) = crate::commands::repo::generate_standalone_server(handle.clone(), cfg).await {
             emit!("bmm://repo-export-progress", serde_json::json!({
                 "job_id": &job_id,
                 "step": format!("Warning: server script generation: {}", e),
-                "progress": 96.0, "current_file": "",
+                "progress": 94.0, "current_file": "",
             }));
+        }
+    }
+
+    // Optional: create zip archive
+    if body.zip_output {
+        emit!("bmm://repo-export-progress", serde_json::json!({
+            "job_id": &job_id, "step": "Creating zip archive…", "progress": 95.0, "current_file": "",
+        }));
+        let zip_path = output_path.with_extension("zip");
+        match zip_directory(&output_path, &zip_path) {
+            Ok(_) => emit!("bmm://repo-export-progress", serde_json::json!({
+                "job_id": &job_id,
+                "step": format!("Zip ready: {}", zip_path.display()),
+                "progress": 96.0, "current_file": zip_path.to_string_lossy(),
+                "zip_path": zip_path.to_string_lossy(),
+            })),
+            Err(e) => emit!("bmm://repo-export-progress", serde_json::json!({
+                "job_id": &job_id, "step": format!("Warning: zip failed: {}", e), "progress": 96.0, "current_file": "",
+            })),
         }
     }
 

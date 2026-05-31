@@ -308,6 +308,7 @@ export function initRepo() {
         inputZipLimit: document.getElementById('repo-export-server-limit'),
         inputZipPass: document.getElementById('repo-export-server-pass'),
         selectZipVersion: document.getElementById('repo-export-server-version'),
+        selectZipType: document.getElementById('repo-export-server-type'),
         cbZipCloudflare: document.getElementById('repo-export-server-cloudflare'),
         cbZipUpnp: document.getElementById('repo-export-server-upnp'),
         cbZipDocker: document.getElementById('repo-export-server-docker'),
@@ -324,6 +325,30 @@ export function initRepo() {
     initRepoMonitoring(elements);
     initRepoSync(elements);
     initRepoAdmin(elements);
+    // ZIP Export Server Type Listener (lock cloudflare/upnp for "server")
+    if (elements.selectZipType) {
+        elements.selectZipType.addEventListener('change', (e) => {
+            const isServer = e.target.value === 'server';
+            if (isServer) {
+                if (elements.cbZipCloudflare) {
+                    elements.cbZipCloudflare.checked = false;
+                    elements.cbZipCloudflare.disabled = true;
+                }
+                if (elements.cbZipUpnp) {
+                    elements.cbZipUpnp.checked = false;
+                    elements.cbZipUpnp.disabled = true;
+                }
+            }
+            else {
+                if (elements.cbZipCloudflare)
+                    elements.cbZipCloudflare.disabled = false;
+                if (elements.cbZipUpnp)
+                    elements.cbZipUpnp.disabled = false;
+            }
+        });
+        // Dispatch initial change event
+        elements.selectZipType.dispatchEvent(new Event('change'));
+    }
     // ── bmm:repo-focus — auto-launch + pre-fill from Quick Test ──
     document.addEventListener('bmm:repo-focus', (e) => {
         const section = e.detail?.section ?? '';
@@ -483,6 +508,10 @@ export function initRepo() {
                             const vmap = { std: '1', lux: '2', standard: '1', premium: '2' };
                             const v = vmap[prefill.serverVersion] ?? prefill.serverVersion;
                             elements.selectZipVersion.value = v;
+                        }
+                        if (prefill.serverType && elements.selectZipType) {
+                            elements.selectZipType.value = prefill.serverType;
+                            elements.selectZipType.dispatchEvent(new Event('change'));
                         }
                     });
                 }
@@ -1388,6 +1417,7 @@ export function initRepo() {
                         upload_limit: parseInt(elements.inputZipLimit.value) || 0,
                         admin_password: elements.inputZipPass.value || "admin",
                         server_version: parseInt(elements.selectZipVersion.value) || 2,
+                        server_type: elements.selectZipType ? elements.selectZipType.value : "user",
                         use_cloudflare: elements.cbZipCloudflare.checked,
                         use_upnp: elements.cbZipUpnp.checked,
                         enable_docker: elements.cbZipDocker ? elements.cbZipDocker.checked : false,

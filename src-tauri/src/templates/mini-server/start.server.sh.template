@@ -1,0 +1,9 @@
+#!/bin/bash
+echo "Installing dependencies..."
+npm install
+if [ $? -ne 0 ]; then
+    echo "[ERROR] Failed to install dependencies. Make sure Node.js and NPM are installed."
+    exit 1
+fi
+echo "Starting server..."
+npm start

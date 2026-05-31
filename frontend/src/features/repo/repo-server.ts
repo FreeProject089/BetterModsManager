@@ -357,6 +357,25 @@ export function initRepoServer(elements) {
         if (lastVersion) inputVersion.value = lastVersion;
     }
     
+    const serverTypeSelect = document.getElementById('repo-mini-server-type');
+    const cbCloudflare = document.getElementById('repo-mini-server-cloudflare');
+    const cbUpnp = document.getElementById('repo-mini-server-upnp');
+    if (serverTypeSelect) {
+        serverTypeSelect.addEventListener('change', () => {
+            if (serverTypeSelect.value === 'server') {
+                if (cbCloudflare) { cbCloudflare.checked = false; cbCloudflare.disabled = true; }
+                if (cbUpnp) { cbUpnp.checked = false; cbUpnp.disabled = true; }
+                if (cbAutoStart) { cbAutoStart.checked = false; cbAutoStart.disabled = true; }
+            } else {
+                if (cbCloudflare) cbCloudflare.disabled = false;
+                if (cbUpnp) cbUpnp.disabled = false;
+                if (cbAutoStart) cbAutoStart.disabled = false;
+            }
+        });
+        // Trigger once to set initial state
+        serverTypeSelect.dispatchEvent(new Event('change'));
+    }
+    
     if (btnGenMiniServer) {
         btnGenMiniServer.addEventListener('click', async () => {
             let jsonPath = inputMiniRepoPath ? inputMiniRepoPath.value.trim() : '';
@@ -382,6 +401,7 @@ export function initRepoServer(elements) {
 
             const enableDocker = cbDocker ? cbDocker.checked : false;
             const dockerHostType = dockerHostSelect ? dockerHostSelect.value : "linux";
+            const serverType = document.getElementById('repo-mini-server-type')?.value || "user";
 
             try {
                 btnGenMiniServer.disabled = true;
@@ -390,7 +410,7 @@ export function initRepoServer(elements) {
 
                 await invoke('generate_standalone_server', {
                     payload: {
-                        repoPath: jsonPath, port, autoStart, useCloudflare, useUpnp, lang, uploadLimit, serverVersion, adminPassword, enableDocker, dockerHostType
+                        repoPath: jsonPath, port, autoStart, useCloudflare, useUpnp, lang, uploadLimit, serverVersion, adminPassword, enableDocker, dockerHostType, serverType
                     }
                 });
 

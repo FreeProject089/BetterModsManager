@@ -1206,6 +1206,7 @@
   "repo.miniServerUseUPnP": "Auto Port Forwarding (UPnP)",
   "repo.miniServerDocker": "Docker Support",
   "repo.miniServerVersion": "Version",
+  "repo.miniServerType": "Type",
   "repo.modeInfo": "This mode works like a traditional web server: you export your profiles to a folder, then host it from your PC or a VPS. Your friends enter the URL to automatically download and sync mods.",
   "repo.monAction": "Action",
   "repo.monColAction": "ACTION",
@@ -1258,7 +1259,7 @@
   "repo.serverSeed": "Server Seed (Optional)",
   "repo.serverSeedPlaceholder": "Leave empty to auto-generate",
   "repo.serverSeedTip": "This seed defines your server's unique identity for bans and whitelist. It ensures persistence between sessions.",
-  "repo.serverType": "Server Version",
+  "repo.serverType": "Type",
   "repo.serverVersionHybrid": "STD (Console Interface)",
   "repo.serverVersionV2": "Lux (Full Dashboard)",
   "repo.standaloneSettings": "Standalone Server Settings",
@@ -4250,5 +4251,7 @@
   "plugins.fldProfile": "Profile",
   "plugins.genMultiProfile": "Active profile",
   "plugins.genProfileAll": "— Use each action's own profile —",
-  "plugins.genMultiProfileTip": "Pre-activate a profile so all mod actions run in that profile context"
+  "plugins.genMultiProfileTip": "Pre-activate a profile so all mod actions run in that profile context",
+  "repo.typeUser": "User (Simple)",
+  "repo.typeServer": "Server (Dedicated Node.js)"
 }

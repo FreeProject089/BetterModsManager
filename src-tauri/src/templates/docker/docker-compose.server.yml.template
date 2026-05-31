@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  bmm-repo-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bmm-repo-server
+    ports:
+      - "PORT_PLACEHOLDER:PORT_PLACEHOLDER"
+    volumes:
+      - ./mods:/app/mods:ro
+      - ./repo.json:/app/repo.json:ro
+      - ./Info.json:/app/Info.json:ro
+      - ./bans.json:/app/bans.json
+      - ./whitelist.json:/app/whitelist.json
+      - ./server.log:/app/server.log
+      - ./history.json:/app/history.json
+      - ./downloads.json:/app/downloads.json
+    environment:
+      - ADMIN_PASSWORD=ADMIN_PASSWORD_PLACEHOLDER
+      - PORT=PORT_PLACEHOLDER
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:PORT_PLACEHOLDER/repo.json', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

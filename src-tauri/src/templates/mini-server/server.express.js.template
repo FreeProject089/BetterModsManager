@@ -1,0 +1,250 @@
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const cors = require('cors');
+
+// Configuration
+const PORT = {{PORT}};
+const ADMIN_PASSWORD = "{{ADMIN_PASSWORD}}";
+const UPLOAD_LIMIT = {{UPLOAD_LIMIT}}; // KB/s
+
+// State
+const sessions = new Map();
+const activeDownloads = new Map();
+const startTime = Date.now();
+const history = [];
+
+const logFile = path.join(__dirname, 'server.log');
+const bansFile = path.join(__dirname, 'bans.json');
+const whitelistFile = path.join(__dirname, 'whitelist.json');
+const downloadsFile = path.join(__dirname, 'downloads.json');
+const repoFile = path.join(__dirname, 'repo.json');
+
+const stats = { totalDownloads: 0, totalBytesSent: 0, mods: {} };
+try { if (fs.existsSync(downloadsFile)) Object.assign(stats, JSON.parse(fs.readFileSync(downloadsFile))); } catch(e) {}
+
+function log(msg, event = 'INFO', toFile = true) {
+    const ts = new Date().toISOString();
+    const line = `[${ts}] [${event}] ${msg}`;
+    if (toFile) {
+        fs.appendFileSync(logFile, line + '\n');
+    }
+}
+
+function addToHistory(ip, creatorId, event, details) {
+    history.push({ ts: Date.now(), ip, creatorId, event, details });
+    if (history.length > 500) history.shift();
+    log(`${ip} | ID: ${creatorId} | ${details}`, event);
+}
+
+function getSecurityData() {
+    let bans = { banned_ips: [], banned_keys: [] };
+    let whitelist = { enabled: false, ips: [], keys: [] };
+    let repo = { modpacks: [] };
+    try { if (fs.existsSync(bansFile)) bans = JSON.parse(fs.readFileSync(bansFile, 'utf8')); else fs.writeFileSync(bansFile, JSON.stringify(bans)); } catch(e){}
+    try { if (fs.existsSync(whitelistFile)) whitelist = JSON.parse(fs.readFileSync(whitelistFile, 'utf8')); else fs.writeFileSync(whitelistFile, JSON.stringify(whitelist)); } catch(e){}
+    try { if (fs.existsSync(repoFile)) repo = JSON.parse(fs.readFileSync(repoFile, 'utf8')); } catch(e){}
+    return { bans, whitelist, repo };
+}
+
+function getMonitoringReport() {
+    const now = Date.now();
+    const active = Array.from(activeDownloads.values()).map(d => ({
+        ip: d.ip, file: path.basename(d.file), downloaded: d.downloaded, total: d.total,
+        speed: d.downloaded / Math.max((now - d.startTime) / 1000, 1), protocol: d.protocol
+    }));
+    let totalRepoSize = 0;
+    try {
+        const r = JSON.parse(fs.readFileSync(repoFile, 'utf8'));
+        totalRepoSize = r.total_size || 0;
+    } catch(e){}
+
+    return {
+        server: { uptime: now - startTime, totalDownloads: stats.totalDownloads, totalBytes: stats.totalBytesSent, totalRepoSize },
+        active,
+        sessions: Array.from(sessions.entries()).map(([ip, s]) => ({ ip, creatorId: s.creatorId, bytes: s.bytes, lastSeen: s.lastSeen, files: s.files })),
+        history: history.slice(-100).reverse()
+    };
+}
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// Session Tracking Middleware
+app.use((req, res, next) => {
+    const ip = req.ip.replace('::ffff:', '') || '127.0.0.1';
+    const queryKey = req.query.key || req.query.id || req.query.creatorid;
+    const headerKey = req.headers['x-creator-id'] || req.headers['x-creator-key'] || req.headers['x-bmm-id'] || req.headers['authorization'];
+    const key = (headerKey || queryKey || "UNKNOWN").replace('Bearer ', '').trim();
+    
+    req.clientIp = ip;
+    req.creatorId = key;
+
+    if (!sessions.has(ip)) {
+        sessions.set(ip, { creatorId: key, bytes: 0, lastSeen: Date.now(), files: [] });
+        if (key !== "UNKNOWN") addToHistory(ip, key, "CONNECTION", "Session started with ID");
+        else addToHistory(ip, "UNKNOWN", "CONNECTION", "Anonymous session started");
+    } else {
+        const s = sessions.get(ip);
+        s.lastSeen = Date.now();
+        if (key !== "UNKNOWN" && (s.creatorId === "UNKNOWN" || s.creatorId === "")) {
+            s.creatorId = key;
+            addToHistory(ip, key, "IDENTITY", "Creator ID identified");
+        }
+    }
+    
+    // Security check
+    const { bans, whitelist } = getSecurityData();
+    const isLocal = ip === '127.0.0.1' || ip === '::1';
+    if (!isLocal) {
+        if (bans.banned_ips.includes(ip) || (key !== "UNKNOWN" && bans.banned_keys.includes(key))) { 
+            addToHistory(ip, key, "REJECTED", "Banned identity");
+            return res.status(403).send('Banned'); 
+        }
+        if (whitelist.enabled && !whitelist.ips.includes(ip) && !(key !== "UNKNOWN" && whitelist.keys.includes(key))) { 
+            addToHistory(ip, key, "REJECTED", "Access denied (whitelist)");
+            return res.status(403).send('Not Whitelisted'); 
+        }
+    }
+
+    next();
+});
+
+// Admin Authentication Middleware
+const authAdmin = (req, res, next) => {
+    if (req.headers['authorization'] === ADMIN_PASSWORD) {
+        next();
+    } else {
+        res.status(401).json({ err: "Unauthorized" });
+    }
+};
+
+app.get('/dashboard', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+app.get('/monitoring.json', (req, res) => {
+    res.json(getMonitoringReport());
+});
+
+app.get('/admin/data', authAdmin, (req, res) => {
+    res.json(getSecurityData());
+});
+
+app.get('/admin/logs', authAdmin, (req, res) => {
+    try { 
+        const logs = fs.readFileSync(logFile, 'utf8').split('\n').filter(l => l.trim()).slice(-100); 
+        res.json({ lines: logs }); 
+    } catch(e) { 
+        res.json({ lines: [] }); 
+    }
+});
+
+app.post('/admin/update', authAdmin, (req, res) => {
+    try {
+        const data = req.body;
+        fs.writeFileSync(bansFile, JSON.stringify(data.bans, null, 2));
+        fs.writeFileSync(whitelistFile, JSON.stringify(data.whitelist, null, 2));
+        fs.writeFileSync(repoFile, JSON.stringify(data.repo, null, 2));
+        log(`Server config updated`, 'ADMIN');
+        res.json({ ok: true });
+    } catch(e) { 
+        res.status(400).json({ err: e.message }); 
+    }
+});
+
+app.get('/repo.json', (req, res) => {
+    try {
+        const repo = JSON.parse(fs.readFileSync(repoFile, 'utf8'));
+        if (repo && Array.isArray(repo.modpacks)) repo.modpacks = repo.modpacks.filter(m => m && m.enabled !== false);
+        res.json(repo);
+    } catch(e) { 
+        res.status(500).json({ err: "Failed to parse repo.json" }); 
+    }
+});
+
+// Serve static files with tracking and rate limiting
+app.use('/', (req, res, next) => {
+    let urlPath = decodeURIComponent(req.path);
+    const safePath = path.normalize(path.join(__dirname, urlPath.replace(/\//g, path.sep))).replace(/^(\.\.(\/|\\|$))+/, '');
+    const absolutePath = path.resolve(__dirname, safePath.startsWith(path.sep) ? safePath.substring(1) : safePath);
+
+    if (!absolutePath.startsWith(__dirname) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+        return res.status(404).send('Not Found');
+    }
+
+    const ip = req.clientIp;
+    const key = req.creatorId;
+    const isLocal = ip === '127.0.0.1' || ip === '::1';
+    const total = fs.statSync(absolutePath).size;
+    const protocol = isLocal ? 'Local' : (ip.startsWith('192.168.') ? 'LAN' : 'WAN');
+    const dlId = `${ip}-${Date.now()}`;
+    const dlObj = { ip, creatorId: key, file: urlPath, total, downloaded: 0, startTime: Date.now(), protocol };
+    
+    activeDownloads.set(dlId, dlObj);
+    stats.totalDownloads++;
+    addToHistory(ip, key, "DL_START", urlPath);
+    const s = sessions.get(ip); if (s && !s.files.includes(urlPath)) s.files.push(urlPath);
+
+    const stream = fs.createReadStream(absolutePath);
+    res.setHeader('Content-Length', total);
+    
+    let bytesSentInInterval = 0; let intervalStart = Date.now();
+
+    stream.on('data', chunk => {
+        dlObj.downloaded += chunk.length;
+        stats.totalBytesSent += chunk.length;
+        const ses = sessions.get(ip); if (ses) ses.bytes += chunk.length;
+
+        if (UPLOAD_LIMIT > 0) {
+            bytesSentInInterval += chunk.length;
+            const now = Date.now(); const elapsed = now - intervalStart;
+            if (elapsed < 1000 && bytesSentInInterval > (UPLOAD_LIMIT * 1024)) {
+                stream.pause();
+                setTimeout(() => { bytesSentInInterval = 0; intervalStart = Date.now(); stream.resume(); }, 1000 - elapsed);
+            } else if (elapsed >= 1000) { bytesSentInInterval = 0; intervalStart = now; }
+        }
+    });
+
+    let saveTimeout = null;
+    const saveStats = () => {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            try { fs.writeFileSync(downloadsFile, JSON.stringify({ totalDownloads: stats.totalDownloads, totalBytesSent: stats.totalBytesSent, mods: stats.mods })); } catch(e) {}
+        }, 5000);
+    };
+
+    stream.on('end', () => { 
+        activeDownloads.delete(dlId);
+        addToHistory(ip, key, "DL_FINISH", urlPath);
+        if (urlPath.includes('/mods/')) {
+            const parts = urlPath.split('/mods/')[1].split('/');
+            if (parts.length > 0) {
+                const modId = parts[0];
+                stats.mods[modId] = (stats.mods[modId] || 0) + 1;
+                saveStats();
+            }
+        } else {
+            saveStats();
+        }
+    });
+
+    res.on('close', () => { stream.destroy(); activeDownloads.delete(dlId); });
+    stream.pipe(res);
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.clear();
+    const cyan = '\x1b[36m'; const green = '\x1b[32m'; const magenta = '\x1b[35m';
+    const blue = '\x1b[34m'; const reset = '\x1b[0m'; const bold = '\x1b[1m';
+    const underline = '\x1b[4m';
+
+    console.log(`${bold}${cyan}   +------------------------------------------------------+`);
+    console.log(`   |             BMM DEDICATED SERVER                     |`);
+    console.log(`   +------------------------------------------------------+${reset}\n`);
+    console.log(`  ${bold}${green}[STATUS]${reset}  SERVER ONLINE`);
+    console.log(`  ${bold}${cyan}[PORT]${reset}    ${PORT}`);
+    console.log(`  ${bold}${magenta}[ADMIN]${reset}   Password: ${underline}${ADMIN_PASSWORD}${reset}`);
+    console.log(`  ${bold}${blue}[DASH]${reset}    http://127.0.0.1:${PORT}/dashboard\n`);
+});

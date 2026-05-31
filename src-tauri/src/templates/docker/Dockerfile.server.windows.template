@@ -1,0 +1,38 @@
+# BMM Express Server - Docker Image (Windows)
+FROM mcr.microsoft.com/windows/nanoserver:ltsc2022
+SHELL ["cmd", "/S", "/C"]
+
+# Create app directory
+WORKDIR /app
+
+# Install Node.js (download during build)
+USER ContainerAdministrator
+RUN curl -fSLo node.zip https://nodejs.org/dist/v20.11.0/node-v20.11.0-win-x64.zip && \
+    tar -xf node.zip && \
+    move node-v20.11.0-win-x64 C:\nodejs && \
+    del node.zip
+ENV PATH="C:\nodejs;%PATH%"
+
+# Copy package manifest first for layer caching
+COPY package.json ./
+
+# Install production dependencies
+RUN npm install --omit=dev
+
+# Copy application files
+COPY server.js ./
+COPY public/ ./public/
+
+# Copy repository data files
+COPY mods/ ./mods/
+COPY repo.json ./
+COPY Info.json ./
+
+# Expose configured port
+EXPOSE PORT_PLACEHOLDER
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:PORT_PLACEHOLDER/repo.json', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) })"
+
+CMD ["node", "server.js"]

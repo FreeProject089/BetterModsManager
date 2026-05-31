@@ -1,4 +1,4 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 import { invoke, pickFolder } from '../../core/api.js';
 import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
@@ -327,6 +327,7 @@ export function initRepo() {
         inputZipLimit: document.getElementById('repo-export-server-limit'),
         inputZipPass: document.getElementById('repo-export-server-pass'),
         selectZipVersion: document.getElementById('repo-export-server-version'),
+        selectZipType: document.getElementById('repo-export-server-type'),
         cbZipCloudflare: document.getElementById('repo-export-server-cloudflare'),
         cbZipUpnp: document.getElementById('repo-export-server-upnp'),
         cbZipDocker: document.getElementById('repo-export-server-docker'),
@@ -345,6 +346,22 @@ export function initRepo() {
     initRepoMonitoring(elements);
     initRepoSync(elements);
     initRepoAdmin(elements);
+
+    // ZIP Export Server Type Listener (lock cloudflare/upnp for "server")
+    if (elements.selectZipType) {
+        elements.selectZipType.addEventListener('change', (e: any) => {
+            const isServer = e.target.value === 'server';
+            if (isServer) {
+                if (elements.cbZipCloudflare) { (elements.cbZipCloudflare as HTMLInputElement).checked = false; (elements.cbZipCloudflare as HTMLInputElement).disabled = true; }
+                if (elements.cbZipUpnp) { (elements.cbZipUpnp as HTMLInputElement).checked = false; (elements.cbZipUpnp as HTMLInputElement).disabled = true; }
+            } else {
+                if (elements.cbZipCloudflare) (elements.cbZipCloudflare as HTMLInputElement).disabled = false;
+                if (elements.cbZipUpnp) (elements.cbZipUpnp as HTMLInputElement).disabled = false;
+            }
+        });
+        // Dispatch initial change event
+        elements.selectZipType.dispatchEvent(new Event('change'));
+    }
 
     // ── bmm:repo-focus — auto-launch + pre-fill from Quick Test ──
     document.addEventListener('bmm:repo-focus', (e: any) => {
@@ -501,6 +518,10 @@ export function initRepo() {
                             const vmap: Record<string, string> = { std: '1', lux: '2', standard: '1', premium: '2' };
                             const v = vmap[prefill.serverVersion] ?? prefill.serverVersion;
                             (elements.selectZipVersion as HTMLSelectElement).value = v;
+                        }
+                        if (prefill.serverType && elements.selectZipType) {
+                            (elements.selectZipType as HTMLSelectElement).value = prefill.serverType;
+                            elements.selectZipType.dispatchEvent(new Event('change'));
                         }
                     });
                 }
@@ -1431,6 +1452,7 @@ export function initRepo() {
                         upload_limit: parseInt(elements.inputZipLimit.value) || 0,
                         admin_password: elements.inputZipPass.value || "admin",
                         server_version: parseInt(elements.selectZipVersion.value) || 2,
+                        server_type: elements.selectZipType ? elements.selectZipType.value : "user",
                         use_cloudflare: elements.cbZipCloudflare.checked,
                         use_upnp: elements.cbZipUpnp.checked,
                         enable_docker: elements.cbZipDocker ? elements.cbZipDocker.checked : false,

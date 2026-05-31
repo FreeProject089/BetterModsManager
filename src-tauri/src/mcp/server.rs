@@ -398,7 +398,8 @@ impl ServerHandler for BmmMcpServer {
                         "server_version": { "type": "integer" },
                         "admin_password": { "type": "string" },
                         "enable_docker": { "type": "boolean" },
-                        "docker_host_type": { "type": "string" }
+                        "docker_host_type": { "type": "string" },
+                        "server_type": { "type": "string" }
                     },
                     "required": ["repo_path", "port", "auto_start", "use_cloudflare", "use_upnp", "upload_limit", "server_version", "admin_password"]
                 })).unwrap()),
@@ -582,9 +583,16 @@ impl ServerHandler for BmmMcpServer {
             let admin_password = args.get("admin_password").and_then(|v| v.as_str()).unwrap_or("admin");
             let enable_docker = args.get("enable_docker").and_then(|v| v.as_bool()).unwrap_or(false);
             let docker_host_type = args.get("docker_host_type").and_then(|v| v.as_str()).unwrap_or("linux");
+            let server_type = args.get("server_type").and_then(|v| v.as_str()).unwrap_or("user");
+
+            let (final_cloudflare, final_upnp, final_auto_start) = if server_type == "server" {
+                (false, false, false)
+            } else {
+                (use_cloudflare, use_upnp, auto_start)
+            };
 
             match mods::generate_lightweight_server(
-                repo_path, port, auto_start, use_cloudflare, use_upnp, upload_limit, server_version, admin_password, enable_docker, docker_host_type
+                repo_path, port, final_auto_start, final_cloudflare, final_upnp, upload_limit, server_version, admin_password, enable_docker, docker_host_type, server_type
             ) {
                 Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
                 Err(e) => err_result(&e),

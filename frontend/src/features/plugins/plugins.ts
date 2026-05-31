@@ -822,12 +822,22 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         const serverPanel = `
             <div id="plug-qt-gen-server-panel" style="display:none;flex-direction:column;gap:6px;margin-top:8px;padding:10px 12px;background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.07);border-radius:8px;">
                 <div class="plug-form-label" style="margin-bottom:2px;">${IC.globe} Configuration serveur de distribution</div>
+                <!-- Server Type -->
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:4px;">
+                    <div style="display:flex;flex-direction:column;gap:2px;">
+                        <label class="plug-form-label" style="font-size:10px;margin-bottom:2px;">server_type</label>
+                        <select id="plug-qt-s-server-type" class="select select-sm" style="min-width:160px;">
+                            <option value="user">user — Simple (Cloudflare/UPnP OK)</option>
+                            <option value="server">server — Dédié Node.js (CF/UPnP désactivés)</option>
+                        </select>
+                    </div>
+                </div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <label id="plug-qt-gen-cf-lbl" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
                         <input type="checkbox" id="plug-qt-s-use-cf" style="accent-color:var(--accent);">
                         ${IC.globe} Cloudflare Tunnel
                     </label>
-                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <label id="plug-qt-gen-upnp-lbl" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
                         <input type="checkbox" id="plug-qt-s-use-upnp" style="accent-color:var(--accent);">
                         UPnP (ouverture port)
                     </label>
@@ -835,7 +845,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                         <input type="checkbox" id="plug-qt-s-use-docker" style="accent-color:var(--accent);">
                         Docker
                     </label>
-                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <label id="plug-qt-gen-autostart-lbl" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
                         <input type="checkbox" id="plug-qt-s-auto-start" style="accent-color:var(--accent);">
                         auto_start
                     </label>
@@ -954,16 +964,18 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const author    = (overlay.querySelector('#plug-qt-s-author-name')    as HTMLInputElement)?.value?.trim() || '';
             const seed      = (overlay.querySelector('#plug-qt-s-seed')           as HTMLInputElement)?.value?.trim();
             const zipOutput = (overlay.querySelector('#plug-qt-s-zip-output')     as HTMLInputElement)?.checked || false;
-            const useCf     = (overlay.querySelector('#plug-qt-s-use-cf')         as HTMLInputElement)?.checked || false;
-            const useUpnp   = (overlay.querySelector('#plug-qt-s-use-upnp')       as HTMLInputElement)?.checked || false;
+            const srvType   = (overlay.querySelector('#plug-qt-s-server-type')    as HTMLSelectElement)?.value || 'user';
+            const isServerType = srvType === 'server';
+            const useCf     = isServerType ? false : ((overlay.querySelector('#plug-qt-s-use-cf')  as HTMLInputElement)?.checked || false);
+            const useUpnp   = isServerType ? false : ((overlay.querySelector('#plug-qt-s-use-upnp') as HTMLInputElement)?.checked || false);
+            const autoStart = isServerType ? false : ((overlay.querySelector('#plug-qt-s-auto-start') as HTMLInputElement)?.checked || false);
             const useDocker = (overlay.querySelector('#plug-qt-s-use-docker')     as HTMLInputElement)?.checked || false;
             const dockerOs  = (overlay.querySelector('#plug-qt-s-docker-os')      as HTMLSelectElement)?.value || 'linux';
             const srvVer    = (overlay.querySelector('#plug-qt-s-server-version') as HTMLSelectElement)?.value || 'std';
-            const autoStart = (overlay.querySelector('#plug-qt-s-auto-start')     as HTMLInputElement)?.checked || false;
             const portStr   = (overlay.querySelector('#plug-qt-s-port')           as HTMLInputElement)?.value?.trim();
             const ulStr     = (overlay.querySelector('#plug-qt-s-upload-limit')   as HTMLInputElement)?.value?.trim();
             const adminPw   = (overlay.querySelector('#plug-qt-s-admin-pw')       as HTMLInputElement)?.value?.trim();
-            bodyObj = { profileIds: profIds, outputDir, authorName: author, generateServer: zipOutput, zipOutput, useCloudflare: useCf, useUpnp, autoStart };
+            bodyObj = { profileIds: profIds, outputDir, authorName: author, generateServer: zipOutput, zipOutput, serverType: srvType, useCloudflare: useCf, useUpnp, autoStart };
             if (seed)    bodyObj.seed          = seed;
             if (portStr) bodyObj.port          = parseInt(portStr, 10) || 8080;
             if (ulStr)   bodyObj.uploadLimit   = parseInt(ulStr, 10) || 0;
@@ -1152,6 +1164,19 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         const dockerCb    = overlay.querySelector('#plug-qt-s-use-docker')    as HTMLInputElement | null;
         const serverPanel = overlay.querySelector('#plug-qt-gen-server-panel') as HTMLElement | null;
         const dockerOpts  = overlay.querySelector('#plug-qt-gen-docker-opts') as HTMLElement | null;
+        const srvTypeSel  = overlay.querySelector('#plug-qt-s-server-type')   as HTMLSelectElement | null;
+        const cfCb        = overlay.querySelector('#plug-qt-s-use-cf')        as HTMLInputElement | null;
+        const upnpCb      = overlay.querySelector('#plug-qt-s-use-upnp')      as HTMLInputElement | null;
+        const autoStartCb = overlay.querySelector('#plug-qt-s-auto-start')    as HTMLInputElement | null;
+        // Server type change: lock CF/UPnP/AutoStart for "server"
+        const applyServerTypeLock = () => {
+            const isServer = srvTypeSel?.value === 'server';
+            if (cfCb)        { cfCb.disabled = isServer;        if (isServer) cfCb.checked = false; }
+            if (upnpCb)      { upnpCb.disabled = isServer;      if (isServer) upnpCb.checked = false; }
+            if (autoStartCb) { autoStartCb.disabled = isServer; if (isServer) autoStartCb.checked = false; }
+        };
+        srvTypeSel?.addEventListener('change', applyServerTypeLock);
+        applyServerTypeLock(); // apply on open
         const updateServerPanel = () => {
             if (serverPanel) serverPanel.style.display = zipCb?.checked ? 'flex' : 'none';
         };
@@ -1424,12 +1449,14 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const author      = (overlay.querySelector('#plug-qt-s-author-name')    as HTMLInputElement)?.value?.trim() || '';
             const seed        = (overlay.querySelector('#plug-qt-s-seed')           as HTMLInputElement)?.value?.trim();
             const zipOutput   = (overlay.querySelector('#plug-qt-s-zip-output')     as HTMLInputElement)?.checked || false;
-            const useCf       = (overlay.querySelector('#plug-qt-s-use-cf')         as HTMLInputElement)?.checked || false;
-            const useUpnp     = (overlay.querySelector('#plug-qt-s-use-upnp')       as HTMLInputElement)?.checked || false;
+            const srvType     = (overlay.querySelector('#plug-qt-s-server-type')    as HTMLSelectElement)?.value || 'user';
+            const isServerT   = srvType === 'server';
+            const useCf       = isServerT ? false : ((overlay.querySelector('#plug-qt-s-use-cf')         as HTMLInputElement)?.checked || false);
+            const useUpnp     = isServerT ? false : ((overlay.querySelector('#plug-qt-s-use-upnp')       as HTMLInputElement)?.checked || false);
+            const autoStart   = isServerT ? false : ((overlay.querySelector('#plug-qt-s-auto-start')     as HTMLInputElement)?.checked || false);
             const useDocker   = (overlay.querySelector('#plug-qt-s-use-docker')     as HTMLInputElement)?.checked || false;
             const dockerOs    = (overlay.querySelector('#plug-qt-s-docker-os')      as HTMLSelectElement)?.value || 'linux';
             const srvVersion  = (overlay.querySelector('#plug-qt-s-server-version') as HTMLSelectElement)?.value || 'std';
-            const autoStart   = (overlay.querySelector('#plug-qt-s-auto-start')     as HTMLInputElement)?.checked || false;
             const portStr     = (overlay.querySelector('#plug-qt-s-port')           as HTMLInputElement)?.value?.trim();
             const ulStr       = (overlay.querySelector('#plug-qt-s-upload-limit')   as HTMLInputElement)?.value?.trim();
             const adminPw     = (overlay.querySelector('#plug-qt-s-admin-pw')       as HTMLInputElement)?.value?.trim();
@@ -1443,6 +1470,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 authorName: author,
                 generateServer: zipOutput,
                 zipOutput,
+                serverType: srvType,
                 useCloudflare: useCf,
                 useUpnp,
                 autoStart,

@@ -44,6 +44,7 @@ pub struct MiniServerExportOptions {
     pub use_upnp: bool,
     pub enable_docker: Option<bool>,
     pub docker_host_type: Option<String>,
+    pub server_type: Option<String>,
 }
 
 const CHUNK_SIZE: usize = 4 * 1024 * 1024; // 4MB
@@ -453,6 +454,7 @@ pub async fn export_server_repo(
         println!("[REPO] Generating integrated mini-server...");
         let enable_docker = opt.enable_docker.unwrap_or(false);
         let docker_host_type = opt.docker_host_type.unwrap_or_else(|| "linux".to_string());
+        let server_type = opt.server_type.unwrap_or_else(|| "user".to_string());
         generate_mini_server_files(
             &handle,
             &output_path,
@@ -465,7 +467,8 @@ pub async fn export_server_repo(
             opt.server_version,
             &opt.admin_password,
             enable_docker,
-            &docker_host_type
+            &docker_host_type,
+            &server_type,
         )?;
     }
 
@@ -565,6 +568,7 @@ fn generate_mini_server_files(
     admin_password: &str,
     enable_docker: bool,
     docker_host_type: &str,
+    server_type: &str,
 ) -> Result<(), String> {
     // 1. Get custom cloudflared path or "AUTO"
     let state = handle.state::<crate::state::AppState>();
@@ -573,40 +577,72 @@ fn generate_mini_server_files(
         data.settings.cloudflared_path.clone().unwrap_or_else(|| "AUTO".to_string())
     };
 
-    // 2. Load and Prepare Template
-    let hybrid_template = if server_version == 2 {
-        include_str!("../templates/mini-server/server.v2.bat.template")
+    // Declare upfront so auto-start block can access it regardless of server_type
+    let main_bat_path: Option<std::path::PathBuf>;
+
+    if server_type == "server" {
+        // GENERATE SERVER (EXPRESS/NODE) FILES
+        let package_template = include_str!("../templates/mini-server/package.json.template");
+        let server_js_template = include_str!("../templates/mini-server/server.express.js.template");
+        let dashboard_template = include_str!("../templates/mini-server/dashboard.html.template");
+        let bat_template = include_str!("../templates/mini-server/start.server.bat.template");
+        let sh_template = include_str!("../templates/mini-server/start.server.sh.template");
+
+        let mut server_js_content = server_js_template.replace("{{PORT}}", &port.to_string());
+        server_js_content = server_js_content.replace("{{UPLOAD_LIMIT}}", &upload_limit.to_string());
+        server_js_content = server_js_content.replace("{{ADMIN_PASSWORD}}", admin_password);
+
+        let public_dir = output_path.join("public");
+        if !public_dir.exists() {
+            fs::create_dir_all(&public_dir).map_err(|_| "repo.errCreatePublicDir".to_string())?;
+        }
+
+        fs::write(output_path.join("package.json"), package_template).map_err(|_| "repo.errWritePackageJson".to_string())?;
+        fs::write(output_path.join("server.js"), server_js_content).map_err(|_| "repo.errWriteServerJs".to_string())?;
+        fs::write(public_dir.join("dashboard.html"), dashboard_template).map_err(|_| "repo.errWriteDashboardHtml".to_string())?;
+        
+        let bat_path = output_path.join("BMM-Standalone-Server.bat");
+        fs::write(&bat_path, bat_template).map_err(|_| "repo.errWriteScript".to_string())?;
+        let main_sh_path = output_path.join("BMM-Standalone-Server.sh");
+        fs::write(&main_sh_path, sh_template).map_err(|_| "repo.errWriteScript".to_string())?;
+        main_bat_path = Some(bat_path);
     } else {
-        include_str!("../templates/mini-server/server.hybrid.bat.template")
-    };
-    
-    let mut hybrid_content = hybrid_template.replace("PORT_PLACEHOLDER", &port.to_string());
-    hybrid_content = hybrid_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "true" } else { "false" });
-    hybrid_content = hybrid_content.replace("USE_UPNP_PLACE_HOLDER", if use_upnp { "true" } else { "false" });
-    hybrid_content = hybrid_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
-    hybrid_content = hybrid_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
-    hybrid_content = hybrid_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+        // GENERATE USER (POLYGLOT) FILES
+        let hybrid_template = if server_version == 2 {
+            include_str!("../templates/mini-server/server.v2.bat.template")
+        } else {
+            include_str!("../templates/mini-server/server.hybrid.bat.template")
+        };
+        
+        let mut hybrid_content = hybrid_template.replace("PORT_PLACEHOLDER", &port.to_string());
+        hybrid_content = hybrid_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "true" } else { "false" });
+        hybrid_content = hybrid_content.replace("USE_UPNP_PLACE_HOLDER", if use_upnp { "true" } else { "false" });
+        hybrid_content = hybrid_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
+        hybrid_content = hybrid_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
+        hybrid_content = hybrid_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
 
-    // 3. Write Windows Batch File
-    let main_bat_path = output_path.join("BMM-Standalone-Server.bat");
-    fs::write(&main_bat_path, &hybrid_content).map_err(|_| "repo.errWriteScript".to_string())?;
+        // 3. Write Windows Batch File
+        let bat_path = output_path.join("BMM-Standalone-Server.bat");
+        fs::write(&bat_path, &hybrid_content).map_err(|_| "repo.errWriteScript".to_string())?;
+        main_bat_path = Some(bat_path);
 
-    // 4. Write Linux Shell File
-    let linux_template = if server_version == 2 {
-        include_str!("../templates/mini-server/server.v2.sh.template")
-    } else {
-        include_str!("../templates/mini-server/server.hybrid.sh.template")
-    };
-    
-    let mut linux_content = linux_template.replace("PORT_PLACEHOLDER", &port.to_string());
-    linux_content = linux_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "true" } else { "false" });
-    linux_content = linux_content.replace("USE_UPNP_PLACE_HOLDER", if use_upnp { "true" } else { "false" });
-    linux_content = linux_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
-    linux_content = linux_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
-    linux_content = linux_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+        // 4. Write Linux Shell File
+        let linux_template = if server_version == 2 {
+            include_str!("../templates/mini-server/server.v2.sh.template")
+        } else {
+            include_str!("../templates/mini-server/server.hybrid.sh.template")
+        };
+        
+        let mut linux_content = linux_template.replace("PORT_PLACEHOLDER", &port.to_string());
+        linux_content = linux_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "true" } else { "false" });
+        linux_content = linux_content.replace("USE_UPNP_PLACE_HOLDER", if use_upnp { "true" } else { "false" });
+        linux_content = linux_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
+        linux_content = linux_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
+        linux_content = linux_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
 
-    let main_sh_path = output_path.join("BMM-Standalone-Server.sh");
-    fs::write(&main_sh_path, linux_content).map_err(|_| "repo.errWriteScript".to_string())?;
+        let main_sh_path = output_path.join("BMM-Standalone-Server.sh");
+        fs::write(&main_sh_path, linux_content).map_err(|_| "repo.errWriteScript".to_string())?;
+    }
 
     // 5. Copy Bans if exists
     if let Ok(ban_path) = ban_manager::get_ban_file_path(handle) {
@@ -624,10 +660,22 @@ fn generate_mini_server_files(
 
     // 6. Generate Docker files if enabled
     if enable_docker {
-        let dockerfile_content = if docker_host_type == "windows" {
-            include_str!("../templates/docker/Dockerfile.windows.template")
+        let (dockerfile_content, compose_template) = if server_type == "server" {
+            // Express/Node server — uses its own Dockerfiles that call `node server.js`
+            let df = if docker_host_type == "windows" {
+                include_str!("../templates/docker/Dockerfile.server.windows.template")
+            } else {
+                include_str!("../templates/docker/Dockerfile.server.linux.template")
+            };
+            (df, include_str!("../templates/docker/docker-compose.server.yml.template"))
         } else {
-            include_str!("../templates/docker/Dockerfile.linux.template")
+            // Polyglot / user mode — existing Dockerfiles that run the .sh/.bat script
+            let df = if docker_host_type == "windows" {
+                include_str!("../templates/docker/Dockerfile.windows.template")
+            } else {
+                include_str!("../templates/docker/Dockerfile.linux.template")
+            };
+            (df, include_str!("../templates/docker/docker-compose.yml.template"))
         };
 
         let dockerfile_path = output_path.join("Dockerfile");
@@ -636,7 +684,6 @@ fn generate_mini_server_files(
         fs::write(&dockerfile_path, dockerfile_content).map_err(|_| "repo.errWriteDockerfile".to_string())?;
 
         // Generate docker-compose.yml
-        let compose_template = include_str!("../templates/docker/docker-compose.yml.template");
         let mut compose_content = compose_template.replace("PORT_PLACEHOLDER", &port.to_string());
         compose_content = compose_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
         let compose_path = output_path.join("docker-compose.yml");
@@ -651,26 +698,28 @@ fn generate_mini_server_files(
         {
             use winreg::enums::*;
             use winreg::RegKey;
-            println!("[STARTUP] Enabling autostart for standalone server...");
-            let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-            match hkcu.open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_SET_VALUE) {
-                Ok(run) => {
-                    let mut path_str = if let Ok(abs_path) = fs::canonicalize(&main_bat_path) {
-                        abs_path.to_string_lossy().to_string().replace("\\\\?\\", "").replace("/","\\")
-                    } else {
-                        main_bat_path.to_string_lossy().to_string()
-                    };
+            if let Some(bat) = &main_bat_path {
+                println!("[STARTUP] Enabling autostart for standalone server...");
+                let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+                match hkcu.open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_SET_VALUE) {
+                    Ok(run) => {
+                        let mut path_str = if let Ok(abs_path) = fs::canonicalize(bat) {
+                            abs_path.to_string_lossy().to_string().replace("\\\\?\\", "").replace("/","\\")
+                        } else {
+                            bat.to_string_lossy().to_string()
+                        };
 
-                    if path_str.contains(' ') && !path_str.starts_with('"') {
-                        path_str = format!("\"{}\"", path_str);
-                    }
+                        if path_str.contains(' ') && !path_str.starts_with('"') {
+                            path_str = format!("\"{}\"", path_str);
+                        }
 
-                    match run.set_value("BMM-Mini-Server", &path_str) {
-                        Ok(_) => println!("[STARTUP] Registry key set successfully."),
-                        Err(e) => println!("[STARTUP] Failed to set registry value: {}", e),
-                    }
-                },
-                Err(e) => println!("[STARTUP] Failed to open registry key: {}", e),
+                        match run.set_value("BMM-Mini-Server", &path_str) {
+                            Ok(_) => println!("[STARTUP] Registry key set successfully."),
+                            Err(e) => println!("[STARTUP] Failed to set registry value: {}", e),
+                        }
+                    },
+                    Err(e) => println!("[STARTUP] Failed to open registry key: {}", e),
+                }
             }
         }
     } else {
@@ -703,6 +752,7 @@ pub struct StandaloneServerConfig {
     pub admin_password: Option<String>,
     pub enable_docker: Option<bool>,
     pub docker_host_type: Option<String>,
+    pub server_type: Option<String>,
 }
 
 #[tauri::command]
@@ -724,6 +774,7 @@ pub async fn generate_standalone_server(
         admin_password,
         enable_docker,
         docker_host_type,
+        server_type,
     } = payload;
     let mut repo_json = PathBuf::from(&repo_path);
     
@@ -742,7 +793,8 @@ pub async fn generate_standalone_server(
     let pw = admin_password.unwrap_or_else(|| "admin".to_string());
     let enable_docker = enable_docker.unwrap_or(false);
     let docker_host_type = docker_host_type.unwrap_or_else(|| "linux".to_string());
-    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang, upload_limit, version, &pw, enable_docker, &docker_host_type)
+    let stype = server_type.unwrap_or_else(|| "user".to_string());
+    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang, upload_limit, version, &pw, enable_docker, &docker_host_type, &stype)
 }
 
 #[tauri::command]

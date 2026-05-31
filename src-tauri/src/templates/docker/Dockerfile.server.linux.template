@@ -1,0 +1,40 @@
+# BMM Express Server - Docker Image (Linux)
+FROM node:20-alpine
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Create app directory
+WORKDIR /app
+
+# Copy package manifest first for layer caching
+COPY package.json ./
+
+# Install production dependencies only
+RUN npm install --omit=dev
+
+# Copy application files
+COPY server.js ./
+COPY public/ ./public/
+
+# Copy repository data files
+COPY mods/ ./mods/
+COPY repo.json ./
+COPY Info.json ./
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S bmm && \
+    adduser -S bmm -u 1001 -G bmm && \
+    chown -R bmm:bmm /app
+
+USER bmm
+
+# Expose configured port
+EXPOSE PORT_PLACEHOLDER
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:PORT_PLACEHOLDER/repo.json', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) })"
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "server.js"]

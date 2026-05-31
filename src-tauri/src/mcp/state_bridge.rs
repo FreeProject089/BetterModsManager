@@ -858,6 +858,7 @@ pub fn generate_lightweight_server(
     admin_password: &str,
     enable_docker: bool,
     docker_host_type: &str,
+    server_type: &str,
 ) -> anyhow::Result<String> {
     let output_path = std::path::PathBuf::from(repo_path);
     if !output_path.exists() {
@@ -867,21 +868,65 @@ pub fn generate_lightweight_server(
     let data_dir = get_bmm_data_dir();
     let cf_path = data_dir.join("bin").join("cloudflared.exe").to_string_lossy().to_string();
 
-    let hybrid_template = if server_version == 2 {
-        include_str!("../templates/mini-server/server.v2.bat.template")
-    } else {
-        include_str!("../templates/mini-server/server.hybrid.bat.template")
-    };
+    let mut main_bat_path = output_path.join("BMM-Standalone-Server.bat");
     
-    let mut hybrid_content = hybrid_template.replace("PORT_PLACEHOLDER", &port.to_string());
-    hybrid_content = hybrid_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "true" } else { "false" });
-    hybrid_content = hybrid_content.replace("USE_UPNP_PLACE_HOLDER", if use_upnp { "true" } else { "false" });
-    hybrid_content = hybrid_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
-    hybrid_content = hybrid_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
-    hybrid_content = hybrid_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+    if server_type == "server" {
+        let package_template = include_str!("../templates/mini-server/package.json.template");
+        let server_js_template = include_str!("../templates/mini-server/server.express.js.template");
+        let dashboard_template = include_str!("../templates/mini-server/dashboard.html.template");
+        let bat_template = include_str!("../templates/mini-server/start.server.bat.template");
+        let sh_template = include_str!("../templates/mini-server/start.server.sh.template");
 
-    let main_bat_path = output_path.join("BMM-Standalone-Server.bat");
-    std::fs::write(&main_bat_path, hybrid_content)?;
+        let mut server_js_content = server_js_template.replace("{{PORT}}", &port.to_string());
+        server_js_content = server_js_content.replace("{{UPLOAD_LIMIT}}", &upload_limit.to_string());
+        server_js_content = server_js_content.replace("{{ADMIN_PASSWORD}}", admin_password);
+
+        let public_dir = output_path.join("public");
+        if !public_dir.exists() {
+            std::fs::create_dir_all(&public_dir)?;
+        }
+
+        std::fs::write(output_path.join("package.json"), package_template)?;
+        std::fs::write(output_path.join("server.js"), server_js_content)?;
+        std::fs::write(public_dir.join("dashboard.html"), dashboard_template)?;
+        
+        main_bat_path = output_path.join("BMM-Standalone-Server.bat");
+        std::fs::write(&main_bat_path, bat_template)?;
+        let main_sh_path = output_path.join("BMM-Standalone-Server.sh");
+        std::fs::write(&main_sh_path, sh_template)?;
+    } else {
+        let hybrid_template = if server_version == 2 {
+            include_str!("../templates/mini-server/server.v2.bat.template")
+        } else {
+            include_str!("../templates/mini-server/server.hybrid.bat.template")
+        };
+        
+        let mut hybrid_content = hybrid_template.replace("PORT_PLACEHOLDER", &port.to_string());
+        hybrid_content = hybrid_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "true" } else { "false" });
+        hybrid_content = hybrid_content.replace("USE_UPNP_PLACE_HOLDER", if use_upnp { "true" } else { "false" });
+        hybrid_content = hybrid_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
+        hybrid_content = hybrid_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
+        hybrid_content = hybrid_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+
+        main_bat_path = output_path.join("BMM-Standalone-Server.bat");
+        std::fs::write(&main_bat_path, hybrid_content)?;
+        
+        let linux_template = if server_version == 2 {
+            include_str!("../templates/mini-server/server.v2.sh.template")
+        } else {
+            include_str!("../templates/mini-server/server.hybrid.sh.template")
+        };
+        
+        let mut linux_content = linux_template.replace("PORT_PLACEHOLDER", &port.to_string());
+        linux_content = linux_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "true" } else { "false" });
+        linux_content = linux_content.replace("USE_UPNP_PLACE_HOLDER", if use_upnp { "true" } else { "false" });
+        linux_content = linux_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
+        linux_content = linux_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
+        linux_content = linux_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+
+        let main_sh_path = output_path.join("BMM-Standalone-Server.sh");
+        std::fs::write(&main_sh_path, linux_content)?;
+    }
 
     // Copy Bans if exists
     let ban_path = data_dir.join("bans.json");
@@ -899,10 +944,20 @@ pub fn generate_lightweight_server(
 
     // Generate Docker files if enabled
     if enable_docker {
-        let dockerfile_content = if docker_host_type == "windows" {
-            include_str!("../templates/docker/Dockerfile.windows.template")
+        let (dockerfile_content, compose_template) = if server_type == "server" {
+            let df = if docker_host_type == "windows" {
+                include_str!("../templates/docker/Dockerfile.server.windows.template")
+            } else {
+                include_str!("../templates/docker/Dockerfile.server.linux.template")
+            };
+            (df, include_str!("../templates/docker/docker-compose.server.yml.template"))
         } else {
-            include_str!("../templates/docker/Dockerfile.linux.template")
+            let df = if docker_host_type == "windows" {
+                include_str!("../templates/docker/Dockerfile.windows.template")
+            } else {
+                include_str!("../templates/docker/Dockerfile.linux.template")
+            };
+            (df, include_str!("../templates/docker/docker-compose.yml.template"))
         };
 
         let dockerfile_path = output_path.join("Dockerfile");
@@ -911,7 +966,6 @@ pub fn generate_lightweight_server(
         std::fs::write(&dockerfile_path, dockerfile_content)?;
 
         // Generate docker-compose.yml
-        let compose_template = include_str!("../templates/docker/docker-compose.yml.template");
         let mut compose_content = compose_template.replace("PORT_PLACEHOLDER", &port.to_string());
         compose_content = compose_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
         let compose_path = output_path.join("docker-compose.yml");
