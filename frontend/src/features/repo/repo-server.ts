@@ -285,7 +285,7 @@ export function initRepoServer(elements) {
                     serverStatusDot.style.background = '#2ecc71';
                     serverStatusDot.style.boxShadow = '0 0 8px #2ecc71';
                 }
-                if (serverStatusLabel) serverStatusLabel.textContent = t('repo.serverOnline') || 'Serveur en ligne — port 8000';
+                if (serverStatusLabel) serverStatusLabel.textContent = t('repo.serverOnline', { port: String(status.port || 8000) }) || `Server online - port ${status.port || 8000}`;
                 urlInputServer.value = status.lan_url;
                 if (status.public_url) {
                     publicUrlInput.value = status.public_url;

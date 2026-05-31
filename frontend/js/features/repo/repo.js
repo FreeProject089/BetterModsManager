@@ -9,6 +9,37 @@ import { initRepoServer } from './repo-server.js';
 import { initRepoMonitoring } from './repo-monitoring.js';
 import { initRepoSync } from './repo-sync.js';
 import { initRepoAdmin } from './repo-admin.js';
+// Normalise a repo URL so map lookups match regardless of trailing slash / repo.json
+export const normRepoUrl = (url) => {
+    let u = (url || '').trim();
+    u = u.replace(/\/repo\.json$/i, '').replace(/\/+$/, '');
+    return u.toLowerCase();
+};
+// ── Repo favorites (localStorage) ─────────────────────────────────────────────
+const REPO_FAV_KEY = 'bmm_repo_favorites';
+export const getRepoFavorites = () => {
+    try {
+        return JSON.parse(localStorage.getItem(REPO_FAV_KEY) || '[]');
+    }
+    catch {
+        return [];
+    }
+};
+export const isRepoFav = (url) => getRepoFavorites().includes(url);
+export const toggleRepoFav = (url) => {
+    let favs = getRepoFavorites();
+    const has = favs.includes(url);
+    favs = has ? favs.filter(u => u !== url) : [...favs, url];
+    localStorage.setItem(REPO_FAV_KEY, JSON.stringify(favs));
+    return !has; // new state
+};
+// Star button markup (shared between browse + history)
+const repoStarBtn = (url) => {
+    const fav = isRepoFav(url);
+    return `<button class="repo-fav-btn${fav ? ' active' : ''}" data-fav-url="${escAttr(url)}" title="${fav ? (t('repo.unfavorite') || 'Unfavorite') : (t('repo.favorite') || 'Favorite')}">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="${fav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    </button>`;
+};
 export const copyToClipboard = async (text, successMsg) => {
     try {
         await navigator.clipboard.writeText(text);
@@ -628,6 +659,7 @@ export function initRepo() {
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                                     <span style="font-size:13px; font-weight:600; color:var(--text-primary);">${escHtml(entry.name || 'Unknown')}</span>
                                     <div style="display:flex; align-items:center; gap:8px;">
+                                        ${repoStarBtn(entry.url)}
                                         <div style="display:flex; align-items:center; gap:4px;" class="repo-history-ping-container" data-url="${escAttr(entry.url)}">
                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" class="repo-history-ping-icon">
                                                 <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
@@ -683,6 +715,17 @@ export function initRepo() {
                         history.splice(idx, 1);
                         localStorage.setItem('bmm_repo_history_client', JSON.stringify(history));
                         renderHistory();
+                    };
+                });
+                // Favorite star handlers
+                historyList.querySelectorAll('.repo-fav-btn').forEach(btn => {
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        const nowFav = toggleRepoFav(btn.dataset.favUrl);
+                        btn.classList.toggle('active', nowFav);
+                        const svg = btn.querySelector('svg');
+                        if (svg)
+                            svg.setAttribute('fill', nowFav ? 'currentColor' : 'none');
                     };
                 });
                 // Ping history repos
@@ -746,12 +789,27 @@ export function initRepo() {
                 modal.classList.add('open');
             };
         }
+        const btnClearAll = document.getElementById('btn-clear-all-repo-history');
+        // "Clear" → removes only non-favorited entries (keeps favorites)
         if (btnClear) {
-            btnClear.onclick = () => {
-                if (confirm(t('repo.historyConfirmClear'))) {
-                    localStorage.removeItem('bmm_repo_history_client');
-                    renderHistory();
-                }
+            btnClear.onclick = async () => {
+                const ok = await showConfirm(t('repo.historyClearTitle') || 'Clear history', t('repo.historyClearMsg') || 'Remove all non-favorited history entries? Favorited repos are kept.', true);
+                if (!ok)
+                    return; // only delete AFTER confirmation
+                const history = JSON.parse(localStorage.getItem('bmm_repo_history_client') || '[]');
+                const kept = history.filter(h => isRepoFav(h.url));
+                localStorage.setItem('bmm_repo_history_client', JSON.stringify(kept));
+                renderHistory();
+            };
+        }
+        // "Clear All" → removes everything, including favorited entries
+        if (btnClearAll) {
+            btnClearAll.onclick = async () => {
+                const ok = await showConfirm(t('repo.historyClearAllTitle') || 'Clear everything', t('repo.historyClearAllMsg') || 'Remove ALL history entries, including favorited repos? This cannot be undone.', true);
+                if (!ok)
+                    return;
+                localStorage.removeItem('bmm_repo_history_client');
+                renderHistory();
             };
         }
     };
@@ -783,8 +841,16 @@ export function initRepo() {
                 const bustUrl = `${getLinks().server_browse}?t=${Date.now()}`;
                 const response = await fetch(bustUrl, { cache: 'no-store' });
                 if (!response.ok)
-                    throw new Error('Failed to fetch');
+                    throw new Error(`HTTP ${response.status}`);
                 repoList = await response.json();
+                // Build a url → expected-signature map (recorded by the BMM team when
+                // validating the repo). repo-sync compares the live repo's signature
+                // against this to detect content changed since verification.
+                window.__bmmRepoExpectedSig = {};
+                repoList.forEach(r => {
+                    if (r.url && r.signature)
+                        window.__bmmRepoExpectedSig[normRepoUrl(r.url)] = r.signature;
+                });
                 renderRepoList();
                 loadingEl.style.display = 'none';
                 contentEl.style.display = 'block';
@@ -813,8 +879,9 @@ export function initRepo() {
             const onlineOnly = onlineFilter?.checked || false;
             whitelistFilter = whitelistFilterEl?.value || 'all';
             let filtered = repoList;
-            // Only show repos with a valid verified hash (hash field must be present and non-empty)
-            // This filters out online but invalid servers
+            // Only show repos validated by the BMM team (hash field present and non-empty).
+            // This is intentional — unvalidated entries in repos.json stay hidden until
+            // the team adds a hash. The Verified badge is then shown for those entries.
             filtered = filtered.filter(r => r.hash && r.hash.length > 0);
             // Filter by category
             if (currentFilter !== 'all') {
@@ -852,7 +919,7 @@ export function initRepo() {
                             <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
                                 <span style="font-size:14px; font-weight:700; color:var(--text-primary);">${escHtml(repo.name)}</span>
                                 <span class="repo-badge" style="font-size:9px; font-weight:800; padding:2px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; ${repo.category === 'official' ? 'background:rgba(16,185,129,0.15); color:#10b981;' : 'background:rgba(59,130,246,0.15); color:#3b82f6;'}">${escHtml(repo.category)}</span>
-                                <span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.25); display:flex; align-items:center; gap:3px;" data-tooltip="Verified server — hash validated by the BMM team"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Verified</span>
+                                ${repo.hash ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.25); display:flex; align-items:center; gap:3px;" data-tooltip="Verified server — hash validated by the BMM team"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Verified</span>` : ''}
                                 ${repo.whitelist_enabled === true
                 ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(34,197,94,0.12); color:#22c55e; border:1px solid rgba(34,197,94,0.3); display:flex; align-items:center; gap:3px;" data-tooltip="This server uses a whitelist — access is restricted"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Whitelist</span>`
                 : repo.whitelist_enabled === false
@@ -862,7 +929,10 @@ export function initRepo() {
                             <p style="font-size:12px; color:var(--text-secondary); margin:0; line-height:1.5;">${escHtml(repo.description || '')}</p>
                         </div>
                         <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; margin-left:16px;">
-                            <span style="font-size:10px; color:var(--text-muted);">${escHtml(repo.region || 'Unknown')}</span>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                ${repoStarBtn(repo.url)}
+                                <span style="font-size:10px; color:var(--text-muted);">${escHtml(repo.region || 'Unknown')}</span>
+                            </div>
                             ${repo.tags && repo.tags.length > 0 ? `
                                 <div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end;">
                                     ${repo.tags.slice(0, 2).map(tag => `<span style="font-size:9px; padding:2px 6px; background:rgba(255,255,255,0.05); border-radius:3px; color:var(--text-muted);">${escHtml(tag)}</span>`).join('')}
@@ -911,9 +981,9 @@ export function initRepo() {
                             </a>
                             ` : ''}
                             ${repo.discord_link ? `
-                            <a href="${escAttr(repo.discord_link)}" target="_blank" style="width:20px; height:20px; display:flex; align-items:center; justify-content:center; background:rgba(88,101,242,0.15); border:1px solid rgba(88,101,242,0.3); border-radius:4px; text-decoration:none; color:#5865F2;" >
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                            <a href="${escAttr(repo.discord_link)}" target="_blank" title="Discord" style="width:22px; height:22px; display:flex; align-items:center; justify-content:center; background:#5865F2; border-radius:5px; text-decoration:none; flex-shrink:0; transition:opacity 0.15s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                                <svg width="13" height="10" viewBox="0 0 71 55" fill="white" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M60.1 4.9A58.5 58.5 0 0 0 45.6.7a.2.2 0 0 0-.2.1 40.8 40.8 0 0 0-1.8 3.7 54 54 0 0 0-16.2 0A37.5 37.5 0 0 0 25.6.8a.2.2 0 0 0-.2-.1 58.3 58.3 0 0 0-14.5 4.2.2.2 0 0 0-.1.1C1.6 18.5-.9 31.7.3 44.8v.1a58.7 58.7 0 0 0 17.7 9 .2.2 0 0 0 .2-.1 42 42 0 0 0 3.6-5.9.2.2 0 0 0-.1-.3 38.7 38.7 0 0 1-5.5-2.6.2.2 0 0 1 0-.4c.4-.3.7-.6 1.1-.8a.2.2 0 0 1 .2 0c11.6 5.3 24.1 5.3 35.5 0a.2.2 0 0 1 .2 0l1.1.8a.2.2 0 0 1 0 .4 36 36 0 0 1-5.5 2.6.2.2 0 0 0-.1.3 47 47 0 0 0 3.6 5.9.2.2 0 0 0 .2.1 58.5 58.5 0 0 0 17.7-9v-.1c1.5-15.3-2.5-28.4-10.7-40.1a.2.2 0 0 0-.1 0ZM23.7 37c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.6 0 6.5 3.3 6.4 7.2 0 4-2.8 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.6 0 6.5 3.3 6.4 7.2 0 4-2.8 7.2-6.4 7.2Z"/>
                                 </svg>
                             </a>
                             ` : ''}
@@ -936,6 +1006,18 @@ export function initRepo() {
                     ` : ''}
                 </div>
             `).join('');
+            // Favorite star handlers (must run before item-click; stop propagation)
+            listEl.querySelectorAll('.repo-fav-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const url = btn.dataset.favUrl;
+                    const nowFav = toggleRepoFav(url);
+                    btn.classList.toggle('active', nowFav);
+                    const svg = btn.querySelector('svg');
+                    if (svg)
+                        svg.setAttribute('fill', nowFav ? 'currentColor' : 'none');
+                });
+            });
             // Add click handlers
             listEl.querySelectorAll('.repo-browser-item').forEach(item => {
                 item.addEventListener('click', () => {
@@ -1055,6 +1137,22 @@ export function initRepo() {
         }
         if (btnRetry) {
             btnRetry.addEventListener('click', fetchRepoList);
+        }
+        const btnRefresh = document.getElementById('btn-refresh-repo-browser');
+        if (btnRefresh) {
+            btnRefresh.addEventListener('click', () => {
+                btnRefresh.style.opacity = '0.5';
+                btnRefresh.style.pointerEvents = 'none';
+                const svg = btnRefresh.querySelector('svg');
+                if (svg)
+                    svg.style.animation = 'spin 0.6s linear infinite';
+                fetchRepoList().then(() => {
+                    btnRefresh.style.opacity = '';
+                    btnRefresh.style.pointerEvents = '';
+                    if (svg)
+                        svg.style.animation = '';
+                });
+            });
         }
         filterBtns.forEach(btn => {
             btn.addEventListener('click', () => {

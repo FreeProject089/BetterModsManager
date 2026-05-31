@@ -10,7 +10,10 @@ let lastFetchedRepoSaltedId = null;
 
 // ── Repo verification detail modal ───────────────────────────────────────────
 
-function _openRepoVerifyDetail(repo: any, isVerified: boolean): void {
+// reason: optional override describing WHY verification failed.
+//   'mismatch'  → live repo signature differs from the BMM-recorded one
+//   'unsigned'  → no/invalid self-signature (default)
+function _openRepoVerifyDetail(repo: any, isVerified: boolean, reason?: string): void {
     const modal = document.getElementById('modal-repo-verify-detail');
     if (!modal) return;
 
@@ -52,13 +55,19 @@ function _openRepoVerifyDetail(repo: any, isVerified: boolean): void {
         sigIcon.innerHTML = isVerified
             ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>`
             : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
-        sigTitle.textContent = isVerified
-            ? (t('repo.verifyDetail.sigOk')   || 'Signature Ed25519 valide')
-            : (t('repo.verifyDetail.sigFail') || 'Signature invalide ou absente');
+        if (isVerified) {
+            sigTitle.textContent = t('repo.verifyDetail.sigOk') || 'Signature Ed25519 valide';
+            sigDesc.textContent  = t('repo.verifyDetail.sigOkDesc') || "Le contenu de ce dépôt a été signé par l'auteur et n'a pas été altéré.";
+        } else if (reason === 'mismatch') {
+            // Content changed since the BMM team verified this repo
+            sigTitle.textContent = t('repo.verifyDetail.sigMismatch') || 'Signature ne correspond plus';
+            sigDesc.textContent  = t('repo.verifyDetail.sigMismatchDesc')
+                || "Le contenu de ce dépôt a changé depuis sa vérification par l'équipe BMM. Sa signature ne correspond plus à celle enregistrée — vérifiez avant de synchroniser.";
+        } else {
+            sigTitle.textContent = t('repo.verifyDetail.sigFail') || 'Signature invalide ou absente';
+            sigDesc.textContent  = t('repo.verifyDetail.sigFailDesc') || "La signature n'a pas pu être vérifiée. Le dépôt peut être non signé ou potentiellement modifié.";
+        }
         sigTitle.style.color = isVerified ? '#2ecc71' : '#e74c3c';
-        sigDesc.textContent = isVerified
-            ? (t('repo.verifyDetail.sigOkDesc')   || "Le contenu de ce dépôt a été signé par l'auteur et n'a pas été altéré.")
-            : (t('repo.verifyDetail.sigFailDesc') || "La signature n'a pas pu être vérifiée. Le dépôt peut être non signé ou potentiellement modifié.");
     }
 
     modal.classList.add('open');
@@ -145,7 +154,25 @@ export function initRepoSync(elements) {
 
                 if (window.saveClientHistory) window.saveClientHistory(url, repo);
                 lastFetchedRepo = repo;
-                const isVerified = await invoke('verify_repo_signature', { repo });
+
+                // 1. Self-signature check: is the repo validly signed by its author?
+                const selfSigned = await invoke('verify_repo_signature', { repo });
+
+                // 2. Content-integrity check: does the live signature still match the
+                //    one the BMM team recorded in repos.json? If a server changed its
+                //    repo content after verification, the signature won't match.
+                let verifyReason: string | undefined;
+                const normUrl = (url || '').trim().replace(/\/repo\.json$/i, '').replace(/\/+$/, '').toLowerCase();
+                const expectedSig = (window as any).__bmmRepoExpectedSig?.[normUrl];
+                let isVerified = selfSigned;
+                if (selfSigned && expectedSig) {
+                    if (repo.signature !== expectedSig) {
+                        isVerified = false;
+                        verifyReason = 'mismatch';
+                    }
+                } else if (!selfSigned) {
+                    verifyReason = 'unsigned';
+                }
 
                 syncInfoCard.style.display = 'block';
                 syncNameDisplay.textContent = repo.name;
@@ -171,6 +198,7 @@ export function initRepoSync(elements) {
 
                 // Cache repo + verification state for the detail modal
                 syncBadge.dataset.isVerified = isVerified ? '1' : '0';
+                syncBadge.dataset.verifyReason = verifyReason || '';
                 (syncBadge as any)._repoRef = repo;
 
                 if (profilesSelectionEl && repo.profiles) {
@@ -619,7 +647,7 @@ export function initRepoSync(elements) {
             const repo = (syncBadge as any)._repoRef;
             if (!repo) return;
             const isVerified = syncBadge.dataset.isVerified === '1';
-            _openRepoVerifyDetail(repo, isVerified);
+            _openRepoVerifyDetail(repo, isVerified, syncBadge.dataset.verifyReason || undefined);
         });
     }
 

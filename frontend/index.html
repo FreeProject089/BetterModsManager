@@ -9456,13 +9456,18 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
                                 data-i18n="repo.browserSubtitle">Official and partner server repositories</p>
                         </div>
                     </div>
-                    <button class="modal-close" data-close="modal-repo-browser">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button id="btn-refresh-repo-browser" title="Refresh list" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;color:var(--text-muted);transition:all 0.15s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-muted)'">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.36"/></svg>
+                        </button>
+                        <button class="modal-close" data-close="modal-repo-browser">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
                             <line x1="18" y1="6" x2="6" y2="18" />
                             <line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                     </button>
+                    </div>
                 </div>
                 <div class="modal-body" id="repo-browser-body"
                     style="padding:20px; max-height:calc(80vh - 140px); overflow-y:auto;">
@@ -9652,9 +9657,14 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
                 </div>
                 <div class="modal-footer"
                     style="padding:16px 24px; background:rgba(255,255,255,0.03); display:flex; justify-content:space-between; align-items:center; gap:12px; border-top:1px solid rgba(255,255,255,0.08);">
-                    <button class="btn btn-ghost" id="btn-clear-repo-history"
-                        style="padding:8px 16px; font-size:12px; color:#ef4444; border:1px solid rgba(239,68,68,0.2);"
-                        data-i18n="repo.clearHistory"></button>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-ghost" id="btn-clear-repo-history"
+                            style="padding:8px 16px; font-size:12px; color:#fb923c; border:1px solid rgba(251,146,60,0.25);"
+                            data-i18n="repo.clearHistory"></button>
+                        <button class="btn btn-ghost" id="btn-clear-all-repo-history"
+                            style="padding:8px 16px; font-size:12px; color:#ef4444; border:1px solid rgba(239,68,68,0.2);"
+                            data-i18n="repo.clearAllHistory">Clear All</button>
+                    </div>
                     <button class="btn btn-ghost" data-close="modal-repo-history"
                         style="padding:8px 20px; font-size:13px; border:1px solid rgba(255,255,255,0.1);"
                         data-i18n="common.cancel">Close</button>
@@ -10069,7 +10079,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
         </div>
 
         <!-- Modal: Generic Premium Confirmation -->
-        <div class="modal-overlay" id="modal-confirm-generic" style="z-index: 1200;">
+        <div class="modal-overlay" id="modal-confirm-generic" style="z-index: 9999;">
             <div class="modal glass" style="max-width: 400px; width: 90%; border: 1px solid rgba(255,255,255,0.1);">
                 <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
                     <div style="display:flex; align-items:center; gap:12px; width: 100%;">
