@@ -106,8 +106,14 @@ export function initRepoSync(elements) {
     const updateSyncPathsVisibility = () => {
         const sec = document.getElementById('repo-sync-paths-section');
         if (!sec) return;
-        // Always keep visible so users can override paths even when updating
-        sec.style.display = 'block';
+        // Paths are only needed when creating a NEW profile. When syncing into an
+        // existing local profile (incl. "Autre profil"), BMM reuses that profile's
+        // own game/mods/backup paths — no manual paths required.
+        const anyNew = Array.from(document.querySelectorAll('.repo-sync-choice-cb:checked'))
+            .some((cb: any) => cb.value === 'NEW');
+        sec.style.display = anyNew ? 'block' : 'none';
+        const hint = document.getElementById('repo-sync-paths-existing-hint');
+        if (hint) hint.style.display = (!anyNew && document.querySelectorAll('.repo-sync-choice-cb:checked').length > 0) ? 'block' : 'none';
         updateSyncTotalSize();
     };
 
@@ -480,11 +486,13 @@ export function initRepoSync(elements) {
             const modsDir   = inputSyncModsPath   ? inputSyncModsPath.value.trim()   : '';
             const backupDir = inputSyncBackupPath ? inputSyncBackupPath.value.trim() : '';
 
-            if (syncPathsSection && syncPathsSection.style.display !== 'none') {
-                if (!gameDir || !modsDir || !backupDir) {
-                    toast(t('repo.errSyncFolders'), 'warning');
-                    return;
-                }
+            // Paths are only required when creating a NEW profile. When syncing into
+            // existing profiles only, the Rust side reuses each profile's own paths.
+            const anyNew = Array.from(document.querySelectorAll('.repo-sync-choice-cb:checked'))
+                .some((cb: any) => cb.value === 'NEW');
+            if (anyNew && (!gameDir || !modsDir || !backupDir)) {
+                toast(t('repo.errSyncFolders'), 'warning');
+                return;
             }
 
             const selectedBoxes = document.querySelectorAll('.repo-sync-choice-cb:checked');

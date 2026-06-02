@@ -97,7 +97,8 @@ export async function invoke(command: string, args: Record<string, unknown> = {}
         debugHub.recordIPC(command, args, 'error', err, duration);
         // Suppress console noise for expected "user cancelled" signals — callers handle these gracefully
         const errStr = String(err);
-        const isCancelled = errStr.includes('cancel') || errStr.includes('Cancel') || errStr === 'repo.errCancel';
+        const isCancelled = errStr.includes('cancel') || errStr.includes('Cancel') || errStr === 'repo.errCancel'
+            || errStr.includes('annulée') || errStr.includes('annulé') || errStr.includes('Annulé');
         // Network/DNS failures (unreachable repo URL, dead tunnel, offline) are
         // expected runtime conditions the caller surfaces via a toast — don't
         // log them as hard errors.
@@ -105,7 +106,7 @@ export async function invoke(command: string, args: Record<string, unknown> = {}
         // User-facing validation errors (path not found, wrong format, etc.): the
         // Rust backend throws AppError::NotFound / validation messages that are
         // already shown to the user as toasts by the caller — downgrade to warn.
-        const isValidation = /Ressource non trouvée|not found|introuvable|n.existe pas|does not exist|n.a pas été trouvé|invalid|invalide|requis|required/i.test(errStr);
+        const isValidation = /Ressource non trouvée|not found|introuvable|n.existe pas|does not exist|n.a pas été trouvé|invalid|invalide|requis|required|errNoExistingRepo|errNoProfile|errNoUrl|errNoOutDir|errNoAuthor/i.test(errStr);
         if (isCancelled) {
             console.warn(`[RPC CANCEL] ${command}: ${errStr}`);
         } else if (isNetwork) {

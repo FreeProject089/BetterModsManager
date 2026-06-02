@@ -921,6 +921,15 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             </div>
             ${serverPanel}`;
 
+    } else if (p === '/api/repo/update') {
+        formHtml = `
+            <div style="display:flex;flex-direction:column;gap:12px;">
+              ${txtInput('plug-qt-s-repo-dir', 'repo_dir — dossier du repo existant (contient repo.json)', 'C:/BMM/MyRepo')}
+              <div style="padding:10px 12px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;font-size:11px;color:var(--cyan);line-height:1.5;">
+                <b>UI-driven :</b> Cliquer "Send" ouvre la page Server Repo avec le modal <em>Mettre à jour le repo</em> pré-rempli. Tu vois le contenu du repo, tu choisis les mods à ajouter/retirer, puis tu confirmes — comme si tu le faisais à la main.
+              </div>
+            </div>`;
+
     } else if (p === '/api/repo/host') {
         formHtml = txtInput('plug-qt-s-serve-dir', 'serve_dir (dossier à servir)', 'C:/BMM/Export/Repo')
             + txtInput('plug-qt-s-http-port', 'port', '8080', true)
@@ -1489,6 +1498,21 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                     detail: { section: 'gen', prefill: genPl },
                 }));
             }, 350);
+            return;
+
+        } else if (p === '/api/repo/update') {
+            const repoDir  = (overlay.querySelector('#plug-qt-s-repo-dir')   as HTMLInputElement)?.value?.trim() || '';
+            if (!repoDir) { toast('repo_dir est obligatoire', 'warning'); return; }
+            overlay.remove();
+            // Drive the BMM UI — navigate to repo page and open the update modal
+            // pre-filled with the chosen repo directory. The user sees the full UI.
+            const repoNavBtn = document.querySelector('.nav-item[data-view="repo"], .nav-btn[data-view="repo"]') as HTMLElement | null;
+            if (repoNavBtn) repoNavBtn.click();
+            setTimeout(() => {
+                document.dispatchEvent(new CustomEvent('bmm:repo-focus', {
+                    detail: { section: 'update', prefill: { repoDir } },
+                }));
+            }, 400);
             return;
 
         } else if (p === '/api/repo/host') {
@@ -2222,6 +2246,15 @@ function renderScripts(container: HTMLElement) {
         { m: 'POST',   p: '/api/repo/connect',         l: 'Connect Repo',     icon: IC.globe,      body: '{"url":"","name":""}' },
         { m: 'POST',   p: '/api/repo/sync',            l: 'Sync Repo',        icon: IC.refresh,    body: '{}' },
         { m: 'POST',   p: '/api/repo/gen',             l: 'Gen Repo',         icon: IC.upload,     body: '{}' },
+        { m: 'POST',   p: '/api/repo/update',          l: 'Update Repo',      icon: IC.refresh,    body: '{"repoDir":"C:/BMM/MyRepo"}' },
+        // ── App Catalog ────────────────────────────────────────────
+        { m: 'GET',    p: '/api/apps',                 l: 'Installed Apps',   icon: IC.list },
+        { m: 'POST',   p: '/api/apps/install',         l: 'Install App',      icon: IC.download,   body: '{"appId":"my-app","appTitle":"My App","downloadUrl":"https://...","fileType":"exe","installPath":""}' },
+        { m: 'POST',   p: '/api/apps/launch',          l: 'Launch App',       icon: IC.play,        body: '{"appId":"my-app","exePath":"C:/path/app.exe"}' },
+        { m: 'DELETE', p: '/api/apps/:id',             l: 'Uninstall App',    icon: IC.trash },
+        { m: 'GET',    p: '/api/apps/permissions',     l: 'List Permissions', icon: IC.shield },
+        { m: 'GET',    p: '/api/apps/permissions/:id', l: 'Get Perm',         icon: IC.shield },
+        { m: 'PUT',    p: '/api/apps/permissions/:id', l: 'Set Perm',         icon: IC.shield,     body: '{"permissions":["app.read","app.write"]}' },
         { m: 'POST',   p: '/api/repo/host',            l: 'Host HTTP',        icon: IC.globe,      body: '{"serveDir":"C:/BMM/Export","port":8080}' },
         // ── Import / Export (UI-driven) ────────────────────────────
         { m: 'POST',   p: '/api/data/export',          l: 'Export Data',      icon: IC.upload },

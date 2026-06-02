@@ -569,6 +569,29 @@ export function initRepo() {
                 }, 1500);
             }
         }
+        else if (section === 'update') {
+            // ── Open the "Update existing repo" modal and pre-fill from API params ──
+            // This drives the UI exactly as a human would — the user sees the modal
+            // with the repo loaded, can adjust the selection, then clicks Apply.
+            const btnOpenUpdate = document.getElementById('btn-open-repo-update');
+            if (btnOpenUpdate)
+                btnOpenUpdate.click();
+            // Pre-fill the repo dir and trigger a load
+            if (prefill?.repoDir) {
+                setTimeout(async () => {
+                    const pathInput = document.getElementById('repo-update-path');
+                    if (pathInput)
+                        pathInput.value = prefill.repoDir;
+                    // Load the repo content into the modal
+                    try {
+                        const repo = await invoke('read_local_repo', { repoDir: prefill.repoDir });
+                        // Trigger renderLoaded via a custom event (the modal handler listens for this)
+                        document.dispatchEvent(new CustomEvent('bmm:repo-update-loaded', { detail: { repo, repoDir: prefill.repoDir } }));
+                    }
+                    catch (_) { /* show user-friendly error — already handled */ }
+                }, 350);
+            }
+        }
     });
     // ── Load Settings ──
     const loadRepoSettings = async () => {
@@ -1206,6 +1229,371 @@ export function initRepo() {
         }
     };
     initRepoBrowser();
+    // ── Repo Update (incremental) ──
+    // Persistent state so closing the modal does NOT stop the running update;
+    // reopening shows the live progress until it finishes.
+    const _ru = { running: false, percent: 0, status: '', repoDir: '', done: false, summary: '' };
+    let _ruListenerAttached = false;
+    const initRepoUpdate = () => {
+        const modal = document.getElementById('modal-repo-update');
+        const btnOpen = document.getElementById('btn-open-repo-update');
+        const pathInput = document.getElementById('repo-update-path');
+        const btnPick = document.getElementById('btn-pick-repo-update-folder');
+        const contentEl = document.getElementById('repo-update-content');
+        const currentEl = document.getElementById('repo-update-current');
+        const addEl = document.getElementById('repo-update-add');
+        const btnApply = document.getElementById('btn-apply-repo-update');
+        const btnCancel = document.getElementById('btn-cancel-repo-update');
+        const progressEl = document.getElementById('repo-update-progress');
+        const statusEl = document.getElementById('repo-update-status');
+        const percentEl = document.getElementById('repo-update-percent');
+        const fillEl = document.getElementById('repo-update-fill');
+        if (!modal || !btnOpen)
+            return;
+        let repoDir = '';
+        // Reflect _ru state into the progress UI (called on every event + on open)
+        const syncProgressUI = () => {
+            if (!progressEl)
+                return;
+            if (_ru.running || _ru.done) {
+                progressEl.style.display = 'block';
+                percentEl.textContent = `${Math.round(_ru.percent)}%`;
+                fillEl.style.width = `${Math.round(_ru.percent)}%`;
+                statusEl.textContent = _ru.done ? (_ru.summary || t('repo.update.done') || 'Done') : _ru.status;
+                fillEl.style.background = _ru.done ? 'var(--green)' : 'linear-gradient(90deg,var(--cyan),#00f0ff)';
+            }
+            else {
+                progressEl.style.display = 'none';
+            }
+            if (btnApply)
+                btnApply.disabled = _ru.running || !repoDir;
+            if (btnCancel)
+                btnCancel.style.display = _ru.running ? 'inline-flex' : 'none';
+        };
+        // After an update finishes, reload the repo content so the modal shows the
+        // NEW post-update state (no need to re-pick the folder).
+        const reloadCurrentRepo = async () => {
+            if (!repoDir)
+                return;
+            try {
+                const repo = await invoke('read_local_repo', { repoDir });
+                await renderLoaded(repo);
+            }
+            catch { /* repo may have been emptied/removed */ }
+        };
+        // Persistent progress listener (attached once, survives modal close)
+        const attachListener = async () => {
+            if (_ruListenerAttached || !window.__TAURI__)
+                return;
+            _ruListenerAttached = true;
+            const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
+            await listen('bmm://repo-export-progress', (event) => {
+                if (!_ru.running)
+                    return; // ignore generic export events
+                const { step, progress } = event.payload;
+                if (progress !== undefined)
+                    _ru.percent = progress;
+                if (step) {
+                    try {
+                        _ru.status = t(JSON.parse(step).key) || step;
+                    }
+                    catch {
+                        _ru.status = t(step) || step;
+                    }
+                }
+                syncProgressUI();
+            });
+        };
+        const renderLoaded = async (repo) => {
+            // Current repo content — checkbox per mod (checked = keep, unchecked = remove)
+            currentEl.innerHTML = (repo.profiles || []).map(p => `
+                <div class="ru-current-block" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px;">
+                    <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                        <span>${escHtml(p.name)} <span style="color:var(--text-muted);font-weight:400;">(${p.mods.length} mods)</span></span>
+                        <button class="btn btn-xs btn-outline-danger repo-up-rm-profile" data-pid="${escAttr(p.id)}" style="font-size:10px;flex-shrink:0;">${t('repo.update.removeProfile') || 'Remove profile'}</button>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:3px;">
+                        ${p.mods.map(m => `
+                        <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-secondary);cursor:pointer;">
+                            <input type="checkbox" class="repo-up-keep-mod" data-mid="${escAttr(m.id)}" checked>
+                            <span>${escHtml(m.name)} <span style="color:var(--text-muted);">v${escHtml(m.version)}</span></span>
+                        </label>`).join('')}
+                    </div>
+                </div>`).join('') || `<div style="color:var(--text-muted);font-size:12px;">${t('repo.update.empty') || 'Repo is empty'}</div>`;
+            // Local profiles to add — expandable per-mod selection
+            const localProfiles = await invoke('get_profiles');
+            addEl.innerHTML = localProfiles.map(p => `
+                <div class="ru-add-block" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;overflow:hidden;">
+                    <div style="display:flex;align-items:center;gap:8px;padding:10px;cursor:pointer;font-size:12px;">
+                        <input type="checkbox" class="repo-up-add-profile" data-pid="${escAttr(p.id)}">
+                        <span style="font-weight:600;flex:1;">${escHtml(p.name)} <span style="color:var(--text-muted);font-size:11px;font-weight:400;">${escHtml(p.game_name || '')}</span></span>
+                        <button class="btn btn-xs btn-ghost repo-up-expand" data-pid="${escAttr(p.id)}" style="font-size:10px;">${t('repo.update.chooseMods') || 'Choose mods'}</button>
+                    </div>
+                    <div class="repo-up-mods" data-pid="${escAttr(p.id)}" style="display:none;padding:0 10px 10px 32px;border-top:1px solid rgba(255,255,255,0.04);"></div>
+                </div>`).join('');
+            contentEl.style.display = 'block';
+            btnApply.disabled = false;
+            currentEl.querySelectorAll('.repo-up-rm-profile').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const block = btn.closest('.ru-current-block');
+                    btn.dataset.removed = btn.dataset.removed === '1' ? '0' : '1';
+                    const removed = btn.dataset.removed === '1';
+                    if (block)
+                        block.style.opacity = removed ? '0.4' : '1';
+                    btn.textContent = removed ? (t('repo.update.removed') || 'Will remove ✓') : (t('repo.update.removeProfile') || 'Remove profile');
+                });
+            });
+            // Expand → load that profile's mods with per-mod checkboxes
+            addEl.querySelectorAll('.repo-up-expand').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const pid = btn.dataset.pid;
+                    const box = addEl.querySelector(`.repo-up-mods[data-pid="${pid}"]`);
+                    if (!box)
+                        return;
+                    if (box.style.display === 'block') {
+                        box.style.display = 'none';
+                        return;
+                    }
+                    box.style.display = 'block';
+                    if (!box.dataset.loaded) {
+                        box.innerHTML = `<div style="font-size:11px;color:var(--text-muted);padding:6px 0;">${t('common.loading') || 'Loading…'}</div>`;
+                        try {
+                            const mods = await invoke('get_profile_mod_list', { profileId: pid });
+                            box.innerHTML = `
+                                <div style="font-size:10px;color:var(--text-muted);margin:6px 0 4px;">${t('repo.update.modsHint') || 'Checked mods will be added. Leave all checked to add the whole profile.'}</div>
+                                ${mods.map(m => `
+                                <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-secondary);cursor:pointer;padding:1px 0;">
+                                    <input type="checkbox" class="repo-up-add-mod" data-pid="${escAttr(pid)}" data-mid="${escAttr(m.id)}" checked>
+                                    <span>${escHtml(m.name)} <span style="color:var(--text-muted);">v${escHtml(m.version)}</span></span>
+                                </label>`).join('') || `<div style="font-size:11px;color:var(--text-muted);">${t('repo.update.noMods') || 'No mods in this profile'}</div>`}`;
+                            box.dataset.loaded = '1';
+                            // Selecting any mod auto-checks the profile
+                            const profCb = addEl.querySelector(`.repo-up-add-profile[data-pid="${pid}"]`);
+                            box.querySelectorAll('.repo-up-add-mod').forEach(cb => cb.addEventListener('change', () => { if (profCb)
+                                profCb.checked = true; }));
+                        }
+                        catch (e) {
+                            box.innerHTML = `<div style="font-size:11px;color:var(--danger);">${escHtml(String(e))}</div>`;
+                        }
+                    }
+                });
+            });
+        };
+        btnOpen.addEventListener('click', async () => {
+            await attachListener();
+            modal.classList.add('open');
+            // If an update is still running from before, keep showing its progress
+            if (_ru.running || _ru.done) {
+                repoDir = _ru.repoDir;
+                pathInput.value = _ru.repoDir;
+                syncProgressUI();
+            }
+            else {
+                repoDir = '';
+                pathInput.value = '';
+                contentEl.style.display = 'none';
+                progressEl.style.display = 'none';
+                btnApply.disabled = true;
+            }
+        });
+        btnPick?.addEventListener('click', async () => {
+            const folder = await pickFolder().catch(() => null);
+            if (!folder)
+                return;
+            try {
+                const repo = await invoke('read_local_repo', { repoDir: folder });
+                repoDir = folder;
+                pathInput.value = folder;
+                _ru.done = false;
+                progressEl.style.display = 'none';
+                await renderLoaded(repo);
+            }
+            catch (e) {
+                toast(t('repo.update.errNoRepo') || 'No valid repo.json found in this folder', 'error');
+            }
+        });
+        btnApply?.addEventListener('click', async () => {
+            if (!repoDir || _ru.running)
+                return;
+            const removeProfileIds = Array.from(currentEl.querySelectorAll('.repo-up-rm-profile'))
+                .filter(b => b.dataset.removed === '1')
+                .map(b => b.dataset.pid);
+            const removeModIds = Array.from(currentEl.querySelectorAll('.repo-up-keep-mod'))
+                .filter(cb => !cb.checked)
+                .map(cb => cb.dataset.mid);
+            // Build add_profiles with per-mod selection
+            const addProfiles = Array.from(addEl.querySelectorAll('.repo-up-add-profile'))
+                .filter(cb => cb.checked)
+                .map(cb => {
+                const pid = cb.dataset.pid;
+                const modCbs = Array.from(addEl.querySelectorAll(`.repo-up-add-mod[data-pid="${pid}"]`));
+                // If the mod list was expanded, honour the per-mod selection; else add all (null)
+                let modIds = null;
+                if (modCbs.length) {
+                    const checked = modCbs.filter(m => m.checked).map(m => m.dataset.mid);
+                    // null = all; only send a subset if not everything is checked
+                    if (checked.length !== modCbs.length)
+                        modIds = checked;
+                }
+                return { profile_id: pid, mod_ids: modIds };
+            });
+            if (!removeProfileIds.length && !removeModIds.length && !addProfiles.length) {
+                toast(t('repo.update.noChanges') || 'No changes selected', 'warning');
+                return;
+            }
+            const authorName = localStorage.getItem('bmm_last_author') || '';
+            _ru.running = true;
+            _ru.done = false;
+            _ru.percent = 0;
+            _ru.status = t('repo.update.starting') || 'Starting…';
+            _ru.repoDir = repoDir;
+            _ru.summary = '';
+            syncProgressUI();
+            try {
+                const res = await invoke('update_server_repo', {
+                    repoDir,
+                    authorName: authorName || null,
+                    ops: { remove_mod_ids: removeModIds, remove_profile_ids: removeProfileIds, add_profiles: addProfiles }
+                });
+                _ru.running = false;
+                _ru.done = true;
+                _ru.percent = 100;
+                _ru.summary = `${t('repo.update.done') || 'Repo updated'} — +${res.mods_added} / ~${res.mods_updated} / -${res.mods_removed}`;
+                syncProgressUI();
+                toast(_ru.summary, 'success');
+                // Reload the modal content to reflect the new post-update state
+                await reloadCurrentRepo();
+            }
+            catch (e) {
+                _ru.running = false;
+                _ru.done = false;
+                syncProgressUI();
+                const msg = String(e);
+                toast(msg.includes('cancel') ? (t('repo.cancelled') || 'Cancelled') : msg, msg.includes('cancel') ? 'info' : 'error');
+                // Even after a cancel, reload to show whatever state the repo is in
+                await reloadCurrentRepo();
+            }
+        });
+        // Cancel the running update (sets the shared cancel flag; the Rust loop
+        // checks it per-file so it stops quickly without freezing).
+        btnCancel?.addEventListener('click', () => {
+            invoke('cancel_repo_export').catch(() => { });
+            _ru.status = t('repo.cancelling') || 'Cancelling…';
+            syncProgressUI();
+        });
+        // Closing the modal does NOT cancel the running update.
+        modal.addEventListener('click', (e) => { if (e.target === modal)
+            modal.classList.remove('open'); });
+        // ── Listen for API-driven pre-load (from bmm:repo-focus section='update') ──
+        // When the API quicktest drives this modal, it emits this event after opening.
+        document.addEventListener('bmm:repo-update-loaded', async (e) => {
+            const { repo, repoDir: apiDir } = e.detail || {};
+            if (!repo || !apiDir)
+                return;
+            repoDir = apiDir;
+            pathInput.value = apiDir;
+            _ru.done = false;
+            progressEl.style.display = 'none';
+            await renderLoaded(repo);
+        });
+    };
+    initRepoUpdate();
+    // ── Repo Hub (multi-repo Node server) ──
+    const initRepoHub = () => {
+        const modal = document.getElementById('modal-repo-hub');
+        const btnOpen = document.getElementById('btn-open-repo-hub');
+        const pathInput = document.getElementById('repo-hub-path');
+        const btnPick = document.getElementById('btn-pick-repo-hub-folder');
+        const listEl = document.getElementById('repo-hub-list');
+        const btnGen = document.getElementById('btn-generate-repo-hub');
+        const resultEl = document.getElementById('repo-hub-result');
+        if (!modal || !btnOpen)
+            return;
+        let hubDir = '';
+        const fmt = (b) => { if (!b)
+            return '0 B'; const u = ['B', 'KB', 'MB', 'GB', 'TB']; const i = Math.floor(Math.log(b) / Math.log(1024)); return (b / Math.pow(1024, i)).toFixed(1) + ' ' + u[i]; };
+        btnOpen.addEventListener('click', () => {
+            hubDir = '';
+            pathInput.value = '';
+            listEl.style.display = 'none';
+            listEl.innerHTML = '';
+            resultEl.style.display = 'none';
+            btnGen.disabled = true;
+            modal.classList.add('open');
+        });
+        btnPick?.addEventListener('click', async () => {
+            const folder = await pickFolder().catch(() => null);
+            if (!folder)
+                return;
+            hubDir = folder;
+            pathInput.value = folder;
+            resultEl.style.display = 'none';
+            try {
+                const repos = await invoke('scan_repo_hub', { hubDir: folder });
+                if (!repos.length) {
+                    listEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted);padding:8px;">${t('repo.hub.none') || 'No repos found in this folder. Each repo must be its own sub-folder with a repo.json.'}</div>`;
+                }
+                else {
+                    listEl.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:2px;">${repos.length} ${t('repo.hub.found') || 'repos found'}</div>` +
+                        repos.map(r => `
+                        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:9px 12px;">
+                            <span style="font-size:12px;font-weight:600;">${escHtml(r.name)}</span>
+                            <span style="font-size:11px;color:var(--text-muted);">${r.profiles} prof · ${r.mods} mods · ${fmt(r.size)}</span>
+                        </div>`).join('');
+                }
+                listEl.style.display = 'flex';
+                btnGen.disabled = false;
+            }
+            catch (e) {
+                listEl.innerHTML = `<div style="font-size:12px;color:var(--danger);padding:8px;">${escHtml(String(e))}</div>`;
+                listEl.style.display = 'flex';
+                btnGen.disabled = true;
+            }
+        });
+        // Highlight selected mode card
+        document.querySelectorAll('input[name="repo-hub-mode"]').forEach(r => {
+            r.addEventListener('change', () => {
+                document.querySelectorAll('.repo-hub-mode-opt').forEach(l => {
+                    const inp = l.querySelector('input');
+                    l.style.borderColor = inp.checked ? 'var(--cyan)' : 'var(--border)';
+                });
+            });
+        });
+        btnGen?.addEventListener('click', async () => {
+            if (!hubDir)
+                return;
+            const port = parseInt(document.getElementById('repo-hub-port').value) || 8080;
+            const limit = parseInt(document.getElementById('repo-hub-limit').value) || 0;
+            const adminPassword = document.getElementById('repo-hub-adminpw')?.value?.trim() || null;
+            const mode = document.querySelector('input[name="repo-hub-mode"]:checked')?.value || 'serve';
+            const serve = mode === 'serve';
+            btnGen.disabled = true;
+            try {
+                await invoke('generate_repo_hub', { hubDir, port, uploadLimit: limit, serve, adminPassword });
+                if (serve) {
+                    resultEl.innerHTML = `
+                        ✓ ${t('repo.hub.done') || 'Hub server generated!'}<br>
+                        <span style="color:var(--text-secondary)">${t('repo.hub.runHint') || 'Run'} <code style="background:rgba(0,0,0,0.3);padding:1px 6px;border-radius:4px;">Start-Hub.bat</code> / <code style="background:rgba(0,0,0,0.3);padding:1px 6px;border-radius:4px;">start-hub.sh</code>.<br>${t('repo.hub.dashHint') || 'Dashboard:'} <code style="background:rgba(0,0,0,0.3);padding:1px 6px;border-radius:4px;">http://&lt;ip&gt;:${port}/</code> · ${t('repo.hub.perRepo') || 'each repo has its own page'}</span>`;
+                }
+                else {
+                    resultEl.innerHTML = `
+                        ✓ ${t('repo.hub.doneStatic') || 'Static directory generated!'}<br>
+                        <span style="color:var(--text-secondary)">${t('repo.hub.staticHint') || 'Edit'} <code style="background:rgba(0,0,0,0.3);padding:1px 6px;border-radius:4px;">hub-repos.json</code> ${t('repo.hub.staticHint2') || 'to fill each repo URL, then host this folder anywhere (open index.html).'}</span>`;
+                }
+                resultEl.style.display = 'block';
+                toast(serve ? (t('repo.hub.done') || 'Hub server generated!') : (t('repo.hub.doneStatic') || 'Static directory generated!'), 'success');
+            }
+            catch (e) {
+                toast(String(e), 'error');
+            }
+            finally {
+                btnGen.disabled = false;
+            }
+        });
+        modal.addEventListener('click', (e) => { if (e.target === modal)
+            modal.classList.remove('open'); });
+    };
+    initRepoHub();
     const saveHostHistory = (path) => {
         try {
             let paths = JSON.parse(localStorage.getItem('bmm_repo_history_host') || '[]');
@@ -1376,6 +1764,12 @@ export function initRepo() {
                 elements.btnStartExport.disabled = true;
                 elements.exportProgressContainer.style.display = 'block';
                 elements.exportStatus.textContent = t('repo.exporting');
+                // Reset progress bar from any previous run (otherwise the >= guard
+                // below keeps it stuck at the old 100%).
+                if (elements.exportPercent)
+                    elements.exportPercent.textContent = '0%';
+                if (elements.exportFill)
+                    elements.exportFill.style.width = '0%';
                 if (elements.btnCancelExport) {
                     elements.btnCancelExport.style.display = 'flex';
                     elements.btnCancelExport.disabled = false;

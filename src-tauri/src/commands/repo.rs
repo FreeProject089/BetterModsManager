@@ -514,6 +514,403 @@ pub async fn export_server_repo(
     Ok(())
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Incremental Server Repo Update
+//   Modifies an existing repo (repo.json + mods/ folder) without regenerating
+//   everything: add/remove whole profiles, add/update specific mods, remove mods.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct ProfileAddSpec {
+    /// Local profile id to add or merge into the repo.
+    /// Accepts both snake_case ("profile_id") from the BMM UI and
+    /// camelCase ("profileId") from external API callers.
+    #[serde(alias = "profileId")]
+    pub profile_id: String,
+    /// Specific local mod ids to include. `None`/empty = all mods in that profile.
+    #[serde(alias = "modIds", default)]
+    pub mod_ids: Option<Vec<String>>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct RepoUpdateOps {
+    /// Mod ids to remove from the repo (across every profile).
+    #[serde(default)]
+    pub remove_mod_ids: Vec<String>,
+    /// Whole profile ids to remove from the repo.
+    #[serde(default)]
+    pub remove_profile_ids: Vec<String>,
+    /// Profiles (and optionally a subset of their mods) to add or update.
+    #[serde(default)]
+    pub add_profiles: Vec<ProfileAddSpec>,
+}
+
+#[tauri::command]
+pub async fn update_server_repo(
+    window: Window,
+    handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+    repo_dir: String,
+    author_name: Option<String>,
+    ops: RepoUpdateOps,
+) -> Result<RepoUpdateResult, String> {
+    let output_path = PathBuf::from(&repo_dir);
+    let manifest_path = output_path.join("repo.json");
+    if !manifest_path.exists() {
+        return Err("repo.errNoExistingRepo".to_string());
+    }
+
+    state.install_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
+    let cancel_flag = state.install_cancelled.clone();
+
+    let repo_mods_dir = output_path.join("mods");
+    fs::create_dir_all(&repo_mods_dir).map_err(|_| "repo.errCreateModDir".to_string())?;
+
+    // 1. Load existing repo
+    let mut repo: ServerRepo = {
+        let content = fs::read_to_string(&manifest_path).map_err(|_| "repo.errReadManifest".to_string())?;
+        serde_json::from_str(&content).map_err(|e| format!("repo.json parse error: {}", e))?
+    };
+
+    let mut result = RepoUpdateResult::default();
+
+    // 2. Removals — whole profiles
+    if !ops.remove_profile_ids.is_empty() {
+        let before = repo.profiles.len();
+        repo.profiles.retain(|p| !ops.remove_profile_ids.contains(&p.id));
+        result.profiles_removed = before - repo.profiles.len();
+    }
+
+    // 3. Removals — individual mods (across all profiles)
+    if !ops.remove_mod_ids.is_empty() {
+        for prof in repo.profiles.iter_mut() {
+            let before = prof.mods.len();
+            prof.mods.retain(|m| !ops.remove_mod_ids.contains(&m.id));
+            result.mods_removed += before - prof.mods.len();
+        }
+    }
+
+    // 4. Additions — pull local profile/mod data from state (fast, under lock)
+    #[derive(Clone)]
+    struct PendingMod { profile_id: String, profile: crate::models::profile::Profile, mod_entry: crate::models::mod_entry::ModEntry }
+    let data_dir = state.data_path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| std::path::PathBuf::from("."));
+    let (pending, all_tags, resolved_author): (Vec<PendingMod>, Vec<crate::models::tag::TagDef>, Option<String>) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let mut pending = Vec::new();
+        for spec in &ops.add_profiles {
+            if let Some(profile) = data.profiles.iter().find(|p| p.id == spec.profile_id) {
+                for m in &data.mods {
+                    let in_profile = m.mod_folder_path.starts_with(&profile.mods_path)
+                        || matches!((m.mod_folder_path.canonicalize(), profile.mods_path.canonicalize()),
+                            (Ok(a), Ok(b)) if a.starts_with(&b));
+                    if !in_profile { continue; }
+                    if let Some(ids) = &spec.mod_ids {
+                        if !ids.is_empty() && !ids.contains(&m.id) { continue; }
+                    }
+                    pending.push(PendingMod { profile_id: spec.profile_id.clone(), profile: profile.clone(), mod_entry: m.clone() });
+                }
+            }
+        }
+        let author = author_name.filter(|a| !a.trim().is_empty()).or_else(|| repo.author.clone());
+        (pending, data.custom_tags.clone(), author)
+    };
+    repo.author = resolved_author;
+
+    // 5. Heavy work (copy + hash + sign + write) on a blocking thread so the
+    //    async runtime — and the whole UI — stays responsive. Cancellable per-file.
+    let win = window.clone();
+    let handle2 = handle.clone();
+    let join = tokio::task::spawn_blocking(move || -> Result<RepoUpdateResult, String> {
+        let total = pending.len().max(1);
+        for (idx, pm) in pending.into_iter().enumerate() {
+            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) { return Err("repo.cancelled".to_string()); }
+
+            let _ = win.emit("bmm://repo-export-progress", RepoProgress {
+                step: format!(r#"{{"key":"repo.stepUpdating","mod":"{}","current":{},"total":{}}}"#, pm.mod_entry.name, idx + 1, total),
+                progress: (idx as f32 / total as f32) * 90.0,
+                current_file: String::new(),
+            });
+
+            let prof_idx = match repo.profiles.iter().position(|p| p.id == pm.profile_id) {
+                Some(i) => i,
+                None => {
+                    let icon_image_data: Option<String> = pm.profile.icon_image.as_ref().and_then(|fname| {
+                        let icon_path = data_dir.join(fname);
+                        std::fs::read(&icon_path).ok().map(|bytes| {
+                            use base64::{Engine as _, engine::general_purpose};
+                            let ext = icon_path.extension().and_then(|e| e.to_str()).unwrap_or("png").to_lowercase();
+                            let mime = match ext.as_str() {
+                                "png" => "image/png", "jpg" | "jpeg" => "image/jpeg",
+                                "webp" => "image/webp", "gif" => "image/gif", "svg" => "image/svg+xml",
+                                _ => "application/octet-stream",
+                            };
+                            format!("data:{};base64,{}", mime, general_purpose::STANDARD.encode(&bytes))
+                        })
+                    });
+                    repo.profiles.push(crate::models::repo::RepoProfile {
+                        id: pm.profile.id.clone(), name: pm.profile.name.clone(),
+                        game_name: pm.profile.game_name.clone(), mods: Vec::new(),
+                        icon: pm.profile.icon.clone(), color: pm.profile.color.clone(),
+                        icon_image: icon_image_data,
+                    });
+                    result.profiles_added += 1;
+                    repo.profiles.len() - 1
+                }
+            };
+
+            let mut resolved_tags = Vec::new();
+            for tag_id in &pm.mod_entry.tags {
+                if let Some(tag_data) = all_tags.iter().find(|t| &t.id == tag_id) {
+                    resolved_tags.push(RepoTag {
+                        id: tag_data.id.clone(), name: tag_data.name.clone(),
+                        color_bg: tag_data.color.clone(), color_text: "#FFFFFF".to_string(),
+                    });
+                }
+            }
+
+            let target_mod_dir = repo_mods_dir.join(&pm.mod_entry.id);
+            if target_mod_dir.exists() { let _ = fs::remove_dir_all(&target_mod_dir); }
+            fs::create_dir_all(&target_mod_dir).map_err(|_| "repo.errCreateModDir".to_string())?;
+
+            let files = fs_utils::list_mod_files(&pm.mod_entry.mod_folder_path).map_err(|e| e.to_string())?;
+            let mut repo_files = Vec::new();
+            for rel_path in &files {
+                if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) { return Err("repo.cancelled".to_string()); }
+                let src_path = pm.mod_entry.mod_folder_path.join(rel_path);
+                let dst_path = target_mod_dir.join(rel_path);
+                if let Some(parent) = dst_path.parent() {
+                    fs::create_dir_all(parent).map_err(|_| "repo.errCreateSubfolder".to_string())?;
+                }
+                fs::copy(&src_path, &dst_path).map_err(|_| "repo.errCopyFile".to_string())?;
+                let size = fs::metadata(&dst_path).map(|m| m.len()).unwrap_or(0);
+                let (sha256_hash, chunks) = compute_file_hash_and_chunks(&dst_path, size > CHUNK_SIZE as u64)?;
+                repo_files.push(RepoFile {
+                    relative_path: rel_path.to_string_lossy().to_string().replace("\\", "/"),
+                    size, sha256_hash, chunks,
+                });
+            }
+
+            let repo_mod = RepoMod {
+                id: pm.mod_entry.id.clone(), name: pm.mod_entry.name.clone(),
+                version: pm.mod_entry.version.clone(), author: pm.mod_entry.author.clone(),
+                description: pm.mod_entry.description.clone(), tags: resolved_tags,
+                files: repo_files, download_links: pm.mod_entry.download_links.clone(),
+            };
+
+            let prof = &mut repo.profiles[prof_idx];
+            if let Some(existing) = prof.mods.iter_mut().find(|m| m.id == repo_mod.id) {
+                *existing = repo_mod; result.mods_updated += 1;
+            } else {
+                prof.mods.push(repo_mod); result.mods_added += 1;
+            }
+        }
+
+        // GC orphaned mod folders
+        let referenced: std::collections::HashSet<String> = repo.profiles.iter()
+            .flat_map(|p| p.mods.iter().map(|m| m.id.clone())).collect();
+        if let Ok(entries) = fs::read_dir(&repo_mods_dir) {
+            for e in entries.flatten() {
+                if e.path().is_dir() {
+                    let name = e.file_name().to_string_lossy().to_string();
+                    if !referenced.contains(&name) { let _ = fs::remove_dir_all(e.path()); }
+                }
+            }
+        }
+
+        // Re-sign + write
+        let _ = win.emit("bmm://repo-export-progress", RepoProgress {
+            step: "repo.stepFinalizing".to_string(), progress: 92.0, current_file: "repo.json".to_string(),
+        });
+        repo.author_id = None; repo.signature = None;
+        let json_to_sign = serde_json::to_string(&repo).map_err(|e| e.to_string())?;
+        let (author_id, signature) = super::security::sign_message(&handle2, json_to_sign.as_bytes())?;
+        repo.author_id = Some(author_id); repo.signature = Some(signature);
+        let final_json = serde_json::to_string_pretty(&repo).map_err(|e| e.to_string())?;
+        fs::write(&manifest_path, final_json).map_err(|_| "repo.errWriteManifest".to_string())?;
+
+        // Info.json
+        let mut tm = 0; let mut tb: u64 = 0; let mut tf = 0;
+        for p in &repo.profiles { tm += p.mods.len(); for m in &p.mods { tf += m.files.len(); for f in &m.files { tb += f.size; } } }
+        let info = serde_json::json!({
+            "name": repo.name, "author": repo.author, "game_name": repo.game_name,
+            "profiles_count": repo.profiles.len(), "mods_count": tm, "files_count": tf,
+            "total_size_bytes": tb, "total_size_formatted": format_bytes(tb), "version": "1.0",
+            "created_at": chrono::Local::now().to_rfc3339(), "seed": repo.seed,
+            "author_id": repo.author_id, "modpacks_count": repo.modpacks.as_ref().map_or(0, |m| m.len()),
+        });
+        let _ = fs::write(output_path.join("Info.json"), serde_json::to_string_pretty(&info).unwrap_or_default());
+
+        result.total_profiles = repo.profiles.len();
+        result.total_mods = tm;
+        Ok(result)
+    });
+
+    let result = join.await.map_err(|e| format!("update task failed: {}", e))??;
+
+    let _ = window.emit("bmm://repo-export-progress", RepoProgress {
+        step: "repo.exportDone".to_string(), progress: 100.0, current_file: String::new(),
+    });
+
+    Ok(result)
+}
+
+#[derive(serde::Serialize, Default, Clone)]
+pub struct RepoUpdateResult {
+    pub profiles_added: usize,
+    pub profiles_removed: usize,
+    pub mods_added: usize,
+    pub mods_updated: usize,
+    pub mods_removed: usize,
+    pub total_profiles: usize,
+    pub total_mods: usize,
+}
+
+#[derive(serde::Serialize)]
+pub struct HubRepoSummary {
+    pub folder: String,
+    pub name: String,
+    pub game_name: String,
+    pub profiles: usize,
+    pub mods: usize,
+    pub size: u64,
+}
+
+/// Scan a directory and return every immediate sub-folder that contains a
+/// repo.json (used by the hub dashboard preview in BMM).
+#[tauri::command]
+pub fn scan_repo_hub(hub_dir: String) -> Result<Vec<HubRepoSummary>, String> {
+    let root = PathBuf::from(&hub_dir);
+    if !root.is_dir() { return Err("repo.errOutputDirNotDir".to_string()); }
+    let mut out = Vec::new();
+    for entry in fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
+        if !entry.path().is_dir() { continue; }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name == "public" || name == "node_modules" { continue; }
+        let manifest = entry.path().join("repo.json");
+        if !manifest.exists() { continue; }
+        if let Ok(content) = fs::read_to_string(&manifest) {
+            if let Ok(repo) = serde_json::from_str::<ServerRepo>(&content) {
+                let mut mods = 0usize; let mut size = 0u64;
+                for p in &repo.profiles {
+                    mods += p.mods.len();
+                    for m in &p.mods { for f in &m.files { size += f.size; } }
+                }
+                out.push(HubRepoSummary {
+                    folder: name,
+                    name: repo.name,
+                    game_name: repo.game_name,
+                    profiles: repo.profiles.len(),
+                    mods, size,
+                });
+            }
+        }
+    }
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(out)
+}
+
+/// Generate a multi-repo hub into `hub_dir`.
+/// `serve = true`  → a Node/Express server that hosts all repos + dashboards.
+/// `serve = false` → a static directory (index.html + hub-repos.json) you can
+///                   drop on any web host; you fill each repo's external URL.
+#[tauri::command]
+pub fn generate_repo_hub(
+    hub_dir: String,
+    port: u16,
+    upload_limit: u32,
+    serve: Option<bool>,
+    admin_password: Option<String>,
+) -> Result<(), String> {
+    let root = PathBuf::from(&hub_dir);
+    fs::create_dir_all(&root).map_err(|_| "repo.errCreateOutputDir".to_string())?;
+    let serve = serve.unwrap_or(true);
+
+    if serve {
+        // ── Node/Express serving hub ──
+        let pw = admin_password.clone().unwrap_or_default();
+        // Embed the BMM logo as a base64 data-URI so the dashboard is fully
+        // self-contained even when served by the standalone Node process.
+        static BMM_LOGO_PNG: &[u8] = include_bytes!("../../../frontend/assets/BMm.png");
+        use base64::{Engine as _, engine::general_purpose};
+        let logo_b64 = format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(BMM_LOGO_PNG));
+
+        let server_js = include_str!("../templates/mini-server/hub-server.js.template")
+            .replace("{{PORT}}", &port.to_string())
+            .replace("{{UPLOAD_LIMIT}}", &upload_limit.to_string())
+            .replace("{{ADMIN_PASSWORD}}", &pw);
+        let dashboard = include_str!("../templates/mini-server/hub-dashboard.html.template")
+            .replace("{{LOGO_B64}}", &logo_b64);
+        let repo_page = include_str!("../templates/mini-server/hub-repo.html.template");
+        let package   = include_str!("../templates/mini-server/hub-package.json.template");
+
+        let public_dir = root.join("public");
+        fs::create_dir_all(&public_dir).map_err(|_| "repo.errCreateOutputDir".to_string())?;
+
+        fs::write(root.join("hub-server.js"), server_js).map_err(|_| "repo.errWriteServerJs".to_string())?;
+        fs::write(public_dir.join("hub-dashboard.html"), dashboard).map_err(|_| "repo.errWriteDashboardHtml".to_string())?;
+        fs::write(public_dir.join("hub-repo.html"), repo_page).map_err(|_| "repo.errWriteDashboardHtml".to_string())?;
+        fs::write(root.join("package.json"), package).map_err(|_| "repo.errWritePackageJson".to_string())?;
+
+        let bat = "@echo off\r\ntitle BMM Repo Hub\r\ncd /d \"%~dp0\"\r\nwhere node >nul 2>nul || (echo Node.js is required: https://nodejs.org && pause && exit /b)\r\nif not exist node_modules (echo Installing dependencies... && npm install)\r\nnode hub-server.js\r\npause\r\n";
+        fs::write(root.join("Start-Hub.bat"), bat).map_err(|_| "repo.errWriteScript".to_string())?;
+        let sh = "#!/usr/bin/env bash\ncd \"$(dirname \"$0\")\"\ncommand -v node >/dev/null 2>&1 || { echo 'Node.js is required: https://nodejs.org'; exit 1; }\n[ -d node_modules ] || { echo 'Installing dependencies...'; npm install; }\nnode hub-server.js\n";
+        fs::write(root.join("start-hub.sh"), sh).map_err(|_| "repo.errWriteScript".to_string())?;
+    } else {
+        // ── Static directory (no Node) ──
+        let index = include_str!("../templates/mini-server/hub-static.html.template");
+        fs::write(root.join("index.html"), index).map_err(|_| "repo.errWriteDashboardHtml".to_string())?;
+
+        // Build hub-repos.json by scanning sub-folders (url left empty to fill)
+        let summaries = scan_repo_hub(hub_dir.clone()).unwrap_or_default();
+        let repos_json: Vec<serde_json::Value> = summaries.iter().map(|s| serde_json::json!({
+            "folder": s.folder, "name": s.name, "game_name": s.game_name,
+            "profiles": s.profiles, "mods": s.mods, "size": s.size,
+            "url": "",            // ← fill with where this repo is actually hosted
+            "description": "",
+        })).collect();
+        let cfg = serde_json::json!({ "repos": repos_json });
+        fs::write(root.join("hub-repos.json"), serde_json::to_string_pretty(&cfg).unwrap_or_default())
+            .map_err(|_| "repo.errWriteManifest".to_string())?;
+    }
+
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+pub struct ProfileModItem { pub id: String, pub name: String, pub version: String }
+
+/// Lightweight list of a profile's mods (id/name/version) — for the update UI's
+/// per-mod selection, for ANY profile (not just the active one).
+#[tauri::command]
+pub fn get_profile_mod_list(state: State<AppState>, profile_id: String) -> Result<Vec<ProfileModItem>, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    let profile = data.profiles.iter().find(|p| p.id == profile_id)
+        .ok_or("repo.errNoProfile")?;
+    let mut out = Vec::new();
+    for m in &data.mods {
+        let belongs = m.mod_folder_path.starts_with(&profile.mods_path)
+            || matches!((m.mod_folder_path.canonicalize(), profile.mods_path.canonicalize()),
+                (Ok(a), Ok(b)) if a.starts_with(&b));
+        if belongs {
+            out.push(ProfileModItem { id: m.id.clone(), name: m.name.clone(), version: m.version.clone() });
+        }
+    }
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(out)
+}
+
+/// Read an existing repo.json and return its current profiles + mods so the UI
+/// can show what's inside before updating.
+#[tauri::command]
+pub fn read_local_repo(repo_dir: String) -> Result<ServerRepo, String> {
+    let manifest_path = PathBuf::from(&repo_dir).join("repo.json");
+    if !manifest_path.exists() {
+        return Err("repo.errNoExistingRepo".to_string());
+    }
+    let content = fs::read_to_string(&manifest_path).map_err(|_| "repo.errReadManifest".to_string())?;
+    serde_json::from_str(&content).map_err(|e| format!("repo.json parse error: {}", e))
+}
+
 fn zip_directory(src_dir: &Path, dst_file: &Path, cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>) -> Result<(), String> {
     use zip::write::FileOptions;
     use std::io::{copy, BufWriter};

@@ -232,6 +232,11 @@ export async function initApiActivity(): Promise<void> {
             case 'repo/host': driveRepo('host', params); break;
             case 'repo/sync': driveRepo('sync', params); break;
             case 'repo/gen':  driveRepo('gen', params);  break;
+            case 'repo/update':
+                // Drive the BMM UI exactly like gen/sync — opens the update modal,
+                // pre-fills the repo dir and profile list, then lets the user confirm.
+                driveRepo('update', params);
+                break;
             case 'repo/host-stop':
                 gotoRepoPage();
                 setTimeout(async () => {

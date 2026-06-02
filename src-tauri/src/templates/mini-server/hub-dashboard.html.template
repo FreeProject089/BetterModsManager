@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BMM Hub Admin Console</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root { --bg:#04060b; --card:#0f172a; --panel:#080b14; --accent:#06b6d4; --text:#f8fafc; --muted:#94a3b8; --border:rgba(255,255,255,0.08); --success:#10b981; --danger:#ef4444; }
+        * { box-sizing:border-box; }
+        body { font-family:'Inter',system-ui,sans-serif; background:var(--bg); color:var(--text); margin:0; display:flex; height:100vh; overflow:hidden; }
+        /* Sidebar */
+        .sidebar { width:260px; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+        .sb-brand { padding:20px 22px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+        .sb-logo { flex-shrink:0; }
+        .sb-logo svg rect { } /* placeholder for logo */
+        .sb-brand-text h1 { font-size:15px; font-weight:900; margin:0; letter-spacing:0.3px; }
+        .sb-brand-text .st { font-size:9px; color:var(--success); font-weight:800; margin-top:3px; display:flex; align-items:center; gap:5px; }
+        .sb-brand-text .dot { width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 8px var(--success); }
+        .sb-search { padding:12px 14px; }
+        .sb-search input { width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:7px; padding:7px 11px; color:var(--text); font-size:12px; outline:none; }
+        .sb-search input:focus { border-color:var(--accent); }
+        .sb-repos { flex:1; overflow-y:auto; padding:4px 10px 12px; }
+        .sb-item { padding:10px 12px; border-radius:8px; cursor:pointer; margin-bottom:3px; border-left:3px solid transparent; transition:.15s; }
+        .sb-item:hover { background:rgba(255,255,255,0.03); }
+        .sb-item.active { background:rgba(6,182,212,0.1); border-left-color:var(--accent); }
+        .sb-item .n { font-size:12px; font-weight:700; display:flex; align-items:center; gap:6px; }
+        .sb-item .m { font-size:10px; color:var(--muted); margin-top:2px; }
+        .sb-item .sc { color:var(--accent); }
+        /* Main */
+        .main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+        .main-tabs { display:flex; background:var(--panel); border-bottom:1px solid var(--border); padding:0 28px; flex-shrink:0; }
+        .tab-btn { padding:14px 18px; cursor:pointer; color:var(--muted); font-size:12px; font-weight:700; border-bottom:2px solid transparent; transition:.15s; white-space:nowrap; }
+        .tab-btn:hover { color:var(--text); }
+        .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+        .main-body { flex:1; overflow-y:auto; padding:28px; }
+        /* Cards */
+        .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:18px; box-shadow:0 4px 20px rgba(0,0,0,0.3); }
+        .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:22px; }
+        .stat-val { font-size:26px; font-weight:900; margin:5px 0; color:#fff; }
+        .stat-label { font-size:10px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+        table { width:100%; border-collapse:collapse; }
+        th { text-align:left; padding:11px 14px; color:var(--muted); font-size:10px; text-transform:uppercase; border-bottom:1px solid var(--border); }
+        td { padding:11px 14px; border-bottom:1px solid var(--border); font-size:12px; }
+        .btn { padding:7px 13px; border-radius:6px; border:1px solid var(--border); background:rgba(255,255,255,0.05); color:var(--text); cursor:pointer; font-size:11px; font-weight:700; transition:.2s; }
+        .btn:hover { background:rgba(255,255,255,0.1); }
+        .btn-primary { background:var(--accent); color:#001; border:none; }
+        .btn-danger { color:var(--danger); border-color:rgba(239,68,68,0.2); }
+        .input { background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:6px; padding:8px 12px; color:#fff; width:100%; outline:none; font-size:12px; }
+        .input:focus { border-color:var(--accent); }
+        .progress-bg { width:100%; height:5px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden; margin-top:5px; }
+        .progress-fill { height:100%; background:var(--accent); transition:width .3s; }
+        .badge { padding:2px 6px; border-radius:4px; font-size:9px; font-weight:800; text-transform:uppercase; }
+        .badge-info { background:rgba(59,130,246,0.1); color:#60a5fa; }
+        .badge-ok { background:rgba(16,185,129,0.1); color:#34d399; }
+        .badge-danger { background:rgba(239,68,68,0.1); color:#f87171; }
+        .toggle { position:relative; display:inline-block; width:34px; height:18px; }
+        .toggle input { opacity:0; width:0; height:0; }
+        .slider { position:absolute; cursor:pointer; inset:0; background:#334155; border-radius:18px; transition:.3s; }
+        .slider:before { position:absolute; content:""; height:12px; width:12px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.3s; }
+        input:checked + .slider { background:var(--success); }
+        input:checked + .slider:before { transform:translateX(16px); }
+        /* Auth */
+        #auth-overlay { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:2000; }
+        /* Log */
+        .log-box { background:#000; color:#cbd5e1; font-family:'JetBrains Mono',monospace; font-size:11px; height:500px; overflow-y:auto; padding:14px; border-radius:8px; }
+        /* Modal */
+        .modal { position:fixed; inset:0; background:rgba(0,0,0,0.8); display:none; align-items:center; justify-content:center; z-index:3000; padding:20px; }
+        .modal-content { background:var(--card); border:1px solid var(--border); border-radius:12px; width:100%; max-width:580px; max-height:80vh; overflow-y:auto; padding:24px; }
+        .tab-content { display:none; }
+        .tab-content.active { display:block; }
+        /* Empty state */
+        .empty { text-align:center; color:var(--muted); padding:80px 20px; }
+    </style>
+</head>
+<body>
+
+<div id="auth-overlay">
+    <div class="card" style="width:330px;text-align:center;">
+        <div style="margin-bottom:18px;">
+            <img src="{{LOGO_B64}}" width="52" height="52" style="border-radius:15px;" alt="BMM">
+        </div>
+        <h2 style="margin:0 0 6px;font-size:18px;">BMM Repo Hub</h2>
+        <p style="color:var(--muted);font-size:12px;margin-bottom:18px;">Admin Authentication</p>
+        <input type="password" id="admin-pass" class="input" style="text-align:center;margin-bottom:14px;" placeholder="Admin password (leave blank if none)">
+        <button class="btn btn-primary" style="width:100%" onclick="login()">Enter</button>
+    </div>
+</div>
+
+<div id="inspector-modal" class="modal">
+    <div class="modal-content">
+        <div style="display:flex;justify-content:space-between;margin-bottom:18px;">
+            <h3 id="inspect-title" style="margin:0">Session Details</h3>
+            <button class="btn" onclick="closeModal()">Close</button>
+        </div>
+        <div id="inspect-body"></div>
+    </div>
+</div>
+
+<!-- Sidebar -->
+<div class="sidebar">
+    <div class="sb-brand">
+        <div class="sb-logo">
+            <img src="{{LOGO_B64}}" width="42" height="42" style="border-radius:12px;" alt="BMM">
+        </div>
+        <div class="sb-brand-text">
+            <h1>Repo Hub</h1>
+            <div class="st"><span class="dot"></span> ONLINE</div>
+        </div>
+    </div>
+    <div class="sb-search"><input id="search" type="text" placeholder="Search repos…"></div>
+    <div class="sb-repos" id="sb-repos"></div>
+</div>
+
+<!-- Main -->
+<div class="main">
+    <div class="main-tabs" id="main-tabs" style="display:none;">
+        <div class="tab-btn active" onclick="showTab('monitoring',this)">MONITORING</div>
+        <div class="tab-btn" onclick="showTab('history',this)">HISTORY</div>
+        <div class="tab-btn" onclick="showTab('security',this)">SECURITY</div>
+        <div class="tab-btn" onclick="showTab('modpacks',this)">MODPACKS</div>
+        <div class="tab-btn" onclick="showTab('logs',this)">LOGS</div>
+    </div>
+    <div class="main-body" id="main-body">
+        <div class="empty">Select a repository from the sidebar.</div>
+    </div>
+</div>
+
+<script>
+let adminPass = '';
+let currentRepo = null;       // folder name
+let currentData = null;       // admin/data
+let lastMonitor = null;
+let pollTimer   = null;
+
+const fmtBytes = b => { if (!b) return '0 B'; const u=['B','KB','MB','GB','TB']; const i=Math.floor(Math.log(b)/Math.log(1024)); return (b/Math.pow(1024,i)).toFixed(1)+' '+u[i]; };
+const fmtUptime = ms => { const s=Math.floor(ms/1000),d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60),sec=s%60; let r=''; if(d)r+=d+'d '; if(h)r+=h+'h '; if(m)r+=m+'m '; if(sec||!r)r+=sec+'s'; return r; };
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function api(path, method='GET', body=null) {
+    const opts = { method, headers:{ 'Authorization': adminPass } };
+    if (body) { opts.body = JSON.stringify(body); opts.headers['Content-Type']='application/json'; }
+    try { const r = await fetch(path, opts); return r.status===401 ? null : r.json(); } catch(_) { return null; }
+}
+
+async function login() {
+    adminPass = document.getElementById('admin-pass').value;
+    // Try fetching hub stats (always accessible) — just check admin works on first repo
+    const repos = await api('/api/repos');
+    if (!repos) { alert('Cannot connect to hub'); return; }
+    localStorage.setItem('bmm_hub_token', adminPass);
+    document.getElementById('auth-overlay').style.display = 'none';
+    await loadRepoList();
+    // Auto-select repo from URL hash or first
+    const hash = (new URLSearchParams(location.search)).get('repo');
+    if (hash && repos.repos.find(r => r.folder === hash)) selectRepo(hash);
+    else if (repos.repos.length) selectRepo(repos.repos[0].folder);
+}
+
+async function loadRepoList() {
+    const data = await api('/api/repos');
+    if (!data) return;
+    const q = (document.getElementById('search').value || '').toLowerCase();
+    const list = (data.repos || []).filter(r => !q || r.name.toLowerCase().includes(q) || (r.game_name||'').toLowerCase().includes(q));
+    document.getElementById('sb-repos').innerHTML = list.length
+        ? list.map(r => `
+          <div class="sb-item${currentRepo===r.folder?' active':''}" onclick="selectRepo('${r.folder}')">
+            <div class="n">${esc(r.name)}${r.verified?' <span class="sc">✓</span>':''}</div>
+            <div class="m">${r.mods} mods · ${r.profiles} prof · ${fmtBytes(r.size)}</div>
+          </div>`).join('')
+        : '<div style="color:var(--muted);font-size:12px;padding:12px;">No repos found.</div>';
+}
+
+function selectRepo(folder) {
+    currentRepo = folder;
+    currentData = null;
+    clearInterval(pollTimer);
+    loadRepoList();
+    document.getElementById('main-tabs').style.display = 'flex';
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.textContent==='MONITORING'));
+    showTabContent('monitoring');
+    pollData();
+    pollTimer = setInterval(pollData, 2500);
+}
+
+function showTab(tab, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    showTabContent(tab);
+}
+
+function showTabContent(tab) {
+    switch(tab) {
+        case 'monitoring': renderMonitoring(); break;
+        case 'history':    renderHistory();    break;
+        case 'security':   renderSecurity();   break;
+        case 'modpacks':   renderModpacks();   break;
+        case 'logs':       fetchLogs();        break;
+    }
+}
+
+async function pollData() {
+    if (!currentRepo) return;
+    const [mon, adm] = await Promise.all([
+        api(`/${currentRepo}/monitoring.json`),
+        api(`/${currentRepo}/admin/data`),
+    ]);
+    lastMonitor = mon;
+    currentData = adm;
+    const active = document.querySelector('.tab-btn.active');
+    if (active) showTabContent(active.textContent.toLowerCase());
+}
+
+function renderMonitoring() {
+    if (!lastMonitor) { document.getElementById('main-body').innerHTML = '<div class="empty">Loading…</div>'; return; }
+    const d = lastMonitor;
+    document.getElementById('main-body').innerHTML = `
+    <div class="grid">
+      <div class="card"><div class="stat-label">Uptime</div><div class="stat-val">${fmtUptime(d.server.uptime)}</div></div>
+      <div class="card"><div class="stat-label">Total Sent</div><div class="stat-val">${fmtBytes(d.server.totalBytes)}</div></div>
+      <div class="card"><div class="stat-label">Active Sessions</div><div class="stat-val">${d.sessions.length}</div></div>
+      <div class="card"><div class="stat-label">Total Downloads</div><div class="stat-val">${d.server.totalDownloads}</div></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-weight:800;font-size:13px;">ACTIVE SESSIONS</span>
+        <input type="text" id="sess-search" class="input" placeholder="Filter…" style="width:180px;height:28px;font-size:11px;" oninput="renderMonitoring()">
+      </div>
+      <table>
+        <thead><tr><th>Client</th><th>Activity</th><th>Downloaded</th><th>Speed</th><th>Actions</th></tr></thead>
+        <tbody>${(d.sessions||[]).filter(s=>{const q=(document.getElementById('sess-search')?.value||'').toLowerCase(); return !q||s.ip.includes(q)||s.creatorId.toLowerCase().includes(q);}).map(s => {
+          const dl = d.active.find(a => a.ip===s.ip);
+          const pct = d.server.totalRepoSize > 0 ? Math.min(100,(s.bytes/d.server.totalRepoSize*100)) : 0;
+          return `<tr>
+            <td><div style="font-weight:700">${esc(s.ip)}</div><div style="font-size:9px;color:var(--muted)">ID: ${esc(s.creatorId)}</div></td>
+            <td style="font-size:11px">${dl ? '⬇ '+esc(dl.file) : 'IDLE'}</td>
+            <td><div style="font-weight:700">${fmtBytes(s.bytes)}</div><div class="progress-bg"><div class="progress-fill" style="width:${pct}%"></div></div></td>
+            <td style="color:var(--success);font-weight:800">${dl ? fmtBytes(dl.speed)+'/s' : '-'}</td>
+            <td><div style="display:flex;gap:5px;">
+              <button class="btn" style="font-size:10px" onclick="inspectSession('${esc(s.ip)}')">INSPECT</button>
+              <button class="btn btn-danger" style="font-size:10px" onclick="banIp('${esc(s.ip)}')">BAN</button>
+            </div></td>
+          </tr>`;}).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No active sessions</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderHistory() {
+    if (!lastMonitor) return;
+    const q = '';
+    document.getElementById('main-body').innerHTML = `
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
+        <span style="font-weight:800;font-size:13px;">EVENT HISTORY</span>
+      </div>
+      <table>
+        <thead><tr><th>Time</th><th>Client</th><th>Event</th><th>Details</th><th>Action</th></tr></thead>
+        <tbody>${(lastMonitor.history||[]).map(h => `<tr>
+          <td style="color:var(--muted);font-size:11px">${new Date(h.ts).toLocaleTimeString()}</td>
+          <td><div style="font-weight:700">${esc(h.ip)}</div><div style="font-size:9px;color:var(--muted)">${esc(h.creatorId)}</div></td>
+          <td><span class="badge ${h.event==='REJECTED'?'badge-danger':h.event.includes('FINISH')?'badge-ok':'badge-info'}">${esc(h.event)}</span></td>
+          <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(h.details)}</td>
+          <td><button class="btn btn-danger" style="font-size:10px" onclick="banIp('${esc(h.ip)}')">BAN</button></td>
+        </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No history yet</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderSecurity() {
+    if (!currentData) return;
+    const { whitelist: wl, bans } = currentData;
+    document.getElementById('main-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;margin-bottom:14px;">
+          <h3 style="margin:0;font-size:14px;">Whitelist</h3>
+          <label class="toggle"><input type="checkbox" id="wl-enabled" ${wl.enabled?'checked':''} onchange="saveChanges()"><span class="slider"></span></label>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <input id="wl-input" class="input" placeholder="IP or Creator ID">
+          <button class="btn btn-primary" onclick="addSec('wl')">Add</button>
+        </div>
+        <div id="wl-list">${[...wl.ips,...wl.keys].map(v=>`
+          <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:12px">${esc(v)}</span>
+            <button class="btn btn-danger" style="font-size:10px" onclick="removeSec('wl','${esc(v)}')">DEL</button>
+          </div>`).join('') || '<p style="color:var(--muted);font-size:12px;">No entries</p>'}</div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 14px;font-size:14px;">Blacklist / Bans</h3>
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <input id="ban-input" class="input" placeholder="IP or Creator ID">
+          <button class="btn btn-primary" onclick="addSec('ban')">Ban</button>
+        </div>
+        <div id="ban-list">${[...bans.banned_ips,...bans.banned_keys].map(v=>`
+          <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:12px">${esc(v)}</span>
+            <button class="btn btn-danger" style="font-size:10px" onclick="removeSec('ban','${esc(v)}')">UNBAN</button>
+          </div>`).join('') || '<p style="color:var(--muted);font-size:12px;">No bans</p>'}</div>
+      </div>
+    </div>`;
+}
+
+function renderModpacks() {
+    if (!currentData) return;
+    const mps = currentData.repo?.modpacks || [];
+    document.getElementById('main-body').innerHTML = `
+    <div class="card">
+      <h3 style="margin:0 0 16px;font-size:14px;">Modpacks</h3>
+      ${mps.length ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        ${mps.map((m,i)=>{const mp=m.modpack||m; return `
+          <div style="background:rgba(255,255,255,0.02);padding:12px;border-radius:10px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-weight:700;font-size:12px">${esc(mp.name||'Unnamed')}</div>
+              <div style="font-size:9px;color:var(--muted)">MODS: ${mp.mods?mp.mods.length:0} | ${esc(m.share_mode||'public')}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" ${m.enabled!==false?'checked':''} onchange="toggleModpack(${i})"><span class="slider"></span></label>
+          </div>`;}).join('')}
+      </div>` : '<p style="color:var(--muted);font-size:12px;">No modpacks in this repo.</p>'}
+    </div>`;
+}
+
+async function fetchLogs() {
+    if (!currentRepo) return;
+    const logs = await api(`/${currentRepo}/admin/logs`);
+    const lines = logs?.lines || [];
+    document.getElementById('main-body').innerHTML = `
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);font-weight:800;font-size:13px;">SERVER LOGS</div>
+      <div class="log-box" id="log-box">${lines.map(l=>`<div style="margin-bottom:2px">${esc(l)}</div>`).join('')||'<div style="color:var(--muted)">No logs yet.</div>'}</div>
+    </div>`;
+    const lb = document.getElementById('log-box');
+    if (lb) lb.scrollTop = lb.scrollHeight;
+}
+
+// ── Security helpers ──
+async function addSec(type) {
+    if (!currentData) return;
+    const val = document.getElementById(type+'-input').value.trim();
+    if (!val) return;
+    if (type==='wl') { if(val.includes('.')) currentData.whitelist.ips.push(val); else currentData.whitelist.keys.push(val); }
+    else { if(val.includes('.')) currentData.bans.banned_ips.push(val); else currentData.bans.banned_keys.push(val); }
+    document.getElementById(type+'-input').value = '';
+    await saveChanges();
+}
+async function removeSec(type, val) {
+    if (!currentData) return;
+    if (type==='wl') { currentData.whitelist.ips=currentData.whitelist.ips.filter(v=>v!==val); currentData.whitelist.keys=currentData.whitelist.keys.filter(v=>v!==val); }
+    else { currentData.bans.banned_ips=currentData.bans.banned_ips.filter(v=>v!==val); currentData.bans.banned_keys=currentData.bans.banned_keys.filter(v=>v!==val); }
+    await saveChanges();
+}
+async function banIp(ip) {
+    if (!currentData) return;
+    if (!currentData.bans.banned_ips.includes(ip)) currentData.bans.banned_ips.push(ip);
+    await saveChanges();
+    alert('Banned: '+ip);
+}
+async function toggleModpack(idx) {
+    if (!currentData?.repo?.modpacks) return;
+    const m = currentData.repo.modpacks[idx];
+    m.enabled = m.enabled===undefined ? false : !m.enabled;
+    await saveChanges();
+}
+async function saveChanges() {
+    if (!currentData || !currentRepo) return;
+    currentData.whitelist.enabled = document.getElementById('wl-enabled')?.checked ?? currentData.whitelist.enabled;
+    await api(`/${currentRepo}/admin/update`, 'POST', currentData);
+    renderSecurity();
+    renderModpacks();
+}
+
+// ── Session inspect ──
+function inspectSession(ip) {
+    if (!lastMonitor) return;
+    const s = lastMonitor.sessions.find(x=>x.ip===ip);
+    if (!s) return;
+    document.getElementById('inspect-title').textContent = 'Session: '+ip;
+    document.getElementById('inspect-body').innerHTML = `
+    <div style="margin-bottom:16px"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">CREATOR ID</div><div style="font-weight:800;word-break:break-all">${esc(s.creatorId)}</div></div>
+    <div style="margin-bottom:16px"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">TOTAL DOWNLOADED</div><div style="font-weight:800;color:var(--accent)">${fmtBytes(s.bytes)}</div></div>
+    <div><div style="font-size:11px;color:var(--muted);margin-bottom:8px">FILE HISTORY</div>
+    <div style="max-height:180px;overflow-y:auto;background:rgba(0,0,0,0.2);padding:10px;border-radius:8px;border:1px solid var(--border)">
+      ${s.files.length ? s.files.map(f=>`<div style="font-size:11px;margin-bottom:3px">${esc(f)}</div>`).join('') : '<div style="color:var(--muted)">No files yet</div>'}
+    </div></div>`;
+    document.getElementById('inspector-modal').style.display = 'flex';
+}
+function closeModal() { document.getElementById('inspector-modal').style.display = 'none'; }
+
+document.getElementById('search').addEventListener('input', loadRepoList);
+
+// ── Boot ──
+const saved = localStorage.getItem('bmm_hub_token');
+if (saved) { document.getElementById('admin-pass').value = saved; login(); }
+</script>
+</body>
+</html>

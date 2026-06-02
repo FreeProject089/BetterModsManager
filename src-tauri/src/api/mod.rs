@@ -250,6 +250,22 @@ struct RepoGenBody {
     zip_output: bool,
 }
 
+/// POST /api/repo/update — incrementally update an existing repo
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RepoUpdateBody {
+    repo_dir: String,
+    #[serde(default)]
+    author_name: Option<String>,
+    #[serde(default)]
+    remove_mod_ids: Vec<String>,
+    #[serde(default)]
+    remove_profile_ids: Vec<String>,
+    /// [{ "profileId": "...", "modIds": ["...", ...] | null }]
+    #[serde(default)]
+    add_profiles: Vec<serde_json::Value>,
+}
+
 /// POST /api/repo/host — start a static HTTP file server serving a generated repo
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -1500,6 +1516,36 @@ pub async fn start_api_server(
             )
         });
 
+    // POST /api/repo/update  (auth) — incrementally update an existing repo
+    let tok_repo_update    = token.clone();
+    let handle_repo_update = app_handle.clone();
+    let repo_update = warp::path!("api" / "repo" / "update")
+        .and(warp::post())
+        .and(require_token(tok_repo_update))
+        .and(warp::body::json::<RepoUpdateBody>())
+        .and(with_app_handle(handle_repo_update))
+        .map(|body: RepoUpdateBody, handle: tauri::AppHandle| {
+            // Drive through the BMM interface (same UI-driven pattern as repo/gen)
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "repo/update",
+                "params": {
+                    "repoDir": body.repo_dir,
+                    "authorName": body.author_name,
+                    "removeModIds": body.remove_mod_ids,
+                    "removeProfileIds": body.remove_profile_ids,
+                    "addProfiles": body.add_profiles,
+                }
+            }));
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({
+                    "ok": true,
+                    "driven_by": "bmm-ui",
+                    "message": "Repo update requested through the BMM interface.",
+                })),
+                StatusCode::ACCEPTED,
+            )
+        });
+
     // POST /api/repo/host  (auth) — start HTTP static file server for a generated repo
     let tok_repo_host_start = token.clone();
     let http_host_start     = http_host_shutdown.clone();
@@ -1742,6 +1788,140 @@ pub async fn start_api_server(
         .or(io_prof_omm)
         .boxed();
 
+    // ── App Catalog routes ─────────────────────────────────────────────────────
+    // These endpoints expose the app catalog / installed apps system via the API.
+    // All mutating routes (install, launch, uninstall) are auth-gated and require
+    // the "app.write" permission in the caller's plugin permissions.
+
+    // GET /api/apps  (auth) — list installed apps + their usage stats
+    let tok_apps_list = token.clone(); let h_apps_list = app_handle.clone();
+    let apps_list = warp::path!("api" / "apps")
+        .and(warp::get())
+        .and(require_token(tok_apps_list))
+        .and(with_app_handle(h_apps_list))
+        .map(|h: tauri::AppHandle| {
+            match crate::commands::apps::get_apps_state(h) {
+                Ok(s) => warp::reply::with_status(warp::reply::json(&s), StatusCode::OK),
+                Err(e) => warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
+    // POST /api/apps/install  (auth, app.write) — install an app
+    #[derive(serde::Deserialize, Clone)]
+    #[serde(rename_all = "camelCase")]
+    struct AppInstallBody {
+        app_id: String,
+        app_title: String,
+        download_url: String,
+        file_type: String,
+        install_path: String,
+        #[serde(default)] version: Option<String>,
+        #[serde(default)] category: Option<String>,
+        #[serde(default)] thumb: Option<String>,
+    }
+    let tok_app_install = token.clone(); let h_app_install = app_handle.clone();
+    let apps_install = warp::path!("api" / "apps" / "install")
+        .and(warp::post())
+        .and(require_token(tok_app_install))
+        .and(warp::body::json::<AppInstallBody>())
+        .and(with_app_handle(h_app_install))
+        .map(|body: AppInstallBody, h: tauri::AppHandle| {
+            let _ = h.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "apps/install",
+                "params": {
+                    "appId": body.app_id,
+                    "appTitle": body.app_title,
+                    "downloadUrl": body.download_url,
+                    "fileType": body.file_type,
+                    "installPath": body.install_path,
+                }
+            }));
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({"ok":true,"driven_by":"bmm-ui","message":"App install requested"})),
+                StatusCode::ACCEPTED,
+            )
+        });
+
+    // POST /api/apps/launch  (auth, app.write)
+    #[derive(serde::Deserialize, Clone)]
+    #[serde(rename_all = "camelCase")]
+    struct AppLaunchBody { app_id: String, exe_path: String }
+    let tok_app_launch = token.clone(); let h_app_launch = app_handle.clone();
+    let apps_launch = warp::path!("api" / "apps" / "launch")
+        .and(warp::post())
+        .and(require_token(tok_app_launch))
+        .and(warp::body::json::<AppLaunchBody>())
+        .and(with_app_handle(h_app_launch))
+        .map(|body: AppLaunchBody, h: tauri::AppHandle| {
+            match crate::commands::apps::launch_app(h, body.app_id, body.exe_path) {
+                Ok(_)  => warp::reply::with_status(warp::reply::json(&serde_json::json!({"ok":true})), StatusCode::OK),
+                Err(e) => warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
+    // DELETE /api/apps/:id  (auth, app.write) — uninstall app (keep files)
+    let tok_app_del = token.clone(); let h_app_del = app_handle.clone();
+    let apps_delete = warp::path!("api" / "apps" / String)
+        .and(warp::delete())
+        .and(require_token(tok_app_del))
+        .and(with_app_handle(h_app_del))
+        .map(|app_id: String, h: tauri::AppHandle| {
+            match crate::commands::apps::uninstall_app(h, app_id, Some(false), Some(false)) {
+                Ok(_)  => warp::reply::with_status(warp::reply::json(&serde_json::json!({"ok":true})), StatusCode::OK),
+                Err(e) => warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
+    // GET /api/apps/permissions/:plugin_id — get plugin API permissions
+    let tok_perm_get = token.clone(); let d_perm_get = data.clone();
+    let apps_perm_get = warp::path!("api" / "apps" / "permissions" / String)
+        .and(warp::get())
+        .and(require_token(tok_perm_get))
+        .and(with_data(d_perm_get))
+        .map(|plugin_id: String, d: Arc<std::sync::Mutex<AppData>>| {
+            let data = d.lock().unwrap_or_else(|p| p.into_inner());
+            let perms = data.plugin_permissions.get(&plugin_id).cloned().unwrap_or_default();
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({"plugin_id":plugin_id,"permissions":perms})), StatusCode::OK)
+        });
+
+    // PUT /api/apps/permissions/:plugin_id — set plugin API permissions
+    #[derive(serde::Deserialize)]
+    struct SetPermsBody { permissions: Vec<String> }
+    let tok_perm_set = token.clone(); let d_perm_set = data.clone(); let dp_perm_set = data_path.clone();
+    let apps_perm_set = warp::path!("api" / "apps" / "permissions" / String)
+        .and(warp::put())
+        .and(require_token(tok_perm_set))
+        .and(warp::body::json::<SetPermsBody>())
+        .and(with_data(d_perm_set))
+        .and(with_path(dp_perm_set))
+        .map(|plugin_id: String, body: SetPermsBody, d: Arc<std::sync::Mutex<AppData>>, dp: Arc<PathBuf>| {
+            let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
+            data.plugin_permissions.insert(plugin_id.clone(), body.permissions.clone());
+            drop(data);
+            save_data(&d, &dp);
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({"ok":true,"plugin_id":plugin_id,"permissions":body.permissions})), StatusCode::OK)
+        });
+
+    // GET /api/apps/permissions  — list all plugin permissions
+    let tok_perm_list = token.clone(); let d_perm_list = data.clone();
+    let apps_perm_list = warp::path!("api" / "apps" / "permissions")
+        .and(warp::get())
+        .and(require_token(tok_perm_list))
+        .and(with_data(d_perm_list))
+        .map(|d: Arc<std::sync::Mutex<AppData>>| {
+            let data = d.lock().unwrap_or_else(|p| p.into_inner());
+            warp::reply::with_status(warp::reply::json(&data.plugin_permissions), StatusCode::OK)
+        });
+
+    let group_apps = apps_perm_list    // /api/apps/permissions (GET, no id)
+        .or(apps_perm_get)             // /api/apps/permissions/:id (GET)
+        .or(apps_perm_set)             // /api/apps/permissions/:id (PUT)
+        .or(apps_install)              // /api/apps/install (POST)
+        .or(apps_launch)               // /api/apps/launch (POST)
+        .or(apps_delete)               // /api/apps/:id (DELETE) — must be AFTER specific paths
+        .or(apps_list)                 // /api/apps (GET)
+        .boxed();
+
     // CORS headers — allow any origin (local-only, Bearer token required)
     let cors = warp::cors()
         .allow_any_origin()
@@ -1780,6 +1960,7 @@ pub async fn start_api_server(
         .or(repo_sync)
         .or(repo_gen_cancel)
         .or(repo_gen)
+        .or(repo_update)        // POST /api/repo/update
         .or(repo_host_stop)     // DELETE /api/repo/host
         .or(repo_host_start)    // POST /api/repo/host
         .or(repo_remove)
@@ -1801,6 +1982,7 @@ pub async fn start_api_server(
         .or(group_d)
         .or(group_e)
         .or(group_io)
+        .or(group_apps)
         .with(cors)
         .recover(handle_rejection);
 

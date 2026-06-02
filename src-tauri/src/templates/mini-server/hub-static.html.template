@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BMM Repo Directory</title>
+<style>
+  :root { --bg:#070910; --bg2:#0c0f18; --card:#12161f; --card-hover:#161b27; --border:#1e2433; --border-hi:#2a3346;
+    --text:#eef1f6; --muted:#7f8aa0; --dim:#5a6478; --accent:#06b6d4; --accent2:#0891b2; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:radial-gradient(900px 500px at 15% -10%, rgba(6,182,212,0.10), transparent 60%), var(--bg);
+    color:var(--text); font-family:'Segoe UI',system-ui,Roboto,sans-serif; min-height:100vh; padding:36px 20px 60px; }
+  .wrap { max-width:1080px; margin:0 auto; }
+  .hero { display:flex; align-items:center; gap:16px; margin-bottom:22px; flex-wrap:wrap; }
+  .logo { width:54px;height:54px;border-radius:15px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:900;font-size:19px;color:#011;box-shadow:0 8px 28px rgba(6,182,212,0.35); }
+  h1 { font-size:25px; font-weight:800; letter-spacing:-0.5px; }
+  .sub { color:var(--muted); font-size:13px; margin-top:3px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:15px; margin-top:8px; }
+  .repo { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:18px; transition:border-color .18s,transform .18s; }
+  .repo:hover { border-color:var(--border-hi); transform:translateY(-3px); }
+  .repo-name { font-size:16px; font-weight:700; margin-bottom:8px; }
+  .repo-desc { font-size:12px; color:var(--muted); line-height:1.55; margin-bottom:13px; min-height:18px; }
+  .meta { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .chip { font-size:11px; color:var(--muted); background:var(--bg2); border:1px solid var(--border); padding:4px 9px; border-radius:8px; }
+  .chip b { color:var(--text); }
+  .url-row { display:flex; gap:7px; }
+  .url-row input { flex:1; background:var(--bg2); border:1px solid var(--border); border-radius:9px; padding:9px 11px; color:var(--text); font-size:11px; font-family:monospace; }
+  .url-row button { background:linear-gradient(135deg,var(--accent),var(--accent2)); border:none; border-radius:9px; padding:0 16px; color:#011; font-weight:800; font-size:12px; cursor:pointer; }
+  .url-row button.ok { background:#10b981; }
+  .empty { text-align:center; color:var(--muted); padding:60px 20px; grid-column:1/-1; }
+  footer { text-align:center; color:var(--dim); font-size:11px; margin-top:34px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div class="logo">BMM</div>
+    <div><h1>Repo Directory</h1><div class="sub">Copy a repo URL and paste it into BMM → Server Repo → Sync.</div></div>
+  </div>
+  <div class="grid" id="grid"><div class="empty">Loading…</div></div>
+  <footer>Powered by Better Mod Manager — Static Directory</footer>
+</div>
+<script>
+const fmt = b => { if(!b) return '0 B'; const u=['B','KB','MB','GB','TB']; const i=Math.floor(Math.log(b)/Math.log(1024)); return (b/Math.pow(1024,i)).toFixed(1)+' '+u[i]; };
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function cp(btn,url){ navigator.clipboard.writeText(url).then(()=>{ const t=btn.textContent; btn.textContent='✓'; btn.classList.add('ok'); setTimeout(()=>{btn.textContent=t;btn.classList.remove('ok');},1200); }); }
+(async () => {
+  let repos = [];
+  try { repos = (await (await fetch('hub-repos.json?t='+Date.now())).json()).repos || []; } catch(e) {}
+  const grid = document.getElementById('grid');
+  if (!repos.length) { grid.innerHTML = '<div class="empty">No repos configured. Edit <b>hub-repos.json</b> and fill each repo URL.</div>'; return; }
+  grid.innerHTML = repos.map(r => `
+    <div class="repo">
+      <div class="repo-name">${esc(r.name)}</div>
+      <div class="repo-desc">${esc(r.description||'')}</div>
+      <div class="meta">
+        ${r.game_name ? `<span class="chip">🎮 <b>${esc(r.game_name)}</b></span>` : ''}
+        <span class="chip">📦 <b>${r.mods||0}</b> mods</span>
+        <span class="chip">📁 <b>${r.profiles||0}</b> profiles</span>
+        <span class="chip">💾 <b>${fmt(r.size||0)}</b></span>
+      </div>
+      <div class="url-row">
+        <input value="${esc(r.url||'')}" placeholder="Set this repo's URL in hub-repos.json" readonly onclick="this.select()">
+        <button onclick="cp(this,'${esc(r.url||'')}')">Copy</button>
+      </div>
+    </div>`).join('');
+})();
+</script>
+</body>
+</html>

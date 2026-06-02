@@ -1,0 +1,292 @@
+/**
+ * BMM Multi-Repo Hub Server  —  Full Admin Edition
+ * ─────────────────────────────────────────────────────────────────────────────
+ * One Express server for ALL your repos with full per-repo admin capabilities:
+ *   • Session tracking & download monitoring (per repo)
+ *   • Whitelist / ban management (per repo, files in each repo subfolder)
+ *   • Server logs (per repo)
+ *   • Modpack toggle (per repo)
+ *   • Rate limiting per client
+ *   • Single admin password for the whole hub
+ *
+ * Routes:
+ *   GET  /                          → hub dashboard
+ *   GET  /api/repos                 → JSON: all repo summaries + hub stats
+ *   GET  /<folder>/repo.json        → repo manifest
+ *   GET  /<folder>/mods/...         → mod files (rate-limited)
+ *   GET  /<folder>/monitoring.json  → per-repo live monitoring
+ *   GET  /<folder>/admin/data       → per-repo security data (auth required)
+ *   POST /<folder>/admin/update     → save whitelist/bans (auth required)
+ *   GET  /<folder>/admin/logs       → last 100 log lines (auth required)
+ *
+ * Run: npm install && node hub-server.js
+ */
+const express = require('express');
+const fs      = require('fs');
+const path    = require('path');
+const cors    = require('cors');
+
+const PORT           = {{PORT}};
+const UPLOAD_LIMIT   = {{UPLOAD_LIMIT}}; // KB/s per client, 0 = unlimited
+const ADMIN_PASSWORD = "{{ADMIN_PASSWORD}}";
+const ROOT           = __dirname;
+const startTime      = Date.now();
+
+// ── Per-repo state ────────────────────────────────────────────────────────────
+const repoSessions       = {};  // folder → Map<ip, session>
+const repoHistory        = {};  // folder → []
+const repoActiveDownloads = {}; // folder → Map<dlId, dlObj>
+const repoStats          = {};  // folder → { totalDownloads, totalBytesSent }
+
+function ensureRepoState(folder) {
+    if (!repoSessions[folder])        repoSessions[folder]        = new Map();
+    if (!repoHistory[folder])         repoHistory[folder]         = [];
+    if (!repoActiveDownloads[folder]) repoActiveDownloads[folder] = new Map();
+    if (!repoStats[folder])           repoStats[folder]           = { totalDownloads: 0, totalBytesSent: 0 };
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function repoPath(folder)       { return path.join(ROOT, folder); }
+function bansPath(folder)       { return path.join(ROOT, folder, 'bans.json'); }
+function whitelistPath(folder)  { return path.join(ROOT, folder, 'whitelist.json'); }
+function logPath(folder)        { return path.join(ROOT, folder, 'server.log'); }
+
+function readJson(filePath, def) {
+    try { if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (_) {}
+    return def;
+}
+function writeJson(filePath, data) {
+    try { fs.writeFileSync(filePath, JSON.stringify(data, null, 2)); } catch (_) {}
+}
+
+function logLine(folder, msg, event = 'INFO') {
+    const ts   = new Date().toISOString();
+    const line = `[${ts}] [${event}] ${msg}`;
+    try { fs.appendFileSync(logPath(folder), line + '\n'); } catch (_) {}
+}
+
+function discoverRepos() {
+    const repos = [];
+    let entries = [];
+    try { entries = fs.readdirSync(ROOT, { withFileTypes: true }); } catch (e) { return repos; }
+    for (const ent of entries) {
+        if (!ent.isDirectory()) continue;
+        if (['public', 'node_modules'].includes(ent.name)) continue;
+        const rjPath = path.join(ROOT, ent.name, 'repo.json');
+        if (!fs.existsSync(rjPath)) continue;
+        try {
+            const r = JSON.parse(fs.readFileSync(rjPath, 'utf8'));
+            let mods = 0, size = 0;
+            (r.profiles || []).forEach(p => {
+                mods += (p.mods || []).length;
+                (p.mods || []).forEach(m => (m.files || []).forEach(f => size += (f.size || 0)));
+            });
+            repos.push({
+                folder:    ent.name,
+                name:      r.name || ent.name,
+                description: r.description || '',
+                author:    r.author || '',
+                game_name: r.game_name || '',
+                profiles:  (r.profiles || []).length,
+                mods, size,
+                verified:  !!(r.signature && r.author_id),
+            });
+        } catch (_) {}
+    }
+    return repos.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// Admin auth middleware
+const authAdmin = (req, res, next) => {
+    if (ADMIN_PASSWORD === '' || req.headers['authorization'] === ADMIN_PASSWORD) return next();
+    res.status(401).json({ error: 'Unauthorized' });
+};
+
+// ── Hub-level API ─────────────────────────────────────────────────────────────
+app.get('/api/repos', (req, res) => {
+    res.json({
+        hub: true,
+        uptime: Date.now() - startTime,
+        port: PORT,
+        repos: discoverRepos(),
+    });
+});
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+app.get('/', (req, res) => {
+    res.sendFile(path.join(ROOT, 'public', 'hub-dashboard.html'));
+});
+
+// ── Per-repo security middleware ───────────────────────────────────────────────
+function repoSecurityCheck(folder, ip, key, res) {
+    const bans = readJson(bansPath(folder), { banned_ips: [], banned_keys: [] });
+    const wl   = readJson(whitelistPath(folder), { enabled: false, ips: [], keys: [] });
+    const isLocal = ip === '127.0.0.1' || ip === '::1';
+    if (isLocal) return true;
+    if (bans.banned_ips.includes(ip) || (key && bans.banned_keys.includes(key))) {
+        res.status(403).send('Banned');
+        return false;
+    }
+    if (wl.enabled && !wl.ips.includes(ip) && !(key && wl.keys.includes(key))) {
+        res.status(403).send('Not Whitelisted');
+        return false;
+    }
+    return true;
+}
+
+// ── Per-repo admin routes ─────────────────────────────────────────────────────
+app.get('/:folder/monitoring.json', (req, res) => {
+    const folder = req.params.folder;
+    if (!fs.existsSync(path.join(ROOT, folder, 'repo.json'))) return res.status(404).end();
+    ensureRepoState(folder);
+    const st    = repoStats[folder];
+    const now   = Date.now();
+    const rj    = readJson(path.join(ROOT, folder, 'repo.json'), {});
+    let repoSize = 0;
+    (rj.profiles || []).forEach(p => (p.mods || []).forEach(m => (m.files || []).forEach(f => repoSize += f.size || 0)));
+    const active  = Array.from(repoActiveDownloads[folder].values()).map(d => ({
+        ip: d.ip, file: path.basename(d.file), downloaded: d.downloaded, total: d.total,
+        speed: d.downloaded / Math.max((now - d.startTime) / 1000, 1),
+    }));
+    res.json({
+        server: { uptime: now - startTime, totalDownloads: st.totalDownloads, totalBytes: st.totalBytesSent, totalRepoSize: repoSize },
+        active,
+        sessions: Array.from(repoSessions[folder].entries()).map(([ip, s]) => ({
+            ip, creatorId: s.creatorId, bytes: s.bytes, lastSeen: s.lastSeen, files: s.files,
+        })),
+        history: repoHistory[folder].slice(-100).reverse(),
+    });
+});
+
+app.get('/:folder/admin/data', authAdmin, (req, res) => {
+    const folder = req.params.folder;
+    if (!fs.existsSync(path.join(ROOT, folder, 'repo.json'))) return res.status(404).end();
+    const bans  = readJson(bansPath(folder),      { banned_ips: [], banned_keys: [] });
+    const wl    = readJson(whitelistPath(folder), { enabled: false, ips: [], keys: [] });
+    const repo  = readJson(path.join(ROOT, folder, 'repo.json'), { modpacks: [] });
+    res.json({ bans, whitelist: wl, repo });
+});
+
+app.post('/:folder/admin/update', authAdmin, (req, res) => {
+    const folder = req.params.folder;
+    if (!fs.existsSync(path.join(ROOT, folder, 'repo.json'))) return res.status(404).end();
+    const { bans, whitelist, repo } = req.body;
+    try {
+        if (bans)      writeJson(bansPath(folder),      bans);
+        if (whitelist) writeJson(whitelistPath(folder), whitelist);
+        if (repo) {
+            const existing = readJson(path.join(ROOT, folder, 'repo.json'), {});
+            if (repo.modpacks !== undefined) existing.modpacks = repo.modpacks;
+            writeJson(path.join(ROOT, folder, 'repo.json'), existing);
+        }
+        logLine(folder, 'Admin config updated', 'ADMIN');
+        res.json({ ok: true });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.get('/:folder/admin/logs', authAdmin, (req, res) => {
+    const folder = req.params.folder;
+    try {
+        const lp = logPath(folder);
+        const lines = fs.existsSync(lp)
+            ? fs.readFileSync(lp, 'utf8').split('\n').filter(l => l.trim()).slice(-100)
+            : [];
+        res.json({ lines });
+    } catch (_) { res.json({ lines: [] }); }
+});
+
+// ── Per-repo single-page dashboard ────────────────────────────────────────────
+app.get('/:folder', (req, res, next) => {
+    const f = req.params.folder;
+    if (f !== 'api' && fs.existsSync(path.join(ROOT, f, 'repo.json'))) {
+        // Redirect to hub dashboard which handles per-repo view via JS
+        return res.redirect(`/?repo=${encodeURIComponent(f)}`);
+    }
+    next();
+});
+
+// ── File serving per repo (with session tracking + rate limiting) ──────────────
+app.use('/', (req, res, next) => {
+    // Strip leading slashes and join safely — do NOT replace '/' with path.sep
+    // before joining because a leading backslash creates an absolute path on Windows.
+    const stripped = decodeURIComponent(req.path).replace(/^\/+/, '');
+    if (!stripped) return next();
+    const abs = path.resolve(path.join(ROOT, stripped));
+    if (!abs.startsWith(ROOT) || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) return next();
+
+    // Determine which repo folder this file belongs to
+    const rel    = path.relative(ROOT, abs);
+    const folder = rel.split(path.sep)[0] || '';
+    if (!folder || !fs.existsSync(path.join(ROOT, folder, 'repo.json'))) return res.status(404).end();
+    ensureRepoState(folder);
+
+    const ip  = (req.ip || '').replace('::ffff:', '') || '127.0.0.1';
+    const key = (req.headers['x-creator-id'] || req.headers['x-bmm-id'] || req.query.key || req.query.creatorid || 'UNKNOWN').toString().replace('Bearer ', '').trim();
+
+    if (!repoSecurityCheck(folder, ip, key, res)) return;
+
+    if (!repoSessions[folder].has(ip)) {
+        repoSessions[folder].set(ip, { creatorId: key, bytes: 0, lastSeen: Date.now(), files: [] });
+        logLine(folder, `${ip} | ID: ${key} | Session started`, 'CONNECTION');
+    } else {
+        const s = repoSessions[folder].get(ip);
+        s.lastSeen = Date.now();
+        if (key !== 'UNKNOWN' && s.creatorId === 'UNKNOWN') s.creatorId = key;
+    }
+
+    const total  = fs.statSync(abs).size;
+    const dlId   = `${ip}-${Date.now()}`;
+    const dlObj  = { ip, file: urlPath, total, downloaded: 0, startTime: Date.now() };
+    repoActiveDownloads[folder].set(dlId, dlObj);
+    repoStats[folder].totalDownloads++;
+    logLine(folder, `${ip} | DL_START | ${urlPath}`, 'DL_START');
+
+    const stream = fs.createReadStream(abs);
+    res.setHeader('Content-Length', total);
+
+    let sent = 0, iStart = Date.now();
+    stream.on('data', chunk => {
+        dlObj.downloaded += chunk.length;
+        repoStats[folder].totalBytesSent += chunk.length;
+        const s = repoSessions[folder].get(ip);
+        if (s) { s.bytes += chunk.length; }
+        if (UPLOAD_LIMIT > 0) {
+            sent += chunk.length;
+            const e = Date.now() - iStart;
+            if (e < 1000 && sent > UPLOAD_LIMIT * 1024) {
+                stream.pause();
+                setTimeout(() => { sent = 0; iStart = Date.now(); stream.resume(); }, 1000 - e);
+            } else if (e >= 1000) { sent = 0; iStart = Date.now(); }
+        }
+    });
+    stream.on('end', () => {
+        repoActiveDownloads[folder].delete(dlId);
+        logLine(folder, `${ip} | DL_FINISH | ${urlPath}`, 'DL_FINISH');
+        const sess = repoSessions[folder].get(ip);
+        if (sess && !sess.files.includes(urlPath)) sess.files.push(urlPath);
+    });
+    res.on('close', () => { stream.destroy(); repoActiveDownloads[folder].delete(dlId); });
+    stream.pipe(res);
+});
+
+app.use((req, res) => res.status(404).send('Not Found'));
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+app.listen(PORT, '0.0.0.0', () => {
+    const c = '\x1b[36m', g = '\x1b[32m', b = '\x1b[1m', r = '\x1b[0m';
+    const repos = discoverRepos();
+    console.clear();
+    console.log(`${b}${c}   +------------------------------------------------------+`);
+    console.log(`   |            BMM MULTI-REPO HUB  (Admin Edition)      |`);
+    console.log(`   +------------------------------------------------------+${r}\n`);
+    console.log(`  ${b}${g}[STATUS]${r}  ONLINE  |  ${b}${c}[PORT]${r}  ${PORT}  |  ${b}${g}[REPOS]${r}  ${repos.length}`);
+    repos.forEach(rp => console.log(`            • ${rp.name}  →  /${rp.folder}/repo.json`));
+    console.log(`\n  ${b}${c}[DASH]${r}    http://127.0.0.1:${PORT}/\n`);
+    if (ADMIN_PASSWORD) console.log(`  ${b}[ADMIN]${r}   Password protected\n`);
+    else console.log(`  ${b}[ADMIN]${r}   No password (open)\n`);
+});
