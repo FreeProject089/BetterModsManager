@@ -596,6 +596,29 @@ fn get_unique_mod_info(mods_path: &std::path::Path, original_name: &str) -> (Str
     (display_name, target_dir)
 }
 
+/// Returns a map of profile_id -> Vec<{id, name, enabled}> for ALL profiles.
+/// Used by the cross-profile dependency picker in the frontend.
+#[tauri::command]
+pub fn get_mods_all_profiles(state: State<AppState>) -> Result<serde_json::Value, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    let mut result = serde_json::Map::new();
+    for profile in &data.profiles {
+        let mods_in_profile: Vec<serde_json::Value> = data.mods.iter()
+            .filter(|m| m.mod_folder_path.starts_with(&profile.mods_path)
+                || matches!((m.mod_folder_path.canonicalize(), profile.mods_path.canonicalize()),
+                    (Ok(a), Ok(b)) if a.starts_with(&b)))
+            .map(|m| serde_json::json!({
+                "id": m.id, "name": m.name, "version": m.version, "enabled": m.enabled
+            }))
+            .collect();
+        result.insert(profile.id.clone(), serde_json::json!({
+            "profile_name": profile.name,
+            "mods": mods_in_profile,
+        }));
+    }
+    Ok(serde_json::Value::Object(result))
+}
+
 #[tauri::command]
 pub fn get_all_mods(state: State<AppState>) -> Result<Vec<ModEntry>, AppError> {
     let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
@@ -853,6 +876,17 @@ pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files
 }
 
 
+/// Parse a dependency string which can be:
+///   - `"mod-id"`               → same-profile dep
+///   - `"profile_id::mod-id"`   → cross-profile dep (mod lives in another profile)
+fn parse_dep_ref(dep: &str) -> (Option<String>, String) {
+    if let Some((prof, mid)) = dep.split_once("::") {
+        (Some(prof.to_string()), mid.to_string())
+    } else {
+        (None, dep.to_string())
+    }
+}
+
 fn resolve_dependencies(
     target_id: &String,
     all_mods: &[ModEntry],
@@ -863,27 +897,36 @@ fn resolve_dependencies(
     if resolved.contains(target_id) {
         return Ok(());
     }
-    
+
     unresolved.push(target_id.clone());
     resolved.push(target_id.clone());
-    
+
     let target_mod = all_mods.iter().find(|m| &m.id == target_id)
         .ok_or_else(|| format!("Mod introuvable: {}", target_id))?;
-    
-    for dep_id in &target_mod.dependencies {
-        if unresolved.contains(dep_id) {
+
+    for raw_dep in &target_mod.dependencies {
+        let (cross_profile_id, dep_id) = parse_dep_ref(raw_dep);
+
+        // Cross-profile deps are informational only — we cannot enable mods
+        // from other profiles in a single call, so just record if they're missing.
+        if cross_profile_id.is_some() {
+            if !all_mods.iter().any(|m| &m.id == &dep_id) {
+                missing.push(raw_dep.clone());
+            }
+            // Don't recurse — cross-profile deps are checked at the frontend level
+            continue;
+        }
+
+        if unresolved.contains(&dep_id) {
             return Err(format!("Dépendance circulaire détectée: {} -> {}", target_id, dep_id));
         }
-        // Check if dependency exists
-        if !all_mods.iter().any(|m| &m.id == dep_id) {
+        if !all_mods.iter().any(|m| &m.id == &dep_id) {
             missing.push(dep_id.clone());
         } else {
-            resolve_dependencies(dep_id, all_mods, resolved, unresolved, missing)?;
+            resolve_dependencies(&dep_id, all_mods, resolved, unresolved, missing)?;
         }
     }
-    
-    // Position is always found at this point in the resolution algorithm;
-    // if somehow missing, skip removal gracefully.
+
     if let Some(pos) = unresolved.iter().position(|x| x == target_id) {
         unresolved.remove(pos);
     }

@@ -259,6 +259,7 @@ fn main() {
             commands::profile::delete_profile,
             commands::mods::get_mods,
             commands::mods::get_all_mods,
+            commands::mods::get_mods_all_profiles,
             commands::mods::get_mod_hashes,
             commands::mods::find_local_mods_by_hashes,
             commands::mods::flush_mem_caches,

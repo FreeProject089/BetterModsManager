@@ -253,6 +253,8 @@ function setupEvents(view: HTMLElement) {
     document.getElementById('apps-install-modal')?.addEventListener('click', e => {
         if ((e.target as HTMLElement).id === 'apps-install-modal') closeInstallModal();
     });
+    // Note: cr-app-modal backdrop close is attached in renderCreate() since
+    // that function replaces the entire DOM including the modal element.
 }
 
 // ── Catalog loading ───────────────────────────────────────────────────────────
@@ -930,6 +932,16 @@ function renderCreate() {
         <div class="apps-modal-body" id="cr-app-body"></div>
       </div>
     </div>`;
+
+    // Close sub-modal by clicking backdrop (re-attach each time renderCreate runs since it rebuilds DOM)
+    document.getElementById('cr-app-modal')?.addEventListener('click', e => {
+        if ((e.target as HTMLElement).id === 'cr-app-modal') {
+            document.getElementById('cr-app-modal')!.classList.remove('open');
+        }
+    });
+    document.getElementById('cr-app-close')?.addEventListener('click', () => {
+        document.getElementById('cr-app-modal')!.classList.remove('open');
+    });
 
     // Sync name/desc inputs to draft
     document.getElementById('cr-name')?.addEventListener('input', e => { _draft.name = (e.target as HTMLInputElement).value; });

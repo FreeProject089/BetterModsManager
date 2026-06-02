@@ -205,16 +205,27 @@ pub async fn export_modpack(
     Ok(())
 }
 
-/// Imports a modpack from a user-selected path (.bmp)
+/// Imports a modpack from a user-selected path (.bmp).
+/// Optional `path` arg imports that file directly (API callers); otherwise a dialog opens.
 #[tauri::command]
 pub async fn import_modpack(
     handle: AppHandle,
+    path: Option<String>,
 ) -> Result<LocalModpack, AppError> {
     use tauri::api::dialog::blocking::FileDialogBuilder;
-    
-    if let Some(path) = FileDialogBuilder::new()
-        .add_filter("Better ModPack", &["bmp", "json"])
-        .pick_file()
+
+    let chosen = match path.filter(|p| !p.trim().is_empty()) {
+        Some(p) => {
+            let pb = std::path::PathBuf::from(&p);
+            if !pb.exists() { return Err(AppError::NotFound(format!("File not found: {}", p))); }
+            Some(pb)
+        }
+        None => FileDialogBuilder::new()
+            .add_filter("Better ModPack", &["bmp", "json"])
+            .pick_file(),
+    };
+
+    if let Some(path) = chosen
     {
         let content = std::fs::read_to_string(path)?;
         let mut pack = serde_json::from_str::<LocalModpack>(&content)?;

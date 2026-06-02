@@ -245,14 +245,22 @@ pub fn get_language_content(app_handle: tauri::AppHandle, lang: String) -> Resul
     std::fs::read_to_string(file_path).map_err(|e| e.to_string())
 }
 #[tauri::command]
-pub fn import_language(app_handle: tauri::AppHandle) -> Result<String, String> {
+pub fn import_language(app_handle: tauri::AppHandle, path: Option<String>) -> Result<String, String> {
     use tauri::api::dialog::blocking::FileDialogBuilder;
     use std::fs;
 
-    let file_path = FileDialogBuilder::new()
-        .add_filter("Language JSON", &["json"])
-        .set_title("Select Language File")
-        .pick_file();
+    // If a path is supplied (API caller), use it directly; otherwise open a dialog.
+    let file_path = match path.filter(|p| !p.trim().is_empty()) {
+        Some(p) => {
+            let pb = std::path::PathBuf::from(&p);
+            if !pb.exists() { return Err(format!("File not found: {}", p)); }
+            Some(pb)
+        }
+        None => FileDialogBuilder::new()
+            .add_filter("Language JSON", &["json"])
+            .set_title("Select Language File")
+            .pick_file(),
+    };
 
     if let Some(src_path) = file_path {
         let file_name = src_path

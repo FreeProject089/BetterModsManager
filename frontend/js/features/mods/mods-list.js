@@ -502,6 +502,96 @@ export function createModCard(mod) {
     });
     return card;
 }
+// ── Global right-click cancel context menu (delegated) ────────────────────
+// Attached ONCE on the viewport — fires even when a loading overlay covers the card.
+let _cancelCtxAttached = false;
+export function ensureModCancelContextMenu() {
+    if (_cancelCtxAttached)
+        return;
+    _cancelCtxAttached = true;
+    const showModCancelMenu = (x, y, modId, modName) => {
+        document.getElementById('__mod-cancel-backdrop')?.remove();
+        const root = document.getElementById('app-window-outer') || document.body;
+        // Full-screen invisible backdrop captures the outside click → closes the menu.
+        // The menu sits above it; clicking a menu item works because items are children.
+        const backdrop = document.createElement('div');
+        backdrop.id = '__mod-cancel-backdrop';
+        backdrop.style.cssText = 'position:fixed;inset:0;z-index:99998;background:transparent;';
+        const closeAll = () => backdrop.remove();
+        backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop)
+            closeAll(); });
+        backdrop.addEventListener('contextmenu', (e) => { e.preventDefault(); closeAll(); });
+        const menu = document.createElement('div');
+        menu.id = '__mod-cancel-ctx';
+        menu.style.cssText = `position:fixed;z-index:99999;background:#131620;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 4px;box-shadow:0 12px 32px rgba(0,0,0,.7);min-width:215px;font-size:13px;user-select:none;`;
+        menu.style.left = `${Math.min(x, window.innerWidth - 235)}px`;
+        menu.style.top = `${Math.min(y, window.innerHeight - 130)}px`;
+        const opForThis = S.processingMods.has(modId);
+        const totalOps = S.processingMods.size;
+        const mkItem = (label, icon, action) => {
+            const el = document.createElement('div');
+            el.style.cssText = `padding:9px 14px;cursor:pointer;border-radius:7px;color:#f87171;display:flex;align-items:center;gap:9px;transition:background .12s;`;
+            el.innerHTML = `${icon} <span style="flex:1;">${label}</span>`;
+            el.addEventListener('mouseenter', () => { el.style.background = 'rgba(239,68,68,.12)'; });
+            el.addEventListener('mouseleave', () => { el.style.background = 'transparent'; });
+            el.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                closeAll();
+                action();
+            });
+            return el;
+        };
+        const ICstop = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+        const ICtrash = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>`;
+        const ICSpin = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
+        const header = document.createElement('div');
+        header.style.cssText = 'padding:5px 14px 8px;font-size:10px;color:#7f8aa0;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:4px;display:flex;align-items:center;gap:6px;';
+        header.innerHTML = `${ICSpin} ${totalOps} ${t('lib.opsRunning') || 'operation(s) running'}`;
+        menu.appendChild(header);
+        if (opForThis) {
+            menu.appendChild(mkItem(`${t('lib.cancelCurrent') || 'Cancel'} <em style="opacity:.55;font-size:11px;">${escHtml(modName)}</em>`, ICstop, () => import('./mods-actions.js').then(({ requestCancelCurrentOnly }) => requestCancelCurrentOnly())));
+        }
+        if (totalOps > (opForThis ? 1 : 0)) {
+            menu.appendChild(mkItem(`${t('lib.cancelAll') || 'Cancel all'} (${totalOps})`, ICtrash, () => import('./mods-actions.js').then(({ requestCancelModOps }) => requestCancelModOps())));
+        }
+        backdrop.appendChild(menu);
+        root.appendChild(backdrop);
+        // Auto-close if all ops finish while the menu is open
+        const watch = setInterval(() => {
+            if (S.processingMods.size === 0) {
+                clearInterval(watch);
+                closeAll();
+            }
+        }, 500);
+        const obs = new MutationObserver(() => { if (!document.contains(backdrop)) {
+            clearInterval(watch);
+            obs.disconnect();
+        } });
+        obs.observe(root, { childList: true });
+        // Escape closes
+        const onEsc = (e) => { if (e.key === 'Escape') {
+            closeAll();
+            document.removeEventListener('keydown', onEsc);
+        } };
+        document.addEventListener('keydown', onEsc);
+    };
+    // Listen on the list viewport at capture phase to bypass loading overlays
+    document.addEventListener('contextmenu', (e) => {
+        if (S.processingMods.size === 0)
+            return;
+        const card = e.target.closest('.mod-card');
+        if (!card)
+            return;
+        const modId = card.dataset.id || '';
+        const modName = card.querySelector('.mod-name')?.textContent?.trim() || modId;
+        // Only intercept if this card is loading OR any ops are running
+        if (!S.processingMods.has(modId) && S.processingMods.size === 0)
+            return;
+        e.preventDefault();
+        showModCancelMenu(e.clientX, e.clientY, modId, modName);
+    }, true); // capture=true bypasses overlays
+}
 export function updateCardState(card, mod) {
     // While a toggle is in-flight the backend state is stale — freeze all
     // enabled/disabled visuals so the optimistic UI state isn't overwritten.

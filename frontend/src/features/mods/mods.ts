@@ -9,10 +9,11 @@ import { appState } from '../../core/state.js';
 
 // Sub-modules
 import { 
-  renderModList, 
-  updateBadge, 
-  updateSubtitle, 
-  updateToggleAllBtn 
+  renderModList,
+  updateBadge,
+  updateSubtitle,
+  updateToggleAllBtn,
+  ensureModCancelContextMenu
 } from './mods-list.js';
 import { 
   checkAllConflicts, 
@@ -43,6 +44,7 @@ let refreshTimeout = null;
 
 export async function initMods() {
   window._refreshModsFn = refreshMods;
+  ensureModCancelContextMenu();
 
   // --- Core Listeners ---
   document.getElementById('btn-add-mod')?.addEventListener('click', openAddModModal);

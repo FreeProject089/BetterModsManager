@@ -11122,8 +11122,8 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     /* Card */
     position: relative;
     width: 100%;
-    max-width: 560px;
-    max-height: min(88vh, 640px);
+    max-width: 600px;
+    max-height: min(90vh, 720px);
     display: flex;
     flex-direction: column;
     background: var(--bg-secondary, #111827);
@@ -11137,6 +11137,27 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     overflow: hidden;
     animation: plugPanelIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* ── Quick-test form field consistency ── */
+.plug-ov-body .plug-form-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary, #b8c0d0);
+    text-transform: none;
+    letter-spacing: 0.2px;
+}
+.plug-ov-body .input,
+.plug-ov-body textarea.input,
+.plug-ov-body .select {
+    width: 100%;
+    box-sizing: border-box;
+}
+.plug-ov-body .plug-qt-smart-field { width: 100%; }
+.plug-ov-body details > summary { list-style: none; }
+.plug-ov-body details > summary::-webkit-details-marker { display: none; }
+.plug-ov-body details > summary::before { content: '▸'; margin-right: 6px; font-size: 10px; opacity: .7; transition: transform .15s; display: inline-block; }
+.plug-ov-body details[open] > summary::before { transform: rotate(90deg); }
 
 /* ── Header ── */
 .plug-ov-header {

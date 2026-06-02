@@ -7,6 +7,7 @@ import { invoke } from '../../core/api.js';
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { dispatchBmmAction, BMM_ACTIONS, onBmmAction } from '../../ui/tutorial-events.js';
+import { escHtml } from '../../core/utils.js';
 import type { Profile, ModEntry, FileTreeNode, EnrichedMod } from '../../types/models.js';
 
 let selectedModId: string | null = null;
@@ -165,7 +166,13 @@ export async function initMapper(): Promise<void> {
     });
 
     onBmmAction(BMM_ACTIONS.MODS_SCANNED, async () => {
+        const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement | null;
+        const currentVal = selectedModId;
         await refreshMapperData();
+        // Restore selection silently after scan
+        if (currentVal && modSelect?.querySelector(`option[value="${currentVal}"]`)) {
+            modSelect.value = currentVal;
+        }
     });
 
     // Live refresh: update mod selector when mods list changes from any part of the app
@@ -179,6 +186,52 @@ export async function initMapper(): Promise<void> {
             modSelect.value = currentVal;
         }
     });
+
+    // ── Auto-detect new mods in the active profile's mods folder ──
+    // Poll every 8s while mapper is visible; scan+notify only when count changes.
+    let _mapperPollTimer: ReturnType<typeof setInterval> | null = null;
+    let _lastKnownModCount = -1;
+
+    const startMapperPoll = async () => {
+        if (_mapperPollTimer) return;
+        _mapperPollTimer = setInterval(async () => {
+            if (!document.getElementById('view-mapper')?.classList.contains('active-view') &&
+                !document.querySelector('.nav-item[data-view="mapper"]')?.classList.contains('active')) {
+                return; // Mapper not visible, skip
+            }
+            try {
+                const mods: any[] = await invoke('get_mods');
+                const count = mods.length;
+                if (_lastKnownModCount !== -1 && count !== _lastKnownModCount) {
+                    // New mod detected — auto-scan without user action
+                    await invoke('scan_mods_folder').catch(() => {});
+                    const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement | null;
+                    const currentVal = selectedModId;
+                    await refreshMapperData();
+                    if (currentVal && modSelect?.querySelector(`option[value="${currentVal}"]`)) {
+                        modSelect.value = currentVal;
+                    }
+                    const diff = count - _lastKnownModCount;
+                    if (diff > 0) {
+                        toast(`${diff} ${t('mapper.newModsDetected') || 'new mod(s) detected and added automatically'}`, 'success', 3000);
+                    }
+                }
+                _lastKnownModCount = count;
+            } catch (_) {}
+        }, 8000);
+    };
+
+    const stopMapperPoll = () => {
+        if (_mapperPollTimer) { clearInterval(_mapperPollTimer); _mapperPollTimer = null; }
+    };
+
+    // Start/stop poll based on visibility
+    document.querySelector('.nav-item[data-view="mapper"]')?.addEventListener('click', () => {
+        _lastKnownModCount = -1; // reset so first poll sets baseline
+        startMapperPoll();
+    });
+    document.querySelectorAll('.nav-item:not([data-view="mapper"])').forEach(n =>
+        n.addEventListener('click', stopMapperPoll));
 }
 
 /**
@@ -281,7 +334,37 @@ async function refreshModTree(force = false): Promise<void> {
         modTreeData = await invoke('get_directory_tree', { path: modFolderPath });
         lastModFolderPath = modFolderPath;
         await renderFilteredModTree();
-    } catch (e) { container.innerHTML = `<div class="empty-hint error" style="color:var(--danger)">${e}</div>`; }
+    } catch (e: any) {
+        // Mod folder may have been moved externally — show a friendly error and
+        // clear the selection so the user can pick a different mod.
+        const msg = String(e);
+        const isMissing = msg.includes('not found') || msg.includes('introuvable') ||
+                          msg.includes('n\'existe pas') || msg.includes('NotFound') || msg.includes('os error 2');
+        if (isMissing) {
+            selectedModId = null;
+            modTreeData = [];
+            lastModFolderPath = null;
+            container.innerHTML = `
+                <div class="empty-hint error" style="color:var(--danger);text-align:center;padding:20px;">
+                    <div style="font-size:22px;margin-bottom:8px;">📂</div>
+                    <strong>${t('mapper.modFolderMissing') || 'Mod folder not found'}</strong><br>
+                    <span style="font-size:11px;color:var(--text-muted);display:block;margin-top:6px;">
+                        ${t('mapper.modFolderMissingHint') || 'This mod\'s folder was moved or deleted externally. Rescan mods to update the list.'}
+                    </span>
+                    <button class="btn btn-sm btn-secondary" style="margin-top:12px;" id="btn-mapper-missing-rescan">
+                        ${t('mapper.rescanMods') || 'Rescan mods'}
+                    </button>
+                </div>`;
+            document.getElementById('btn-mapper-missing-rescan')?.addEventListener('click', async () => {
+                await invoke('scan_mods_folder').catch(() => {});
+                await refreshMapperData();
+            });
+            const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement | null;
+            if (modSelect) modSelect.value = '';
+        } else {
+            container.innerHTML = `<div class="empty-hint error" style="color:var(--danger)">${escHtml(msg)}</div>`;
+        }
+    }
 }
 
 /**

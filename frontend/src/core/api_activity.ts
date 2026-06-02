@@ -257,11 +257,11 @@ export async function initApiActivity(): Promise<void> {
             case 'modlist/import':  navClick('settings', 'btn-import-mm'); break;
 
             // ── Language file ────────────────────────────────────────────────
-            case 'language/import': run('import_language', undefined,
+            case 'language/import': run('import_language', { path: params.path || null },
                 t('settings.langImported') || 'Language imported'); break;
 
             // ── Modpacks (.bmp) — self-contained file dialogs ────────────────
-            case 'modpack/import':  run('import_modpack', undefined,
+            case 'modpack/import':  run('import_modpack', { path: params.path || null },
                 t('plugins.actionCreateModpack') || 'Modpack imported'); break;
             case 'modpack/export':
                 if (params.id) run('export_modpack', { id: params.id });

@@ -371,6 +371,64 @@ fn require_token(
 struct Unauthorized;
 impl warp::reject::Reject for Unauthorized {}
 
+/// Plugin permission gate.
+/// If the request includes `X-BMM-Plugin-Id: <id>`, the plugin's permissions
+/// are looked up in `plugin_permissions`. Without the header, admin access is
+/// assumed (direct API calls, curl, etc.).
+#[derive(Debug)]
+struct PermissionDenied { required: &'static str, plugin_id: String }
+impl warp::reject::Reject for PermissionDenied {}
+
+// ── Local catalog helpers (module-level so they can be called from warp closures) ──
+fn catalog_path(h: &tauri::AppHandle) -> std::path::PathBuf {
+    h.path_resolver().app_data_dir().unwrap_or_default().join("apps-catalog.json")
+}
+
+fn catalog_read(h: &tauri::AppHandle) -> serde_json::Value {
+    let p = catalog_path(h);
+    if let Ok(s) = std::fs::read_to_string(&p) {
+        serde_json::from_str(&s).unwrap_or_else(|_| catalog_empty())
+    } else {
+        catalog_empty()
+    }
+}
+
+fn catalog_empty() -> serde_json::Value {
+    serde_json::json!({"version":"1.0","name":"Local Catalog","description":"","partner_catalogs":[],"community_imports":[],"apps":[]})
+}
+
+fn catalog_write(h: &tauri::AppHandle, cat: &serde_json::Value) -> Result<(), String> {
+    let p = catalog_path(h);
+    if let Some(parent) = p.parent() { let _ = std::fs::create_dir_all(parent); }
+    serde_json::to_string_pretty(cat).map_err(|e| e.to_string())
+        .and_then(|s| std::fs::write(&p, s).map_err(|e| e.to_string()))
+}
+
+fn require_permission(
+    data: Arc<std::sync::Mutex<AppData>>,
+    permission: &'static str,
+) -> impl Filter<Extract = (), Error = warp::Rejection> + Clone {
+    warp::header::optional::<String>("x-bmm-plugin-id")
+        .and_then(move |plugin_id: Option<String>| {
+            let d = data.clone();
+            async move {
+                if let Some(pid) = plugin_id {
+                    let data = d.lock().unwrap_or_else(|p| p.into_inner());
+                    let perms = data.plugin_permissions.get(&pid).cloned().unwrap_or_default();
+                    if !perms.contains(&permission.to_string()) {
+                        return Err(warp::reject::custom(PermissionDenied {
+                            required: permission,
+                            plugin_id: pid,
+                        }));
+                    }
+                }
+                // No plugin ID header → admin / direct access: allow everything
+                Ok(())
+            }
+        })
+        .untuple_one()
+}
+
 pub async fn start_api_server(
     data: Arc<std::sync::Mutex<AppData>>,
     data_path: Arc<PathBuf>,
@@ -1733,11 +1791,17 @@ pub async fn start_api_server(
         .and(require_token(t4)).and(with_app_handle(h4))
         .map(|h: tauri::AppHandle| api_exec_reply(&h, "modlist/import", serde_json::json!({})));
 
-    // POST /api/modpacks/import — import a .bmp modpack
+    // POST /api/modpacks/import — import a .bmp modpack.
+    // Optional JSON body { "path": "C:/.../pack.bmp" } imports directly; else opens a dialog.
     let t5 = token.clone(); let h5 = app_handle.clone();
     let io_modpack_import = warp::path!("api" / "modpacks" / "import").and(warp::post())
         .and(require_token(t5)).and(with_app_handle(h5))
-        .map(|h: tauri::AppHandle| api_exec_reply(&h, "modpack/import", serde_json::json!({})));
+        .and(warp::body::bytes())
+        .map(|h: tauri::AppHandle, body: bytes::Bytes| {
+            let path = serde_json::from_slice::<serde_json::Value>(&body).ok()
+                .and_then(|v| v.get("path").and_then(|p| p.as_str().map(String::from)));
+            api_exec_reply(&h, "modpack/import", serde_json::json!({ "path": path }))
+        });
 
     // POST /api/modpacks/export — export a modpack to .bmp (body: { id })
     let t6 = token.clone(); let h6 = app_handle.clone();
@@ -1757,11 +1821,18 @@ pub async fn start_api_server(
         .and(require_token(t8)).and(warp::body::json::<IoIdBody>()).and(with_app_handle(h8))
         .map(|b: IoIdBody, h: tauri::AppHandle| api_exec_reply(&h, "plugin/export", serde_json::json!({ "id": b.id })));
 
-    // POST /api/language/import — import a language .json file
+    // POST /api/language/import — import a language .json file.
+    // Optional JSON body { "path": "C:/.../fr.json" } imports that file directly;
+    // an empty/absent body opens the native file picker.
     let t10 = token.clone(); let h10 = app_handle.clone();
     let io_lang_import = warp::path!("api" / "language" / "import").and(warp::post())
         .and(require_token(t10)).and(with_app_handle(h10))
-        .map(|h: tauri::AppHandle| api_exec_reply(&h, "language/import", serde_json::json!({})));
+        .and(warp::body::bytes())
+        .map(|h: tauri::AppHandle, body: bytes::Bytes| {
+            let path = serde_json::from_slice::<serde_json::Value>(&body).ok()
+                .and_then(|v| v.get("path").and_then(|p| p.as_str().map(String::from)));
+            api_exec_reply(&h, "language/import", serde_json::json!({ "path": path }))
+        });
 
     // POST /api/profiles/import/ovgme — import OvGME profiles
     let t11 = token.clone(); let h11 = app_handle.clone();
@@ -1793,11 +1864,12 @@ pub async fn start_api_server(
     // All mutating routes (install, launch, uninstall) are auth-gated and require
     // the "app.write" permission in the caller's plugin permissions.
 
-    // GET /api/apps  (auth) — list installed apps + their usage stats
-    let tok_apps_list = token.clone(); let h_apps_list = app_handle.clone();
+    // GET /api/apps  (auth, perm: app.read) — list installed apps + usage stats
+    let tok_apps_list = token.clone(); let perm_apps_list = data.clone(); let h_apps_list = app_handle.clone();
     let apps_list = warp::path!("api" / "apps")
         .and(warp::get())
         .and(require_token(tok_apps_list))
+        .and(require_permission(perm_apps_list, "app.read"))
         .and(with_app_handle(h_apps_list))
         .map(|h: tauri::AppHandle| {
             match crate::commands::apps::get_apps_state(h) {
@@ -1819,10 +1891,11 @@ pub async fn start_api_server(
         #[serde(default)] category: Option<String>,
         #[serde(default)] thumb: Option<String>,
     }
-    let tok_app_install = token.clone(); let h_app_install = app_handle.clone();
+    let tok_app_install = token.clone(); let perm_app_install = data.clone(); let h_app_install = app_handle.clone();
     let apps_install = warp::path!("api" / "apps" / "install")
         .and(warp::post())
         .and(require_token(tok_app_install))
+        .and(require_permission(perm_app_install, "app.write"))
         .and(warp::body::json::<AppInstallBody>())
         .and(with_app_handle(h_app_install))
         .map(|body: AppInstallBody, h: tauri::AppHandle| {
@@ -1849,10 +1922,11 @@ pub async fn start_api_server(
     #[derive(serde::Deserialize, Clone)]
     #[serde(rename_all = "camelCase")]
     struct AppLaunchBody { app_id: String, exe_path: String }
-    let tok_app_launch = token.clone(); let h_app_launch = app_handle.clone();
+    let tok_app_launch = token.clone(); let perm_app_launch = data.clone(); let h_app_launch = app_handle.clone();
     let apps_launch = warp::path!("api" / "apps" / "launch")
         .and(warp::post())
         .and(require_token(tok_app_launch))
+        .and(require_permission(perm_app_launch, "app.write"))
         .and(warp::body::json::<AppLaunchBody>())
         .and(with_app_handle(h_app_launch))
         .map(|body: AppLaunchBody, h: tauri::AppHandle| {
@@ -1863,10 +1937,11 @@ pub async fn start_api_server(
         });
 
     // DELETE /api/apps/:id  (auth, app.write) — uninstall app (keep files)
-    let tok_app_del = token.clone(); let h_app_del = app_handle.clone();
+    let tok_app_del = token.clone(); let perm_app_del = data.clone(); let h_app_del = app_handle.clone();
     let apps_delete = warp::path!("api" / "apps" / String)
         .and(warp::delete())
         .and(require_token(tok_app_del))
+        .and(require_permission(perm_app_del, "app.write"))
         .and(with_app_handle(h_app_del))
         .map(|app_id: String, h: tauri::AppHandle| {
             match crate::commands::apps::uninstall_app(h, app_id, Some(false), Some(false)) {
@@ -1915,6 +1990,151 @@ pub async fn start_api_server(
             let data = d.lock().unwrap_or_else(|p| p.into_inner());
             warp::reply::with_status(warp::reply::json(&data.plugin_permissions), StatusCode::OK)
         });
+
+    // ── Local Catalog CRUD ────────────────────────────────────────────────────
+    // Manages a local `apps-catalog.json` in BMM data dir (catalog_read/write helpers above).
+
+    // GET /api/language/template  (no auth) — download the translation template JSON
+    // Useful for plugin/community developers: download → translate → POST /api/language/import
+    let h_lang_tmpl = app_handle.clone();
+    let lang_template = warp::path!("api" / "language" / "template")
+        .and(warp::get())
+        .and(with_app_handle(h_lang_tmpl))
+        .map(|h: tauri::AppHandle| {
+            let lang_dir = crate::fs_utils::get_lang_dir(&h);
+            let tmpl_path = lang_dir.join("template.json");
+            match std::fs::read_to_string(&tmpl_path) {
+                Ok(content) => {
+                    warp::reply::with_status(
+                        warp::reply::with_header(
+                            warp::reply::json(&serde_json::from_str::<serde_json::Value>(&content)
+                                .unwrap_or_else(|_| serde_json::json!({}))),
+                            "Content-Disposition", "attachment; filename=\"lang-template.json\""
+                        ),
+                        StatusCode::OK,
+                    )
+                }
+                Err(_) => warp::reply::with_status(
+                    warp::reply::with_header(
+                        warp::reply::json(&ApiError { error: "Language template not found. Is BMM installed correctly?".into() }),
+                        "Content-Disposition", ""
+                    ),
+                    StatusCode::NOT_FOUND,
+                ),
+            }
+        });
+
+    // GET /api/catalog  (auth, perm: catalog.read)
+    let (tok_cat_get, perm_cat_get, h_cat_get) = (token.clone(), data.clone(), app_handle.clone());
+    let cat_get = warp::path!("api" / "catalog")
+        .and(warp::get()).and(require_token(tok_cat_get)).and(require_permission(perm_cat_get, "catalog.read"))
+        .and(with_app_handle(h_cat_get))
+        .map(|h: tauri::AppHandle| {
+            warp::reply::with_status(warp::reply::json(&catalog_read(&h)), StatusCode::OK)
+        });
+
+    // POST /api/catalog/new  (auth, perm: catalog.write) — create/reset whole catalog
+    #[derive(serde::Deserialize, Clone)]
+    struct CatalogCreateBody {
+        #[serde(default)] name: Option<String>,
+        #[serde(default)] description: Option<String>,
+        #[serde(default)] partner_catalogs: Vec<String>,
+        #[serde(default)] community_imports: Vec<String>,
+        #[serde(default)] apps: Vec<serde_json::Value>,
+    }
+    let (tok_cat_new, perm_cat_new, h_cat_new) = (token.clone(), data.clone(), app_handle.clone());
+    let cat_new = warp::path!("api" / "catalog" / "new")
+        .and(warp::post()).and(require_token(tok_cat_new)).and(require_permission(perm_cat_new, "catalog.write"))
+        .and(warp::body::json::<CatalogCreateBody>())
+        .and(with_app_handle(h_cat_new))
+        .map(|body: CatalogCreateBody, h: tauri::AppHandle| {
+            let cat = serde_json::json!({
+                "version": "1.0",
+                "name": body.name.unwrap_or_else(|| "My Catalog".into()),
+                "description": body.description.unwrap_or_default(),
+                "partner_catalogs": body.partner_catalogs,
+                "community_imports": body.community_imports,
+                "apps": body.apps,
+            });
+            match catalog_write(&h, &cat) {
+                Ok(_) => warp::reply::with_status(warp::reply::json(&serde_json::json!({"ok":true,"catalog":cat})), StatusCode::CREATED),
+                Err(e) => warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
+    // POST /api/catalog/apps  (auth, perm: catalog.write) — add single app entry
+    #[derive(serde::Deserialize, Clone)] struct CatalogAppBody { #[serde(flatten)] app: serde_json::Value }
+    let (tok_cat_add, perm_cat_add, h_cat_add) = (token.clone(), data.clone(), app_handle.clone());
+    let cat_add_app = warp::path!("api" / "catalog" / "apps")
+        .and(warp::post()).and(require_token(tok_cat_add)).and(require_permission(perm_cat_add, "catalog.write"))
+        .and(warp::body::json::<CatalogAppBody>())
+        .and(with_app_handle(h_cat_add))
+        .map(|body: CatalogAppBody, h: tauri::AppHandle| {
+            let mut cat = catalog_read(&h);
+            match cat["apps"].as_array_mut() {
+                Some(arr) => arr.push(body.app),
+                None => { cat["apps"] = serde_json::json!([body.app]); }
+            }
+            match catalog_write(&h, &cat) {
+                Ok(_) => warp::reply::with_status(warp::reply::json(&serde_json::json!({"ok":true,"total":cat["apps"].as_array().map(|a|a.len()).unwrap_or(0)})), StatusCode::CREATED),
+                Err(e) => warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
+    // PUT /api/catalog/apps/:id  (auth, perm: catalog.write) — update app entry fields
+    let (tok_cat_upd, perm_cat_upd, h_cat_upd) = (token.clone(), data.clone(), app_handle.clone());
+    let cat_upd_app = warp::path!("api" / "catalog" / "apps" / String)
+        .and(warp::put()).and(require_token(tok_cat_upd)).and(require_permission(perm_cat_upd, "catalog.write"))
+        .and(warp::body::json::<serde_json::Value>())
+        .and(with_app_handle(h_cat_upd))
+        .map(|app_id: String, fields: serde_json::Value, h: tauri::AppHandle| {
+            let mut cat = catalog_read(&h);
+            let mut found = false;
+            if let Some(arr) = cat["apps"].as_array_mut() {
+                for entry in arr.iter_mut() {
+                    if entry.get("id").and_then(|v| v.as_str()) == Some(&app_id) {
+                        if let (Some(obj), Some(upd)) = (entry.as_object_mut(), fields.as_object()) {
+                            for (k, v) in upd { obj.insert(k.clone(), v.clone()); }
+                        }
+                        found = true; break;
+                    }
+                }
+            }
+            if !found { return warp::reply::with_status(warp::reply::json(&ApiError { error: format!("App '{}' not found in catalog", app_id) }), StatusCode::NOT_FOUND); }
+            match catalog_write(&h, &cat) {
+                Ok(_) => warp::reply::with_status(warp::reply::json(&serde_json::json!({"ok":true})), StatusCode::OK),
+                Err(e) => warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
+    // DELETE /api/catalog/apps/:id  (auth, perm: catalog.write)
+    let (tok_cat_del, perm_cat_del, h_cat_del) = (token.clone(), data.clone(), app_handle.clone());
+    let cat_del_app = warp::path!("api" / "catalog" / "apps" / String)
+        .and(warp::delete()).and(require_token(tok_cat_del)).and(require_permission(perm_cat_del, "catalog.write"))
+        .and(with_app_handle(h_cat_del))
+        .map(|app_id: String, h: tauri::AppHandle| {
+            let mut cat = catalog_read(&h);
+            let before = cat["apps"].as_array().map(|a| a.len()).unwrap_or(0);
+            if let Some(arr) = cat["apps"].as_array_mut() {
+                arr.retain(|e| e.get("id").and_then(|v| v.as_str()) != Some(&app_id));
+            }
+            if cat["apps"].as_array().map(|a| a.len()).unwrap_or(0) == before {
+                return warp::reply::with_status(warp::reply::json(&ApiError { error: format!("App '{}' not found", app_id) }), StatusCode::NOT_FOUND);
+            }
+            match catalog_write(&h, &cat) {
+                Ok(_) => warp::reply::with_status(warp::reply::json(&serde_json::json!({"ok":true,"removed":app_id})), StatusCode::OK),
+                Err(e) => warp::reply::with_status(warp::reply::json(&ApiError { error: e }), StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        });
+
+    // Order matters: specific sub-paths BEFORE the base GET /api/catalog
+    let group_catalog = lang_template  // GET  /api/language/template (no auth needed)
+        .or(cat_new)                   // POST /api/catalog/new
+        .or(cat_add_app)               // POST /api/catalog/apps
+        .or(cat_upd_app)               // PUT  /api/catalog/apps/:id
+        .or(cat_del_app)               // DELETE /api/catalog/apps/:id
+        .or(cat_get)                   // GET  /api/catalog
+        .boxed();
 
     let group_apps = apps_perm_list    // /api/apps/permissions (GET, no id)
         .or(apps_perm_get)             // /api/apps/permissions/:id (GET)
@@ -1985,6 +2205,7 @@ pub async fn start_api_server(
         .or(group_d)
         .or(group_e)
         .or(group_io)
+        .or(group_catalog)
         .or(group_apps)
         .with(cors)
         .recover(handle_rejection);
@@ -2678,25 +2899,27 @@ async fn do_api_repo_gen(
 }
 
 async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, std::convert::Infallible> {
-    let (code, message) = if err.find::<Unauthorized>().is_some() {
-        (StatusCode::UNAUTHORIZED, "Unauthorized: invalid or missing token")
+    let (code, msg) = if err.find::<Unauthorized>().is_some() {
+        (StatusCode::UNAUTHORIZED, "Unauthorized: invalid or missing token".to_string())
+    } else if let Some(denied) = err.find::<PermissionDenied>() {
+        (StatusCode::FORBIDDEN, format!(
+            "Forbidden: plugin '{}' lacks permission '{}' — grant it with: PUT /api/apps/permissions/{}",
+            denied.plugin_id, denied.required, denied.plugin_id
+        ))
     } else if err.find::<warp::filters::body::BodyDeserializeError>().is_some() {
-        (StatusCode::BAD_REQUEST, "Bad request: invalid or missing JSON body")
+        (StatusCode::BAD_REQUEST, "Bad request: invalid or missing JSON body".to_string())
     } else if err.find::<warp::reject::MethodNotAllowed>().is_some() {
-        (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed")
+        (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed".to_string())
     } else if err.is_not_found() {
-        (StatusCode::NOT_FOUND, "Not found")
+        (StatusCode::NOT_FOUND, "Not found".to_string())
     } else {
-        (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
+        (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
     };
 
-    let base = warp::reply::with_status(
-        warp::reply::json(&ApiError { error: message.into() }),
-        code,
-    );
+    let base = warp::reply::with_status(warp::reply::json(&ApiError { error: msg }), code);
     let r = warp::reply::with_header(base, "access-control-allow-origin", "*");
     let r = warp::reply::with_header(r, "access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS");
-    let r = warp::reply::with_header(r, "access-control-allow-headers", "Content-Type, Authorization");
+    let r = warp::reply::with_header(r, "access-control-allow-headers", "Content-Type, Authorization, X-BMM-Plugin-Id");
     Ok(r)
 }
 

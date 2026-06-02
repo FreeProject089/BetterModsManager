@@ -524,17 +524,34 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         } catch { _allModpacks = []; }
     } catch (e) { console.warn('[PLUGINS] qt data refresh failed', e); }
 
-    const modOpts  = _allMods.length     ? _allMods.map(mod => `<option value="${escHtml(mod.id)}">${escHtml(mod.name || mod.id)}</option>`).join('') : `<option value="">— aucun mod —</option>`;
-    const profOpts = _allProfiles.length ? _allProfiles.map(pr  => `<option value="${escHtml(pr.id)}">${escHtml(pr.name)}</option>`).join('') : `<option value="">— aucun profil —</option>`;
-    const plugOpts = _installedPlugins.length ? _installedPlugins.map(pl => `<option value="${escHtml(pl.manifest.id)}">${escHtml(pl.manifest.name)}</option>`).join('') : `<option value="">— aucun plugin —</option>`;
+    const noMod  = t('plugins.qtNoMods')     || '— no mods —';
+    const noProf = t('plugins.qtNoProfiles') || '— no profiles —';
+    const noPlug = t('plugins.qtNoPlugins')  || '— no plugins —';
+    const noMp   = t('plugins.qtNoModpacks') || '— no modpacks —';
 
-    const modSel     = `<div class="plug-qt-smart-field"><label class="plug-form-label" style="margin-bottom:4px;">Mod <span style="color:var(--danger)">*</span></label><select id="plug-qt-s-mod" class="select">${modOpts}</select></div>`;
-    const profSel    = `<div class="plug-qt-smart-field"><label class="plug-form-label" style="margin-bottom:4px;">Profil <span style="color:var(--danger)">*</span></label><select id="plug-qt-s-profile" class="select">${profOpts}</select></div>`;
-    const plugSel    = `<div class="plug-qt-smart-field"><label class="plug-form-label" style="margin-bottom:4px;">Plugin <span style="color:var(--danger)">*</span></label><select id="plug-qt-s-plugin" class="select">${plugOpts}</select></div>`;
-    const modpackOpts = _allModpacks.length ? _allModpacks.map(mp => `<option value="${escHtml(mp.id)}">${escHtml(mp.name)} (${mp.mods?.length ?? 0} mods)</option>`).join('') : `<option value="">— aucun modpack —</option>`;
-    const modpackSel = `<div class="plug-qt-smart-field"><label class="plug-form-label" style="margin-bottom:4px;">Modpack <span style="color:var(--danger)">*</span></label><select id="plug-qt-s-modpack" class="select">${modpackOpts}</select></div>`;
-    const idInput    = (label: string, ph: string) => `<div class="plug-qt-smart-field"><label class="plug-form-label" style="margin-bottom:4px;">${label} <span style="color:var(--danger)">*</span></label><input type="text" id="plug-qt-s-id" class="input" placeholder="${ph}" style="font-family:var(--font-mono);font-size:12px;"></div>`;
-    const txtInput   = (id: string, label: string, ph: string, opt = false) => `<div class="plug-qt-smart-field" style="margin-top:8px;"><label class="plug-form-label" style="margin-bottom:4px;">${label}${opt ? ' <span style="color:var(--text-muted);font-size:10px;">(optionnel)</span>' : ' <span style="color:var(--danger)">*</span>'}</label><input type="text" id="${id}" class="input" placeholder="${ph}" style="font-family:var(--font-mono);font-size:12px;"></div>`;
+    const modOpts  = _allMods.length     ? _allMods.map(mod => `<option value="${escHtml(mod.id)}">${escHtml(mod.name || mod.id)}</option>`).join('') : `<option value="">${noMod}</option>`;
+    const profOpts = _allProfiles.length ? _allProfiles.map(pr  => `<option value="${escHtml(pr.id)}">${escHtml(pr.name)}</option>`).join('') : `<option value="">${noProf}</option>`;
+    const plugOpts = _installedPlugins.length ? _installedPlugins.map(pl => `<option value="${escHtml(pl.manifest.id)}">${escHtml(pl.manifest.name)} v${escHtml(pl.manifest.version||'1.0')}</option>`).join('') : `<option value="">${noPlug}</option>`;
+    const modpackOpts = _allModpacks.length ? _allModpacks.map(mp => `<option value="${escHtml(mp.id)}">${escHtml(mp.name)} (${mp.mods?.length ?? 0} mods)</option>`).join('') : `<option value="">${noMp}</option>`;
+
+    const sel = (elId: string, label: string, opts: string, hint = '') =>
+        `<div class="plug-qt-smart-field"><label class="plug-form-label" style="margin-bottom:4px;">${label} <span style="color:var(--danger)">*</span></label>
+         <select id="${elId}" class="select">${opts}</select>${hint ? `<p style="font-size:10px;color:var(--text-muted);margin:3px 0 0;">${hint}</p>` : ''}</div>`;
+
+    const modSel     = sel('plug-qt-s-mod',     t('plugins.qtFieldMod')     || 'Mod',     modOpts);
+    const profSel    = sel('plug-qt-s-profile',  t('plugins.qtFieldProfile') || 'Profile', profOpts);
+    const plugSel    = sel('plug-qt-s-plugin',   t('plugins.qtFieldPlugin')  || 'Plugin',  plugOpts,
+        !_installedPlugins.length ? (t('plugins.qtNoPluginsHint') || 'Install a plugin first to use this endpoint.') : '');
+    const modpackSel = sel('plug-qt-s-modpack',  t('plugins.qtFieldModpack') || 'Modpack', modpackOpts);
+
+    const idInput  = (label: string, ph: string) =>
+        `<div class="plug-qt-smart-field"><label class="plug-form-label" style="margin-bottom:4px;">${label} <span style="color:var(--danger)">*</span></label>
+         <input type="text" id="plug-qt-s-id" class="input" placeholder="${ph}" style="font-family:var(--font-mono);font-size:12px;"></div>`;
+    const txtInput = (id: string, label: string, ph: string, opt = false) =>
+        `<div class="plug-qt-smart-field" style="margin-top:8px;"><label class="plug-form-label" style="margin-bottom:4px;">${label}${opt
+            ? ` <span style="color:var(--text-muted);font-size:10px;">(${t('common.optional')||'optional'})</span>`
+            : ' <span style="color:var(--danger)">*</span>'}</label>
+         <input type="text" id="${id}" class="input" placeholder="${ph}" style="font-family:var(--font-mono);font-size:12px;"></div>`;
 
     let formHtml = '';
     let actualPath = p; // may be rewritten when :id is in path
@@ -648,13 +665,19 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             + txtInput('plug-qt-s-mods-path', 'mods_path', 'C:/Games/MyGame/Mods')
             + txtInput('plug-qt-s-backup-path', 'backup_path', 'C:/BMM/Backups/MyGame');
     } else if (p === '/api/plugins/compare' || p === '/api/plugins/apply') {
-        const strictRow = p === '/api/plugins/apply' ? `
+        const isApply = p === '/api/plugins/apply';
+        const aboutHint = isApply
+            ? (t('plugins.qtApplyHint') || 'Applies the plugin — activates mods from the plugin modlist and optionally disables all others (force_strict).')
+            : (t('plugins.qtCompareHint') || 'Compares the plugin modlist against currently enabled mods. Returns a list of matches, missing, and extra mods.');
+        const strictRow = isApply ? `
             <div class="plug-qt-smart-field" style="flex-direction:row;align-items:center;gap:10px;margin-top:8px;">
-                <label class="plug-form-label" style="margin:0;">force_strict</label>
                 <label class="plug-toggle" style="margin:0;"><input type="checkbox" id="plug-qt-s-strict"><span class="plug-toggle-slider"></span></label>
-                <span style="font-size:11px;color:var(--text-muted);">Désactive les mods absents de la liste</span>
+                <div>
+                    <span class="plug-form-label" style="margin:0;">force_strict</span>
+                    <p style="font-size:10px;color:var(--text-muted);margin:2px 0 0;">${t('plugins.qtForceStrictDesc') || 'Disables mods not in the plugin modlist'}</p>
+                </div>
             </div>` : '';
-        formHtml = plugSel + strictRow;
+        formHtml = plugSel + strictRow + `<p style="font-size:11px;color:var(--text-muted);margin:8px 0 0;">${aboutHint}</p>`;
     } else if (p === '/api/restart') {
         formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">BMM va redémarrer dans 300 ms. L'API sera brièvement indisponible.</p>`;
     } else if (p === '/api/modpacks/create') {
@@ -934,6 +957,71 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
               </div>
             </div>`;
 
+    } else if (p === '/api/catalog/new') {
+        const previewFn = `(() => {
+          const n=document.getElementById('plug-qt-cat-name')?.value||'My Catalog';
+          const d=document.getElementById('plug-qt-cat-desc')?.value||'';
+          document.getElementById('plug-qt-cat-preview').textContent=JSON.stringify({version:'1.0',name:n,description:d,partner_catalogs:[],community_imports:[],apps:[]},null,2);
+        })()`;
+        formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;">
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                ${txtInput('plug-qt-cat-name', t('plugins.qtCatName') || 'Catalog name', 'My Catalog')}
+                ${txtInput('plug-qt-cat-desc', t('plugins.qtCatDesc') || 'Description (optional)', '', true)}
+                <p style="font-size:10px;color:var(--text-muted);margin:0;">${t('plugins.qtCatNewInfo')||'Creates/resets <code>apps-catalog.json</code> in BMM AppData.'}</p>
+              </div>
+              <div>
+                <label class="plug-form-label" style="margin-bottom:4px;">${t('plugins.qtJsonPreview')||'JSON preview'}</label>
+                <pre id="plug-qt-cat-preview" style="background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:10px;color:var(--accent);max-height:160px;overflow:auto;white-space:pre-wrap;word-break:break-all;">{}</pre>
+              </div>
+            </div>
+        </div>`;
+
+    } else if (p === '/api/catalog/apps' && m === 'POST') {
+        const req = `<span style="color:var(--danger)">*</span>`;
+        formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;">
+              <div><label class="plug-form-label" style="margin-bottom:4px;">id ${req}</label>
+                <input id="plug-qt-catapp-id" class="input" placeholder="my-app" style="font-family:var(--font-mono);font-size:12px;"></div>
+              <div><label class="plug-form-label" style="margin-bottom:4px;">title ${req}</label>
+                <input id="plug-qt-catapp-title" class="input" placeholder="My App" style="font-size:12px;"></div>
+            </div>
+            <div><label class="plug-form-label" style="margin-bottom:4px;">description</label>
+              <textarea id="plug-qt-catapp-desc" class="input" rows="2" style="resize:vertical;font-size:12px;width:100%;" placeholder="What this app does…"></textarea></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+              <div><label class="plug-form-label" style="margin-bottom:4px;">category</label>
+                <select id="plug-qt-catapp-cat" class="select select-sm" style="width:100%"><option value="utility">Utility</option><option value="game">Game</option><option value="other">Other</option></select></div>
+              <div><label class="plug-form-label" style="margin-bottom:4px;">price</label>
+                <select id="plug-qt-catapp-price" class="select select-sm" style="width:100%"><option value="free">Free</option><option value="freemium">Freemium</option><option value="paid">Paid</option></select></div>
+              <div><label class="plug-form-label" style="margin-bottom:4px;">file_type ${req}</label>
+                <select id="plug-qt-catapp-ftype" class="select select-sm" style="width:100%"><option>exe</option><option>zip</option><option>msi</option><option>script</option></select></div>
+            </div>
+            <div><label class="plug-form-label" style="margin-bottom:4px;">download.url ${req}</label>
+              <input id="plug-qt-catapp-url" class="input" placeholder="https://github.com/.../app.exe" style="font-family:var(--font-mono);font-size:12px;"></div>
+            <details style="border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:0;">
+              <summary style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text-secondary);font-weight:600;">${t('plugins.qtOptionalFields')||'Optional fields'} (version, tags, images, requirements…)</summary>
+              <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:8px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                  ${txtInput('plug-qt-catapp-version', 'version',                 '1.0.0',   true)}
+                  ${txtInput('plug-qt-catapp-size',    'download.size (bytes)',   '',        true)}
+                </div>
+                ${txtInput('plug-qt-catapp-tags',  t('plugins.qtCatAppTags')||'tags (comma, max 3)', 'dcs, tool', true)}
+                ${txtInput('plug-qt-catapp-thumb', 'images.thumb URL',           'https://…/thumb.png', true)}
+                ${txtInput('plug-qt-catapp-extra', 'images.extra (comma URLs)',  '',        true)}
+                ${txtInput('plug-qt-catapp-reqs',  t('plugins.qtCatAppReqs')||'requirements', 'Windows 10+', true)}
+                ${txtInput('plug-qt-catapp-md',    'md_link (README URL)',       'https://github.com/.../README.md', true)}
+                <div style="display:flex;gap:18px;margin-top:4px;">
+                  <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;"><input type="checkbox" id="plug-qt-catapp-official" style="accent-color:var(--amber)"> official</label>
+                  <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;"><input type="checkbox" id="plug-qt-catapp-partner"  style="accent-color:var(--accent)"> partner</label>
+                </div>
+              </div>
+            </details>
+            <div>
+              <label class="plug-form-label" style="margin-bottom:4px;">${t('plugins.qtJsonPreview')||'JSON preview'}</label>
+              <pre id="plug-qt-catapp-preview" style="background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:10px;color:var(--accent);max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:0;">{}</pre>
+            </div>
+        </div>`;
+
     } else if (p === '/api/apps/install') {
         const installedApps = _catalog.length ? '' : '';
         formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
@@ -968,18 +1056,51 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             ${txtInput('plug-qt-launch-exe', 'exe_path', installed[0]?.exe_path || 'C:/path/to/app.exe')}
         </div>`;
 
-    } else if (p === '/api/apps/permissions' && m === 'PUT') {
-        formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
-            ${txtInput('plug-qt-perm-id', 'plugin_id', '')}
-            <div>
-                <label class="plug-form-label">Permissions (cocher pour accorder)</label>
-                <div style="display:flex;flex-direction:column;gap:4px;background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:10px;">
-                    ${['app.read','app.write','repo.read','repo.write','mods.read','mods.write','profiles.read','profiles.write'].map(perm =>
-                        `<label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;">
-                            <input type="checkbox" class="plug-qt-perm-check" value="${perm}" style="accent-color:var(--accent);">
-                            <code style="font-size:11px;color:var(--accent);">${perm}</code>
-                        </label>`).join('')}
+    } else if (p === '/api/apps/permissions/:id' && m === 'PUT') {
+        // Plugin selector (installed plugins) + grouped permission checkboxes
+        const permGroups: { group: string; color: string; perms: string[] }[] = [
+            { group: 'Apps',     color: '#f97316', perms: ['app.read',      'app.write'] },
+            { group: 'Catalog',  color: '#06b6d4', perms: ['catalog.read',  'catalog.write'] },
+            { group: 'Mods',     color: '#3b82f6', perms: ['mods.read',     'mods.write'] },
+            { group: 'Profiles', color: '#a855f7', perms: ['profiles.read', 'profiles.write'] },
+            { group: 'Repo',     color: '#10b981', perms: ['repo.read',     'repo.write'] },
+        ];
+        const permRows = permGroups.map(g => `
+            <div style="margin-bottom:8px;">
+                <div style="font-size:9px;font-weight:800;color:${g.color};text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px;">${g.group}</div>
+                <div style="display:flex;gap:14px;flex-wrap:wrap;">
+                    ${g.perms.map(perm => `
+                    <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap;">
+                        <input type="checkbox" class="plug-qt-perm-check" value="${perm}" style="accent-color:${g.color};">
+                        <code style="font-size:11px;color:${g.color};">${perm}</code>
+                    </label>`).join('')}
                 </div>
+            </div>`).join('');
+
+        const pluginPickOpts = _installedPlugins.length
+            ? `<option value="">— ${t('plugins.qtPermTypeId') || 'type id or pick a plugin'} —</option>` +
+              _installedPlugins.map(pl => `<option value="${escHtml(pl.manifest.id)}">${escHtml(pl.manifest.name)} (${escHtml(pl.manifest.id)})</option>`).join('')
+            : '';
+
+        formHtml = `<div style="display:flex;flex-direction:column;gap:11px;">
+            ${pluginPickOpts ? `<div><label class="plug-form-label" style="margin-bottom:4px;">${t('plugins.qtPermPickPlugin') || 'Plugin'}</label>
+              <select id="plug-qt-perm-sel" class="select select-sm" style="width:100%;">${pluginPickOpts}</select></div>` : ''}
+            <div><label class="plug-form-label" style="margin-bottom:4px;">plugin_id <span style="color:var(--danger)">*</span></label>
+              <input type="text" id="plug-qt-perm-id" class="input" placeholder="my-plugin-id" style="font-family:var(--font-mono);font-size:12px;"></div>
+            <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <label class="plug-form-label" style="margin:0;">${t('plugins.qtPermGrant') || 'Grant permissions'}</label>
+                    <div style="display:flex;gap:5px;">
+                        <button type="button" id="plug-qt-perm-all" class="btn btn-xs btn-ghost" style="font-size:10px;">${t('common.all')||'All'}</button>
+                        <button type="button" id="plug-qt-perm-none" class="btn btn-xs btn-ghost" style="font-size:10px;">${t('common.none')||'None'}</button>
+                    </div>
+                </div>
+                <div style="background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:12px;">
+                    ${permRows}
+                </div>
+            </div>
+            <div style="padding:9px 12px;background:rgba(6,182,212,0.07);border:1px solid rgba(6,182,212,0.2);border-radius:8px;font-size:10px;color:var(--cyan);line-height:1.5;">
+              ${t('plugins.qtPermHint') || 'Without the <code>X-BMM-Plugin-Id</code> header → admin access (all allowed). With the header → only the granted permissions below are allowed for that plugin.'}
             </div>
         </div>`;
 
@@ -995,7 +1116,23 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                    <select id="plug-qt-del-app-sel" class="select select-sm" style="width:100%;">${selOpts2}</select></div>`
                 : ''}
             ${txtInput('plug-qt-del-app-id', 'app_id (ou taper manuellement)', installed[0]?.id || '')}
-            <p style="font-size:11px;color:var(--text-muted);">Les fichiers sont conservés (remove from BMM only).</p>
+            <p style="font-size:11px;color:var(--text-muted);">${t('plugins.qtAppDelNote') || 'Files are kept on disk — removes from BMM registry only.'}</p>
+        </div>`;
+
+    } else if (p === '/api/plugins/export') {
+        formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
+            ${plugSel}
+            <div style="padding:9px 12px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;font-size:11px;color:var(--cyan);line-height:1.5;">
+              ${t('plugins.qtPluginExportInfo') || 'UI-driven — BMM opens a save-file dialog. The plugin is exported as a <code>.bmmplug</code> archive.'}
+            </div>
+        </div>`;
+
+    } else if (p === '/api/modpacks/export') {
+        formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
+            ${modpackSel}
+            <div style="padding:9px 12px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;font-size:11px;color:var(--cyan);line-height:1.5;">
+              ${t('plugins.qtModpackExportInfo') || 'UI-driven — BMM opens a save-file dialog. The modpack is exported as a <code>.bmp</code> file.'}
+            </div>
         </div>`;
 
     } else if (p === '/api/repo/host') {
@@ -1003,9 +1140,116 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             + txtInput('plug-qt-s-http-port', 'port', '8080', true)
             + txtInput('plug-qt-s-http-upload-limit', 'upload_limit (KB/s, 0 = illimité)', '0', true);
 
+    } else if (p === '/api/language/template') {
+        formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="padding:10px 12px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;font-size:12px;color:var(--cyan);line-height:1.6;">
+                ${t('plugins.qtLangTemplateDesc') || 'Downloads <b>lang-template.json</b> — all BMM translation keys with English defaults. Translate the values → import via POST /api/language/import.'}
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <a href="http://127.0.0.1:51274/api/language/template" download="lang-template.json" class="btn btn-sm btn-accent" style="text-decoration:none;">
+                    ⬇ ${t('plugins.qtLangTemplateBtn') || 'Download lang-template.json'}
+                </a>
+            </div>
+            <p style="font-size:11px;color:var(--text-muted);margin:0;">${t('plugins.qtLangTemplateWorkflow') || 'Clicking "Send" below previews the JSON response in the result panel.'}</p>
+        </div>`;
+
+    } else if ([
+        '/api/language/import', '/api/plugins/import', '/api/modpacks/import',
+        '/api/modlists/import', '/api/data/import', '/api/profiles/import/ovgme',
+        '/api/profiles/import/omm', '/api/data/export', '/api/modlists/export',
+    ].includes(p)) {
+        const uiDrivenNote = (() => {
+            if (p === '/api/plugins/import')  return t('plugins.qtImportPluginNote') || 'Opens a file-picker dialog. Select a <code>.bmmplug</code> file to install.';
+            if (p === '/api/modpacks/import') return t('plugins.qtImportModpackNote') || 'Opens a file-picker dialog. Select a <code>.bmp</code> file to import.';
+            if (p === '/api/modlists/import') return t('plugins.qtImportMlNote')      || 'Opens a file-picker dialog. Select a mod list file to import.';
+            if (p === '/api/data/import')     return t('plugins.qtImportDataNote')    || 'Opens a file-picker dialog. Select a BMM data export to restore.';
+            if (p === '/api/data/export')     return t('plugins.qtExportDataNote')    || 'Opens a save-file dialog. Exports all BMM data (profiles, mods, settings) to a JSON file.';
+            if (p === '/api/modlists/export') return t('plugins.qtExportMlNote')      || 'Opens a save-file dialog. Exports the active profile mod list.';
+            if (p === '/api/language/import') return t('plugins.qtImportLangNote')    || 'Opens a file-picker dialog. Select a <code>.json</code> lang file to install.';
+            return t('plugins.qtUIDriven') || 'UI-driven — triggers a native BMM dialog. No JSON body required.';
+        })();
+        // These imports support a direct file path (skip the dialog if provided)
+        const pathCapable = ['/api/language/import', '/api/modpacks/import'].includes(p);
+        const pathField = pathCapable ? `
+            <div>
+              <label class=”plug-form-label” style=”margin-bottom:4px;”>${t('plugins.qtImportPath') || 'File path'} <span style=”color:var(--text-muted);font-size:10px;”>(${t('plugins.qtImportPathHint') || 'leave empty to open file picker'})</span></label>
+              <div style=”display:flex;gap:7px;”>
+                <input id=”plug-qt-import-path” class=”input” placeholder=”${p === '/api/language/import' ? 'C:/.../fr.json' : 'C:/.../pack.bmp'}” style=”flex:1;font-family:var(--font-mono);font-size:12px;”>
+                <button type=”button” id=”plug-qt-import-browse” class=”btn btn-sm btn-secondary”>${t('plugins.qtBrowse') || 'Browse'}</button>
+              </div>
+            </div>` : '';
+        formHtml = `<div style=”display:flex;flex-direction:column;gap:10px;”>
+            <div style=”padding:10px 12px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;font-size:12px;color:var(--cyan);line-height:1.6;”>
+                <b>${t('plugins.qtUIDrivenLabel') || 'UI-driven'}</b> — ${uiDrivenNote}
+            </div>
+            ${pathField}
+        </div>`;
+
+    } else if (p === '/api/catalog/apps/:id' && m === 'PUT') {
+        // Try to load existing catalog to pre-populate a dropdown
+        let catAppOpts = '';
+        try {
+            const cat: any = await invoke('get_local_catalog' as any).catch(() => null)
+                || await (async () => { const r = await fetch('http://127.0.0.1:51274/api/catalog'); return r.ok ? r.json() : null; })();
+            if (cat?.apps?.length) {
+                catAppOpts = cat.apps.map((a: any) =>
+                    `<option value=”${escHtml(a.id)}”>${escHtml(a.title || a.id)} (${escHtml(a.id)})</option>`
+                ).join('');
+            }
+        } catch {}
+
+        const req = `<span style=”color:var(--danger)”>*</span>`;
+        const hintTxt = t('plugins.qtCatUpdHint') || 'Only filled fields are updated — leave blank to keep existing value.';
+
+        formHtml = `<div style=”display:flex;flex-direction:column;gap:10px;”>
+            ${catAppOpts
+                ? `<div><label class=”plug-form-label” style=”margin-bottom:4px;”>${t('plugins.qtCatPickApp')||'Pick app from catalog'}</label>
+                   <select id=”plug-qt-catupd-sel” class=”select select-sm” style=”width:100%;”><option value=””>— ${t('plugins.qtCatPickHint')||'pick to pre-fill'} —</option>${catAppOpts}</select></div>`
+                : ''}
+            <div><label class=”plug-form-label” style=”margin-bottom:4px;”>App id ${req}</label>
+              <input id=”plug-qt-catupd-id” class=”input” placeholder=”my-app” style=”font-family:var(--font-mono);font-size:12px;”></div>
+            <div style=”padding:8px 11px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;font-size:10px;color:var(--amber);”>${hintTxt}</div>
+            <details style=”border:1px solid rgba(255,255,255,0.07);border-radius:8px;” open>
+              <summary style=”padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text-secondary);font-weight:600;”>${t('plugins.qtFieldsToUpdate')||'Fields to update'}</summary>
+              <div style=”padding:0 12px 12px;display:flex;flex-direction:column;gap:8px;”>
+                ${txtInput('plug-qt-catupd-title', 'title', '', true)}
+                <div><label class=”plug-form-label” style=”margin-bottom:4px;”>description</label>
+                  <textarea id=”plug-qt-catupd-desc” class=”input” rows=”2” style=”resize:vertical;font-size:12px;width:100%;”></textarea></div>
+                <div style=”display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;”>
+                  <div><label class=”plug-form-label” style=”margin-bottom:4px;”>category</label>
+                    <select id=”plug-qt-catupd-cat” class=”select select-sm” style=”width:100%;”><option value=””>— keep —</option><option value=”utility”>utility</option><option value=”game”>game</option><option value=”other”>other</option></select></div>
+                  <div><label class=”plug-form-label” style=”margin-bottom:4px;”>price</label>
+                    <select id=”plug-qt-catupd-price” class=”select select-sm” style=”width:100%;”><option value=””>— keep —</option><option value=”free”>free</option><option value=”freemium”>freemium</option><option value=”paid”>paid</option></select></div>
+                  <div><label class=”plug-form-label” style=”margin-bottom:4px;”>file_type</label>
+                    <select id=”plug-qt-catupd-ftype” class=”select select-sm” style=”width:100%;”><option value=””>— keep —</option><option>exe</option><option>zip</option><option>msi</option><option>script</option></select></div>
+                </div>
+                <div style=”display:grid;grid-template-columns:1fr 1fr;gap:8px;”>
+                  ${txtInput('plug-qt-catupd-ver',   'version', '', true)}
+                  ${txtInput('plug-qt-catupd-tags',  'tags (comma, max 3)', '', true)}
+                </div>
+                ${txtInput('plug-qt-catupd-url',   'download.url', '', true)}
+                ${txtInput('plug-qt-catupd-thumb', 'images.thumb URL', '', true)}
+                ${txtInput('plug-qt-catupd-reqs',  'requirements', '', true)}
+                ${txtInput('plug-qt-catupd-md',    'md_link', '', true)}
+              </div>
+            </details>
+            <div>
+              <label class=”plug-form-label” style=”margin-bottom:4px;”>${t('plugins.qtJsonPreview')||'JSON preview'}</label>
+              <pre id=”plug-qt-catupd-preview” style=”background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:10px;color:var(--accent);max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:0;”>{}</pre>
+            </div>
+        </div>`;
+
+    } else if (p === '/api/catalog/apps/:id' && m === 'DELETE') {
+        formHtml = `<div style=”display:flex;flex-direction:column;gap:10px;”>
+            ${txtInput('plug-qt-catdel-id', t('plugins.qtCatAppId') || 'App id to remove from catalog', '', false)}
+            <div style=”padding:9px 12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:8px;font-size:11px;color:#f87171;line-height:1.5;”>
+              ${t('plugins.qtCatDelWarn') || 'This removes the app from the local catalog only. Installed files are not touched.'}
+            </div>
+        </div>`;
+
     } else if (m === 'GET' || (m === 'DELETE' && !rawBody)) {
         // Parameterless GET / DELETE: no body form — just Send + Copy cURL in the footer.
-        formHtml = `<p style="font-size:13px;color:var(--text-secondary);margin:0;">${t('plugins.qtNoBody') || `${escHtml(m)} request — no parameters required. Use “Send” to run it, or “cURL” to copy the command.`}</p>`;
+        formHtml = `<p style=”font-size:13px;color:var(--text-secondary);margin:0;”>${t('plugins.qtNoBody') || `${escHtml(m)} request — no parameters required. Use “Send” to run it, or “cURL” to copy the command.`}</p>`;
     } else {
         const pretty = (() => { try { return JSON.stringify(JSON.parse(rawBody), null, 2); } catch { return rawBody; } })();
         formHtml = `<p style="font-size:11px;color:var(--text-muted);margin:0 0 6px;">${t('plugins.qtBodyHint')}</p>
@@ -1283,6 +1527,125 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             overlay.querySelectorAll<HTMLInputElement>('.plug-qt-sync-prof-check').forEach(c => c.checked = false));
     }
 
+    // ── Import path browse button ───────────────────────────────────────────
+    {
+        const browseBtn = overlay.querySelector('#plug-qt-import-browse');
+        if (browseBtn) {
+            browseBtn.addEventListener('click', async () => {
+                const ext = p === '/api/language/import' ? ['json'] : ['bmp', 'json'];
+                const name = p === '/api/language/import' ? 'Language JSON' : 'Better ModPack';
+                const picked = await pickFile([{ name, extensions: ext }]).catch(() => null);
+                if (picked) {
+                    const inp = overlay.querySelector('#plug-qt-import-path') as HTMLInputElement;
+                    if (inp) inp.value = picked;
+                }
+            });
+        }
+    }
+
+    // ── Permissions form: all/none buttons + plugin dropdown auto-fill ──────
+    if (p === '/api/apps/permissions/:id' && m === 'PUT') {
+        overlay.querySelector('#plug-qt-perm-all')?.addEventListener('click', () =>
+            overlay.querySelectorAll<HTMLInputElement>('.plug-qt-perm-check').forEach(c => c.checked = true));
+        overlay.querySelector('#plug-qt-perm-none')?.addEventListener('click', () =>
+            overlay.querySelectorAll<HTMLInputElement>('.plug-qt-perm-check').forEach(c => c.checked = false));
+        overlay.querySelector('#plug-qt-perm-sel')?.addEventListener('change', async (ev: Event) => {
+            const pid = (ev.target as HTMLSelectElement).value;
+            const idEl = overlay.querySelector('#plug-qt-perm-id') as HTMLInputElement;
+            if (pid && idEl) {
+                idEl.value = pid;
+                // Pre-check existing permissions for this plugin
+                try {
+                    const existing: string[] = await invoke('get_plugin_permissions', { pluginId: pid }).catch(() => []);
+                    overlay.querySelectorAll<HTMLInputElement>('.plug-qt-perm-check').forEach(c => {
+                        c.checked = existing.includes(c.value);
+                    });
+                } catch {}
+            }
+        });
+    }
+
+    // ── Catalog update app: live JSON preview + dropdown auto-fill ──────────
+    if (p === '/api/catalog/apps/:id' && m === 'PUT') {
+        const updPreview = () => {
+            const get = (id: string) => (overlay.querySelector(`#plug-qt-catupd-${id}`) as HTMLInputElement)?.value?.trim() || '';
+            const sel = (id: string) => (overlay.querySelector(`#plug-qt-catupd-${id}`) as HTMLSelectElement)?.value || '';
+            const fields: any = {};
+            if (get('title'))  fields.title = get('title');
+            if (get('desc'))   fields.description = (overlay.querySelector('#plug-qt-catupd-desc') as HTMLTextAreaElement)?.value?.trim() || '';
+            if (sel('cat'))    fields.category = sel('cat');
+            if (sel('price'))  fields.price = sel('price');
+            if (sel('ftype'))  fields.download = { file_type: sel('ftype'), ...(get('url') ? { url: get('url') } : {}) };
+            else if (get('url')) fields.download = { url: get('url') };
+            if (get('ver'))    fields.version = get('ver');
+            if (get('tags'))   fields.tags = get('tags').split(',').map((s: string) => s.trim()).filter(Boolean).slice(0,3);
+            if (get('thumb'))  fields.images = { thumb: get('thumb') };
+            if (get('reqs'))   fields.requirements = get('reqs');
+            if (get('md'))     fields.md_link = get('md');
+            const preview = overlay.querySelector('#plug-qt-catupd-preview');
+            if (preview) preview.textContent = Object.keys(fields).length
+                ? JSON.stringify(fields, null, 2)
+                : '// All fields blank — nothing will be changed.';
+        };
+        ['catupd-id','catupd-title','catupd-ver','catupd-tags','catupd-url','catupd-thumb','catupd-reqs','catupd-md'].forEach(id => {
+            overlay.querySelector(`#plug-qt-${id}`)?.addEventListener('input', updPreview);
+        });
+        overlay.querySelectorAll('#plug-qt-catupd-cat,#plug-qt-catupd-price,#plug-qt-catupd-ftype').forEach(s => s.addEventListener('change', updPreview));
+        overlay.querySelector('#plug-qt-catupd-desc')?.addEventListener('input', updPreview);
+        // Auto-fill id from dropdown
+        overlay.querySelector('#plug-qt-catupd-sel')?.addEventListener('change', (ev: Event) => {
+            const val = (ev.target as HTMLSelectElement).value;
+            const idEl = overlay.querySelector('#plug-qt-catupd-id') as HTMLInputElement;
+            if (val && idEl) { idEl.value = val; updPreview(); }
+        });
+        updPreview();
+    }
+
+    // ── Catalog new: live JSON preview ──────────────────────────────────────
+    if (p === '/api/catalog/new') {
+        const updatePreview = () => {
+            const n = (overlay.querySelector('#plug-qt-cat-name') as HTMLInputElement)?.value || 'My Catalog';
+            const d = (overlay.querySelector('#plug-qt-cat-desc') as HTMLInputElement)?.value || '';
+            const preview = overlay.querySelector('#plug-qt-cat-preview');
+            if (preview) preview.textContent = JSON.stringify({
+                version:'1.0', name: n, description: d,
+                partner_catalogs: [], community_imports: [], apps: []
+            }, null, 2);
+        };
+        overlay.querySelector('#plug-qt-cat-name')?.addEventListener('input', updatePreview);
+        overlay.querySelector('#plug-qt-cat-desc')?.addEventListener('input', updatePreview);
+        updatePreview();
+    }
+
+    // ── Catalog add app: live JSON preview ──────────────────────────────────
+    if (p === '/api/catalog/apps' && m === 'POST') {
+        const updateCatAppPreview = () => {
+            const get = (id: string) => (overlay.querySelector(`#plug-qt-catapp-${id}`) as HTMLInputElement)?.value?.trim() || '';
+            const preview = overlay.querySelector('#plug-qt-catapp-preview');
+            if (!preview) return;
+            const entry: any = {
+                id: get('id') || 'my-app',
+                title: get('title') || 'My App',
+                description: (overlay.querySelector('#plug-qt-catapp-desc') as HTMLTextAreaElement)?.value?.trim() || '',
+                category: (overlay.querySelector('#plug-qt-catapp-cat') as HTMLSelectElement)?.value || 'utility',
+                price: (overlay.querySelector('#plug-qt-catapp-price') as HTMLSelectElement)?.value || 'free',
+                tags: get('tags').split(',').map(s => s.trim()).filter(Boolean).slice(0,3),
+                download: { url: get('url') || '…', file_type: (overlay.querySelector('#plug-qt-catapp-ftype') as HTMLSelectElement)?.value || 'exe' },
+            };
+            if (get('version'))  entry.version = get('version');
+            if (get('reqs'))     entry.requirements = get('reqs');
+            if (get('md'))       entry.md_link = get('md');
+            if (get('thumb'))    entry.images = { thumb: get('thumb') };
+            preview.textContent = JSON.stringify(entry, null, 2);
+        };
+        ['catapp-id','catapp-title','catapp-tags','catapp-url','catapp-version','catapp-reqs','catapp-md','catapp-thumb'].forEach(id => {
+            overlay.querySelector(`#plug-qt-${id}`)?.addEventListener('input', updateCatAppPreview);
+        });
+        overlay.querySelectorAll('#plug-qt-catapp-cat,#plug-qt-catapp-price,#plug-qt-catapp-ftype').forEach(s => s.addEventListener('change', updateCatAppPreview));
+        overlay.querySelector('#plug-qt-catapp-desc')?.addEventListener('input', updateCatAppPreview);
+        updateCatAppPreview();
+    }
+
     // ── Sync form: auto-fetch repo profiles when URL is entered ─────────────
     if (p === '/api/repo/sync') {
         const urlInput      = overlay.querySelector('#plug-qt-s-repo-url')           as HTMLInputElement | null;
@@ -1417,9 +1780,25 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 game_name:   '',
             });
         } else if (p === '/api/plugins/compare') {
-            body = JSON.stringify({ plugin_id: (overlay.querySelector('#plug-qt-s-plugin') as HTMLSelectElement)?.value || '' });
+            const plugId = (overlay.querySelector('#plug-qt-s-plugin') as HTMLSelectElement)?.value || '';
+            if (!plugId) { toast(t('plugins.qtPluginRequired') || 'Select a plugin', 'warning'); return; }
+            body = JSON.stringify({ plugin_id: plugId });
         } else if (p === '/api/plugins/apply') {
-            body = JSON.stringify({ plugin_id: (overlay.querySelector('#plug-qt-s-plugin') as HTMLSelectElement)?.value || '', force_strict: (overlay.querySelector('#plug-qt-s-strict') as HTMLInputElement)?.checked || false });
+            const plugId = (overlay.querySelector('#plug-qt-s-plugin') as HTMLSelectElement)?.value || '';
+            if (!plugId) { toast(t('plugins.qtPluginRequired') || 'Select a plugin', 'warning'); return; }
+            body = JSON.stringify({ plugin_id: plugId, force_strict: (overlay.querySelector('#plug-qt-s-strict') as HTMLInputElement)?.checked || false });
+        } else if (p === '/api/plugins/export') {
+            const plugId = (overlay.querySelector('#plug-qt-s-plugin') as HTMLSelectElement)?.value || '';
+            if (!plugId) { toast(t('plugins.qtPluginRequired') || 'Select a plugin', 'warning'); return; }
+            overlay.remove();
+            handleQuickTest('POST', '/api/plugins/export', JSON.stringify({ id: plugId }));
+            return;
+        } else if (p === '/api/modpacks/export') {
+            const mpId = (overlay.querySelector('#plug-qt-s-modpack') as HTMLSelectElement)?.value || '';
+            if (!mpId) { toast(t('plugins.qtModpackRequired') || 'Select a modpack', 'warning'); return; }
+            overlay.remove();
+            handleQuickTest('POST', '/api/modpacks/export', JSON.stringify({ id: mpId }));
+            return;
         } else if (p === '/api/restart') {
             body = '{}';
         } else if (p === '/api/modpacks/create') {
@@ -1595,6 +1974,42 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             }, 400);
             return;
 
+        } else if (p === '/api/catalog/new') {
+            const name = (overlay.querySelector('#plug-qt-cat-name') as HTMLInputElement)?.value?.trim() || 'My Catalog';
+            const desc = (overlay.querySelector('#plug-qt-cat-desc') as HTMLInputElement)?.value?.trim() || '';
+            overlay.remove();
+            handleQuickTest('POST', '/api/catalog/new', JSON.stringify({ name, description: desc, partner_catalogs: [], community_imports: [], apps: [] }, null, 2));
+            return;
+
+        } else if (p === '/api/catalog/apps' && m === 'POST') {
+            const get = (id: string) => (overlay.querySelector(`#plug-qt-catapp-${id}`) as HTMLInputElement)?.value?.trim() || '';
+            const getChk = (id: string) => (overlay.querySelector(`#plug-qt-catapp-${id}`) as HTMLInputElement)?.checked || false;
+            const id    = get('id');
+            const url   = get('url');
+            if (!id || !url) { toast(t('plugins.qtCatAppIdRequired') || 'id and download.url are required', 'warning'); return; }
+            const tags  = get('tags').split(',').map(s => s.trim()).filter(Boolean).slice(0,3);
+            const extra = get('extra').split(',').map(s => s.trim()).filter(Boolean);
+            const appEntry: any = {
+                id, title: get('title') || id,
+                description: (overlay.querySelector('#plug-qt-catapp-desc') as HTMLTextAreaElement)?.value?.trim() || '',
+                category: (overlay.querySelector('#plug-qt-catapp-cat') as HTMLSelectElement)?.value || 'utility',
+                price:    (overlay.querySelector('#plug-qt-catapp-price') as HTMLSelectElement)?.value || 'free',
+                tags,
+                download: {
+                    url, file_type: (overlay.querySelector('#plug-qt-catapp-ftype') as HTMLSelectElement)?.value || 'exe',
+                    ...(parseInt(get('size')) ? { size: parseInt(get('size')) } : {}),
+                },
+            };
+            if (get('version'))  appEntry.version = get('version');
+            if (get('reqs'))     appEntry.requirements = get('reqs');
+            if (get('md'))       appEntry.md_link = get('md');
+            if (get('thumb') || extra.length) appEntry.images = { thumb: get('thumb') || undefined, extra: extra.length ? extra : undefined };
+            if (getChk('official')) appEntry.official = true;
+            if (getChk('partner'))  appEntry.partner  = true;
+            overlay.remove();
+            handleQuickTest('POST', '/api/catalog/apps', JSON.stringify(appEntry, null, 2));
+            return;
+
         } else if (p === '/api/apps/install') {
             const appId    = (overlay.querySelector('#plug-qt-app-id')    as HTMLInputElement)?.value?.trim() || '';
             const appTitle = (overlay.querySelector('#plug-qt-app-title') as HTMLInputElement)?.value?.trim() || appId;
@@ -1616,12 +2031,13 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             handleQuickTest('POST', '/api/apps/launch', JSON.stringify({ appId, exePath }, null, 2));
             return;
 
-        } else if (p === '/api/apps/permissions' && m === 'PUT') {
-            const pluginId = (overlay.querySelector('#plug-qt-perm-id') as HTMLInputElement)?.value?.trim() || '';
+        } else if (p === '/api/apps/permissions/:id' && m === 'PUT') {
+            const pluginId = (overlay.querySelector('#plug-qt-perm-id') as HTMLInputElement)?.value?.trim()
+                || (overlay.querySelector('#plug-qt-perm-sel') as HTMLSelectElement)?.value || '';
             const perms = Array.from(overlay.querySelectorAll('.plug-qt-perm-check'))
                 .filter(cb => (cb as HTMLInputElement).checked)
                 .map(cb => (cb as HTMLInputElement).value);
-            if (!pluginId) { toast('plugin_id est obligatoire', 'warning'); return; }
+            if (!pluginId) { toast(t('plugins.qtPermIdRequired') || 'plugin_id is required', 'warning'); return; }
             overlay.remove();
             handleQuickTest('PUT', `/api/apps/permissions/${encodeURIComponent(pluginId)}`, JSON.stringify({ permissions: perms }, null, 2));
             return;
@@ -1629,9 +2045,40 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         } else if (p === '/api/apps/:id' && m === 'DELETE') {
             const sel2  = overlay.querySelector('#plug-qt-del-app-sel') as HTMLSelectElement | null;
             const appId = (overlay.querySelector('#plug-qt-del-app-id') as HTMLInputElement)?.value?.trim() || sel2?.value || '';
-            if (!appId) { toast('app_id est obligatoire', 'warning'); return; }
+            if (!appId) { toast(t('plugins.qtAppIdRequired') || 'app_id is required', 'warning'); return; }
             overlay.remove();
             handleQuickTest('DELETE', `/api/apps/${encodeURIComponent(appId)}`, '');
+            return;
+
+        } else if (p === '/api/catalog/apps/:id' && m === 'PUT') {
+            const appId = (overlay.querySelector('#plug-qt-catupd-id')    as HTMLInputElement)?.value?.trim() || '';
+            // Pick appId from text field or dropdown
+            const selId = (overlay.querySelector('#plug-qt-catupd-sel') as HTMLSelectElement)?.value;
+            const finalAppId = appId || selId || '';
+            if (!finalAppId) { toast(t('plugins.qtCatAppIdRequired') || 'App id is required', 'warning'); return; }
+            const get = (id: string) => (overlay.querySelector(`#plug-qt-catupd-${id}`) as HTMLInputElement)?.value?.trim() || '';
+            const sel = (id: string) => (overlay.querySelector(`#plug-qt-catupd-${id}`) as HTMLSelectElement)?.value || '';
+            const fields: any = {};
+            if (get('title'))  fields.title = get('title');
+            const descVal = (overlay.querySelector('#plug-qt-catupd-desc') as HTMLTextAreaElement)?.value?.trim();
+            if (descVal)       fields.description = descVal;
+            if (sel('cat'))    fields.category = sel('cat');
+            if (sel('price'))  fields.price = sel('price');
+            if (sel('ftype') || get('url')) fields.download = { ...(get('url') ? {url: get('url')} : {}), ...(sel('ftype') ? {file_type: sel('ftype')} : {}) };
+            if (get('ver'))    fields.version = get('ver');
+            if (get('tags'))   fields.tags = get('tags').split(',').map((s: string) => s.trim()).filter(Boolean).slice(0,3);
+            if (get('thumb'))  fields.images = { thumb: get('thumb') };
+            if (get('reqs'))   fields.requirements = get('reqs');
+            if (get('md'))     fields.md_link = get('md');
+            overlay.remove();
+            handleQuickTest('PUT', `/api/catalog/apps/${encodeURIComponent(finalAppId)}`, JSON.stringify(fields, null, 2));
+            return;
+
+        } else if (p === '/api/catalog/apps/:id' && m === 'DELETE') {
+            const appId = (overlay.querySelector('#plug-qt-catdel-id') as HTMLInputElement)?.value?.trim() || '';
+            if (!appId) { toast(t('plugins.qtCatAppIdRequired') || 'App id is required', 'warning'); return; }
+            overlay.remove();
+            handleQuickTest('DELETE', `/api/catalog/apps/${encodeURIComponent(appId)}`, '');
             return;
 
         } else if (p === '/api/repo/host') {
@@ -1653,6 +2100,23 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             }, 350);
             return;
 
+        } else if ([
+            '/api/language/import',
+            '/api/plugins/import',
+            '/api/modpacks/import',
+            '/api/modlists/import',
+            '/api/data/import',
+            '/api/profiles/import/ovgme',
+            '/api/profiles/import/omm',
+            '/api/data/export',
+            '/api/modlists/export',
+        ].includes(p)) {
+            // UI-driven. For path-capable imports, pass the typed/browsed path so
+            // the backend skips the dialog and imports the file directly.
+            const importPath = (overlay.querySelector('#plug-qt-import-path') as HTMLInputElement)?.value?.trim();
+            overlay.remove();
+            handleQuickTest(m, resolvedPath, importPath ? JSON.stringify({ path: importPath }) : '');
+            return;
         } else {
             body = (overlay.querySelector('#plug-qt-s-json') as HTMLTextAreaElement)?.value || rawBody;
         }
@@ -2337,71 +2801,72 @@ function renderCreate(container: HTMLElement) {
 // ── Tab: API & Scripts ─────────────────────────────────────────────────────
 
 function renderScripts(container: HTMLElement) {
-    // Endpoints sorted strictly: GET → POST → PUT → DELETE (no method interleaving)
+    // Endpoints — strict order: GET → POST → PUT → DELETE, no exceptions
     const QT_ENDPOINTS = [
-        // ── GET ────────────────────────────────────────────────────────────────
-        { m: 'GET',    p: '/api/health',                  l: 'Health',             icon: IC.checkCircle },
-        { m: 'GET',    p: '/api/status',                  l: 'Status',             icon: IC.info },
-        { m: 'GET',    p: '/api/check-update',            l: 'Check Update',       icon: IC.refresh },
-        { m: 'GET',    p: '/api/mods',                    l: 'All Mods',           icon: IC.list },
-        { m: 'GET',    p: '/api/mods/active',             l: 'Active Mods',        icon: IC.check },
-        { m: 'GET',    p: '/api/modpacks',                l: 'List Modpacks',      icon: IC.list },
-        { m: 'GET',    p: '/api/profiles',                l: 'Profiles',           icon: IC.puzzle },
-        { m: 'GET',    p: '/api/plugins',                 l: 'Plugins',            icon: IC.zap },
-        { m: 'GET',    p: '/api/creator-id',              l: 'Creator ID',         icon: IC.shield },
-        { m: 'GET',    p: '/api/repo/info',               l: 'Repo Info',          icon: IC.info,     body: '?url=' },
-        { m: 'GET',    p: '/api/repo/list',               l: 'Connected Repos',    icon: IC.list },
-        // ── App Catalog — GET
-        { m: 'GET',    p: '/api/apps',                   l: 'Installed Apps',     icon: IC.list },
-        { m: 'GET',    p: '/api/apps/permissions',       l: 'List Permissions',   icon: IC.shield },
-        { m: 'GET',    p: '/api/apps/permissions/:id',   l: 'Get Plugin Perms',   icon: IC.shield },
-        // ── POST ───────────────────────────────────────────────────────────────
-        { m: 'POST',   p: '/api/mods/enable',             l: 'Enable Mod',         icon: IC.check,    body: '{"mod_id":""}' },
-        { m: 'POST',   p: '/api/mods/disable',            l: 'Disable Mod',        icon: IC.x,        body: '{"mod_id":""}' },
-        { m: 'POST',   p: '/api/profiles',                l: 'Create Profile',     icon: IC.plus,     body: '{"name":"","game_path":"","mods_path":"","backup_path":""}' },
-        { m: 'POST',   p: '/api/profiles/activate',       l: 'Activate Profile',   icon: IC.puzzle,   body: '{"profile_id":""}' },
-        { m: 'POST',   p: '/api/plugins/apply',           l: 'Apply Plugin',       icon: IC.zap,      body: '{"plugin_id":"","force_strict":false}' },
-        { m: 'POST',   p: '/api/plugins/compare',         l: 'Compare Plugin',     icon: IC.shield,   body: '{"plugin_id":""}' },
-        { m: 'POST',   p: '/api/modpacks/enable',         l: 'Enable Modpack',     icon: IC.folder,   body: '{"modpack_id":""}' },
-        { m: 'POST',   p: '/api/modpacks/disable',        l: 'Disable Modpack',    icon: IC.folder,   body: '{"modpack_id":""}' },
-        { m: 'POST',   p: '/api/modpacks/create',         l: 'Create Modpack',     icon: IC.plus,     body: '{"name":"","profile_id":""}' },
-        { m: 'POST',   p: '/api/restart',                 l: 'Restart BMM',        icon: IC.refresh,  body: '' },
-        { m: 'POST',   p: '/api/repo/connect',            l: 'Connect Repo',       icon: IC.globe,    body: '{"url":"","name":""}' },
-        { m: 'POST',   p: '/api/repo/sync',               l: 'Sync Repo',          icon: IC.refresh,  body: '{}' },
-        { m: 'POST',   p: '/api/repo/gen',                l: 'Gen Repo',           icon: IC.upload,   body: '{}' },
-        { m: 'POST',   p: '/api/repo/update',             l: 'Update Repo',        icon: IC.refresh,  body: '{"repoDir":"C:/BMM/MyRepo"}' },
-        { m: 'POST',   p: '/api/repo/host',               l: 'Host HTTP',          icon: IC.globe,    body: '{"serveDir":"C:/BMM/Export","port":8080}' },
-        // ── App Catalog — POST
-        { m: 'POST',   p: '/api/apps/install',           l: 'Install App',        icon: IC.download },
-        { m: 'POST',   p: '/api/apps/launch',            l: 'Launch App',         icon: IC.play },
-        // ── Import / Export (UI-driven) — POST
-        { m: 'POST',   p: '/api/data/export',            l: 'Export Data',        icon: IC.upload },
-        { m: 'POST',   p: '/api/data/import',            l: 'Import Data',        icon: IC.download },
-        { m: 'POST',   p: '/api/modlists/export',        l: 'Export Mod List',    icon: IC.upload },
-        { m: 'POST',   p: '/api/modlists/import',        l: 'Import Mod List',    icon: IC.download },
-        { m: 'POST',   p: '/api/modpacks/import',        l: 'Import Modpack',     icon: IC.download },
-        { m: 'POST',   p: '/api/modpacks/export',        l: 'Export Modpack',     icon: IC.upload,   body: '{"id":""}' },
-        { m: 'POST',   p: '/api/plugins/import',         l: 'Import Plugin',      icon: IC.download },
-        { m: 'POST',   p: '/api/plugins/export',         l: 'Export Plugin',      icon: IC.upload,   body: '{"id":""}' },
-        { m: 'POST',   p: '/api/language/import',        l: 'Import Language',    icon: IC.download },
-        { m: 'POST',   p: '/api/profiles/import/ovgme', l: 'Import OvGME',       icon: IC.download },
-        { m: 'POST',   p: '/api/profiles/import/omm',   l: 'Import OMM/OMX',     icon: IC.download },
-        // ── PUT ────────────────────────────────────────────────────────────────
-        { m: 'PUT',    p: '/api/mods/:id',               l: 'Update Mod',         icon: IC.editIcon, body: '{"name":""}' },
-        { m: 'PUT',    p: '/api/profiles/:id',           l: 'Update Profile',     icon: IC.editIcon, body: '{"name":""}' },
-        { m: 'PUT',    p: '/api/modpacks/:id',           l: 'Update Modpack',     icon: IC.editIcon, body: '{"name":""}' },
-        // ── App Catalog — PUT
-        { m: 'PUT',    p: '/api/apps/permissions/:id',   l: 'Set Plugin Perms',   icon: IC.shield,   body: '{"permissions":["app.read","app.write"]}' },
-        // ── DELETE ─────────────────────────────────────────────────────────────
-        { m: 'DELETE', p: '/api/repo/sync/cancel',       l: 'Cancel Sync',        icon: IC.x },
-        { m: 'DELETE', p: '/api/repo/gen/cancel',        l: 'Cancel Gen',         icon: IC.x },
-        { m: 'DELETE', p: '/api/repo/host',              l: 'Stop Host',          icon: IC.x },
-        { m: 'DELETE', p: '/api/repo',                   l: 'Disconnect Repo',    icon: IC.trash,    body: '{"url":""}' },
-        { m: 'DELETE', p: '/api/mods/:id',               l: 'Delete Mod',         icon: IC.trash },
-        { m: 'DELETE', p: '/api/profiles/:id',           l: 'Delete Profile',     icon: IC.trash },
-        { m: 'DELETE', p: '/api/modpacks/:id',           l: 'Delete Modpack',     icon: IC.trash },
-        // ── App Catalog — DELETE
-        { m: 'DELETE', p: '/api/apps/:id',               l: 'Uninstall App',      icon: IC.trash },
+        // ═══ GET ═══════════════════════════════════════════════════════════════
+        { m: 'GET', p: '/api/health',                  l: t('plugins.ep.health')      || 'Health',                icon: IC.checkCircle },
+        { m: 'GET', p: '/api/status',                  l: t('plugins.ep.status')      || 'Status',                icon: IC.info },
+        { m: 'GET', p: '/api/check-update',            l: t('plugins.ep.checkUpdate') || 'Check Update',          icon: IC.refresh },
+        { m: 'GET', p: '/api/mods',                    l: t('plugins.ep.allMods')     || 'All Mods',              icon: IC.list },
+        { m: 'GET', p: '/api/mods/active',             l: t('plugins.ep.activeMods')  || 'Active Mods',           icon: IC.check },
+        { m: 'GET', p: '/api/modpacks',                l: t('plugins.ep.modpacks')    || 'List Modpacks',         icon: IC.list },
+        { m: 'GET', p: '/api/profiles',                l: t('plugins.ep.profiles')    || 'Profiles',              icon: IC.puzzle },
+        { m: 'GET', p: '/api/plugins',                 l: t('plugins.ep.plugins')     || 'Plugins',               icon: IC.zap },
+        { m: 'GET', p: '/api/creator-id',              l: t('plugins.ep.creatorId')   || 'Creator ID',            icon: IC.shield },
+        { m: 'GET', p: '/api/repo/info',               l: t('plugins.ep.repoInfo')    || 'Repo Info',             icon: IC.info,     body: '?url=' },
+        { m: 'GET', p: '/api/repo/list',               l: t('plugins.ep.repoList')    || 'Connected Repos',       icon: IC.list },
+        { m: 'GET', p: '/api/apps',                    l: t('plugins.ep.installedApps')|| 'Installed Apps',       icon: IC.list },
+        { m: 'GET', p: '/api/catalog',                 l: t('plugins.ep.catalog')     || 'Local Catalog',         icon: IC.list },
+        { m: 'GET', p: '/api/language/template',       l: t('plugins.ep.langTemplate')|| 'Lang Template',         icon: IC.download },
+        { m: 'GET', p: '/api/apps/permissions',        l: t('plugins.ep.listPerms')   || 'List Permissions',      icon: IC.shield },
+        { m: 'GET', p: '/api/apps/permissions/:id',    l: t('plugins.ep.getPerms')    || 'Get Plugin Perms',      icon: IC.shield },
+        // ═══ POST ══════════════════════════════════════════════════════════════
+        { m: 'POST', p: '/api/mods/enable',             l: t('plugins.ep.enableMod')   || 'Enable Mod',           icon: IC.check,    body: '{"mod_id":""}' },
+        { m: 'POST', p: '/api/mods/disable',            l: t('plugins.ep.disableMod')  || 'Disable Mod',          icon: IC.x,        body: '{"mod_id":""}' },
+        { m: 'POST', p: '/api/profiles',                l: t('plugins.ep.createProf')  || 'Create Profile',       icon: IC.plus,     body: '{"name":"","game_path":"","mods_path":"","backup_path":""}' },
+        { m: 'POST', p: '/api/profiles/activate',       l: t('plugins.ep.activateProf')|| 'Activate Profile',     icon: IC.puzzle,   body: '{"profile_id":""}' },
+        { m: 'POST', p: '/api/plugins/apply',           l: t('plugins.ep.applyPlugin') || 'Apply Plugin',         icon: IC.zap,      body: '{"plugin_id":"","force_strict":false}' },
+        { m: 'POST', p: '/api/plugins/compare',         l: t('plugins.ep.cmpPlugin')   || 'Compare Plugin',       icon: IC.shield,   body: '{"plugin_id":""}' },
+        { m: 'POST', p: '/api/modpacks/enable',         l: t('plugins.ep.enableMp')    || 'Enable Modpack',       icon: IC.folder,   body: '{"modpack_id":""}' },
+        { m: 'POST', p: '/api/modpacks/disable',        l: t('plugins.ep.disableMp')   || 'Disable Modpack',      icon: IC.folder,   body: '{"modpack_id":""}' },
+        { m: 'POST', p: '/api/modpacks/create',         l: t('plugins.ep.createMp')    || 'Create Modpack',       icon: IC.plus,     body: '{"name":"","profile_id":""}' },
+        { m: 'POST', p: '/api/restart',                 l: t('plugins.ep.restart')     || 'Restart BMM',          icon: IC.refresh,  body: '' },
+        { m: 'POST', p: '/api/repo/connect',            l: t('plugins.ep.repoConnect') || 'Connect Repo',         icon: IC.globe,    body: '{"url":"","name":""}' },
+        { m: 'POST', p: '/api/repo/sync',               l: t('plugins.ep.repoSync')    || 'Sync Repo',            icon: IC.refresh,  body: '{}' },
+        { m: 'POST', p: '/api/repo/gen',                l: t('plugins.ep.repoGen')     || 'Gen Repo',             icon: IC.upload,   body: '{}' },
+        { m: 'POST', p: '/api/repo/update',             l: t('plugins.ep.repoUpdate')  || 'Update Repo',          icon: IC.refresh,  body: '{"repoDir":"C:/BMM/MyRepo"}' },
+        { m: 'POST', p: '/api/repo/host',               l: t('plugins.ep.repoHost')    || 'Host HTTP',            icon: IC.globe,    body: '{"serveDir":"C:/BMM/Export","port":8080}' },
+        { m: 'POST', p: '/api/apps/install',            l: t('plugins.ep.installApp')  || 'Install App',          icon: IC.download },
+        { m: 'POST', p: '/api/apps/launch',             l: t('plugins.ep.launchApp')   || 'Launch App',           icon: IC.play },
+        { m: 'POST', p: '/api/catalog/new',             l: t('plugins.ep.catNew')      || 'Create Catalog',       icon: IC.plus },
+        { m: 'POST', p: '/api/catalog/apps',            l: t('plugins.ep.catAddApp')   || 'Add App to Catalog',   icon: IC.plus },
+        { m: 'POST', p: '/api/data/export',             l: t('plugins.ep.exportData')  || 'Export Data',          icon: IC.upload },
+        { m: 'POST', p: '/api/data/import',             l: t('plugins.ep.importData')  || 'Import Data',          icon: IC.download },
+        { m: 'POST', p: '/api/modlists/export',         l: t('plugins.ep.exportMl')    || 'Export Mod List',      icon: IC.upload },
+        { m: 'POST', p: '/api/modlists/import',         l: t('plugins.ep.importMl')    || 'Import Mod List',      icon: IC.download },
+        { m: 'POST', p: '/api/modpacks/import',         l: t('plugins.ep.importMp')    || 'Import Modpack',       icon: IC.download },
+        { m: 'POST', p: '/api/modpacks/export',         l: t('plugins.ep.exportMp')    || 'Export Modpack',       icon: IC.upload,   body: '{"id":""}' },
+        { m: 'POST', p: '/api/plugins/import',          l: t('plugins.ep.importPlugin')|| 'Import Plugin',        icon: IC.download },
+        { m: 'POST', p: '/api/plugins/export',          l: t('plugins.ep.exportPlugin')|| 'Export Plugin',        icon: IC.upload,   body: '{"id":""}' },
+        { m: 'POST', p: '/api/language/import',         l: t('plugins.ep.importLang')  || 'Import Language',      icon: IC.download },
+        { m: 'POST', p: '/api/profiles/import/ovgme',   l: t('plugins.ep.importOvgme') || 'Import OvGME',         icon: IC.download },
+        { m: 'POST', p: '/api/profiles/import/omm',     l: t('plugins.ep.importOmm')   || 'Import OMM/OMX',       icon: IC.download },
+        // ═══ PUT ═══════════════════════════════════════════════════════════════
+        { m: 'PUT',  p: '/api/mods/:id',                l: t('plugins.ep.updateMod')   || 'Update Mod',           icon: IC.editIcon, body: '{"name":""}' },
+        { m: 'PUT',  p: '/api/profiles/:id',            l: t('plugins.ep.updateProf')  || 'Update Profile',       icon: IC.editIcon, body: '{"name":""}' },
+        { m: 'PUT',  p: '/api/modpacks/:id',            l: t('plugins.ep.updateMp')    || 'Update Modpack',       icon: IC.editIcon, body: '{"name":""}' },
+        { m: 'PUT',  p: '/api/apps/permissions/:id',    l: t('plugins.ep.setPerms')    || 'Set Plugin Perms',     icon: IC.shield,   body: '{"permissions":["app.read","app.write","catalog.read","catalog.write"]}' },
+        { m: 'PUT',  p: '/api/catalog/apps/:id',        l: t('plugins.ep.catUpdateApp')|| 'Update Catalog App',   icon: IC.editIcon, body: '{"version":"2.0"}' },
+        // ═══ DELETE ════════════════════════════════════════════════════════════
+        { m: 'DELETE', p: '/api/repo/sync/cancel',      l: t('plugins.ep.cancelSync')  || 'Cancel Sync',          icon: IC.x },
+        { m: 'DELETE', p: '/api/repo/gen/cancel',       l: t('plugins.ep.cancelGen')   || 'Cancel Gen',           icon: IC.x },
+        { m: 'DELETE', p: '/api/repo/host',             l: t('plugins.ep.stopHost')    || 'Stop Host',            icon: IC.x },
+        { m: 'DELETE', p: '/api/repo',                  l: t('plugins.ep.disconnRepo') || 'Disconnect Repo',      icon: IC.trash,    body: '{"url":""}' },
+        { m: 'DELETE', p: '/api/mods/:id',              l: t('plugins.ep.deleteMod')   || 'Delete Mod',           icon: IC.trash },
+        { m: 'DELETE', p: '/api/profiles/:id',          l: t('plugins.ep.deleteProf')  || 'Delete Profile',       icon: IC.trash },
+        { m: 'DELETE', p: '/api/modpacks/:id',          l: t('plugins.ep.deleteMp')    || 'Delete Modpack',       icon: IC.trash },
+        { m: 'DELETE', p: '/api/apps/:id',              l: t('plugins.ep.uninstallApp')|| 'Uninstall App',        icon: IC.trash },
+        { m: 'DELETE', p: '/api/catalog/apps/:id',      l: t('plugins.ep.catRemApp')   || 'Remove from Catalog',  icon: IC.trash },
     ];
 
     container.innerHTML = `
@@ -3296,6 +3761,25 @@ function buildEndpointRow(ep: EndpointDef): string {
     const cls = methodCls[ep.method] || 'plug-method-get';
     const safeId = (ep.method.toLowerCase() + '_' + ep.path).replace(/\//g, '_').replace(/^_/, '').replace(/:/g, '');
 
+    // For permission/app/catalog endpoints, show the available permission chips
+    const PERM_GROUPS: { g: string; c: string; perms: string[] }[] = [
+        { g: 'Apps',     c: '#f97316', perms: ['app.read', 'app.write'] },
+        { g: 'Catalog',  c: '#06b6d4', perms: ['catalog.read', 'catalog.write'] },
+        { g: 'Mods',     c: '#3b82f6', perms: ['mods.read', 'mods.write'] },
+        { g: 'Profiles', c: '#a855f7', perms: ['profiles.read', 'profiles.write'] },
+        { g: 'Repo',     c: '#10b981', perms: ['repo.read', 'repo.write'] },
+    ];
+    const showsPerms = ep.path === '/api/apps/permissions/:id' && ep.method === 'PUT';
+    const permChipsHtml = showsPerms ? `
+        <div class="plug-ep-perms" style="margin:10px 0;padding:11px 13px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:9px;">
+            <div class="plug-ep-section-lbl" style="margin-bottom:8px;">${t('plugins.epAvailablePerms') || 'Available permissions'}</div>
+            ${PERM_GROUPS.map(grp => `
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;">
+                <span style="font-size:9px;font-weight:800;color:${grp.c};text-transform:uppercase;letter-spacing:.6px;min-width:62px;">${grp.g}</span>
+                ${grp.perms.map(pm => `<code style="font-size:10px;color:${grp.c};background:${grp.c}1a;border:1px solid ${grp.c}33;padding:2px 7px;border-radius:5px;">${pm}</code>`).join('')}
+              </div>`).join('')}
+        </div>` : '';
+
     const fieldsHtml = ep.fields ? `
         <div class="plug-ep-fields">
             <div class="plug-ep-section-lbl">${t('plugins.epRequestBody')}</div>
@@ -3381,7 +3865,8 @@ function buildEndpointRow(ep: EndpointDef): string {
             </div>
             <div class="plug-ep-detail plug-ep-swagger" id="epd-${safeId}" style="display:none;">
                 <div class="plug-ep-swagger-left">
-                    <p class="plug-ep-about">${escHtml(ep.about)}</p>
+                    <p class="plug-ep-about">${ep.about}</p>
+                    ${permChipsHtml}
                     ${authNote}
                     ${dlInfoHtml}
                     ${fieldsHtml}
@@ -3941,8 +4426,10 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'POST', path: '/api/modpacks/import', auth: true,
             desc: 'Import a modpack (.bmp)',
-            about: '<strong>What:</strong> a Better ModPack <code>.bmp</code> file. <strong>Where it goes:</strong> the imported modpack is added to BMM\'s modpack list (stored in the app-data file) and appears on the Modpacks page. <strong>Source:</strong> you pick the <code>.bmp</code> in the native file dialog.<br><br>UI-driven via the native modpack importer.',
-            fields: [],
+            about: '<strong>What:</strong> a Better ModPack <code>.bmp</code> file. <strong>Where it goes:</strong> the imported modpack is added to BMM\'s modpack list and appears on the Modpacks page. <strong>Source:</strong> send an optional <code>path</code> in the JSON body to import that file directly, or omit it to open the native file picker.',
+            fields: [
+                { name: 'path', type: 'string', required: false, desc: 'Absolute path to a .bmp/.json modpack file. If omitted, BMM opens a file-picker dialog.' },
+            ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "modpack/import" }' },
                 e401,
@@ -3985,8 +4472,10 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'POST', path: '/api/language/import', auth: true,
             desc: 'Import a language file',
-            about: '<strong>What:</strong> a translation <code>.json</code> (same shape as BMM\'s built-in <code>Lang/</code> files). <strong>Where it goes:</strong> it is copied into BMM\'s <code>Lang/</code> folder and becomes selectable as a language in Settings. <strong>Source:</strong> you pick the file in the open dialog.',
-            fields: [],
+            about: '<strong>What:</strong> a translation <code>.json</code> (same shape as <code>GET /api/language/template</code>). <strong>Where it goes:</strong> it is copied into BMM\'s <code>Lang/</code> folder and becomes selectable as a language in Settings. <strong>Source:</strong> send an optional <code>path</code> in the JSON body to import that file directly, or omit it to open the file picker. The filename (minus <code>.json</code>) becomes the language code — <code>template.json</code> is rejected.',
+            fields: [
+                { name: 'path', type: 'string', required: false, desc: 'Absolute path to a .json language file. If omitted, BMM opens a file-picker dialog.' },
+            ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "language/import" }' },
                 e401,
@@ -4073,6 +4562,176 @@ function getEndpointDefs(): EndpointDef[] {
             responseStatuses: [
                 { code: 200, label: 'OK', body: '{ "ok": true, "deleted_id": "uuid" }' },
                 e401, e404,
+            ],
+        },
+        // ── Apps (installed catalog) ─────────────────────────────────────────
+        {
+            method: 'GET', path: '/api/apps', auth: true,
+            desc: t('plugins.ep.installedApps') || 'Installed Apps',
+            about: t('plugins.epAbout.appsGet') || 'Returns all apps installed through the BMM App Catalog, including their install path, launch executable, install type, and usage stats. Requires <code>app.read</code> permission when called with <code>X-BMM-Plugin-Id</code> header.',
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "installed": { "my-app": { "id": "my-app", "title": "My App", "exe_path": "C:/Apps/my-app.exe", "install_type": "exe" } } }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/apps/install', auth: true,
+            desc: t('plugins.ep.installApp') || 'Install App',
+            about: t('plugins.epAbout.appsInstall') || 'UI-driven: triggers the BMM App Catalog install flow in the interface. Requires <code>app.write</code> permission when called with a plugin ID. Fields <code>version</code>, <code>category</code>, <code>thumb</code> are optional.',
+            fields: [
+                { name: 'appId',       type: 'string', required: true,  desc: 'Unique identifier for the app.' },
+                { name: 'appTitle',    type: 'string', required: true,  desc: 'Display name shown in the UI.' },
+                { name: 'downloadUrl', type: 'string', required: true,  desc: 'Direct download URL for the installer/archive.' },
+                { name: 'fileType',    type: 'string', required: true,  desc: 'One of: exe, zip, msi, script.' },
+                { name: 'installPath', type: 'string', required: false, desc: 'Target install directory (uses default Apps folder if blank).' },
+                { name: 'version',     type: 'string', required: false, desc: 'Version string, e.g. "1.2.0".' },
+                { name: 'category',    type: 'string', required: false, desc: 'Category hint, e.g. "utility".' },
+                { name: 'thumb',       type: 'string', required: false, desc: 'Thumbnail URL for display.' },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "message": "App install requested" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/apps/launch', auth: true,
+            desc: t('plugins.ep.launchApp') || 'Launch App',
+            about: t('plugins.epAbout.appsLaunch') || 'Launches an installed app by its ID and executable path. Requires <code>app.write</code> permission when called with a plugin ID.',
+            fields: [
+                { name: 'appId',   type: 'string', required: true, desc: 'ID of the installed app (from GET /api/apps).' },
+                { name: 'exePath', type: 'string', required: true, desc: 'Absolute path to the executable to launch.' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true }' },
+                e401, e404,
+            ],
+        },
+        {
+            method: 'DELETE', path: '/api/apps/:id', auth: true,
+            desc: t('plugins.ep.uninstallApp') || 'Uninstall App',
+            about: t('plugins.epAbout.appsDel') || 'Removes an app from BMM\'s installed registry. Files are kept on disk by default. Requires <code>app.write</code> permission when called with a plugin ID. Replace <code>:id</code> with the app ID.',
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true }' },
+                e401, e404,
+            ],
+        },
+        // ── Permissions ──────────────────────────────────────────────────────
+        {
+            method: 'GET', path: '/api/apps/permissions', auth: true,
+            desc: t('plugins.ep.listPerms') || 'List Permissions',
+            about: t('plugins.epAbout.permsGet') || 'Returns a map of <code>plugin_id → [permissions]</code> showing every plugin\'s current API permissions. Permissions are checked when a request includes <code>X-BMM-Plugin-Id</code> header.',
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "my-plugin": ["app.read", "catalog.write"] }' },
+                e401,
+            ],
+        },
+        {
+            method: 'GET', path: '/api/apps/permissions/:id', auth: true,
+            desc: t('plugins.ep.getPerms') || 'Get Plugin Perms',
+            about: t('plugins.epAbout.permsGetOne') || 'Returns the permission list for a specific plugin. Replace <code>:id</code> with the plugin ID.',
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "plugin_id": "my-plugin", "permissions": ["app.read", "catalog.read"] }' },
+                e401,
+            ],
+        },
+        {
+            method: 'PUT', path: '/api/apps/permissions/:id', auth: true,
+            desc: t('plugins.ep.setPerms') || 'Set Plugin Perms',
+            about: t('plugins.epAbout.permsSet') || 'Replaces the full permission list for a plugin. Available permissions: <code>app.read</code>, <code>app.write</code>, <code>catalog.read</code>, <code>catalog.write</code>, <code>mods.read</code>, <code>mods.write</code>, <code>profiles.read</code>, <code>profiles.write</code>. Replace <code>:id</code> with the plugin ID.',
+            fields: [
+                { name: 'permissions', type: 'array', required: true, desc: 'Array of permission strings to grant. Available values: app.read, app.write, catalog.read, catalog.write, mods.read, mods.write, profiles.read, profiles.write, repo.read, repo.write. An empty array revokes everything.' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "plugin_id": "my-plugin", "permissions": ["app.read", "catalog.write"] }' },
+                e401,
+            ],
+        },
+        // ── Local Catalog ────────────────────────────────────────────────────
+        {
+            method: 'GET', path: '/api/catalog', auth: true,
+            desc: t('plugins.ep.catalog') || 'Local Catalog',
+            about: t('plugins.epAbout.catGet') || 'Returns the local <code>apps-catalog.json</code> stored in BMM\'s AppData directory. This file follows the standard BMM catalog format and can be hosted and shared. Requires <code>catalog.read</code> permission for plugin callers.',
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "version": "1.0", "name": "My Catalog", "apps": [] }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/catalog/new', auth: true,
+            desc: t('plugins.ep.catNew') || 'Create Catalog',
+            about: t('plugins.epAbout.catNew') || 'Creates or resets the local catalog file. All fields are optional — omitting <code>apps</code> starts with an empty catalog. Requires <code>catalog.write</code> permission for plugin callers.',
+            fields: [
+                { name: 'name',               type: 'string', required: false, desc: 'Catalog display name. Default: "My Catalog".' },
+                { name: 'description',        type: 'string', required: false, desc: 'Short description of the catalog.' },
+                { name: 'partner_catalogs',   type: 'array',  required: false, desc: 'Array of partner catalog URLs to include.' },
+                { name: 'community_imports',  type: 'array',  required: false, desc: 'Array of community catalog URLs.' },
+                { name: 'apps',               type: 'array',  required: false, desc: 'Initial app entries (same structure as Add App).' },
+            ],
+            responseStatuses: [
+                { code: 201, label: 'Created', body: '{ "ok": true, "catalog": { "version": "1.0", "name": "My Catalog", "apps": [] } }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/catalog/apps', auth: true,
+            desc: t('plugins.ep.catAddApp') || 'Add App to Catalog',
+            about: t('plugins.epAbout.catAddApp') || 'Adds a single app entry to the local catalog. The app object should follow the standard BMM catalog app format. Requires <code>catalog.write</code>.',
+            fields: [
+                { name: 'id',           type: 'string', required: true,  desc: 'Unique slug, lowercase with dashes only, e.g. "my-app".' },
+                { name: 'title',        type: 'string', required: true,  desc: 'Display name of the app.' },
+                { name: 'description',  type: 'string', required: false, desc: 'Short description.' },
+                { name: 'category',     type: 'string', required: false, desc: 'Category: utility, game, other.' },
+                { name: 'price',        type: 'string', required: false, desc: 'Pricing: free, freemium, paid.' },
+                { name: 'tags',         type: 'array',  required: false, desc: 'Up to 3 tag strings.' },
+                { name: 'download',     type: 'object', required: true,  desc: '{ "url": "https://…", "file_type": "exe|zip|msi|script" }' },
+                { name: 'requirements', type: 'string', required: false, desc: 'System requirements string, e.g. "Windows 10+".' },
+                { name: 'md_link',      type: 'string', required: false, desc: 'URL to a README or docs page.' },
+            ],
+            responseStatuses: [
+                { code: 201, label: 'Created', body: '{ "ok": true, "total": 1 }' },
+                e401,
+            ],
+        },
+        {
+            method: 'PUT', path: '/api/catalog/apps/:id', auth: true,
+            desc: t('plugins.ep.catUpdateApp') || 'Update Catalog App',
+            about: t('plugins.epAbout.catUpdateApp') || 'Updates one or more fields of an existing catalog app entry. Only sent fields are modified (PATCH-like). Replace <code>:id</code> with the app ID. Requires <code>catalog.write</code>.',
+            fields: [
+                { name: 'title',        type: 'string', required: false, desc: 'New display name.' },
+                { name: 'description',  type: 'string', required: false, desc: 'New description.' },
+                { name: 'version',      type: 'string', required: false, desc: 'New version string.' },
+                { name: 'category',     type: 'string', required: false, desc: 'New category.' },
+                { name: 'download',     type: 'object', required: false, desc: 'New download object { url, file_type }.' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true }' },
+                e401, e404,
+            ],
+        },
+        {
+            method: 'DELETE', path: '/api/catalog/apps/:id', auth: true,
+            desc: t('plugins.ep.catRemApp') || 'Remove from Catalog',
+            about: t('plugins.epAbout.catRemApp') || 'Removes an app from the local catalog by its ID. Replace <code>:id</code> with the app ID. Requires <code>catalog.write</code>.',
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "removed": "my-app" }' },
+                e401, e404,
+            ],
+        },
+        // ── Language template ─────────────────────────────────────────────────
+        {
+            method: 'GET', path: '/api/language/template', auth: false,
+            desc: t('plugins.ep.langTemplate') || 'Lang Template',
+            about: t('plugins.epAbout.langTemplate') || 'Downloads <code>lang-template.json</code> — a flat JSON object of all BMM translation keys mapped to their English default strings. <strong>Output format:</strong> <code>{ "namespace.key": "English text", … }</code> — keys use dot-namespacing (e.g. <code>common.ok</code>, <code>mod.activated</code>). <strong>Workflow:</strong> download → translate each <em>value</em> (keep keys unchanged) → rename to your language code (e.g. <code>de.json</code>) → import via <code>POST /api/language/import</code>. Served with <code>Content-Disposition: attachment</code>. No auth required.',
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK (JSON file download)', body: '{\n  "common.ok": "OK",\n  "common.cancel": "Cancel",\n  "mod.activated": "{name} activated",\n  ...\n}' },
+                { code: 404, label: 'Not Found', body: '{ "error": "Language template not found. Is BMM installed correctly?" }' },
             ],
         },
         // ── Repo cancel endpoints ────────────────────────────────────────────
@@ -4243,7 +4902,7 @@ type _Field = {
 
 type _ActionDef = {
     id: string;
-    cat: 'mods' | 'repo' | 'read' | 'system' | 'control';
+    cat: 'mods' | 'repo' | 'apps' | 'read' | 'system' | 'control';
     label: string;
     desc: string;
     iconSvg: string;
@@ -4255,6 +4914,7 @@ type _ActionDef = {
 const _CAT_META: Record<string, { color: string; label: string }> = {
     mods:    { color: '#3b82f6', label: 'BMM' },
     repo:    { color: '#a855f7', label: 'Repo' },
+    apps:    { color: '#f97316', label: 'Apps' },
     read:    { color: '#06b6d4', label: 'Read' },
     system:  { color: '#10b981', label: 'System' },
     control: { color: '#f59e0b', label: 'Control' },
@@ -4301,7 +4961,11 @@ function _actionCatalog(): _ActionDef[] {
         { value: 'list_modpacks',    label: d('actionListModpacks', 'List modpacks') },
         { value: 'get_creator_id',   label: d('actionGetCreatorId', 'Get creator ID') },
         { value: 'repo_list',        label: d('actionRepoList', 'List repos') },
-        { value: 'repo_info',        label: d('actionRepoInfo', 'Repo info') },
+        { value: 'repo_info',             label: d('actionRepoInfo', 'Repo info') },
+        { value: 'update_repo',          label: d('actionUpdateRepo', 'Update repo') },
+        { value: 'install_app',          label: d('actionInstallApp', 'Install app') },
+        { value: 'launch_app',           label: d('actionLaunchApp', 'Launch app') },
+        { value: 'list_installed_apps',  label: d('actionListInstalledApps', 'List installed apps') },
     ];
     return [
         // ── BMM ─────────────────────────────────────────────────────────
@@ -4441,6 +5105,11 @@ function _actionCatalog(): _ActionDef[] {
         { id: 'stop_http_host', cat: 'repo', label: d('actionStopHttpHost', 'Stop HTTP host'),
           desc: d('actionStopHttpHostDesc', 'Stops the local HTTP server. No parameters.'),
           iconSvg: sv('<rect x="6" y="6" width="12" height="12" rx="1"/>') },
+        { id: 'update_repo',    cat: 'repo', label: d('actionUpdateRepo', 'Update repo'),
+          desc: d('actionUpdateRepoDesc', 'Incrementally updates an existing server repo (add/remove mods & profiles). Opens the BMM update modal.'),
+          iconSvg: sv('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.76"/>'),
+          fields: [ { key: 'repoDir', label: d('fldRepoDir', 'Repo folder'), type: 'text', placeholder: 'C:/MyRepo' } ] },
+
         { id: 'repo_connect',   cat: 'repo', label: d('actionRepoConnect', 'Connect repo'),
           desc: d('actionRepoConnectDesc', 'Registers a remote BMM repo by URL.'),
           iconSvg: sv('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
@@ -4449,6 +5118,27 @@ function _actionCatalog(): _ActionDef[] {
           desc: d('actionRepoRemoveDesc', 'Unregisters a connected repo by URL.'),
           iconSvg: sv('<path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/>'),
           fields: [ { key: 'url', label: d('fldRepoUrl', 'Repo URL'), type: 'text', placeholder: 'https://repo.example.com' } ] },
+
+        // ── App Catalog ──────────────────────────────────────────────────
+        { id: 'install_app',  cat: 'apps', label: d('actionInstallApp', 'Install app'),
+          desc: d('actionInstallAppDesc', 'Triggers the BMM App Catalog install flow for the specified app.'),
+          iconSvg: sv('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
+          fields: [
+            { key: 'appId',       label: d('fldAppId',    'App ID'),        type: 'text', placeholder: 'my-app' },
+            { key: 'appTitle',    label: d('fldAppTitle', 'Title'),         type: 'text', placeholder: 'My App' },
+            { key: 'downloadUrl', label: d('fldDlUrl',    'Download URL'),  type: 'text', placeholder: 'https://github.com/.../app.exe' },
+            { key: 'fileType',    label: d('fldFileType', 'File type'),     type: 'select', options: ['exe','zip','msi','script'] },
+          ] },
+        { id: 'launch_app',   cat: 'apps', label: d('actionLaunchApp', 'Launch app'),
+          desc: d('actionLaunchAppDesc', 'Launches an app already installed through the BMM App Catalog.'),
+          iconSvg: sv('<polygon points="5 3 19 12 5 21 5 3"/>'),
+          fields: [
+            { key: 'appId',   label: d('fldAppId',  'App ID'),   type: 'text', placeholder: 'my-app' },
+            { key: 'exePath', label: d('fldExePath', 'Exe path'), type: 'text', placeholder: 'C:/Apps/my-app.exe' },
+          ] },
+        { id: 'list_installed_apps', cat: 'apps', label: d('actionListInstalledApps', 'List installed apps'),
+          desc: d('actionListInstalledAppsDesc', 'Fetches all apps installed through the BMM App Catalog.'),
+          iconSvg: sv('<rect x="2" y="3" width="7" height="7"/><rect x="15" y="3" width="7" height="7"/><rect x="15" y="14" width="7" height="7"/><rect x="2" y="14" width="7" height="7"/>') },
 
         // ── Read (GET — no token required) ────────────────────────────────
         { id: 'get_status',       cat: 'read', label: d('actionGetStatus', 'Get status'),
@@ -4794,7 +5484,7 @@ function _openActionPicker(anchorBtn: HTMLElement) {
             <input type="text" class="input input-sm plug-act-picker-search" placeholder="${t('common.search') || 'Search action…'}" autofocus>
         </div>
         <div class="plug-act-picker-body">
-            ${(['mods','repo','read','system','control'] as const).map(cat => {
+            ${(['mods','repo','apps','read','system','control'] as const).map(cat => {
                 const meta = _CAT_META[cat];
                 const items = (grouped[cat] || []).map(a => `
                     <button class="plug-act-pick-item" data-id="${a.id}">

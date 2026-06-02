@@ -349,65 +349,139 @@ export async function toggleAllMods(forcedEnable = null) {
   }
 }
 
-export function setupDependencyInput(inputId, listId, suggestionsId, initialDeps = []) {
+// Cache for all-profile mods — refreshed once per detail-panel open
+let _allProfileMods: Record<string, { profile_name: string; mods: Array<{id:string;name:string;version:string;enabled:boolean}> }> = {};
+
+async function _loadAllProfileMods() {
+  try { _allProfileMods = await invoke('get_mods_all_profiles'); } catch { _allProfileMods = {}; }
+}
+
+/** Resolve a dep ref (same-profile: "mod-id" or cross-profile: "prof::mod-id") to a display name. */
+function _resolveDep(depRef: string): { name: string; profileName?: string; crossProfile: boolean } {
+  if (depRef.includes('::')) {
+    const [profId, modId] = depRef.split('::');
+    const profData = _allProfileMods[profId];
+    const modEntry = profData?.mods.find(m => m.id === modId);
+    return { name: modEntry?.name || modId, profileName: profData?.profile_name || profId, crossProfile: true };
+  }
+  const m = S.allMods.find((m: any) => m.id === depRef);
+  return { name: m?.name || depRef, crossProfile: false };
+}
+
+export async function setupDependencyInput(inputId, listId, suggestionsId, initialDeps = []) {
   const input = document.getElementById(inputId);
   const list = document.getElementById(listId);
   const suggs = document.getElementById(suggestionsId);
   if (!input || !list || !suggs) return;
 
+  // Load cross-profile mods in background
+  await _loadAllProfileMods();
+
   let selectedIds = [...initialDeps];
   input._selectedDeps = selectedIds;
 
+  // Determine active profile id to distinguish same-profile mods
+  const activeProfileId = S.activeProfileId || null;
+
   const renderChips = () => {
     list.innerHTML = '';
-    selectedIds.forEach(id => {
-      const mod = S.allMods.find(m => m.id === id);
-      if (!mod) return;
+    selectedIds.forEach(depRef => {
+      const { name, profileName, crossProfile } = _resolveDep(depRef);
       const chip = document.createElement('div');
       chip.className = 'badge';
-      chip.style.cssText = 'display:flex; align-items:center; gap:4px; padding:2px 8px; border-radius:6px; background:rgba(255,255,255,0.1); font-size:11px';
-      chip.innerHTML = `<span>${escHtml(mod.name)}</span><button style="background:none; border:none; color:var(--danger); cursor:pointer; padding:0; margin-left:4px">&times;</button>`;
+      chip.style.cssText = 'display:flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;font-size:11px;';
+      chip.style.background = crossProfile ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.1)';
+      chip.style.border = crossProfile ? '1px solid rgba(168,85,247,0.35)' : '1px solid rgba(255,255,255,0.08)';
+      chip.innerHTML = `
+        ${crossProfile ? `<span style="font-size:9px;color:#a855f7;font-weight:700;">${escHtml(profileName || '?')} ›</span>` : ''}
+        <span>${escHtml(name)}</span>
+        <button style="background:none;border:none;color:var(--danger);cursor:pointer;padding:0 0 0 4px;font-size:14px;line-height:1;">&times;</button>`;
       chip.querySelector('button').onclick = () => {
-        selectedIds = selectedIds.filter(sid => sid !== id);
+        selectedIds = selectedIds.filter(sid => sid !== depRef);
         input._selectedDeps = selectedIds;
         renderChips();
       };
+      if (crossProfile) chip.title = `${t('mod.crossProfileDep') || 'Cross-profile dependency'}: ${profileName}`;
       list.appendChild(chip);
     });
   };
 
   const updateSuggestions = () => {
     const val = input.value.toLowerCase().trim();
-    const matches = S.allMods.filter(m => 
-        (!val || m.name.toLowerCase().includes(val) || m.id.toLowerCase().includes(val)) && 
+
+    // Section 1: same-profile mods
+    const sameProfileMatches = S.allMods.filter((m: any) =>
+        (!val || m.name.toLowerCase().includes(val) || m.id.toLowerCase().includes(val)) &&
         !selectedIds.includes(m.id) &&
         (!input._currentModId || m.id !== input._currentModId)
     );
 
-    if (matches.length === 0) {
+    // Section 2: cross-profile mods from other profiles
+    // Identify "other" profiles by checking if their mods overlap with S.allMods.
+    // This avoids relying on S.activeProfileId which may be null/stale.
+    const activeModIds = new Set((S.allMods || []).map((m: any) => m.id));
+    const crossProfileMatches: Array<{depRef: string; name: string; profileName: string; enabled: boolean}> = [];
+    for (const [profId, profData] of Object.entries(_allProfileMods)) {
+      // A profile is "active" if most of its mods are already in S.allMods.
+      // Skip it (those mods are in sameProfileMatches already).
+      const itsModIds = profData.mods.map(m => m.id);
+      const overlap = itsModIds.filter(id => activeModIds.has(id)).length;
+      const isCurrent = itsModIds.length > 0 && overlap / itsModIds.length > 0.5;
+      if (isCurrent || profId === activeProfileId) continue;
+      for (const m of profData.mods) {
+        const depRef = `${profId}::${m.id}`;
+        if (selectedIds.includes(depRef)) continue;
+        if (input._currentModId && m.id === input._currentModId) continue;
+        if (!val || m.name.toLowerCase().includes(val) || m.id.toLowerCase().includes(val)) {
+          crossProfileMatches.push({ depRef, name: m.name, profileName: profData.profile_name, enabled: m.enabled });
+        }
+      }
+    }
+
+    if (sameProfileMatches.length === 0 && crossProfileMatches.length === 0) {
       suggs.style.display = 'none';
       return;
     }
 
-    suggs.innerHTML = matches.map(m => `
-        <div class="suggestion-item" data-id="${m.id}" style="padding:10px 14px; cursor:pointer; font-size:12px; border-bottom:1px solid rgba(255,255,255,0.05); transition: background 0.2s">
-            <div style="font-weight:600; color:var(--text-primary)">${escHtml(m.name)}</div>
-            <div style="font-size:10px; color:var(--text-muted)">${escHtml(m.id)}</div>
-        </div>
-    `).join('');
-    suggs.style.cssText += '; display:block; background:rgba(20,20,25,0.95); backdrop-filter:blur(10px); box-shadow:0 10px 25px rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1)';
+    let html = '';
+    if (sameProfileMatches.length) {
+      html += `<div style="padding:4px 12px 2px;font-size:9px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.8px;">${t('mod.currentProfile') || 'Current profile'}</div>`;
+      html += sameProfileMatches.slice(0, 8).map((m: any) => `
+        <div class="suggestion-item" data-dep-ref="${m.id}" style="padding:8px 14px;cursor:pointer;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.04);">
+          <div style="font-weight:600;color:var(--text-primary);">${escHtml(m.name)}</div>
+          <div style="font-size:10px;color:var(--text-muted);">${escHtml(m.id)}</div>
+        </div>`).join('');
+    }
+    if (crossProfileMatches.length) {
+      html += `<div style="padding:4px 12px 2px;font-size:9px;font-weight:800;color:#a855f7;text-transform:uppercase;letter-spacing:.8px;">${t('mod.otherProfiles') || 'Other profiles'}</div>`;
+      html += crossProfileMatches.slice(0, 8).map(m => `
+        <div class="suggestion-item" data-dep-ref="${m.depRef}" style="padding:8px 14px;cursor:pointer;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.04);">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-weight:600;color:var(--text-primary);">${escHtml(m.name)}</span>
+            <span style="font-size:9px;background:rgba(168,85,247,0.15);color:#a855f7;padding:1px 6px;border-radius:4px;font-weight:700;">${escHtml(m.profileName)}</span>
+            ${!m.enabled ? `<span style="font-size:9px;color:var(--text-muted);">(${t('mod.statusInactive')||'inactive'})</span>` : ''}
+          </div>
+          <div style="font-size:10px;color:var(--text-muted);">${escHtml(m.depRef)}</div>
+        </div>`).join('');
+    }
+
+    suggs.innerHTML = html;
+    suggs.style.cssText += ';display:block;background:rgba(12,15,24,0.97);backdrop-filter:blur(12px);box-shadow:0 10px 28px rgba(0,0,0,.6);border:1px solid rgba(255,255,255,0.1);max-height:280px;overflow-y:auto;';
     suggs.style.display = 'block';
 
     suggs.querySelectorAll('.suggestion-item').forEach(item => {
-      item.onmouseover = () => { item.style.background = 'rgba(255,255,255,0.05)'; };
-      item.onmouseout = () => { item.style.background = 'transparent'; };
+      item.onmouseover = () => { (item as HTMLElement).style.background = 'rgba(255,255,255,0.05)'; };
+      item.onmouseout  = () => { (item as HTMLElement).style.background = 'transparent'; };
       item.onclick = (e) => {
         e.stopPropagation();
-        selectedIds.push(item.dataset.id);
-        input._selectedDeps = selectedIds;
-        input.value = '';
-        suggs.style.display = 'none';
-        renderChips();
+        const depRef = (item as HTMLElement).dataset.depRef;
+        if (depRef && !selectedIds.includes(depRef)) {
+          selectedIds.push(depRef);
+          input._selectedDeps = selectedIds;
+          input.value = '';
+          suggs.style.display = 'none';
+          renderChips();
+        }
       };
     });
   };

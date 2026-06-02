@@ -6,7 +6,7 @@ import { t } from '../../core/i18n.js';
 import { escHtml, truncate } from '../../core/utils.js';
 import { appState } from '../../core/state.js';
 // Sub-modules
-import { renderModList, updateBadge, updateSubtitle, updateToggleAllBtn } from './mods-list.js';
+import { renderModList, updateBadge, updateSubtitle, updateToggleAllBtn, ensureModCancelContextMenu } from './mods-list.js';
 import { checkAllConflicts, restoreConflictCache } from './mods-conflicts.js';
 import { openAddModModal, confirmAddMod, toggleAllMods, scanModsFolder, verifyIntegrity, requestCancelModOps, requestCancelCurrentOnly } from './mods-actions.js';
 import { selectMod, closeModDetail, renderModDetail } from './mods-details.js';
@@ -18,6 +18,7 @@ const S = new Proxy(appState.state, {
 let refreshTimeout = null;
 export async function initMods() {
     window._refreshModsFn = refreshMods;
+    ensureModCancelContextMenu();
     // --- Core Listeners ---
     document.getElementById('btn-add-mod')?.addEventListener('click', openAddModModal);
     document.getElementById('btn-quick-apply-modpack')?.addEventListener('click', openQuickApplyModal);
