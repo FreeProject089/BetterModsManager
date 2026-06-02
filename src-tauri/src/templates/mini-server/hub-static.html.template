@@ -5,66 +5,259 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BMM Repo Directory</title>
 <style>
-  :root { --bg:#070910; --bg2:#0c0f18; --card:#12161f; --card-hover:#161b27; --border:#1e2433; --border-hi:#2a3346;
-    --text:#eef1f6; --muted:#7f8aa0; --dim:#5a6478; --accent:#06b6d4; --accent2:#0891b2; }
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { background:radial-gradient(900px 500px at 15% -10%, rgba(6,182,212,0.10), transparent 60%), var(--bg);
-    color:var(--text); font-family:'Segoe UI',system-ui,Roboto,sans-serif; min-height:100vh; padding:36px 20px 60px; }
-  .wrap { max-width:1080px; margin:0 auto; }
-  .hero { display:flex; align-items:center; gap:16px; margin-bottom:22px; flex-wrap:wrap; }
-  .logo { width:54px;height:54px;border-radius:15px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:900;font-size:19px;color:#011;box-shadow:0 8px 28px rgba(6,182,212,0.35); }
-  h1 { font-size:25px; font-weight:800; letter-spacing:-0.5px; }
-  .sub { color:var(--muted); font-size:13px; margin-top:3px; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:15px; margin-top:8px; }
-  .repo { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:18px; transition:border-color .18s,transform .18s; }
-  .repo:hover { border-color:var(--border-hi); transform:translateY(-3px); }
-  .repo-name { font-size:16px; font-weight:700; margin-bottom:8px; }
-  .repo-desc { font-size:12px; color:var(--muted); line-height:1.55; margin-bottom:13px; min-height:18px; }
-  .meta { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
-  .chip { font-size:11px; color:var(--muted); background:var(--bg2); border:1px solid var(--border); padding:4px 9px; border-radius:8px; }
-  .chip b { color:var(--text); }
+  :root {
+    --bg:#070910; --bg2:#0c0f18; --card:#12161f; --card-h:#161b27;
+    --border:#1e2433; --border-h:#2a3346;
+    --text:#eef1f6; --muted:#7f8aa0; --dim:#5a6478;
+    --accent:#06b6d4; --accent2:#0891b2; --green:#10b981; --amber:#f59e0b;
+  }
+  *  { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    background:
+      radial-gradient(ellipse 900px 500px at 10% -8%, rgba(6,182,212,.12) 0%, transparent 60%),
+      radial-gradient(ellipse 700px 500px at 95% 5%,  rgba(16,185,129,.06) 0%, transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Segoe UI',system-ui,Roboto,sans-serif;
+    min-height:100vh;
+    padding:40px 20px 70px;
+  }
+
+  /* ── Layout ── */
+  .wrap { max-width:1100px; margin:0 auto; }
+
+  /* ── Header ── */
+  header {
+    display:flex; align-items:center; justify-content:space-between;
+    gap:16px; margin-bottom:28px; flex-wrap:wrap;
+  }
+  .brand { display:flex; align-items:center; gap:14px; }
+  .brand img { width:50px; height:50px; border-radius:14px; box-shadow:0 8px 24px rgba(6,182,212,.35); }
+  .brand h1 { font-size:24px; font-weight:900; letter-spacing:-.5px; }
+  .brand .sub { font-size:12px; color:var(--muted); margin-top:3px; }
+  .online-badge {
+    display:flex; align-items:center; gap:7px;
+    background:rgba(16,185,129,.1); border:1px solid rgba(16,185,129,.3);
+    color:var(--green); font-size:12px; font-weight:700;
+    padding:8px 14px; border-radius:100px;
+  }
+  .online-badge .dot {
+    width:7px; height:7px; border-radius:50%; background:var(--green);
+    box-shadow:0 0 0 0 rgba(16,185,129,.6); animation:pulse 2s infinite;
+  }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(16,185,129,.5)} 70%{box-shadow:0 0 0 8px rgba(16,185,129,0)} 100%{box-shadow:0 0 0 0 rgba(16,185,129,0)} }
+
+  /* ── Stats bar ── */
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin-bottom:26px; }
+  .stat {
+    background:var(--card); border:1px solid var(--border); border-radius:13px;
+    padding:14px 16px; position:relative; overflow:hidden;
+  }
+  .stat::before { content:''; position:absolute; top:0; left:0; width:3px; height:100%; background:var(--accent); opacity:.6; }
+  .stat .v { font-size:22px; font-weight:900; color:var(--text); line-height:1; }
+  .stat .l { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-top:6px; }
+
+  /* ── Toolbar ── */
+  .toolbar { display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
+  .search-wrap {
+    flex:1; min-width:200px; display:flex; align-items:center; gap:9px;
+    background:var(--card); border:1px solid var(--border); border-radius:11px; padding:10px 14px;
+  }
+  .search-wrap svg { color:var(--dim); flex-shrink:0; }
+  .search-wrap input { flex:1; background:none; border:none; outline:none; color:var(--text); font-size:13px; }
+  select.filter-sel {
+    background:var(--card); border:1px solid var(--border); border-radius:11px;
+    padding:10px 12px; color:var(--text); font-size:12px; cursor:pointer;
+  }
+
+  /* ── Grid ── */
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; }
+
+  /* ── Repo card ── */
+  .repo {
+    background:var(--card); border:1px solid var(--border); border-radius:16px;
+    padding:18px; display:flex; flex-direction:column; gap:0;
+    transition:border-color .18s, transform .18s, background .18s;
+  }
+  .repo:hover { border-color:var(--border-h); background:var(--card-h); transform:translateY(-3px); }
+
+  .repo-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:7px; }
+  .repo-name { font-size:16px; font-weight:800; line-height:1.25; }
+  .badges { display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end; flex-shrink:0; }
+  .badge { font-size:9px; font-weight:800; padding:3px 8px; border-radius:6px; text-transform:uppercase; letter-spacing:.4px; }
+  .badge-signed   { background:rgba(6,182,212,.14);  color:var(--accent); }
+  .badge-official { background:rgba(245,158,11,.14);  color:var(--amber); }
+
+  .repo-desc { font-size:12px; color:var(--muted); line-height:1.6; margin-bottom:12px; flex:1; }
+
+  .chips { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:14px; }
+  .chip {
+    display:inline-flex; align-items:center; gap:5px;
+    font-size:11px; color:var(--muted); background:var(--bg2);
+    border:1px solid var(--border); padding:4px 9px; border-radius:8px;
+  }
+  .chip b { color:var(--text); font-weight:700; }
+
   .url-row { display:flex; gap:7px; }
-  .url-row input { flex:1; background:var(--bg2); border:1px solid var(--border); border-radius:9px; padding:9px 11px; color:var(--text); font-size:11px; font-family:monospace; }
-  .url-row button { background:linear-gradient(135deg,var(--accent),var(--accent2)); border:none; border-radius:9px; padding:0 16px; color:#011; font-weight:800; font-size:12px; cursor:pointer; }
-  .url-row button.ok { background:#10b981; }
-  .empty { text-align:center; color:var(--muted); padding:60px 20px; grid-column:1/-1; }
-  footer { text-align:center; color:var(--dim); font-size:11px; margin-top:34px; }
+  .url-row input {
+    flex:1; background:var(--bg2); border:1px solid var(--border); border-radius:9px;
+    padding:9px 11px; color:var(--text); font-size:11px; font-family:monospace;
+    transition:border-color .15s;
+  }
+  .url-row input:focus { outline:none; border-color:var(--accent); }
+  .url-row input::placeholder { color:var(--dim); font-style:italic; }
+  .copy-btn {
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    border:none; border-radius:9px; padding:0 16px;
+    color:#001; font-weight:800; font-size:12px; cursor:pointer;
+    transition:filter .15s; white-space:nowrap; flex-shrink:0;
+  }
+  .copy-btn:hover { filter:brightness(1.12); }
+  .copy-btn.ok    { background:var(--green); }
+
+  /* ── Not configured warning ── */
+  .not-set { font-size:10px; color:var(--amber); margin-top:5px; display:flex; align-items:center; gap:4px; }
+
+  /* ── Empty ── */
+  .empty { grid-column:1/-1; text-align:center; color:var(--muted); padding:70px 20px; }
+  .empty svg { opacity:.3; margin-bottom:14px; display:block; margin-inline:auto; }
+
+  /* ── Footer ── */
+  footer { text-align:center; color:var(--dim); font-size:11px; margin-top:40px; }
+  footer a { color:var(--accent); text-decoration:none; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="hero">
-    <div class="logo">BMM</div>
-    <div><h1>Repo Directory</h1><div class="sub">Copy a repo URL and paste it into BMM → Server Repo → Sync.</div></div>
+
+  <header>
+    <div class="brand">
+      <img src="{{LOGO_B64}}" alt="BMM">
+      <div>
+        <h1>Repo Directory</h1>
+        <div class="sub">Copy a URL · paste it in BMM → Server Repo → Sync</div>
+      </div>
+    </div>
+    <div class="online-badge"><span class="dot"></span> STATIC DIRECTORY</div>
+  </header>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="q" type="text" placeholder="Search repos…">
+    </div>
+    <select class="filter-sel" id="filter-game">
+      <option value="">All games</option>
+    </select>
   </div>
-  <div class="grid" id="grid"><div class="empty">Loading…</div></div>
-  <footer>Powered by Better Mod Manager — Static Directory</footer>
+
+  <div class="grid" id="grid"><div class="empty">
+    <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+    Loading…
+  </div></div>
+
+  <footer>Powered by <a href="https://github.com/FreeProject089/BetterModsManager">Better Mod Manager</a> — Static Repo Directory</footer>
 </div>
+
 <script>
 const fmt = b => { if(!b) return '0 B'; const u=['B','KB','MB','GB','TB']; const i=Math.floor(Math.log(b)/Math.log(1024)); return (b/Math.pow(1024,i)).toFixed(1)+' '+u[i]; };
 const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function cp(btn,url){ navigator.clipboard.writeText(url).then(()=>{ const t=btn.textContent; btn.textContent='✓'; btn.classList.add('ok'); setTimeout(()=>{btn.textContent=t;btn.classList.remove('ok');},1200); }); }
-(async () => {
-  let repos = [];
-  try { repos = (await (await fetch('hub-repos.json?t='+Date.now())).json()).repos || []; } catch(e) {}
+
+let ALL = [];
+
+async function load() {
+  try {
+    const data = await (await fetch('hub-repos.json?t='+Date.now())).json();
+    ALL = data.repos || [];
+  } catch(e) {
+    document.getElementById('grid').innerHTML = `<div class="empty">
+      <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Could not load <code>hub-repos.json</code>. Make sure the file is in the same folder as this page.
+    </div>`;
+    return;
+  }
+
+  // Stats
+  const totalMods = ALL.reduce((n,r)=>n+(r.mods||0),0);
+  const totalSize = ALL.reduce((n,r)=>n+(r.size||0),0);
+  const configured = ALL.filter(r=>r.url).length;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="v">${ALL.length}</div><div class="l">Repos</div></div>
+    <div class="stat"><div class="v">${totalMods}</div><div class="l">Total mods</div></div>
+    <div class="stat"><div class="v">${fmt(totalSize)}</div><div class="l">Total size</div></div>
+    <div class="stat"><div class="v">${configured}/${ALL.length}</div><div class="l">URLs set</div></div>`;
+
+  // Game filter options
+  const games = [...new Set(ALL.map(r=>r.game_name||'').filter(Boolean))].sort();
+  const sel = document.getElementById('filter-game');
+  games.forEach(g => { const o=document.createElement('option'); o.value=g; o.textContent=g; sel.appendChild(o); });
+
+  render();
+}
+
+function render() {
+  const q    = (document.getElementById('q').value||'').toLowerCase();
+  const game = document.getElementById('filter-game').value;
+  const list = ALL.filter(r => {
+    if (game && r.game_name !== game) return false;
+    if (q && !r.name.toLowerCase().includes(q) && !(r.description||'').toLowerCase().includes(q)) return false;
+    return true;
+  });
+
   const grid = document.getElementById('grid');
-  if (!repos.length) { grid.innerHTML = '<div class="empty">No repos configured. Edit <b>hub-repos.json</b> and fill each repo URL.</div>'; return; }
-  grid.innerHTML = repos.map(r => `
-    <div class="repo">
-      <div class="repo-name">${esc(r.name)}</div>
-      <div class="repo-desc">${esc(r.description||'')}</div>
-      <div class="meta">
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty">
+      <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      ${ALL.length ? 'No repos match your search.' : 'No repos configured. Edit <b>hub-repos.json</b> and fill each repo\'s URL.'}
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(r => {
+    const url = r.url || '';
+    const hasUrl = !!url;
+    return `<div class="repo">
+      <div class="repo-top">
+        <span class="repo-name">${esc(r.name)}</span>
+        <div class="badges">
+          ${r.verified ? '<span class="badge badge-signed">✓ Signed</span>' : ''}
+          ${r.official ? '<span class="badge badge-official">✦ Official</span>' : ''}
+        </div>
+      </div>
+      <div class="repo-desc">${esc(r.description||'No description.')}</div>
+      <div class="chips">
         ${r.game_name ? `<span class="chip">🎮 <b>${esc(r.game_name)}</b></span>` : ''}
         <span class="chip">📦 <b>${r.mods||0}</b> mods</span>
         <span class="chip">📁 <b>${r.profiles||0}</b> profiles</span>
         <span class="chip">💾 <b>${fmt(r.size||0)}</b></span>
       </div>
       <div class="url-row">
-        <input value="${esc(r.url||'')}" placeholder="Set this repo's URL in hub-repos.json" readonly onclick="this.select()">
-        <button onclick="cp(this,'${esc(r.url||'')}')">Copy</button>
+        <input value="${esc(url)}" placeholder="⚠ URL not set — edit hub-repos.json" readonly onclick="this.select()">
+        <button class="copy-btn" ${!hasUrl?'disabled style="opacity:.35;cursor:not-allowed"':''} onclick="cp(this,'${esc(url)}')">Copy</button>
       </div>
-    </div>`).join('');
-})();
+      ${!hasUrl ? `<div class="not-set">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Edit <code>hub-repos.json</code> and set <code>"url"</code> for this repo.
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function cp(btn, url) {
+  if (!url) return;
+  navigator.clipboard.writeText(url).then(() => {
+    const t = btn.textContent;
+    btn.textContent = '✓ Copied';
+    btn.classList.add('ok');
+    setTimeout(() => { btn.textContent = t; btn.classList.remove('ok'); }, 1300);
+  });
+}
+
+document.getElementById('q').addEventListener('input', render);
+document.getElementById('filter-game').addEventListener('change', render);
+load();
 </script>
 </body>
 </html>

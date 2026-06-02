@@ -241,10 +241,10 @@ app.use('/', (req, res, next) => {
 
     const total  = fs.statSync(abs).size;
     const dlId   = `${ip}-${Date.now()}`;
-    const dlObj  = { ip, file: urlPath, total, downloaded: 0, startTime: Date.now() };
+    const dlObj  = { ip, file: stripped, total, downloaded: 0, startTime: Date.now() };
     repoActiveDownloads[folder].set(dlId, dlObj);
     repoStats[folder].totalDownloads++;
-    logLine(folder, `${ip} | DL_START | ${urlPath}`, 'DL_START');
+    logLine(folder, `${ip} | DL_START | ${stripped}`, 'DL_START');
 
     const stream = fs.createReadStream(abs);
     res.setHeader('Content-Length', total);
@@ -266,9 +266,9 @@ app.use('/', (req, res, next) => {
     });
     stream.on('end', () => {
         repoActiveDownloads[folder].delete(dlId);
-        logLine(folder, `${ip} | DL_FINISH | ${urlPath}`, 'DL_FINISH');
+        logLine(folder, `${ip} | DL_FINISH | ${stripped}`, 'DL_FINISH');
         const sess = repoSessions[folder].get(ip);
-        if (sess && !sess.files.includes(urlPath)) sess.files.push(urlPath);
+        if (sess && !sess.files.includes(stripped)) sess.files.push(stripped);
     });
     res.on('close', () => { stream.destroy(); repoActiveDownloads[folder].delete(dlId); });
     stream.pipe(res);

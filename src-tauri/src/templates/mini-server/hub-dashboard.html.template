@@ -23,7 +23,10 @@
         .sb-item { padding:10px 12px; border-radius:8px; cursor:pointer; margin-bottom:3px; border-left:3px solid transparent; transition:.15s; }
         .sb-item:hover { background:rgba(255,255,255,0.03); }
         .sb-item.active { background:rgba(6,182,212,0.1); border-left-color:var(--accent); }
-        .sb-item .n { font-size:12px; font-weight:700; display:flex; align-items:center; gap:6px; }
+        .sb-item .n { font-size:12px; font-weight:700; display:flex; align-items:center; gap:6px; width:100%; }
+        .sb-copy { background:none; border:none; cursor:pointer; color:var(--muted); padding:2px 4px; border-radius:4px; opacity:0; transition:.15s; flex-shrink:0; }
+        .sb-item:hover .sb-copy { opacity:1; }
+        .sb-copy:hover { color:var(--accent); background:rgba(6,182,212,0.1); }
         .sb-item .m { font-size:10px; color:var(--muted); margin-top:2px; }
         .sb-item .sc { color:var(--accent); }
         /* Main */
@@ -162,11 +165,18 @@ async function loadRepoList() {
     const q = (document.getElementById('search').value || '').toLowerCase();
     const list = (data.repos || []).filter(r => !q || r.name.toLowerCase().includes(q) || (r.game_name||'').toLowerCase().includes(q));
     document.getElementById('sb-repos').innerHTML = list.length
-        ? list.map(r => `
-          <div class="sb-item${currentRepo===r.folder?' active':''}" onclick="selectRepo('${r.folder}')">
-            <div class="n">${esc(r.name)}${r.verified?' <span class="sc">✓</span>':''}</div>
-            <div class="m">${r.mods} mods · ${r.profiles} prof · ${fmtBytes(r.size)}</div>
-          </div>`).join('')
+        ? list.map(r => {
+            const rUrl = `${location.origin}/${r.folder}/repo.json`;
+            return `<div class="sb-item${currentRepo===r.folder?' active':''}" onclick="selectRepo('${r.folder}')">
+              <div class="n" style="justify-content:space-between;">
+                <span>${esc(r.name)}${r.verified?' <span class="sc">✓</span>':''}</span>
+                <button class="sb-copy" title="Copy repo.json URL" onclick="event.stopPropagation();sbCopyUrl(this,'${rUrl}')">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+              </div>
+              <div class="m">${r.mods} mods · ${r.profiles} prof · ${fmtBytes(r.size)}</div>
+            </div>`;
+          }).join('')
         : '<div style="color:var(--muted);font-size:12px;padding:12px;">No repos found.</div>';
 }
 
@@ -386,6 +396,15 @@ function inspectSession(ip) {
 function closeModal() { document.getElementById('inspector-modal').style.display = 'none'; }
 
 document.getElementById('search').addEventListener('input', loadRepoList);
+
+function sbCopyUrl(btn, url) {
+    navigator.clipboard.writeText(url).then(() => {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+        btn.style.color = '#10b981';
+        setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 1400);
+    });
+}
 
 // ── Boot ──
 const saved = localStorage.getItem('bmm_hub_token');

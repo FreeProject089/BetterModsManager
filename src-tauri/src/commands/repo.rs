@@ -857,7 +857,11 @@ pub fn generate_repo_hub(
         fs::write(root.join("start-hub.sh"), sh).map_err(|_| "repo.errWriteScript".to_string())?;
     } else {
         // ── Static directory (no Node) ──
-        let index = include_str!("../templates/mini-server/hub-static.html.template");
+        static BMM_LOGO_PNG_S: &[u8] = include_bytes!("../../../frontend/assets/BMm.png");
+        use base64::{Engine as _, engine::general_purpose};
+        let logo_b64_s = format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(BMM_LOGO_PNG_S));
+        let index = include_str!("../templates/mini-server/hub-static.html.template")
+            .replace("{{LOGO_B64}}", &logo_b64_s);
         fs::write(root.join("index.html"), index).map_err(|_| "repo.errWriteDashboardHtml".to_string())?;
 
         // Build hub-repos.json by scanning sub-folders (url left empty to fill)

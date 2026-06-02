@@ -1829,11 +1829,14 @@ pub async fn start_api_server(
             let _ = h.emit_all("bmm://api-exec", serde_json::json!({
                 "action": "apps/install",
                 "params": {
-                    "appId": body.app_id,
-                    "appTitle": body.app_title,
+                    "appId":       body.app_id,
+                    "appTitle":    body.app_title,
                     "downloadUrl": body.download_url,
-                    "fileType": body.file_type,
+                    "fileType":    body.file_type,
                     "installPath": body.install_path,
+                    "version":     body.version,
+                    "category":    body.category,
+                    "thumb":       body.thumb,
                 }
             }));
             warp::reply::with_status(

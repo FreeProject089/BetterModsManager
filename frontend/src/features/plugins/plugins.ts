@@ -223,7 +223,11 @@ function renderTab(tabId: string) {
         case 'installed': renderInstalled(container); break;
         case 'catalog':   renderCatalog(container); break;
         case 'create':    renderCreate(container); break;
-        case 'scripts':   renderScripts(container); break;
+        case 'scripts':
+            // Pre-load installed apps state so quicktest forms can list them
+            invoke('get_apps_state').then(s => { (window as any).__latestAppsState = s; }).catch(() => {});
+            renderScripts(container);
+            break;
         case 'perms':     renderPerms(container); break;
     }
 }
@@ -930,6 +934,70 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
               </div>
             </div>`;
 
+    } else if (p === '/api/apps/install') {
+        const installedApps = _catalog.length ? '' : '';
+        formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
+            ${txtInput('plug-qt-app-id',    'app_id (identifiant unique)',                'my-app-id')}
+            ${txtInput('plug-qt-app-title', 'app_title (nom affiché)',                   'My App')}
+            ${txtInput('plug-qt-app-url',   'download_url',                              'https://github.com/.../app.exe')}
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:120px;">
+                    <label class="plug-form-label">file_type</label>
+                    <select id="plug-qt-app-ftype" class="select select-sm" style="width:100%;">
+                        <option>exe</option><option>zip</option><option>msi</option><option>script</option>
+                    </select>
+                </div>
+                <div style="flex:2;min-width:180px;">${txtInput('plug-qt-app-path', 'install_path', '')}</div>
+            </div>
+            <p style="font-size:11px;color:var(--text-muted);margin:0;">Laisse install_path vide pour utiliser le dossier Apps par défaut de BMM.</p>
+        </div>`;
+
+    } else if (p === '/api/apps/launch') {
+        const installed: any[] = (window as any).__latestAppsState?.installed
+            ? Object.values((window as any).__latestAppsState.installed) : [];
+        const selOpts = installed.map((a: any) =>
+            `<option value="${escHtml(a.id)}" data-exe="${escAttr(a.exe_path||'')}">${escHtml(a.title)}</option>`
+        ).join('');
+        formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
+            ${selOpts
+                ? `<div><label class="plug-form-label">App installée</label>
+                   <select id="plug-qt-launch-sel" class="select select-sm" style="width:100%;">${selOpts}</select>
+                   <p style="font-size:10px;color:var(--text-muted);margin-top:4px;">Sélectionner remplira automatiquement les champs.</p></div>`
+                : '<p style="font-size:12px;color:var(--text-muted);">Aucune app installée. Installe une app d\'abord via le catalogue.</p>'}
+            ${txtInput('plug-qt-launch-id',  'app_id',   installed[0]?.id  || '')}
+            ${txtInput('plug-qt-launch-exe', 'exe_path', installed[0]?.exe_path || 'C:/path/to/app.exe')}
+        </div>`;
+
+    } else if (p === '/api/apps/permissions' && m === 'PUT') {
+        formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
+            ${txtInput('plug-qt-perm-id', 'plugin_id', '')}
+            <div>
+                <label class="plug-form-label">Permissions (cocher pour accorder)</label>
+                <div style="display:flex;flex-direction:column;gap:4px;background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:10px;">
+                    ${['app.read','app.write','repo.read','repo.write','mods.read','mods.write','profiles.read','profiles.write'].map(perm =>
+                        `<label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;">
+                            <input type="checkbox" class="plug-qt-perm-check" value="${perm}" style="accent-color:var(--accent);">
+                            <code style="font-size:11px;color:var(--accent);">${perm}</code>
+                        </label>`).join('')}
+                </div>
+            </div>
+        </div>`;
+
+    } else if (p === '/api/apps/:id' && m === 'DELETE') {
+        const installed: any[] = (window as any).__latestAppsState?.installed
+            ? Object.values((window as any).__latestAppsState.installed) : [];
+        const selOpts2 = installed.map((a: any) =>
+            `<option value="${escHtml(a.id)}">${escHtml(a.title)} (${escHtml(a.id)})</option>`
+        ).join('');
+        formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
+            ${selOpts2
+                ? `<div><label class="plug-form-label">App à désinstaller</label>
+                   <select id="plug-qt-del-app-sel" class="select select-sm" style="width:100%;">${selOpts2}</select></div>`
+                : ''}
+            ${txtInput('plug-qt-del-app-id', 'app_id (ou taper manuellement)', installed[0]?.id || '')}
+            <p style="font-size:11px;color:var(--text-muted);">Les fichiers sont conservés (remove from BMM only).</p>
+        </div>`;
+
     } else if (p === '/api/repo/host') {
         formHtml = txtInput('plug-qt-s-serve-dir', 'serve_dir (dossier à servir)', 'C:/BMM/Export/Repo')
             + txtInput('plug-qt-s-http-port', 'port', '8080', true)
@@ -1192,6 +1260,18 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         zipCb?.addEventListener('change', updateServerPanel);
         dockerCb?.addEventListener('change', () => {
             if (dockerOpts) dockerOpts.style.display = dockerCb.checked ? 'flex' : 'none';
+        });
+    }
+
+    // ── App launch form: auto-fill exe_path from selected app ───────────────
+    if (p === '/api/apps/launch') {
+        const sel   = overlay.querySelector('#plug-qt-launch-sel') as HTMLSelectElement | null;
+        const idInp = overlay.querySelector('#plug-qt-launch-id')  as HTMLInputElement  | null;
+        const exeInp = overlay.querySelector('#plug-qt-launch-exe') as HTMLInputElement | null;
+        sel?.addEventListener('change', () => {
+            const opt = sel.selectedOptions[0];
+            if (idInp)  idInp.value  = opt?.value || '';
+            if (exeInp) exeInp.value = opt?.dataset.exe || '';
         });
     }
 
@@ -1513,6 +1593,45 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                     detail: { section: 'update', prefill: { repoDir } },
                 }));
             }, 400);
+            return;
+
+        } else if (p === '/api/apps/install') {
+            const appId    = (overlay.querySelector('#plug-qt-app-id')    as HTMLInputElement)?.value?.trim() || '';
+            const appTitle = (overlay.querySelector('#plug-qt-app-title') as HTMLInputElement)?.value?.trim() || appId;
+            const dlUrl    = (overlay.querySelector('#plug-qt-app-url')   as HTMLInputElement)?.value?.trim() || '';
+            const ftype    = (overlay.querySelector('#plug-qt-app-ftype') as HTMLSelectElement)?.value || 'exe';
+            const iPath    = (overlay.querySelector('#plug-qt-app-path')  as HTMLInputElement)?.value?.trim() || '';
+            if (!appId || !dlUrl) { toast('app_id et download_url sont obligatoires', 'warning'); return; }
+            const installBody = JSON.stringify({ appId, appTitle, downloadUrl: dlUrl, fileType: ftype, installPath: iPath }, null, 2);
+            overlay.remove();
+            handleQuickTest('POST', '/api/apps/install', installBody);
+            return;
+
+        } else if (p === '/api/apps/launch') {
+            const sel = overlay.querySelector('#plug-qt-launch-sel') as HTMLSelectElement | null;
+            const appId   = (overlay.querySelector('#plug-qt-launch-id')  as HTMLInputElement)?.value?.trim() || sel?.value || '';
+            const exePath = (overlay.querySelector('#plug-qt-launch-exe') as HTMLInputElement)?.value?.trim() || '';
+            if (!appId) { toast('app_id est obligatoire', 'warning'); return; }
+            overlay.remove();
+            handleQuickTest('POST', '/api/apps/launch', JSON.stringify({ appId, exePath }, null, 2));
+            return;
+
+        } else if (p === '/api/apps/permissions' && m === 'PUT') {
+            const pluginId = (overlay.querySelector('#plug-qt-perm-id') as HTMLInputElement)?.value?.trim() || '';
+            const perms = Array.from(overlay.querySelectorAll('.plug-qt-perm-check'))
+                .filter(cb => (cb as HTMLInputElement).checked)
+                .map(cb => (cb as HTMLInputElement).value);
+            if (!pluginId) { toast('plugin_id est obligatoire', 'warning'); return; }
+            overlay.remove();
+            handleQuickTest('PUT', `/api/apps/permissions/${encodeURIComponent(pluginId)}`, JSON.stringify({ permissions: perms }, null, 2));
+            return;
+
+        } else if (p === '/api/apps/:id' && m === 'DELETE') {
+            const sel2  = overlay.querySelector('#plug-qt-del-app-sel') as HTMLSelectElement | null;
+            const appId = (overlay.querySelector('#plug-qt-del-app-id') as HTMLInputElement)?.value?.trim() || sel2?.value || '';
+            if (!appId) { toast('app_id est obligatoire', 'warning'); return; }
+            overlay.remove();
+            handleQuickTest('DELETE', `/api/apps/${encodeURIComponent(appId)}`, '');
             return;
 
         } else if (p === '/api/repo/host') {
@@ -2220,66 +2339,69 @@ function renderCreate(container: HTMLElement) {
 function renderScripts(container: HTMLElement) {
     // Endpoints sorted strictly: GET → POST → PUT → DELETE (no method interleaving)
     const QT_ENDPOINTS = [
-        // ── GET ────────────────────────────────────────────────────
-        { m: 'GET',    p: '/api/health',              l: 'Health',           icon: IC.checkCircle },
-        { m: 'GET',    p: '/api/status',              l: 'Status',           icon: IC.info },
-        { m: 'GET',    p: '/api/check-update',        l: 'Check Update',     icon: IC.refresh },
-        { m: 'GET',    p: '/api/mods',                l: 'All Mods',         icon: IC.list },
-        { m: 'GET',    p: '/api/mods/active',         l: 'Active Mods',      icon: IC.check },
-        { m: 'GET',    p: '/api/modpacks',            l: 'List Modpacks',    icon: IC.list },
-        { m: 'GET',    p: '/api/profiles',            l: 'Profiles',         icon: IC.puzzle },
-        { m: 'GET',    p: '/api/plugins',             l: 'Plugins',          icon: IC.zap },
-        { m: 'GET',    p: '/api/creator-id',          l: 'Creator ID',       icon: IC.shield },
-        { m: 'GET',    p: '/api/repo/info',            l: 'Repo Info',        icon: IC.info,       body: '?url=' },
-        { m: 'GET',    p: '/api/repo/list',            l: 'Connected Repos',  icon: IC.list },
-        // ── POST ───────────────────────────────────────────────────
-        { m: 'POST',   p: '/api/mods/enable',         l: 'Enable Mod',       icon: IC.check,      body: '{"mod_id":""}' },
-        { m: 'POST',   p: '/api/mods/disable',        l: 'Disable Mod',      icon: IC.x,          body: '{"mod_id":""}' },
-        { m: 'POST',   p: '/api/profiles',            l: 'Create Profile',   icon: IC.plus,       body: '{"name":"","game_path":"","mods_path":"","backup_path":""}' },
-        { m: 'POST',   p: '/api/profiles/activate',   l: 'Activate Profile', icon: IC.puzzle,     body: '{"profile_id":""}' },
-        { m: 'POST',   p: '/api/plugins/apply',       l: 'Apply Plugin',     icon: IC.zap,        body: '{"plugin_id":"","force_strict":false}' },
-        { m: 'POST',   p: '/api/plugins/compare',     l: 'Compare Plugin',   icon: IC.shield,     body: '{"plugin_id":""}' },
-        { m: 'POST',   p: '/api/modpacks/enable',     l: 'Enable Modpack',   icon: IC.folder,     body: '{"modpack_id":""}' },
-        { m: 'POST',   p: '/api/modpacks/disable',    l: 'Disable Modpack',  icon: IC.folder,     body: '{"modpack_id":""}' },
-        { m: 'POST',   p: '/api/modpacks/create',     l: 'Create Modpack',   icon: IC.plus,       body: '{"name":"","profile_id":""}' },
-        { m: 'POST',   p: '/api/restart',             l: 'Restart BMM',      icon: IC.refresh,    body: '' },
-        { m: 'POST',   p: '/api/repo/connect',         l: 'Connect Repo',     icon: IC.globe,      body: '{"url":"","name":""}' },
-        { m: 'POST',   p: '/api/repo/sync',            l: 'Sync Repo',        icon: IC.refresh,    body: '{}' },
-        { m: 'POST',   p: '/api/repo/gen',             l: 'Gen Repo',         icon: IC.upload,     body: '{}' },
-        { m: 'POST',   p: '/api/repo/update',          l: 'Update Repo',      icon: IC.refresh,    body: '{"repoDir":"C:/BMM/MyRepo"}' },
-        // ── App Catalog ────────────────────────────────────────────
-        { m: 'GET',    p: '/api/apps',                 l: 'Installed Apps',   icon: IC.list },
-        { m: 'POST',   p: '/api/apps/install',         l: 'Install App',      icon: IC.download,   body: '{"appId":"my-app","appTitle":"My App","downloadUrl":"https://...","fileType":"exe","installPath":""}' },
-        { m: 'POST',   p: '/api/apps/launch',          l: 'Launch App',       icon: IC.play,        body: '{"appId":"my-app","exePath":"C:/path/app.exe"}' },
-        { m: 'DELETE', p: '/api/apps/:id',             l: 'Uninstall App',    icon: IC.trash },
-        { m: 'GET',    p: '/api/apps/permissions',     l: 'List Permissions', icon: IC.shield },
-        { m: 'GET',    p: '/api/apps/permissions/:id', l: 'Get Perm',         icon: IC.shield },
-        { m: 'PUT',    p: '/api/apps/permissions/:id', l: 'Set Perm',         icon: IC.shield,     body: '{"permissions":["app.read","app.write"]}' },
-        { m: 'POST',   p: '/api/repo/host',            l: 'Host HTTP',        icon: IC.globe,      body: '{"serveDir":"C:/BMM/Export","port":8080}' },
-        // ── Import / Export (UI-driven) ────────────────────────────
-        { m: 'POST',   p: '/api/data/export',          l: 'Export Data',      icon: IC.upload },
-        { m: 'POST',   p: '/api/data/import',          l: 'Import Data',      icon: IC.download },
-        { m: 'POST',   p: '/api/modlists/export',      l: 'Export Mod List',  icon: IC.upload },
-        { m: 'POST',   p: '/api/modlists/import',      l: 'Import Mod List',  icon: IC.download },
-        { m: 'POST',   p: '/api/modpacks/import',      l: 'Import Modpack',   icon: IC.download },
-        { m: 'POST',   p: '/api/modpacks/export',      l: 'Export Modpack',   icon: IC.upload,     body: '{"id":""}' },
-        { m: 'POST',   p: '/api/plugins/import',       l: 'Import Plugin',    icon: IC.download },
-        { m: 'POST',   p: '/api/plugins/export',       l: 'Export Plugin',    icon: IC.upload,     body: '{"id":""}' },
-        { m: 'POST',   p: '/api/language/import',       l: 'Import Language',  icon: IC.download },
-        { m: 'POST',   p: '/api/profiles/import/ovgme', l: 'Import OvGME',     icon: IC.download },
-        { m: 'POST',   p: '/api/profiles/import/omm',   l: 'Import OMM/OMX',   icon: IC.download },
-        // ── PUT ────────────────────────────────────────────────────
-        { m: 'PUT',    p: '/api/mods/:id',            l: 'Update Mod',       icon: IC.editIcon,   body: '{"name":""}' },
-        { m: 'PUT',    p: '/api/profiles/:id',        l: 'Update Profile',   icon: IC.editIcon,   body: '{"name":""}' },
-        { m: 'PUT',    p: '/api/modpacks/:id',        l: 'Update Modpack',   icon: IC.editIcon,   body: '{"name":""}' },
-        // ── DELETE ─────────────────────────────────────────────────
-        { m: 'DELETE', p: '/api/repo/sync/cancel',     l: 'Cancel Sync',      icon: IC.x },
-        { m: 'DELETE', p: '/api/repo/gen/cancel',      l: 'Cancel Gen',       icon: IC.x },
-        { m: 'DELETE', p: '/api/repo/host',            l: 'Stop Host',        icon: IC.x },
-        { m: 'DELETE', p: '/api/repo',                 l: 'Disconnect Repo',  icon: IC.trash,      body: '{"url":""}' },
-        { m: 'DELETE', p: '/api/mods/:id',            l: 'Delete Mod',       icon: IC.trash },
-        { m: 'DELETE', p: '/api/profiles/:id',        l: 'Delete Profile',   icon: IC.trash },
-        { m: 'DELETE', p: '/api/modpacks/:id',        l: 'Delete Modpack',   icon: IC.trash },
+        // ── GET ────────────────────────────────────────────────────────────────
+        { m: 'GET',    p: '/api/health',                  l: 'Health',             icon: IC.checkCircle },
+        { m: 'GET',    p: '/api/status',                  l: 'Status',             icon: IC.info },
+        { m: 'GET',    p: '/api/check-update',            l: 'Check Update',       icon: IC.refresh },
+        { m: 'GET',    p: '/api/mods',                    l: 'All Mods',           icon: IC.list },
+        { m: 'GET',    p: '/api/mods/active',             l: 'Active Mods',        icon: IC.check },
+        { m: 'GET',    p: '/api/modpacks',                l: 'List Modpacks',      icon: IC.list },
+        { m: 'GET',    p: '/api/profiles',                l: 'Profiles',           icon: IC.puzzle },
+        { m: 'GET',    p: '/api/plugins',                 l: 'Plugins',            icon: IC.zap },
+        { m: 'GET',    p: '/api/creator-id',              l: 'Creator ID',         icon: IC.shield },
+        { m: 'GET',    p: '/api/repo/info',               l: 'Repo Info',          icon: IC.info,     body: '?url=' },
+        { m: 'GET',    p: '/api/repo/list',               l: 'Connected Repos',    icon: IC.list },
+        // ── App Catalog — GET
+        { m: 'GET',    p: '/api/apps',                   l: 'Installed Apps',     icon: IC.list },
+        { m: 'GET',    p: '/api/apps/permissions',       l: 'List Permissions',   icon: IC.shield },
+        { m: 'GET',    p: '/api/apps/permissions/:id',   l: 'Get Plugin Perms',   icon: IC.shield },
+        // ── POST ───────────────────────────────────────────────────────────────
+        { m: 'POST',   p: '/api/mods/enable',             l: 'Enable Mod',         icon: IC.check,    body: '{"mod_id":""}' },
+        { m: 'POST',   p: '/api/mods/disable',            l: 'Disable Mod',        icon: IC.x,        body: '{"mod_id":""}' },
+        { m: 'POST',   p: '/api/profiles',                l: 'Create Profile',     icon: IC.plus,     body: '{"name":"","game_path":"","mods_path":"","backup_path":""}' },
+        { m: 'POST',   p: '/api/profiles/activate',       l: 'Activate Profile',   icon: IC.puzzle,   body: '{"profile_id":""}' },
+        { m: 'POST',   p: '/api/plugins/apply',           l: 'Apply Plugin',       icon: IC.zap,      body: '{"plugin_id":"","force_strict":false}' },
+        { m: 'POST',   p: '/api/plugins/compare',         l: 'Compare Plugin',     icon: IC.shield,   body: '{"plugin_id":""}' },
+        { m: 'POST',   p: '/api/modpacks/enable',         l: 'Enable Modpack',     icon: IC.folder,   body: '{"modpack_id":""}' },
+        { m: 'POST',   p: '/api/modpacks/disable',        l: 'Disable Modpack',    icon: IC.folder,   body: '{"modpack_id":""}' },
+        { m: 'POST',   p: '/api/modpacks/create',         l: 'Create Modpack',     icon: IC.plus,     body: '{"name":"","profile_id":""}' },
+        { m: 'POST',   p: '/api/restart',                 l: 'Restart BMM',        icon: IC.refresh,  body: '' },
+        { m: 'POST',   p: '/api/repo/connect',            l: 'Connect Repo',       icon: IC.globe,    body: '{"url":"","name":""}' },
+        { m: 'POST',   p: '/api/repo/sync',               l: 'Sync Repo',          icon: IC.refresh,  body: '{}' },
+        { m: 'POST',   p: '/api/repo/gen',                l: 'Gen Repo',           icon: IC.upload,   body: '{}' },
+        { m: 'POST',   p: '/api/repo/update',             l: 'Update Repo',        icon: IC.refresh,  body: '{"repoDir":"C:/BMM/MyRepo"}' },
+        { m: 'POST',   p: '/api/repo/host',               l: 'Host HTTP',          icon: IC.globe,    body: '{"serveDir":"C:/BMM/Export","port":8080}' },
+        // ── App Catalog — POST
+        { m: 'POST',   p: '/api/apps/install',           l: 'Install App',        icon: IC.download },
+        { m: 'POST',   p: '/api/apps/launch',            l: 'Launch App',         icon: IC.play },
+        // ── Import / Export (UI-driven) — POST
+        { m: 'POST',   p: '/api/data/export',            l: 'Export Data',        icon: IC.upload },
+        { m: 'POST',   p: '/api/data/import',            l: 'Import Data',        icon: IC.download },
+        { m: 'POST',   p: '/api/modlists/export',        l: 'Export Mod List',    icon: IC.upload },
+        { m: 'POST',   p: '/api/modlists/import',        l: 'Import Mod List',    icon: IC.download },
+        { m: 'POST',   p: '/api/modpacks/import',        l: 'Import Modpack',     icon: IC.download },
+        { m: 'POST',   p: '/api/modpacks/export',        l: 'Export Modpack',     icon: IC.upload,   body: '{"id":""}' },
+        { m: 'POST',   p: '/api/plugins/import',         l: 'Import Plugin',      icon: IC.download },
+        { m: 'POST',   p: '/api/plugins/export',         l: 'Export Plugin',      icon: IC.upload,   body: '{"id":""}' },
+        { m: 'POST',   p: '/api/language/import',        l: 'Import Language',    icon: IC.download },
+        { m: 'POST',   p: '/api/profiles/import/ovgme', l: 'Import OvGME',       icon: IC.download },
+        { m: 'POST',   p: '/api/profiles/import/omm',   l: 'Import OMM/OMX',     icon: IC.download },
+        // ── PUT ────────────────────────────────────────────────────────────────
+        { m: 'PUT',    p: '/api/mods/:id',               l: 'Update Mod',         icon: IC.editIcon, body: '{"name":""}' },
+        { m: 'PUT',    p: '/api/profiles/:id',           l: 'Update Profile',     icon: IC.editIcon, body: '{"name":""}' },
+        { m: 'PUT',    p: '/api/modpacks/:id',           l: 'Update Modpack',     icon: IC.editIcon, body: '{"name":""}' },
+        // ── App Catalog — PUT
+        { m: 'PUT',    p: '/api/apps/permissions/:id',   l: 'Set Plugin Perms',   icon: IC.shield,   body: '{"permissions":["app.read","app.write"]}' },
+        // ── DELETE ─────────────────────────────────────────────────────────────
+        { m: 'DELETE', p: '/api/repo/sync/cancel',       l: 'Cancel Sync',        icon: IC.x },
+        { m: 'DELETE', p: '/api/repo/gen/cancel',        l: 'Cancel Gen',         icon: IC.x },
+        { m: 'DELETE', p: '/api/repo/host',              l: 'Stop Host',          icon: IC.x },
+        { m: 'DELETE', p: '/api/repo',                   l: 'Disconnect Repo',    icon: IC.trash,    body: '{"url":""}' },
+        { m: 'DELETE', p: '/api/mods/:id',               l: 'Delete Mod',         icon: IC.trash },
+        { m: 'DELETE', p: '/api/profiles/:id',           l: 'Delete Profile',     icon: IC.trash },
+        { m: 'DELETE', p: '/api/modpacks/:id',           l: 'Delete Modpack',     icon: IC.trash },
+        // ── App Catalog — DELETE
+        { m: 'DELETE', p: '/api/apps/:id',               l: 'Uninstall App',      icon: IC.trash },
     ];
 
     container.innerHTML = `
