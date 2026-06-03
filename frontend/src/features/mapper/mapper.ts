@@ -411,6 +411,7 @@ function setupFilters(): void {
     modFilter?.addEventListener('input', debouncedModSearch);
     gameFilter?.addEventListener('input', debouncedGameSearch);
     
+    document.getElementById('btn-mapper-mod-selectroot')?.addEventListener('click', selectModRoot);
     document.getElementById('btn-mapper-mod-expand')?.addEventListener('click', () => toggleAll('mapper-mod-tree', true));
     document.getElementById('btn-mapper-mod-collapse')?.addEventListener('click', () => toggleAll('mapper-mod-tree', false));
     document.getElementById('btn-mapper-game-expand')?.addEventListener('click', () => toggleAll('mapper-game-tree', true));
@@ -604,7 +605,8 @@ async function renderFilteredGameTree(): Promise<void> {
             </span>
             <span class="tree-item-label">${t('mapper.gameRoot') || 'Racine du Jeu'}</span>`;
         rootItem.dataset.path = ".";
-        rootItem.addEventListener('dblclick', () => { if (selectedPaths.size > 0) queueMoveTo("."); });
+        rootItem.title = t('mapper.dblClickDumpHint') || 'Double-click: move selection here (or the whole mod if nothing is selected)';
+        rootItem.addEventListener('dblclick', () => queueMoveSelectedOrRoot("."));
         rootItem.addEventListener('contextmenu', (e) => {
             e.preventDefault(); e.stopPropagation();
             showContextMenu(e.clientX, e.clientY, ".", true, false);
@@ -731,9 +733,10 @@ async function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSi
         });
 
         if (!isModSide && node.is_dir) {
+            item.title = t('mapper.dblClickDumpHint') || 'Double-click: move selection here (or the whole mod if nothing is selected)';
             item.addEventListener('dblclick', (e) => {
                 e.stopPropagation();
-                if (selectedPaths.size > 0) queueMoveTo(node.path);
+                queueMoveSelectedOrRoot(node.path);
             });
         }
 
@@ -891,6 +894,44 @@ function queueMoveTo(targetPath: string) {
     selectedPaths.forEach(p => { pendingMoves.set(p, targetPath); });
     const targetDisplay = targetPath === "." ? (t("mapper.root") || "la racine") : targetPath;
     toast(t("mapper.itemsMoved", { count: count.toString(), target: targetDisplay }) || `${count} éléments déplacés vers "${targetDisplay}"`, "info");
+    updateSaveButtonVisibility();
+    renderFilteredModTree();
+}
+
+/** Select every top-level item of the current mod (the "mod root"), so the user
+ *  visibly sees the whole mod selected and can dump it into a game folder. */
+function selectModRoot(): void {
+    if (!selectedModId) { toast(t('mapper.selectModFirst') || 'Select a mod first', 'warning'); return; }
+    const topLevel = (modTreeData || []).filter(n => !n.path.includes('/') && !n.path.includes('\\'));
+    if (topLevel.length === 0) { toast(t('mapper.modEmpty') || 'This mod is empty', 'info'); return; }
+    selectedPaths.clear();
+    topLevel.forEach(n => selectedPaths.add(n.path));
+    lastSelectedPath = topLevel[topLevel.length - 1].path;
+    updateSelectionVisuals();
+    updateSelectionCounter();
+    updateLiveMappingHighlight();
+    toast(t('mapper.modRootSelected', { count: topLevel.length.toString() })
+        || `Whole mod root selected (${topLevel.length} items) — double-click a game folder to map it there`, 'info', 3500);
+}
+
+/** Move the current selection to `targetPath`. If nothing is selected, move the
+ *  ENTIRE mod root (all top-level mod items) — "dump the whole mod here". */
+function queueMoveSelectedOrRoot(targetPath: string) {
+    if (selectedPaths.size > 0) { queueMoveTo(targetPath); return; }
+
+    // No selection → dump every top-level mod item into the target folder
+    const topLevel = (modTreeData || []).filter(n => {
+        // top-level = path has no separator (or starts a virtual root)
+        return !n.path.includes('/') && !n.path.includes('\\');
+    });
+    if (topLevel.length === 0) {
+        toast(t('mapper.nothingToMap') || 'Nothing to map — select a mod first', 'warning');
+        return;
+    }
+    topLevel.forEach(n => pendingMoves.set(n.path, targetPath));
+    const targetDisplay = targetPath === "." ? (t("mapper.root") || "la racine") : targetPath;
+    toast(t('mapper.modRootMapped', { count: topLevel.length.toString(), target: targetDisplay })
+        || `Whole mod (${topLevel.length} items) mapped to "${targetDisplay}"`, 'success');
     updateSaveButtonVisibility();
     renderFilteredModTree();
 }

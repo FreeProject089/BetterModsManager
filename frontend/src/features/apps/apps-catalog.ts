@@ -1533,11 +1533,11 @@ function openInstallModal(app: AppEntry) {
                 toast(`${app.title} ${t('apps.installed')||'installed!'}`, 'success');
 
             } else if (result.executables.length > 1) {
-                // Zip with several exes — BMM picked the largest; let the user override if they want
-                status.textContent = t('apps.install.detectedMain')||'Installed! Main app detected automatically.';
-                closeInstallModal();
-                renderCurrentTab();
+                // Zip with several executables — let the user pick the launcher,
+                // with BMM's auto-detected (root-priority) choice pre-selected.
                 toast(`${app.title} ${t('apps.installed')||'installed!'}`, 'success');
+                closeInstallModal();
+                showLauncherPicker(app.id, result.executables, () => renderCurrentTab());
 
             } else {
                 closeInstallModal();
@@ -1559,6 +1559,67 @@ function openInstallModal(app: AppEntry) {
 
 function closeInstallModal() {
     document.getElementById('apps-install-modal')?.classList.remove('open');
+}
+
+/** Lightweight modal to manually pick which executable/script launches a zip app.
+ *  The first entry is BMM's auto-detected (root-priority) choice. */
+function showLauncherPicker(appId: string, exes: { name: string; path: string; size: number }[], onDone: () => void): void {
+    document.getElementById('__app-launcher-picker')?.remove();
+    const fmtSize = (b: number) => b < 1024 ? `${b} B` : b < 1048576 ? `${(b/1024).toFixed(0)} KB` : `${(b/1048576).toFixed(1)} MB`;
+    const auto = exes[0]; // detect_executables_in returns root-first → [0] is auto choice
+
+    const ov = document.createElement('div');
+    ov.id = '__app-launcher-picker';
+    ov.className = 'modal-overlay open';
+    ov.style.zIndex = '10000';
+    ov.innerHTML = `
+      <div class="modal glass" style="max-width:560px;width:94%;">
+        <div class="modal-header">
+          <h2 style="margin:0;font-size:16px;">${escHtml(t('apps.pickLauncher')||'Choose launcher')}</h2>
+          <button class="modal-close" id="alp-close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="modal-body" style="padding:16px 18px;">
+          <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px;">${escHtml(t('apps.pickLauncherDesc')||'This app contains several executables. Pick the one to launch, or keep BMM auto choice.')}</p>
+          <div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto;">
+            ${exes.map((e, i) => {
+              const depth = (e.path.match(/[\\/]/g) || []).length;
+              const rel = e.path.split(/[\\/]/).slice(-2).join('/');
+              return `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid rgba(255,255,255,0.08);border-radius:9px;cursor:pointer;background:${i===0?'rgba(6,182,212,0.08)':'rgba(255,255,255,0.02)'};">
+                <input type="radio" name="alp-exe" value="${escAttr(e.path)}" ${i===0?'checked':''} style="accent-color:var(--cyan);">
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:13px;font-weight:600;color:var(--text-primary);">${escHtml(e.name)} ${i===0?`<span style="font-size:9px;color:var(--cyan);font-weight:800;">★ ${escHtml(t('apps.autoDetected')||'AUTO')}</span>`:''}</div>
+                  <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">${escHtml(rel)} · ${fmtSize(e.size)} · depth ${depth}</div>
+                </div>
+              </label>`;
+            }).join('')}
+          </div>
+        </div>
+        <div class="modal-footer" style="padding:12px 18px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid rgba(255,255,255,0.08);">
+          <button class="btn btn-ghost btn-sm" id="alp-browse">${escHtml(t('plugins.qtBrowse')||'Browse…')}</button>
+          <button class="btn btn-ghost btn-sm" id="alp-auto">${escHtml(t('apps.autoDetected')||'Keep auto')}</button>
+          <button class="btn btn-accent btn-sm" id="alp-use">${escHtml(t('apps.useThis')||'Use this')}</button>
+        </div>
+      </div>`;
+    (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+
+    const close = () => { ov.remove(); onDone(); };
+    const apply = async (path: string) => {
+        try { await invoke('set_app_main_exe', { appId, exePath: path }); toast(t('apps.launcherSet')||'Launcher updated', 'success'); }
+        catch (e) { toast(String(e), 'error'); }
+        close();
+    };
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+    ov.querySelector('#alp-close')?.addEventListener('click', close);
+    ov.querySelector('#alp-auto')?.addEventListener('click', () => apply(auto.path));
+    ov.querySelector('#alp-use')?.addEventListener('click', () => {
+        const sel = ov.querySelector('input[name="alp-exe"]:checked') as HTMLInputElement;
+        apply(sel?.value || auto.path);
+    });
+    // Browse for a launcher manually
+    ov.querySelector('#alp-browse')?.addEventListener('click', async () => {
+        const picked = await pickFile([{ name: 'Executable / Script', extensions: ['exe', 'bat', 'cmd', 'vbs', 'ps1', 'msi'] }]).catch(() => null);
+        if (picked) apply(picked);
+    });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

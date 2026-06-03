@@ -183,23 +183,33 @@ pub async fn build_modpack_mod_ref(
     })
 }
 
-/// Exports a modpack to a user-selected path (.bmp)
+/// Exports a modpack to `.bmp`. Optional `dest_dir` writes straight into that
+/// folder (no dialog); otherwise a save dialog opens.
 #[tauri::command]
 pub async fn export_modpack(
     handle: AppHandle,
     id: String,
+    dest_dir: Option<String>,
 ) -> Result<(), String> {
     use tauri::api::dialog::blocking::FileDialogBuilder;
     let pack = get_modpack_by_id(handle.clone(), id).await?.ok_or("Modpack not found")?;
-    
+
     let default_name = format!("{}.bmp", pack.name.replace(" ", "_"));
-    
-    if let Some(path) = FileDialogBuilder::new()
-        .add_filter("Better ModPack", &["bmp"])
-        .set_file_name(&default_name)
-        .save_file()
-    {
-        let json = serde_json::to_string_pretty(&pack).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string_pretty(&pack).map_err(|e| e.to_string())?;
+
+    let target = match dest_dir.filter(|d| !d.trim().is_empty()) {
+        Some(d) => {
+            let dir = std::path::PathBuf::from(&d);
+            if !dir.is_dir() { return Err(format!("Not a folder: {}", d)); }
+            Some(dir.join(&default_name))
+        }
+        None => FileDialogBuilder::new()
+            .add_filter("Better ModPack", &["bmp"])
+            .set_file_name(&default_name)
+            .save_file(),
+    };
+
+    if let Some(path) = target {
         std::fs::write(path, json).map_err(|e| e.to_string())?;
     }
     Ok(())

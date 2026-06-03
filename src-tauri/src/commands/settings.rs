@@ -237,12 +237,82 @@ pub fn get_available_languages(app_handle: tauri::AppHandle) -> Vec<String> {
 pub fn get_language_content(app_handle: tauri::AppHandle, lang: String) -> Result<String, String> {
     let lang_dir = get_lang_dir(&app_handle);
     let file_path = lang_dir.join(format!("{}.json", lang));
-    
+
     if !file_path.exists() {
         return Err(format!("Language file not found: {}.json", lang));
     }
-    
+
     std::fs::read_to_string(file_path).map_err(|e| e.to_string())
+}
+
+#[derive(serde::Serialize)]
+pub struct I18nUsage {
+    pub file: String,
+    pub line: u32,
+    pub snippet: String,
+}
+
+/// Searches the shipped frontend source (compiled JS + index.html) for occurrences
+/// of an i18n key, so the Translation Sandbox can show WHERE a key is used.
+#[tauri::command]
+pub fn find_i18n_usages(app_handle: tauri::AppHandle, key: String) -> Result<Vec<I18nUsage>, String> {
+    if key.trim().is_empty() { return Ok(vec![]); }
+    // frontend dir = parent of Lang/
+    let lang_dir = get_lang_dir(&app_handle);
+    let frontend_dir = lang_dir.parent().map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    let mut results: Vec<I18nUsage> = Vec::new();
+    let key_q1 = format!("'{}'", key);          // t('key')
+    let key_q2 = format!("\"{}\"", key);        // t("key") / data-i18n="key"
+    let key_bare = key.clone();
+
+    // Walk frontend dir, scan .js and .html files (skip Lang/, node_modules, maps)
+    for entry in jwalk::WalkDir::new(&frontend_dir).into_iter().flatten() {
+        let path = entry.path();
+        if !path.is_file() { continue; }
+        let p_str = path.to_string_lossy().replace('\\', "/");
+        if p_str.contains("/Lang/") || p_str.contains("/node_modules/") || p_str.ends_with(".map") { continue; }
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if ext != "js" && ext != "html" && ext != "ts" { continue; }
+        // Prefer .ts source over compiled .js when both exist? Keep both but de-dup later by content.
+        let content = match std::fs::read_to_string(&path) { Ok(c) => c, Err(_) => continue };
+        if !content.contains(&key_q1) && !content.contains(&key_q2) { continue; }
+        let rel = path.strip_prefix(&frontend_dir).unwrap_or(&path).to_string_lossy().replace('\\', "/");
+        for (i, line) in content.lines().enumerate() {
+            if line.contains(&key_q1) || line.contains(&key_q2) {
+                // require the key appears as a near-standalone token to avoid prefix collisions
+                let trimmed = line.trim();
+                let snippet = if trimmed.len() > 160 { format!("{}…", &trimmed[..160]) } else { trimmed.to_string() };
+                results.push(I18nUsage { file: rel.clone(), line: (i as u32) + 1, snippet });
+                if results.len() >= 200 { return Ok(results); }
+            }
+        }
+    }
+    let _ = key_bare;
+    Ok(results)
+}
+
+/// Returns the list of available language codes + the raw JSON content of each,
+/// so the sandbox can diff all languages at once.
+#[tauri::command]
+pub fn get_all_languages_content(app_handle: tauri::AppHandle) -> Result<std::collections::HashMap<String, String>, String> {
+    let lang_dir = get_lang_dir(&app_handle);
+    let mut out = std::collections::HashMap::new();
+    if let Ok(entries) = std::fs::read_dir(&lang_dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.extension().and_then(|x| x.to_str()) == Some("json") {
+                if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                    if stem == "template" { continue; }
+                    if let Ok(content) = std::fs::read_to_string(&p) {
+                        out.insert(stem.to_string(), content);
+                    }
+                }
+            }
+        }
+    }
+    Ok(out)
 }
 #[tauri::command]
 pub fn import_language(app_handle: tauri::AppHandle, path: Option<String>) -> Result<String, String> {

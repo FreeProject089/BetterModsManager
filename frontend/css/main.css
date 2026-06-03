@@ -11148,10 +11148,37 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     letter-spacing: 0.2px;
 }
 .plug-ov-body .input,
+.plug-ov-body textarea,
 .plug-ov-body textarea.input,
+.plug-ov-body .form-input,
 .plug-ov-body .select {
     width: 100%;
     box-sizing: border-box;
+}
+/* Force dark styling on every text input/area inside a quick-test overlay
+   (some textareas were rendering with the browser default white background). */
+.plug-ov-body textarea,
+.plug-ov-body input[type="text"],
+.plug-ov-body input:not([type]) {
+    background: rgba(0,0,0,0.28);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 8px;
+    color: var(--text-primary, #eef1f6);
+    padding: 8px 11px;
+    outline: none;
+    transition: border-color .15s;
+}
+.plug-ov-body textarea:focus,
+.plug-ov-body input[type="text"]:focus,
+.plug-ov-body input:not([type]):focus { border-color: var(--accent, #06b6d4); }
+.plug-ov-body textarea::placeholder,
+.plug-ov-body input::placeholder { color: var(--text-muted, #7f8aa0); }
+.plug-ov-body .select, .plug-ov-body select {
+    background: rgba(0,0,0,0.28);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 8px;
+    color: var(--text-primary, #eef1f6);
+    padding: 6px 9px;
 }
 .plug-ov-body .plug-qt-smart-field { width: 100%; }
 .plug-ov-body details > summary { list-style: none; }

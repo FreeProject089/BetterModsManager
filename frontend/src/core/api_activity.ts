@@ -260,11 +260,29 @@ export async function initApiActivity(): Promise<void> {
             case 'language/import': run('import_language', { path: params.path || null },
                 t('settings.langImported') || 'Language imported'); break;
 
+            // ── App Catalog: install via API ─────────────────────────────────
+            case 'apps/install': {
+                const installPath = params.installPath
+                    || `${(window as any).__bmmAppsDefaultDir || 'C:/BMM/Apps'}`;
+                run('install_app', {
+                    appId:       params.appId,
+                    appTitle:    params.appTitle || params.appId,
+                    downloadUrl: params.downloadUrl,
+                    fileType:    params.fileType || 'exe',
+                    installPath: params.installPath || installPath,
+                    version:     params.version || null,
+                    category:    params.category || null,
+                    thumb:       params.thumb || null,
+                }, `${params.appTitle || params.appId} ${t('apps.installed') || 'installed'}`);
+                break;
+            }
+
             // ── Modpacks (.bmp) — self-contained file dialogs ────────────────
             case 'modpack/import':  run('import_modpack', { path: params.path || null },
                 t('plugins.actionCreateModpack') || 'Modpack imported'); break;
             case 'modpack/export':
-                if (params.id) run('export_modpack', { id: params.id });
+                if (params.id) run('export_modpack', { id: params.id, destDir: params.destDir || null },
+                    t('common.exported') || 'Exported');
                 else navClick('modpacks', 'btn-import-modpack'); // fallback: open modpacks page
                 break;
 

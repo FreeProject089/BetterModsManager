@@ -1130,8 +1130,15 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
     } else if (p === '/api/modpacks/export') {
         formHtml = `<div style="display:flex;flex-direction:column;gap:10px;">
             ${modpackSel}
+            <div>
+              <label class="plug-form-label" style="margin-bottom:4px;">${t('plugins.qtDestFolder') || 'Destination folder'} <span style="color:var(--text-muted);font-size:10px;">(${t('plugins.qtImportPathHint') || 'leave empty to open save dialog'})</span></label>
+              <div style="display:flex;gap:7px;">
+                <input id="plug-qt-mp-dest" class="input" placeholder="C:/Exports" style="flex:1;font-family:var(--font-mono);font-size:12px;">
+                <button type="button" id="plug-qt-mp-browse" class="btn btn-sm btn-secondary">${t('plugins.qtBrowse') || 'Browse'}</button>
+              </div>
+            </div>
             <div style="padding:9px 12px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;font-size:11px;color:var(--cyan);line-height:1.5;">
-              ${t('plugins.qtModpackExportInfo') || 'UI-driven — BMM opens a save-file dialog. The modpack is exported as a <code>.bmp</code> file.'}
+              ${t('plugins.qtModpackExportInfo') || 'Pick a folder to export the .bmp straight there (no dialog), or leave empty to choose the file manually.'}
             </div>
         </div>`;
 
@@ -1186,11 +1193,14 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         </div>`;
 
     } else if (p === '/api/catalog/apps/:id' && m === 'PUT') {
-        // Try to load existing catalog to pre-populate a dropdown
+        // Try to load existing catalog to pre-populate a dropdown (auth required → send token)
         let catAppOpts = '';
         try {
-            const cat: any = await invoke('get_local_catalog' as any).catch(() => null)
-                || await (async () => { const r = await fetch('http://127.0.0.1:51274/api/catalog'); return r.ok ? r.json() : null; })();
+            const liveTok = (document.getElementById('plug-token-display') as HTMLInputElement)?.value?.trim() || _apiToken;
+            const cat: any = await (async () => {
+                const r = await fetch('http://127.0.0.1:51274/api/catalog', { headers: { 'Authorization': `Bearer ${liveTok}` } });
+                return r.ok ? r.json() : null;
+            })();
             if (cat?.apps?.length) {
                 catAppOpts = cat.apps.map((a: any) =>
                     `<option value=”${escHtml(a.id)}”>${escHtml(a.title || a.id)} (${escHtml(a.id)})</option>`
@@ -1252,8 +1262,15 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         formHtml = `<p style=”font-size:13px;color:var(--text-secondary);margin:0;”>${t('plugins.qtNoBody') || `${escHtml(m)} request — no parameters required. Use “Send” to run it, or “cURL” to copy the command.`}</p>`;
     } else {
         const pretty = (() => { try { return JSON.stringify(JSON.parse(rawBody), null, 2); } catch { return rawBody; } })();
-        formHtml = `<p style="font-size:11px;color:var(--text-muted);margin:0 0 6px;">${t('plugins.qtBodyHint')}</p>
-            <textarea id="plug-qt-s-json" class="input" style="font-family:var(--font-mono);font-size:12px;min-height:110px;resize:vertical;" spellcheck="false">${escHtml(pretty)}</textarea>`;
+        formHtml = `<div style="display:flex;flex-direction:column;gap:7px;">
+            <div style="display:flex;align-items:center;gap:7px;">
+                <span style="font-size:11px;font-weight:700;color:var(--text-secondary);">${t('plugins.qtRequestBody') || 'Request body'}</span>
+                <span style="font-size:9px;font-weight:800;color:var(--accent);background:rgba(6,182,212,0.12);padding:1px 7px;border-radius:5px;">JSON</span>
+            </div>
+            <p style="font-size:11px;color:var(--text-muted);margin:0;">${t('plugins.qtBodyHint') || 'Edit the request body before sending.'}</p>
+            <textarea id="plug-qt-s-json" class="input" spellcheck="false"
+                style="font-family:var(--font-mono);font-size:12px;min-height:130px;resize:vertical;width:100%;box-sizing:border-box;line-height:1.5;tab-size:2;">${escHtml(pretty)}</textarea>
+        </div>`;
     }
 
     const methodCls: Record<string, string> = { GET:'plug-method-get', POST:'plug-method-post', PUT:'plug-method-put', DELETE:'plug-method-delete', PATCH:'plug-method-patch' };
@@ -1527,6 +1544,17 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             overlay.querySelectorAll<HTMLInputElement>('.plug-qt-sync-prof-check').forEach(c => c.checked = false));
     }
 
+    // ── Modpack export destination browse ───────────────────────────────────
+    {
+        const mpBrowse = overlay.querySelector('#plug-qt-mp-browse');
+        if (mpBrowse) {
+            mpBrowse.addEventListener('click', async () => {
+                const dir = await pickFolder().catch(() => null);
+                if (dir) { const inp = overlay.querySelector('#plug-qt-mp-dest') as HTMLInputElement; if (inp) inp.value = dir; }
+            });
+        }
+    }
+
     // ── Import path browse button ───────────────────────────────────────────
     {
         const browseBtn = overlay.querySelector('#plug-qt-import-browse');
@@ -1796,8 +1824,9 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         } else if (p === '/api/modpacks/export') {
             const mpId = (overlay.querySelector('#plug-qt-s-modpack') as HTMLSelectElement)?.value || '';
             if (!mpId) { toast(t('plugins.qtModpackRequired') || 'Select a modpack', 'warning'); return; }
+            const destDir = (overlay.querySelector('#plug-qt-mp-dest') as HTMLInputElement)?.value?.trim();
             overlay.remove();
-            handleQuickTest('POST', '/api/modpacks/export', JSON.stringify({ id: mpId }));
+            handleQuickTest('POST', '/api/modpacks/export', JSON.stringify(destDir ? { id: mpId, destDir } : { id: mpId }));
             return;
         } else if (p === '/api/restart') {
             body = '{}';
@@ -2384,9 +2413,12 @@ async function handleQuickTest(method: string, path: string, body?: string, btnE
     bodyEl.innerHTML = `<span style="color:var(--text-muted)">${t('common.loading')}</span>`;
 
     try {
+        // Read the LIVE token (input field first, then cache) so a regenerated
+        // token doesn't cause spurious 401s from a stale cached value.
+        const liveToken = (document.getElementById('plug-token-display') as HTMLInputElement)?.value?.trim() || _apiToken;
         const opts: RequestInit = {
             method,
-            headers: { 'Authorization': `Bearer ${_apiToken}`, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${liveToken}`, 'Content-Type': 'application/json' },
         };
         if ((method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') && body) opts.body = body;
         const res = await fetch(`http://127.0.0.1:51274${path}`, opts);
@@ -4438,9 +4470,10 @@ function getEndpointDefs(): EndpointDef[] {
         {
             method: 'POST', path: '/api/modpacks/export', auth: true,
             desc: 'Export a modpack (.bmp)',
-            about: '<strong>What:</strong> the modpack identified by <code>id</code>, written as a Better ModPack <code>.bmp</code> file. <strong>Where:</strong> you choose the destination in the native save dialog BMM opens.<br><br>Get the id from <code>GET /api/modpacks</code>.',
+            about: '<strong>What:</strong> the modpack identified by <code>id</code>, written as a Better ModPack <code>.bmp</code> file. <strong>Where:</strong> pass <code>destDir</code> to write it straight into that folder (no dialog, fully automatic), or omit it to choose the destination in the native save dialog.<br><br>Get the id from <code>GET /api/modpacks</code>.',
             fields: [
-                { name: 'id', type: 'string', required: true, desc: 'UUID of the modpack to export (from GET /api/modpacks).' },
+                { name: 'id',      type: 'string', required: true,  desc: 'UUID of the modpack to export (from GET /api/modpacks).' },
+                { name: 'destDir', type: 'string', required: false, desc: 'Folder to export into (e.g. "C:/Exports"). If omitted, a save dialog opens. The filename is auto-generated from the modpack name.' },
             ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "modpack/export" }' },

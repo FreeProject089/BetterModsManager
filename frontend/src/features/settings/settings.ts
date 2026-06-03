@@ -5,6 +5,7 @@
 
 import { invoke, getSettings, updateSettings, pickFile, saveFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
+import { initI18nSandbox } from './i18n-sandbox.js';
 import { toast } from '../../ui/app.js';
 import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml } from '../../core/utils.js';
@@ -1373,6 +1374,7 @@ export async function initSettings() {
     renderSettingsShortcuts();
     await initStorageSettings();
     await initLanguageSettings();
+    initI18nSandbox();
     await initSecuritySettings();
     await initLaunchPackSettings();
     initSecurityInfoCard().catch(() => {});

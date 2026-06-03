@@ -73,6 +73,10 @@ export async function setLang(lang) {
         document.dispatchEvent(new CustomEvent('langChanged', { detail: { lang } }));
     }
 }
+/** Returns the raw loaded translations map { lang: { key: value } } — used by the i18n sandbox. */
+export function getAllTranslations() {
+    return translations;
+}
 export function getLanguages() {
     return Object.entries(langInfo).map(([code, info]) => ({
         code,

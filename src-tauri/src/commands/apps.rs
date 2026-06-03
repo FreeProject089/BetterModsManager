@@ -409,25 +409,39 @@ fn scan_folder_uninstaller(install_dir: &std::path::Path) -> Option<String> {
 }
 
 fn detect_executables_in(dir: &std::path::Path) -> Vec<ExeInfo> {
-    let mut exes: Vec<ExeInfo> = walkdir::WalkDir::new(dir)
+    // Collect with depth so we can prefer executables sitting in the mod root
+    // over ones buried in sub-folders (tools/, redist/, etc.).
+    let mut found: Vec<(usize, ExeInfo)> = walkdir::WalkDir::new(dir)
         .max_depth(4)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
         .filter_map(|e| {
+            let depth = e.depth(); // 1 = directly in `dir`
             let p = e.path().to_path_buf();
             let ext = p.extension()?.to_str()?.to_lowercase();
-            if ext != "exe" && ext != "msi" { return None; }
+            // Runnable launchers: native executables AND common script launchers.
+            if !matches!(ext.as_str(), "exe" | "msi" | "bat" | "cmd" | "vbs" | "ps1") { return None; }
             let size = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
-            Some(ExeInfo {
+            Some((depth, ExeInfo {
                 name: p.file_name().unwrap_or_default().to_string_lossy().to_string(),
                 path: p.to_string_lossy().to_string(),
                 size,
-            })
+            }))
         })
         .collect();
-    exes.sort_by(|a, b| b.size.cmp(&a.size)); // largest first = main exe heuristic
-    exes
+
+    // Sort priority:
+    //   1. shallower depth first (root-level exes win over buried ones)
+    //   2. real .exe over scripts
+    //   3. larger size (main app heuristic)
+    found.sort_by(|(da, a), (db, b)| {
+        let rank = |n: &str| -> u8 { if n.to_lowercase().ends_with(".exe") { 0 } else { 1 } };
+        da.cmp(db)
+            .then(rank(&a.name).cmp(&rank(&b.name)))
+            .then(b.size.cmp(&a.size))
+    });
+    found.into_iter().map(|(_, e)| e).collect()
 }
 
 /// True if a filename looks like an installer rather than the app itself.
@@ -435,23 +449,31 @@ fn looks_like_installer(name: &str) -> bool {
     let n = name.to_lowercase();
     n.ends_with(".msi")
         || n.contains("setup")
-        || n.contains("install")   // installer, install, etc.
+        || n.contains("install")   // installer.bat, install.exe, install.vbs, etc.
         || n.starts_with("vc_redist")
         || n.contains("redist")
 }
 
 /// Among a set of executables, pick the best "main app" exe:
-/// highest name-match score, skipping installers/uninstallers, then largest.
+/// highest name-match score, then shallowest (root-level) path, then largest.
 fn pick_main_exe(exes: &[ExeInfo], app_id: &str, app_title: &str) -> Option<ExeInfo> {
+    // Path "depth" = number of separators; fewer = closer to the mod root.
+    let depth = |p: &str| -> isize { p.matches('/').count() as isize + p.matches('\\').count() as isize };
     exes.iter()
         .filter(|e| !looks_like_installer(&e.name))
         .cloned()
         .max_by(|a, b| {
+            // 1. shallowest path wins (root strictly preferred over sub-folders)
+            //    invert: lower depth = "greater" for max_by
+            // 2. better name match (app_id/title)
+            // 3. larger size
             let sa = match_score(&a.name, app_id, app_title);
             let sb = match_score(&b.name, app_id, app_title);
-            sa.cmp(&sb).then(a.size.cmp(&b.size))
+            depth(&b.path).cmp(&depth(&a.path))
+                .then(sa.cmp(&sb))
+                .then(a.size.cmp(&b.size))
         })
-        .or_else(|| exes.first().cloned()) // fallback: anything
+        .or_else(|| exes.first().cloned()) // fallback: shallowest from detect (already sorted)
 }
 
 /// Run an installer (.exe or .msi), wait for it to finish, then detect what it
@@ -864,6 +886,27 @@ pub fn scan_and_track_running_apps(app_handle: AppHandle) {
 #[tauri::command]
 pub fn get_apps_state(app_handle: AppHandle) -> Result<AppsState, String> {
     Ok(load_state(&app_handle))
+}
+
+/// Lists every runnable executable/script found in an installed app's folder,
+/// sorted root-first. Used by the manual launcher picker (esp. for zip apps).
+#[tauri::command]
+pub fn list_app_executables(app_handle: AppHandle, app_id: String) -> Result<Vec<ExeInfo>, String> {
+    let state = load_state(&app_handle);
+    let info = state.installed.get(&app_id).ok_or("App not installed")?;
+    let dir = info.install_path.clone();
+    if dir.is_empty() { return Ok(vec![]); }
+    Ok(detect_executables_in(std::path::Path::new(&dir)))
+}
+
+/// Sets the main launcher executable for an installed app (manual override).
+#[tauri::command]
+pub fn set_app_main_exe(app_handle: AppHandle, app_id: String, exe_path: String) -> Result<(), String> {
+    let mut state = load_state(&app_handle);
+    let info = state.installed.get_mut(&app_id).ok_or("App not installed")?;
+    info.exe_path = Some(exe_path);
+    save_state(&app_handle, &state).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Returns true if a setup-installed app has a known uninstaller command.

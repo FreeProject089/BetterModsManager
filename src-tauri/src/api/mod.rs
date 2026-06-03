@@ -320,6 +320,8 @@ fn with_app_handle(
 struct IoIdBody {
     #[serde(default)]
     id: String,
+    #[serde(default, rename = "destDir", alias = "dest_dir")]
+    dest_dir: Option<String>,
 }
 
 /// Emit a `bmm://api-exec` event so the frontend performs the action through
@@ -1807,7 +1809,7 @@ pub async fn start_api_server(
     let t6 = token.clone(); let h6 = app_handle.clone();
     let io_modpack_export = warp::path!("api" / "modpacks" / "export").and(warp::post())
         .and(require_token(t6)).and(warp::body::json::<IoIdBody>()).and(with_app_handle(h6))
-        .map(|b: IoIdBody, h: tauri::AppHandle| api_exec_reply(&h, "modpack/export", serde_json::json!({ "id": b.id })));
+        .map(|b: IoIdBody, h: tauri::AppHandle| api_exec_reply(&h, "modpack/export", serde_json::json!({ "id": b.id, "destDir": b.dest_dir })));
 
     // POST /api/plugins/import — import a .bmmplug plugin
     let t7 = token.clone(); let h7 = app_handle.clone();
