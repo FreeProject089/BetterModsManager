@@ -9671,6 +9671,103 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     margin: 0;
 }
 
+/* ══ Server Repo — Sync / Hosting tabs ══════════════════════════════════ */
+.repo-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 26px;
+}
+.repo-tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    text-align: left;
+    padding: 14px 18px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.07);
+    background: rgba(255,255,255,0.02);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, transform 0.12s ease;
+    position: relative;
+    overflow: hidden;
+}
+.repo-tab-btn:hover {
+    background: rgba(255,255,255,0.045);
+    border-color: rgba(255,255,255,0.13);
+    transform: translateY(-1px);
+}
+.repo-tab-ic {
+    width: 42px;
+    height: 42px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-muted);
+    transition: all 0.18s ease;
+}
+.repo-tab-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.repo-tab-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.1;
+}
+.repo-tab-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Active — Sync = accent, Hosting = cyan */
+.repo-tab-btn[data-repo-tab="sync"].active {
+    background: linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(59,130,246,0.03) 100%);
+    border-color: rgba(59,130,246,0.4);
+}
+.repo-tab-btn[data-repo-tab="sync"].active .repo-tab-ic {
+    background: rgba(59,130,246,0.18);
+    border-color: rgba(59,130,246,0.35);
+    color: var(--accent);
+}
+.repo-tab-btn[data-repo-tab="host"].active {
+    background: linear-gradient(135deg, rgba(0,194,255,0.12) 0%, rgba(0,194,255,0.03) 100%);
+    border-color: rgba(0,194,255,0.4);
+}
+.repo-tab-btn[data-repo-tab="host"].active .repo-tab-ic {
+    background: rgba(0,194,255,0.18);
+    border-color: rgba(0,194,255,0.35);
+    color: var(--cyan);
+}
+.repo-tab-btn.active .repo-tab-sub { color: var(--text-secondary); }
+
+/* Panels — high specificity so it beats .repo-column { display:flex } */
+.repo-tab-body { position: relative; }
+.repo-tab-body .repo-tab-panel {
+    display: none !important;
+    animation: repoTabFade 0.25s ease;
+    max-width: 880px;
+    width: 100%;
+    margin: 0 auto;
+}
+.repo-tab-body .repo-tab-panel.active { display: flex !important; }
+@keyframes repoTabFade {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 760px) {
+    .repo-tabs { grid-template-columns: 1fr; }
+    .repo-tab-sub { white-space: normal; }
+}
+
 .repo-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;

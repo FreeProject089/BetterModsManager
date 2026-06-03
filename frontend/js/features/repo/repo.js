@@ -325,6 +325,22 @@ export function initRepo() {
     initRepoMonitoring(elements);
     initRepoSync(elements);
     initRepoAdmin(elements);
+    // ── Sync / Hosting tab switcher ──────────────────────────────────────
+    const activateRepoTab = (name) => {
+        const view = document.getElementById('view-repo');
+        if (!view)
+            return;
+        view.querySelectorAll('.repo-tab-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.repoTab === name);
+        });
+        view.querySelectorAll('.repo-tab-panel').forEach(p => {
+            p.classList.toggle('active', p.dataset.repoPanel === name);
+        });
+    };
+    window.activateRepoTab = activateRepoTab;
+    document.querySelectorAll('#view-repo .repo-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => activateRepoTab(btn.dataset.repoTab || 'sync'));
+    });
     // ZIP Export Server Type Listener (lock cloudflare/upnp for "server")
     if (elements.selectZipType) {
         elements.selectZipType.addEventListener('change', (e) => {
@@ -353,6 +369,9 @@ export function initRepo() {
     document.addEventListener('bmm:repo-focus', (e) => {
         const section = e.detail?.section ?? '';
         const prefill = e.detail?.prefill ?? null;
+        // Make sure the relevant tab is visible before scrolling/pre-filling
+        const HOST_SECTIONS = ['host', 'gen', 'update'];
+        activateRepoTab(HOST_SECTIONS.includes(section) ? 'host' : 'sync');
         if (section === 'sync') {
             // ── Pre-fill sync form fields from QT data ──
             if (prefill) {
@@ -1676,6 +1695,12 @@ export function initRepo() {
     // --- Profile Checklist ---
     loadProfilesForExport(elements.profilesListEl);
     loadModpacksForExport(elements.modpacksListEl);
+    // Re-render these JS-built lists on language change so their labels
+    // (empty states, game names, share-mode options) translate live without a refresh.
+    document.addEventListener('langChanged', () => {
+        loadProfilesForExport(elements.profilesListEl);
+        loadModpacksForExport(elements.modpacksListEl);
+    });
     // Refresh button
     if (elements.btnRefreshProfiles) {
         elements.btnRefreshProfiles.addEventListener('click', () => {

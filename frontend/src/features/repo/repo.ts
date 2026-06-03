@@ -347,6 +347,22 @@ export function initRepo() {
     initRepoSync(elements);
     initRepoAdmin(elements);
 
+    // ── Sync / Hosting tab switcher ──────────────────────────────────────
+    const activateRepoTab = (name: string) => {
+        const view = document.getElementById('view-repo');
+        if (!view) return;
+        view.querySelectorAll('.repo-tab-btn').forEach(b => {
+            b.classList.toggle('active', (b as HTMLElement).dataset.repoTab === name);
+        });
+        view.querySelectorAll('.repo-tab-panel').forEach(p => {
+            p.classList.toggle('active', (p as HTMLElement).dataset.repoPanel === name);
+        });
+    };
+    (window as any).activateRepoTab = activateRepoTab;
+    document.querySelectorAll('#view-repo .repo-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => activateRepoTab((btn as HTMLElement).dataset.repoTab || 'sync'));
+    });
+
     // ZIP Export Server Type Listener (lock cloudflare/upnp for "server")
     if (elements.selectZipType) {
         elements.selectZipType.addEventListener('change', (e: any) => {
@@ -367,6 +383,10 @@ export function initRepo() {
     document.addEventListener('bmm:repo-focus', (e: any) => {
         const section: string  = e.detail?.section ?? '';
         const prefill: any     = e.detail?.prefill ?? null;
+
+        // Make sure the relevant tab is visible before scrolling/pre-filling
+        const HOST_SECTIONS = ['host', 'gen', 'update'];
+        activateRepoTab(HOST_SECTIONS.includes(section) ? 'host' : 'sync');
 
         if (section === 'sync') {
             // ── Pre-fill sync form fields from QT data ──
@@ -1707,6 +1727,13 @@ export function initRepo() {
     // --- Profile Checklist ---
     loadProfilesForExport(elements.profilesListEl);
     loadModpacksForExport(elements.modpacksListEl);
+
+    // Re-render these JS-built lists on language change so their labels
+    // (empty states, game names, share-mode options) translate live without a refresh.
+    document.addEventListener('langChanged', () => {
+        loadProfilesForExport(elements.profilesListEl);
+        loadModpacksForExport(elements.modpacksListEl);
+    });
 
     // Refresh button
     if (elements.btnRefreshProfiles) {

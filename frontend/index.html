@@ -1367,27 +1367,41 @@
                         <p data-i18n="repo.modeInfo">...</p>
                     </div>
 
-                    <div class="repo-grid">
+                    <!-- ══ TABS : SYNC / HOSTING ══ -->
+                    <div class="repo-tabs" role="tablist">
+                        <button class="repo-tab-btn active" data-repo-tab="sync" role="tab">
+                            <span class="repo-tab-ic">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                                    <path d="M3 3v5h5" />
+                                    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                                    <path d="M16 16h5v5" />
+                                </svg>
+                            </span>
+                            <span class="repo-tab-txt">
+                                <span class="repo-tab-title" data-i18n="repo.tabSync">Se synchroniser</span>
+                                <span class="repo-tab-sub" data-i18n="repo.tabSyncSub">Rejoindre un dépôt et télécharger les mods</span>
+                            </span>
+                        </button>
+                        <button class="repo-tab-btn" data-repo-tab="host" role="tab">
+                            <span class="repo-tab-ic">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                                    <path d="M8 21h8M12 17v4" />
+                                    <path d="M7 7h.01M11 7h.01" />
+                                </svg>
+                            </span>
+                            <span class="repo-tab-txt">
+                                <span class="repo-tab-title" data-i18n="repo.tabHost">Héberger</span>
+                                <span class="repo-tab-sub" data-i18n="repo.tabHostSub">Générer un dépôt et le partager</span>
+                            </span>
+                        </button>
+                    </div>
 
-                        <!-- ══ GAUCHE : HOST ══ -->
-                        <div class="repo-column">
-                            <div class="repo-section-intro repo-section-intro--host">
-                                <div class="repo-section-intro-icon">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <rect x="2" y="3" width="20" height="14" rx="2" />
-                                        <path d="M8 21h8M12 17v4" />
-                                        <path d="M7 7h.01M11 7h.01" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <span class="repo-section-intro-label"
-                                        data-i18n="repo.hostColumnLabel">HÉBERGER</span>
-                                    <span class="repo-section-intro-desc" data-i18n="repo.hostColumnDesc">Générez un
-                                        dépôt et partagez-le avec votre équipe via HTTP</span>
-                                </div>
-                            </div>
+                    <div class="repo-tab-body">
 
+                        <!-- ══ HOST ══ -->
+                        <div class="repo-column repo-tab-panel" data-repo-panel="host">
                             <!-- Card: Generate Repo -->
                             <div class="repo-card repo-card--cyan">
                                 <div class="repo-card-header">
@@ -2146,24 +2160,8 @@
                         </div><!-- /repo-column host -->
 
 
-                        <!-- ══ DROITE : REJOINDRE ══ -->
-                        <div class="repo-column">
-                            <div class="repo-section-intro repo-section-intro--join">
-                                <div class="repo-section-intro-icon">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <polyline points="1 4 1 10 7 10" />
-                                        <path d="M3.51 15a9 9 0 1 0 .49-3.8" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <span class="repo-section-intro-label"
-                                        data-i18n="repo.joinColumnLabel">SYNCHRONISER</span>
-                                    <span class="repo-section-intro-desc" data-i18n="repo.joinColumnDesc">Connectez-vous
-                                        à un dépôt et synchronisez vos mods automatiquement</span>
-                                </div>
-                            </div>
-
+                        <!-- ══ SYNC / REJOINDRE ══ -->
+                        <div class="repo-column repo-tab-panel active" data-repo-panel="sync">
                             <div class="repo-card repo-card--accent">
                                 <div class="repo-card-header">
                                     <h3>
@@ -2400,9 +2398,9 @@
                                 </div><!-- /repo-card-body (sync) -->
                             </div><!-- /repo-card--accent -->
 
-                        </div><!-- /repo-column join -->
+                        </div><!-- /repo-column join (sync panel) -->
 
-                    </div><!-- /repo-grid -->
+                    </div><!-- /repo-tab-body -->
                 </section>
 
                 <!-- ══ DOCUMENTATION VIEW ══ -->
