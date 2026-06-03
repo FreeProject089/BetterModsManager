@@ -475,6 +475,7 @@
   "apps.autoDetected": "Auto-détecté (peut échouer)",
   "apps.useThis": "Utiliser",
   "apps.launcherSet": "Lanceur mis à jour",
+  "apps.changeLauncher": "Changer le lanceur",
   "plugins.qtDestFolder": "Dossier de destination",
   "common.exported": "Exporté",
   "common.all": "Tout",

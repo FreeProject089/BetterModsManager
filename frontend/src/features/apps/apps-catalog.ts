@@ -478,6 +478,7 @@ function renderInstalled() {
           ${app.exe_path
             ? `<button class="btn btn-sm btn-accent" data-action="launch" data-id="${escAttr(app.id)}" data-exe="${escAttr(app.exe_path)}">${IC.play} ${t('apps.launch')||'Launch'}</button>`
             : `<button class="btn btn-sm btn-ghost" data-action="pick-exe" data-id="${escAttr(app.id)}">${IC.monitor} ${t('apps.pickExe')||'Set exe'}</button>`}
+          ${app.exe_path ? `<button class="btn btn-sm btn-ghost" data-action="change-launcher" data-id="${escAttr(app.id)}" title="${escAttr(app.exe_path)}">${IC.refresh || IC.monitor}</button>` : ''}
           <button class="btn btn-sm btn-ghost" data-action="folder" data-id="${escAttr(app.id)}" data-path="${escAttr(app.install_path)}">${IC.folder}</button>
           <button class="btn btn-sm btn-ghost btn-danger-ghost" data-action="uninstall" data-id="${escAttr(app.id)}">${IC.trash}</button>
         </div>
@@ -507,13 +508,40 @@ function renderInstalled() {
                 } catch (err) { toast(String(err), 'error'); }
             }
             if (action === 'pick-exe') {
-                const file = await pickFile({ filters: [{ name: 'Executable', extensions: ['exe', 'msi'] }] }).catch(() => null);
+                const file = await pickFile({ filters: [{ name: 'Executable', extensions: ['exe', 'msi', 'bat', 'cmd', 'vbs', 'ps1'] }] }).catch(() => null);
                 if (!file) return;
                 try {
                     await invoke('register_installed_exe', { appId: id, exePath: file });
                     toast(t('apps.exeSet')||'Executable set', 'success');
                     await refreshAndRender();
                 } catch (err) { toast(String(err), 'error'); }
+            }
+            if (action === 'change-launcher') {
+                // List every runnable file in the app folder and let the user re-pick
+                // the one BMM launches (with Browse fallback). Current choice pre-selected.
+                let exes: { name: string; path: string; size: number }[] = [];
+                try { exes = await invoke('list_app_executables', { appId: id }); } catch {}
+                const current = _state.installed[id]?.exe_path;
+                if (current) {
+                    // Put the current launcher first so it's the pre-selected "★ auto" entry
+                    exes = [
+                        ...exes.filter(e => e.path === current),
+                        ...exes.filter(e => e.path !== current),
+                    ];
+                    if (!exes.some(e => e.path === current)) {
+                        exes.unshift({ name: current.split(/[\\/]/).pop() || current, path: current, size: 0 });
+                    }
+                }
+                if (exes.length === 0) {
+                    // Nothing detected → straight to Browse
+                    const file = await pickFile([{ name: 'Executable / Script', extensions: ['exe', 'bat', 'cmd', 'vbs', 'ps1', 'msi'] }]).catch(() => null);
+                    if (file) {
+                        try { await invoke('set_app_main_exe', { appId: id, exePath: file }); toast(t('apps.launcherSet')||'Launcher updated', 'success'); await refreshAndRender(); }
+                        catch (err) { toast(String(err), 'error'); }
+                    }
+                    return;
+                }
+                showLauncherPicker(id, exes, () => refreshAndRender());
             }
             if (action === 'folder') {
                 await invoke('open_app_folder', { installPath: el.dataset.path }).catch(() => {});
