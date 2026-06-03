@@ -503,6 +503,45 @@ pub async fn start_api_server(
             warp::reply::json(&serde_json::json!({ "ok": true, "data": mods }))
         });
 
+    // GET /api/mods/all — every mod across ALL profiles, grouped by profile.
+    let data_mods_all = data.clone();
+    let get_mods_all = warp::path!("api" / "mods" / "all")
+        .and(warp::get())
+        .and(with_data(data_mods_all))
+        .map(|d: Arc<std::sync::Mutex<AppData>>| {
+            let data = d.lock().unwrap_or_else(|p| p.into_inner());
+            let mut profiles_out: Vec<serde_json::Value> = Vec::new();
+            let mut total = 0usize;
+            for profile in &data.profiles {
+                let mods: Vec<serde_json::Value> = data.mods.iter()
+                    .filter(|m| m.mod_folder_path.starts_with(&profile.mods_path)
+                        || matches!((m.mod_folder_path.canonicalize(), profile.mods_path.canonicalize()),
+                            (Ok(a), Ok(b)) if a.starts_with(&b)))
+                    .map(|m| serde_json::json!({ "id": m.id, "name": m.name, "version": m.version, "enabled": m.enabled }))
+                    .collect();
+                total += mods.len();
+                profiles_out.push(serde_json::json!({
+                    "profile_id": profile.id, "profile_name": profile.name,
+                    "mod_count": mods.len(), "mods": mods,
+                }));
+            }
+            warp::reply::json(&serde_json::json!({ "ok": true, "total_mods": total, "profiles": profiles_out }))
+        });
+
+    // GET /api/data — full BMM data export (the entire data.json). Auth required.
+    let data_dump = data.clone(); let tok_dump = token.clone();
+    let get_data_dump = warp::path!("api" / "data")
+        .and(warp::get())
+        .and(require_token(tok_dump))
+        .and(with_data(data_dump))
+        .map(|d: Arc<std::sync::Mutex<AppData>>| {
+            let data = d.lock().unwrap_or_else(|p| p.into_inner());
+            warp::reply::with_header(
+                warp::reply::json(&*data),
+                "Content-Disposition", "attachment; filename=\"bmm-data.json\"",
+            )
+        });
+
     // GET /api/mods/active
     let data_active = data.clone();
     let get_active_mods = warp::path!("api" / "mods" / "active")
@@ -2176,8 +2215,10 @@ pub async fn start_api_server(
     let group_a = health
         .or(status)
         .or(check_update)
+        .or(get_mods_all)
         .or(get_mods)
         .or(get_active_mods)
+        .or(get_data_dump)
         .or(get_profiles)
         .or(get_plugins)
         .or(get_creator_id_route)

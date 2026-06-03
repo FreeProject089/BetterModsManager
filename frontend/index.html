@@ -2482,13 +2482,6 @@
                                     <h3 class="panel-title" data-i18n="mapper.modSide">Structure du Mod</h3>
                                     <div class="selection-counter" id="mapper-selection-count">0 sélectionné</div>
                                     <div class="tree-controls">
-                                        <button class="btn-icon-small" id="btn-mapper-mod-selectroot"
-                                            data-i18n-title="mapper.selectRoot" title="Select whole mod root">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2.5">
-                                                <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                                            </svg>
-                                        </button>
                                         <button class="btn-icon-small" id="btn-mapper-mod-expand"
                                             data-i18n-title="mapper.expandAll">
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
@@ -6308,7 +6301,7 @@
   "game":        "DCS World",
   "description": "Required mods for My Server",
   "official":    false,
-  "permissions": ["read_mods", "enable_mods"],
+  "permissions": ["mods.read", "mods.write"],
   "tags":        ["dcs", "multiplayer"],
   "website":     "https://myserver.example.com",
   "modlist": {
@@ -6341,15 +6334,28 @@
 
                                 <p class="plug-doc-h" data-i18n="docs.dlUrlsTitle">Available URLs</p>
                                 <ul class="plug-doc-ul">
-                                    <li><code>bmm://mod/enable?id=mod-id</code>                &nbsp;— <span data-i18n="docs.dlEnableMod">Enable a specific mod</span></li>
-                                    <li><code>bmm://mod/disable?id=mod-id</code>               &nbsp;— <span data-i18n="docs.dlDisableMod">Disable a specific mod</span></li>
-                                    <li><code>bmm://profile/activate?id=prof-id</code>         &nbsp;— <span data-i18n="docs.dlProfile">Activate a profile</span></li>
-                                    <li><code>bmm://plugin/activate?id=my-server</code>        &nbsp;— <span data-i18n="docs.dlActivate">Apply plugin modlist</span></li>
-                                    <li><code>bmm://plugin/compare?id=my-server</code>         &nbsp;— <span data-i18n="docs.dlCompare">Compare modlist</span></li>
-                                    <li><code>bmm://modpack/enable?id=modpack-uuid</code>      &nbsp;— <span data-i18n="docs.dlModpackEnable">Enable all mods in a modpack</span></li>
-                                    <li><code>bmm://modpack/disable?id=modpack-uuid</code>     &nbsp;— <span data-i18n="docs.dlModpackDisable">Disable all mods in a modpack</span></li>
-                                    <li><code>bmm://install?url=https://...&amp;name=ModName</code> &nbsp;— <span data-i18n="docs.dlInstall">Install a mod from URL</span></li>
+                                    <li><code>bmm://mod/enable?id=mod-id</code>                &nbsp;— Enable a specific mod</li>
+                                    <li><code>bmm://mod/disable?id=mod-id</code>               &nbsp;— Disable a specific mod</li>
+                                    <li><code>bmm://profile/activate?id=prof-id</code>         &nbsp;— Activate a profile</li>
+                                    <li><code>bmm://plugin/activate?id=my-server</code>        &nbsp;— Apply plugin modlist</li>
+                                    <li><code>bmm://plugin/compare?id=my-server</code>         &nbsp;— Compare modlist</li>
+                                    <li><code>bmm://modpack/enable?id=uuid</code>              &nbsp;— Enable all mods in a modpack</li>
+                                    <li><code>bmm://modpack/disable?id=uuid</code>             &nbsp;— Disable all mods in a modpack</li>
+                                    <li><code>bmm://modpack/create?name=X&amp;profile=id</code>  &nbsp;— Create a modpack from a profile</li>
+                                    <li><code>bmm://repo/connect?url=...</code>                &nbsp;— Connect a server repo</li>
+                                    <li><code>bmm://repo/sync?url=...&amp;profile=id</code>      &nbsp;— Sync a server repo</li>
+                                    <li><code>bmm://repo/gen</code> · <code>bmm://repo/update?dir=...</code> · <code>bmm://repo/host?dir=...&amp;port=8080</code></li>
+                                    <li><code>bmm://app/install?id=X&amp;url=...&amp;type=exe</code> &nbsp;— Install a catalog app</li>
+                                    <li><code>bmm://app/launch?id=X&amp;exe=C:/path.exe</code> &nbsp;— Launch an installed app</li>
+                                    <li><code>bmm://language/import?path=fr.json</code>        &nbsp;— Import a translation</li>
+                                    <li><code>bmm://restart</code>                            &nbsp;— Restart BMM</li>
+                                    <li><code>bmm://install?url=...&amp;name=ModName</code>     &nbsp;— One-click mod install</li>
                                 </ul>
+
+                                <div class="plug-doc-tip" style="margin-top:8px;">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                    <span><strong>Generic passthrough</strong> — one deeplink for EVERY endpoint: <code>bmm://api?method=POST&amp;path=/api/mods/enable&amp;mod_id=abc</code>. Extra params become the JSON body (POST/PUT) or query string (GET/DELETE).</span>
+                                </div>
 
                                 <p class="plug-doc-h" data-i18n="docs.dlScriptTitle">Script examples</p>
                                 <div class="plug-doc-code-wrap">
@@ -6389,6 +6395,10 @@ start "" "bmm://mod/enable?id=my-mod-folder"</pre>
                                 </div>
 
                                 <p class="plug-doc-h" data-i18n="docs.apiEndpoints">Endpoints</p>
+                                <div class="plug-doc-tip" style="margin-bottom:10px;">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                    <span>The full, always-up-to-date endpoint list (with fields, responses & a one-click test) lives in <strong>Plugins &amp; API → Quick Test</strong>. A reference doc is also at <code>.Assets/.md/API_Reference.md</code> (FR: <code>API_Reference_FR.md</code>).</span>
+                                </div>
                                 <div class="plug-doc-grid2">
                                     <div class="plug-doc-ep-col get">
                                         <h4>GET — no auth required</h4>
@@ -6398,28 +6408,28 @@ start "" "bmm://mod/enable?id=my-mod-folder"</pre>
                                             <li><code>GET /api/check-update</code></li>
                                             <li><code>GET /api/mods</code></li>
                                             <li><code>GET /api/mods/active</code></li>
+                                            <li><code>GET /api/mods/all</code> — all profiles</li>
                                             <li><code>GET /api/modpacks</code></li>
                                             <li><code>GET /api/profiles</code></li>
                                             <li><code>GET /api/plugins</code></li>
                                             <li><code>GET /api/creator-id</code></li>
-                                            <li><code>GET /api/server-repo/list</code></li>
+                                            <li><code>GET /api/repo/info?url=</code></li>
+                                            <li><code>GET /api/repo/list</code></li>
+                                            <li><code>GET /api/language/template</code></li>
                                         </ul>
                                     </div>
                                     <div class="plug-doc-ep-col post">
                                         <h4>POST — Bearer token</h4>
                                         <ul>
-                                            <li><code>POST /api/mods/enable</code></li>
-                                            <li><code>POST /api/mods/disable</code></li>
-                                            <li><code>POST /api/profiles</code></li>
-                                            <li><code>POST /api/profiles/activate</code></li>
-                                            <li><code>POST /api/plugins/apply</code></li>
-                                            <li><code>POST /api/plugins/compare</code></li>
-                                            <li><code>POST /api/modpacks/enable</code></li>
-                                            <li><code>POST /api/modpacks/disable</code></li>
-                                            <li><code>POST /api/modpacks/create</code></li>
-                                            <li><code>POST /api/server-repo/connect</code></li>
-                                            <li><code>POST /api/server-repo/sync</code></li>
-                                            <li><code>POST /api/server-repo/host</code></li>
+                                            <li><code>POST /api/mods/enable</code> · <code>/disable</code></li>
+                                            <li><code>POST /api/profiles</code> · <code>/activate</code></li>
+                                            <li><code>POST /api/plugins/apply</code> · <code>/compare</code></li>
+                                            <li><code>POST /api/modpacks/enable</code> · <code>/disable</code> · <code>/create</code></li>
+                                            <li><code>POST /api/repo/connect</code> · <code>/sync</code> · <code>/gen</code> · <code>/update</code> · <code>/host</code></li>
+                                            <li><code>POST /api/apps/install</code> · <code>/launch</code></li>
+                                            <li><code>POST /api/catalog/new</code> · <code>/apps</code></li>
+                                            <li><code>POST /api/{data,modlists,modpacks,plugins}/export · /import</code></li>
+                                            <li><code>POST /api/language/import</code></li>
                                             <li><code>POST /api/restart</code></li>
                                         </ul>
                                     </div>
@@ -6430,6 +6440,9 @@ start "" "bmm://mod/enable?id=my-mod-folder"</pre>
                                         <ul>
                                             <li><code>PUT /api/mods/:id</code></li>
                                             <li><code>PUT /api/profiles/:id</code></li>
+                                            <li><code>PUT /api/modpacks/:id</code></li>
+                                            <li><code>PUT /api/catalog/apps/:id</code></li>
+                                            <li><code>PUT /api/apps/permissions/:id</code></li>
                                         </ul>
                                     </div>
                                     <div class="plug-doc-ep-col" style="border-color:rgba(239,68,68,0.3);">
@@ -6437,6 +6450,10 @@ start "" "bmm://mod/enable?id=my-mod-folder"</pre>
                                         <ul>
                                             <li><code>DELETE /api/mods/:id</code></li>
                                             <li><code>DELETE /api/profiles/:id</code></li>
+                                            <li><code>DELETE /api/modpacks/:id</code></li>
+                                            <li><code>DELETE /api/apps/:id</code></li>
+                                            <li><code>DELETE /api/catalog/apps/:id</code></li>
+                                            <li><code>DELETE /api/repo</code> · <code>/repo/sync/cancel</code> · <code>/repo/gen/cancel</code></li>
                                         </ul>
                                     </div>
                                 </div>
@@ -6469,7 +6486,7 @@ curl -X POST http://127.0.0.1:51274/api/modpacks/enable \
   -d '{"profile_id":"my-profile-id"}'
 
 # Connect to a Server Repo / Depot
-curl -X POST http://127.0.0.1:51274/api/server-repo/connect \
+curl -X POST http://127.0.0.1:51274/api/repo/connect \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://repo.example.com/depot.json","name":"My Server"}'</pre>
@@ -6496,7 +6513,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/modpacks/enable" `
 
 # Connect to a Server Repo
 $body3 = @{ url = "https://repo.example.com/depot.json"; name = "My Server" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
+Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
     -Method POST `
     -Headers @{ Authorization = "Bearer $token"; "Content-Type" = "application/json" } `
     -Body $body3</pre>
@@ -6652,26 +6669,27 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/server-repo/connect" `
                                 <svg class="plug-doc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
                             </summary>
                             <div class="plug-doc-body">
-                                <p class="plug-doc-p" data-i18n="docs.permsDesc">Declare permissions in <code>plugin.json</code> — BMM will prompt the user to grant them on first use.</p>
+                                <p class="plug-doc-p">When a plugin calls the API it sends <code>X-BMM-Plugin-Id</code>. BMM then only allows the scopes you granted it in <strong>Plugins &amp; API → Permissions</strong>; anything else returns <code>403</code>. Without that header (your own scripts / curl) the call has full access.</p>
                                 <table class="plug-doc-perm-table">
                                     <thead>
                                         <tr>
-                                            <th data-i18n="docs.permColPerm">Permission</th>
+                                            <th data-i18n="docs.permColPerm">Scope</th>
                                             <th data-i18n="docs.permColDesc">What it allows</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr><td>read_mods</td><td data-i18n="docs.perm.readMods">Read the list of installed mods</td></tr>
-                                        <tr><td>enable_mods</td><td data-i18n="docs.perm.enableMods">Enable mods via deep link / API</td></tr>
-                                        <tr><td>disable_mods</td><td data-i18n="docs.perm.disableMods">Disable mods via deep link / API</td></tr>
-                                        <tr><td>switch_profile</td><td data-i18n="docs.perm.switchProfile">Activate a profile</td></tr>
-                                        <tr><td>apply_modlist</td><td data-i18n="docs.perm.applyModlist">Apply the full plugin modlist</td></tr>
-                                        <tr><td>compare_modlist</td><td data-i18n="docs.perm.compareModlist">Run a modlist comparison check</td></tr>
+                                        <tr><td><code>mods.read</code> / <code>mods.write</code></td><td>Read mods · enable / disable / edit / delete mods</td></tr>
+                                        <tr><td><code>profiles.read</code> / <code>profiles.write</code></td><td>Read profiles · create / activate / edit / delete profiles</td></tr>
+                                        <tr><td><code>modpacks.read</code> / <code>modpacks.write</code></td><td>Read modpacks · create / enable / disable / edit / delete</td></tr>
+                                        <tr><td><code>plugins.read</code> / <code>plugins.write</code></td><td>Compare a plugin modlist · apply a plugin</td></tr>
+                                        <tr><td><code>repo.read</code> / <code>repo.write</code></td><td>Read repo info · connect / sync / gen / host / disconnect</td></tr>
+                                        <tr><td><code>app.read</code> / <code>app.write</code></td><td>Read installed apps · install / launch / uninstall</td></tr>
+                                        <tr><td><code>catalog.read</code> / <code>catalog.write</code></td><td>Read local catalog · create / edit / delete catalog entries</td></tr>
                                     </tbody>
                                 </table>
                                 <div class="plug-doc-tip" style="margin-top:10px;">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                    <span data-i18n="docs.permsGlobalNote">You can enable <strong>Global Plugin Trust</strong> in the Permissions tab to skip all permission prompts for all plugins at once — useful for advanced users who trust all their plugins.</span>
+                                    <span>Declare requested scopes in <code>plugin.json</code> → <code>"permissions": ["mods.read", "mods.write"]</code>. Grant/revoke per plugin in the Permissions tab. <strong>Global Plugin Trust</strong> skips the confirmation dialogs for trusted plugins.</span>
                                 </div>
                             </div>
                         </details>

@@ -42,6 +42,22 @@ export async function initMapper(): Promise<void> {
     const view = document.getElementById('view-mapper');
     if (!view) return;
 
+    // Intercept [data-tooltip] elements inside the mapper → use Tasky (mouse-follow,
+    // never clipped by the tree panel's overflow) instead of the CSS ::after tooltip.
+    if (!(view as any)._taskyTipBound) {
+        (view as any)._taskyTipBound = true;
+        view.addEventListener('mouseover', (e) => {
+            const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
+            if (!el) return;
+            const tip = el.getAttribute('data-tooltip') || '';
+            if (tip) (window as any).showTaskyHelp?.(tip, 'info', true);
+        });
+        view.addEventListener('mouseout', (e) => {
+            const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
+            if (el) (window as any).hideTaskyHelp?.();
+        });
+    }
+
     const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement;
     const profileSelect = document.getElementById('mapper-profile-select') as HTMLSelectElement;
     const previewBtn = document.getElementById('btn-mapper-preview');
@@ -411,7 +427,7 @@ function setupFilters(): void {
     modFilter?.addEventListener('input', debouncedModSearch);
     gameFilter?.addEventListener('input', debouncedGameSearch);
     
-    document.getElementById('btn-mapper-mod-selectroot')?.addEventListener('click', selectModRoot);
+    // (btn-mapper-mod-selectroot is now rendered on the mod-root tree item itself)
     document.getElementById('btn-mapper-mod-expand')?.addEventListener('click', () => toggleAll('mapper-mod-tree', true));
     document.getElementById('btn-mapper-mod-collapse')?.addEventListener('click', () => toggleAll('mapper-mod-tree', false));
     document.getElementById('btn-mapper-game-expand')?.addEventListener('click', () => toggleAll('mapper-game-tree', true));
@@ -561,7 +577,7 @@ async function renderFilteredModTree(): Promise<void> {
     if (modContainer) {
         modContainer.innerHTML = '';
         
-        // Add Virtual "Racine du Mod" item
+        // Add Virtual "Racine du Mod" item — with a "select whole mod" button on it
         if (selectedModId) {
             const rootItem = document.createElement('div');
             rootItem.className = 'tree-item folder root-target-item mod-root-target';
@@ -573,8 +589,17 @@ async function renderFilteredModTree(): Promise<void> {
                         <path d="M12 22V12"/>
                     </svg>
                 </span>
-                <span class="tree-item-label">${t('mapper.modRoot') || 'Racine du Mod'}</span>`;
+                <span class="tree-item-label">${t('mapper.modRoot') || 'Racine du Mod'}</span>
+                <button class="mapper-root-select-btn" id="btn-mapper-mod-selectroot" data-tooltip="${t('mapper.selectRoot') || 'Select whole mod root'}">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    </svg>
+                </button>`;
             rootItem.dataset.path = ".";
+            rootItem.querySelector('#btn-mapper-mod-selectroot')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectModRoot();
+            });
             rootItem.addEventListener('contextmenu', (e) => {
                 e.preventDefault(); e.stopPropagation();
                 showContextMenu(e.clientX, e.clientY, ".", true, true);

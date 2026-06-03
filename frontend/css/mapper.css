@@ -307,6 +307,38 @@
     background: rgba(255, 255, 255, 0.05) !important;
 }
 
+/* "Select whole mod root" button rendered directly on the mod-root tree item */
+.mod-root-target {
+    position: relative;
+}
+.mapper-root-select-btn {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid rgba(255, 165, 0, 0.35);
+    border-radius: 6px;
+    background: rgba(255, 165, 0, 0.12);
+    color: var(--warning);
+    cursor: pointer;
+    flex-shrink: 0;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+.mod-root-target:hover .mapper-root-select-btn {
+    opacity: 1;
+}
+.mapper-root-select-btn:hover {
+    background: rgba(255, 165, 0, 0.25);
+    transform: scale(1.08);
+}
+.mapper-root-select-btn:active {
+    transform: scale(0.94);
+}
+
 .mapper-panel {
     flex: 1;
     display: flex;
@@ -675,3 +707,8 @@
 /* JS tooltip replaces CSS ::after for cells inside the overflow scroll area */
 .preview-list-wrapper [data-tooltip]::after,
 .preview-list-wrapper [data-tooltip]::before { display: none !important; }
+
+/* Tasky tooltip replaces the CSS ::after tooltip everywhere in the mapper
+   (the tree panels clip ::after via overflow; Tasky follows the mouse, never cut) */
+#view-mapper [data-tooltip]::after,
+#view-mapper [data-tooltip]::before { display: none !important; }

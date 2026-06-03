@@ -703,11 +703,15 @@ function renderUqtForm(ep: EndpointDef, formEl: HTMLElement): void {
     formEl.querySelector('#uqt-curl')?.addEventListener('click', () => {
         const { path, body } = collect();
         const tok = (document.getElementById('plug-token-display') as HTMLInputElement)?.value?.trim() || _apiToken;
-        const lines = [`curl -X ${ep.method} \\`];
-        if (ep.auth) lines.push(`  -H "Authorization: Bearer ${tok}" \\`);
-        if (body) lines.push(`  -H "Content-Type: application/json" \\`, `  -d '${body.replace(/\n\s*/g, '')}' \\`);
-        lines.push(`  "http://127.0.0.1:51274${path}"`);
-        navigator.clipboard.writeText(lines.join('\n')).catch(() => {});
+        // Single-line command — paste straight into a terminal, no line continuations.
+        const parts = [`curl -X ${ep.method}`];
+        if (ep.auth) parts.push(`-H "Authorization: Bearer ${tok}"`);
+        if (body) {
+            const compact = JSON.stringify(JSON.parse(body)); // minified, single line
+            parts.push(`-H "Content-Type: application/json"`, `-d "${compact.replace(/"/g, '\\"')}"`);
+        }
+        parts.push(`"http://127.0.0.1:51274${path}"`);
+        navigator.clipboard.writeText(parts.join(' ')).catch(() => {});
         toast(t('plugins.epCopyDone') || 'cURL copied', 'success');
     });
 }
@@ -4048,6 +4052,16 @@ function buildEndpointRow(ep: EndpointDef): string {
         'POST /api/modpacks/disable':  'bmm://modpack/disable?id=<modpack_id>',
         'POST /api/repo/connect':      'bmm://repo/connect?url=<repo_url>',
         'POST /api/repo/sync':         'bmm://repo/sync?url=<repo_url>&profile=<repo_profile_id>',
+        'POST /api/repo/gen':          'bmm://repo/gen',
+        'POST /api/repo/update':       'bmm://repo/update?dir=<repoDir>',
+        'POST /api/repo/host':         'bmm://repo/host?dir=<serveDir>&port=<port>',
+        'POST /api/apps/install':      'bmm://app/install?id=<id>&url=<url>&type=<fileType>&title=<title>',
+        'POST /api/apps/launch':       'bmm://app/launch?id=<id>&exe=<exePath>',
+        'POST /api/modpacks/create':   'bmm://modpack/create?name=<name>&profile=<profile_id>',
+        'POST /api/language/import':   'bmm://language/import?path=<file>',
+        'POST /api/restart':           'bmm://restart',
+        // Every other endpoint is reachable via the generic passthrough:
+        //   bmm://api?method=<M>&path=<path>&<field>=<value>…
     };
     const dlEquiv = ENDPOINT_TO_DL[`${ep.method} ${ep.path}`];
     const dlBadge = dlEquiv
@@ -4306,6 +4320,25 @@ function getEndpointDefs(): EndpointDef[] {
             desc: t('plugins.endpointModsActive'), about: 'Raccourci pour lister uniquement les mods activés dans le profil actif.',
             fields: null,
             responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "data": [{ "id": "mod-uuid", "name": "MyMod", "active": true }] }' }],
+        },
+        {
+            method: 'GET', path: '/api/mods/all', auth: false,
+            desc: t('plugins.endpointModsAll') || 'List every mod (all profiles)',
+            about: 'Returns every mod across <strong>all profiles</strong>, grouped by profile, with a global total. Unlike <code>GET /api/mods</code> (active profile only), this covers your entire library. No authentication required.',
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{\n  "ok": true,\n  "total_mods": 42,\n  "profiles": [\n    { "profile_id": "abc", "profile_name": "DCS World", "mod_count": 12, "mods": [ { "id": "...", "name": "...", "version": "1.0", "enabled": true } ] }\n  ]\n}' },
+            ],
+        },
+        {
+            method: 'GET', path: '/api/data', auth: true,
+            desc: t('plugins.endpointDataDump') || 'Export all BMM data (data.json)',
+            about: 'Returns the <strong>complete BMM data file</strong> (<code>data.json</code>) — every profile, mod, modpack, plugin, setting, tag, etc. Served with <code>Content-Disposition: attachment</code> as <code>bmm-data.json</code>. This is the full machine-readable backup; use it to inspect or replicate a BMM state programmatically. Requires a token.',
+            fields: null,
+            responseStatuses: [
+                { code: 200, label: 'OK (JSON file)', body: '{ "profiles": [...], "mods": [...], "modpacks": [...], "settings": {...}, "plugin_permissions": {...}, ... }' },
+                e401,
+            ],
         },
         {
             method: 'POST', path: '/api/mods/enable', auth: true,
