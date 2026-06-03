@@ -17,6 +17,11 @@ declare global {
     }
 }
 
+/** Reads the live API token from settings (for deeplinks that call the local API). */
+async function getApiToken(): Promise<string> {
+    try { const s: any = await invoke('get_settings'); return s?.api_token || ''; } catch { return ''; }
+}
+
 /**
  * Initializes the deep link listener.
  * Listens for 'deep-link-received' events from the Rust backend.
@@ -235,6 +240,118 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             setTimeout(() => {
                 window.dispatchEvent(new CustomEvent('bmm:deeplink-repo-sync', { detail: { url: repoUrl } }));
             }, 300);
+            return;
+        }
+
+        // ── Generic passthrough: bmm://api?method=&path=&<field>=… ────────
+        // Lets a single deeplink hit ANY documented API endpoint. Example:
+        //   bmm://api?method=POST&path=/api/mods/enable&mod_id=abc
+        //   bmm://api?method=GET&path=/api/status
+        // Query params (other than method/path) become the JSON body (POST/PUT)
+        // or the query string (GET/DELETE).
+        if (action === 'api') {
+            const method = (parsedUrl.searchParams.get('method') || 'GET').toUpperCase();
+            let apiPath = parsedUrl.searchParams.get('path') || '';
+            if (!apiPath.startsWith('/api/')) { toast('Deep link: invalid path', 'error'); return; }
+            const params: Record<string, string> = {};
+            parsedUrl.searchParams.forEach((v, k) => { if (k !== 'method' && k !== 'path') params[k] = v; });
+            try {
+                const tok = await getApiToken();
+                const opts: RequestInit = { method, headers: { 'Authorization': `Bearer ${tok}` } };
+                if (method === 'GET' || method === 'DELETE') {
+                    const qs = Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+                    if (qs) apiPath += (apiPath.includes('?') ? '&' : '?') + qs;
+                } else if (Object.keys(params).length) {
+                    (opts.headers as any)['Content-Type'] = 'application/json';
+                    // Coerce booleans/numbers where obvious
+                    const body: Record<string, any> = {};
+                    for (const [k, v] of Object.entries(params)) {
+                        body[k] = v === 'true' ? true : v === 'false' ? false : (/^-?\d+$/.test(v) ? Number(v) : v);
+                    }
+                    opts.body = JSON.stringify(body);
+                }
+                const r = await fetch(`http://127.0.0.1:51274${apiPath}`, opts);
+                if (r.ok) { toast(`${method} ${apiPath.split('?')[0]} ✓`, 'success'); window._refreshModsFn?.(true); }
+                else toast(`${method} ${apiPath.split('?')[0]} → ${r.status}`, 'error');
+            } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+            return;
+        }
+
+        // ── Repo: gen / update / host ─────────────────────────────────────
+        if (action === 'repo/gen' || action === 'repo/update' || action === 'repo/host') {
+            const navBtn = document.querySelector('.nav-item[data-view="repo"], [data-view="repo"]') as HTMLElement | null;
+            navBtn?.click();
+            const section = action === 'repo/gen' ? 'gen' : action === 'repo/update' ? 'update' : 'host';
+            const prefill: any = {};
+            if (action === 'repo/update') prefill.repoDir = parsedUrl.searchParams.get('dir') || '';
+            if (action === 'repo/host') {
+                prefill.serveDir = parsedUrl.searchParams.get('dir') || '';
+                const port = parsedUrl.searchParams.get('port'); if (port) prefill.port = parseInt(port, 10);
+            }
+            setTimeout(() => document.dispatchEvent(new CustomEvent('bmm:repo-focus', { detail: { section, prefill } })), 400);
+            toast(`Deep Link: ${action}`, 'info');
+            return;
+        }
+
+        // ── App Catalog: install / launch ─────────────────────────────────
+        if (action === 'app/install') {
+            const id = parsedUrl.searchParams.get('id');
+            const url = parsedUrl.searchParams.get('url');
+            if (!id || !url) { toast(t('plugins.deepLinkMissingUrl') || 'Missing id/url', 'error'); return; }
+            try {
+                await invoke('install_app', {
+                    appId: id,
+                    appTitle: parsedUrl.searchParams.get('title') || id,
+                    downloadUrl: url,
+                    fileType: parsedUrl.searchParams.get('type') || 'exe',
+                    installPath: parsedUrl.searchParams.get('path') || '',
+                    version: null, category: null, thumb: null,
+                });
+                toast(`${parsedUrl.searchParams.get('title') || id} ${t('apps.installed') || 'installed'}`, 'success');
+            } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+            return;
+        }
+        if (action === 'app/launch') {
+            const id = parsedUrl.searchParams.get('id');
+            const exe = parsedUrl.searchParams.get('exe');
+            if (!id || !exe) { toast(t('plugins.deepLinkMissingId') || 'Missing id/exe', 'error'); return; }
+            try { await invoke('launch_app', { appId: id, exePath: exe }); toast(`${t('apps.launched') || 'Launched'}: ${id}`, 'success'); }
+            catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+            return;
+        }
+
+        // ── Modpack: create from a profile (via local API) ───────────────
+        if (action === 'modpack/create') {
+            const name = parsedUrl.searchParams.get('name');
+            const profileId = parsedUrl.searchParams.get('profile');
+            if (!name) { toast(t('plugins.deepLinkMissingId') || 'Missing name', 'error'); return; }
+            try {
+                const tok = await getApiToken();
+                const r = await fetch('http://127.0.0.1:51274/api/modpacks/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tok}` },
+                    body: JSON.stringify({ name, source_profile_id: profileId || undefined }),
+                });
+                if (r.ok) { toast(`${t('plugins.actionCreateModpack') || 'Modpack created'}: ${name}`, 'success'); window._refreshModsFn?.(true); }
+                else toast(`${t('common.error')}: ${r.status}`, 'error');
+            } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+            return;
+        }
+
+        // ── Language: import a translation file by path ───────────────────
+        if (action === 'language/import') {
+            const path = parsedUrl.searchParams.get('path');
+            try { await invoke('import_language', { path: path || null }); toast(t('settings.langImported') || 'Language imported', 'success'); }
+            catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+            return;
+        }
+
+        // ── Restart BMM (via local API) ───────────────────────────────────
+        if (action === 'restart') {
+            try {
+                const tok = await getApiToken();
+                await fetch('http://127.0.0.1:51274/api/restart', { method: 'POST', headers: { 'Authorization': `Bearer ${tok}` } });
+            } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
             return;
         }
 

@@ -10285,10 +10285,26 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 }
 .plug-card-actions-right {
     display: flex;
-    gap: 4px;
+    gap: 5px;
     margin-left: auto;
     align-items: center;
 }
+/* Clean square icon buttons in the installed-plugin action row */
+.plug-card-actions-right .btn {
+    width: 30px; height: 30px; min-width: 30px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-secondary);
+    transition: background .12s, color .12s, border-color .12s, transform .1s;
+}
+.plug-card-actions-right .btn:hover { background: rgba(255,255,255,0.09); color: var(--text-primary); transform: translateY(-1px); }
+.plug-card-actions-right .btn svg { width: 14px; height: 14px; }
+.plug-card-actions-right .btn-danger-ghost:hover,
+.plug-card-actions-right .btn.btn-danger:hover { background: rgba(239,68,68,0.15); color: #f87171; border-color: rgba(239,68,68,0.35); }
+/* Primary actions (Compare / Apply) keep a clear filled/secondary look */
+.plug-card-actions > .btn-accent, .plug-card-actions > .btn-secondary { height: 30px; border-radius: 8px; font-weight: 600; }
 
 /* ── Plugin checksum badge (matches mod SHA badge style) ── */
 .plug-sha-badge {
@@ -10544,19 +10560,24 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     gap: 6px;
 }
 .plug-perm-block {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 13px;
+    padding: 16px 18px;
     margin-bottom: 12px;
+    transition: border-color .15s;
 }
+.plug-perm-block:hover { border-color: rgba(255,255,255,0.14); }
 .plug-perm-header {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
 }
-.plug-perm-id { font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); }
+.plug-perm-header strong { font-size: 14px; }
+.plug-perm-id { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); background: rgba(0,0,0,0.25); padding: 2px 7px; border-radius: 5px; }
 .plug-perm-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -11017,17 +11038,28 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .plug-mod-item {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-    transition: background 0.15s;
+    gap: 8px;
+    padding: 9px 12px;
+    margin-bottom: 4px;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    background: rgba(0,0,0,0.18);
+    transition: background 0.15s, border-color 0.15s, transform 0.12s;
     font-size: 12px;
+    cursor: pointer;
 }
-.plug-mod-item:last-child { border-bottom: none; }
-.plug-mod-item:hover { background: rgba(255,255,255,0.04); }
-.plug-mod-item.plug-mod-selected { opacity: 0.4; pointer-events: none; }
+.plug-mod-item:hover { background: rgba(255,255,255,0.05); border-color: var(--accent); transform: translateX(2px); }
+.plug-mod-item.plug-mod-selected { opacity: 0.4; pointer-events: none; border-color: var(--success); }
 .plug-mod-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.plug-mod-optional-lbl { font-size: 10px; color: var(--text-secondary); display: flex; align-items: center; gap: 3px; cursor: pointer; flex-shrink: 0; }
+.plug-mod-optional-lbl {
+    font-size: 10px; font-weight: 700; color: var(--text-muted);
+    display: flex; align-items: center; gap: 5px; cursor: pointer; flex-shrink: 0;
+    padding: 3px 8px; border: 1px solid rgba(255,255,255,0.1); border-radius: 100px;
+    text-transform: uppercase; letter-spacing: .04em; transition: background .12s, color .12s, border-color .12s;
+}
+.plug-mod-optional-lbl:hover { background: rgba(255,255,255,0.05); color: var(--text-secondary); }
+.plug-mod-optional-lbl:has(input:checked) { background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.4); color: #fbbf24; }
+.plug-mod-optional-cb { accent-color: var(--amber); width: 12px; height: 12px; }
 .plug-mod-empty { padding: 20px; text-align: center; color: var(--text-muted); font-size: 12px; }
 
 /* Selected mods list (Create tab) */
@@ -11769,12 +11801,16 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 }
 .plug-mod-add-btn {
     flex-shrink: 0;
-    opacity: 0;
-    transition: opacity 0.12s, background 0.12s;
-    color: var(--accent);
-    border-color: rgba(59,130,246,0.3) !important;
+    width: 28px; height: 28px; min-width: 28px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 8px;
+    background: rgba(59,130,246,0.14);
+    border: 1px solid rgba(59,130,246,0.35) !important;
+    color: #60a5fa;
+    transition: background 0.14s, transform 0.1s;
 }
-.plug-mod-item:hover .plug-mod-add-btn { opacity: 1; }
+.plug-mod-add-btn:hover { background: var(--accent); color: #fff; transform: scale(1.08); }
+.plug-mod-add-btn svg { width: 14px; height: 14px; }
 /* Selected items improvements */
 .plug-selected-item:hover {
     background: rgba(255,255,255,0.03);
@@ -12523,11 +12559,82 @@ option   { background: #131825; color: var(--text-primary); }
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 8px 4px;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-    margin-bottom: 2px;
+    padding: 9px 10px;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 9px;
+    background: rgba(255,255,255,0.025);
+    cursor: pointer;
+    user-select: none;
+    transition: background .12s;
 }
-.plug-ep-group-header:not(:first-child) { margin-top: 10px; }
+.plug-ep-group-header:hover { background: rgba(255,255,255,0.05); }
+.plug-ep-group { margin-bottom: 6px; }
+.plug-ep-group-chevron { color: var(--text-muted); transition: transform .15s; flex-shrink: 0; }
+.plug-ep-group.open > .plug-ep-group-header .plug-ep-group-chevron { transform: rotate(90deg); }
+/* Collapsed by default → body hidden; .open reveals it */
+.plug-ep-group-body { display: none; flex-direction: column; gap: 4px; padding: 6px 0 2px; }
+.plug-ep-group.open > .plug-ep-group-body { display: flex; }
+.plug-ep-collapse-bar { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 8px; }
+
+/* ── Unified Quick Test ─────────────────────────────────────────────────── */
+.plug-uqt { margin-bottom: 12px; }
+.plug-uqt-anchor { position: relative; }
+.plug-uqt-select {
+    width: 100%; display: flex; align-items: center; gap: 8px;
+    padding: 11px 14px; background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+    color: var(--text-primary); font-size: 13px; cursor: pointer; transition: border-color .15s;
+}
+.plug-uqt-select:hover { border-color: var(--accent); }
+.plug-uqt-select > span:first-child { flex: 1; text-align: left; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.plug-uqt-select svg { color: var(--text-muted); flex-shrink: 0; }
+.plug-uqt-dropdown {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 50;
+    background: #0e1119; border: 1px solid rgba(255,255,255,0.14); border-radius: 12px;
+    box-shadow: 0 18px 44px rgba(0,0,0,0.6); overflow: hidden; max-height: 420px; display: flex; flex-direction: column;
+}
+.plug-uqt-search-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.07); flex-shrink: 0; }
+.plug-uqt-search-row .plug-qt-search-ic { color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.plug-uqt-search-row .plug-qt-search-ic svg { display: block; width: 14px; height: 14px; }
+.plug-uqt-search-row input { flex: 1; min-width: 0; border: none; background: transparent; }
+/* Explicit max-height guarantees the list scrolls even if flex sizing misbehaves */
+.plug-uqt-list { flex: 1 1 auto; min-height: 0; max-height: 340px; overflow-y: auto; padding: 4px; }
+.plug-uqt-sep { font-size: 9px; font-weight: 800; letter-spacing: .08em; padding: 8px 10px 3px; opacity: .75; }
+.plug-uqt-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 7px; cursor: pointer; }
+.plug-uqt-item:hover { background: rgba(255,255,255,0.06); }
+.plug-uqt-path { font-size: 12px; color: var(--text-primary); font-family: var(--font-mono); white-space: nowrap; }
+.plug-uqt-desc { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.plug-uqt-badge { font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 5px; flex-shrink: 0; }
+.plug-qt-get { background: rgba(16,185,129,0.16); color: #34d399; }
+.plug-qt-post { background: rgba(59,130,246,0.16); color: #60a5fa; }
+.plug-qt-put { background: rgba(245,158,11,0.16); color: #fbbf24; }
+.plug-qt-delete { background: rgba(239,68,68,0.16); color: #f87171; }
+.plug-qt-patch { background: rgba(168,85,247,0.16); color: #c084fc; }
+.plug-uqt-form { display: none; margin-top: 12px; padding: 16px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; }
+.plug-uqt-about { font-size: 12px; color: var(--text-secondary); line-height: 1.55; margin-bottom: 10px; }
+.plug-uqt-about code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+.plug-uqt-meta { margin-bottom: 12px; }
+.plug-uqt-auth { font-size: 10px; color: var(--amber); display: inline-flex; align-items: center; gap: 5px; }
+.plug-uqt-noauth { font-size: 10px; color: var(--success); }
+.plug-uqt-field { margin-bottom: 11px; }
+.plug-uqt-flabel { display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; }
+.plug-uqt-fdesc { font-size: 10px; color: var(--text-muted); margin-top: 3px; line-height: 1.4; }
+.plug-uqt-check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.plug-uqt-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.07); }
+
+/* ── Per-plugin permission domains ──────────────────────────────────────── */
+.plug-perm-domains { display: flex; flex-direction: column; gap: 9px; margin: 10px 0; }
+.plug-perm-domain-h { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
+.plug-perm-domain-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.plug-perm-domain-row .plug-perm-item {
+    display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 12px; white-space: nowrap;
+    padding: 5px 11px; border: 1px solid rgba(255,255,255,0.1); border-radius: 100px;
+    background: rgba(0,0,0,0.2); transition: background .12s, border-color .12s;
+}
+.plug-perm-domain-row .plug-perm-item:hover { background: rgba(255,255,255,0.05); }
+/* Highlight a granted permission chip */
+.plug-perm-domain-row .plug-perm-item:has(input:checked) { background: rgba(255,255,255,0.06); border-color: currentColor; }
+.plug-perm-domain-row .plug-perm-item input { accent-color: var(--accent); width: 13px; height: 13px; }
 .plug-ep-group-label {
     font-size: 11px;
     font-weight: 800;

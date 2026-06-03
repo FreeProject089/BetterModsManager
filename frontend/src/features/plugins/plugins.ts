@@ -2,7 +2,7 @@
 import { invoke, pickFile, saveFile, pickFolder, convertFileSrc } from '../../core/api.js';
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
-import { escHtml } from '../../core/utils.js';
+import { escHtml, escAttr } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { getLinks } from '../../core/links-config.js';
 
@@ -507,8 +507,216 @@ function createOverlay(html: string): HTMLElement {
     return ov;
 }
 
-// ── Smart quick-test overlay (shows selectors for mods / profiles / plugins) ──
+// ── Unified Quick Test ────────────────────────────────────────────────────────
+// One panel: pick an endpoint → its fields are generated from getEndpointDefs() →
+// fill them → Run or copy the ready cURL. Replaces the old 60-button grid.
 
+let _uqtSelected: EndpointDef | null = null;
+
+async function _refreshUqtData(): Promise<void> {
+    try {
+        [_allMods, _allProfiles, _installedPlugins] = await Promise.all([
+            invoke('get_mods').catch(() => []),
+            invoke('get_profiles').catch(() => []),
+            invoke('get_installed_plugins').catch(() => []),
+        ]);
+        try {
+            const liveTok = (document.getElementById('plug-token-display') as HTMLInputElement)?.value?.trim() || _apiToken;
+            const mpRes = await fetch('http://127.0.0.1:51274/api/modpacks', { headers: { 'Authorization': `Bearer ${liveTok}` } });
+            _allModpacks = (await mpRes.json().catch(() => ({}))).data || [];
+        } catch { _allModpacks = []; }
+    } catch { /* best effort */ }
+}
+
+function setupUnifiedQuickTest(container: HTMLElement): void {
+    const selectBtn = container.querySelector('#plug-uqt-select') as HTMLElement | null;
+    const dropdown  = container.querySelector('#plug-uqt-dropdown') as HTMLElement | null;
+    const search    = container.querySelector('#plug-uqt-search') as HTMLInputElement | null;
+    const listEl    = container.querySelector('#plug-uqt-list') as HTMLElement | null;
+    const formEl    = container.querySelector('#plug-uqt-form') as HTMLElement | null;
+    if (!selectBtn || !dropdown || !listEl || !formEl) return;
+
+    const defs = getEndpointDefs();
+    const methodOrder: Record<string, number> = { GET: 0, POST: 1, PUT: 2, DELETE: 3, PATCH: 4 };
+    defs.sort((a, b) => (methodOrder[a.method] ?? 9) - (methodOrder[b.method] ?? 9));
+    const methodCls: Record<string, string> = { GET: 'plug-qt-get', POST: 'plug-qt-post', PUT: 'plug-qt-put', DELETE: 'plug-qt-delete', PATCH: 'plug-qt-patch' };
+
+    const renderDropdownList = (q = '') => {
+        const ql = q.trim().toLowerCase();
+        const rows = defs.filter(ep => !ql || `${ep.method} ${ep.path} ${ep.desc}`.toLowerCase().includes(ql));
+        let lastM = '';
+        listEl.innerHTML = rows.map(ep => {
+            let sep = '';
+            if (!ql && ep.method !== lastM) { lastM = ep.method; sep = `<div class="plug-uqt-sep ${methodCls[ep.method]}">${ep.method}</div>`; }
+            return sep + `<div class="plug-uqt-item" data-method="${ep.method}" data-path="${escAttr(ep.path)}">
+                <span class="plug-uqt-badge ${methodCls[ep.method]}">${ep.method}</span>
+                <code class="plug-uqt-path">${escHtml(ep.path)}</code>
+                <span class="plug-uqt-desc">${escHtml(ep.desc)}</span>
+            </div>`;
+        }).join('') || `<div style="padding:14px;color:var(--text-muted);font-size:12px;text-align:center;">${t('plugins.qtNoMatch') || 'No endpoint matches'}</div>`;
+        listEl.querySelectorAll('.plug-uqt-item').forEach(it => {
+            it.addEventListener('click', () => {
+                const ep = defs.find(d => d.method === (it as HTMLElement).dataset.method && d.path === (it as HTMLElement).dataset.path);
+                if (ep) selectEndpoint(ep);
+            });
+        });
+    };
+
+    const openDropdown = async () => {
+        await _refreshUqtData();
+        dropdown.style.display = 'block';
+        renderDropdownList(search?.value || '');
+        search?.focus();
+    };
+    const closeDropdown = () => { dropdown.style.display = 'none'; };
+
+    selectBtn.addEventListener('click', () => {
+        if (dropdown.style.display === 'none') openDropdown(); else closeDropdown();
+    });
+    search?.addEventListener('input', () => renderDropdownList(search.value));
+    document.addEventListener('mousedown', (e) => {
+        if (dropdown.style.display !== 'none' && !dropdown.contains(e.target as Node) && !selectBtn.contains(e.target as Node)) closeDropdown();
+    });
+
+    const selectEndpoint = (ep: EndpointDef) => {
+        _uqtSelected = ep;
+        closeDropdown();
+        const lbl = container.querySelector('#plug-uqt-select-label');
+        if (lbl) lbl.innerHTML = `<span class="plug-uqt-badge ${methodCls[ep.method]}">${ep.method}</span> <code style="color:var(--accent);">${escHtml(ep.path)}</code>`;
+        renderUqtForm(ep, formEl);
+    };
+}
+
+/** Builds the dynamic form for one endpoint from its field definitions. */
+function renderUqtForm(ep: EndpointDef, formEl: HTMLElement): void {
+    const hasPathParam = ep.path.includes(':');
+    const fields = ep.fields || [];
+
+    // Smart dropdown options for *_id fields
+    const optsFor = (fieldName: string): string | null => {
+        const opt = (arr: any[], v: (x: any) => string, l: (x: any) => string) =>
+            `<option value="">— ${t('common.select') || 'select'} —</option>` + arr.map(x => `<option value="${escAttr(v(x))}">${escHtml(l(x))}</option>`).join('');
+        if (/mod_?id/i.test(fieldName) && _allMods.length)        return opt(_allMods, m => m.id, m => `${m.name || m.id}`);
+        if (/profile_?id/i.test(fieldName) && _allProfiles.length) return opt(_allProfiles, p => p.id, p => p.name);
+        if (/plugin_?id/i.test(fieldName) && _installedPlugins.length) return opt(_installedPlugins, p => p.manifest.id, p => `${p.manifest.name} (${p.manifest.id})`);
+        if (/modpack_?id/i.test(fieldName) && _allModpacks.length) return opt(_allModpacks, m => m.id, m => `${m.name} (${m.mod_count ?? m.mods?.length ?? 0})`);
+        return null;
+    };
+
+    const fieldRow = (f: any): string => {
+        const req = f.required ? ` <span style="color:var(--danger)">*</span>` : ` <span style="color:var(--text-muted);font-size:10px;">(${t('common.optional') || 'optional'})</span>`;
+        const lbl = `<label class="plug-uqt-flabel">${escHtml(f.name)}${req}</label>`;
+        const desc = f.desc ? `<div class="plug-uqt-fdesc">${escHtml(f.desc)}</div>` : '';
+        let input = '';
+        const id = `uqt-f-${f.name}`;
+        const smartOpts = optsFor(f.name);
+        if (smartOpts) {
+            input = `<select id="${id}" class="select select-sm" data-fname="${escAttr(f.name)}" data-ftype="string">${smartOpts}</select>`;
+        } else if (f.type === 'boolean') {
+            input = `<label class="plug-uqt-check"><input type="checkbox" id="${id}" data-fname="${escAttr(f.name)}" data-ftype="boolean"> <span>${escHtml(f.name)}</span></label>`;
+            return `<div class="plug-uqt-field">${input}${desc}</div>`;
+        } else if (f.type === 'object' || f.type === 'array') {
+            const ph = f.type === 'array' ? '["a","b"]' : '{ "key": "value" }';
+            input = `<textarea id="${id}" class="input" rows="2" data-fname="${escAttr(f.name)}" data-ftype="${f.type}" placeholder="${ph}" style="font-family:var(--font-mono);font-size:12px;"></textarea>`;
+        } else if (f.type === 'number') {
+            input = `<input type="number" id="${id}" class="input" data-fname="${escAttr(f.name)}" data-ftype="number">`;
+        } else {
+            const isPath = /path|dir|folder/i.test(f.name);
+            input = `<div style="display:flex;gap:6px;"><input type="text" id="${id}" class="input" data-fname="${escAttr(f.name)}" data-ftype="string" placeholder="${escAttr(f.placeholder || '')}" style="flex:1;font-family:var(--font-mono);font-size:12px;">${isPath ? `<button type="button" class="btn btn-sm btn-secondary plug-uqt-browse" data-target="${id}" data-kind="${/dir|folder/i.test(f.name) ? 'dir' : 'file'}">${t('plugins.qtBrowse') || 'Browse'}</button>` : ''}</div>`;
+        }
+        return `<div class="plug-uqt-field">${lbl}${input}${desc}</div>`;
+    };
+
+    const pathParamRow = hasPathParam
+        ? `<div class="plug-uqt-field"><label class="plug-uqt-flabel">:id <span style="color:var(--danger)">*</span></label>
+           <input type="text" id="uqt-pathparam" class="input" placeholder="${escAttr(ep.path)}" style="font-family:var(--font-mono);font-size:12px;">
+           <div class="plug-uqt-fdesc">${t('plugins.qtPathParam') || 'Replaces :id in the URL.'}</div></div>`
+        : '';
+
+    const authChip = ep.auth
+        ? `<span class="plug-uqt-auth"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> ${t('plugins.requiresToken') || 'token required'}</span>`
+        : `<span class="plug-uqt-noauth">${t('plugins.epNoAuthNote') || 'no auth'}</span>`;
+
+    formEl.innerHTML = `
+        <div class="plug-uqt-about">${ep.about}</div>
+        <div class="plug-uqt-meta">${authChip}</div>
+        ${pathParamRow}
+        ${fields.length ? fields.map(fieldRow).join('') : (hasPathParam ? '' : `<div class="plug-uqt-fdesc" style="padding:4px 0;">${t('plugins.qtNoBody') || 'No parameters required.'}</div>`)}
+        <div class="plug-uqt-actions">
+            <button class="btn btn-sm btn-ghost" id="uqt-curl">${IC.copy} cURL</button>
+            <button class="btn btn-sm btn-ghost" id="uqt-copybody" style="display:${fields.length ? '' : 'none'};">${IC.copy} JSON</button>
+            <span style="flex:1;"></span>
+            <button class="btn btn-sm btn-accent" id="uqt-run">${IC.play} ${t('plugins.run') || 'Run'}</button>
+        </div>`;
+    formEl.style.display = 'block';
+
+    // Browse buttons
+    formEl.querySelectorAll('.plug-uqt-browse').forEach(b => {
+        b.addEventListener('click', async () => {
+            const tgt = (b as HTMLElement).dataset.target!;
+            const kind = (b as HTMLElement).dataset.kind;
+            const picked = kind === 'dir' ? await pickFolder().catch(() => null) : await pickFile().catch(() => null);
+            if (picked) { const el = document.getElementById(tgt) as HTMLInputElement; if (el) el.value = picked; }
+        });
+    });
+
+    const collect = (): { path: string; body: string } => {
+        let path = ep.path;
+        if (hasPathParam) {
+            const pv = (document.getElementById('uqt-pathparam') as HTMLInputElement)?.value?.trim() || '';
+            path = path.replace(/:[a-zA-Z_]+/, encodeURIComponent(pv));
+        }
+        const obj: Record<string, any> = {};
+        formEl.querySelectorAll<HTMLElement>('[data-fname]').forEach(el => {
+            const name = el.dataset.fname!;
+            const type = el.dataset.ftype;
+            if (type === 'boolean') { if ((el as HTMLInputElement).checked) obj[name] = true; return; }
+            const raw = (el as HTMLInputElement | HTMLTextAreaElement).value?.trim() || '';
+            if (!raw) return;
+            if (type === 'number') obj[name] = Number(raw);
+            else if (type === 'array') { try { obj[name] = JSON.parse(raw); } catch { obj[name] = raw.split(',').map(s => s.trim()).filter(Boolean); } }
+            else if (type === 'object') { try { obj[name] = JSON.parse(raw); } catch { /* skip invalid */ } }
+            else obj[name] = raw;
+        });
+        // GET / DELETE without body: send the fields as a query string instead of
+        // a JSON body (e.g. /api/repo/info?url=…), since those verbs ignore a body.
+        if (ep.method === 'GET') {
+            const qs = Object.entries(obj)
+                .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(typeof v === 'string' ? v : JSON.stringify(v))}`)
+                .join('&');
+            if (qs) path += (path.includes('?') ? '&' : '?') + qs;
+            return { path, body: '' };
+        }
+        const body = Object.keys(obj).length ? JSON.stringify(obj, null, 2) : '';
+        return { path, body };
+    };
+
+    formEl.querySelector('#uqt-run')?.addEventListener('click', () => {
+        const { path, body } = collect();
+        handleQuickTest(ep.method, path, body || undefined);
+    });
+    formEl.querySelector('#uqt-copybody')?.addEventListener('click', () => {
+        const { body } = collect();
+        navigator.clipboard.writeText(body || '{}').catch(() => {});
+        toast(t('common.copy') || 'Copied', 'success');
+    });
+    formEl.querySelector('#uqt-curl')?.addEventListener('click', () => {
+        const { path, body } = collect();
+        const tok = (document.getElementById('plug-token-display') as HTMLInputElement)?.value?.trim() || _apiToken;
+        const lines = [`curl -X ${ep.method} \\`];
+        if (ep.auth) lines.push(`  -H "Authorization: Bearer ${tok}" \\`);
+        if (body) lines.push(`  -H "Content-Type: application/json" \\`, `  -d '${body.replace(/\n\s*/g, '')}' \\`);
+        lines.push(`  "http://127.0.0.1:51274${path}"`);
+        navigator.clipboard.writeText(lines.join('\n')).catch(() => {});
+        toast(t('plugins.epCopyDone') || 'cURL copied', 'success');
+    });
+}
+
+// ── DEPRECATED: per-endpoint smart quick-test overlay ─────────────────────────
+// Superseded by the unified Quick Test panel (setupUnifiedQuickTest), which reads
+// getEndpointDefs() and builds the form generically. Kept temporarily for reference;
+// it is no longer called from anywhere. Safe to delete in a future cleanup pass.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function openSmartQuickTest(m: string, p: string, rawBody: string) {
     // ── Live refresh: reload all data before showing the overlay ──────────
     try {
@@ -2833,8 +3041,12 @@ function renderCreate(container: HTMLElement) {
 // ── Tab: API & Scripts ─────────────────────────────────────────────────────
 
 function renderScripts(container: HTMLElement) {
-    // Endpoints — strict order: GET → POST → PUT → DELETE, no exceptions
-    const QT_ENDPOINTS = [
+    // NOTE: the old QT_ENDPOINTS button grid was removed — the unified Quick Test
+    // panel (setupUnifiedQuickTest) reads getEndpointDefs() directly, so there is a
+    // single source of truth for endpoints. The documented endpoint list below also
+    // comes from getEndpointDefs().
+    const _QT_REMOVED = true; void _QT_REMOVED;
+    const QT_ENDPOINTS_DEAD = false ? [
         // ═══ GET ═══════════════════════════════════════════════════════════════
         { m: 'GET', p: '/api/health',                  l: t('plugins.ep.health')      || 'Health',                icon: IC.checkCircle },
         { m: 'GET', p: '/api/status',                  l: t('plugins.ep.status')      || 'Status',                icon: IC.info },
@@ -2899,7 +3111,8 @@ function renderScripts(container: HTMLElement) {
         { m: 'DELETE', p: '/api/modpacks/:id',          l: t('plugins.ep.deleteMp')    || 'Delete Modpack',       icon: IC.trash },
         { m: 'DELETE', p: '/api/apps/:id',              l: t('plugins.ep.uninstallApp')|| 'Uninstall App',        icon: IC.trash },
         { m: 'DELETE', p: '/api/catalog/apps/:id',      l: t('plugins.ep.catRemApp')   || 'Remove from Catalog',  icon: IC.trash },
-    ];
+    ] : [];
+    void QT_ENDPOINTS_DEAD;
 
     container.innerHTML = `
         <div class="plug-scripts-root">
@@ -2921,34 +3134,23 @@ function renderScripts(container: HTMLElement) {
             <!-- Quick test + endpoints (full width) -->
             <div class="plug-section-card">
                 <h3 class="plug-section-title">${IC.zap} ${t('plugins.quickTest')}</h3>
-                <div class="plug-qt-search-row">
-                    <span class="plug-qt-search-ic">${IC.search || ''}</span>
-                    <input type="text" id="plug-qt-search" class="input input-sm plug-qt-search-input"
-                        placeholder="${t('plugins.quickTestSearch') || 'Search quick tests… (GET, /api/mods, modpack…)'}" spellcheck="false">
-                    <button class="btn btn-xs btn-ghost" id="plug-qt-search-clear" data-tooltip="${t('common.clear') || 'Clear'}" style="display:none;">${IC.x}</button>
-                    <span class="plug-qt-search-count" id="plug-qt-search-count"></span>
-                </div>
-                <div class="plug-qt-grid">
-                    ${(() => {
-                        let lastMethod = '';
-                        return QT_ENDPOINTS.map(e => {
-                            const mc = e.m.toLowerCase();
-                            const badge = `<span class="plug-qt-method-badge plug-qt-${mc}">${e.m}</span>`;
-                            const body       = (e as any).body !== undefined ? ` data-body="${escHtml((e as any).body || '')}"` : '';
-                            const nav        = (e as any).navigate ? ` data-navigate="${(e as any).navigate}"` : '';
-                            const autoLaunch = (e as any).autoLaunch ? ` data-auto-launch="${(e as any).autoLaunch}"` : '';
-                            let sep = '';
-                            if (e.m !== lastMethod) {
-                                lastMethod = e.m;
-                                sep = `<div class="plug-qt-method-sep"><span class="plug-qt-sep-label plug-qt-${mc}">${e.m}</span></div>`;
-                            }
-                            // navigate-type buttons get a distinct visual hint
-                            const navHint = (e as any).navigate ? ` <span style="font-size:9px;opacity:.6;vertical-align:middle;">↗ UI</span>` : '';
-                            return sep + `<button class="plug-qt-btn" data-method="${e.m}" data-path="${e.p}"${body}${nav}${autoLaunch} data-tooltip="${e.m} ${e.p}">
-                                ${e.icon} <span>${e.l}</span>${navHint}${badge}
-                            </button>`;
-                        }).join('');
-                    })()}
+                <p style="font-size:11px;color:var(--text-muted);margin:0 0 10px;">${t('plugins.quickTestIntro') || 'Pick an endpoint, fill the fields, then Run or copy the cURL. Every BMM action is here.'}</p>
+                <!-- Unified single-panel quick test -->
+                <div class="plug-uqt">
+                    <div class="plug-uqt-anchor">
+                        <button class="plug-uqt-select" id="plug-uqt-select" type="button">
+                            <span id="plug-uqt-select-label">${t('plugins.qtSelectEndpoint') || 'Select an endpoint…'}</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="plug-uqt-dropdown" id="plug-uqt-dropdown" style="display:none;">
+                            <div class="plug-uqt-search-row">
+                                <span class="plug-qt-search-ic">${IC.search || ''}</span>
+                                <input type="text" id="plug-uqt-search" class="input input-sm" placeholder="${t('plugins.quickTestSearch') || 'Search… (GET, /api/mods, modpack…)'}" spellcheck="false">
+                            </div>
+                            <div class="plug-uqt-list" id="plug-uqt-list"></div>
+                        </div>
+                    </div>
+                    <div class="plug-uqt-form" id="plug-uqt-form"></div>
                 </div>
                 <div id="plug-qt-result" class="plug-qt-result" style="display:none;">
                     <div class="plug-qt-result-header">
@@ -3002,26 +3204,37 @@ function renderScripts(container: HTMLElement) {
                     <button class="btn btn-xs btn-ghost" id="plug-ep-search-clear" data-tooltip="${t('common.clear') || 'Clear'}" style="display:none;">${IC.x}</button>
                     <span class="plug-qt-search-count" id="plug-ep-search-count"></span>
                 </div>
+                <div class="plug-ep-collapse-bar">
+                    <button class="btn btn-xs btn-ghost" id="plug-ep-expand-all">${t('plugins.epExpandAll') || 'Expand all'}</button>
+                    <button class="btn btn-xs btn-ghost" id="plug-ep-collapse-all">${t('plugins.epCollapseAll') || 'Collapse all'}</button>
+                </div>
                 <div class="plug-endpoint-list" id="plug-ep-list">
                     ${(() => {
                         const defs = getEndpointDefs();
-                        // Sort by method: GET → POST → PUT → DELETE → PATCH
                         const methodOrder: Record<string, number> = { GET: 0, POST: 1, PUT: 2, DELETE: 3, PATCH: 4 };
                         defs.sort((a, b) => (methodOrder[a.method] ?? 9) - (methodOrder[b.method] ?? 9));
                         defs.forEach(ep => {
                             const sid = (ep.method.toLowerCase() + '_' + ep.path).replace(/\//g, '_').replace(/^_/, '').replace(/:/g, '');
                             _epCodeCache.set(sid, ep);
                         });
-                        let lastMethod = '';
                         const methodCls: Record<string, string> = { GET: 'plug-method-get', POST: 'plug-method-post', PUT: 'plug-method-put', DELETE: 'plug-method-delete', PATCH: 'plug-method-patch' };
-                        return defs.map(ep => {
-                            let header = '';
-                            if (ep.method !== lastMethod) {
-                                lastMethod = ep.method;
-                                const cls = methodCls[ep.method] || '';
-                                header = `<div class="plug-ep-group-header"><span class="plug-method ${cls}" style="font-size:11px;">${ep.method}</span><span class="plug-ep-group-count">${defs.filter(d => d.method === ep.method).length} endpoint${defs.filter(d => d.method === ep.method).length > 1 ? 's' : ''}</span></div>`;
-                            }
-                            return header + buildEndpointRow(ep);
+                        const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
+                        // All groups collapsed by default — click a header to expand.
+                        const defaultOpen: Record<string, boolean> = {};
+                        return methods.map(mth => {
+                            const group = defs.filter(d => d.method === mth);
+                            if (group.length === 0) return '';
+                            const cls = methodCls[mth] || '';
+                            const open = !!defaultOpen[mth];
+                            const rows = group.map(ep => buildEndpointRow(ep)).join('');
+                            return `<div class="plug-ep-group ${open ? 'open' : ''}" data-method="${mth}">
+                                <div class="plug-ep-group-header" role="button" tabindex="0">
+                                    <svg class="plug-ep-group-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                                    <span class="plug-method ${cls}" style="font-size:11px;">${mth}</span>
+                                    <span class="plug-ep-group-count">${group.length} endpoint${group.length > 1 ? 's' : ''}</span>
+                                </div>
+                                <div class="plug-ep-group-body">${rows}</div>
+                            </div>`;
                         }).join('');
                     })()}
                 </div>
@@ -3143,64 +3356,13 @@ function renderScripts(container: HTMLElement) {
         toast(t('plugins.epCopyDone'), 'success');
     });
 
-    // Quick test
-    container.querySelectorAll('.plug-qt-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const el = btn as HTMLElement;
-            const m = el.dataset.method || 'GET';
-            const p = el.dataset.path || '/api/health';
-            const rawBody = el.dataset.body;
-            const navTarget = el.dataset.navigate;
-
-            // Navigate buttons: open the corresponding BMM page instead of calling API
-            if (navTarget) {
-                const navBtn = document.querySelector(`.nav-item[data-view="${navTarget}"], .nav-btn[data-view="${navTarget}"]`) as HTMLElement;
-                if (navBtn) navBtn.click();
-                // Dispatch auto-launch event so the target page can focus the right section
-                const autoLaunch = el.dataset.autoLaunch;
-                if (autoLaunch) {
-                    setTimeout(() => {
-                        document.dispatchEvent(new CustomEvent('bmm:repo-focus', { detail: { section: autoLaunch } }));
-                    }, 350);
-                }
-                return;
-            }
-
-            // Every endpoint opens the quick-config overlay: it lets the user
-            // fill parameters, Send, AND copy the ready-to-use cURL — even for
-            // parameterless GETs (which show just the Send / Copy cURL footer).
-            openSmartQuickTest(m, p, rawBody ?? '');
-        });
-    });
+    // ── Unified Quick Test (single panel: pick endpoint → form → Run/cURL) ──────
+    setupUnifiedQuickTest(container);
     container.querySelector('#plug-qt-copy')?.addEventListener('click', () => {
         const txt = document.getElementById('plug-qt-body')?.textContent || '';
         navigator.clipboard.writeText(txt).catch(() => {});
         toast(t('common.copy'), 'success');
     });
-
-    // ── Endpoint search bar — filters the quick-test buttons live ──────────────
-    const qtSearch    = container.querySelector('#plug-qt-search')       as HTMLInputElement | null;
-    const qtSearchClr = container.querySelector('#plug-qt-search-clear') as HTMLElement | null;
-    const qtCount     = container.querySelector('#plug-qt-search-count') as HTMLElement | null;
-    const applyEpFilter = () => {
-        const q = (qtSearch?.value || '').trim().toLowerCase();
-        const btns = Array.from(container.querySelectorAll<HTMLElement>('.plug-qt-btn'));
-        let shown = 0;
-        btns.forEach(b => {
-            const hay = `${b.dataset.method || ''} ${b.dataset.path || ''} ${b.textContent || ''}`.toLowerCase();
-            const match = !q || hay.includes(q);
-            b.style.display = match ? '' : 'none';
-            if (match) shown++;
-        });
-        // Hide method separators while searching (they break up a filtered list)
-        container.querySelectorAll<HTMLElement>('.plug-qt-method-sep').forEach(s => {
-            s.style.display = q ? 'none' : '';
-        });
-        if (qtSearchClr) qtSearchClr.style.display = q ? '' : 'none';
-        if (qtCount) qtCount.textContent = q ? `${shown}/${btns.length}` : '';
-    };
-    qtSearch?.addEventListener('input', applyEpFilter);
-    qtSearchClr?.addEventListener('click', () => { if (qtSearch) { qtSearch.value = ''; applyEpFilter(); qtSearch.focus(); } });
 
     // ── Available-endpoints search bar — filters the documented endpoint rows ──
     const epSearch    = container.querySelector('#plug-ep-search')       as HTMLInputElement | null;
@@ -3222,15 +3384,28 @@ function renderScripts(container: HTMLElement) {
             w.style.display = match ? '' : 'none';
             if (match) shown++;
         });
-        // Hide method group headers while searching (a filtered list spans groups)
-        epList.querySelectorAll<HTMLElement>('.plug-ep-group-header').forEach(h => {
-            h.style.display = q ? 'none' : '';
+        // While searching, force every group open so matches across groups show.
+        epList.querySelectorAll<HTMLElement>('.plug-ep-group').forEach(g => {
+            if (q) g.classList.add('open', 'search-forced-open');
+            else if (g.classList.contains('search-forced-open')) { g.classList.remove('open', 'search-forced-open'); }
         });
         if (epSearchClr) epSearchClr.style.display = q ? '' : 'none';
         if (epCount) epCount.textContent = q ? `${shown}/${rows.length}` : '';
     };
     epSearch?.addEventListener('input', applyEndpointFilter);
     epSearchClr?.addEventListener('click', () => { if (epSearch) { epSearch.value = ''; applyEndpointFilter(); epSearch.focus(); } });
+
+    // ── Collapsible endpoint method groups ──────────────────────────────────
+    container.querySelectorAll<HTMLElement>('#plug-ep-list .plug-ep-group-header').forEach(h => {
+        h.addEventListener('click', () => h.parentElement?.classList.toggle('open'));
+        h.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); h.parentElement?.classList.toggle('open'); }
+        });
+    });
+    container.querySelector('#plug-ep-expand-all')?.addEventListener('click', () =>
+        container.querySelectorAll('#plug-ep-list .plug-ep-group').forEach(g => g.classList.add('open')));
+    container.querySelector('#plug-ep-collapse-all')?.addEventListener('click', () =>
+        container.querySelectorAll('#plug-ep-list .plug-ep-group').forEach(g => g.classList.remove('open')));
 
     // ── API activity log panel — disk-backed, rendered incrementally ───────────
     // The full history is kept on disk (read_api_log / append_api_log). The panel
@@ -3474,10 +3649,19 @@ function renderScripts(container: HTMLElement) {
                 opt.textContent = p.name;
                 genProfileSel.appendChild(opt);
             });
-            updateSelectProfileIcon(genProfileSel, _allProfiles, iconPaths, genProfileIcon);
-            genProfileSel.addEventListener('change', () =>
-                updateSelectProfileIcon(genProfileSel, _allProfiles, iconPaths, genProfileIcon));
+            // When "— Use each action's own profile —" (empty value) is selected,
+            // there is no profile to show → keep the icon slot empty (avoids a broken icon).
+            const syncGenIcon = () => {
+                if (!genProfileIcon) return;
+                if (!genProfileSel.value) { genProfileIcon.innerHTML = ''; genProfileIcon.style.display = 'none'; return; }
+                genProfileIcon.style.display = '';
+                updateSelectProfileIcon(genProfileSel, _allProfiles, iconPaths, genProfileIcon);
+            };
+            syncGenIcon();
+            genProfileSel.addEventListener('change', syncGenIcon);
         });
+    } else if (genProfileIcon) {
+        genProfileIcon.style.display = 'none';
     }
 
     // Mode hint update
@@ -4388,6 +4572,22 @@ function getEndpointDefs(): EndpointDef[] {
             ],
         },
         {
+            method: 'POST', path: '/api/repo/update', auth: true,
+            desc: t('plugins.ep.repoUpdate') || 'Update an existing repo',
+            about: 'Incrementally updates an existing server repo: add/remove mods & whole profiles without regenerating everything. Opens the BMM "Update repo" modal pre-filled with the chosen folder so you confirm the changes. Pass <code>repoDir</code> to point at the repo folder (must contain repo.json).',
+            fields: [
+                { name: 'repoDir',           type: 'string', required: true,  desc: 'Folder of the existing repo (contains repo.json).' },
+                { name: 'authorName',        type: 'string', required: false, desc: 'Override the author name written to repo.json.' },
+                { name: 'removeModIds',      type: 'array',  required: false, desc: 'Mod IDs to remove from the repo.' },
+                { name: 'removeProfileIds',  type: 'array',  required: false, desc: 'Whole profile IDs to remove from the repo.' },
+                { name: 'addProfiles',       type: 'array',  required: false, desc: 'Profiles (with optional per-mod selection) to add: [{ "profileId": "…", "modIds": null }].' },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "repo/update" }' },
+                e401,
+            ],
+        },
+        {
             method: 'POST', path: '/api/repo/host', auth: true,
             desc: 'Démarrer le serveur HTTP statique',
             about: 'Lance un serveur HTTP de fichiers statiques (warp::fs) sur le dossier spécifié. Utile pour servir un repo généré via <code>POST /api/repo/gen</code> directement sur le réseau local. Stoppez-le avec <code>DELETE /api/repo/host</code>.',
@@ -5172,6 +5372,10 @@ function _actionCatalog(): _ActionDef[] {
         { id: 'list_installed_apps', cat: 'apps', label: d('actionListInstalledApps', 'List installed apps'),
           desc: d('actionListInstalledAppsDesc', 'Fetches all apps installed through the BMM App Catalog.'),
           iconSvg: sv('<rect x="2" y="3" width="7" height="7"/><rect x="15" y="3" width="7" height="7"/><rect x="15" y="14" width="7" height="7"/><rect x="2" y="14" width="7" height="7"/>') },
+        { id: 'uninstall_app', cat: 'apps', label: d('actionUninstallApp', 'Uninstall app'),
+          desc: d('actionUninstallAppDesc', 'Removes an app from the BMM registry (files kept on disk).'),
+          iconSvg: sv('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>'),
+          fields: [ { key: 'appId', label: d('fldAppId', 'App ID'), type: 'text', placeholder: 'my-app' } ] },
 
         // ── Read (GET — no token required) ────────────────────────────────
         { id: 'get_status',       cat: 'read', label: d('actionGetStatus', 'Get status'),
@@ -6300,6 +6504,16 @@ function _apiBodyFor(a: any): { method: string; path: string; body: Record<strin
         case 'delete_modpack':   return { method: 'DELETE', path: `/api/modpacks/${s('modpack_id') || 'MODPACK_ID'}`, body: {} };
         case 'repo_connect':     return { method: 'POST', path: '/api/repo/connect', body: { url: s('url') || 'REPO_URL' } };
         case 'repo_remove':      return { method: 'DELETE', path: '/api/repo', body: { url: s('url') || 'REPO_URL' } };
+        case 'update_repo':      return { method: 'POST', path: '/api/repo/update', body: { repoDir: s('repoDir') || 'C:/MyRepo' } };
+
+        // ── App Catalog ───────────────────────────────────────────────────
+        case 'install_app':      return { method: 'POST', path: '/api/apps/install', body: _prune({
+            appId: s('appId') || 'my-app', appTitle: s('appTitle') || s('appId') || 'My App',
+            downloadUrl: s('downloadUrl') || 'https://…', fileType: s('fileType') || 'exe', installPath: s('installPath') }) };
+        case 'launch_app':       return { method: 'POST', path: '/api/apps/launch', body: {
+            appId: s('appId') || 'my-app', exePath: s('exePath') || 'C:/Apps/app.exe' } };
+        case 'uninstall_app':    return { method: 'DELETE', path: `/api/apps/${s('appId') || 'APP_ID'}`, body: {} };
+        case 'list_installed_apps': return { method: 'GET', path: '/api/apps', body: {} };
         default: return null;
     }
 }
@@ -6914,25 +7128,18 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
 // ── Tab: Permissions ───────────────────────────────────────────────────────
 
 async function renderPerms(container: HTMLElement) {
-    const ALL_PERMS = [
-        // ── Mods ──────────────────────
-        'read_mods',
-        'enable_mods',
-        'disable_mods',
-        'download_mods',
-        'delete_mods',
-        // ── Profiles ──────────────────
-        'switch_profile',
-        'manage_profiles',
-        // ── Lists & Modpacks ──────────
-        'apply_modlist',
-        'compare_modlist',
-        'manage_modpacks',
-        // ── Server Repo ───────────────
-        'manage_repo',
-        // ── System ────────────────────
-        'use_api',
+    // Canonical scopes — these EXACTLY match the backend `require_permission(...)`
+    // checks in src-tauri/src/api/mod.rs. Granting one here actually unlocks the
+    // matching API endpoints for a plugin (when it sends X-BMM-Plugin-Id).
+    const PERM_GROUPS: { domain: string; color: string; scopes: string[] }[] = [
+        { domain: t('plugins.permDomMods')     || 'Mods',        color: '#3b82f6', scopes: ['mods.read', 'mods.write'] },
+        { domain: t('plugins.permDomProfiles') || 'Profiles',    color: '#a855f7', scopes: ['profiles.read', 'profiles.write'] },
+        { domain: t('plugins.permDomModpacks') || 'Modpacks',    color: '#8b5cf6', scopes: ['modpacks.read', 'modpacks.write'] },
+        { domain: t('plugins.permDomPlugins')  || 'Plugins',     color: '#ec4899', scopes: ['plugins.read', 'plugins.write'] },
+        { domain: t('plugins.permDomRepo')     || 'Server Repo', color: '#10b981', scopes: ['repo.read', 'repo.write'] },
+        { domain: t('plugins.permDomApps')     || 'App Catalog', color: '#f97316', scopes: ['app.read', 'app.write', 'catalog.read', 'catalog.write'] },
     ];
+    const ALL_PERMS = PERM_GROUPS.flatMap(g => g.scopes);
 
     const globalAllowed   = localStorage.getItem('bmm_plug_allow_global') === 'always';
     const deepLinkAllowed = localStorage.getItem('bmm_deeplink_allow_global') !== 'blocked';
@@ -6976,21 +7183,7 @@ async function renderPerms(container: HTMLElement) {
                 </div>
             </div>
 
-            <div class="plug-perm-global-card">
-                <div class="plug-perm-global-inner">
-                    <div class="plug-perm-global-icon">${IC.globe}</div>
-                    <div class="plug-perm-global-text">
-                        <strong>${t('plugins.apiPublicPermTitle') || 'Endpoints GET publics actifs'}</strong>
-                        <span class="plug-perm-global-sub">${t('plugins.apiPublicPermDesc') || 'Les endpoints GET (health, status, mods...) sont accessibles sans token. Désactivez pour forcer l\'auth sur tout.'}</span>
-                    </div>
-                    <label class="plug-toggle" style="margin-left:auto;">
-                        <input type="checkbox" id="plug-api-public-allow" ${apiNoAuthAllow ? 'checked' : ''}>
-                        <span class="plug-toggle-slider"></span>
-                    </label>
-                </div>
-            </div>
-
-            <div class="plug-perm-global-card" style="margin-top:8px;border-color:rgba(239,68,68,0.25);">
+            <div class="plug-perm-global-card" style="border-color:rgba(239,68,68,0.25);">
                 <div class="plug-perm-global-inner">
                     <div class="plug-perm-global-icon" style="color:var(--danger);">${IC.alert}</div>
                     <div class="plug-perm-global-text">
@@ -7023,14 +7216,6 @@ async function renderPerms(container: HTMLElement) {
         } else {
             localStorage.setItem('bmm_deeplink_allow_global', 'blocked');
         }
-    });
-    container.querySelector('#plug-api-public-allow')?.addEventListener('change', (e) => {
-        if ((e.target as HTMLInputElement).checked) {
-            localStorage.removeItem('bmm_api_public_allow');
-        } else {
-            localStorage.setItem('bmm_api_public_allow', 'blocked');
-        }
-        toast(t('plugins.apiPublicPermRestart') || 'Redémarrez BMM pour appliquer ce changement.', 'info');
     });
     container.querySelector('#plug-unsafe-allow')?.addEventListener('change', (e) => {
         const on = (e.target as HTMLInputElement).checked;
@@ -7071,15 +7256,26 @@ async function renderPerms(container: HTMLElement) {
                         <span>${t('plugins.alwaysAllow')}</span>
                     </label>
                 </div>
-                <div class="plug-perm-grid">
-                    ${ALL_PERMS.map(perm => `
-                        <label class="plug-perm-item">
-                            <input type="checkbox" class="plug-perm-check" data-perm="${perm}"
-                                ${(currentPerms.includes(perm) || plugin.manifest.permissions?.includes(perm)) ? 'checked' : ''}>
-                            <span>${t('plugins.perm_' + perm)}</span>
-                        </label>`).join('')}
+                <div class="plug-perm-domains">
+                    ${PERM_GROUPS.map(g => `
+                        <div class="plug-perm-domain">
+                            <div class="plug-perm-domain-h" style="color:${g.color};">${escHtml(g.domain)}</div>
+                            <div class="plug-perm-domain-row">
+                                ${g.scopes.map(perm => `
+                                    <label class="plug-perm-item">
+                                        <input type="checkbox" class="plug-perm-check" data-perm="${perm}" style="accent-color:${g.color};"
+                                            ${(currentPerms.includes(perm) || plugin.manifest.permissions?.includes(perm)) ? 'checked' : ''}>
+                                        <code style="color:${g.color};font-size:11px;">${perm}</code>
+                                    </label>`).join('')}
+                            </div>
+                        </div>`).join('')}
                 </div>
-                <button class="btn btn-sm btn-accent plug-save-perms" data-id="${escHtml(id)}">${IC.save} ${t('plugins.savePerms')}</button>
+                <div style="display:flex;gap:6px;margin-top:8px;">
+                    <button class="btn btn-xs btn-ghost plug-perm-all" data-id="${escHtml(id)}">${t('common.all') || 'All'}</button>
+                    <button class="btn btn-xs btn-ghost plug-perm-none" data-id="${escHtml(id)}">${t('common.none') || 'None'}</button>
+                    <span style="flex:1;"></span>
+                    <button class="btn btn-sm btn-accent plug-save-perms" data-id="${escHtml(id)}">${IC.save} ${t('plugins.savePerms')}</button>
+                </div>
             </div>`;
     }).join('');
 
@@ -7090,6 +7286,10 @@ async function renderPerms(container: HTMLElement) {
             if ((e.target as HTMLInputElement).checked) localStorage.setItem(`bmm_plug_allow_${id}`, 'always');
             else localStorage.removeItem(`bmm_plug_allow_${id}`);
         });
+        block.querySelector('.plug-perm-all')?.addEventListener('click', () =>
+            block.querySelectorAll<HTMLInputElement>('.plug-perm-check').forEach(c => c.checked = true));
+        block.querySelector('.plug-perm-none')?.addEventListener('click', () =>
+            block.querySelectorAll<HTMLInputElement>('.plug-perm-check').forEach(c => c.checked = false));
         block.querySelector('.plug-save-perms')?.addEventListener('click', async () => {
             const perms = Array.from(block.querySelectorAll('.plug-perm-check:checked')).map(c => (c as HTMLInputElement).dataset.perm);
             try {
