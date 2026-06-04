@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { invoke, listenFileDrop, pickFolder } from '../../core/api.js';
+import { invoke, listenFileDrop, pickFolder, pickFile } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { updateDiscordStatus } from '../settings/settings.js';
 import { renderProfiles } from '../profiles/profiles.js';
@@ -81,6 +81,25 @@ export async function initMods() {
       }
     } catch (error) {
       console.error('Error picking folder:', error);
+      toast((window.t ? window.t('common.error') : 'Error'), 'error');
+    }
+  });
+
+  // Add a zipped mod (.zip) — stored zipped, extracted only on activation
+  document.getElementById('btn-pick-mod-archive')?.addEventListener('click', async () => {
+    try {
+      const file = await pickFile([{ name: 'Mod archive', extensions: ['zip', 'rar', '7z', 'tar', 'gz', 'tgz'] }]);
+      if (file) {
+        document.getElementById('mod-folder').value = file;
+        // Auto-fill the name from the archive filename (strip path + extension) if empty
+        const nameEl = document.getElementById('mod-name') as HTMLInputElement | null;
+        if (nameEl && !nameEl.value.trim()) {
+          const base = (file.split(/[\\/]/).pop() || '').replace(/\.(zip|rar|7z|tar\.gz|tgz|tar)$/i, '');
+          nameEl.value = base;
+        }
+      }
+    } catch (error) {
+      console.error('Error picking archive:', error);
       toast((window.t ? window.t('common.error') : 'Error'), 'error');
     }
   });

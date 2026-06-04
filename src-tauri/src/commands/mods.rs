@@ -463,13 +463,30 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), AppError> {
                     0
                 });
 
+            // IMPORTANT: never EXTRACT an archive here (this runs at startup while
+            // holding the lock — extracting a big .zip froze the UI). For archived
+            // mods we list the entries straight from the archive index (cheap, no
+            // disk writes). Hashing of archived mods is left to on-demand paths.
+            let is_arch = crate::archive::is_archive(&m.mod_folder_path);
             let files = match &m.cached_files {
                 Some(cached) if m.last_scan_mtime == current_mtime && current_mtime != 0 => cached.clone(),
-                _ => if let Ok(f_paths) = crate::fs_utils::list_mod_files(&m.mod_folder_path) {
-                    let f_strings: Vec<String> = f_paths.into_iter().map(|p| p.to_string_lossy().to_string()).collect();
+                _ => {
+                    let f_strings: Vec<String> = if is_arch {
+                        crate::archive::archive_entries(&m.mod_folder_path)
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(|(rel, _)| rel)
+                            .collect()
+                    } else if let Ok(f_paths) = crate::fs_utils::list_mod_files(&m.mod_folder_path) {
+                        f_paths.into_iter().map(|p| p.to_string_lossy().to_string()).collect()
+                    } else {
+                        Vec::new()
+                    };
                     m.cached_files = Some(f_strings.clone());
-                    
-                    if m.file_hashes.is_some() {
+
+                    // Re-hash folders here only (archives are hashed on demand to
+                    // avoid extracting large archives synchronously at startup).
+                    if m.file_hashes.is_some() && !is_arch {
                         let mut new_hashes = std::collections::HashMap::new();
                         for rel in &f_strings {
                             let full_path = m.mod_folder_path.join(rel);
@@ -484,8 +501,6 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), AppError> {
                     m.last_scan_mtime = current_mtime;
                     needs_save = true;
                     f_strings
-                } else {
-                    Vec::new()
                 }
             };
 
@@ -733,7 +748,25 @@ pub async fn add_mod(
         p.mods_path.clone()
     };
 
-    let (final_name, target_dir) = get_unique_mod_info(&mods_path, &name);
+    // Archived mods (.zip …) are STORED zipped: we copy the archive as-is into the
+    // mods folder and never unpack it here. It is only extracted on activation.
+    let src_probe = PathBuf::from(&mod_folder_path);
+    let src_is_archive = crate::archive::is_archive(&src_probe);
+
+    let (final_name, target_dir) = if src_is_archive {
+        let ext = src_probe.extension().and_then(|e| e.to_str()).unwrap_or("zip").to_lowercase();
+        let base = name.trim().trim_end_matches(&format!(".{}", ext)).to_string();
+        let base = if base.is_empty() { "mod".to_string() } else { base };
+        let mut candidate = mods_path.join(format!("{}.{}", base, ext));
+        let mut n = 1;
+        while candidate.exists() {
+            candidate = mods_path.join(format!("{} ({}).{}", base, n, ext));
+            n += 1;
+        }
+        (base, candidate)
+    } else {
+        get_unique_mod_info(&mods_path, &name)
+    };
     let target_dir_clone = target_dir.clone();
     let src = PathBuf::from(&mod_folder_path);
 
@@ -742,50 +775,24 @@ pub async fn add_mod(
             return Err(format!("Fichier source introuvable: {}", src.display()));
         }
 
-        let is_same_dir = match (src.canonicalize(), target_dir_clone.canonicalize()) {
+        let is_same = match (src.canonicalize(), target_dir_clone.canonicalize()) {
             (Ok(s), Ok(t)) => s == t,
             _ => false,
         };
+        if is_same { return Ok(()); }
 
-        if !is_same_dir {
+        if src_is_archive {
+            // Keep the archive file as-is (do NOT unpack).
+            if let Some(parent) = target_dir_clone.parent() { std::fs::create_dir_all(parent).ok(); }
+            std::fs::copy(&src, &target_dir_clone).map_err(|e| e.to_string())?;
+        } else if src.is_dir() {
             std::fs::create_dir_all(&target_dir_clone).map_err(|e| e.to_string())?;
-
-            if src.is_file() && src.extension().and_then(|e| e.to_str()).map(|s| s.eq_ignore_ascii_case("zip")).unwrap_or(false) {
-                let file = std::fs::File::open(&src).map_err(|e| e.to_string())?;
-                let archive = zip::ZipArchive::new(file).map_err(|e| format!("Zip error: {}", e))?;
-                let len = archive.len();
-                let num_threads = rayon::current_num_threads().max(1);
-                let chunk_size = (len + num_threads - 1) / num_threads;
-                let chunks: Vec<Vec<usize>> = (0..len).collect::<Vec<_>>().chunks(chunk_size).map(|c| c.to_vec()).collect();
-
-                use rayon::prelude::*;
-                chunks.into_par_iter().try_for_each(|chunk| -> Result<(), String> {
-                    let file = std::fs::File::open(&src).map_err(|e| e.to_string())?;
-                    let mut local_archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-                    
-                    for i in chunk {
-                        let mut f = local_archive.by_index(i).map_err(|e| e.to_string())?;
-                        let outpath = target_dir_clone.join(f.name());
-                        if f.name().ends_with('/') {
-                            std::fs::create_dir_all(&outpath).ok();
-                        } else {
-                            if let Some(parent) = outpath.parent() {
-                                std::fs::create_dir_all(parent).ok();
-                            }
-                            let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
-                            std::io::copy(&mut f, &mut outfile).map_err(|e| e.to_string())?;
-                        }
-                    }
-                    Ok(())
-                })?;
-            } else if src.is_dir() {
-                let mut options = fs_extra::dir::CopyOptions::new();
-                options.content_only = true;
-                options.overwrite = true;
-                fs_extra::dir::copy(&src, &target_dir_clone, &options).map_err(|e| e.to_string())?;
-            } else {
-                return Err("Le fichier sélectionné doit être un dossier ou un fichier .zip".to_string());
-            }
+            let mut options = fs_extra::dir::CopyOptions::new();
+            options.content_only = true;
+            options.overwrite = true;
+            fs_extra::dir::copy(&src, &target_dir_clone, &options).map_err(|e| e.to_string())?;
+        } else {
+            return Err("Le fichier sélectionné doit être un dossier ou une archive (.zip)".to_string());
         }
         Ok(())
     }).await.map_err(|e| e.to_string())??;
@@ -858,8 +865,13 @@ pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files
 
     if delete_files {
         tauri::async_runtime::spawn_blocking(move || {
-            if mod_path.exists() && mod_path.is_dir() {
-                std::fs::remove_dir_all(mod_path).map_err(|e| e.to_string())?;
+            if mod_path.exists() {
+                if mod_path.is_dir() {
+                    std::fs::remove_dir_all(&mod_path).map_err(|e| e.to_string())?;
+                } else {
+                    // Archived mod (.zip …) — it's a single file
+                    std::fs::remove_file(&mod_path).map_err(|e| e.to_string())?;
+                }
             }
             Ok::<(), String>(())
         }).await.map_err(|e| e.to_string())??;
@@ -1051,6 +1063,18 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
             }
 
             (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), m.name)
+        };
+
+        // Archived mods (.zip …) are kept zipped in the mods folder; extract to a
+        // cache dir and activate FROM that. The copy/backup/conflict/installed_files
+        // logic below is unchanged — it just operates on the extracted view.
+        let mod_folder = if crate::archive::is_archive(&mod_folder) {
+            match crate::archive::materialize(&mod_folder) {
+                Ok(dir) => dir,
+                Err(e) => return Err(format!("Failed to extract archive '{}': {}", mod_name, e)),
+            }
+        } else {
+            mod_folder
         };
 
         // --- Space check ---
@@ -1573,9 +1597,11 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
             let path = entry.path();
             log_line(format!("[MOD-SCAN] Checking: {:?}", path));
             let is_dir = path.is_dir();
-            let is_zip = path.is_file() && path.extension().and_then(|s| s.to_str()).unwrap_or("").eq_ignore_ascii_case("zip");
-            
-            if !is_dir && !is_zip { continue; }
+            // Archive mods (.zip/.tar/.tar.gz/.7z) are detected as mods too — kept
+            // compressed, extracted only on activation.
+            let is_arch = crate::archive::is_archive(&path);
+
+            if !is_dir && !is_arch { continue; }
 
             // Check if already in BMM list (global check)
             let is_already_added = existing_paths.iter().any(|ep| {
@@ -1592,8 +1618,15 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
                 .to_string();
 
             let mut mod_name = folder_name.clone();
-            if is_zip && mod_name.to_lowercase().ends_with(".zip") {
-                mod_name = mod_name[..mod_name.len() - 4].to_string();
+            if is_arch {
+                // Strip the archive extension for a clean display name.
+                let low = mod_name.to_lowercase();
+                for ext in [".tar.gz", ".tgz", ".zip", ".tar", ".7z", ".rar"] {
+                    if low.ends_with(ext) {
+                        mod_name = mod_name[..mod_name.len() - ext.len()].to_string();
+                        break;
+                    }
+                }
             }
 
             let mut entry = ModEntry::new(mod_name.clone(), path.clone());
@@ -2051,7 +2084,10 @@ pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>,
         let mut invalid_mod_ids = Vec::new();
         
         for m in mods_to_check {
-            let mod_dir = &m.mod_folder_path;
+            // Archived mods: compare against the extracted cache view so the report
+            // doesn't wrongly flag every file as "missing in library".
+            let mod_dir = crate::archive::mod_read_root(&m.mod_folder_path);
+            let mod_dir = &mod_dir;
             let game_dir = std::path::PathBuf::from(&game_path);
             let mut mod_has_issues = false;
             
@@ -2327,7 +2363,9 @@ pub async fn list_mod_files_recursive(state: State<'_, AppState>, mod_id: String
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         m.mod_folder_path.clone()
     };
-    
+    // Archived mods: list from the extracted cache view (file explorer parity).
+    let mod_folder = crate::archive::mod_read_root(&mod_folder);
+
     let files = fs_utils::list_mod_files(&mod_folder).map_err(|e| e.to_string())?;
     Ok(files.into_iter().map(|p| p.to_string_lossy().to_string()).collect())
 }
@@ -2516,6 +2554,8 @@ pub async fn get_mod_integrity(state: State<'_, AppState>, mod_id: String) -> Re
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         (m.mod_folder_path.clone(), m.file_hashes.clone(), m.file_hashes.is_none())
     };
+    // Archived mods: read files from the extracted cache view so integrity matches.
+    let mod_path = crate::archive::mod_read_root(&mod_path);
 
     if needs_baseline {
         // Auto-initialize baseline hashes if missing
@@ -2604,6 +2644,7 @@ pub async fn update_mod_hashes(state: State<'_, AppState>, mod_id: String) -> Re
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         m.mod_folder_path.clone()
     };
+    let mod_path = crate::archive::mod_read_root(&mod_path);
 
     let current_files = fs_utils::list_mod_files(&mod_path).map_err(|e| e.to_string())?;
     let mut new_hashes = std::collections::HashMap::new();
@@ -2982,7 +3023,12 @@ fn process_single_mod_hashing(
     };
     
     if let Some(mod_path) = mod_path_opt {
-        if let Ok(current_files) = fs_utils::list_mod_files(&mod_path) {
+        // For archived mods, hash the CONTENT of the archive (its extracted view),
+        // not the .zip file itself. This runs on the background SHA thread, so the
+        // one-time extraction is off the UI thread; the resulting hashes match the
+        // unzipped twin (content_id parity + correct integrity).
+        let read_root = crate::archive::mod_read_root(&mod_path);
+        if let Ok(current_files) = fs_utils::list_mod_files(&read_root) {
             let mut tracker = crate::commands::resource_tracker::OpTracker::start("SHA/compute")
                 .with_subject(id);
             let mut new_hashes = std::collections::HashMap::new();
@@ -2990,7 +3036,7 @@ fn process_single_mod_hashing(
             let mut bytes_total: u64 = 0;
 
             for f in current_files {
-                let full_path = mod_path.join(&f);
+                let full_path = read_root.join(&f);
                 if let Ok(meta) = std::fs::metadata(&full_path) {
                     bytes_total += meta.len();
                 }

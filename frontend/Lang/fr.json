@@ -791,6 +791,8 @@
   "mod.explorerTitle": "Explorateur d'Archive",
   "mod.filesCount": "{count} fichiers installés",
   "mod.folderPlaceholder": "Chemin vers le dossier...",
+  "mod.pickArchive": "Archive",
+  "mod.pickArchiveTip": "Ajouter un mod archivé (.zip .rar .7z .tar .tar.gz) — gardé compressé, décompressé automatiquement à l'activation",
   "mod.folderRequired": "Le nom et le fichier/dossier sont obligatoires.",
   "mod.importConfirmDesc": "Voulez-vous télécharger et installer <strong>{name}</strong> ?",
   "mod.importNameLabel": "Nom du mod",

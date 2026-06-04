@@ -230,6 +230,13 @@ pub async fn export_server_repo(
 
     let total_profiles = profiles_data.len();
 
+    // Every mod id that is part of THIS export (across all exported profiles).
+    // Used to keep only the dependencies whose target mod is also exported —
+    // cross-profile deps pointing at a NON-exported profile are dropped.
+    let exported_mod_ids: std::collections::HashSet<String> = profiles_data.iter()
+        .flat_map(|(_p, mods)| mods.iter().map(|m| m.id.clone()))
+        .collect();
+
     // Loop over each profile
     for (p_idx, (profile, exported_mods)) in profiles_data.into_iter().enumerate() {
         if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
@@ -290,6 +297,17 @@ pub async fn export_server_repo(
                 }
             }
 
+            // Keep only deps whose target mod is part of this export. A dep may be
+            // a bare "mod-id" or a cross-profile "profile_id::mod-id" — we resolve
+            // to the bare mod id and drop it if that mod isn't being exported.
+            let mut dep_ids: Vec<String> = Vec::new();
+            for d in &mod_entry.dependencies {
+                let mid = d.split_once("::").map(|(_, m)| m.to_string()).unwrap_or_else(|| d.clone());
+                if exported_mod_ids.contains(&mid) && !dep_ids.contains(&mid) {
+                    dep_ids.push(mid);
+                }
+            }
+
             let mut repo_mod = RepoMod {
                 id: mod_entry.id.clone(),
                 name: mod_entry.name.clone(),
@@ -299,9 +317,13 @@ pub async fn export_server_repo(
                 tags: resolved_tags,
                 files: Vec::new(),
                 download_links: mod_entry.download_links.clone(),
+                dependencies: dep_ids,
             };
 
-            let files = fs_utils::list_mod_files(&mod_entry.mod_folder_path).map_err(|e| e.to_string())?;
+            // Archived mods (.zip) are read from their extracted cache view so the
+            // repo packs the actual files (fixes "server repo with .zip bugs").
+            let read_root = crate::archive::mod_read_root(&mod_entry.mod_folder_path);
+            let files = fs_utils::list_mod_files(&read_root).map_err(|e| e.to_string())?;
             let total_files = files.len();
             
             use rayon::prelude::*;
@@ -309,7 +331,7 @@ pub async fn export_server_repo(
 
             let f_idx_atomic = AtomicUsize::new(0);
             let repo_files: Result<Vec<RepoFile>, String> = files.par_iter().map(|rel_path| {
-                let src_path = mod_entry.mod_folder_path.join(rel_path);
+                let src_path = read_root.join(rel_path);
                 let dst_path = target_mod_dir.join(rel_path);
                 
                 if let Some(parent) = dst_path.parent() {
@@ -672,11 +694,13 @@ pub async fn update_server_repo(
             if target_mod_dir.exists() { let _ = fs::remove_dir_all(&target_mod_dir); }
             fs::create_dir_all(&target_mod_dir).map_err(|_| "repo.errCreateModDir".to_string())?;
 
-            let files = fs_utils::list_mod_files(&pm.mod_entry.mod_folder_path).map_err(|e| e.to_string())?;
+            // Archived mods (.zip) read from their extracted cache view.
+            let read_root = crate::archive::mod_read_root(&pm.mod_entry.mod_folder_path);
+            let files = fs_utils::list_mod_files(&read_root).map_err(|e| e.to_string())?;
             let mut repo_files = Vec::new();
             for rel_path in &files {
                 if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) { return Err("repo.cancelled".to_string()); }
-                let src_path = pm.mod_entry.mod_folder_path.join(rel_path);
+                let src_path = read_root.join(rel_path);
                 let dst_path = target_mod_dir.join(rel_path);
                 if let Some(parent) = dst_path.parent() {
                     fs::create_dir_all(parent).map_err(|_| "repo.errCreateSubfolder".to_string())?;
@@ -695,6 +719,10 @@ pub async fn update_server_repo(
                 version: pm.mod_entry.version.clone(), author: pm.mod_entry.author.clone(),
                 description: pm.mod_entry.description.clone(), tags: resolved_tags,
                 files: repo_files, download_links: pm.mod_entry.download_links.clone(),
+                // bare mod ids; pruned to mods present in the repo after the loop
+                dependencies: pm.mod_entry.dependencies.iter()
+                    .map(|d| d.split_once("::").map(|(_, m)| m.to_string()).unwrap_or_else(|| d.clone()))
+                    .collect(),
             };
 
             let prof = &mut repo.profiles[prof_idx];
@@ -708,6 +736,13 @@ pub async fn update_server_repo(
         // GC orphaned mod folders
         let referenced: std::collections::HashSet<String> = repo.profiles.iter()
             .flat_map(|p| p.mods.iter().map(|m| m.id.clone())).collect();
+        // Drop dependencies pointing at mods that are not part of this repo
+        // (cross-profile deps to non-exported profiles).
+        for p in repo.profiles.iter_mut() {
+            for m in p.mods.iter_mut() {
+                m.dependencies.retain(|d| referenced.contains(d));
+            }
+        }
         if let Ok(entries) = fs::read_dir(&repo_mods_dir) {
             for e in entries.flatten() {
                 if e.path().is_dir() {
@@ -1647,7 +1682,9 @@ pub async fn sync_server_repo(
                 new_mod.author = repo_mod.author.clone();
                 new_mod.description = repo_mod.description.clone();
                 new_mod.download_links = repo_mod.download_links.clone();
-                
+                // Carry over the (already cross-profile-filtered) dependencies.
+                new_mod.dependencies = repo_mod.dependencies.clone();
+
                 let mut tag_ids = Vec::new();
                 for repo_tag in repo_mod.tags {
                     if !data.custom_tags.iter().any(|t| t.id == repo_tag.id) {
@@ -1670,6 +1707,7 @@ pub async fn sync_server_repo(
                     existing.description = new_mod.description;
                     existing.tags = new_mod.tags;
                     existing.download_links = new_mod.download_links;
+                    existing.dependencies = new_mod.dependencies;
                 }
             }
         }

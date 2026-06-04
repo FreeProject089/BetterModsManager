@@ -2795,6 +2795,12 @@ async fn do_api_repo_gen(
         }
     }
 
+    // Mods that are part of this export — used to keep only deps whose target is
+    // also exported (cross-profile deps to non-exported profiles are dropped).
+    let exported_mod_ids: std::collections::HashSet<String> = profiles_data.iter()
+        .flat_map(|(_p, mods)| mods.iter().map(|m| m.id.clone()))
+        .collect();
+
     let total = profiles_data.len();
     for (p_idx, (profile, mods)) in profiles_data.into_iter().enumerate() {
         // Check cancellation between profiles
@@ -2845,6 +2851,15 @@ async fn do_api_repo_gen(
                     color_bg: t.color.clone(), color_text: "#FFFFFF".to_string(),
                 }).collect();
 
+            let dep_ids: Vec<String> = {
+                let mut v: Vec<String> = Vec::new();
+                for d in &mod_entry.dependencies {
+                    let mid = d.split_once("::").map(|(_, m)| m.to_string()).unwrap_or_else(|| d.clone());
+                    if exported_mod_ids.contains(&mid) && !v.contains(&mid) { v.push(mid); }
+                }
+                v
+            };
+
             let mut repo_mod = RepoMod {
                 id: mod_entry.id.clone(),
                 name: mod_entry.name.clone(),
@@ -2854,11 +2869,14 @@ async fn do_api_repo_gen(
                 tags: resolved_tags,
                 files: Vec::new(),
                 download_links: mod_entry.download_links.clone(),
+                dependencies: dep_ids,
             };
 
-            if let Ok(files) = crate::fs_utils::list_mod_files(&mod_entry.mod_folder_path) {
+            // Archived mods (.zip) read from their extracted cache view.
+            let read_root = crate::archive::mod_read_root(&mod_entry.mod_folder_path);
+            if let Ok(files) = crate::fs_utils::list_mod_files(&read_root) {
                 for rel_path in &files {
-                    let src = mod_entry.mod_folder_path.join(rel_path);
+                    let src = read_root.join(rel_path);
                     let size_src = std::fs::metadata(&src).map(|m| m.len()).unwrap_or(0);
 
                     if body.lightweight {

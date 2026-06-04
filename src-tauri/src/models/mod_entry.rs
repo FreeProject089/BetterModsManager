@@ -187,9 +187,17 @@ pub fn derive_content_id(folder_path: &Path) -> Option<String> {
         }
     }
 
-    // 2. Fingerprint: walk all files, collect (relative_path_str, size), sort, hash
-    let mut entries: Vec<(String, u64)> = Vec::new();
-    collect_file_entries(folder_path, folder_path, &mut entries);
+    // 2. Fingerprint: collect (relative_path_str, size) pairs, sort, hash.
+    //    For an ARCHIVE mod we read the entries straight from the archive — the
+    //    (rel, size) pairs are identical to the unpacked folder, so a zipped mod
+    //    and its unzipped twin get the SAME content_id.
+    let mut entries: Vec<(String, u64)> = if crate::archive::is_archive(folder_path) {
+        crate::archive::archive_entries(folder_path).unwrap_or_default()
+    } else {
+        let mut e: Vec<(String, u64)> = Vec::new();
+        collect_file_entries(folder_path, folder_path, &mut e);
+        e
+    };
 
     if entries.is_empty() {
         return None;

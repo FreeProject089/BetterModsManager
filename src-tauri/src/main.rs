@@ -8,6 +8,7 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 mod error;
+mod archive;
 mod commands;
 mod fs_utils;
 mod models;

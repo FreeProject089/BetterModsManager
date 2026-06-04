@@ -52,6 +52,11 @@ pub struct RepoMod {
     pub tags: Vec<RepoTag>,
     pub files: Vec<RepoFile>,
     pub download_links: Vec<crate::models::mod_entry::DownloadLink>,
+    /// Mod-id dependencies, filtered at gen time to only those whose target mod
+    /// is part of the exported profiles (cross-profile deps to non-exported
+    /// profiles are dropped). Bare mod ids.
+    #[serde(default)]
+    pub dependencies: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
