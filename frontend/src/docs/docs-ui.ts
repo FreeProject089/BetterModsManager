@@ -58,6 +58,58 @@ function highlightDocsPluginsApiTab() {
     });
 }
 
+// ── Copy buttons + click-to-copy across ALL documentation tabs ────────────
+const COPY_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+const CHECK_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`;
+function setupDocsCopy() {
+    document.querySelectorAll('.docs-tab-content').forEach(tab => {
+        // 1. Copy button on every code block (<pre>) — works for highlighted plugin
+        //    blocks AND plain <pre> trees in the Basics / Documentation / FAQ tabs.
+        tab.querySelectorAll('pre').forEach(preEl => {
+            const pre = preEl as HTMLElement;
+            if (pre.dataset.copyReady) return;
+            pre.dataset.copyReady = '1';
+            // Find / create a positioned host for the button
+            let host = pre.closest('.plug-doc-code-wrap') as HTMLElement | null;
+            if (!host) {
+                const wrap = document.createElement('div');
+                wrap.className = 'docs-copy-wrap';
+                pre.parentNode?.insertBefore(wrap, pre);
+                wrap.appendChild(pre);
+                host = wrap;
+            }
+            if (host.querySelector(':scope > .plug-doc-copy')) return;
+            const btn = document.createElement('button');
+            btn.className = 'plug-doc-copy';
+            btn.type = 'button';
+            btn.title = t('docs.copyCode') || 'Copy';
+            btn.innerHTML = COPY_ICON;
+            btn.addEventListener('click', () => {
+                navigator.clipboard?.writeText((pre.textContent || '').trim());
+                btn.classList.add('copied'); btn.innerHTML = CHECK_ICON;
+                setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = COPY_ICON; }, 1400);
+            });
+            host.appendChild(btn);
+        });
+
+        // 2. Click-to-copy on inline <code> chips (URLs, endpoints, paths, scopes…)
+        tab.querySelectorAll('code').forEach(codeEl => {
+            const el = codeEl as HTMLElement;
+            if (el.dataset.copyBound || el.closest('pre')) return;
+            const txt = (el.textContent || '').trim();
+            if (txt.length < 2) return;
+            el.dataset.copyBound = '1';
+            el.classList.add('plug-doc-code-copy');
+            el.title = t('docs.clickToCopy') || 'Click to copy';
+            el.addEventListener('click', () => {
+                navigator.clipboard?.writeText((el.textContent || '').trim());
+                el.classList.add('just-copied');
+                setTimeout(() => el.classList.remove('just-copied'), 700);
+            });
+        });
+    });
+}
+
 interface DiagramIndexItem {
     text: string;
     diagramId: string;
@@ -320,8 +372,14 @@ function setupTabs() {
             if (tabId === 'plugins-api') {
                 highlightDocsPluginsApiTab();
             }
+            setupDocsCopy();
         });
     });
+
+    // Highlight + add copy buttons up-front so EVERY documentation tab (Basics,
+    // Documentation, FAQ, Plugins & API) is fully searchable and copyable from the start.
+    highlightDocsPluginsApiTab();
+    setupDocsCopy();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -426,6 +484,14 @@ function _runSearch(
         if (query !== '' && match) (faq as HTMLDetailsElement).open = true;
         else if (query === '') (faq as HTMLDetailsElement).open = false;
         animateVisibility(faq as HTMLElement, match);
+    });
+
+    // 2b. Filter Plugin & API doc sections (<details class="plug-doc-section">) so the
+    //     whole Plugins & API tab is searchable; expand the ones that match.
+    document.querySelectorAll('.docs-tab-content details.plug-doc-section').forEach(sec => {
+        const match = checkMatch(sec.textContent?.toLowerCase() || '', query, searchMode);
+        if (query !== '' && match) (sec as HTMLDetailsElement).open = true; // expand matches
+        animateVisibility(sec as HTMLElement, match);
     });
 
     // 3. Filter Diagram Gallery Buttons

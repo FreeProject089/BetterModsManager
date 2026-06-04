@@ -6395,7 +6395,7 @@ start "" "bmm://mod/enable?id=my-mod-folder"</pre>
                                 <p class="plug-doc-h" data-i18n="docs.apiEndpoints">Endpoints</p>
                                 <div class="plug-doc-tip" style="margin-bottom:10px;">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                    <span>The full, always-up-to-date endpoint list (with fields, responses & a one-click test) lives in <strong>Plugins &amp; API → Quick Test</strong>. A reference doc is also at <code>.Assets/.md/API_Reference.md</code> (FR: <code>API_Reference_FR.md</code>).</span>
+                                    <span>The full, always-up-to-date endpoint list (with fields, responses & a one-click test) lives in <strong>Plugins &amp; API → Quick Test</strong>. A reference doc is also at <code>Update/Documentation/API_Reference_EN.md</code> (FR: <code>API_Reference_FR.md</code>).</span>
                                 </div>
                                 <div class="plug-doc-grid2">
                                     <div class="plug-doc-ep-col get">
@@ -6411,6 +6411,10 @@ start "" "bmm://mod/enable?id=my-mod-folder"</pre>
                                             <li><code>GET /api/profiles</code></li>
                                             <li><code>GET /api/plugins</code></li>
                                             <li><code>GET /api/creator-id</code></li>
+                                            <li><code>GET /api/data</code> — full data.json dump</li>
+                                            <li><code>GET /api/catalog</code></li>
+                                            <li><code>GET /api/apps</code> — installed apps</li>
+                                            <li><code>GET /api/apps/permissions</code> · <code>/api/apps/permissions/:id</code></li>
                                             <li><code>GET /api/repo/info?url=</code></li>
                                             <li><code>GET /api/repo/list</code></li>
                                             <li><code>GET /api/language/template</code></li>
@@ -6427,6 +6431,7 @@ start "" "bmm://mod/enable?id=my-mod-folder"</pre>
                                             <li><code>POST /api/apps/install</code> · <code>/launch</code></li>
                                             <li><code>POST /api/catalog/new</code> · <code>/apps</code></li>
                                             <li><code>POST /api/{data,modlists,modpacks,plugins}/export · /import</code></li>
+                                            <li><code>POST /api/profiles/import/ovgme</code> · <code>/omm</code></li>
                                             <li><code>POST /api/language/import</code></li>
                                             <li><code>POST /api/restart</code></li>
                                         </ul>
@@ -7122,42 +7127,102 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
 
                         <!-- ── i18n Translation Sandbox Modal ── -->
                         <div class="modal-overlay" id="modal-i18n-sandbox" style="z-index:9999;">
-                            <div class="modal glass" style="max-width:1050px; width:96%; height:88vh; display:flex; flex-direction:column;">
-                                <div class="modal-header" style="flex-shrink:0;">
-                                    <div style="display:flex;align-items:center;gap:12px;">
-                                        <div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:rgba(6,182,212,0.15);border-radius:8px;">
+                            <div class="modal glass i18n-sb" style="max-width:1080px; width:96%; height:88vh; display:flex; flex-direction:column;">
+                                <div class="modal-header i18n-sb-header" style="flex-shrink:0;">
+                                    <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                                        <div class="i18n-sb-logo">
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
                                         </div>
-                                        <div>
+                                        <div style="min-width:0;">
                                             <h2 style="margin:0;font-size:17px;" data-i18n="i18n.title">Translation Sandbox</h2>
                                             <p style="margin:2px 0 0;font-size:12px;color:var(--text-muted);" data-i18n="i18n.subtitle">Edit translations in a sandbox — nothing is saved to BMM until you export.</p>
                                         </div>
                                     </div>
-                                    <button class="modal-close" data-close="modal-i18n-sandbox">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                    <div class="i18n-sb-header-actions">
+                                        <button class="i18n-sb-tool" id="i18n-pick-screen" data-i18n-title="i18n.pickScreen" title="Pick text from the app">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                                            <span data-i18n="i18n.pickScreenShort">Pick</span>
+                                        </button>
+                                        <button class="i18n-sb-tool" id="i18n-highlight-hc" data-i18n-title="i18n.highlightHc" title="Highlight hardcoded text on screen">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 11-6 6v3h3l6-6"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg>
+                                            <span data-i18n="i18n.highlightHcShort">Scan</span>
+                                        </button>
+                                        <button class="i18n-sb-tool" id="i18n-overlay-toggle" data-i18n-title="i18n.overlayMode" title="Overlay mode">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+                                        </button>
+                                        <button class="modal-close" data-close="modal-i18n-sandbox">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Tabs -->
+                                <div class="i18n-sb-tabs" style="flex-shrink:0;">
+                                    <button class="i18n-sb-tab active" data-i18n-tab="keys">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-3 3"/></svg>
+                                        <span data-i18n="i18n.tabKeys">Translation keys</span>
+                                        <span class="i18n-sb-tab-count" id="i18n-tabcount-keys"></span>
+                                    </button>
+                                    <button class="i18n-sb-tab" data-i18n-tab="hardcoded">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+                                        <span data-i18n="i18n.tabHardcoded">Hardcoded text</span>
+                                        <span class="i18n-sb-tab-count" id="i18n-tabcount-hc"></span>
                                     </button>
                                 </div>
-                                <div class="modal-body" style="padding:0;flex:1;display:flex;overflow:hidden;min-height:0;">
-                                    <!-- Left: key list -->
-                                    <div style="width:48%;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,0.08);min-height:0;">
-                                        <div style="padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0;">
-                                            <select id="i18n-base-lang" class="form-input" style="width:110px;font-size:12px;"></select>
-                                            <input id="i18n-search" class="form-input" placeholder="Search key or text…" style="flex:1;min-width:140px;font-size:12px;">
-                                            <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-secondary);cursor:pointer;white-space:nowrap;">
-                                                <input type="checkbox" id="i18n-only-missing"> <span data-i18n="i18n.onlyMissing">Missing only</span>
-                                            </label>
+
+                                <!-- KEYS TAB -->
+                                <div class="i18n-sb-panel active" data-i18n-panel="keys">
+                                    <div class="i18n-sb-left">
+                                        <div class="i18n-sb-filters">
+                                            <select id="i18n-base-lang" class="i18n-sb-lang"></select>
+                                            <button class="i18n-sb-newlang" id="i18n-new-lang" data-i18n-title="i18n.newLang" title="Create a new language">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+                                            </button>
+                                            <div class="i18n-sb-search-wrap">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                                <input id="i18n-search" placeholder="Search key or text…">
+                                            </div>
                                         </div>
-                                        <div id="i18n-stats" style="padding:6px 14px;font-size:11px;color:var(--text-muted);border-bottom:1px solid rgba(255,255,255,0.04);flex-shrink:0;"></div>
-                                        <div id="i18n-key-list" style="flex:1;overflow-y:auto;padding:4px;min-height:0;"></div>
+                                        <div class="i18n-sb-chips">
+                                            <button class="i18n-sb-chip active" data-i18n-filter="all"><span data-i18n="i18n.filterAll">All</span></button>
+                                            <button class="i18n-sb-chip" data-i18n-filter="missing">⚠ <span data-i18n="i18n.filterMissing">Missing</span></button>
+                                        </div>
+                                        <div id="i18n-stats" class="i18n-sb-stats"></div>
+                                        <div id="i18n-key-list" class="i18n-sb-keylist"></div>
                                     </div>
-                                    <!-- Right: detail / editor / usage -->
-                                    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;">
-                                        <div id="i18n-detail" style="flex:1;overflow-y:auto;padding:16px 18px;min-height:0;">
-                                            <div style="color:var(--text-muted);text-align:center;margin-top:60px;font-size:13px;" data-i18n="i18n.pickKey">Select a key on the left to edit it and see where it's used.</div>
+                                    <div class="i18n-sb-right">
+                                        <div id="i18n-detail" class="i18n-sb-detail">
+                                            <div class="i18n-sb-empty">
+                                                <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4;margin-bottom:14px;"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+                                                <div data-i18n="i18n.pickKey">Select a key on the left to edit it and see where it's used.</div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="modal-footer" style="padding:12px 18px;background:rgba(255,255,255,0.03);display:flex;justify-content:space-between;align-items:center;gap:10px;border-top:1px solid rgba(255,255,255,0.08);flex-shrink:0;">
+
+                                <!-- HARDCODED TAB -->
+                                <div class="i18n-sb-panel" data-i18n-panel="hardcoded">
+                                    <div class="i18n-sb-hc-bar">
+                                        <div class="i18n-sb-search-wrap" style="flex:1;">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                            <input id="i18n-hc-search" placeholder="Filter hardcoded text…">
+                                        </div>
+                                        <select id="i18n-hc-kind" class="i18n-sb-lang" style="width:auto;">
+                                            <option value="all" data-i18n="i18n.hcAll">All sources</option>
+                                            <option value="html">HTML</option>
+                                            <option value="ts">.ts / .js</option>
+                                            <option value="toast">Toasts</option>
+                                        </select>
+                                        <button class="btn btn-secondary btn-sm" id="i18n-hc-rescan">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right:5px;"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                                            <span data-i18n="i18n.hcRescan">Scan</span>
+                                        </button>
+                                    </div>
+                                    <p class="i18n-sb-hc-hint" data-i18n="i18n.hcHint">Human-readable text found in the source that is NOT using i18n. Click an entry to copy its file:line so you can add a key there.</p>
+                                    <div id="i18n-hc-list" class="i18n-sb-hclist"></div>
+                                </div>
+
+                                <div class="i18n-sb-footer">
                                     <span id="i18n-dirty-count" style="font-size:12px;color:var(--amber);"></span>
                                     <div style="display:flex;gap:10px;">
                                         <button class="btn btn-ghost btn-sm" id="i18n-reset" data-i18n="i18n.reset">Reset sandbox</button>

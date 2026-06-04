@@ -293,6 +293,257 @@ pub fn find_i18n_usages(app_handle: tauri::AppHandle, key: String) -> Result<Vec
     Ok(results)
 }
 
+#[derive(serde::Serialize)]
+pub struct HardcodedString {
+    pub file: String,
+    pub line: u32,
+    pub text: String,
+    pub snippet: String,
+    pub kind: String, // "html" | "toast" | "js"
+}
+
+/// Heuristically scans the shipped frontend source for human-readable text that
+/// is NOT going through i18n (no data-i18n / no t(...)). Lets the sandbox surface
+/// hardcoded strings with their exact file + line so a key can be added easily.
+#[tauri::command]
+pub fn find_hardcoded_strings(app_handle: tauri::AppHandle, filter: Option<String>) -> Result<Vec<HardcodedString>, String> {
+    let lang_dir = get_lang_dir(&app_handle);
+    let frontend_dir = lang_dir.parent().map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let needle = filter.unwrap_or_default().to_lowercase();
+
+    // True if a string looks like human-facing copy (has letters + a space or is a real word),
+    // not a css value, path, identifier, svg data, etc.
+    fn looks_human(s: &str) -> bool {
+        let s = s.trim();
+        if s.len() < 2 || s.len() > 200 { return false; }
+        // must contain at least 2 letters
+        let letters = s.chars().filter(|c| c.is_alphabetic()).count();
+        if letters < 2 { return false; }
+        // reject obvious non-copy
+        let low = s.to_lowercase();
+        if s.starts_with('#') || s.starts_with('.') || s.starts_with('/') || s.starts_with('@') { return false; }
+        if low.contains("px") && s.chars().any(|c| c.is_ascii_digit()) && !s.contains(' ') { return false; }
+        if s.contains("://") || s.contains("data-i18n") { return false; }
+        if low.starts_with("var(") || low.starts_with("rgba") || low.starts_with("0x") { return false; }
+        // mostly symbols / svg path like "M12 3l4 4"
+        let symbolic = s.chars().filter(|c| !c.is_alphanumeric() && !c.is_whitespace()).count();
+        if symbolic * 2 > s.len() { return false; }
+        // single camelCase/snake token w/o spaces → likely an identifier
+        if !s.contains(' ') && (s.contains('_') || s.contains('-')) && !s.ends_with(['.', '!', '?']) { return false; }
+        true
+    }
+
+    let mut out: Vec<HardcodedString> = Vec::new();
+    for entry in jwalk::WalkDir::new(&frontend_dir).into_iter().flatten() {
+        let path = entry.path();
+        if !path.is_file() { continue; }
+        let p_str = path.to_string_lossy().replace('\\', "/");
+        if p_str.contains("/Lang/") || p_str.contains("/node_modules/") || p_str.ends_with(".map") { continue; }
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        // Scan index.html + scripts. Prefer .ts source (dev); fall back to .js so this
+        // ALSO works in production where only compiled .js ships. To avoid duplicates in
+        // dev, skip a .js when a sibling .ts exists.
+        if ext != "html" && ext != "ts" && ext != "js" { continue; }
+        if ext == "js" && path.with_extension("ts").exists() { continue; }
+        let is_html = ext == "html";
+        let content = match std::fs::read_to_string(&path) { Ok(c) => c, Err(_) => continue };
+        let rel = path.strip_prefix(&frontend_dir).unwrap_or(&path).to_string_lossy().replace('\\', "/");
+
+        for (i, raw_line) in content.lines().enumerate() {
+            let line = raw_line.trim();
+            if line.is_empty() || line.starts_with("//") || line.starts_with('*') { continue; }
+            let line_no = (i as u32) + 1;
+            let trimmed_snip = if line.chars().count() > 160 {
+                format!("{}…", line.chars().take(160).collect::<String>())
+            } else { line.to_string() };
+
+            if is_html {
+                // Text between > and < on this line, when no data-i18n present on the line.
+                if line.contains("data-i18n") { continue; }
+                if line.contains("<svg") || line.contains("<path") || line.contains("<script") || line.contains("<style") { continue; }
+                let bytes = line.as_bytes();
+                let mut idx = 0;
+                while let Some(gt) = line[idx..].find('>') {
+                    let start = idx + gt + 1;
+                    if start >= bytes.len() { break; }
+                    if let Some(lt) = line[start..].find('<') {
+                        let text = &line[start..start + lt];
+                        if looks_human(text) && (needle.is_empty() || text.to_lowercase().contains(&needle)) {
+                            out.push(HardcodedString {
+                                file: rel.clone(), line: line_no,
+                                text: text.trim().to_string(), snippet: trimmed_snip.clone(),
+                                kind: "html".into(),
+                            });
+                        }
+                        idx = start + lt + 1;
+                    } else { break; }
+                }
+            } else {
+                // .ts / .js — two passes:
+                //  (a) HTML text inside innerHTML/template literals: >Some Text<
+                //  (b) string literals passed to toast(...) / textContent / placeholder
+                let uses_i18n = line.contains("t('") || line.contains("t(\"") || line.contains("${t(")
+                    || line.contains("data-i18n");
+
+                // (a) tag text like `<span>Real Text</span>` inside backtick HTML templates.
+                if !uses_i18n && !line.contains("<svg") && !line.contains("<path")
+                    && line.contains('>') && line.contains('<') {
+                    let bytes = line.as_bytes();
+                    let mut idx = 0;
+                    while let Some(gt) = line[idx..].find('>') {
+                        let start = idx + gt + 1;
+                        if start >= bytes.len() { break; }
+                        if let Some(lt) = line[start..].find('<') {
+                            let text = &line[start..start + lt];
+                            // skip template interpolations like `>${foo}<`
+                            if !text.contains("${") && looks_human(text)
+                                && (needle.is_empty() || text.to_lowercase().contains(&needle)) {
+                                out.push(HardcodedString {
+                                    file: rel.clone(), line: line_no,
+                                    text: text.trim().to_string(), snippet: trimmed_snip.clone(),
+                                    kind: "ts".into(),
+                                });
+                            }
+                            idx = start + lt + 1;
+                        } else { break; }
+                    }
+                }
+
+                // (b) literals inside toast(...) / textContent / placeholder, not via t(...)
+                let is_toast = line.contains("toast(");
+                let is_text = line.contains(".textContent") || line.contains(".placeholder")
+                    || line.contains(".title =") || line.contains(".innerText");
+                if (is_toast || is_text) && !uses_i18n {
+                    for quote in ['\'', '"'] {
+                        let mut search = line;
+                        while let Some(a) = search.find(quote) {
+                            let rest = &search[a + 1..];
+                            if let Some(b) = rest.find(quote) {
+                                let lit = &rest[..b];
+                                if looks_human(lit) && (needle.is_empty() || lit.to_lowercase().contains(&needle)) {
+                                    out.push(HardcodedString {
+                                        file: rel.clone(), line: line_no,
+                                        text: lit.trim().to_string(), snippet: trimmed_snip.clone(),
+                                        kind: if is_toast { "toast".into() } else { "js".into() },
+                                    });
+                                }
+                                search = &rest[b + 1..];
+                            } else { break; }
+                        }
+                    }
+                }
+            }
+            if out.len() >= 800 { return Ok(out); }
+        }
+    }
+    Ok(out)
+}
+
+/// Scans the frontend source once and classifies i18n keys by how they are used:
+/// "toast" (shown via toast(t('key'))) or "tooltip" (shown via showTaskyHelp('key')).
+/// Returns key -> list of kinds. Lets the sandbox filter Toast / Tooltip keys.
+#[tauri::command]
+pub fn get_i18n_key_kinds(app_handle: tauri::AppHandle) -> Result<std::collections::HashMap<String, Vec<String>>, String> {
+    let lang_dir = get_lang_dir(&app_handle);
+    let frontend_dir = lang_dir.parent().map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    // Extract every t('key') / t("key") referenced in a string.
+    fn t_keys(s: &str) -> Vec<String> {
+        let mut keys = Vec::new();
+        let bytes = s.as_bytes();
+        let mut i = 0;
+        while i + 1 < bytes.len() {
+            if bytes[i] == b't' && bytes[i + 1] == b'(' {
+                // char before 't' must not be an identifier char (so we match t( not foot()
+                let ok_prefix = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_' || bytes[i - 1] == b'.');
+                if ok_prefix {
+                    let rest = &s[i + 2..];
+                    if let Some(q) = rest.find(['\'', '"']) {
+                        let quote = rest.as_bytes()[q] as char;
+                        let after = &rest[q + 1..];
+                        if let Some(e) = after.find(quote) {
+                            keys.push(after[..e].to_string());
+                        }
+                    }
+                }
+            }
+            i += 1;
+        }
+        keys
+    }
+    // First quoted literal right after a marker like showTaskyHelp(
+    fn first_literal_after(line: &str, marker: &str) -> Option<String> {
+        let idx = line.find(marker)? + marker.len();
+        let rest = &line[idx..];
+        let q = rest.find(['\'', '"'])?;
+        let quote = rest.as_bytes()[q] as char;
+        let after = &rest[q + 1..];
+        let e = after.find(quote)?;
+        Some(after[..e].to_string())
+    }
+
+    let mut map: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let mut add = |key: String, kind: &str| {
+        if key.is_empty() || key.starts_with('_') { return; }
+        let e = map.entry(key).or_default();
+        if !e.iter().any(|k| k == kind) { e.push(kind.to_string()); }
+    };
+
+    for entry in jwalk::WalkDir::new(&frontend_dir).into_iter().flatten() {
+        let path = entry.path();
+        if !path.is_file() { continue; }
+        let p_str = path.to_string_lossy().replace('\\', "/");
+        if p_str.contains("/Lang/") || p_str.contains("/node_modules/") || p_str.ends_with(".map") { continue; }
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if ext != "js" && ext != "ts" && ext != "html" { continue; }
+        let content = match std::fs::read_to_string(&path) { Ok(c) => c, Err(_) => continue };
+        for line in content.lines() {
+            if line.contains("toast(") {
+                for k in t_keys(line) { add(k, "toast"); }
+            }
+            if line.contains("showTaskyHelp(") {
+                if let Some(k) = first_literal_after(line, "showTaskyHelp(") {
+                    // must look like a key (has a dot, no spaces) — literal tooltips are skipped
+                    if k.contains('.') && !k.contains(' ') { add(k, "tooltip"); }
+                }
+            }
+        }
+    }
+    Ok(map)
+}
+
+/// Creates a new language file Lang/{code}.json on disk, seeded either from an
+/// existing language's content (copy_from) or empty. Returns the new file's JSON.
+#[tauri::command]
+pub fn create_language_file(app_handle: tauri::AppHandle, code: String, copy_from: Option<String>) -> Result<String, String> {
+    let code = code.trim().to_lowercase();
+    if code.is_empty() || code == "template" {
+        return Err("Invalid language code".into());
+    }
+    if !code.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("Language code may only contain letters, digits, - and _".into());
+    }
+    let lang_dir = get_lang_dir(&app_handle);
+    if !lang_dir.exists() { std::fs::create_dir_all(&lang_dir).map_err(|e| e.to_string())?; }
+    let file_path = lang_dir.join(format!("{}.json", code));
+    if file_path.exists() {
+        return Err(format!("Language '{}' already exists", code));
+    }
+
+    // Seed: copy the source language's keys (values kept so the new lang starts usable)
+    let seed_json = match copy_from.filter(|s| !s.trim().is_empty()) {
+        Some(src) => {
+            let src_path = lang_dir.join(format!("{}.json", src.trim().to_lowercase()));
+            std::fs::read_to_string(&src_path).unwrap_or_else(|_| "{}".to_string())
+        }
+        None => "{}".to_string(),
+    };
+    std::fs::write(&file_path, &seed_json).map_err(|e| e.to_string())?;
+    Ok(seed_json)
+}
+
 /// Returns the list of available language codes + the raw JSON content of each,
 /// so the sandbox can diff all languages at once.
 #[tauri::command]
