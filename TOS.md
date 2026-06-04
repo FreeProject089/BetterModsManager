@@ -1,6 +1,6 @@
-# Better Mods Manager (BMM) - End User License Agreement (EULA)
+# Better Mods Manager (BMM) - Terms of Service (TOS)
 
-This End User License Agreement ("Agreement") is a legal agreement between you and the Better Mods Manager development team for the use of Better Mods Manager ("Software").
+These Terms of Service ("Terms") form a legal agreement between you and the Better Mods Manager development team for the use of Better Mods Manager ("Software"). Better Mods Manager is **free and open-source software** distributed under the GPL‑3.0 license — these Terms simply describe acceptable use and the absence of warranty; they do not restrict the freedoms granted by the GPL‑3.0.
 
 ## 1. LICENSE GRANT
 Better Mods Manager is free software licensed under the **GNU General Public License v3.0 (GPL-3.0)**. You are encouraged to study, modify, and redistribute the Software in accordance with the terms of the GPL-3.0. A copy of the full license text is available in the LICENSE file provided with this Software.

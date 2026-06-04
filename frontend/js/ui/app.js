@@ -790,9 +790,9 @@ async function main() {
     // 0. Language selection on first start (before everything else)
     await checkLangSelect();
     await waitForModalClosed('modal-lang-select');
-    // 1. Auto EULA on first start (if enabled in app.cfg)
+    // 1. Auto TOS (Terms of Service) on first start (if enabled in app.cfg)
     await checkAutoEula();
-    await waitForModalClosed('modal-eula');
+    await waitForModalClosed('modal-tos');
     // 2. Crash report UI wiring and check
     initCrashReportUI();
     await checkPreviousCrash();

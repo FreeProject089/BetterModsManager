@@ -667,6 +667,20 @@ body.is-maximized .titlebar-spacer {
     gap: 2px;
 }
 
+/* Language row: option + download / remove buttons for custom languages */
+.nav-lang-row { display: flex; align-items: center; gap: 2px; border-radius: 6px; }
+.nav-lang-row.active { background: var(--accent-dim); }
+.nav-lang-row .nav-lang-option { background: none; }
+.nav-lang-dl, .nav-lang-del {
+    width: 26px; height: 26px; flex-shrink: 0; display: inline-flex;
+    align-items: center; justify-content: center; border-radius: 6px;
+    border: none; background: none; color: var(--text-muted); cursor: pointer;
+    opacity: 0; transition: all 0.14s ease;
+}
+.nav-lang-row:hover .nav-lang-dl, .nav-lang-row:hover .nav-lang-del { opacity: 1; }
+.nav-lang-dl:hover { background: rgba(96,165,250,0.16); color: var(--accent); }
+.nav-lang-del:hover { background: rgba(239,68,68,0.16); color: var(--danger); }
+
 /* Language logic styles below */
 
 @keyframes pulse-dot {
@@ -3449,6 +3463,13 @@ body.is-maximized .titlebar-spacer {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 6px;
     padding: 3px 6px 3px 9px;
+}
+/* "Already bundled" chips shown when editing a plugin (read-only) */
+.plug-existing-chip {
+    background: rgba(96,165,250,0.1);
+    border-color: rgba(96,165,250,0.3);
+    color: var(--accent);
+    padding: 3px 9px;
 }
 .plug-script-rm {
     background: none;
@@ -10554,7 +10575,15 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     flex-shrink: 0;
 }
 .plug-endpoint-desc { color: var(--text-secondary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.plug-auth-badge { font-size: 12px; flex-shrink: 0; }
+.plug-auth-badge { font-size: 12px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
+/* Reserved fixed-width slot so the lock badge never shifts the action buttons →
+   the terminal / copy icons stay vertically aligned across every endpoint row. */
+.plug-auth-slot { width: 16px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
+/* Copyable permission chips (endpoint detail) */
+.plug-perm-copy { transition: transform 0.1s ease, filter 0.12s ease; }
+.plug-perm-copy:hover { filter: brightness(1.35); }
+.plug-perm-copy:active { transform: scale(0.94); }
+.plug-perm-copied { outline: 1px solid currentColor; filter: brightness(1.5); }
 
 /* Generator form */
 .plug-gen-form { display: flex; flex-direction: column; gap: 12px; }

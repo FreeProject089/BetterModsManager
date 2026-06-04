@@ -38,6 +38,8 @@ let _catalog: AppEntry[] = [];
 let _state: AppsState = { installed: {}, favorites: [], history: [], community_sources: [] };
 let _activeTab = 'browse';
 let _searchQ = '';
+let _searchDeb: any;
+let _favSearchDeb: any;
 let _filterCat = 'all';
 let _filterPrice = 'all';
 let _filterTag  = 'all';
@@ -234,7 +236,8 @@ function setupEvents(view: HTMLElement) {
     document.getElementById('apps-btn-reload')?.addEventListener('click', () => loadCatalog(true));
     document.getElementById('apps-search')?.addEventListener('input', (e) => {
         _searchQ = (e.target as HTMLInputElement).value;
-        renderBrowse();
+        clearTimeout(_searchDeb);
+        _searchDeb = setTimeout(() => renderBrowse(), 150);
     });
     document.getElementById('apps-filter-cat')?.addEventListener('change', (e) => {
         _filterCat = (e.target as HTMLSelectElement).value;
@@ -640,7 +643,7 @@ function renderFavorites() {
       : `<div class="apps-grid">${apps.map(a => renderAppCardWithCollMenu(a)).join('')}</div>`}`;
 
     // Search
-    document.getElementById('fav-search')?.addEventListener('input', e => { _favSearch = (e.target as HTMLInputElement).value; renderFavorites(); });
+    document.getElementById('fav-search')?.addEventListener('input', e => { _favSearch = (e.target as HTMLInputElement).value; clearTimeout(_favSearchDeb); _favSearchDeb = setTimeout(() => renderFavorites(), 150); });
     // Category filter
     document.getElementById('fav-filter-cat')?.addEventListener('change', e => { _favFilterCat = (e.target as HTMLSelectElement).value; renderFavorites(); });
     // Source filter

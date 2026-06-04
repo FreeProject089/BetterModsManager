@@ -49,6 +49,9 @@ let _tab = 'installed';
 let _installedPlugins = [];
 let _catalog = null;
 let _allMods = [];
+let _allModsAll: any[] = [];   // flattened, deduped mods across ALL profiles (for the creator)
+let _editScripts: string[] = []; // existing bundled scripts carried over when editing a plugin
+let _editFolders: string[] = []; // existing bundled folders carried over when editing a plugin
 let _allProfiles = [];
 let _apiToken = '';
 let _exePath = '';
@@ -137,6 +140,23 @@ async function loadInitialData() {
             invoke('get_api_token'),
         ]);
         _exePath = await invoke('get_app_exe_path').catch(() => '');
+        // Flattened list of EVERY mod across ALL profiles (deduped by id), each
+        // tagged with the profiles that contain it — used by the plugin creator so
+        // it shows every mod regardless of the active profile (and the profile
+        // filter actually works). One backend call, built once → opti.
+        try {
+            const allProf: Record<string, any> = await invoke('get_mods_all_profiles');
+            const map = new Map<string, any>();
+            for (const [pid, info] of Object.entries(allProf || {})) {
+                for (const m of ((info as any)?.mods || [])) {
+                    let e = map.get(m.id);
+                    if (!e) { e = { id: m.id, name: m.name, version: m.version, profileIds: [] }; map.set(m.id, e); }
+                    if (!e.profileIds.includes(pid)) e.profileIds.push(pid);
+                }
+            }
+            _allModsAll = Array.from(map.values()).sort((a, b) =>
+                (a.name || a.id).localeCompare(b.name || b.id));
+        } catch { _allModsAll = _allMods.slice(); }
         try {
             const mpRes = await fetch('http://127.0.0.1:51274/api/modpacks');
             const mpJson = await mpRes.json().catch(() => ({}));
@@ -2671,6 +2691,9 @@ async function handleQuickTest(method: string, path: string, body?: string, btnE
 // ── Tab: Create ────────────────────────────────────────────────────────────
 
 function renderCreate(container: HTMLElement) {
+    // Reset edit-carry state — a fresh Create tab starts with no bundled files.
+    _editScripts = [];
+    _editFolders = [];
     container.innerHTML = `
         <div class="plug-create-layout">
             <div class="plug-create-form-col">
@@ -2783,8 +2806,8 @@ function renderCreate(container: HTMLElement) {
                         </div>
                     </div>
                     <div class="plug-mod-available" id="pc-available-mods">
-                        ${_allMods.length ? _allMods.map(m => `
-                            <div class="plug-mod-item" data-id="${escHtml(m.id)}" data-name="${escHtml(m.name || m.id)}">
+                        ${_allModsAll.length ? _allModsAll.map(m => `
+                            <div class="plug-mod-item" data-id="${escHtml(m.id)}" data-name="${escHtml(m.name || m.id)}" data-profiles="${escHtml((m.profileIds || []).join(','))}">
                                 <span class="plug-mod-item-name">${escHtml(m.name || m.id)}</span>
                                 <span class="plug-mod-profile-badge" style="display:none;" data-tooltip="${t('plugins.activeInProfile')}">${IC.checkCircle}</span>
                                 <label class="plug-mod-optional-lbl" data-tooltip="${t('plugins.optional')}">
@@ -2953,11 +2976,13 @@ function renderCreate(container: HTMLElement) {
             const el = item as HTMLElement;
             const id = el.dataset.id || '';
             const name = el.dataset.name?.toLowerCase() || '';
+            // Profiles that physically contain this mod (from the all-profiles list)
+            const modProfiles = (el.dataset.profiles || '').split(',').filter(Boolean);
             const badge = el.querySelector('.plug-mod-profile-badge') as HTMLElement | null;
-            // Show badge if this mod is in the selected profile
+            // Badge = mod is enabled in the selected profile
             if (badge) badge.style.display = profileId && activeMods.has(id) ? '' : 'none';
-            // Filter visibility: if a profile is selected, only show mods in that profile (OR all if no profile)
-            const passesProfile = !profileId || activeMods.has(id);
+            // Visibility: no profile → show all; profile selected → only mods in that profile
+            const passesProfile = !profileId || modProfiles.includes(profileId);
             const passesSearch = !q || name.includes(q);
             el.style.display = passesProfile && passesSearch ? '' : 'none';
         });
@@ -2995,9 +3020,11 @@ function renderCreate(container: HTMLElement) {
             description: (document.getElementById('pc-desc') as HTMLTextAreaElement)?.value.trim() || '',
             game: (document.getElementById('pc-game') as HTMLInputElement)?.value.trim() || '',
             official: false, permissions: [], tags: [], website: '',
-            has_scripts: (document.getElementById('pc-has-scripts') as HTMLInputElement)?.checked || false,
-            scripts: [],
-            folders: [],
+            has_scripts: ((document.getElementById('pc-has-scripts') as HTMLInputElement)?.checked) || _editScripts.length > 0 || _editFolders.length > 0,
+            // Preserve scripts/folders already bundled with the plugin when editing
+            // (the backend only overwrites these when NEW source paths are picked).
+            scripts: _editScripts,
+            folders: _editFolders,
             apply_mode: (document.getElementById('pc-apply-mode') as HTMLSelectElement)?.value || 'modlist',
             modlist: {
                 strict: (document.getElementById('pc-strict') as HTMLInputElement)?.checked || false,
@@ -3642,6 +3669,18 @@ function renderScripts(container: HTMLElement) {
         });
     });
 
+    // Permission chips → click to copy the scope string
+    container.querySelectorAll('.plug-perm-copy').forEach(chip => {
+        chip.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const perm = (chip as HTMLElement).dataset.perm || (chip.textContent || '').trim();
+            await navigator.clipboard.writeText(perm).catch(() => {});
+            (chip as HTMLElement).classList.add('plug-perm-copied');
+            setTimeout(() => (chip as HTMLElement).classList.remove('plug-perm-copied'), 700);
+            toast(t('plugins.permCopied') || 'Permission copied', 'success', 1400);
+        });
+    });
+
     // Multi-profile selector: populate + wire icon
     const genProfileSel = container.querySelector('#plug-gen-profile') as HTMLSelectElement | null;
     const genProfileIcon = document.getElementById('plug-gen-profile-icon');
@@ -3996,7 +4035,7 @@ function buildEndpointRow(ep: EndpointDef): string {
             ${PERM_GROUPS.map(grp => `
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;">
                 <span style="font-size:9px;font-weight:800;color:${grp.c};text-transform:uppercase;letter-spacing:.6px;min-width:62px;">${grp.g}</span>
-                ${grp.perms.map(pm => `<code style="font-size:10px;color:${grp.c};background:${grp.c}1a;border:1px solid ${grp.c}33;padding:2px 7px;border-radius:5px;">${pm}</code>`).join('')}
+                ${grp.perms.map(pm => `<code class="plug-perm-copy" data-perm="${pm}" data-tooltip="${t('plugins.clickToCopy') || 'Click to copy'}" style="font-size:10px;color:${grp.c};background:${grp.c}1a;border:1px solid ${grp.c}33;padding:2px 7px;border-radius:5px;cursor:pointer;">${pm}</code>`).join('')}
               </div>`).join('')}
         </div>` : '';
 
@@ -4088,9 +4127,9 @@ function buildEndpointRow(ep: EndpointDef): string {
                 ${dlBadge}
                 <span class="plug-endpoint-desc">${ep.desc}</span>
                 <div class="plug-ep-row-actions">
-                    <button class="btn btn-xs btn-ghost plug-ep-prefill-btn" data-method="${ep.method}" data-path="${ep.path}" data-tooltip="Préremplir la requête personnalisée">${IC.terminal}</button>
+                    <button class="btn btn-xs btn-ghost plug-ep-prefill-btn" data-method="${ep.method}" data-path="${ep.path}" data-tooltip="${t('plugins.epPrefillTip') || 'Pre-fill the custom request'}">${IC.terminal}</button>
                     <button class="btn btn-xs btn-ghost plug-ep-copy-btn" data-copy="${ep.path}" data-tooltip="${t('plugins.epCopy')}">${IC.copy}</button>
-                    ${ep.auth ? `<span class="plug-auth-badge" data-tooltip="${t('plugins.requiresToken')}">${IC.lock}</span>` : ''}
+                    <span class="plug-auth-slot">${ep.auth ? `<span class="plug-auth-badge" data-tooltip="${t('plugins.requiresToken')}">${IC.lock}</span>` : ''}</span>
                 </div>
             </div>
             <div class="plug-ep-detail plug-ep-swagger" id="epd-${safeId}" style="display:none;">
@@ -5222,6 +5261,7 @@ function _actionCatalog(): _ActionDef[] {
         { value: 'check_update',     label: d('actionCheckUpdate', 'Check for update') },
         { value: 'list_mods',        label: d('actionListMods', 'List mods') },
         { value: 'list_active_mods', label: d('actionListActiveMods', 'List active mods') },
+        { value: 'list_all_mods',    label: d('actionListAllMods', 'List all mods (all profiles)') },
         { value: 'list_profiles',    label: d('actionListProfiles', 'List profiles') },
         { value: 'list_plugins',     label: d('actionListPlugins', 'List plugins') },
         { value: 'list_modpacks',    label: d('actionListModpacks', 'List modpacks') },
@@ -5420,6 +5460,9 @@ function _actionCatalog(): _ActionDef[] {
         { id: 'list_active_mods', cat: 'read', label: d('actionListActiveMods', 'List active mods'),
           desc: d('actionListActiveModsDesc', 'Lists currently-enabled mods. Prints the JSON response.'),
           iconSvg: sv('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>') },
+        { id: 'list_all_mods',    cat: 'read', label: d('actionListAllMods', 'List all mods (all profiles)'),
+          desc: d('actionListAllModsDesc', 'Lists every mod across ALL profiles, grouped by profile. Prints the JSON response.'),
+          iconSvg: sv('<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>') },
         { id: 'list_profiles',    cat: 'read', label: d('actionListProfiles', 'List profiles'),
           desc: d('actionListProfilesDesc', 'Lists all profiles. Prints the JSON response.'),
           iconSvg: sv('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') },
@@ -6509,6 +6552,7 @@ function _apiBodyFor(a: any): { method: string; path: string; body: Record<strin
         case 'get_status':       return { method: 'GET', path: '/api/status',       body: {} };
         case 'list_mods':        return { method: 'GET', path: '/api/mods',         body: {} };
         case 'list_active_mods': return { method: 'GET', path: '/api/mods/active',  body: {} };
+        case 'list_all_mods':    return { method: 'GET', path: '/api/mods/all',     body: {} };
         case 'list_profiles':    return { method: 'GET', path: '/api/profiles',     body: {} };
         case 'list_plugins':     return { method: 'GET', path: '/api/plugins',      body: {} };
         case 'list_modpacks':    return { method: 'GET', path: '/api/modpacks',     body: {} };
@@ -7692,10 +7736,36 @@ function prefillCreateTab(manifest: any) {
         strictCb.checked = !!(manifest.modlist?.strict);
         strictCb.dispatchEvent(new Event('change'));
     }
-    // Pre-select mods
+
+    // Restore apply mode (modlist / scripts / both)
+    const applyModeSel = document.getElementById('pc-apply-mode') as HTMLSelectElement | null;
+    if (applyModeSel) applyModeSel.value = manifest.apply_mode || 'modlist';
+
+    // Restore "has scripts" toggle and SHOW the scripts/folders already linked to
+    // this plugin (read-only "existing" chips) so editing keeps full context.
+    const existingScripts: string[] = manifest.scripts || [];
+    const existingFolders: string[] = manifest.folders || [];
+    // Carry them through to save so editing doesn't wipe bundled files.
+    _editScripts = existingScripts.slice();
+    _editFolders = existingFolders.slice();
+    const hasScriptsCb = document.getElementById('pc-has-scripts') as HTMLInputElement | null;
+    if (hasScriptsCb) {
+        hasScriptsCb.checked = !!(manifest.has_scripts || existingScripts.length || existingFolders.length);
+        hasScriptsCb.dispatchEvent(new Event('change'));
+    }
+    const existChip = (label: string) =>
+        `<div class="plug-script-chip plug-existing-chip" data-tooltip="${t('plugins.existingBundled') || 'Already bundled — kept on save'}">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.7"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            <span>${escHtml(label)}</span>
+        </div>`;
+    const sList = document.getElementById('pc-scripts-list');
+    if (sList && existingScripts.length) sList.insertAdjacentHTML('afterbegin', existingScripts.map(existChip).join(''));
+    const fList = document.getElementById('pc-folders-list');
+    if (fList && existingFolders.length) fList.insertAdjacentHTML('afterbegin', existingFolders.map(f => existChip(f + '/')).join(''));
+
+    // Pre-select mods (resolved against the full all-profiles mod list)
     const mods: { name: string; optional: boolean }[] = manifest.modlist?.required_mods || [];
     for (const mod of mods) {
-        // Find mod item by name and click add
         const items = document.querySelectorAll('.plug-mod-item');
         for (const item of Array.from(items) as HTMLElement[]) {
             if ((item.dataset.name || '').toLowerCase() === mod.name.toLowerCase()) {

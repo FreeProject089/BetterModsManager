@@ -1,6 +1,6 @@
-# Better Mods Manager (BMM) - Contrat de Licence Utilisateur Final (CLUF)
+# Better Mods Manager (BMM) - Conditions d'Utilisation (TOS)
 
-Le présent Contrat de Licence Utilisateur Final ("Contrat") constitue une entente légale entre vous et l'équipe de développement de Better Mods Manager pour l'utilisation de Better Mods Manager ("Logiciel").
+Les présentes Conditions d'Utilisation (« Conditions ») constituent une entente légale entre vous et l'équipe de développement de Better Mods Manager pour l'utilisation de Better Mods Manager (« Logiciel »). Better Mods Manager est un **logiciel libre et open-source** distribué sous licence GPL‑3.0 — ces Conditions décrivent simplement un usage acceptable et l'absence de garantie ; elles ne restreignent pas les libertés accordées par la GPL‑3.0.
 
 ## 1. CONCESSION DE LICENCE
 Better Mods Manager est un logiciel libre sous licence **GNU General Public License v3.0 (GPL-3.0)**. Vous êtes encouragé à étudier, modifier et redistribuer le Logiciel conformément aux termes de la licence GPL-3.0. Une copie du texte complet de la licence est disponible dans le fichier LICENSE fourni avec ce Logiciel.

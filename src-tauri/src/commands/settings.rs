@@ -137,20 +137,37 @@ pub fn get_license_text(app_handle: tauri::AppHandle) -> Result<String, String> 
 
 #[tauri::command]
 pub fn get_eula_text(app_handle: tauri::AppHandle, lang: String) -> Result<String, String> {
-    // 1. Try exact match: EULA_{LANG}.md (e.g. EULA_FR.md, EULA_DE.md, EULA_ES.md)
-    let specific = format!("EULA_{}.md", lang.to_uppercase());
+    // Terms of Service (formerly EULA). Try TOS_{LANG}.md, then default TOS.md.
+    // Legacy EULA*.md names are kept as a fallback for older installs.
+    let candidates = [
+        format!("TOS_{}.md", lang.to_uppercase()),
+        "TOS.md".to_string(),
+        format!("EULA_{}.md", lang.to_uppercase()),
+        "EULA.md".to_string(),
+    ];
+    for name in &candidates {
+        if let Some(path) = resolve_path(&app_handle, name) {
+            if let Ok(text) = std::fs::read_to_string(&path) {
+                return Ok(text);
+            }
+        }
+    }
+    Err("TOS.md not found".to_string())
+}
+
+#[tauri::command]
+pub fn get_privacy_text(app_handle: tauri::AppHandle, lang: String) -> Result<String, String> {
+    // Try PRIVACY_{LANG}.md, then default PRIVACY.md
+    let specific = format!("PRIVACY_{}.md", lang.to_uppercase());
     if let Some(path) = resolve_path(&app_handle, &specific) {
         if let Ok(text) = std::fs::read_to_string(&path) {
             return Ok(text);
         }
     }
-
-    // 2. Fallback: default EULA.md (English)
-    if let Some(path) = resolve_path(&app_handle, "EULA.md") {
+    if let Some(path) = resolve_path(&app_handle, "PRIVACY.md") {
         return std::fs::read_to_string(path).map_err(|e| e.to_string());
     }
-
-    Err("EULA.md not found".to_string())
+    Err("PRIVACY.md not found".to_string())
 }
 
 
@@ -542,6 +559,27 @@ pub fn create_language_file(app_handle: tauri::AppHandle, code: String, copy_fro
     };
     std::fs::write(&file_path, &seed_json).map_err(|e| e.to_string())?;
     Ok(seed_json)
+}
+
+/// Deletes a (non built-in) language file Lang/{code}.json. The official bundled
+/// languages and the template can never be removed.
+#[tauri::command]
+pub fn delete_language_file(app_handle: tauri::AppHandle, code: String) -> Result<(), String> {
+    let code = code.trim().to_lowercase();
+    const PROTECTED: [&str; 3] = ["en", "fr", "template"];
+    if PROTECTED.contains(&code.as_str()) {
+        return Err(format!("'{}' is a built-in language and cannot be removed", code));
+    }
+    if code.is_empty() || code.contains('/') || code.contains('\\') || code.contains("..") {
+        return Err("Invalid language code".into());
+    }
+    let lang_dir = get_lang_dir(&app_handle);
+    let file_path = lang_dir.join(format!("{}.json", code));
+    if !file_path.exists() {
+        return Err(format!("Language '{}' not found", code));
+    }
+    std::fs::remove_file(&file_path).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Returns the list of available language codes + the raw JSON content of each,

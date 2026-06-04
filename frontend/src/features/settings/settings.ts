@@ -742,13 +742,24 @@ async function initLanguageSettings() {
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="nav-lang-chevron"><polyline points="18 15 12 9 6 15"/></svg>
             </button>
             <div class="settings-lang-menu" id="settings-lang-menu">
-                ${languages.map(l => `
-                    <button class="nav-lang-option ${l.active ? 'active' : ''}" data-lang="${l.code}">
-                        <span class="nav-lang-flag" style="margin-right:10px">${getFlag(l)}</span>
-                        <span>${l.name}</span>
-                        ${l.active ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
-                    </button>
-                `).join('')}
+                ${languages.map(l => {
+                    const protectedLang = ['en', 'fr', 'template'].includes((l.code || '').toLowerCase());
+                    return `
+                    <div class="nav-lang-row${l.active ? ' active' : ''}">
+                        <button class="nav-lang-option" data-lang="${l.code}" style="flex:1;">
+                            <span class="nav-lang-flag" style="margin-right:10px">${getFlag(l)}</span>
+                            <span>${l.name}</span>
+                            ${l.active ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+                        </button>
+                        ${protectedLang ? '' : `
+                            <button class="nav-lang-dl" data-lang-dl="${l.code}" title="${t('settings.langDownload') || 'Download .json'}">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            </button>
+                            <button class="nav-lang-del" data-lang-del="${l.code}" data-lang-name="${escHtml(l.name)}" title="${t('settings.langRemove') || 'Remove language'}">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>`}
+                    </div>`;
+                }).join('')}
             </div>
         `;
 
@@ -771,6 +782,45 @@ async function initLanguageSettings() {
                     toggle.classList.remove('open');
                     renderLangs();
                     if (typeof initNavbarLangDropdown === 'function') initNavbarLangDropdown();
+                });
+            });
+
+            // Download a custom language's .json
+            menu.querySelectorAll('.nav-lang-dl').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const code = (btn as HTMLElement).dataset.langDl || '';
+                    try {
+                        const content: string = await invoke('get_language_content', { lang: code });
+                        const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
+                        const a = document.createElement('a');
+                        a.href = url; a.download = `${code}.json`; a.click();
+                        URL.revokeObjectURL(url);
+                    } catch (err) { toast(String(err), 'error'); }
+                });
+            });
+
+            // Remove a custom language (with confirm). Offers a download first if wanted.
+            menu.querySelectorAll('.nav-lang-del').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const code = (btn as HTMLElement).dataset.langDel || '';
+                    const name = (btn as HTMLElement).dataset.langName || code;
+                    const ok = confirm((t('settings.langRemoveConfirm') || 'Remove language "{name}" ({code})? This deletes its .json file.')
+                        .replace('{name}', name).replace('{code}', code.toUpperCase()));
+                    if (!ok) return;
+                    try {
+                        // if the removed language is active, fall back to English first
+                        const langs = getLanguages();
+                        if (langs.find(l => l.code === code && l.active)) setLang('en');
+                        await invoke('delete_language_file', { code });
+                        toast((t('settings.langRemoved') || 'Removed {name}').replace('{name}', name), 'success');
+                        // reload language files in-memory, then re-render
+                        const { reloadLanguages } = await import('../../core/i18n.js');
+                        if (typeof reloadLanguages === 'function') await reloadLanguages();
+                        renderLangs();
+                        if (typeof initNavbarLangDropdown === 'function') initNavbarLangDropdown();
+                    } catch (err) { toast(String(err), 'error'); }
                 });
             });
         }

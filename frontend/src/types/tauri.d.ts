@@ -67,6 +67,8 @@ declare interface Window {
   openDocs?: (diagramId: string) => void;
   openLicenseModal?: () => Promise<void>;
   openEulaModal?: () => Promise<void>;
+  openTosModal?: () => Promise<void>;
+  openPrivacyModal?: () => Promise<void>;
   checkPtbMode?: (force?: boolean, initialFileName?: string | null) => Promise<void>;
   copyCodeToClipboard?: (text: string, btn: HTMLElement) => void;
   Cropper?: any;

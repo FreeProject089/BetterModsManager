@@ -71,8 +71,10 @@
             "resources": [
                 "../app.cfg",
                 "../LICENSE.md",
-                "../EULA.md",
-                "../EULA_FR.md",
+                "../TOS.md",
+                "../TOS_FR.md",
+                "../PRIVACY.md",
+                "../PRIVACY_FR.md",
                 "../frontend/Lang",
                 "../frontend/assets/tutorial-assets"
             ],

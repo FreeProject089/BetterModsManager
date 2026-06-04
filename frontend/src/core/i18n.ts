@@ -101,6 +101,24 @@ export function getAllTranslations(): Record<string, Record<string, string>> {
     return translations;
 }
 
+/** Re-sync the in-memory language list with what's on disk: prunes removed
+ *  languages and loads newly added ones (translate tool / import / delete). */
+export async function reloadLanguages(): Promise<void> {
+    try {
+        const { invoke } = await import('./api.js');
+        const langs = await (invoke('get_available_languages') as Promise<string[]>)
+            .catch(() => Object.keys(translations));
+        // prune languages whose file no longer exists
+        for (const code of Object.keys(translations)) {
+            if (!langs.includes(code)) { delete translations[code]; delete langInfo[code]; }
+        }
+        // load any newly added language
+        await Promise.all(langs.filter(l => !translations[l]).map(l => loadLang(l)));
+    } catch (e) {
+        console.warn('[i18n] reloadLanguages failed:', e);
+    }
+}
+
 export function getLanguages(): LanguageData[] {
     return Object.entries(langInfo).map(([code, info]) => ({
         code,

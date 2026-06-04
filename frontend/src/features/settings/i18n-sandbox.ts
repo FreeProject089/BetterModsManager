@@ -22,6 +22,13 @@ let _modal: HTMLElement | null = null;
 let _hcData: any[] = [];
 let _hcLoaded = false;
 
+function debounce<T extends (...a: any[]) => void>(fn: T, ms: number): T {
+    let h: any;
+    return ((...a: any[]) => { clearTimeout(h); h = setTimeout(() => fn(...a), ms); }) as T;
+}
+const debouncedRenderList = debounce(() => renderList(), 160);
+const debouncedRenderHardcoded = debounce(() => renderHardcoded(), 160);
+
 export function initI18nSandbox(): void {
     const openBtn = document.getElementById('btn-open-i18n-sandbox');
     const modal = document.getElementById('modal-i18n-sandbox');
@@ -59,8 +66,9 @@ export function initI18nSandbox(): void {
     document.getElementById('i18n-overlay-toggle')?.addEventListener('click', () => toggleOverlayMode(modal));
     document.getElementById('i18n-new-lang')?.addEventListener('click', promptNewLanguage);
 
-    // Filters
-    document.getElementById('i18n-search')?.addEventListener('input', renderList);
+    // Filters — debounce the search so we don't rebuild the (large) key list on
+    // every keystroke (prevents typing lag with 1500+ keys).
+    document.getElementById('i18n-search')?.addEventListener('input', debouncedRenderList);
     document.getElementById('i18n-base-lang')?.addEventListener('change', (e) => {
         _baseLang = (e.target as HTMLSelectElement).value;
         renderList();
@@ -75,7 +83,7 @@ export function initI18nSandbox(): void {
     });
 
     // Hardcoded tab
-    document.getElementById('i18n-hc-search')?.addEventListener('input', renderHardcoded);
+    document.getElementById('i18n-hc-search')?.addEventListener('input', debouncedRenderHardcoded);
     document.getElementById('i18n-hc-kind')?.addEventListener('change', renderHardcoded);
     document.getElementById('i18n-hc-rescan')?.addEventListener('click', () => { _hcLoaded = false; loadHardcoded(true); });
 

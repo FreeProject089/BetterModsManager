@@ -7012,7 +7012,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                     </div>
                                 </a>
 
-                                <a href="#" onclick="openEulaModal()" class="credit-link-card credit-link-card-eula">
+                                <a href="#" onclick="openTosModal()" class="credit-link-card credit-link-card-eula">
                                     <div class="credit-icon-box credit-icon-box-eula">
                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">
@@ -7025,6 +7025,22 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                         </div>
                                         <div class="credit-subtitle credit-subtitle-muted" data-i18n="credits.eulaSub">
                                             Legal terms — Click to read</div>
+                                    </div>
+                                </a>
+                                <a href="#" onclick="openPrivacyModal()" class="credit-link-card credit-link-card-eula">
+                                    <div class="credit-icon-box credit-icon-box-eula">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                        </svg>
+                                    </div>
+                                    <div class="credit-info">
+                                        <div class="credit-title credit-title-eula" data-i18n="credits.privacy">
+                                            Privacy Policy
+                                        </div>
+                                        <div class="credit-subtitle credit-subtitle-muted" data-i18n="credits.privacySub">
+                                            What data BMM collects — Click to read</div>
                                     </div>
                                 </a>
                             </div>
@@ -8951,12 +8967,12 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
             </div>
         </div>
 
-        <!-- EULA Modal -->
-        <div class="modal-overlay" id="modal-eula" data-prevent-close="true">
+        <!-- TOS (Terms of Service) Modal -->
+        <div class="modal-overlay" id="modal-tos" data-prevent-close="true">
             <div class="modal glass" style="max-width: 600px; width: 90%;">
                 <div class="modal-header">
-                    <h2 class="modal-title" data-i18n="credits.eula">Terms of Use (EULA)</h2>
-                    <button class="modal-close" data-close="modal-eula" id="btn-eula-close" style="display:none">
+                    <h2 class="modal-title" data-i18n="credits.eula">Terms of Service</h2>
+                    <button class="modal-close" data-close="modal-tos" id="btn-tos-close" style="display:none">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2.5">
                             <line x1="18" y1="6" x2="6" y2="18" />
@@ -8966,11 +8982,29 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                 </div>
                 <div class="modal-body"
                     style="max-height: 500px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 20px; margin-top:10px; border: 1px solid var(--border);">
-                    <div id="eula-content" style="text-align: left;">Loading EULA...</div>
+                    <div id="tos-content" style="text-align: left;">Loading…</div>
                 </div>
                 <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:12px;padding:20px;">
-                    <button class="btn btn-danger" id="btn-eula-quit" data-i18n="eula.quit">Quit BMM</button>
-                    <button class="btn btn-primary" id="btn-eula-accept" data-i18n="eula.accept">Accept</button>
+                    <button class="btn btn-danger" id="btn-tos-quit" data-i18n="eula.quit">Quit BMM</button>
+                    <button class="btn btn-primary" id="btn-tos-accept" data-i18n="eula.accept">Accept</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Privacy Policy Modal -->
+        <div class="modal-overlay" id="modal-privacy">
+            <div class="modal glass" style="max-width: 600px; width: 90%;">
+                <div class="modal-header">
+                    <h2 class="modal-title" data-i18n="credits.privacy">Privacy Policy</h2>
+                    <button class="modal-close" data-close="modal-privacy" id="btn-privacy-close">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body"
+                    style="max-height: 500px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 20px; margin-top:10px; border: 1px solid var(--border);">
+                    <div id="privacy-content" style="text-align: left;">Loading…</div>
                 </div>
             </div>
         </div>

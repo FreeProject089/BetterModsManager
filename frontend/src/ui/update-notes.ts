@@ -1109,17 +1109,17 @@ export async function openLicenseModal() {
     }
 }
 
-// ── EULA ──────────────────────────────────────────────────
+// ── Terms of Service (TOS) ─────────────────────────────────
 export async function openEulaModal(showButtons = false) {
-    const modal = document.getElementById('modal-eula');
-    const contentEl = document.getElementById('eula-content');
+    const modal = document.getElementById('modal-tos');
+    const contentEl = document.getElementById('tos-content');
     if (!modal || !contentEl) return;
 
     modal.classList.add('open');
     
     // Toggle UI based on whether buttons are shown or just viewing
     const footer = modal.querySelector('.modal-footer') as HTMLElement;
-    const closeBtn = document.getElementById('btn-eula-close');
+    const closeBtn = document.getElementById('btn-tos-close');
     
     if (footer) {
         footer.style.setProperty('display', showButtons ? 'flex' : 'none', 'important');
@@ -1143,7 +1143,7 @@ export async function openEulaModal(showButtons = false) {
     }
 
     // Setup Accept button
-    const acceptBtn = document.getElementById('btn-eula-accept');
+    const acceptBtn = document.getElementById('btn-tos-accept');
     if (acceptBtn) {
         acceptBtn.onclick = () => {
             markEulaAccepted();
@@ -1152,7 +1152,7 @@ export async function openEulaModal(showButtons = false) {
     }
 
     // Setup Quit button
-    const quitBtn = document.getElementById('btn-eula-quit');
+    const quitBtn = document.getElementById('btn-tos-quit');
     if (quitBtn) {
         quitBtn.onclick = () => {
             invoke('exit_app');
@@ -1160,9 +1160,30 @@ export async function openEulaModal(showButtons = false) {
     }
 }
 
+// ── Privacy Policy ─────────────────────────────────────────
+export async function openPrivacyModal() {
+    const modal = document.getElementById('modal-privacy');
+    const contentEl = document.getElementById('privacy-content');
+    if (!modal || !contentEl) return;
+    modal.classList.add('open');
+    contentEl.textContent = t('common.loading');
+    try {
+        const { getLang } = await import('../core/i18n.js');
+        const text = await invoke('get_privacy_text', { lang: getLang() });
+        contentEl.innerHTML = renderMarkdown(text);
+    } catch (err) {
+        contentEl.textContent = t('common.error') + ' (Privacy): ' + err;
+    }
+    const closeBtn = document.getElementById('btn-privacy-close');
+    if (closeBtn) closeBtn.onclick = () => modal.classList.remove('open');
+    modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('open'); };
+}
+
 // Global expose for onclick
 window.openLicenseModal = openLicenseModal;
-window.openEulaModal = openEulaModal;
+window.openEulaModal = openEulaModal;   // legacy alias
+window.openTosModal = openEulaModal;    // current name (Terms of Service)
+window.openPrivacyModal = openPrivacyModal;
 window.checkPtbMode = checkPtbMode;
 
 // ── Auto EULA on First Start ────────────────────────────────
