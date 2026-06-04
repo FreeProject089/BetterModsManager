@@ -1247,7 +1247,7 @@
   "repo.update.starting": "Starting…",
   "repo.update.cancel": "Cancel update",
   "repo.cancelling": "Cancelling…",
-  "repo.syncUsesProfilePaths": "Mods will be downloaded to the selected profile's own game / mods / backup folders.",
+  "repo.syncUsesProfilePaths": "Mods will be downloaded to the selected profile own mods folder.",
   "repo.hub.openBtn": "Multi-repo hub server",
   "repo.hub.openHint": "Serve all your repos from one Node server with a web dashboard.",
   "repo.hub.title": "Multi-Repo Hub Server",

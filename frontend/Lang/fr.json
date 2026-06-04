@@ -1245,7 +1245,7 @@
   "repo.update.starting": "Démarrage…",
   "repo.update.cancel": "Annuler la mise à jour",
   "repo.cancelling": "Annulation…",
-  "repo.syncUsesProfilePaths": "Les mods seront téléchargés dans les dossiers jeu / mods / sauvegarde du profil sélectionné.",
+  "repo.syncUsesProfilePaths": "Les mods seront téléchargés dans le dossier mods du profil sélectionné.",
   "repo.hub.openBtn": "Serveur hub multi-repos",
   "repo.hub.openHint": "Servez tous vos repos depuis un seul serveur Node avec un dashboard web.",
   "repo.hub.title": "Serveur Hub Multi-Repos",
