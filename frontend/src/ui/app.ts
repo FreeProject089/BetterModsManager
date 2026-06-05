@@ -35,6 +35,9 @@ import { loadLinks, getLinks } from '../core/links-config.js';
 import { initMapper } from '../features/mapper/mapper.js';
 import { initAppsCatalog } from '../features/apps/apps-catalog.js';
 import { openAdvancedPerfModal } from '../features/bench/benchmark.js';
+import { restoreThemeAtBoot, initDataPage } from '../features/themes/theme-engine.js';
+import { initThemeEditor } from '../features/themes/theme-editor.js';
+import { initThemeCatalog } from '../features/themes/theme-catalog.js';
 import { playBootSound, playCloseSound, setSoundEnabled, setSoundVolume } from './sound-engine.js';
 export { setSoundEnabled, setSoundVolume, playCloseSound };
 
@@ -734,6 +737,9 @@ async function main() {
     try {
         await invoke('log_frontend_line', { line: '[BMM] App started from generated TypeScript!' });
     } catch (e) { }
+    // Restore active theme ASAP (before first render to avoid flash)
+    restoreThemeAtBoot().catch(() => {});
+
     await initI18n();
 
     initNavigation();
@@ -766,6 +772,8 @@ async function main() {
     initMapper();
     initPlugins();
     initAppsCatalog();
+    initThemeEditor();
+    initThemeCatalog();
 
     document.getElementById('btn-restart-onboarding')?.addEventListener('click', () => {
         openTutorialHub();

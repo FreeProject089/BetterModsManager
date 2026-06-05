@@ -27,6 +27,8 @@ export async function initDeepLinks() {
         console.warn('[DEEP-LINK] Tauri event module not available. Deep links disabled.');
         return;
     }
+    // Expose __bmmDeeplink so custom theme elements can trigger any bmm:// action
+    window.__bmmDeeplink = (url) => handleDeepLink(url);
     console.log('[BMM] Initializing Deep Link Manager...');
     const { listen } = window.__TAURI__.event;
     await listen('deep-link-received', async (event) => {
@@ -388,6 +390,56 @@ async function handleDeepLink(urlStr) {
             }
             catch (e) {
                 toast(`${t('common.error')}: ${e}`, 'error');
+            }
+            return;
+        }
+        // ── Theme deeplinks ──────────────────────────────────────────────────
+        if (action === 'theme/apply') {
+            const id = parsedUrl.searchParams.get('id');
+            if (id) {
+                const { activateTheme, loadInstalledThemes } = await import('../features/themes/theme-engine.js');
+                await loadInstalledThemes();
+                await activateTheme(id);
+                toast(t('themes.deeplink.apply') || 'Theme applied', 'success');
+            }
+            return;
+        }
+        if (action === 'theme/import') {
+            const url = parsedUrl.searchParams.get('url');
+            if (url) {
+                toast(t('themes.deeplink.import') || 'Importing theme…', 'info');
+                const { installTheme } = await import('../features/themes/theme-engine.js');
+                try {
+                    const resp = await fetch(url);
+                    const json = await resp.json();
+                    await installTheme(json);
+                    toast(`${t('themes.imported') || 'Theme imported'}: ${json.name}`, 'success');
+                }
+                catch (e) {
+                    toast(String(e), 'error');
+                }
+            }
+            return;
+        }
+        if (action === 'theme/editor') {
+            window.openThemeEditor?.();
+            return;
+        }
+        if (action === 'theme/import-inline') {
+            const data = parsedUrl.searchParams.get('data');
+            if (data) {
+                try {
+                    const json = decodeURIComponent(escape(atob(data)));
+                    const theme = JSON.parse(json);
+                    const { installTheme, activateTheme, loadInstalledThemes } = await import('../features/themes/theme-engine.js');
+                    await installTheme(theme);
+                    await loadInstalledThemes();
+                    await activateTheme(theme.id);
+                    toast(`${t('themes.imported') || 'Theme installed'}: ${theme.name}`, 'success');
+                }
+                catch (e) {
+                    toast(String(e), 'error');
+                }
             }
             return;
         }

@@ -1,0 +1,197 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   BMM — Design Tokens  (the ONLY file themes need to override)
+   All --bmm-* variables are the official theming surface.
+   Everything in main.css references these via var(--bmm-*).
+   Themes override them on :root to restyle the entire app instantly.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+    /* ── Backgrounds ──────────────────────────────────────────────────────── */
+    --bmm-bg-base:      #0a0e17;   /* outermost app background */
+    --bmm-bg-elevated:  #111827;   /* cards, panels */
+    /* Overlay/glass surface — derives from bg-elevated so every theme that sets
+       bg-elevated automatically restyles all cards & modals. Themes can still
+       override --bmm-bg-overlay directly for a custom translucency.            */
+    --bmm-bg-overlay:   var(--bmm-bg-elevated);
+    /* Hover/active surfaces derive from the surface tint → follow the theme   */
+    --bmm-bg-hover:     rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.04);
+    --bmm-bg-active:    rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.12);
+    --bmm-bg-sidebar:   #0d1117;   /* left navigation */
+    --bmm-bg-titlebar:  #080c14;
+
+    /* ── Borders (derive from surface tint so light themes invert) ────────── */
+    --bmm-border:        rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.07);
+    --bmm-border-hover:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.13);
+    --bmm-border-accent: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.4);
+
+    /* ── Accent (blue by default) ─────────────────────────────────────────── */
+    --bmm-accent:      #3b82f6;
+    --bmm-accent-dim:  rgba(59, 130, 246, 0.18);
+    --bmm-accent-glow: 0 0 20px rgba(59, 130, 246, 0.4);
+    /* RGB components for dynamic rgba() composition */
+    --bmm-accent-r: 59;
+    --bmm-accent-g: 130;
+    --bmm-accent-b: 246;
+
+    /* ── Semantic colours ─────────────────────────────────────────────────── */
+    --bmm-cyan:    #06b6d4;
+    --bmm-cyan-dim: rgba(6, 182, 212, 0.18);
+    --bmm-success: #10b981;
+    --bmm-warning: #f59e0b;
+    --bmm-danger:  #ef4444;
+    --bmm-danger-dim: rgba(239, 68, 68, 0.15);
+    --bmm-amber:   #f59e0b;
+    --bmm-purple:  #a855f7;
+
+    /* ── Text ─────────────────────────────────────────────────────────────── */
+    --bmm-text-primary:   #f1f5f9;
+    --bmm-text-secondary: #94a3b8;
+    --bmm-text-muted:     #475569;
+
+    /* ── Typography ───────────────────────────────────────────────────────── */
+    --bmm-font-sans:      'Inter', system-ui, sans-serif;
+    --bmm-font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+    --bmm-font-size-base: 13px;
+    --bmm-font-scale:     1;       /* multiply all font sizes by this */
+
+    /* ── Spacing / Shape ──────────────────────────────────────────────────── */
+    --bmm-radius-card:  14px;
+    --bmm-radius-btn:   10px;
+    --bmm-radius-input: 9px;
+    --bmm-radius-chip:  20px;
+    --bmm-sidebar-w:    240px;
+    --bmm-titlebar-h:   38px;
+
+    /* ── Shadows / Glows ──────────────────────────────────────────────────── */
+    --bmm-shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+    --bmm-shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.7);
+    --bmm-glow-accent:  0 0 20px rgba(59, 130, 246, 0.4);
+    --bmm-glow-cyan:    0 0 20px rgba(6, 182, 212, 0.35);
+
+    /* ── Images / Backgrounds ─────────────────────────────────────────────── */
+    --bmm-app-bg-image: none;      /* set to url('...') for a wallpaper */
+    --bmm-app-bg-size:  cover;
+    --bmm-app-bg-blur:  0px;       /* backdrop-filter blur on content above bg */
+    --bmm-sidebar-bg-image: none;
+    --bmm-nav-logo-url: none;      /* url(...) to replace the BMM logo */
+
+    /* ── Title bar ────────────────────────────────────────────────────────── */
+    --bmm-titlebar-bg:     rgba(10, 14, 23, 0.95);
+    --bmm-titlebar-blur:   12px;
+
+    /* ── Tasky tooltip bubble ─────────────────────────────────────────────── */
+    --bmm-tasky-bubble-bg:     rgba(15, 23, 42, 0.7);
+    --bmm-tasky-bubble-border: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.3);
+    --bmm-tasky-bubble-text:   #e2e8f0;
+    --bmm-tasky-bubble-blur:   30px;
+    --bmm-tasky-bubble-radius: 12px;
+
+    /* ── Loader / boot mascot ─────────────────────────────────────────────── */
+    --bmm-loader-img:      none;          /* url('...') to replace spinning Tasky */
+    --bmm-loader-bg:       #08080f;       /* boot screen background */
+    --bmm-mascot-img:      none;          /* url('...') to replace the corner Tasky */
+
+    /* ── Effects (holo / glow / shadows) ──────────────────────────────────── */
+    --bmm-holo-1:          rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.15);
+    --bmm-holo-2:          rgba(var(--bmm-cyan-r,6),var(--bmm-cyan-g,182),var(--bmm-cyan-b,212),0.1);
+    --bmm-card-glow:       0 0 0 transparent;   /* extra glow on cards (off by default) */
+    --bmm-card-hover-lift: -2px;                /* translateY on card hover */
+
+    /* ── Animations (intro / exit / transitions) ──────────────────────────── */
+    --bmm-anim-speed:      1;             /* multiplier — 0 disables all animations */
+    --bmm-intro-duration:  0.65s;         /* boot loader fade */
+    --bmm-modal-anim:      0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* ── DevTools ─────────────────────────────────────────────────────────── */
+    --bmm-devtools-bg:     #0d1117;
+    --bmm-devtools-accent: var(--bmm-accent);
+
+    /* ── Transitions ──────────────────────────────────────────────────────── */
+    --bmm-transition:      all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --bmm-transition-fast: all 0.12s ease;
+
+    /* ── Surface overlay tint (255,255,255 in dark / 0,0,0 in light) ─────── */
+    /* All the rgba(255,255,255,0.05) glass effects use these so light themes
+       can invert them to rgba(0,0,0,0.05) by changing a single token.        */
+    --bmm-surface-r: 255;
+    --bmm-surface-g: 255;
+    --bmm-surface-b: 255;
+
+    /* Pre-built surface values used most frequently — themes override these   */
+    --bmm-s02:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.02);
+    --bmm-s03:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.03);
+    --bmm-s04:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.04);
+    --bmm-s05:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.05);
+    --bmm-s06:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.06);
+    --bmm-s07:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.07);
+    --bmm-s08:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.08);
+    --bmm-s09:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.09);
+    --bmm-s10:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.10);
+    --bmm-s12:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.12);
+    --bmm-s15:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.15);
+    --bmm-s20:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.20);
+
+    /* ── Glass card background & border ──────────────────────────────────── */
+    --bmm-glass-bg:     rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.03);
+    --bmm-glass-border: rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.08);
+
+    /* ── Backward-compat aliases (keep existing code working) ─────────────── */
+    --bg-primary:    var(--bmm-bg-base);
+    --bg-secondary:  var(--bmm-bg-elevated);
+    --bg-card:       var(--bmm-bg-overlay);
+    --bg-hover:      var(--bmm-bg-hover);
+    --bg-active:     var(--bmm-bg-active);
+    --border:        var(--bmm-border);
+    --border-accent: var(--bmm-border-accent);
+    --border-hover:  var(--bmm-border-hover);
+    --accent:        var(--bmm-accent);
+    --accent-dim:    var(--bmm-accent-dim);
+    --accent-glow:   var(--bmm-accent-glow);
+    --cyan:          var(--bmm-cyan);
+    --cyan-dim:      var(--bmm-cyan-dim);
+    --success:       var(--bmm-success);
+    --warning:       var(--bmm-warning);
+    --danger:        var(--bmm-danger);
+    --danger-dim:    var(--bmm-danger-dim);
+    --amber:         var(--bmm-amber);
+    --text-primary:  var(--bmm-text-primary);
+    --text-secondary: var(--bmm-text-secondary);
+    --text-muted:    var(--bmm-text-muted);
+    --font-sans:     var(--bmm-font-sans);
+    --font-mono:     var(--bmm-font-mono);
+    --radius-card:   var(--bmm-radius-card);
+    --radius-btn:    var(--bmm-radius-btn);
+    --radius-input:  var(--bmm-radius-input);
+    --radius-chip:   var(--bmm-radius-chip);
+    --sidebar-w:     var(--bmm-sidebar-w);
+    --titlebar-h:    var(--bmm-titlebar-h);
+    --transition:    var(--bmm-transition);
+    --transition-fast: var(--bmm-transition-fast);
+}
+
+/* ── Boot loader background follows the theme ─────────────────────────────── */
+#app-loader { background: var(--bmm-loader-bg) !important; }
+
+/* ── Animation kill-switch (--bmm-anim-speed: 0) ──────────────────────────── */
+body.bmm-no-anim *,
+body.bmm-no-anim *::before,
+body.bmm-no-anim *::after {
+    animation-duration: 0.001s !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.001s !important;
+}
+
+/* ── App background image / wallpaper support ─────────────────────────────── */
+#app-window-outer::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: var(--bmm-app-bg-image);
+    background-size: var(--bmm-app-bg-size);
+    background-position: center;
+    background-repeat: no-repeat;
+    filter: blur(var(--bmm-app-bg-blur));
+    z-index: 0;
+    pointer-events: none;
+    opacity: var(--bmm-app-bg-opacity, 0.3);
+}

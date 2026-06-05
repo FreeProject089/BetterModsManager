@@ -490,6 +490,15 @@ fn main() {
             commands::apps::register_installed_exe,
             commands::apps::app_has_uninstaller,
             commands::apps::scan_and_track_running_apps,
+            // ── Themes ──────────────────────────────────────────────────────
+            commands::themes::list_installed_themes,
+            commands::themes::get_active_theme,
+            commands::themes::set_active_theme,
+            commands::themes::install_theme,
+            commands::themes::delete_theme,
+            commands::themes::import_theme,
+            commands::themes::export_theme,
+            commands::themes::fetch_theme_catalogs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

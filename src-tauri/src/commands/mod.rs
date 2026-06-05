@@ -27,3 +27,4 @@ pub mod launch_pack;
 pub mod plugins;
 pub mod resource_tracker;
 pub mod apps;
+pub mod themes;
