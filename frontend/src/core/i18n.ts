@@ -170,6 +170,12 @@ export function applyTranslations(root: Document | Element = document): void {
         const key = (el as HTMLElement).dataset.i18nContent!;
         el.setAttribute('data-content', t(key));
     });
+    // Update data-tooltip from an i18n key — so Tasky tooltips are translated and
+    // change instantly when the user switches language.
+    root.querySelectorAll('[data-i18n-tooltip]').forEach((el: Element) => {
+        const key = (el as HTMLElement).dataset.i18nTooltip!;
+        el.setAttribute('data-tooltip', t(key));
+    });
 }
 
 export async function refreshLanguages(): Promise<boolean> {
