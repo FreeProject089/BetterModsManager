@@ -10580,6 +10580,15 @@ body.tasky-hidden .titlebar-left .titlebar-version {
    the terminal / copy icons stay vertically aligned across every endpoint row. */
 .plug-auth-slot { width: 16px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
 /* Copyable permission chips (endpoint detail) */
+/* Archive mod badge (shown on compressed mods .zip/.rar/.7z…) */
+.mod-archive-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 9px; font-weight: 700; padding: 1px 6px;
+    border-radius: 4px; cursor: help; font-family: var(--font-mono);
+    background: rgba(245,158,11,0.14); color: var(--amber, #f59e0b);
+    border: 1px solid rgba(245,158,11,0.35);
+    white-space: nowrap;
+}
 .plug-perm-copy { transition: transform 0.1s ease, filter 0.12s ease; }
 .plug-perm-copy:hover { filter: brightness(1.35); }
 .plug-perm-copy:active { transform: scale(0.94); }

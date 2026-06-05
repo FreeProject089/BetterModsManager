@@ -7,7 +7,7 @@ import { toast } from '../../ui/app.js';
 import { updateDiscordStatus } from '../settings/settings.js';
 import { refreshMods, selectMod, closeModDetail } from './mods.js';
 import { registerSingleModOp, isCancelledOp, consumeAndClearOp } from './mods-actions.js';
-import { escHtml, escAttr, escJs, truncate } from '../../core/utils.js';
+import { escHtml, escJs, truncate } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
@@ -668,7 +668,9 @@ export function updateCardState(card, mod) {
         const authorNameEl = authorContainer.querySelector('.mod-author-name');
         if (authorNameEl)
             authorNameEl.textContent = truncate(mod.author || '', 50);
-        authorContainer.setAttribute('onmouseenter', `window.showTaskyHelp('${escAttr(escJs(mod.author || ''))}', 'user', true)`);
+        // Use escJs only (not escAttr): setAttribute bypasses the HTML parser so
+        // &quot; would remain literal. Single-quoted JS strings don't need " escaped.
+        authorContainer.setAttribute('onmouseenter', `window.showTaskyHelp('${escJs(mod.author || '')}', 'user', true)`);
     }
     // Update Tags
     const tagsContainer = card.querySelector('.mod-tags-container');

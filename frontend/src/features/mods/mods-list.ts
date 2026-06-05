@@ -696,7 +696,9 @@ export function updateCardState(card, mod) {
     authorContainer.style.display = mod.author ? 'flex' : 'none';
     const authorNameEl = authorContainer.querySelector('.mod-author-name');
     if (authorNameEl) authorNameEl.textContent = truncate(mod.author || '', 50);
-    authorContainer.setAttribute('onmouseenter', `window.showTaskyHelp('${escAttr(escJs(mod.author || ''))}', 'user', true)`);
+    // Use escJs only (not escAttr): setAttribute bypasses the HTML parser so
+    // &quot; would remain literal. Single-quoted JS strings don't need " escaped.
+    authorContainer.setAttribute('onmouseenter', `window.showTaskyHelp('${escJs(mod.author || '')}', 'user', true)`);
   }
 
   // Update Tags

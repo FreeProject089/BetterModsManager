@@ -4111,8 +4111,8 @@ function buildEndpointRow(ep: EndpointDef): string {
         ? `<div class="plug-ep-dl-info" style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:6px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);border-radius:8px;">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" style="flex-shrink:0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                 <span style="font-size:11px;color:var(--text-secondary);white-space:nowrap;flex-shrink:0;">Équivalent deeplink :</span>
-                <code class="plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" data-tooltip="Cliquer pour copier" style="flex:1;font-size:11px;color:#a78bfa;background:rgba(139,92,246,0.12);padding:2px 8px;border-radius:4px;cursor:pointer;user-select:all;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;" tabindex="0">${escHtml(dlEquiv)}</code>
-                <button class="btn btn-xs plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" data-tooltip="Copier" style="flex-shrink:0;padding:3px 7px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.25);border-radius:5px;">${IC.copy}</button>
+                <code class="plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" data-tooltip="${t('plugins.copyDeeplink') || 'Click to copy'}" style="flex:1;font-size:11px;color:#a78bfa;background:rgba(139,92,246,0.12);padding:2px 8px;border-radius:4px;cursor:pointer;user-select:all;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;" tabindex="0">${escHtml(dlEquiv)}</code>
+                <button class="btn btn-xs plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" data-tooltip="${t('common.copy') || 'Copy'}" style="flex-shrink:0;padding:3px 7px;background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.25);border-radius:5px;">${IC.copy}</button>
            </div>`
         : '';
 
@@ -4291,8 +4291,8 @@ function buildDeepLinkRow(dl: DeepLinkDef): string {
                 <code class="plug-path">${escHtml(fullUrl)}</code>
                 <span class="plug-endpoint-desc">${escHtml(dl.desc)}</span>
                 <div class="plug-ep-row-actions">
-                    <button class="btn btn-xs btn-ghost plug-dl-open-btn" data-url="${escHtml(dl.example)}" data-tooltip="Ouvrir ce deep link">${IC.play}</button>
-                    <button class="btn btn-xs btn-ghost plug-ep-copy-btn" data-copy="${escHtml(dl.example)}" data-tooltip="Copier l'URL">${IC.copy}</button>
+                    <button class="btn btn-xs btn-ghost plug-dl-open-btn" data-url="${escHtml(dl.example)}" data-tooltip="${t('plugins.openDeeplink') || 'Open this deeplink'}">${IC.play}</button>
+                    <button class="btn btn-xs btn-ghost plug-ep-copy-btn" data-copy="${escHtml(dl.example)}" data-tooltip="${t('plugins.copyUrl') || 'Copy URL'}">${IC.copy}</button>
                     <span class="plug-ep-noauth-note" style="font-size:10px;">${IC.checkCircle} Sans auth</span>
                 </div>
             </div>

@@ -413,8 +413,15 @@ function showTooltipImpl(key: string, iconClass: string, isLiteral: boolean) {
         exp = (descExp && descExp !== descKey) ? descExp : t(key);
     }
     
-    // Show if we have valid content (or if literal is requested)
+    // Show if we have valid content (or if literal is requested).
+    // Decode HTML entities that may have been left encoded when the value
+    // came from a path that skipped the HTML parser (e.g. setAttribute).
     if (exp && (isLiteral || exp !== key)) {
+        if (isLiteral && exp.includes('&')) {
+            const tmp = document.createElement('textarea');
+            tmp.innerHTML = exp;
+            exp = tmp.value;
+        }
         explanationEl.textContent = exp;
         bubble.classList.add('active');
         // Re-enable pointer events when showing
