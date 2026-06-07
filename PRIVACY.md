@@ -75,6 +75,7 @@ service you configured, under that service's own privacy terms.
 ## 5. Contact
 
 Questions? Open an issue on the GitHub repository:
-<https://github.com/FreeProject089/BetterModsManager>
-
+<a href="https://github.com/FreeProject089/BetterModsManager" target="_blank" rel="noopener noreferrer">
+BetterModsManager
+</a>
 > This policy may evolve with the app. Material changes will be noted in the release notes.

@@ -77,7 +77,8 @@ données au service concerné, selon les conditions de confidentialité de ce se
 ## 5. Contact
 
 Une question ? Ouvrez une issue sur le dépôt GitHub :
-<https://github.com/FreeProject089/BetterModsManager>
-
+<a href="https://github.com/FreeProject089/BetterModsManager" target="_blank" rel="noopener noreferrer">
+BetterModsManager
+</a>
 > Cette politique peut évoluer avec l'application. Les changements importants seront indiqués dans les
 > notes de version.
