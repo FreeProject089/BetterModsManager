@@ -308,7 +308,7 @@ export function showConflictContextMenu(e, mod1Id, mod2Id) {
         container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted)">${t('conflict.noTreeFiles')}</div>`;
         return;
       }
-      container.innerHTML = files.map(f => `<div style="padding:4px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" data-tooltip="${escAttr(f)}">${escHtml(f)}</div>`).join('');
+      container.innerHTML = files.map(f => `<div style="padding:4px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4;min-height:18px" data-tooltip="${escAttr(f)}">${escHtml(f)}</div>`).join('');
     } catch (err) {
       container.innerHTML = `<span style="color:var(--danger)">${t('common.error')||"Error"}: ${err}</span>`;
     }
