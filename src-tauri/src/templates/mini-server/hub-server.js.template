@@ -69,9 +69,34 @@ function discoverRepos() {
     const repos = [];
     let entries = [];
     try { entries = fs.readdirSync(ROOT, { withFileTypes: true }); } catch (e) { return repos; }
+
+    // First, check if root has repo.json
+    const rootRepoPath = path.join(ROOT, 'repo.json');
+    if (fs.existsSync(rootRepoPath)) {
+        try {
+            const r = JSON.parse(fs.readFileSync(rootRepoPath, 'utf8'));
+            let mods = 0, size = 0;
+            (r.profiles || []).forEach(p => {
+                mods += (p.mods || []).length;
+                (p.mods || []).forEach(m => (m.files || []).forEach(f => size += (f.size || 0)));
+            });
+            repos.push({
+                folder:    '.',
+                name:      r.name || '[Hub Root]',
+                description: r.description || '',
+                author:    r.author || '',
+                game_name: r.game_name || '',
+                profiles:  (r.profiles || []).length,
+                mods, size,
+                verified:  !!(r.signature && r.author_id),
+            });
+        } catch (_) {}
+    }
+
+    // Then scan subdirectories
     for (const ent of entries) {
         if (!ent.isDirectory()) continue;
-        if (['public', 'node_modules'].includes(ent.name)) continue;
+        if (['public', 'node_modules', '.'].includes(ent.name)) continue;
         const rjPath = path.join(ROOT, ent.name, 'repo.json');
         if (!fs.existsSync(rjPath)) continue;
         try {
@@ -277,7 +302,7 @@ app.use('/', (req, res, next) => {
 app.use((req, res) => res.status(404).send('Not Found'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     const c = '\x1b[36m', g = '\x1b[32m', b = '\x1b[1m', r = '\x1b[0m';
     const repos = discoverRepos();
     console.clear();
@@ -289,4 +314,16 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n  ${b}${c}[DASH]${r}    http://127.0.0.1:${PORT}/\n`);
     if (ADMIN_PASSWORD) console.log(`  ${b}[ADMIN]${r}   Password protected\n`);
     else console.log(`  ${b}[ADMIN]${r}   No password (open)\n`);
+});
+
+server.on('error', (err) => {
+    const b = '\x1b[1m', r = '\x1b[0m';
+    if (err.code === 'EADDRINUSE') {
+        console.error(`\n${b}[ERROR]${r} Port ${PORT} is already in use!`);
+        console.error(`  • Check what's using that port or pick a different port.`);
+        console.error(`  • On Windows: netstat -ano | findstr :${PORT}`);
+        console.error(`  • On Mac/Linux: lsof -i :${PORT}\n`);
+        process.exit(1);
+    }
+    throw err;
 });

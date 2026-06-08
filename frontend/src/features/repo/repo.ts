@@ -1592,12 +1592,39 @@ export function initRepo() {
                 if (!repos.length) {
                     listEl.innerHTML = `<div style="font-size:12px;color:var(--text-muted);padding:8px;">${t('repo.hub.none') || 'No repos found in this folder. Each repo must be its own sub-folder with a repo.json.'}</div>`;
                 } else {
-                    listEl.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:2px;">${repos.length} ${t('repo.hub.found') || 'repos found'}</div>` +
+                    listEl.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;">${repos.length} ${t('repo.hub.found') || 'repos found'}</div>` +
                         repos.map(r => `
-                        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:9px 12px;">
-                            <span style="font-size:12px;font-weight:600;">${escHtml(r.name)}</span>
-                            <span style="font-size:11px;color:var(--text-muted);">${r.profiles} prof · ${r.mods} mods · ${fmt(r.size)}</span>
+                        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:12px;gap:12px;">
+                            <div style="flex:1; display:flex; align-items:center; gap:10px; min-width:0;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" style="flex-shrink:0;">
+                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                </svg>
+                                <div style="flex:1; min-width:0;">
+                                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(r.name)}</div>
+                                    <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" data-repo-path="${escAttr(folder)}/${r.folder === '.' ? '' : escAttr(r.folder) + '/'}repo.json">${r.folder === '.' ? '(hub root)' : escHtml(r.folder)}/repo.json</div>
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
+                                <button class="repo-hub-copy-btn" data-path="${escAttr(folder)}/${r.folder === '.' ? '' : escAttr(r.folder) + '/'}repo.json" style="padding:6px 10px;font-size:11px;background:rgba(6,182,212,0.15);color:var(--cyan);border:1px solid rgba(6,182,212,0.3);border-radius:6px;cursor:pointer;white-space:nowrap;transition:all 0.15s;" title="${t('repo.hub.copyPath') || 'Copy repo.json path'}" onmouseover="this.style.background='rgba(6,182,212,0.25)'" onmouseout="this.style.background='rgba(6,182,212,0.15)'">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;margin-right:4px;vertical-align:-1px;">
+                                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                                        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                                    </svg>
+                                    Copy
+                                </button>
+                                <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">${r.profiles} prof · ${r.mods} mods · ${fmt(r.size)}</span>
+                            </div>
                         </div>`).join('');
+                    // Add event listeners to copy buttons
+                    document.querySelectorAll('.repo-hub-copy-btn').forEach(btn => {
+                        btn.addEventListener('click', async () => {
+                            const path = btn.getAttribute('data-path');
+                            if (path) {
+                                navigator.clipboard.writeText(path);
+                                toast(t('common.copied') || 'Copied!', 'success');
+                            }
+                        });
+                    });
                 }
                 listEl.style.display = 'flex';
                 btnGen.disabled = false;

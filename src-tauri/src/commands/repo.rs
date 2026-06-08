@@ -817,6 +817,26 @@ pub fn scan_repo_hub(hub_dir: String) -> Result<Vec<HubRepoSummary>, String> {
     let root = PathBuf::from(&hub_dir);
     if !root.is_dir() { return Err("repo.errOutputDirNotDir".to_string()); }
     let mut out = Vec::new();
+
+    // First, check if the root itself has a repo.json (hub root repo)
+    if let Ok(content) = fs::read_to_string(root.join("repo.json")) {
+        if let Ok(repo) = serde_json::from_str::<ServerRepo>(&content) {
+            let mut mods = 0usize; let mut size = 0u64;
+            for p in &repo.profiles {
+                mods += p.mods.len();
+                for m in &p.mods { for f in &m.files { size += f.size; } }
+            }
+            out.push(HubRepoSummary {
+                folder: ".".to_string(),  // indicates root repo
+                name: repo.name,
+                game_name: repo.game_name,
+                profiles: repo.profiles.len(),
+                mods, size,
+            });
+        }
+    }
+
+    // Then scan subdirectories
     for entry in fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
         if !entry.path().is_dir() { continue; }
         let name = entry.file_name().to_string_lossy().to_string();
