@@ -281,7 +281,14 @@ export function showConflictContextMenu(e, mod1Id, mod2Id) {
                 container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted)">${t('conflict.noTreeFiles')}</div>`;
                 return;
             }
-            container.innerHTML = files.map(f => `<div style="padding:4px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4;min-height:18px" data-tooltip="${escAttr(f)}">${escHtml(f)}</div>`).join('');
+            container.innerHTML = files.map(f => `<div style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4;min-height:24px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:all 0.15s ease;border-radius:6px;margin-bottom:2px"
+           onmouseover="this.style.background='rgba(59,130,246,0.15)';this.style.borderLeft='2px solid var(--accent)'"
+           onmouseout="this.style.background='transparent';this.style.borderLeft='none'"
+           onclick="window.showFileConflictSelector(event,'${escAttr(escJs(f))}','${mod1Id}','${mod2Id}')"
+           data-tooltip="${escAttr(f)}" title="${escAttr(f)}">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--accent)"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;font-size:11.5px;color:var(--text-primary)">${escHtml(f)}</span>
+      </div>`).join('');
         }
         catch (err) {
             container.innerHTML = `<span style="color:var(--danger)">${t('common.error') || "Error"}: ${err}</span>`;
@@ -295,6 +302,85 @@ export function showConflictContextMenu(e, mod1Id, mod2Id) {
     });
 }
 window.showConflictContextMenu = showConflictContextMenu;
+let fileConflictSelectorState = {
+    currentFile: '',
+    modIds: [],
+    selectedMods: new Set()
+};
+export async function showFileConflictSelectorAsync(e, filePath, mod1Id, mod2Id) {
+    e.preventDefault();
+    const modal = document.getElementById('modal-conflict-file-selector');
+    const nameLabel = document.getElementById('conflict-file-selector-name');
+    const list = document.getElementById('conflict-file-selector-list');
+    const openBtn = document.getElementById('btn-open-conflict-files');
+    const cancelBtn = document.getElementById('btn-cancel-conflict-file-selector');
+    const closeBtn = document.getElementById('btn-close-conflict-file-selector');
+    if (!modal)
+        return;
+    fileConflictSelectorState = {
+        currentFile: filePath,
+        modIds: [mod1Id, mod2Id],
+        selectedMods: new Set()
+    };
+    nameLabel.textContent = filePath;
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">Chargement...</div>';
+    const allModsGlobal = await invoke('get_all_mods').catch(() => []);
+    const modsByIdMap = new Map(allModsGlobal.map(m => [m.id, m]));
+    list.innerHTML = [mod1Id, mod2Id].map(modId => {
+        const mod = modsByIdMap.get(modId);
+        const modName = mod?.name || modId;
+        const checkboxId = `conflict-mod-checkbox-${modId}`;
+        return `
+      <label style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;cursor:pointer;border:1.5px solid rgba(255,255,255,0.1);transition:all 0.15s ease"
+           onmouseover="this.style.background='rgba(59,130,246,0.1)';this.style.borderColor='rgba(59,130,246,0.3)';this.style.boxShadow='0 0 0 1px rgba(59,130,246,0.2)'"
+           onmouseout="this.style.background='rgba(255,255,255,0.03)';this.style.borderColor='rgba(255,255,255,0.1)';this.style.boxShadow='none'">
+        <input type="checkbox" id="${checkboxId}" style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent);flex-shrink:0" onchange="window.toggleModSelector('${modId}')">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(modName)}</div>
+          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:2px">${escHtml(modId)}</div>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--accent);opacity:0.6">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+      </label>
+    `;
+    }).join('');
+    cancelBtn.onclick = () => modal.classList.remove('open');
+    closeBtn.onclick = () => modal.classList.remove('open');
+    openBtn.onclick = async () => {
+        if (fileConflictSelectorState.selectedMods.size === 0) {
+            toast('Sélectionnez au moins un mod', 'warning');
+            return;
+        }
+        modal.classList.remove('open');
+        for (const modId of fileConflictSelectorState.selectedMods) {
+            try {
+                await invoke('open_mod_folder_at', { modId, relativePath: filePath });
+            }
+            catch (err) {
+                toast(`Erreur ouverture ${modId}: ${err}`, 'error');
+            }
+        }
+    };
+    modal.classList.add('open');
+}
+export function showFileConflictSelector(e, filePath, mod1Id, mod2Id) {
+    showFileConflictSelectorAsync(e, filePath, mod1Id, mod2Id).catch(err => {
+        console.error('Erreur sélecteur conflit:', err);
+        toast('Erreur: ' + err, 'error');
+    });
+}
+window.showFileConflictSelector = showFileConflictSelector;
+export function toggleModSelector(modId) {
+    if (fileConflictSelectorState.selectedMods.has(modId)) {
+        fileConflictSelectorState.selectedMods.delete(modId);
+    }
+    else {
+        fileConflictSelectorState.selectedMods.add(modId);
+    }
+}
+window.toggleModSelector = toggleModSelector;
 export function showActivationWarning(modId, conflicts, onConfirm) {
     const modal = document.getElementById('modal-activation-warning');
     const list = document.getElementById('activation-warning-list');

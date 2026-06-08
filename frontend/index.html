@@ -10267,6 +10267,34 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
             </div>
         </div>
 
+        <!-- Conflict File Mod Selector Modal -->
+        <div class="modal-overlay" id="modal-conflict-file-selector" style="z-index:10006;">
+            <div class="modal glass" style="max-width:500px;width:92%;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
+                <div style="padding:18px 20px 14px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent)">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                        </svg>
+                        <div>
+                            <div style="font-size:13px;font-weight:700;color:var(--text-primary);">Ouvrir fichier en conflit</div>
+                            <div id="conflict-file-selector-name" style="font-size:10px;font-weight:600;color:var(--text-muted);margin-top:2px;max-width:350px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+                        </div>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" id="btn-close-conflict-file-selector" style="padding:0;width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:8px;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <div class="modal-body" style="padding:16px 20px;overflow-y:auto;max-height:350px;">
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">Sélectionnez le(s) mod(s) dont vous voulez ouvrir ce fichier dans l'explorateur:</div>
+                    <div id="conflict-file-selector-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+                </div>
+                <div style="padding:14px 20px;border-top:1px solid rgba(255,255,255,0.06);display:flex;justify-content:flex-end;gap:8px;background:rgba(0,0,0,0.15);">
+                    <button class="btn btn-secondary" id="btn-cancel-conflict-file-selector" style="padding:6px 16px;font-size:11px;">Annuler</button>
+                    <button class="btn btn-primary" id="btn-open-conflict-files" style="padding:6px 16px;font-size:11px;">Ouvrir</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Custom Context Menu for Conflicts -->
         <div id="conflict-context-menu" class="custom-context-menu">
             <div class="menu-item" id="ctx-open-explorer">
