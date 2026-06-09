@@ -16,6 +16,32 @@ import {
 } from './theme-engine.js';
 import type { BmmTheme, CustomElement } from './theme-engine.js';
 
+// ── Icons (lucide outline set, consistent across the editor) ────────────────────
+const ICON = {
+    eyedropper: (s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L21 6l-3 3-3-3Z"/></svg>`,
+    reset: (s = 13) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`,
+    close: (s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>`,
+    palette: (s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.555C21.965 6.012 17.461 2 12 2z"/></svg>`,
+    plus: (s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
+    trash: (s = 13) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+    edit: (s = 13) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>`,
+};
+
+/** Escape a string for safe use inside a single-quoted JS string that itself
+ *  lives in a double-quoted HTML attribute (e.g. onmouseenter="fn('TEXT')").
+ *  escAttr alone does NOT escape apostrophes, which breaks the JS string for
+ *  translated text like "n'importe où".                                       */
+function escJs(s: string): string {
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/[\r\n]+/g, ' ');
+}
+
 // ── Token catalogue ────────────────────────────────────────────────────────────
 // desc = friendly explanation (shown in Tasky tooltip). mdn = CSS property doc.
 interface Token { key: string; label: string; type: 'color'|'size'|'font'|'image'; group: string; desc: string; mdn?: string; }
@@ -165,20 +191,12 @@ function buildPanel(): void {
     _panel.id = 'bmm-theme-editor';
     _panel.innerHTML = `
         <div class="bte-header" id="bte-header">
-            <div class="bte-logo">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-accent)" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/><path d="M3.6 15a10 10 0 1 0 .6-5"/>
-                </svg>
-            </div>
+            <div class="bte-logo">${ICON.palette(17)}</div>
             <span class="bte-title">${t('themes.editorTitle')||'Theme Editor'}</span>
             <div class="bte-header-actions">
-                <button class="bte-tool" id="bte-pick-token" title="${t('themes.pickElement')||'Pick element to edit token'}">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                </button>
-                <button class="bte-tool" id="bte-reset" title="${t('common.reset')||'Reset'}">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                </button>
-                <button class="bte-close" id="bte-close">✕</button>
+                <button class="bte-tool" id="bte-pick-token" title="${t('themes.pickElement')||'Pick element to edit token'}">${ICON.eyedropper(14)}</button>
+                <button class="bte-tool" id="bte-reset" title="${t('common.reset')||'Reset'}">${ICON.reset(13)}</button>
+                <button class="bte-close" id="bte-close">${ICON.close(14)}</button>
             </div>
         </div>
         <div class="bte-tabs">
@@ -190,14 +208,14 @@ function buildPanel(): void {
         <div class="bte-body" id="bte-body"></div>
         <div class="bte-footer">
             <span class="bte-dirty" id="bte-dirty"></span>
-            <div style="display:flex;gap:7px;">
+            <div class="bte-footer-actions">
                 <button class="btn btn-ghost btn-sm" id="bte-discard">${t('themes.discard')||'Discard'}</button>
                 <button class="btn btn-secondary btn-sm" id="bte-save">${t('themes.saveTheme')||'Save'}</button>
                 <button class="btn btn-ghost btn-sm" id="bte-share" title="${t('themes.share')||'Copy share link'}">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
                     ${t('themes.share')||'Share'}
                 </button>
-                <button class="btn btn-accent btn-sm" id="bte-export">${t('themes.export')||'Export'}</button>
+                <button class="btn btn-accent btn-sm" id="bte-export" title="${t('themes.export')||'Export'} .bmmtheme">${t('themes.export')||'Export'}</button>
             </div>
         </div>`;
 
@@ -220,6 +238,7 @@ function buildPanel(): void {
         tab.addEventListener('click', () => {
             _tab = (tab as HTMLElement).dataset.bteTab as any;
             _panel!.querySelectorAll('.bte-tab').forEach(t => t.classList.toggle('active', t === tab));
+            previewTheme(_draft);   // drop any transient element-preview before leaving
             renderTab(_tab);
         })
     );
@@ -291,7 +310,7 @@ function buildSimpleTab(): string {
 
     const presets = BUILTIN_THEMES.map(bt => `
         <button class="bte-preset" data-preset-id="${bt.id}"
-            onmouseenter="window.showTaskyHelp('${escAttr(bt.description||bt.name)}','info',true)" onmouseleave="window.hideTaskyHelp()">
+            onmouseenter="window.showTaskyHelp('${escJs(bt.description||bt.name)}','info',true)" onmouseleave="window.hideTaskyHelp()">
             <span class="bte-preset-dot" style="background:${bt.vars?.['--bmm-accent']||'var(--bmm-accent)'}"></span>
             ${escHtml(bt.name)}
         </button>`).join('');
@@ -302,7 +321,7 @@ function buildSimpleTab(): string {
         <div class="bte-asset-row">
             <div class="bte-asset-info">
                 <span class="bte-asset-label"
-                    onmouseenter="window.showTaskyHelp('${escAttr(desc)}','image',true)" onmouseleave="window.hideTaskyHelp()">${escHtml(label)}</span>
+                    onmouseenter="window.showTaskyHelp('${escJs(desc)}','image',true)" onmouseleave="window.hideTaskyHelp()">${escHtml(label)}</span>
                 ${assets[key] ? `<span class="bte-asset-set">✓ set</span>` : `<span class="bte-asset-none">default</span>`}
             </div>
             <div class="bte-asset-actions">
@@ -330,7 +349,7 @@ function buildSimpleTab(): string {
                 const custom = vars[tok.key] || '';
                 const ph = pickerHex(tok.key, custom);
                 const liveLabel = custom ? '' : `<span class="bte-token-live">${escHtml(currentLabel(tok.key, tok.type))}</span>`;
-                const mdnLink = tok.mdn ? `<a class="bte-mdn" href="${MDN_BASE}${tok.mdn}" target="_blank" title="MDN: ${tok.mdn}" onmouseenter="window.showTaskyHelp('Open the MDN documentation for the CSS property: ${tok.mdn}','info',true)" onmouseleave="window.hideTaskyHelp()">?</a>` : '';
+                const mdnLink = tok.mdn ? `<a class="bte-mdn" href="${MDN_BASE}${tok.mdn}" target="_blank" title="MDN: ${tok.mdn}" onmouseenter="window.showTaskyHelp('${escJs('Open the MDN documentation for the CSS property: ' + tok.mdn)}','info',true)" onmouseleave="window.hideTaskyHelp()">?</a>` : '';
                 let inp = '';
                 if (tok.type === 'color') {
                     inp = `<div class="bte-color-wrap">
@@ -353,7 +372,7 @@ function buildSimpleTab(): string {
                 }
                 return `<div class="bte-token-row${custom ? ' has-custom' : ''}">
                     <label class="bte-token-lbl"
-                        onmouseenter="window.showTaskyHelp('${escAttr(tok.desc)}','info',true)" onmouseleave="window.hideTaskyHelp()">${escHtml(tok.label)} ${mdnLink}</label>
+                        onmouseenter="window.showTaskyHelp('${escJs(tok.desc)}','info',true)" onmouseleave="window.hideTaskyHelp()">${escHtml(tok.label)} ${mdnLink}</label>
                     <div class="bte-token-ctrl">
                         ${inp}
                         ${custom ? `<button class="bte-token-revert" data-var="${tok.key}" title="Reset to default">↩</button>` : liveLabel}
@@ -492,66 +511,97 @@ function syncAccentRgb(k: string, v: string): void {
 // ═══════════════════════════════════════════════════════════════════
 // ELEMENTS TAB — add / edit custom HTML elements anywhere in BMM
 // ═══════════════════════════════════════════════════════════════════
+// Ready-made HTML templates so users don't have to write HTML from scratch.
+const CE_TEMPLATES: { label: string; icon: string; html: string }[] = [
+    { label: 'Button', icon: '🔘',
+      html: `<button class="btn btn-sm btn-primary" onclick="window.__bmmDeeplink('bmm://restart')">My button</button>` },
+    { label: 'Banner', icon: '📢',
+      html: `<div style="padding:10px 14px;border-radius:10px;background:var(--bmm-accent-dim);color:var(--bmm-text-primary);font-weight:600;">👋 My custom banner</div>` },
+    { label: 'Badge', icon: '🏷️',
+      html: `<span style="padding:3px 9px;border-radius:999px;background:var(--bmm-accent);color:#fff;font-size:11px;font-weight:700;">NEW</span>` },
+    { label: 'Note', icon: '📝',
+      html: `<p style="margin:8px 0;color:var(--bmm-text-secondary);font-size:13px;">My note text…</p>` },
+    { label: 'Image', icon: '🖼️',
+      html: `<img src="https://placekitten.com/120/60" alt="" style="border-radius:10px;max-width:100%;">` },
+    { label: 'Link', icon: '🔗',
+      html: `<a href="#" onclick="window.__bmmDeeplink('bmm://repo/sync?url=URL');return false;" style="color:var(--bmm-accent);font-weight:600;">My link →</a>` },
+];
+
 function buildElementsTab(): string {
     const ces: CustomElement[] = _draft.custom_elements || [];
     const pageOpts = ['(all pages)', ...PAGE_OPTIONS.map(p => p.label)].map((l, i) =>
         `<option value="${i===0?'':PAGE_OPTIONS[i-1]?.id||''}">${escHtml(l)}</option>`).join('');
 
+    const posLabels: Record<string,string> = {
+        append:  t('themes.posAppend')||'Inside, at the end',
+        prepend: t('themes.posPrepend')||'Inside, at the start',
+        before:  t('themes.posBefore')||'Just before it',
+        after:   t('themes.posAfter')||'Just after it',
+    };
+
     const list = ces.length ? ces.map(ce => `
         <div class="bte-ce-row" data-ce-id="${escAttr(ce.id)}">
             <div class="bte-ce-row-info">
                 <code class="bte-ce-selector">${escHtml(ce.target)}</code>
-                <span class="bte-ce-pos">${ce.position}</span>
-                ${ce.scope ? `<span class="bte-ce-scope">${escHtml(ce.scope)}</span>` : ''}
+                <span class="bte-ce-pos">${escHtml(posLabels[ce.position]||ce.position)}</span>
+                ${ce.scope ? `<span class="bte-ce-scope">${escHtml(ce.scope)}</span>` : `<span class="bte-ce-scope">${t('themes.allPages')||'all pages'}</span>`}
             </div>
-            <div class="bte-ce-row-preview">${ce.html.replace(/<[^>]+>/g, '').slice(0, 50) || '(no text)'}</div>
+            <div class="bte-ce-row-preview">${escHtml(ce.html.replace(/<[^>]+>/g, '').trim().slice(0, 50)) || '⟨html⟩'}</div>
             <div class="bte-ce-row-actions">
-                <button class="btn btn-xs btn-ghost bte-ce-edit" data-ce-id="${escAttr(ce.id)}">${t('common.edit')||'Edit'}</button>
-                <button class="btn btn-xs btn-danger bte-ce-del" data-ce-id="${escAttr(ce.id)}">✕</button>
+                <button class="bte-icon-btn bte-ce-edit" data-ce-id="${escAttr(ce.id)}" title="${t('common.edit')||'Edit'}">${ICON.edit(13)}</button>
+                <button class="bte-icon-btn danger bte-ce-del" data-ce-id="${escAttr(ce.id)}" title="${t('common.delete')||'Delete'}">${ICON.trash(13)}</button>
             </div>
-        </div>`) : `<div class="bte-empty" style="margin:16px 0;">${t('themes.noCe')||'No custom elements yet.'}</div>`;
+        </div>`).join('') : `<div class="bte-empty" style="margin:14px 0;">${t('themes.noCe')||'No custom elements yet — add one below.'}</div>`;
 
     const isEdit = _editingCeId != null;
     const editing = isEdit ? ces.find(c => c.id === _editingCeId) : null;
 
     return `
-        <div class="bte-section-title">Custom elements ${ces.length ? `(${ces.length})` : ''}</div>
-        <div class="bte-ce-list">${list}</div>
+        <div class="bte-intro" onmouseenter="window.showTaskyHelp('${escJs(t('themes.ceTaskyHelp')||'Add your own buttons, banners or widgets anywhere in BMM. Choose WHERE (1), pick a template, then tweak the HTML (2).')}','info',true)" onmouseleave="window.hideTaskyHelp()">
+            ${t('themes.ceIntro')||'Add your own buttons, banners, badges or widgets anywhere in BMM. Pick a spot, choose a template, done.'}
+        </div>
 
-        <div class="bte-sep"></div>
-        <div class="bte-section-title">${isEdit ? `Edit: ${editing?.id}` : 'Add element'}</div>
+        ${ces.length ? `<div class="bte-section-title">${t('themes.ceYour')||'Your elements'} (${ces.length})</div>
+        <div class="bte-ce-list">${list}</div>
+        <div class="bte-sep"></div>` : ''}
+
+        <div class="bte-section-title">${isEdit ? `${t('common.edit')||'Edit'}` : (t('themes.ceAdd')||'Add an element')}</div>
 
         <div class="bte-ce-form">
-            <div class="bte-ce-form-row">
-                <label class="bte-ce-lbl">Target CSS selector</label>
-                <div style="display:flex;gap:6px;align-items:center;">
-                    <input id="bte-ce-target" class="bte-var-inp" style="flex:1;" placeholder="#view-library .view-header" value="${escHtml(editing?.target||'')}">
-                    <button class="bte-tool" id="bte-ce-pick-target" title="${t('themes.pickTarget')||'Pick target by clicking'}">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                    </button>
+            <!-- STEP 1: WHERE -->
+            <div class="bte-step"><span class="bte-step-n">1</span>${t('themes.ceWhere')||'Where should it go?'}</div>
+            <button class="btn btn-secondary btn-sm bte-ce-pickbtn" id="bte-ce-pick-target">
+                ${ICON.eyedropper(14)} <span>${t('themes.cePickSpot')||'Click a spot in BMM'}</span>
+            </button>
+            <div class="bte-ce-form-row" style="margin-top:8px;">
+                <label class="bte-ce-lbl">${t('themes.ceSelector')||'…or type a CSS selector'}</label>
+                <input id="bte-ce-target" class="bte-var-inp" placeholder="#view-library .view-header" value="${escHtml(editing?.target||'')}">
+            </div>
+            <div class="bte-ce-form-grid">
+                <div class="bte-ce-form-row">
+                    <label class="bte-ce-lbl">${t('themes.cePosition')||'Placement'}</label>
+                    <select id="bte-ce-pos" class="bte-adv-sel">
+                        ${['append','prepend','before','after'].map(p =>
+                            `<option value="${p}"${(editing?.position||'append')===p?' selected':''}>${escHtml(posLabels[p])}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="bte-ce-form-row">
+                    <label class="bte-ce-lbl">${t('themes.ceScope')||'Show on'}</label>
+                    <select id="bte-ce-scope" class="bte-adv-sel">${pageOpts}</select>
                 </div>
             </div>
-            <div class="bte-ce-form-row">
-                <label class="bte-ce-lbl">Position</label>
-                <select id="bte-ce-pos" class="bte-adv-sel">
-                    ${['append','prepend','before','after'].map(p =>
-                        `<option value="${p}"${editing?.position===p?' selected':''}>${p}</option>`).join('')}
-                </select>
-            </div>
-            <div class="bte-ce-form-row">
-                <label class="bte-ce-lbl">Scope (page)</label>
-                <select id="bte-ce-scope" class="bte-adv-sel">${pageOpts}</select>
-            </div>
 
-            <label class="bte-ce-lbl" style="margin-top:8px;">HTML content</label>
-            <p class="bte-adv-tip" style="margin:4px 0 6px;">Tip: use <code>onclick="window.__bmmDeeplink('bmm://...')"</code> for BMM actions. &lt;script&gt; tags are stripped on import.</p>
-            <textarea id="bte-ce-html" class="bte-adv-textarea" style="min-height:90px;" placeholder='&lt;button class="btn btn-xs btn-accent" onclick="window.__bmmDeeplink(&apos;bmm://mod/enable?id=my-mod&apos;)"&gt;Enable my mod&lt;/button&gt;'>${escHtml(editing?.html||'')}</textarea>
-
-            <label class="bte-ce-lbl" style="margin-top:8px;">CSS (scoped to this element)</label>
-            <textarea id="bte-ce-css" class="bte-adv-textarea" style="min-height:60px;" placeholder="/* Optional CSS */">${escHtml(editing?.css||'')}</textarea>
+            <!-- STEP 2: WHAT -->
+            <div class="bte-step" style="margin-top:14px;"><span class="bte-step-n">2</span>${t('themes.ceWhat')||'What to show?'}</div>
+            <div class="bte-ce-templates">
+                ${CE_TEMPLATES.map(tpl =>
+                    `<button class="bte-tpl-chip" data-tpl="${escAttr(tpl.html)}"><span>${tpl.icon}</span>${escHtml(tpl.label)}</button>`).join('')}
+            </div>
+            <textarea id="bte-ce-html" class="bte-adv-textarea" style="min-height:84px;margin-top:8px;" placeholder="${escAttr(t('themes.ceHtmlPh')||'Pick a template above, or write your own HTML here…')}">${escHtml(editing?.html||'')}</textarea>
+            <p class="bte-adv-tip" style="margin:4px 0 0;">${t('themes.ceDeeplinkTip')||'For BMM actions, use'} <code>onclick="window.__bmmDeeplink('bmm://…')"</code></p>
 
             <div class="bte-deeplink-quick">
-                <div class="bte-ce-lbl" style="margin-bottom:4px;">Quick action snippets</div>
+                <div class="bte-ce-lbl" style="margin-bottom:4px;">${t('themes.ceActions')||'Insert an action'}</div>
                 ${[
                     ['Enable mod','bmm://mod/enable?id=MOD_ID'],
                     ['Disable mod','bmm://mod/disable?id=MOD_ID'],
@@ -565,9 +615,12 @@ function buildElementsTab(): string {
                 ).join('')}
             </div>
 
-            <div style="display:flex;gap:8px;margin-top:10px;">
-                ${isEdit ? `<button class="btn btn-ghost btn-sm" id="bte-ce-cancel">Cancel</button>` : ''}
-                <button class="btn btn-accent btn-sm" id="bte-ce-add">${isEdit ? 'Save changes' : '＋ Add element'}</button>
+            <label class="bte-ce-lbl" style="margin-top:12px;">${t('themes.ceCss')||'Extra CSS (optional)'}</label>
+            <textarea id="bte-ce-css" class="bte-adv-textarea" style="min-height:54px;" placeholder="/* e.g. margin-top: 8px; */">${escHtml(editing?.css||'')}</textarea>
+
+            <div style="display:flex;gap:8px;margin-top:12px;">
+                ${isEdit ? `<button class="btn btn-ghost btn-sm" id="bte-ce-cancel">${t('common.cancel')||'Cancel'}</button>` : ''}
+                <button class="btn btn-accent btn-sm" id="bte-ce-add">${ICON.plus(13)} ${isEdit ? (t('themes.ceSaveChanges')||'Save changes') : (t('themes.ceAddBtn')||'Add element')}</button>
             </div>
         </div>`;
 }
@@ -593,7 +646,7 @@ function wireElements(): void {
     // Add / save
     _panel?.querySelector('#bte-ce-add')?.addEventListener('click', commitElement);
     _panel?.querySelector('#bte-ce-cancel')?.addEventListener('click', () => {
-        _editingCeId = null; renderTab('elements');
+        _editingCeId = null; previewTheme(_draft); renderTab('elements');
     });
 
     // Pick target
@@ -601,7 +654,7 @@ function wireElements(): void {
         toast(t('themes.pickTarget')||'Click any element in BMM to use it as target', 'info', 2500);
         startPickTarget((selector) => {
             const el = _panel?.querySelector('#bte-ce-target') as HTMLInputElement|null;
-            if (el) el.value = selector;
+            if (el) { el.value = selector; el.dispatchEvent(new Event('input')); }
         });
     });
 
@@ -622,7 +675,19 @@ function wireElements(): void {
         });
     });
 
-    // Deeplink snippets → insert into HTML textarea
+    // Ready-made templates → fill the HTML textarea
+    _panel?.querySelectorAll('.bte-tpl-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const ta = _panel?.querySelector('#bte-ce-html') as HTMLTextAreaElement|null;
+            if (!ta) return;
+            const html = (chip as HTMLElement).dataset.tpl || '';
+            ta.value = ta.value.trim() ? ta.value.trimEnd() + '\n' + html : html;
+            ta.dispatchEvent(new Event('input'));
+            ta.focus();
+        });
+    });
+
+    // Deeplink snippets → insert into HTML textarea at the cursor
     _panel?.querySelectorAll('.bte-dl-chip').forEach(chip => {
         chip.addEventListener('click', () => {
             const ta = _panel?.querySelector('#bte-ce-html') as HTMLTextAreaElement|null;
@@ -631,8 +696,30 @@ function wireElements(): void {
             const decoded = snippet.replace(/&apos;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
             ta.setRangeText(decoded, ta.selectionStart, ta.selectionEnd, 'end');
             ta.dispatchEvent(new Event('input'));
+            ta.focus();
         });
     });
+
+    // Live preview while typing the element
+    ['#bte-ce-html', '#bte-ce-css', '#bte-ce-target', '#bte-ce-pos', '#bte-ce-scope'].forEach(sel => {
+        _panel?.querySelector(sel)?.addEventListener('input', livePreviewElement);
+    });
+}
+
+/** Show the element being built live (temporary, not committed) so the user
+ *  sees their custom element appear before clicking Add. */
+function livePreviewElement(): void {
+    const target = (_panel?.querySelector('#bte-ce-target') as HTMLInputElement)?.value.trim();
+    const html   = (_panel?.querySelector('#bte-ce-html')   as HTMLTextAreaElement)?.value || '';
+    if (!target || !html) { previewTheme(_draft); return; }
+    const pos   = (_panel?.querySelector('#bte-ce-pos')   as HTMLSelectElement)?.value as CustomElement['position'];
+    const scope = (_panel?.querySelector('#bte-ce-scope') as HTMLSelectElement)?.value || '';
+    const css   = (_panel?.querySelector('#bte-ce-css')   as HTMLTextAreaElement)?.value || '';
+    const preview = { ..._draft, custom_elements: [
+        ...(_draft.custom_elements || []).filter(c => c.id !== _editingCeId),
+        { id: _editingCeId || '__ce_preview__', target, position: pos, scope, html, css },
+    ] };
+    previewTheme(preview);
 }
 
 function commitElement(): void {
@@ -745,7 +832,7 @@ function wireInstalled(): void {
     });
     _panel?.querySelectorAll('.bte-delete-theme').forEach(btn => {
         btn.addEventListener('click', async () => {
-            if (!confirm(t('themes.confirmDelete')||'Remove this theme?')) return;
+            if (!await bteConfirm(t('themes.confirmDelete')||'Remove this theme?', { danger: true, okLabel: t('common.delete')||'Delete' })) return;
             await deleteTheme((btn as HTMLElement).dataset.id!);
             renderTab('installed');
         });
@@ -757,6 +844,8 @@ function wireInstalled(): void {
 // ═══════════════════════════════════════════════════════════════════
 // SMART PICK — click element → highlight matching token in Simple tab
 // ═══════════════════════════════════════════════════════════════════
+// Selection uses RIGHT-click or MIDDLE-click so the user can still LEFT-click to
+// navigate normally while picking. Esc cancels.
 function togglePickToken(): void {
     if (_pickMode === 'token') { stopPick(); return; }
     stopPick();
@@ -764,8 +853,10 @@ function togglePickToken(): void {
     _panel?.querySelector('#bte-pick-token')?.classList.add('active');
     document.body.classList.add('bte-picking');
     document.addEventListener('mouseover', onPickHover, true);
-    document.addEventListener('click', onPickTokenClick, true);
-    toast(t('themes.pickOn')||'Click any element to edit its style token', 'info', 2500);
+    document.addEventListener('contextmenu', onPickTokenClick, true);
+    document.addEventListener('auxclick', onPickTokenClick, true);
+    document.addEventListener('keydown', onPickEsc, true);
+    toast(t('themes.pickOn')||'Right-click (or middle-click) any element to edit it. Esc to cancel.', 'info', 3500);
 }
 
 function startPickTarget(cb: (selector: string) => void): void {
@@ -774,7 +865,13 @@ function startPickTarget(cb: (selector: string) => void): void {
     _pickTargetCb = cb;
     document.body.classList.add('bte-picking');
     document.addEventListener('mouseover', onPickHover, true);
-    document.addEventListener('click', onPickTargetClick, true);
+    document.addEventListener('contextmenu', onPickTargetClick, true);
+    document.addEventListener('auxclick', onPickTargetClick, true);
+    document.addEventListener('keydown', onPickEsc, true);
+}
+
+function onPickEsc(e: KeyboardEvent): void {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); stopPick(); }
 }
 
 function stopPick(): void {
@@ -782,22 +879,39 @@ function stopPick(): void {
     _pickTargetCb = null;
     document.body.classList.remove('bte-picking');
     document.removeEventListener('mouseover', onPickHover, true);
-    document.removeEventListener('click', onPickTokenClick, true);
-    document.removeEventListener('click', onPickTargetClick, true);
+    document.removeEventListener('contextmenu', onPickTokenClick, true);
+    document.removeEventListener('contextmenu', onPickTargetClick, true);
+    document.removeEventListener('auxclick', onPickTokenClick, true);
+    document.removeEventListener('auxclick', onPickTargetClick, true);
+    document.removeEventListener('keydown', onPickEsc, true);
     document.querySelectorAll('.bte-pick-highlight').forEach(e => e.classList.remove('bte-pick-highlight'));
     _panel?.querySelector('#bte-pick-token')?.classList.remove('active');
 }
 
+/** True only for the selection gesture: right-click (contextmenu) or
+ *  middle-click (auxclick button 1). Ignores left/other auxclicks.            */
+function isPickGesture(e: MouseEvent): boolean {
+    if (e.type === 'contextmenu') return true;
+    if (e.type === 'auxclick' && e.button === 1) return true;
+    return false;
+}
+
+/** Elements that must stay interactive during a pick (the picker's own UI). */
+function isPickExcluded(el: HTMLElement | null): boolean {
+    return !!el?.closest?.('#bte-elov, #bte-confirm');
+}
+
 function onPickHover(e: MouseEvent): void {
     const tgt = e.target as HTMLElement;
-    if (_panel?.contains(tgt) || tgt?.closest?.('#bte-elov')) return;
+    if (isPickExcluded(tgt)) return;
     document.querySelectorAll('.bte-pick-highlight').forEach(e => e.classList.remove('bte-pick-highlight'));
     tgt?.classList.add('bte-pick-highlight');
 }
 
 function onPickTokenClick(e: MouseEvent): void {
+    if (!isPickGesture(e)) return;
     const _t = e.target as HTMLElement;
-    if (_panel?.contains(_t) || _t?.closest?.('#bte-elov')) return;
+    if (isPickExcluded(_t)) return;
     e.preventDefault(); e.stopPropagation();
     const el = e.target as HTMLElement;
     const cs = getComputedStyle(el);
@@ -835,21 +949,48 @@ function onPickTokenClick(e: MouseEvent): void {
 /** Build a stable-ish CSS selector from id, nearest view, or class chain. */
 function buildSelectorFor(el: HTMLElement): string {
     if (el.id) return `#${el.id}`;
+    // Build a precise path: from the element up to the nearest id/view ancestor,
+    // using meaningful classes or :nth-of-type so the EXACT element is targeted.
+    const seg = (node: HTMLElement): string => {
+        let s = node.tagName.toLowerCase();
+        const cls = Array.from(node.classList)
+            .filter(c => !c.startsWith('bmm-') && c !== 'bte-pick-highlight' && c !== 'active' && c !== 'bte-picking');
+        if (cls.length) return s + '.' + cls.slice(0, 2).map(c => CSS.escape(c)).join('.');
+        const parent = node.parentElement;
+        if (parent) {
+            const sameTag = Array.from(parent.children).filter(c => c.tagName === node.tagName);
+            if (sameTag.length > 1) s += `:nth-of-type(${sameTag.indexOf(node) + 1})`;
+        }
+        return s;
+    };
+    const parts: string[] = [];
+    let cur: HTMLElement | null = el;
+    let root = '';
+    let depth = 0;
+    while (cur && cur !== document.body && depth < 5) {
+        if (cur.id) { root = `#${cur.id} `; break; }
+        parts.unshift(seg(cur));
+        if (cur.id?.startsWith('view-')) { root = ''; break; }
+        cur = cur.parentElement;
+        depth++;
+        if (cur && cur.id) { root = `#${cur.id} `; break; }
+    }
+    const built = (root + parts.join(' > ')).trim();
+    // Verify it resolves to the same element; fall back to a simpler selector.
+    try { if (document.querySelector(built) === el) return built; } catch {}
     const view = el.closest('[id^="view-"]') as HTMLElement|null;
-    const prefix = view ? `#${view.id} ` : '';
-    const classes = Array.from(el.classList)
-        .filter(c => !['bte-pick-highlight'].includes(c) && !c.startsWith('bmm-') && !c.startsWith('bte-'))
-        .slice(0, 3).map(c => `.${c}`).join('');
-    return prefix + (classes || el.tagName.toLowerCase());
+    return (view ? `#${view.id} ` : '') + el.tagName.toLowerCase();
 }
 
 function onPickTargetClick(e: MouseEvent): void {
+    if (!isPickGesture(e)) return;
     const _t = e.target as HTMLElement;
-    if (_panel?.contains(_t) || _t?.closest?.('#bte-elov')) return;
+    if (isPickExcluded(_t)) return;
     e.preventDefault(); e.stopPropagation();
     const selector = buildSelectorFor(e.target as HTMLElement);
+    const cb = _pickTargetCb;     // capture BEFORE stopPick() nulls it
     stopPick();
-    _pickTargetCb?.(selector);
+    cb?.(selector);
 }
 
 /** Convert an rgb()/rgba() computed colour to #rrggbb for <input type=color>. */
@@ -977,10 +1118,43 @@ function openElementOverrideEditor(el: HTMLElement): void {
 // ═══════════════════════════════════════════════════════════════════
 // SAVE / EXPORT / IMPORT / RESET
 // ═══════════════════════════════════════════════════════════════════
+/** In-app text prompt (native prompt() is unreliable in the Tauri webview). */
+function btePrompt(message: string, def = ''): Promise<string|null> {
+    return new Promise(resolve => {
+        document.getElementById('bte-confirm')?.remove();
+        const ov = document.createElement('div');
+        ov.id = 'bte-confirm';
+        ov.className = 'bte-confirm-overlay';
+        ov.innerHTML = `
+            <div class="bte-confirm-box">
+                <p class="bte-confirm-msg">${escHtml(message)}</p>
+                <input class="bte-confirm-input" type="text" value="${escAttr(def)}" spellcheck="false">
+                <div class="bte-confirm-actions">
+                    <button class="btn btn-ghost btn-sm" data-act="no">${t('common.cancel')||'Cancel'}</button>
+                    <button class="btn btn-accent btn-sm" data-act="yes">${t('common.ok')||'OK'}</button>
+                </div>
+            </div>`;
+        (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+        const inp = ov.querySelector('.bte-confirm-input') as HTMLInputElement;
+        const done = (val: string|null) => { ov.remove(); document.removeEventListener('keydown', onKey, true); resolve(val); };
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') { e.preventDefault(); done(null); }
+            if (e.key === 'Enter')  { e.preventDefault(); done(inp.value); }
+        };
+        document.addEventListener('keydown', onKey, true);
+        ov.querySelector('[data-act=no]')!.addEventListener('click', () => done(null));
+        ov.querySelector('[data-act=yes]')!.addEventListener('click', () => done(inp.value));
+        ov.addEventListener('mousedown', e => { if (e.target === ov) done(null); });
+        inp.focus(); inp.select();
+    });
+}
+
 async function saveTheme(): Promise<void> {
     const cur = getActiveTheme();
     const name = cur?.name !== 'Preview' ? cur?.name : undefined;
-    const finalName = (name || prompt(t('themes.enterName')||'Theme name:') || 'My Theme').trim();
+    const entered = name || await btePrompt(t('themes.enterName')||'Theme name:', 'My Theme');
+    if (entered === null) return;                       // user cancelled
+    const finalName = (entered || 'My Theme').trim();
     const finalId = (cur?.id && cur.id !== '__preview__') ? cur.id : finalName.toLowerCase().replace(/[^a-z0-9]/g, '-');
     const theme: BmmTheme = { id: finalId, name: finalName, author: 'You', version: '1.0.0', ...(_draft as any) };
     await installTheme(theme);
@@ -1034,8 +1208,39 @@ async function importFile(): Promise<void> {
     } catch (e) { toast(String(e), 'error'); }
 }
 
-function confirmReset(): void {
-    if (!confirm(t('themes.confirmReset')||'Reset to BMM default?')) return;
+/** In-app confirm dialog. The native window.confirm() does NOT block reliably
+ *  in the Tauri webview (it returns immediately), so actions ran without waiting.
+ *  This promise-based dialog actually waits for the user's choice.            */
+function bteConfirm(message: string, opts: { danger?: boolean; okLabel?: string } = {}): Promise<boolean> {
+    return new Promise(resolve => {
+        document.getElementById('bte-confirm')?.remove();
+        const ov = document.createElement('div');
+        ov.id = 'bte-confirm';
+        ov.className = 'bte-confirm-overlay';
+        ov.innerHTML = `
+            <div class="bte-confirm-box">
+                <p class="bte-confirm-msg">${escHtml(message)}</p>
+                <div class="bte-confirm-actions">
+                    <button class="btn btn-ghost btn-sm" data-act="no">${t('common.cancel')||'Cancel'}</button>
+                    <button class="btn ${opts.danger ? 'btn-danger' : 'btn-accent'} btn-sm" data-act="yes">${opts.okLabel || t('common.confirm') || 'Confirm'}</button>
+                </div>
+            </div>`;
+        (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+        const done = (val: boolean) => { ov.remove(); document.removeEventListener('keydown', onKey, true); resolve(val); };
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') { e.preventDefault(); done(false); }
+            if (e.key === 'Enter')  { e.preventDefault(); done(true); }
+        };
+        document.addEventListener('keydown', onKey, true);
+        ov.querySelector('[data-act=no]')!.addEventListener('click', () => done(false));
+        ov.querySelector('[data-act=yes]')!.addEventListener('click', () => done(true));
+        ov.addEventListener('mousedown', e => { if (e.target === ov) done(false); });
+        (ov.querySelector('[data-act=yes]') as HTMLElement).focus();
+    });
+}
+
+async function confirmReset(): Promise<void> {
+    if (!await bteConfirm(t('themes.confirmReset')||'Reset to BMM default? Your unsaved changes will be lost.', { danger: true, okLabel: t('common.reset')||'Reset' })) return;
     _draft = { custom_elements: [] };
     resetTheme(); renderTab(_tab); updateDirty();
 }

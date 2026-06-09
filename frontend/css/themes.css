@@ -76,9 +76,11 @@
 .bte-footer {
     display: flex; align-items: center; gap: 8px; padding: 10px 14px;
     border-top: 1px solid var(--bmm-s07); flex-shrink: 0;
-    background: rgba(0,0,0,0.15);
+    background: rgba(0,0,0,0.15); flex-wrap: wrap;
 }
-.bte-dirty { font-size: 11px; color: var(--bmm-amber); flex: 1; }
+.bte-dirty { font-size: 11px; color: var(--bmm-amber); flex: 1 1 auto; min-width: 0; }
+.bte-footer-actions { display: flex; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
+.bte-footer .btn { white-space: nowrap; }
 
 /* ── Simple tab — friendly UI ─────────────────────────────────────────────── */
 .bte-intro {
@@ -269,10 +271,12 @@
 /* ── Elements tab ─────────────────────────────────────────────────────────── */
 .bte-ce-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 4px; }
 .bte-ce-row {
+    position: relative;
     background: var(--bmm-s03); border: 1px solid var(--bmm-s07);
     border-radius: 9px; padding: 9px 12px; display: flex; flex-direction: column; gap: 5px;
     transition: border-color 0.13s ease;
 }
+.bte-ce-list { display: flex; flex-direction: column; gap: 7px; margin-bottom: 4px; }
 .bte-ce-row:hover { border-color: rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.13); }
 .bte-ce-row-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .bte-ce-selector {
@@ -287,18 +291,51 @@
     font-size: 10px; color: var(--bmm-text-muted); background: var(--bmm-s05);
     padding: 1px 6px; border-radius: 5px;
 }
-.bte-ce-row-preview { font-size: 11px; color: var(--bmm-text-muted); font-style: italic; }
-.bte-ce-row-actions { display: flex; gap: 6px; }
+.bte-ce-row-preview { font-size: 11px; color: var(--bmm-text-muted); font-style: italic; padding-right: 60px; }
+.bte-ce-row-actions { position: absolute; top: 8px; right: 10px; display: flex; gap: 5px; }
+.bte-icon-btn {
+    width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 6px; border: 1px solid var(--bmm-border); background: var(--bmm-s05);
+    color: var(--bmm-text-secondary); cursor: pointer; transition: all 0.12s ease;
+}
+.bte-icon-btn:hover { color: var(--bmm-text-primary); border-color: var(--bmm-border-accent); }
+.bte-icon-btn.danger:hover { color: var(--bmm-danger); border-color: var(--bmm-danger);
+    background: var(--bmm-danger-dim); }
 .bte-ce-form { display: flex; flex-direction: column; gap: 4px; }
 .bte-ce-form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.bte-ce-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .bte-ce-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--bmm-text-muted); }
+
+/* Numbered steps */
+.bte-step { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600;
+    color: var(--bmm-text-primary); margin: 4px 0 8px; }
+.bte-step-n { width: 20px; height: 20px; flex-shrink: 0; display: inline-flex; align-items: center;
+    justify-content: center; border-radius: 50%; background: var(--bmm-accent); color: #fff;
+    font-size: 11px; font-weight: 800; }
+
+/* "Click a spot" picker button */
+.bte-ce-pickbtn { width: 100%; justify-content: center; gap: 8px; }
+.bte-ce-pickbtn svg { flex-shrink: 0; }
+body.bte-picking .bte-ce-pickbtn { background: var(--bmm-accent); color: #fff; }
+
+/* Template chips */
+.bte-ce-templates { display: flex; flex-wrap: wrap; gap: 6px; }
+.bte-tpl-chip {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 6px 11px;
+    border-radius: 8px; border: 1px solid var(--bmm-border); background: var(--bmm-s05);
+    color: var(--bmm-text-primary); cursor: pointer; transition: all 0.12s ease;
+}
+.bte-tpl-chip span { font-size: 14px; }
+.bte-tpl-chip:hover { border-color: var(--bmm-border-accent); background: var(--bmm-accent-dim); }
+
 .bte-deeplink-quick { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 8px; }
 .bte-dl-chip {
-    font-size: 10.5px; padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(59,130,246,0.25);
-    background: rgba(59,130,246,0.08); color: var(--bmm-accent); cursor: pointer;
+    font-size: 10.5px; padding: 3px 9px; border-radius: 6px;
+    border: 1px solid var(--bmm-border-accent);
+    background: var(--bmm-accent-dim); color: var(--bmm-accent); cursor: pointer;
     transition: all 0.12s ease;
 }
-.bte-dl-chip:hover { background: rgba(59,130,246,0.18); }
+.bte-dl-chip:hover { background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.2); }
 
 /* Flash highlight on matched token row */
 .bte-token-highlight {
@@ -343,6 +380,28 @@
     color: var(--bmm-text-primary); }
 .bte-elov-css:focus { outline: none; border-color: var(--bmm-border-accent); }
 .bte-elov-hint { margin: 6px 0 0; font-size: 10px; color: var(--bmm-text-muted); line-height: 1.4; }
+
+/* ── In-app confirm dialog (replaces unreliable native confirm) ───────────── */
+.bte-confirm-overlay {
+    position: fixed; inset: 0; z-index: 2147483647;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(3px);
+    animation: bteElovIn 0.14s ease;
+}
+.bte-confirm-box {
+    width: 340px; max-width: 90vw; padding: 20px;
+    background: var(--bmm-bg-elevated); border: 1px solid var(--bmm-border-accent);
+    border-radius: 14px; box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    color: var(--bmm-text-primary);
+}
+.bte-confirm-msg { margin: 0 0 18px; font-size: 14px; line-height: 1.5; }
+.bte-confirm-input {
+    width: 100%; box-sizing: border-box; margin: 0 0 16px; padding: 8px 10px;
+    border-radius: 8px; border: 1px solid var(--bmm-border); background: var(--bmm-s05);
+    color: var(--bmm-text-primary); font-size: 13px; font-family: var(--bmm-font-sans);
+}
+.bte-confirm-input:focus { outline: none; border-color: var(--bmm-border-accent); }
+.bte-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ── Pick mode highlight ──────────────────────────────────────────────────── */
 body.bte-picking * { cursor: crosshair !important; }

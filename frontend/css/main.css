@@ -7314,7 +7314,7 @@ select:focus {
 .pip-btn:hover {
     background: var(--bmm-s08);
     border-color: var(--bmm-s20);
-    color: #fff;
+    color: var(--bmm-text-primary);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
@@ -11949,12 +11949,31 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     background: var(--bmm-s04) !important;
 }
 
-/* ── select optgroup dark color-scheme fix ───────────────────────────────── */
+/* ── select optgroup color-scheme (follows theme: dark / light) ──────────── */
 .select, select {
-    color-scheme: dark;
+    color-scheme: var(--bmm-color-scheme, dark);
 }
-optgroup { background: #1a2030; color: #7a8499; }
-option   { background: #131825; color: var(--text-primary); }
+optgroup { background: var(--bmm-bg-sidebar); color: var(--bmm-text-muted); }
+option   { background: var(--bmm-bg-elevated); color: var(--bmm-text-primary); }
+
+/* Light themes: the OS-rendered native <select> popup frequently ignores CSS
+   variables, leaving low-contrast text. Force concrete light colours so EVERY
+   option (not just the highlighted one) stays readable.                       */
+body.bmm-theme-light select,
+body.bmm-theme-light .select { color-scheme: light !important; }
+body.bmm-theme-light option {
+    background-color: #ffffff !important;
+    color: #18181b !important;
+}
+body.bmm-theme-light optgroup {
+    background-color: #f1f1f4 !important;
+    color: #52525b !important;
+}
+body.bmm-theme-light option:checked,
+body.bmm-theme-light option:hover {
+    background-color: #e4e4e8 !important;
+    color: #000000 !important;
+}
 
 /* ── Swagger-like endpoint detail panel ──────────────────────────────────── */
 .plug-ep-swagger {

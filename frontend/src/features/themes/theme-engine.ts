@@ -272,11 +272,17 @@ function startPatchObserver(theme: BmmTheme): void {
     ];
 
     const lightExtra: [RegExp, string][] = isLight ? [
-        // Hardcoded light text → primary dark text (covers white/255 text on light bg)
+        // Hardcoded light text → primary dark text (covers white/255 text on light bg).
+        // Browsers normalise style.color='#fff'/'white' to rgb(255, 255, 255), so we
+        // must catch the rgb() form too (set by JS onmouseover handlers).
         [/color:\s*white\b/gi, 'color:var(--bmm-text-primary)'],
         [/color:\s*#fff\b/gi, 'color:var(--bmm-text-primary)'],
         [/color:\s*#ffffff\b/gi, 'color:var(--bmm-text-primary)'],
+        [/color:\s*rgb\(\s*255,\s*255,\s*255\s*\)/gi, 'color:var(--bmm-text-primary)'],
         [/color:\s*rgba\(\s*255,\s*255,\s*255[^)]*\)/gi, 'color:var(--bmm-text-primary)'],
+        // Other very-light hardcoded text colours commonly used for "bright" hover
+        [/color:\s*#f(1f5f9|8fafc|9fafb)\b/gi, 'color:var(--bmm-text-primary)'],
+        [/color:\s*#e(2e8f0|5e7eb)\b/gi, 'color:var(--bmm-text-secondary)'],
     ] : [];
 
     const allPatches = [...patches, ...lightExtra];
@@ -376,6 +382,8 @@ export function applyTheme(theme: BmmTheme): void {
     // Disable all animations (intro/exit, Tasky spin, transitions) when speed = 0
     const speed = (theme.vars || {})['--bmm-anim-speed'];
     document.body.classList.toggle('bmm-no-anim', speed === '0' || speed === '0.0');
+    // Flag light themes so CSS can fix hover/dropdown contrast that hardcodes light text.
+    document.body.classList.toggle('bmm-theme-light', theme.mode === 'light');
     if (theme.id !== '__preview__') localStorage.setItem(ACTIVE_KEY, theme.id);
 }
 
@@ -539,6 +547,7 @@ function lightSurfaces(): Record<string, string> {
         '--bmm-s15': 'rgba(0,0,0,0.15)', '--bmm-s20': 'rgba(0,0,0,0.20)',
         '--bmm-glass-bg': 'rgba(0,0,0,0.03)', '--bmm-glass-border': 'rgba(0,0,0,0.08)',
         '--bmm-bg-hover': 'rgba(0,0,0,0.045)',
+        '--bmm-color-scheme': 'light',
     };
 }
 
@@ -562,59 +571,78 @@ export const BUILTIN_THEMES: BmmTheme[] = [
             ...accentVars('#5865f2'),
         },
     },
-    // 3. Void / Noir (pure black)
+    // 3. Void / Noir (pure black, monochrome grey-white accent — NO blue)
     {
         id: 'bmm-void', name: 'Void / Noir', author: 'BMM Team',
-        description: 'Pure black, crisp electric-blue accent, hairline borders.',
+        description: 'Pure black, monochrome grey-white accent, hairline borders.',
         vars: {
             '--bmm-bg-base': '#000000', '--bmm-bg-elevated': '#0b0b0d',
             '--bmm-bg-sidebar': '#060607', '--bmm-bg-titlebar': '#000000',
             '--bmm-titlebar-bg': '#000000', '--bmm-loader-bg': '#000000',
-            '--bmm-border': 'rgba(255,255,255,0.055)', '--bmm-border-hover': 'rgba(255,255,255,0.13)',
+            '--bmm-border': 'rgba(255,255,255,0.055)', '--bmm-border-hover': 'rgba(255,255,255,0.16)',
             '--bmm-text-primary': '#f5f5f7', '--bmm-text-secondary': '#a1a1a8',
             '--bmm-text-muted': '#55555c', '--bmm-radius-card': '12px',
             '--bmm-card-glow': '0 0 0 1px rgba(255,255,255,0.03)',
-            ...accentVars('#4f8ef7'),
+            // Grey-white accent — dark text on the light accent so buttons stay readable.
+            '--bmm-btn-primary-text': '#0a0a0a',
+            '--bmm-cyan': '#d4d4d8',
+            ...accentVars('#d4d4d8'),
         },
     },
-    // 4. Void / Light (light grey, neutral slate accent)
-    {
-        id: 'bmm-void-light', name: 'Void / Light', author: 'BMM Team',
-        description: 'Light grey surfaces with a neutral slate accent.',
-        mode: 'light',
-        vars: {
-            '--bmm-bg-base': '#e7e7ec', '--bmm-bg-elevated': '#f3f3f6',
-            '--bmm-bg-sidebar': '#dddde3', '--bmm-bg-titlebar': '#d4d4dc',
-            '--bmm-titlebar-bg': '#d4d4dc', '--bmm-loader-bg': '#e7e7ec',
-            '--bmm-border': 'rgba(0,0,0,0.10)', '--bmm-border-hover': 'rgba(0,0,0,0.18)',
-            '--bmm-text-primary': '#1a1a1e', '--bmm-text-secondary': '#3f3f46',
-            '--bmm-text-muted': '#71717a', '--bmm-success': '#16a34a',
-            '--bmm-warning': '#d97706', '--bmm-danger': '#dc2626', '--bmm-cyan': '#0891b2',
-            '--bmm-tasky-bubble-bg': 'rgba(255,255,255,0.9)', '--bmm-tasky-bubble-text': '#1a1a1e',
-            ...lightSurfaces(),
-            ...accentVars('#52525b'),
-        },
-    },
-    // 5. Full White (bright, adaptive dark text)
+    // 4. Full White (bright, dark text)
     {
         id: 'bmm-white', name: 'Full White', author: 'BMM Team',
-        description: 'Pure white interface — text always switches to dark for readability.',
+        description: 'Pure white interface with strong dark text for readability.',
         mode: 'light',
         vars: {
             '--bmm-bg-base': '#ffffff', '--bmm-bg-elevated': '#ffffff', '--bmm-bg-overlay': '#ffffff',
-            '--bmm-bg-sidebar': '#f7f7f8', '--bmm-bg-titlebar': '#efeff1',
-            '--bmm-titlebar-bg': '#efeff1', '--bmm-loader-bg': '#ffffff',
-            '--bmm-border': 'rgba(0,0,0,0.11)', '--bmm-border-hover': 'rgba(0,0,0,0.2)',
-            '--bmm-text-primary': '#0a0a0a', '--bmm-text-secondary': '#3f3f46',
-            '--bmm-text-muted': '#71717a', '--bmm-success': '#15803d',
-            '--bmm-warning': '#b45309', '--bmm-danger': '#dc2626', '--bmm-cyan': '#0369a1',
-            '--bmm-tasky-bubble-bg': 'rgba(255,255,255,0.96)', '--bmm-tasky-bubble-text': '#0a0a0a',
+            '--bmm-bg-sidebar': '#f4f4f6', '--bmm-bg-titlebar': '#ececef',
+            '--bmm-titlebar-bg': '#ececef', '--bmm-loader-bg': '#ffffff',
+            '--bmm-border': 'rgba(0,0,0,0.13)', '--bmm-border-hover': 'rgba(0,0,0,0.24)',
+            '--bmm-text-primary': '#000000', '--bmm-text-secondary': '#27272a',
+            '--bmm-text-muted': '#52525b', '--bmm-success': '#15803d',
+            '--bmm-warning': '#b45309', '--bmm-danger': '#dc2626', '--bmm-cyan': '#075985',
+            '--bmm-tasky-bubble-bg': 'rgba(255,255,255,0.96)', '--bmm-tasky-bubble-text': '#000000',
             '--bmm-shadow-card': '0 2px 12px rgba(0,0,0,0.08)',
             ...lightSurfaces(),
-            ...accentVars('#2563eb'),
+            ...accentVars('#1d4ed8'),
         },
     },
-    // 6. Spotify Green
+    // 5. Discord (authentic Discord dark palette)
+    {
+        id: 'bmm-discord', name: 'Discord', author: 'BMM Team',
+        description: 'The authentic Discord dark look — layered greys & blurple.',
+        vars: {
+            '--bmm-bg-base': '#313338', '--bmm-bg-elevated': '#2b2d31',
+            '--bmm-bg-sidebar': '#1e1f22', '--bmm-bg-titlebar': '#1e1f22',
+            '--bmm-titlebar-bg': '#1e1f22', '--bmm-loader-bg': '#1e1f22',
+            '--bmm-border': 'rgba(255,255,255,0.06)', '--bmm-border-hover': 'rgba(255,255,255,0.13)',
+            '--bmm-text-primary': '#f2f3f5', '--bmm-text-secondary': '#b5bac1',
+            '--bmm-text-muted': '#949ba4', '--bmm-cyan': '#00a8fc',
+            '--bmm-success': '#23a559', '--bmm-warning': '#f0b232', '--bmm-danger': '#f23f43',
+            '--bmm-radius-btn': '8px', '--bmm-radius-card': '8px',
+            ...accentVars('#5865f2'),
+        },
+    },
+    // 6. Orange / Noir (black with a vivid orange accent)
+    {
+        id: 'bmm-orange', name: 'Orange / Noir', author: 'BMM Team',
+        description: 'Deep black with a bold, warm orange accent.',
+        vars: {
+            '--bmm-bg-base': '#0a0a0a', '--bmm-bg-elevated': '#161614',
+            '--bmm-bg-sidebar': '#000000', '--bmm-bg-titlebar': '#000000',
+            '--bmm-titlebar-bg': '#000000', '--bmm-loader-bg': '#000000',
+            '--bmm-border': 'rgba(255,255,255,0.07)', '--bmm-border-hover': 'rgba(255,140,26,0.35)',
+            '--bmm-text-primary': '#f6f1ea', '--bmm-text-secondary': '#b3aa9f',
+            '--bmm-text-muted': '#6c655c', '--bmm-radius-card': '12px',
+            '--bmm-cyan': '#ff8c1a', '--bmm-warning': '#ffb340',
+            '--bmm-card-glow': '0 0 22px rgba(255,106,0,0.08)',
+            // Dark text on the bright orange buttons for contrast.
+            '--bmm-btn-primary-text': '#1a0d00',
+            ...accentVars('#ff6a00'),
+        },
+    },
+    // 7. Spotify Green
     {
         id: 'bmm-spotify', name: 'Spotify Green', author: 'BMM Team',
         description: 'Spotify-style near-black with that iconic green accent.',

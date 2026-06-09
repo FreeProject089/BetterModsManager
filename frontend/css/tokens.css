@@ -128,6 +128,10 @@
     --bmm-surface-g: 255;
     --bmm-surface-b: 255;
 
+    /* color-scheme for native controls (select popups, scrollbars). Light themes
+       set this to "light" so the OS renders dropdowns with light surfaces.      */
+    --bmm-color-scheme: dark;
+
     /* Pre-built surface values used most frequently — themes override these   */
     --bmm-s02:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.02);
     --bmm-s03:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.03);
