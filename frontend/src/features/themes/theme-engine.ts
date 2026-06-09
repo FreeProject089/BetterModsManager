@@ -224,6 +224,111 @@ body { color: var(--bmm-text-primary) !important; }
 
 /** Patch JS-generated inline styles in real-time via MutationObserver.
  *  When elements appear with hardcoded colours, swap them to CSS variables. */
+// ── Light-mode contrast enforcer ──────────────────────────────────────────────
+// Many components hardcode dark-theme light text colours (incomplete token
+// migration). On light themes that text is invisible. This walks text-bearing
+// elements and, when their computed text colour is too light AND they sit on a
+// light background, rewrites the colour to the theme token (theme-safe — the
+// token flips back to light if a dark theme is later applied). Dark-background
+// components (code blocks, devtools…) keep their light text because we check the
+// effective background first.
+const CONTRAST_ATTR = 'data-bmm-contrast';
+const CONTRAST_KEY  = 'bmm_contrast_enforce';   // 'false' = user disabled it
+
+/** Whether the automatic light-theme contrast enforcer is enabled (default on). */
+export function isContrastEnforced(): boolean {
+    return localStorage.getItem(CONTRAST_KEY) !== 'false';
+}
+/** Remove every inline colour the enforcer applied (restore original styling). */
+function clearAllEnforced(): void {
+    document.querySelectorAll(`[${CONTRAST_ATTR}]`).forEach(node => {
+        const el = node as HTMLElement;
+        el.style.removeProperty('color');
+        el.style.removeProperty('background-color');
+        el.removeAttribute(CONTRAST_ATTR);
+    });
+}
+/** Turn the contrast enforcer on/off and apply the change immediately. */
+export function setContrastEnforced(on: boolean): void {
+    localStorage.setItem(CONTRAST_KEY, on ? 'true' : 'false');
+    if (!on) clearAllEnforced();
+    else if (_activeTheme?.mode === 'light') enforceLightContrast(document);
+}
+function _lum(r: number, g: number, b: number): number {
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+function _parseRgb(s: string): [number, number, number, number] | null {
+    const m = s.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?/i);
+    if (!m) return null;
+    return [+m[1], +m[2], +m[3], m[4] === undefined ? 1 : +m[4]];
+}
+function _effectiveBgLum(el: HTMLElement): number {
+    let node: HTMLElement | null = el;
+    let hops = 0;
+    while (node && hops++ < 12) {
+        const c = _parseRgb(getComputedStyle(node).backgroundColor);
+        if (c && c[3] > 0.5) return _lum(c[0], c[1], c[2]);
+        node = node.parentElement;
+    }
+    return 1; // reached the (light) page background
+}
+// Tags / class fragments that must KEEP their own (often dark) background.
+const _BG_SKIP_TAGS = new Set(['PRE', 'CODE', 'BUTTON', 'A', 'SVG', 'IMG', 'CANVAS', 'VIDEO', 'INPUT', 'TEXTAREA', 'SELECT']);
+function _saturation(r: number, g: number, b: number): number {
+    return (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
+}
+function enforceLightContrast(root: Element | Document): void {
+    if (!_activeTheme || _activeTheme.mode !== 'light') return;
+    if (!isContrastEnforced()) return;
+    // Elements the user is explicitly styling via the pick tool must win — never
+    // let the enforcer's inline !important fight an element_override.
+    const ovSelectors = (_activeTheme.element_overrides || [])
+        .map(o => o.selector).filter(Boolean);
+    const ovSel = ovSelectors.join(',');
+    const isOverridden = (el: HTMLElement) => {
+        if (!ovSel) return false;
+        try { return el.matches(ovSel) || !!el.closest(ovSel); } catch { return false; }
+    };
+    const scan = (el: HTMLElement) => {
+        if (!el || el.nodeType !== 1) return;
+        if (el.closest('#bmm-theme-editor, #bte-elov, .bmm-csel-menu, #app-loader')) return;
+        if (isOverridden(el)) return;
+        const cls = el.className && typeof el.className === 'string' ? el.className : '';
+        const isChip = /badge|btn|tag|pill|chip|toggle|dot|avatar|method|status/i.test(cls);
+        const cs = getComputedStyle(el);
+
+        // 1) Solid, low-saturation DARK surface backgrounds → elevated token.
+        //    (Spares accent buttons/badges via saturation + class checks, and dark
+        //     code blocks / media via tag checks.)
+        if (!_BG_SKIP_TAGS.has(el.tagName) && !isChip) {
+            const bg = _parseRgb(cs.backgroundColor);
+            if (bg && bg[3] >= 0.85) {
+                const bgLum = _lum(bg[0], bg[1], bg[2]);
+                if (bgLum < 0.16 && _saturation(bg[0], bg[1], bg[2]) < 0.16) {
+                    el.style.setProperty('background-color', 'var(--bmm-bg-elevated)', 'important');
+                    el.setAttribute(CONTRAST_ATTR, 'bg');
+                }
+            }
+        }
+
+        // 2) Light text sitting on a light background → dark text token.
+        let hasText = false;
+        for (const n of el.childNodes) {
+            if (n.nodeType === 3 && (n.textContent || '').trim()) { hasText = true; break; }
+        }
+        if (!hasText) return;
+        const col = _parseRgb(cs.color);
+        if (!col) return;
+        if (_lum(col[0], col[1], col[2]) > 0.6 && _effectiveBgLum(el) > 0.5) {
+            el.style.setProperty('color', 'var(--bmm-text-primary)', 'important');
+            el.setAttribute(CONTRAST_ATTR, '1');
+        }
+    };
+    const r = root as any;
+    if (r.nodeType === 1) scan(r as HTMLElement);
+    r.querySelectorAll?.('*').forEach((e: Element) => scan(e as HTMLElement));
+}
+
 function startPatchObserver(theme: BmmTheme): void {
     if (_patchObserver) { _patchObserver.disconnect(); _patchObserver = null; }
     const vars = theme.vars || {};
@@ -305,21 +410,31 @@ function startPatchObserver(theme: BmmTheme): void {
     };
 
     patchAll(document);
+    // Full-document contrast pass is relatively heavy, so only run it on a real
+    // (non-preview) apply or when first switching INTO light mode — not on every
+    // live-preview keystroke. Already-enforced inline colours use the token and
+    // adapt on their own, and new DOM is handled by the observer below.
+    const wasLight = document.body.classList.contains('bmm-theme-light');
+    if (isLight && (!wasLight || theme.id !== '__preview__')) enforceLightContrast(document);
     let scheduled = false;
+    let pendingRoots: Element[] = [];
     _patchObserver = new MutationObserver(muts => {
         // Coalesce bursts of mutations into one pass per frame (perf)
+        for (const m of muts) {
+            if (m.type === 'childList') {
+                m.addedNodes.forEach(n => { if (n.nodeType === 1) pendingRoots.push(n as Element); });
+            } else if (m.type === 'attributes' && m.attributeName === 'style') {
+                patchEl(m.target as HTMLElement);
+            }
+        }
         if (scheduled) return;
         scheduled = true;
         requestAnimationFrame(() => {
             scheduled = false;
-            for (const m of muts) {
-                if (m.type === 'childList') {
-                    m.addedNodes.forEach(n => {
-                        if (n.nodeType === 1) patchAll(n as Element);
-                    });
-                } else if (m.type === 'attributes' && m.attributeName === 'style') {
-                    patchEl(m.target as HTMLElement);
-                }
+            const roots = pendingRoots; pendingRoots = [];
+            for (const r of roots) {
+                patchAll(r);
+                if (isLight) enforceLightContrast(r);
             }
         });
     });
@@ -333,6 +448,26 @@ function buildFontsCSS(theme: BmmTheme): string {
         if (!src) return '';
         return `@font-face { font-family: '${f.family}'; src: ${src}; font-weight: ${f.weight || 'normal'}; font-style: ${f.style || 'normal'}; font-display: swap; }`;
     }).join('\n');
+}
+
+/** Remove the contrast-enforcer's inline colours from elements the user targets
+ *  with an element_override, so the override CSS (also !important) takes effect. */
+function clearEnforcedOnOverrides(theme: BmmTheme): void {
+    const sels = (theme.element_overrides || []).map(o => o.selector).filter(Boolean);
+    if (!sels.length) return;
+    document.querySelectorAll(`[${CONTRAST_ATTR}]`).forEach(node => {
+        const el = node as HTMLElement;
+        for (const s of sels) {
+            try {
+                if (el.matches(s) || el.closest(s)) {
+                    el.style.removeProperty('color');
+                    el.style.removeProperty('background-color');
+                    el.removeAttribute(CONTRAST_ATTR);
+                    break;
+                }
+            } catch { /* invalid selector */ }
+        }
+    });
 }
 
 // ── Custom elements — survive re-renders via MutationObserver ─────────────────
@@ -379,6 +514,9 @@ export function applyTheme(theme: BmmTheme): void {
     applyCustomElements(theme);
     applyAssets(theme);
     startPatchObserver(theme);
+    // Let element_overrides win: strip the enforcer's inline !important colours
+    // from any element the user is explicitly styling via the pick tool.
+    clearEnforcedOnOverrides(theme);
     // Disable all animations (intro/exit, Tasky spin, transitions) when speed = 0
     const speed = (theme.vars || {})['--bmm-anim-speed'];
     document.body.classList.toggle('bmm-no-anim', speed === '0' || speed === '0.0');
@@ -391,16 +529,25 @@ export function applyTheme(theme: BmmTheme): void {
  *  and the app logo if the theme provides them (base64 data-URI or URL). */
 function applyAssets(theme: BmmTheme): void {
     const a = theme.assets || {};
-    const setImg = (sel: string, val?: string, defaultSrc?: string) => {
-        const el = document.querySelector(sel) as HTMLImageElement | null;
-        if (!el) return;
-        if (val) { if (!el.dataset.bmmOrig) el.dataset.bmmOrig = el.src; el.src = val; }
-        else if (el.dataset.bmmOrig) { el.src = el.dataset.bmmOrig; }   // restore default
+    const setImg = (sel: string, val?: string) => {
+        document.querySelectorAll(sel).forEach(node => {
+            const el = node as HTMLImageElement;
+            if (val) { if (!el.dataset.bmmOrig) el.dataset.bmmOrig = el.src; el.src = val; }
+            else if (el.dataset.bmmOrig) { el.src = el.dataset.bmmOrig; }   // restore default
+        });
     };
-    setImg('#app-mascot', a.mascot);          // corner Tasky
-    setImg('#loader-img', a.mascot || a.loader); // spinning boot Tasky
+    // The mascot asset replaces EVERY Tasky image across BMM: the floating corner
+    // mascot, the spinning boot loader, the Settings "Tasky — Mascotte" card icon,
+    // and the tutorial-hub / power mascots.
+    const mascot = a.mascot;
+    setImg('#app-mascot', mascot);
+    setImg('#loader-img', mascot || a.loader);
+    setImg('#settings-tasky-icon', mascot);
+    setImg('#tasky-mascot-img', mascot);
+    setImg('.bh-pow-mascot', mascot);
     // App logo (sidebar)
     if (a.logo) document.documentElement.style.setProperty('--bmm-nav-logo-url', `url("${a.logo}")`);
+    else document.documentElement.style.removeProperty('--bmm-nav-logo-url');
 }
 
 /** Remove all theme overrides and revert to BMM default. */
@@ -472,6 +619,10 @@ export async function restoreThemeAtBoot(): Promise<void> {
     const activeId = localStorage.getItem(ACTIVE_KEY);
     if (!activeId) return;
 
+    // Built-in themes live in code, not on disk — restore them directly.
+    const builtin = BUILTIN_THEMES.find(b => b.id === activeId);
+    if (builtin) { applyTheme(builtin); return; }
+
     // Quick restore from cache in localStorage to avoid IPC delay
     const cached = localStorage.getItem(`bmm_theme_cache_${activeId}`);
     if (cached) {
@@ -485,7 +636,7 @@ export async function restoreThemeAtBoot(): Promise<void> {
         if (theme) {
             applyTheme(theme);
             localStorage.setItem(`bmm_theme_cache_${activeId}`, JSON.stringify(theme));
-        } else {
+        } else if (!BUILTIN_THEMES.some(b => b.id === activeId)) {
             resetTheme();
         }
     } catch {}
@@ -589,21 +740,30 @@ export const BUILTIN_THEMES: BmmTheme[] = [
             ...accentVars('#d4d4d8'),
         },
     },
-    // 4. Full White (bright, dark text)
+    // 4. Full White — clean, flat light theme. Light-grey canvas so white cards pop.
     {
         id: 'bmm-white', name: 'Full White', author: 'BMM Team',
-        description: 'Pure white interface with strong dark text for readability.',
+        description: 'A clean, flat white interface — light-grey canvas, crisp white cards, dark text.',
         mode: 'light',
         vars: {
-            '--bmm-bg-base': '#ffffff', '--bmm-bg-elevated': '#ffffff', '--bmm-bg-overlay': '#ffffff',
-            '--bmm-bg-sidebar': '#f4f4f6', '--bmm-bg-titlebar': '#ececef',
-            '--bmm-titlebar-bg': '#ececef', '--bmm-loader-bg': '#ffffff',
-            '--bmm-border': 'rgba(0,0,0,0.13)', '--bmm-border-hover': 'rgba(0,0,0,0.24)',
-            '--bmm-text-primary': '#000000', '--bmm-text-secondary': '#27272a',
-            '--bmm-text-muted': '#52525b', '--bmm-success': '#15803d',
-            '--bmm-warning': '#b45309', '--bmm-danger': '#dc2626', '--bmm-cyan': '#075985',
-            '--bmm-tasky-bubble-bg': 'rgba(255,255,255,0.96)', '--bmm-tasky-bubble-text': '#000000',
-            '--bmm-shadow-card': '0 2px 12px rgba(0,0,0,0.08)',
+            '--bmm-bg-base': '#f5f6f8',           // soft grey canvas
+            '--bmm-bg-elevated': '#ffffff',       // pure white cards/panels stand out
+            '--bmm-bg-overlay': '#ffffff',
+            '--bmm-bg-sidebar': '#ffffff', '--bmm-bg-titlebar': '#ffffff',
+            '--bmm-titlebar-bg': '#ffffff', '--bmm-loader-bg': '#f5f6f8',
+            '--bmm-border': 'rgba(0,0,0,0.09)', '--bmm-border-hover': 'rgba(0,0,0,0.18)',
+            '--bmm-border-accent': 'rgba(29,78,216,0.4)',
+            '--bmm-text-primary': '#18181b', '--bmm-text-secondary': '#3f3f46',
+            '--bmm-text-muted': '#71717a', '--bmm-success': '#15803d',
+            '--bmm-warning': '#b45309', '--bmm-danger': '#dc2626', '--bmm-cyan': '#0e7490',
+            '--bmm-tasky-bubble-bg': '#ffffff', '--bmm-tasky-bubble-text': '#18181b',
+            '--bmm-tasky-bubble-border': 'rgba(0,0,0,0.1)',
+            // Clean & flat: no glows, gentle shadows, square-ish radii.
+            '--bmm-card-glow': '0 0 0 transparent',
+            '--bmm-card-hover-lift': '0px',
+            '--bmm-shadow-card': '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+            '--bmm-shadow-modal': '0 12px 40px rgba(0,0,0,0.12)',
+            '--bmm-radius-card': '12px',
             ...lightSurfaces(),
             ...accentVars('#1d4ed8'),
         },

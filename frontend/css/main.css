@@ -372,13 +372,13 @@ body.is-maximized .titlebar-spacer {
 }
 
 .profile-select option {
-    background-color: #1a1f2e;
+    background-color: var(--bmm-bg-elevated);
     color: var(--text-primary);
 }
 
 .nav-item:hover {
     background: var(--bg-hover);
-    color: var(--text-primary);
+    color: var(--accent);
 }
 
 .nav-item.active {
@@ -2104,7 +2104,8 @@ body.is-maximized .titlebar-spacer {
                 opacity 0.18s ease;
     animation: slideIn 0.18s ease;
     overflow: visible !important;
-    will-change: transform, border-left-color, opacity;
+    /* No will-change: promoting to a GPU layer makes the card text render
+       slightly fuzzy / doubled (subpixel AA differs on composited layers). */
 }
 
 @keyframes slideIn {
@@ -3794,7 +3795,7 @@ select.input-field option {
     max-height: min(90vh, calc(100% - 40px));
     display: flex;
     flex-direction: column;
-    background: linear-gradient(160deg, rgba(15, 23, 42, 0.98) 0%, rgba(10, 16, 30, 0.98) 100%);
+    background: var(--bmm-bg-elevated);
     border: 1px solid var(--bmm-s08);
     border-top: 2px solid rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.5);
     border-radius: 22px;
@@ -4207,7 +4208,7 @@ select.input-field option {
     z-index: 2000100;
     pointer-events: all;
 
-    background: rgba(8, 12, 24, 0.97);
+    background: var(--bmm-bg-elevated);
     border: 1px solid var(--bmm-s10);
     border-top: 2.5px solid var(--tut-panel-color, var(--accent));
     border-radius: 20px;
@@ -5072,7 +5073,7 @@ select.input-field option {
 .tut-assets-container {
     width: min(480px, 90vw);
     max-height: 70vh;
-    background: rgba(13, 20, 35, 0.95);
+    background: var(--bmm-bg-elevated);
     border: 1px solid var(--bmm-s10);
     border-radius: 16px;
     overflow: hidden;
@@ -11949,6 +11950,42 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     background: var(--bmm-s04) !important;
 }
 
+/* ── Custom themeable select (replaces unstyleable native popup) ──────────── */
+.bmm-csel-native-hidden { display: none !important; }
+.bmm-csel { position: relative; display: inline-block; vertical-align: middle; }
+.bmm-csel-trigger {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; box-sizing: border-box; text-align: left;
+    background-image: none !important; cursor: pointer; font-family: var(--font-sans);
+    /* Fallback look for plain <select> without .select/.profile-select classes */
+    background-color: var(--bmm-s04); border: 1px solid var(--bmm-border);
+    color: var(--bmm-text-primary); border-radius: 8px; padding: 7px 10px; font-size: 12.5px;
+}
+.bmm-csel-trigger:hover { border-color: var(--bmm-border-hover); }
+.bmm-csel.open .bmm-csel-trigger { border-color: var(--bmm-border-accent); }
+.bmm-csel-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.bmm-csel-arrow { flex-shrink: 0; opacity: 0.65; transition: transform 0.15s ease; }
+.bmm-csel.open .bmm-csel-arrow { transform: rotate(180deg); }
+/* Menu is portaled to <body> while open (escapes overflow + transform ancestors). */
+.bmm-csel-menu {
+    display: none;
+    position: fixed; z-index: 2147483600;
+    max-width: 340px; overflow-y: auto; overflow-x: hidden;
+    background: var(--bmm-bg-elevated); border: 1px solid var(--bmm-border-accent);
+    border-radius: 9px; padding: 4px; box-shadow: 0 12px 34px rgba(0,0,0,0.45);
+    pointer-events: auto;
+}
+.bmm-csel-menu.bmm-csel-menu-open { display: block; animation: bmmCselIn 0.12s ease; }
+@keyframes bmmCselIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.bmm-csel-opt {
+    padding: 7px 10px; border-radius: 6px; font-size: 12.5px; color: var(--bmm-text-primary);
+    cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: background 0.1s ease;
+}
+.bmm-csel-opt:hover { background: var(--bmm-bg-hover); }
+.bmm-csel-opt.selected { background: var(--bmm-accent-dim); color: var(--bmm-accent); font-weight: 600; }
+.bmm-csel-opt.disabled { opacity: 0.5; cursor: default; }
+
 /* ── select optgroup color-scheme (follows theme: dark / light) ──────────── */
 .select, select {
     color-scheme: var(--bmm-color-scheme, dark);
@@ -11974,6 +12011,72 @@ body.bmm-theme-light option:hover {
     background-color: #e4e4e8 !important;
     color: #000000 !important;
 }
+
+/* ── Light-theme text readability safety net ──────────────────────────────────
+   Some text across pages keeps dark-theme light colours (hardcoded in classes or
+   set by JS). On light themes, force readable dark text on the structural text
+   elements. Colored utilities (badges, .text-accent, status pills) keep their
+   own colour because they set it with higher specificity / their own classes. */
+body.bmm-theme-light { color: var(--bmm-text-primary); }
+body.bmm-theme-light .view,
+body.bmm-theme-light .glass-card,
+body.bmm-theme-light .mod-card,
+body.bmm-theme-light .modal,
+body.bmm-theme-light .modal-body,
+body.bmm-theme-light .card { color: var(--bmm-text-primary); }
+body.bmm-theme-light h1,
+body.bmm-theme-light h2,
+body.bmm-theme-light h3,
+body.bmm-theme-light h4,
+body.bmm-theme-light .view-title,
+body.bmm-theme-light .mod-name,
+body.bmm-theme-light .mp-mod-name,
+body.bmm-theme-light .mod-desc,
+body.bmm-theme-light .setting-label,
+body.bmm-theme-light .field-label {
+    color: var(--bmm-text-primary) !important;
+}
+body.bmm-theme-light .card-title,
+body.bmm-theme-light .mod-meta,
+body.bmm-theme-light .subtitle,
+body.bmm-theme-light .view-subtitle,
+body.bmm-theme-light .muted,
+body.bmm-theme-light .text-muted {
+    color: var(--bmm-text-secondary) !important;
+}
+/* Text you TYPE — inputs/textareas/contenteditable always readable in light themes */
+body.bmm-theme-light input,
+body.bmm-theme-light textarea,
+body.bmm-theme-light .input,
+body.bmm-theme-light [contenteditable="true"] {
+    color: var(--bmm-text-primary) !important;
+    -webkit-text-fill-color: var(--bmm-text-primary) !important;
+    caret-color: var(--bmm-text-primary);
+}
+body.bmm-theme-light input::placeholder,
+body.bmm-theme-light textarea::placeholder,
+body.bmm-theme-light .input::placeholder {
+    color: var(--bmm-text-muted) !important;
+    -webkit-text-fill-color: var(--bmm-text-muted) !important;
+    opacity: 1;
+}
+/* The custom-select trigger label follows too */
+body.bmm-theme-light .bmm-csel-trigger,
+body.bmm-theme-light .bmm-csel-label { color: var(--bmm-text-primary) !important; }
+/* Kill backdrop-filter blur on light themes: on opaque light surfaces it does
+   nothing visible but promotes elements to a GPU layer, making their text render
+   faintly doubled/fuzzy (the recurring hover glitch). */
+body.bmm-theme-light .mod-card,
+body.bmm-theme-light .glass-card,
+body.bmm-theme-light .card,
+body.bmm-theme-light [style*="backdrop-filter"] { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+
+/* Sidebar nav: readable when idle, blue (accent) when active or hovered */
+body.bmm-theme-light .nav-item { color: var(--bmm-text-secondary) !important; }
+body.bmm-theme-light .nav-item.active,
+body.bmm-theme-light .nav-item.active .nav-label,
+body.bmm-theme-light .nav-item:hover,
+body.bmm-theme-light .nav-item:hover .nav-label { color: var(--bmm-accent) !important; }
 
 /* ── Swagger-like endpoint detail panel ──────────────────────────────────── */
 .plug-ep-swagger {

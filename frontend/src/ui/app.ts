@@ -38,6 +38,7 @@ import { openAdvancedPerfModal } from '../features/bench/benchmark.js';
 import { restoreThemeAtBoot, initDataPage } from '../features/themes/theme-engine.js';
 import { initThemeEditor } from '../features/themes/theme-editor.js';
 import { initThemeCatalog } from '../features/themes/theme-catalog.js';
+import { initCustomSelects } from './custom-select.js';
 import { playBootSound, playCloseSound, setSoundEnabled, setSoundVolume } from './sound-engine.js';
 export { setSoundEnabled, setSoundVolume, playCloseSound };
 
@@ -774,6 +775,7 @@ async function main() {
     initAppsCatalog();
     initThemeEditor();
     initThemeCatalog();
+    initCustomSelects();
 
     document.getElementById('btn-restart-onboarding')?.addEventListener('click', () => {
         openTutorialHub();

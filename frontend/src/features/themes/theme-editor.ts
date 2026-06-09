@@ -13,6 +13,7 @@ import {
     applyTheme, previewTheme, resetTheme, getActiveTheme,
     installTheme, exportTheme, getInstalledThemes,
     activateTheme, deleteTheme, BUILTIN_THEMES,
+    isContrastEnforced, setContrastEnforced,
 } from './theme-engine.js';
 import type { BmmTheme, CustomElement } from './theme-engine.js';
 
@@ -200,16 +201,17 @@ function buildPanel(): void {
             </div>
         </div>
         <div class="bte-tabs">
-            <button class="bte-tab active" data-bte-tab="simple">Simple</button>
-            <button class="bte-tab" data-bte-tab="elements">+ Elements</button>
-            <button class="bte-tab" data-bte-tab="advanced">CSS</button>
-            <button class="bte-tab" data-bte-tab="installed">Installed</button>
+            <button class="bte-tab active" data-bte-tab="simple">${t('themes.tabSimple')||'Simple'}</button>
+            <button class="bte-tab" data-bte-tab="elements">${t('themes.tabElements')||'+ Elements'}</button>
+            <button class="bte-tab" data-bte-tab="advanced">${t('themes.tabCss')||'CSS'}</button>
+            <button class="bte-tab" data-bte-tab="installed">${t('themes.tabInstalled')||'Installed'}</button>
         </div>
         <div class="bte-body" id="bte-body"></div>
         <div class="bte-footer">
             <span class="bte-dirty" id="bte-dirty"></span>
             <div class="bte-footer-actions">
                 <button class="btn btn-ghost btn-sm" id="bte-discard">${t('themes.discard')||'Discard'}</button>
+                <button class="btn btn-ghost btn-sm" id="bte-save-as" title="${t('themes.saveAsHint')||'Save as a new theme'}">${t('themes.saveAs')||'Save as…'}</button>
                 <button class="btn btn-secondary btn-sm" id="bte-save">${t('themes.saveTheme')||'Save'}</button>
                 <button class="btn btn-ghost btn-sm" id="bte-share" title="${t('themes.share')||'Copy share link'}">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
@@ -229,6 +231,7 @@ function buildPanel(): void {
     _panel.querySelector('#bte-pick-token')!.addEventListener('click', () => togglePickToken());
     _panel.querySelector('#bte-reset')!.addEventListener('click', confirmReset);
     _panel.querySelector('#bte-save')!.addEventListener('click', saveTheme);
+    _panel.querySelector('#bte-save-as')!.addEventListener('click', saveThemeAs);
     _panel.querySelector('#bte-share')!.addEventListener('click', shareTheme);
     _panel.querySelector('#bte-export')!.addEventListener('click', doExport);
     _panel.querySelector('#bte-discard')!.addEventListener('click', () => {
@@ -287,6 +290,57 @@ function currentLabel(key: string, type: Token['type']): string {
     return cv.slice(0, 30) + (cv.length > 30 ? '…' : '');
 }
 
+/** A unified, revertable list of every change in the current draft: token tweaks,
+ *  fonts/sizes, custom element overrides and assets. Lets the user review and
+ *  undo changes one by one instead of hunting through the groups.            */
+function buildChangesPanel(): string {
+    const labelOf = (key: string) => TOKENS.find(tk => tk.key === key)?.label || key.replace('--bmm-', '');
+    const rows: string[] = [];
+    for (const [k, v] of Object.entries(_draft.vars || {})) {
+        // skip the auto-derived rgb channel tokens (noise)
+        if (/-(r|g|b)$/.test(k) && /^\d+$/.test(String(v))) continue;
+        const isColor = /^#|rgb/i.test(String(v));
+        const sw = isColor ? `<span class="bte-chg-swatch" style="background:${escAttr(String(v))}"></span>` : '';
+        rows.push(`<div class="bte-chg-row" data-chg="var" data-key="${escAttr(k)}">
+            ${sw}<span class="bte-chg-name">${escHtml(labelOf(k))}</span>
+            <code class="bte-chg-val">${escHtml(String(v).slice(0, 22))}</code>
+            <button class="bte-chg-revert" title="${t('themes.revert')||'Revert'}">↩</button>
+        </div>`);
+    }
+    for (const o of (_draft.element_overrides || [])) {
+        rows.push(`<div class="bte-chg-row" data-chg="ov" data-key="${escAttr(o.selector)}">
+            <span class="bte-chg-name">🎯 <code>${escHtml(o.selector.slice(0, 30))}</code></span>
+            <span class="bte-chg-val">${Object.keys(o.props).length} ${t('themes.props')||'props'}</span>
+            <button class="bte-chg-revert" title="${t('themes.revert')||'Revert'}">↩</button>
+        </div>`);
+    }
+    for (const k of Object.keys(_draft.assets || {})) {
+        rows.push(`<div class="bte-chg-row" data-chg="asset" data-key="${escAttr(k)}">
+            <span class="bte-chg-name">🖼 ${escHtml(k)}</span>
+            <span class="bte-chg-val">${t('themes.custom')||'custom'}</span>
+            <button class="bte-chg-revert" title="${t('themes.revert')||'Revert'}">↩</button>
+        </div>`);
+    }
+    if (_draft.global_css) {
+        rows.push(`<div class="bte-chg-row" data-chg="globalcss" data-key="">
+            <span class="bte-chg-name">⌨ ${t('themes.customCssLabel')||'Custom CSS'}</span>
+            <span class="bte-chg-val"></span>
+            <button class="bte-chg-revert" title="${t('themes.revert')||'Revert'}">↩</button>
+        </div>`);
+    }
+    if (!rows.length) return '';
+    return `
+        <div class="bte-group bte-changes open">
+            <button class="bte-group-head" type="button">
+                <span class="bte-group-title">📝 ${t('themes.yourChanges')||'Your changes'}</span>
+                <span class="bte-group-badge">${rows.length}</span>
+                <button class="bte-chg-revert-all" title="${t('themes.revertAll')||'Revert all'}">${t('themes.revertAll')||'Revert all'}</button>
+                <svg class="bte-group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="bte-group-body">${rows.join('')}</div>
+        </div>`;
+}
+
 // Friendly per-group descriptions + icons
 const GROUP_INFO: Record<string, { icon: string; desc: string }> = {
     'Background':     { icon: '🎨', desc: 'Colours behind the whole app, cards and bars.' },
@@ -339,11 +393,21 @@ function buildSimpleTab(): string {
             ${assetRow('wallpaper', t('themes.assetWallpaper')||'App wallpaper', 'image/*,video/*', 'A full-app background image. Set blur & opacity in the Background group.', true)}
         </div>`;
 
+    // Collapse all groups by default except the two most-used, so the panel isn't
+    // an overwhelming wall of fields. Groups with a customised token start open.
+    const OPEN_BY_DEFAULT = new Set(['Background', 'Accent']);
     const groupsHtml = Object.entries(groups).map(([grp, tokens]) => {
         const info = GROUP_INFO[grp] || { icon: '', desc: '' };
+        const customCount = tokens.filter(tk => vars[tk.key]).length;
+        const open = OPEN_BY_DEFAULT.has(grp) || customCount > 0;
         return `
-        <div class="bte-group">
-            <div class="bte-group-title">${info.icon} ${escHtml(grp)}</div>
+        <div class="bte-group${open ? ' open' : ''}">
+            <button class="bte-group-head" type="button">
+                <span class="bte-group-title">${info.icon} ${escHtml(grp)}</span>
+                ${customCount ? `<span class="bte-group-badge">${customCount}</span>` : ''}
+                <svg class="bte-group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="bte-group-body">
             ${info.desc ? `<p class="bte-group-desc">${escHtml(info.desc)}</p>` : ''}
             ${tokens.map(tok => {
                 const custom = vars[tok.key] || '';
@@ -375,10 +439,11 @@ function buildSimpleTab(): string {
                         onmouseenter="window.showTaskyHelp('${escJs(tok.desc)}','info',true)" onmouseleave="window.hideTaskyHelp()">${escHtml(tok.label)} ${mdnLink}</label>
                     <div class="bte-token-ctrl">
                         ${inp}
-                        ${custom ? `<button class="bte-token-revert" data-var="${tok.key}" title="Reset to default">↩</button>` : liveLabel}
+                        ${custom ? `<button class="bte-token-revert" data-var="${tok.key}" title="${t('themes.resetToDefault')||'Reset to default'}">↩</button>` : liveLabel}
                     </div>
                 </div>`;
             }).join('')}
+            </div>
         </div>`;
     }).join('');
 
@@ -386,14 +451,53 @@ function buildSimpleTab(): string {
         <div class="bte-intro" onmouseenter="window.showTaskyHelp('Hover any label to see what it does. Click ? for the MDN docs. Pick a preset to start fast, then tweak.','info',true)" onmouseleave="window.hideTaskyHelp()">
             ${t('themes.simpleIntro')||'Pick a preset, then tweak anything. Hover labels for help, click ? for MDN docs.'}
         </div>
+        ${buildChangesPanel()}
         <div class="bte-section-title">${t('themes.quickPresets')||'Quick presets'}</div>
         <div class="bte-presets">${presets}</div>
+        <label class="bte-contrast-toggle" title="${escAttr(t('themes.contrastHint')||'Auto-darkens light text/surfaces on light themes. Turn off for full manual control.')}">
+            <input type="checkbox" id="bte-contrast-toggle" ${isContrastEnforced() ? 'checked' : ''}>
+            <span>${t('themes.contrastToggle')||'Auto contrast on light themes'}</span>
+        </label>
         <div class="bte-sep"></div>
         ${assetsHtml}
         ${groupsHtml}`;
 }
 
 function wireSimple(): void {
+    // Collapsible token groups
+    _panel?.querySelectorAll('.bte-group-head').forEach(head => {
+        head.addEventListener('click', () => head.parentElement?.classList.toggle('open'));
+    });
+    // Change tracker — revert individual changes or all at once
+    _panel?.querySelectorAll('.bte-chg-revert').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const row = (btn as HTMLElement).closest('.bte-chg-row') as HTMLElement;
+            const type = row?.dataset.chg, key = row?.dataset.key || '';
+            if (type === 'var' && _draft.vars) delete _draft.vars[key];
+            else if (type === 'ov' && _draft.element_overrides)
+                _draft.element_overrides = _draft.element_overrides.filter(o => o.selector !== key);
+            else if (type === 'asset' && _draft.assets) {
+                delete _draft.assets[key];
+                if (key === 'wallpaper' && _draft.vars) _draft.vars['--bmm-app-bg-image'] = 'none';
+            }
+            else if (type === 'globalcss') _draft.global_css = '';
+            previewTheme(_draft); renderTab('simple');
+        });
+    });
+    _panel?.querySelector('.bte-chg-revert-all')?.addEventListener('click', async e => {
+        e.stopPropagation();
+        if (!await bteConfirm(t('themes.revertAllConfirm')||'Revert ALL unsaved changes?', { danger: true, okLabel: t('themes.revertAll')||'Revert all' })) return;
+        _draft = { custom_elements: _draft.custom_elements || [] };
+        previewTheme(_draft); renderTab('simple');
+    });
+    // Auto-contrast enforcer on/off
+    _panel?.querySelector('#bte-contrast-toggle')?.addEventListener('change', e => {
+        const on = (e.target as HTMLInputElement).checked;
+        setContrastEnforced(on);
+        toast(on ? (t('themes.contrastOn')||'Auto contrast enabled')
+                 : (t('themes.contrastOff')||'Auto contrast disabled'), 'info', 1800);
+    });
     _panel?.querySelectorAll('.bte-var-inp').forEach(inp => {
         inp.addEventListener('input', () => {
             const k = (inp as HTMLInputElement).dataset.var!;
@@ -444,7 +548,9 @@ function wireSimple(): void {
         btn.addEventListener('click', () => {
             const id = (btn as HTMLElement).dataset.presetId!;
             const p = BUILTIN_THEMES.find(b => b.id === id);
-            if (p) { _draft = { ..._draft, vars: { ...p.vars }, custom_elements: _draft.custom_elements }; previewTheme(_draft); renderTab('simple'); }
+            // Carry over the preset's `mode` too — without it, light presets (Full
+            // White…) never trigger body.bmm-theme-light or the light contrast patches.
+            if (p) { _draft = { ..._draft, vars: { ...p.vars }, mode: p.mode, custom_elements: _draft.custom_elements }; previewTheme(_draft); renderTab('simple'); }
         });
     });
 
@@ -749,15 +855,15 @@ function commitElement(): void {
 // ═══════════════════════════════════════════════════════════════════
 function buildAdvTab(): string {
     const pageOpts = [
-        {id:'global', label:'Global (all pages)'}, ...PAGE_OPTIONS,
+        {id:'global', label:t('themes.advGlobal')||'Global (all pages)'}, ...PAGE_OPTIONS,
     ].map(p => `<option value="${p.id}"${p.id===_advPage?' selected':''}>${escHtml(p.label)}</option>`).join('');
     const css = _advPage==='global' ? (_draft.global_css||'') : (_draft.pages?.[_advPage]?.css||'');
     return `
         <div class="bte-adv-bar">
             <select id="bte-adv-page" class="bte-adv-sel">${pageOpts}</select>
-            <span class="bte-adv-hint">Scoped to selected page</span>
+            <span class="bte-adv-hint">${t('themes.advScoped')||'Scoped to selected page'}</span>
         </div>
-        <p class="bte-adv-tip">Use <code>var(--bmm-*)</code> for theming-safe values. CSS is scoped to <code>#view-${_advPage==='global'?'…':_advPage}</code>.</p>
+        <p class="bte-adv-tip">${t('themes.advTip')||'Use'} <code>var(--bmm-*)</code> ${t('themes.advTip2')||'for theming-safe values. CSS is scoped to'} <code>#view-${_advPage==='global'?'…':_advPage}</code>.</p>
         <textarea id="bte-adv-css" class="bte-adv-textarea" style="flex:1;" placeholder="/* CSS */">${escHtml(css)}</textarea>`;
 }
 
@@ -800,12 +906,12 @@ function buildInstalledTab(): string {
                 return `<div class="bte-installed-item${isActive?' active':''}">
                     <div class="bte-installed-accent" style="background:${th.vars?.['--bmm-accent']||'var(--bmm-accent)'}"></div>
                     <div class="bte-installed-info">
-                        <div class="bte-installed-name">${escHtml(th.name)}${isBuiltin?'<span class="bte-builtin-tag">built-in</span>':''}</div>
+                        <div class="bte-installed-name">${escHtml(th.name)}${isBuiltin?`<span class="bte-builtin-tag">${t('themes.builtin')||'built-in'}</span>`:''}</div>
                         ${th.description ? `<div class="bte-installed-author">${escHtml(th.description)}</div>` : ''}
                     </div>
                     <div class="bte-installed-actions">
-                        <button class="btn btn-xs${isActive?' btn-accent':' btn-ghost'} bte-activate" data-id="${th.id}">${isActive?'✓ Active':'Apply'}</button>
-                        ${!isBuiltin?`<button class="btn btn-xs btn-ghost bte-export-theme" data-id="${th.id}">Export</button>`:''}
+                        <button class="btn btn-xs${isActive?' btn-accent':' btn-ghost'} bte-activate" data-id="${th.id}">${isActive?`✓ ${t('themes.active')||'Active'}`:(t('themes.apply')||'Apply')}</button>
+                        ${!isBuiltin?`<button class="btn btn-xs btn-ghost bte-export-theme" data-id="${th.id}">${t('themes.export')||'Export'}</button>`:''}
                         ${!isBuiltin?`<button class="btn btn-xs btn-danger bte-delete-theme" data-id="${th.id}">✕</button>`:''}
                     </div>
                 </div>`;
@@ -1017,82 +1123,134 @@ function cssToProps(css: string): Record<string, string> {
     return out;
 }
 
+/** Best hex for a colour <input>: the override value if any, else computed. */
+function colorInputHex(propVal: string | undefined, computed: string): string {
+    const v = (propVal || '').trim();
+    if (/^#[0-9a-f]{6}$/i.test(v)) return v;
+    if (/^#[0-9a-f]{3}$/i.test(v)) return '#' + v.slice(1).split('').map(c => c + c).join('');
+    if (/\d+,\s*\d+,\s*\d+/.test(v)) return rgbToHex(v);
+    return rgbToHex(computed);
+}
+
 /** Floating per-element editor: edit ANY CSS of any element via an
- *  element_override — colours through quick pickers, everything else through a
- *  free-form CSS box. Writes into _draft.element_overrides. Fully reversible.  */
+ *  element_override — including its :hover and :active states — through quick
+ *  colour pickers and a free-form CSS box. Writes into _draft.element_overrides. */
 function openElementOverrideEditor(el: HTMLElement): void {
     stopPick();                               // guarantee pick mode is fully off
     document.getElementById('bte-elov')?.remove();
     const cs = getComputedStyle(el);
     if (!_draft.element_overrides) _draft.element_overrides = [];
 
-    let selector = buildSelectorFor(el);
-    let ov = _draft.element_overrides.find(o => o.selector === selector);
-    if (!ov) { ov = { selector, props: {} }; _draft.element_overrides.push(ov); }
+    let base = buildSelectorFor(el);
+    let state = '';                            // '' | ':hover' | ':active'
+    let ov!: ElementOverride;
+
+    const bindOv = () => {
+        const sel = base + state;
+        ov = _draft.element_overrides!.find(o => o.selector === sel)
+          || (_draft.element_overrides!.push({ selector: sel, props: {} }),
+              _draft.element_overrides![_draft.element_overrides!.length - 1]);
+    };
+    bindOv();
+
+    const STATES: [string, string][] = [
+        ['',        t('themes.stateNormal')||'Normal'],
+        [':hover',  t('themes.stateHover')||'Hover'],
+        [':active', t('themes.stateActive')||'Active'],
+    ];
 
     const pop = document.createElement('div');
     pop.id = 'bte-elov';
     pop.className = 'bte-elov';
-    const row = (label: string, prop: string, cur: string) => `
+    const row = (label: string, prop: string) => `
         <label class="bte-elov-row">
             <span>${label}</span>
-            <input type="color" data-prop="${prop}" value="${rgbToHex(cur)}">
+            <input type="color" data-prop="${prop}" value="#000000">
             <button class="bte-elov-clear" data-prop="${prop}" title="${t('themes.clear')||'Clear'}">✕</button>
         </label>`;
     pop.innerHTML = `
         <div class="bte-elov-head">
-            <strong>${t('themes.overrideElement')||'Edit this element'}</strong>
-            <button class="bte-elov-close">✕</button>
+            <strong>${ICON.eyedropper(14)} ${t('themes.overrideElement')||'Edit this element'}</strong>
+            <button class="bte-elov-close" title="${t('common.close')||'Close'}">${ICON.close(13)}</button>
         </div>
-        <label class="bte-elov-sellabel">${t('themes.selector')||'Selector'}
-            <input class="bte-elov-selinput" type="text" value="${escAttr(selector)}" spellcheck="false">
-        </label>
-        ${row(t('themes.text')||'Text', 'color', cs.color)}
-        ${row(t('themes.background')||'Background', 'background-color', cs.backgroundColor)}
-        ${row(t('themes.border')||'Border', 'border-color', cs.borderColor)}
-        <label class="bte-elov-csslabel">${t('themes.customCss')||'Custom CSS (any property)'}</label>
-        <textarea class="bte-elov-css" spellcheck="false" placeholder="border-radius: 12px;&#10;padding: 8px 14px;&#10;box-shadow: 0 4px 20px #000;&#10;font-size: 15px;">${escHtml(propsToCss(ov.props))}</textarea>
-        <p class="bte-elov-hint">${t('themes.overrideHint')||'Affects every element matching this selector. Live preview.'}</p>`;
+        <div class="bte-elov-body">
+            <label class="bte-elov-sellabel">${t('themes.selector')||'Selector'}
+                <input class="bte-elov-selinput" type="text" value="${escAttr(base)}" spellcheck="false">
+            </label>
+            <div class="bte-elov-states">
+                ${STATES.map(([s, lbl]) => `<button class="bte-elov-state${s===state?' active':''}" data-state="${s}">${escHtml(lbl)}</button>`).join('')}
+            </div>
+            <p class="bte-elov-statehint">${t('themes.stateHoverHint')||'Edit how the element looks on hover / when clicked.'}</p>
+            ${row(t('themes.text')||'Text', 'color')}
+            ${row(t('themes.background')||'Background', 'background-color')}
+            ${row(t('themes.border')||'Border', 'border-color')}
+            <label class="bte-elov-csslabel">${t('themes.customCss')||'Custom CSS (any property)'}</label>
+            <textarea class="bte-elov-css" spellcheck="false" placeholder="border-radius: 12px;&#10;padding: 8px 14px;&#10;box-shadow: 0 4px 20px #000;&#10;font-size: 15px;"></textarea>
+            <p class="bte-elov-hint">${t('themes.overrideHint')||'Affects every element matching this selector. Live preview.'}</p>
+        </div>`;
     document.body.appendChild(pop);
 
     const r = el.getBoundingClientRect();
-    pop.style.left = Math.min(r.left, window.innerWidth - 300) + 'px';
-    pop.style.top = Math.min(r.bottom + 8, window.innerHeight - 360) + 'px';
+    pop.style.left = Math.min(Math.max(8, r.left), window.innerWidth - 320) + 'px';
+    pop.style.top = Math.min(r.bottom + 8, window.innerHeight - 440) + 'px';
 
     const cssBox = pop.querySelector('.bte-elov-css') as HTMLTextAreaElement;
-    const refreshBox = () => { cssBox.value = propsToCss(ov!.props); };
+    const stateHint = pop.querySelector('.bte-elov-statehint') as HTMLElement;
     const cleanupEmpty = () => {
-        if (Object.keys(ov!.props).length === 0)
-            _draft.element_overrides = _draft.element_overrides!.filter(o => o !== ov);
+        _draft.element_overrides = _draft.element_overrides!.filter(o => Object.keys(o.props).length > 0);
     };
+    const refresh = () => {
+        cssBox.value = propsToCss(ov.props);
+        pop.querySelectorAll('input[type=color]').forEach(inp => {
+            const prop = (inp as HTMLElement).dataset.prop!;
+            const computed = prop === 'color' ? cs.color : prop === 'background-color' ? cs.backgroundColor : cs.borderColor;
+            (inp as HTMLInputElement).value = colorInputHex(ov.props[prop], computed);
+        });
+        stateHint.style.display = state ? 'block' : 'none';
+    };
+    refresh();
 
     // Quick colour pickers → write a single prop, keep the CSS box in sync.
     pop.querySelectorAll('input[type=color]').forEach(inp => {
         inp.addEventListener('input', () => {
-            ov!.props[(inp as HTMLElement).dataset.prop!] = (inp as HTMLInputElement).value;
-            refreshBox(); previewTheme(_draft); updateDirty();
+            ov.props[(inp as HTMLElement).dataset.prop!] = (inp as HTMLInputElement).value;
+            cssBox.value = propsToCss(ov.props); previewTheme(_draft); updateDirty();
         });
     });
     pop.querySelectorAll('.bte-elov-clear').forEach(btn => {
         btn.addEventListener('click', () => {
-            delete ov!.props[(btn as HTMLElement).dataset.prop!];
-            refreshBox(); cleanupEmpty(); previewTheme(_draft); updateDirty();
+            delete ov.props[(btn as HTMLElement).dataset.prop!];
+            refresh(); previewTheme(_draft); updateDirty();
         });
     });
 
-    // Free-form CSS box is the full source of truth for the props map.
+    // Free-form CSS box is the full source of truth for the current state's props.
     cssBox.addEventListener('input', () => {
-        ov!.props = cssToProps(cssBox.value);
-        // keep override alive while typing even if momentarily empty
-        if (!_draft.element_overrides!.includes(ov!)) _draft.element_overrides!.push(ov!);
+        ov.props = cssToProps(cssBox.value);
+        if (!_draft.element_overrides!.includes(ov)) _draft.element_overrides!.push(ov);
         previewTheme(_draft); updateDirty();
     });
 
-    // Editable selector — retarget the same override (e.g. broaden to all buttons).
+    // State tabs (Normal / Hover / Active)
+    pop.querySelectorAll('.bte-elov-state').forEach(btn => {
+        btn.addEventListener('click', () => {
+            state = (btn as HTMLElement).dataset.state!;
+            pop.querySelectorAll('.bte-elov-state').forEach(b => b.classList.toggle('active', b === btn));
+            bindOv(); refresh();
+        });
+    });
+
+    // Editable base selector — retarget ALL states of this element at once.
     const selInput = pop.querySelector('.bte-elov-selinput') as HTMLInputElement;
     selInput.addEventListener('change', () => {
         const next = selInput.value.trim();
-        if (next) { ov!.selector = next; selector = next; previewTheme(_draft); updateDirty(); }
+        if (!next) return;
+        // Rename every override that belongs to the old base (normal + states).
+        for (const o of _draft.element_overrides!) {
+            if (o.selector === base) o.selector = next;
+            else if (o.selector.startsWith(base + ':')) o.selector = next + o.selector.slice(base.length);
+        }
+        base = next; bindOv(); previewTheme(_draft); updateDirty();
     });
 
     pop.querySelector('.bte-elov-close')?.addEventListener('click', () => { cleanupEmpty(); pop.remove(); });
@@ -1149,14 +1307,37 @@ function btePrompt(message: string, def = ''): Promise<string|null> {
     });
 }
 
+function _slugId(name: string): string {
+    const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'theme';
+    return `${base}-${Date.now().toString(36).slice(-4)}`;
+}
+
+/** Save: update the current USER theme in place; for built-ins or fresh drafts,
+ *  fall through to "Save as new" so built-ins are never overwritten.          */
 async function saveTheme(): Promise<void> {
     const cur = getActiveTheme();
-    const name = cur?.name !== 'Preview' ? cur?.name : undefined;
-    const entered = name || await btePrompt(t('themes.enterName')||'Theme name:', 'My Theme');
-    if (entered === null) return;                       // user cancelled
+    const isBuiltin = !!cur && BUILTIN_THEMES.some(b => b.id === cur.id);
+    if (!cur || cur.id === '__preview__' || isBuiltin) { await saveThemeAs(); return; }
+    // _draft spread FIRST, then pin identity so it can't be overridden.
+    const theme: BmmTheme = { ...(_draft as any), id: cur.id, name: cur.name, author: cur.author || 'You', version: cur.version || '1.0.0' };
+    await installTheme(theme);
+    applyTheme(theme);
+    toast(`${t('themes.saved')||'Saved'}: ${cur.name}`, 'success');
+    updateDirty();
+    renderTab('installed');
+}
+
+/** Always create a NEW theme (lets you keep many themes side by side). */
+async function saveThemeAs(): Promise<void> {
+    const cur = getActiveTheme();
+    const isBuiltin = !!cur && BUILTIN_THEMES.some(b => b.id === cur.id);
+    const def = (cur && cur.name && cur.name !== 'Preview')
+        ? (isBuiltin ? `${cur.name} (copy)` : cur.name)
+        : 'My Theme';
+    const entered = await btePrompt(t('themes.enterName')||'Theme name:', def);
+    if (entered === null) return;
     const finalName = (entered || 'My Theme').trim();
-    const finalId = (cur?.id && cur.id !== '__preview__') ? cur.id : finalName.toLowerCase().replace(/[^a-z0-9]/g, '-');
-    const theme: BmmTheme = { id: finalId, name: finalName, author: 'You', version: '1.0.0', ...(_draft as any) };
+    const theme: BmmTheme = { ...(_draft as any), id: _slugId(finalName), name: finalName, author: 'You', version: '1.0.0' };
     await installTheme(theme);
     applyTheme(theme);
     toast(`${t('themes.saved')||'Saved'}: ${finalName}`, 'success');

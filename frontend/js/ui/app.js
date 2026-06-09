@@ -33,6 +33,7 @@ import { initAppsCatalog } from '../features/apps/apps-catalog.js';
 import { restoreThemeAtBoot } from '../features/themes/theme-engine.js';
 import { initThemeEditor } from '../features/themes/theme-editor.js';
 import { initThemeCatalog } from '../features/themes/theme-catalog.js';
+import { initCustomSelects } from './custom-select.js';
 import { playBootSound, playCloseSound, setSoundEnabled, setSoundVolume } from './sound-engine.js';
 export { setSoundEnabled, setSoundVolume, playCloseSound };
 // Expose boot sound to inline loader script. If the loader already fired before this module
@@ -740,6 +741,7 @@ async function main() {
     initAppsCatalog();
     initThemeEditor();
     initThemeCatalog();
+    initCustomSelects();
     document.getElementById('btn-restart-onboarding')?.addEventListener('click', () => {
         openTutorialHub();
     });

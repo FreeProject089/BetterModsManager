@@ -644,7 +644,7 @@ function showUpdateAvailableModal(info) {
     modal.innerHTML = `
         <div id="upd-card" style="
             width:100%;max-width:480px;
-            background:linear-gradient(160deg,#0d1424 0%,#090e1a 100%);
+            background:var(--bmm-bg-elevated);
             border:1px solid rgba(16,185,129,0.22);
             border-radius:20px;
             overflow:hidden;
@@ -1211,8 +1211,8 @@ async function openLangSelectModal() {
         };
         return `
         <div style="
-            background: rgba(10, 17, 40, 0.92);
-            border: 1px solid rgba(255,255,255,0.08);
+            background: var(--bmm-bg-elevated);
+            border: 1px solid var(--bmm-border);
             border-top: 2px solid rgba(59,130,246,0.6);
             border-radius: 20px;
             padding: 36px 32px 28px;
@@ -1257,7 +1257,7 @@ async function openLangSelectModal() {
 
                 <div id="lang-select-menu" style="
                     display:none; position:absolute; bottom:calc(100% + 8px); left:0; right:0;
-                    background:rgba(10,17,40,0.98); border:1px solid rgba(255,255,255,0.1);
+                    background:var(--bmm-bg-elevated); border:1px solid var(--bmm-border);
                     border-radius:12px; overflow:hidden; z-index:10;
                     box-shadow:0 -8px 32px rgba(0,0,0,0.5);
                     backdrop-filter:blur(20px);
