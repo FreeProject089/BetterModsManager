@@ -332,15 +332,89 @@ const TARGET_GROUPS: { cat: string; items: { label: string; sel: string }[] }[] 
         { label: 'Section titles',     sel: '.card-title' },
     ]},
     { cat: 'Pages', items: PAGE_OPTIONS.map(p => ({ label: p.label, sel: `#view-${p.id}` })) },
+    // Per-page unique elements (things not covered by the shared classes above)
+    { cat: 'Library', items: [
+        { label: 'Mod card',           sel: '#view-library .mod-card' },
+        { label: 'Mod name',           sel: '#view-library .mod-name' },
+        { label: 'Filter pills',       sel: '#view-library .lib-filter-btn, #view-library .filter-btn' },
+        { label: 'Search bar',         sel: '#view-library .input, #view-library input[type=text]' },
+        { label: 'Toggle switches',    sel: '#view-library .mod-toggle-track' },
+    ]},
+    { cat: 'Profiles', items: [
+        { label: 'Profile card',       sel: '#view-profiles .glass-card' },
+        { label: 'Path boxes',         sel: '#view-profiles .profile-card-paths' },
+        { label: 'Action buttons',     sel: '#view-profiles .btn' },
+        { label: 'Active badge',       sel: '#view-profiles .badge' },
+    ]},
+    { cat: 'Server Repo', items: [
+        { label: 'Tabs (Sync/Host)',   sel: '#view-repo .repo-tab, #view-repo .tab-btn' },
+        { label: 'Step cards',         sel: '#view-repo .glass-card' },
+        { label: 'Profile rows',       sel: '#view-repo .repo-profile-row, #view-repo .profile-row' },
+        { label: 'Inputs',             sel: '#view-repo .input, #view-repo input[type=text]' },
+    ]},
+    { cat: '.MM Lists', items: [
+        { label: 'Format cards',       sel: '#view-modpacks .glass-card' },
+        { label: 'Export panel',       sel: '#view-modpacks .mm-export-card, #view-modpacks .export-card' },
+        { label: 'Inputs',             sel: '#view-modpacks .input, #view-modpacks input[type=text]' },
+    ]},
+    { cat: 'Plugins & API', items: [
+        { label: 'Plugin cards',       sel: '#view-plugins .plug-card' },
+        { label: 'Endpoint rows',      sel: '#view-plugins .plug-ep-row, #view-plugins .plug-endpoint' },
+        { label: 'Method badges',      sel: '#view-plugins [class*="plug-method"]' },
+        { label: 'Code blocks',        sel: '#view-plugins pre, #view-plugins code' },
+        { label: 'Perm chips',         sel: '#view-plugins .plug-perm-id, #view-plugins .plug-perm' },
+    ]},
+    { cat: 'App Catalog', items: [
+        { label: 'App cards',          sel: '#view-apps .app-card, #view-apps .glass-card' },
+        { label: 'Install buttons',    sel: '#view-apps .btn-primary, #view-apps .btn-accent' },
+        { label: 'Category pills',     sel: '#view-apps .app-cat-pill, #view-apps .cat-pill' },
+    ]},
+    { cat: 'Help & other', items: [
+        { label: 'FAQ accordions',     sel: '#view-docs .faq-accordion' },
+        { label: 'Search bar',         sel: '#view-docs .input, #view-docs input[type=text]' },
+        { label: 'Doc cards',          sel: '#view-docs .glass-card' },
+        { label: 'Diagram nodes',      sel: '.mermaid-container g.node rect' },
+    ]},
+    { cat: 'Settings', items: [
+        { label: 'Setting cards',      sel: '#view-settings .glass-card' },
+        { label: 'Toggles',            sel: '#view-settings .toggle-slider' },
+        { label: 'Section titles',     sel: '#view-settings .card-title' },
+    ]},
     { cat: 'Modals', items: [
+        { label: 'All modals',         sel: '.modal-overlay .modal, .modal-card' },
+        { label: 'Modal headers',      sel: '.modal-header, .modal-title' },
+        { label: 'Modal close btn',    sel: '.modal-close' },
         { label: 'Tutorial hub',       sel: '.tut-hub-container' },
         { label: 'Tutorial step panel',sel: '.tut-engine-panel' },
         { label: 'Update / release',   sel: '#upd-card' },
         { label: 'Docs browser',       sel: '.ptb-modal-card' },
         { label: 'Theme catalog',      sel: '.tc-modal-card' },
         { label: 'TOS / Privacy',      sel: '#modal-tos .modal, #modal-privacy .modal' },
+        { label: 'Settings cards',     sel: '#view-settings .glass-card' },
+        { label: 'Storage manager',    sel: '#storage-manager-overlay .modal, #storage-manager-modal' },
+        { label: 'Benchmark',          sel: '#perf-modal .modal, #perf-modal-overlay .modal' },
     ]},
 ];
+// Every per-page category also gets generic Buttons / Button text / Icons /
+// Titles / Texts chips scoped to that page, so each page is fully editable.
+{
+    const PAGE_CAT_TO_ID: Record<string, string> = {
+        'Library': 'library', 'Profiles': 'profiles', 'Server Repo': 'repo',
+        '.MM Lists': 'modpacks', 'Plugins & API': 'plugins', 'App Catalog': 'apps',
+        'Help & other': 'docs', 'Settings': 'settings',
+    };
+    for (const g of TARGET_GROUPS) {
+        const pid = PAGE_CAT_TO_ID[g.cat];
+        if (!pid) continue;
+        g.items.push(
+            { label: 'Buttons',     sel: `#view-${pid} .btn, #view-${pid} button` },
+            { label: 'Button text', sel: `#view-${pid} .btn` },
+            { label: 'Icons',       sel: `#view-${pid} svg` },
+            { label: 'Titles',      sel: `#view-${pid} h1, #view-${pid} h2, #view-${pid} h3, #view-${pid} .card-title` },
+            { label: 'Texts',       sel: `#view-${pid} p, #view-${pid} span, #view-${pid} label` },
+        );
+    }
+}
 
 /** Read the CURRENT computed value of a CSS variable from :root.
  *  This is what is actually applied on screen right now. */
@@ -498,12 +572,12 @@ function buildChangesPanel(): string {
     if (!rows.length) return '';
     return `
         <div class="bte-group bte-changes open">
-            <button class="bte-group-head" type="button">
+            <div class="bte-group-head" role="button">
                 <span class="bte-group-title">${gi('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>')} ${t('themes.yourChanges')||'Your changes'}</span>
                 <span class="bte-group-badge">${rows.length}</span>
                 <button class="bte-chg-revert-all" title="${t('themes.revertAll')||'Revert all'}">${t('themes.revertAll')||'Revert all'}</button>
                 <svg class="bte-group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-            </button>
+            </div>
             <div class="bte-group-body">${rows.join('')}</div>
         </div>`;
 }
@@ -683,8 +757,15 @@ function wireSimple(): void {
     _panel?.querySelector('.bte-chg-revert-all')?.addEventListener('click', async e => {
         e.stopPropagation();
         if (!await bteConfirm(t('themes.revertAllConfirm')||'Revert ALL unsaved changes?', { danger: true, okLabel: t('themes.revertAll')||'Revert all' })) return;
-        _draft = { custom_elements: _draft.custom_elements || [] };
-        previewTheme(_draft); renderTab('simple');
+        // Truly revert: restore the theme that was active when the editor opened.
+        if (_origTheme) {
+            _draft = JSON.parse(JSON.stringify(_origTheme));
+            applyTheme(JSON.parse(JSON.stringify(_origTheme)));
+        } else {
+            _draft = { custom_elements: [] };
+            resetTheme();
+        }
+        renderTab('simple');
     });
     // Auto-contrast enforcer on/off
     _panel?.querySelector('#bte-contrast-toggle')?.addEventListener('change', e => {
@@ -850,17 +931,17 @@ function syncAccentRgb(k: string, v: string): void {
 // ═══════════════════════════════════════════════════════════════════
 // Ready-made HTML templates so users don't have to write HTML from scratch.
 const CE_TEMPLATES: { label: string; icon: string; html: string }[] = [
-    { label: 'Button', icon: '🔘',
+    { label: 'Button', icon: gi('<rect x="2" y="7" width="20" height="10" rx="5"/>'),
       html: `<button class="btn btn-sm btn-primary" onclick="window.__bmmDeeplink('bmm://restart')">My button</button>` },
-    { label: 'Banner', icon: '📢',
-      html: `<div style="padding:10px 14px;border-radius:10px;background:var(--bmm-accent-dim);color:var(--bmm-text-primary);font-weight:600;">👋 My custom banner</div>` },
-    { label: 'Badge', icon: '🏷️',
+    { label: 'Banner', icon: gi('<path d="M3 11 21 5v14L3 13v-2z"/>'),
+      html: `<div style="padding:10px 14px;border-radius:10px;background:var(--bmm-accent-dim);color:var(--bmm-text-primary);font-weight:600;">My custom banner</div>` },
+    { label: 'Badge', icon: gi('<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>'),
       html: `<span style="padding:3px 9px;border-radius:999px;background:var(--bmm-accent);color:#fff;font-size:11px;font-weight:700;">NEW</span>` },
-    { label: 'Note', icon: '📝',
+    { label: 'Note', icon: gi('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>'),
       html: `<p style="margin:8px 0;color:var(--bmm-text-secondary);font-size:13px;">My note text…</p>` },
-    { label: 'Image', icon: '🖼️',
-      html: `<img src="https://placekitten.com/120/60" alt="" style="border-radius:10px;max-width:100%;">` },
-    { label: 'Link', icon: '🔗',
+    { label: 'Image', icon: gi('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>'),
+      html: `<img src="https://placehold.co/120x60" alt="" style="border-radius:10px;max-width:100%;">` },
+    { label: 'Link', icon: gi('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>'),
       html: `<a href="#" onclick="window.__bmmDeeplink('bmm://repo/sync?url=URL');return false;" style="color:var(--bmm-accent);font-weight:600;">My link →</a>` },
 ];
 
@@ -1135,8 +1216,8 @@ function buildInstalledTab(): string {
                 const isActive = active?.id === th.id;
                 const isBuiltin = BUILTIN_THEMES.some(b => b.id === th.id);
                 return `<div class="bte-installed-item${isActive?' active':''}">
-                    <div class="bte-installed-swatch" style="background:${th.vars?.['--bmm-bg-base']||'var(--bmm-bg-base)'};border-color:${th.vars?.['--bmm-border']||'rgba(128,128,128,0.4)'}">
-                        <span class="bte-installed-dot" style="background:${th.vars?.['--bmm-accent']||'var(--bmm-accent)'}"></span>
+                    <div class="bte-installed-swatch" style="background:${th.vars?.['--bmm-bg-base']||'#0a0e17'};border-color:${th.mode==='light'?'rgba(0,0,0,0.18)':'rgba(255,255,255,0.18)'}">
+                        <span class="bte-installed-dot" style="background:${th.vars?.['--bmm-accent']||'#3b82f6'}"></span>
                     </div>
                     <div class="bte-installed-info">
                         <div class="bte-installed-name">${escHtml(th.name)}${isBuiltin?`<span class="bte-builtin-tag">${t('themes.builtin')||'built-in'}</span>`:''}</div>
@@ -1384,10 +1465,13 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
     let ov!: ElementOverride;
 
     const bindOv = () => {
+        // _draft may have been replaced (Discard / Revert all) while the popup is
+        // open — always re-ensure the array exists before dereferencing it.
+        if (!_draft.element_overrides) _draft.element_overrides = [];
         const sel = base + state;
-        ov = _draft.element_overrides!.find(o => o.selector === sel)
-          || (_draft.element_overrides!.push({ selector: sel, props: {} }),
-              _draft.element_overrides![_draft.element_overrides!.length - 1]);
+        ov = _draft.element_overrides.find(o => o.selector === sel)
+          || (_draft.element_overrides.push({ selector: sel, props: {} }),
+              _draft.element_overrides[_draft.element_overrides.length - 1]);
     };
     bindOv();
 
@@ -1408,6 +1492,7 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
         </label>`;
     pop.innerHTML = `
         <div class="bte-elov-head">
+            <span class="bte-elov-grip" title="${t('themes.dragMove')||'Drag to move'}"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
             <strong>${ICON.eyedropper(14)} ${t('themes.overrideElement')||'Edit this element'}</strong>
             <button class="bte-elov-close" title="${t('common.close')||'Close'}">${ICON.close(13)}</button>
         </div>
@@ -1441,7 +1526,7 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
     const cssBox = pop.querySelector('.bte-elov-css') as HTMLTextAreaElement;
     const stateHint = pop.querySelector('.bte-elov-statehint') as HTMLElement;
     const cleanupEmpty = () => {
-        _draft.element_overrides = _draft.element_overrides!.filter(o => Object.keys(o.props).length > 0);
+        _draft.element_overrides = (_draft.element_overrides || []).filter(o => Object.keys(o.props).length > 0);
     };
     const refresh = () => {
         cssBox.value = propsToCss(ov.props);
@@ -1471,7 +1556,8 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
     // Free-form CSS box is the full source of truth for the current state's props.
     cssBox.addEventListener('input', () => {
         ov.props = cssToProps(cssBox.value);
-        if (!_draft.element_overrides!.includes(ov)) _draft.element_overrides!.push(ov);
+        if (!_draft.element_overrides) _draft.element_overrides = [];
+        if (!_draft.element_overrides.includes(ov)) _draft.element_overrides.push(ov);
         previewTheme(_draft); updateDirty();
     });
 
@@ -1525,7 +1611,7 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
         const next = selInput.value.trim();
         if (!next) return;
         // Rename every override that belongs to the old base (normal + states).
-        for (const o of _draft.element_overrides!) {
+        for (const o of (_draft.element_overrides || [])) {
             if (o.selector === base) o.selector = next;
             else if (o.selector.startsWith(base + ':')) o.selector = next + o.selector.slice(base.length);
         }

@@ -1573,6 +1573,15 @@ export function initRepo() {
 
         const fmt = (b) => { if (!b) return '0 B'; const u=['B','KB','MB','GB','TB']; const i=Math.floor(Math.log(b)/Math.log(1024)); return (b/Math.pow(1024,i)).toFixed(1)+' '+u[i]; };
 
+        // Optional public domain — when set, Copy buttons copy a shareable URL
+        // (https://domain/<folder>/repo.json) instead of the local file path.
+        const domainInput = document.getElementById('repo-hub-domain') as HTMLInputElement | null;
+        if (domainInput) {
+            domainInput.value = localStorage.getItem('bmm_hub_domain') || '';
+            domainInput.addEventListener('input', () => localStorage.setItem('bmm_hub_domain', domainInput.value.trim()));
+        }
+        const hubDomain = () => (domainInput?.value || '').trim().replace(/\/+$/, '');
+
         btnOpen.addEventListener('click', () => {
             hubDir = ''; pathInput.value = '';
             listEl.style.display = 'none'; listEl.innerHTML = '';
@@ -1605,7 +1614,7 @@ export function initRepo() {
                                 </div>
                             </div>
                             <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
-                                <button class="repo-hub-copy-btn" data-path="${escAttr(folder)}/${r.folder === '.' ? '' : escAttr(r.folder) + '/'}repo.json" style="padding:6px 10px;font-size:11px;background:rgba(6,182,212,0.15);color:var(--cyan);border:1px solid rgba(6,182,212,0.3);border-radius:6px;cursor:pointer;white-space:nowrap;transition:all 0.15s;" title="${t('repo.hub.copyPath') || 'Copy repo.json path'}" onmouseover="this.style.background='rgba(6,182,212,0.25)'" onmouseout="this.style.background='rgba(6,182,212,0.15)'">
+                                <button class="repo-hub-copy-btn" data-path="${escAttr(folder)}/${r.folder === '.' ? '' : escAttr(r.folder) + '/'}repo.json" data-folder="${escAttr(r.folder)}" style="padding:6px 10px;font-size:11px;background:rgba(6,182,212,0.15);color:var(--cyan);border:1px solid rgba(6,182,212,0.3);border-radius:6px;cursor:pointer;white-space:nowrap;transition:all 0.15s;" onmouseenter="this.style.background='rgba(6,182,212,0.25)';window.showTaskyHelp('repo.hub.copyPath','copy')" onmouseleave="this.style.background='rgba(6,182,212,0.15)';window.hideTaskyHelp()">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;margin-right:4px;vertical-align:-1px;">
                                         <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
                                         <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
@@ -1618,10 +1627,16 @@ export function initRepo() {
                     // Add event listeners to copy buttons
                     document.querySelectorAll('.repo-hub-copy-btn').forEach(btn => {
                         btn.addEventListener('click', async () => {
-                            const path = btn.getAttribute('data-path');
-                            if (path) {
-                                navigator.clipboard.writeText(path);
-                                toast(t('common.copied') || 'Copied!', 'success');
+                            const dom = hubDomain();
+                            const repoFolder = btn.getAttribute('data-folder') || '.';
+                            // With a public domain configured → copy the shareable URL
+                            // (what others paste in BMM); otherwise the local file path.
+                            const value = dom
+                                ? `${dom}/${repoFolder === '.' ? '' : repoFolder + '/'}repo.json`
+                                : btn.getAttribute('data-path');
+                            if (value) {
+                                navigator.clipboard.writeText(value);
+                                toast((t('common.copied') || 'Copied!') + (dom ? ' (URL)' : ''), 'success');
                             }
                         });
                     });

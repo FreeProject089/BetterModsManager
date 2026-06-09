@@ -448,7 +448,11 @@ body.bte-picking .bte-ce-pickbtn { background: var(--bmm-accent); color: #fff; }
     background: var(--bmm-bg-elevated); border-bottom: 1px solid var(--bmm-s07);
     border-radius: 12px 12px 0 0; cursor: move;
 }
-.bte-elov-head strong { font-size: 13.5px; display: flex; align-items: center; gap: 7px; }
+.bte-elov-head strong { font-size: 13.5px; display: flex; align-items: center; gap: 7px; flex: 1; }
+.bte-elov-grip { display: inline-flex; align-items: center; color: var(--bmm-text-muted);
+    cursor: grab; flex-shrink: 0; margin-right: 2px; }
+.bte-elov-grip:active { cursor: grabbing; }
+.bte-elov-grip:hover { color: var(--bmm-text-primary); }
 .bte-elov-close { background: var(--bmm-s05); border: none; color: var(--bmm-text-muted); cursor: pointer;
     width: 24px; height: 24px; border-radius: 6px; display: inline-flex; align-items: center;
     justify-content: center; font-size: 14px; line-height: 1; }

@@ -568,8 +568,8 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
                 // -f makes curl exit non-zero on HTTP >= 400 so `if_api_ok` /
                 // `if_api_err` can branch on %ERRORLEVEL%.
                 let base = format!(
-                    "curl -s -f -X {} \"http://127.0.0.1:51274{}\" -H \"Authorization: Bearer %BMM_TOKEN%\"",
-                    method, path
+                    "curl -s -f -X {} \"http://127.0.0.1:{port}{}\" -H \"Authorization: Bearer %BMM_TOKEN%\"",
+                    method, path, port = crate::api::api_port()
                 );
                 if body.is_empty() {
                     out.push(base);
@@ -735,15 +735,15 @@ fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
                 // doesn't halt the script and `if_api_ok`/`if_api_err` can branch.
                 if body.is_empty() {
                     out.push(format!(
-                        "Invoke-RestMethod -Method {} -Uri \"http://127.0.0.1:51274{}\" -Headers $bmmHeaders -ErrorAction SilentlyContinue; $bmmOk = $?",
-                        method, path
+                        "Invoke-RestMethod -Method {} -Uri \"http://127.0.0.1:{port}{}\" -Headers $bmmHeaders -ErrorAction SilentlyContinue; $bmmOk = $?",
+                        method, path, port = crate::api::api_port()
                     ));
                 } else {
                     // Escape single-quotes inside body for PS1 single-quoted string
                     let body_esc = body.replace('\'', "''");
                     out.push(format!(
-                        "Invoke-RestMethod -Method {} -Uri \"http://127.0.0.1:51274{}\" -Headers $bmmHeaders -Body '{}' -ErrorAction SilentlyContinue; $bmmOk = $?",
-                        method, path, body_esc
+                        "Invoke-RestMethod -Method {} -Uri \"http://127.0.0.1:{port}{}\" -Headers $bmmHeaders -Body '{}' -ErrorAction SilentlyContinue; $bmmOk = $?",
+                        method, path, body_esc, port = crate::api::api_port()
                     ));
                 }
             } else {
@@ -777,7 +777,7 @@ fn gen_vbs(req: &GenerateScriptRequest) -> String {
         lines.push("Dim bmmLastStatus : bmmLastStatus = 0  ' set after each API call for if_api_ok / if_api_err".to_string());
         lines.push("Sub BmmApi(method, path, body)".to_string());
         lines.push("    Dim http : Set http = CreateObject(\"MSXML2.XMLHTTP\")".to_string());
-        lines.push("    http.open method, \"http://127.0.0.1:51274\" & path, False".to_string());
+        lines.push(format!("    http.open method, \"http://127.0.0.1:{}\" & path, False", crate::api::api_port()));
         lines.push("    http.setRequestHeader \"Authorization\", \"Bearer \" & bmmToken".to_string());
         lines.push("    On Error Resume Next".to_string());
         lines.push("    If Len(body) > 0 Then".to_string());

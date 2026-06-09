@@ -1396,6 +1396,35 @@ async function initSecurityInfoCard() {
     _setupCopy('btn-sic-copy-creator', 'sic-creator-id');
     _setupCopy('btn-sic-copy-token', 'sic-api-token');
     _setupCopy('btn-sic-copy-url', 'sic-api-url');
+    // ── Configurable API port ──
+    // The displayed URL + port field reflect settings.api_port; changing the
+    // port updates settings (server rebinds on next launch — restart needed).
+    try {
+        const { getSettings, apiBase } = await import('../../core/api.js');
+        const cfg = await getSettings();
+        const urlEl = document.getElementById('sic-api-url');
+        const portEl = document.getElementById('sic-api-port');
+        if (urlEl)
+            urlEl.textContent = apiBase();
+        if (portEl)
+            portEl.value = String(cfg.api_port || 51274);
+        document.getElementById('btn-sic-save-port')?.addEventListener('click', async () => {
+            const p = parseInt(portEl?.value || '', 10);
+            if (!p || p < 1 || p > 65535) {
+                toast(t('settings.identity.apiPortInvalid') || 'Invalid port (1–65535)', 'warning');
+                return;
+            }
+            const fresh = await getSettings();
+            fresh.api_port = p;
+            await invoke('update_settings', { settings: fresh });
+            const { setApiPort } = await import('../../core/api.js');
+            setApiPort(p);
+            if (urlEl)
+                urlEl.textContent = apiBase();
+            toast(t('settings.identity.apiPortSaved') || 'API port saved — restart BMM to apply', 'success', 3500);
+        });
+    }
+    catch (_) { }
     // Reset API token
     document.getElementById('btn-sic-reset-token')?.addEventListener('click', async () => {
         const ok = await window.confirmCustom(t('settings.identity.resetTokenTitle') || 'Régénérer le token ?', t('settings.identity.resetTokenDesc') || 'L\'ancien token sera immédiatement révoqué. Tous les plugins utilisant ce token devront être mis à jour.', 'danger').catch(() => false);

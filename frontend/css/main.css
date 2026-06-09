@@ -5517,29 +5517,24 @@ select:focus {
 .btn-xs { padding: 3px 8px !important; font-size: 11px !important; gap: 4px !important; border-radius: 6px !important; }
 
 /* ── Tooltip ── */
-[data-tooltip] { position: relative; }
-[data-tooltip]::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
+/* [data-tooltip] is rendered by the shared fixed tooltip (src/ui/tooltips.ts) —
+   never clipped by overflow ancestors or window edges, unlike the old ::after. */
+#bmm-fixed-tooltip {
+    position: fixed;
+    z-index: 2147483646;            /* above modals & the tutorial overlay */
     background: var(--bmm-tasky-bubble-bg, rgba(10,10,20,0.95));
     color: var(--bmm-tasky-bubble-text, var(--text-primary));
     font-size: 11px;
     padding: 4px 8px;
     border-radius: 6px;
-    white-space: nowrap;
+    max-width: 320px;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.15s;
-    /* Above modals/tutorial overlay (z ~2000100) so tooltips are never clipped. */
-    z-index: 2147483646;
+    transition: opacity 0.12s;
     border: 1px solid var(--bmm-tasky-bubble-border, var(--border));
     box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-    backdrop-filter: blur(var(--bmm-tasky-bubble-blur, 0px));
 }
-[data-tooltip]:hover::after { opacity: 1; }
+#bmm-fixed-tooltip.visible { opacity: 1; }
 
 .profile-select option {
     background: var(--bg-secondary) !important;
@@ -8447,10 +8442,10 @@ select:focus {
    MERMAID DIAGRAM CUSTOMIZATION (Moved to end for priority)
    ========================================================== */
 
-.mermaid g.node rect,
-.mermaid g.node polygon,
-.mermaid g.node circle,
-.mermaid g.node ellipse {
+.mermaid g.node rect, .mermaid-container g.node rect,
+.mermaid g.node polygon, .mermaid-container g.node polygon,
+.mermaid g.node circle, .mermaid-container g.node circle,
+.mermaid g.node ellipse, .mermaid-container g.node ellipse {
     fill: var(--bmm-diagram-node, rgba(30, 41, 59, 0.7)) !important;
     stroke: var(--bmm-diagram-node-border, var(--border-accent)) !important;
     stroke-width: 1.5px !important;
@@ -8458,7 +8453,8 @@ select:focus {
     ry: 10px !important;
     transition: var(--transition);
 }
-.mermaid g.node .label, .mermaid g.node foreignObject div {
+.mermaid-container g.node .label, .mermaid-container g.node foreignObject div,
+.mermaid-container g.node .nodeLabel, .mermaid-container g.node span {
     color: var(--bmm-diagram-node-text, var(--text-primary)) !important;
 }
 
@@ -8627,20 +8623,23 @@ select:focus {
 }
 
 /* ── Theme-aware diagram defaults (follow the active theme) ───────────────── */
-.mermaid .cluster rect {
+.mermaid-container .cluster rect {
     fill: var(--bmm-bg-elevated) !important;
     stroke: var(--bmm-diagram-node-border, var(--border-accent)) !important;
 }
-.mermaid .cluster-label, .mermaid .cluster-label *,
-.mermaid .nodeLabel, .mermaid .flowchart-label, .mermaid .label text, .mermaid text.label {
+.mermaid-container .cluster-label, .mermaid-container .cluster-label *,
+.mermaid-container .nodeLabel, .mermaid-container .flowchart-label,
+.mermaid-container .label text, .mermaid-container text.label,
+.mermaid-container .node .label, .mermaid-container foreignObject div {
     fill: var(--bmm-diagram-node-text, var(--text-primary)) !important;
     color: var(--bmm-diagram-node-text, var(--text-primary)) !important;
 }
-.mermaid .edgePath path, .mermaid .flowchart-link,
-.mermaid .edgePaths path, .mermaid line.messageLine0 {
+.mermaid-container .edgePath path, .mermaid-container .flowchart-link,
+.mermaid-container .edgePaths path, .mermaid-container line.messageLine0,
+.mermaid-container .edge-pattern-solid {
     stroke: var(--bmm-text-muted) !important;
 }
-.mermaid marker path, .mermaid defs marker path { fill: var(--bmm-text-muted) !important; }
+.mermaid-container marker path, .mermaid-container defs marker path { fill: var(--bmm-text-muted) !important; }
 
 .mermaid-container .cluster:hover rect {
     fill-opacity: 0.12 !important;

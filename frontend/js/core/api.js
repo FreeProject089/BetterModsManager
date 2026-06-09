@@ -4,6 +4,17 @@
  */
 import { debugHub } from '../features/debug/debug.js';
 let _invoke = null;
+// ── Local Plugin API base URL (configurable port) ─────────────────────────────
+// The port comes from settings.api_port (default 51274). Cached in localStorage
+// so it's correct synchronously at boot; refreshed once settings load.
+let _apiPort = parseInt(localStorage.getItem('bmm_api_port') || '51274', 10) || 51274;
+export function apiBase() { return `http://127.0.0.1:${_apiPort}`; }
+export function setApiPort(p) {
+    if (!p || p < 1 || p > 65535)
+        return;
+    _apiPort = p;
+    localStorage.setItem('bmm_api_port', String(p));
+}
 let _dialog = null;
 let _notifModule = null;
 let _convertFileSrc = null;

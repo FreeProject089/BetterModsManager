@@ -124,6 +124,8 @@ export interface AppSettings {
   discord_rpc_enabled: boolean;
   show_sha_loading_animation: boolean;
   enable_lazy_sha_calculation: boolean;
+  /** Local Plugin API port (default 51274). Restart required after change. */
+  api_port?: number;
 }
 
 // ── ModList (.MM format) ─────────────────────────────────

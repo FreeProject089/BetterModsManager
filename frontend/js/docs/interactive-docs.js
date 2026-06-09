@@ -175,6 +175,20 @@ export async function openDiagram(id, highlightNodeId = null) {
         const translatedDefinition = diagram.definition.replace(/\{\{([a-zA-Z0-9._-]+)\}\}/g, (match, key) => t(key));
         const { svg } = await render('mermaid-svg-' + id, translatedDefinition);
         container.innerHTML = svg;
+        // Make ALL diagrams theme-aware: mermaid injects classDef colours as high
+        // specificity !important rules inside the SVG's own <style>. Rewrite the
+        // generic "default" node colours to theme tokens so every diagram follows
+        // the active theme (semantic colours like rust/shield are left intact).
+        container.querySelectorAll('svg style').forEach(styleEl => {
+            styleEl.textContent = (styleEl.textContent || '')
+                .replace(/#1e293b/gi, 'var(--bmm-diagram-node)')
+                .replace(/#0a0e17/gi, 'var(--bmm-bg-base)')
+                .replace(/#111827/gi, 'var(--bmm-bg-elevated)')
+                .replace(/#475569/gi, 'var(--bmm-diagram-node-border)')
+                .replace(/#f1f5f9/gi, 'var(--bmm-diagram-node-text)')
+                .replace(/#e2e8f0/gi, 'var(--bmm-diagram-node-text)')
+                .replace(/#94a3b8/gi, 'var(--bmm-text-secondary)');
+        });
         // Initialize Pan & Zoom
         initPanZoom();
         // Fix Cluster Labels Layout (Mermaid Centering override)

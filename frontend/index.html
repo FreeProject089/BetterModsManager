@@ -235,6 +235,9 @@
                     gsap.set('#ld-stage', { x: 0, y: 0 });
 
                     const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+                    /* Exposed so app.ts can kill the whole timeline when the loader is
+                       removed early (prevents "GSAP target not found" warnings). */
+                    window.__ldTimeline = tl;
 
                     /* 0.0 — ambient bg glow */
                     tl.to('#ld-bg-glow', { opacity: 1, duration: 1.2, ease: 'power2.out' }, 0);
@@ -283,6 +286,9 @@
 
                     /* 1.0 — brand chars stagger in */
                     tl.call(() => {
+                        /* Loader may already be gone on very fast boots — skip quietly
+                           instead of letting GSAP warn about missing targets. */
+                        if (!document.querySelector('.ld-char')) return;
                         gsap.fromTo('.ld-char',
                             { opacity: 0, y: 22, rotateX: -60, scale: 0.82 },
                             {
@@ -7979,6 +7985,18 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                 </div>
                             </div>
 
+                            <!-- API port row — editable, restart required -->
+                            <div class="sic-row">
+                                <span class="sic-label" data-i18n="settings.identity.apiPort">API Port</span>
+                                <input type="number" id="sic-api-port" min="1" max="65535" value="51274"
+                                    style="width:110px;background:var(--bmm-s04);border:1px solid var(--border);border-radius:7px;color:var(--text-primary);padding:5px 9px;font-size:12px;font-family:var(--font-mono);"
+                                    onmouseenter="window.showTaskyHelp('settings.identity.apiPortTip','icon-help')"
+                                    onmouseleave="window.hideTaskyHelp()">
+                                <div class="sic-actions">
+                                    <button class="sic-btn" id="btn-sic-save-port" data-i18n="settings.identity.apiPortSave">Apply</button>
+                                </div>
+                            </div>
+
                             <!-- BMM Version row -->
                             <div class="sic-row">
                                 <span class="sic-label" data-i18n="settings.identity.version">Version</span>
@@ -9890,6 +9908,10 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                         <div style="flex:1; min-width:140px;">
                             <label class="form-label" style="font-size:11px;" data-i18n="repo.hub.adminPw">Admin password (blank = open)</label>
                             <input type="text" id="repo-hub-adminpw" class="form-input" placeholder="admin" style="font-size:13px;">
+                        </div>
+                        <div style="flex:1.4; min-width:180px;">
+                            <label class="form-label" style="font-size:11px;" data-i18n="repo.hub.domain">Public domain/URL (optional)</label>
+                            <input type="text" id="repo-hub-domain" class="form-input" placeholder="https://mods.example.com" style="font-size:13px;">
                         </div>
                     </div>
                     <div style="margin-top:16px;">

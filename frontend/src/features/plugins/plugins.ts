@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { invoke, pickFile, saveFile, pickFolder, convertFileSrc } from '../../core/api.js';
+import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase } from '../../core/api.js';
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
@@ -83,7 +83,7 @@ export async function initPlugins() {
     // Keep _allModpacks in sync when any modpack is created/updated/deleted
     window.addEventListener('bmm://modpacks-updated', async () => {
         try {
-            const mpRes  = await fetch('http://127.0.0.1:51274/api/modpacks');
+            const mpRes  = await fetch(apiBase() + '/api/modpacks');
             const mpJson = await mpRes.json().catch(() => ({}));
             _allModpacks = mpJson.data || [];
         } catch { _allModpacks = []; }
@@ -158,7 +158,7 @@ async function loadInitialData() {
                 (a.name || a.id).localeCompare(b.name || b.id));
         } catch { _allModsAll = _allMods.slice(); }
         try {
-            const mpRes = await fetch('http://127.0.0.1:51274/api/modpacks');
+            const mpRes = await fetch(apiBase() + '/api/modpacks');
             const mpJson = await mpRes.json().catch(() => ({}));
             _allModpacks = mpJson.data || [];
         } catch { _allModpacks = []; }
@@ -542,7 +542,7 @@ async function _refreshUqtData(): Promise<void> {
         ]);
         try {
             const liveTok = (document.getElementById('plug-token-display') as HTMLInputElement)?.value?.trim() || _apiToken;
-            const mpRes = await fetch('http://127.0.0.1:51274/api/modpacks', { headers: { 'Authorization': `Bearer ${liveTok}` } });
+            const mpRes = await fetch(apiBase() + '/api/modpacks', { headers: { 'Authorization': `Bearer ${liveTok}` } });
             _allModpacks = (await mpRes.json().catch(() => ({}))).data || [];
         } catch { _allModpacks = []; }
     } catch { /* best effort */ }
@@ -730,7 +730,7 @@ function renderUqtForm(ep: EndpointDef, formEl: HTMLElement): void {
             const compact = JSON.stringify(JSON.parse(body)); // minified, single line
             parts.push(`-H "Content-Type: application/json"`, `-d "${compact.replace(/"/g, '\\"')}"`);
         }
-        parts.push(`"http://127.0.0.1:51274${path}"`);
+        parts.push(`"${apiBase()}${path}"`);
         navigator.clipboard.writeText(parts.join(' ')).catch(() => {});
         toast(t('plugins.epCopyDone') || 'cURL copied', 'success');
     });
@@ -750,7 +750,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             invoke('get_installed_plugins'),
         ]);
         try {
-            const mpRes  = await fetch('http://127.0.0.1:51274/api/modpacks');
+            const mpRes  = await fetch(apiBase() + '/api/modpacks');
             const mpJson = await mpRes.json().catch(() => ({}));
             _allModpacks = mpJson.data || [];
         } catch { _allModpacks = []; }
@@ -1385,7 +1385,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 ${t('plugins.qtLangTemplateDesc') || 'Downloads <b>lang-template.json</b> — all BMM translation keys with English defaults. Translate the values → import via POST /api/language/import.'}
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <a href="http://127.0.0.1:51274/api/language/template" download="lang-template.json" class="btn btn-sm btn-accent" style="text-decoration:none;">
+                <a href="${apiBase()}/api/language/template" download="lang-template.json" class="btn btn-sm btn-accent" style="text-decoration:none;">
                     ⬇ ${t('plugins.qtLangTemplateBtn') || 'Download lang-template.json'}
                 </a>
             </div>
@@ -1430,7 +1430,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         try {
             const liveTok = (document.getElementById('plug-token-display') as HTMLInputElement)?.value?.trim() || _apiToken;
             const cat: any = await (async () => {
-                const r = await fetch('http://127.0.0.1:51274/api/catalog', { headers: { 'Authorization': `Bearer ${liveTok}` } });
+                const r = await fetch(apiBase() + '/api/catalog', { headers: { 'Authorization': `Bearer ${liveTok}` } });
                 return r.ok ? r.json() : null;
             })();
             if (cat?.apps?.length) {
@@ -1628,7 +1628,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
         const bodyFlag = (m !== 'GET' && bodyStr && bodyStr !== '{}')
             ? ` \\\n  -H "Content-Type: application/json" \\\n  -d '${bodyStr.replace(/\n/g, '').replace(/'/g, "'\\''")}'`
             : '';
-        const curl = `curl -X ${m} "http://127.0.0.1:51274${resolvedCopyPath}"${authHeader}${bodyFlag}`;
+        const curl = `curl -X ${m} "${apiBase()}${resolvedCopyPath}"${authHeader}${bodyFlag}`;
         try {
             await navigator.clipboard.writeText(curl);
             toast('cURL copié ! 📋', 'success');
@@ -1919,7 +1919,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             profilesList.innerHTML = `<p style="font-size:12px;color:var(--text-muted);padding:4px 0;">${IC.refresh} Chargement…</p>`;
             profilesPanel.style.display = 'flex';
             try {
-                const res  = await fetch(`http://127.0.0.1:51274/api/repo/info?url=${encodeURIComponent(repoUrl)}`);
+                const res  = await fetch(`${apiBase()}/api/repo/info?url=${encodeURIComponent(repoUrl)}`);
                 const json = await res.json().catch(() => ({}));
                 const profiles: any[] = json.profiles || json.data?.profiles || [];
                 if (profiles.length === 0) {
@@ -2653,7 +2653,7 @@ async function handleQuickTest(method: string, path: string, body?: string, btnE
             headers: { 'Authorization': `Bearer ${liveToken}`, 'Content-Type': 'application/json' },
         };
         if ((method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') && body) opts.body = body;
-        const res = await fetch(`http://127.0.0.1:51274${path}`, opts);
+        const res = await fetch(`${apiBase()}${path}`, opts);
         const text = await res.text().catch(() => '');
         let json: unknown = null;
         try { json = JSON.parse(text); } catch { /* not JSON */ }
@@ -3152,7 +3152,7 @@ function renderScripts(container: HTMLElement) {
             <div class="plug-section-card plug-token-card">
                 <div class="plug-token-card-top">
                     <h3 class="plug-section-title" style="margin:0;">${IC.lock} ${t('plugins.apiToken')}</h3>
-                    <span class="plug-api-hint">${IC.info} ${t('plugins.apiHint')} <code id="plug-api-base-url" class="plug-api-url-copy" data-tooltip="${t('plugins.copyApiUrl')}">http://127.0.0.1:51274/api/</code></span>
+                    <span class="plug-api-hint">${IC.info} ${t('plugins.apiHint')} <code id="plug-api-base-url" class="plug-api-url-copy" data-tooltip="${t('plugins.copyApiUrl')}">${apiBase()}/api/</code></span>
                 </div>
                 <div class="plug-token-row">
                     <input type="password" id="plug-token-display" class="input plug-token-input" readonly value="${escHtml(_apiToken)}">
@@ -3383,7 +3383,7 @@ function renderScripts(container: HTMLElement) {
 
     // API base URL copy on click
     container.querySelector('#plug-api-base-url')?.addEventListener('click', async () => {
-        await navigator.clipboard.writeText('http://127.0.0.1:51274/api/').catch(() => {});
+        await navigator.clipboard.writeText(apiBase() + '/api/').catch(() => {});
         toast(t('plugins.epCopyDone'), 'success');
     });
 
@@ -3663,7 +3663,7 @@ function renderScripts(container: HTMLElement) {
             e.stopPropagation();
             const val = (btn as HTMLElement).dataset.copy || '';
             // bmm:// deeplinks are copied as-is; API paths get the base URL prepended
-            const full = val.startsWith('bmm://') ? val : `http://127.0.0.1:51274${val}`;
+            const full = val.startsWith('bmm://') ? val : `${apiBase()}${val}`;
             await navigator.clipboard.writeText(full).catch(() => {});
             toast(t('plugins.epCopyDone'), 'success');
         });
@@ -3865,7 +3865,7 @@ function hlCode(raw: string, lang: string): string {
 
 // Generate code example for any language/endpoint combination
 function _genCode(ep: EndpointDef, lang: string): string {
-    const url = `http://127.0.0.1:51274${ep.path}`;
+    const url = `${apiBase()}${ep.path}`;
     const isGet = ep.method === 'GET';
     const bodyObj = ep.fields
         ? Object.fromEntries(ep.fields.map(f => [f.name, f.type === 'boolean' ? false : f.type === 'number' ? 0 : '']))
@@ -3950,7 +3950,7 @@ local t = {}\nhttp.request({\n  url    = "${url}",\n  method = "POST",\n  header
 }
 
 function _curlEx(ep: EndpointDef): string {
-    const url = `http://127.0.0.1:51274${ep.path}`;
+    const url = `${apiBase()}${ep.path}`;
     const authH = ep.auth ? `\n  -H "Authorization: Bearer $TOKEN" \\` : '';
     if (ep.method === 'GET') {
         return `curl${ep.auth ? ` \\\n  -H "Authorization: Bearer $TOKEN"` : ''} \\\n  "${url}"`;
@@ -3962,7 +3962,7 @@ function _curlEx(ep: EndpointDef): string {
 }
 
 function _ps1Ex(ep: EndpointDef): string {
-    const url = `http://127.0.0.1:51274${ep.path}`;
+    const url = `${apiBase()}${ep.path}`;
     // Compact body (single line) so it pastes cleanly
     const bodyObj = ep.fields
         ? Object.fromEntries(ep.fields.map(f => [f.name, f.type === 'boolean' ? false : f.type === 'number' ? 0 : '']))
@@ -5118,7 +5118,7 @@ async function handleApiTest() {
             opts.body = sendBody;
         }
 
-        const res  = await fetch(`http://127.0.0.1:51274${path}`, opts);
+        const res  = await fetch(`${apiBase()}${path}`, opts);
         const text = await res.text().catch(() => '');
 
         statusBadge.textContent = `${res.status} ${res.statusText}`;
@@ -5934,8 +5934,8 @@ async function handleSaveScriptZip() {
 
     // Build .env content
     const envContent = needsEnv
-        ? `# BMM Script — environment variables\n# Do NOT commit this file to version control!\nBMM_TOKEN=${_apiToken}\nBMM_API_BASE=http://127.0.0.1:51274\n`
-        : `# BMM Script — no API token required (deeplink mode)\nBMM_API_BASE=http://127.0.0.1:51274\n`;
+        ? `# BMM Script — environment variables\n# Do NOT commit this file to version control!\nBMM_TOKEN=${_apiToken}\nBMM_API_BASE=${apiBase()}\n`
+        : `# BMM Script — no API token required (deeplink mode)\nBMM_API_BASE=${apiBase()}\n`;
 
     // Build .gitignore
     const gitignore = `.env\n*.log\n__pycache__/\nnode_modules/\ntarget/\n`;
@@ -6215,7 +6215,7 @@ function genScriptLocal(
     exePath: string,
     useEnvFile: boolean = false
 ): string {
-    const BASE = 'http://127.0.0.1:51274';
+    const BASE = apiBase();
     // When useEnvFile: generated code reads token from env var, not hardcoded
     const ENV_TOKEN_PY   = 'os.environ.get("BMM_TOKEN", "")';
     const ENV_TOKEN_LUA  = 'os.getenv("BMM_TOKEN") or ""';

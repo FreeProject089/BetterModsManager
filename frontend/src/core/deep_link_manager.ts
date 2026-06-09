@@ -3,7 +3,7 @@
  * Handles bmm:// protocol links for one-click mod installation.
  */
 
-import { invoke } from './api.js';
+import { invoke, apiBase } from './api.js';
 import { toast } from '../ui/app.js';
 import { t } from './i18n.js';
 import { refreshMods } from '../features/mods/mods.js';
@@ -273,7 +273,7 @@ async function handleDeepLink(urlStr: string): Promise<void> {
                     }
                     opts.body = JSON.stringify(body);
                 }
-                const r = await fetch(`http://127.0.0.1:51274${apiPath}`, opts);
+                const r = await fetch(`${apiBase()}${apiPath}`, opts);
                 if (r.ok) { toast(`${method} ${apiPath.split('?')[0]} ✓`, 'success'); window._refreshModsFn?.(true); }
                 else toast(`${method} ${apiPath.split('?')[0]} → ${r.status}`, 'error');
             } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
@@ -330,7 +330,7 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             if (!name) { toast(t('plugins.deepLinkMissingId') || 'Missing name', 'error'); return; }
             try {
                 const tok = await getApiToken();
-                const r = await fetch('http://127.0.0.1:51274/api/modpacks/create', {
+                const r = await fetch(apiBase() + '/api/modpacks/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tok}` },
                     body: JSON.stringify({ name, source_profile_id: profileId || undefined }),
@@ -353,7 +353,7 @@ async function handleDeepLink(urlStr: string): Promise<void> {
         if (action === 'restart') {
             try {
                 const tok = await getApiToken();
-                await fetch('http://127.0.0.1:51274/api/restart', { method: 'POST', headers: { 'Authorization': `Bearer ${tok}` } });
+                await fetch(apiBase() + '/api/restart', { method: 'POST', headers: { 'Authorization': `Bearer ${tok}` } });
             } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
             return;
         }

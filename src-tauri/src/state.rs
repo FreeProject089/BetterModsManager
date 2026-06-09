@@ -62,6 +62,10 @@ pub struct AppSettings {
     pub history_retention_days: u32,
     #[serde(default = "default_api_token")]
     pub api_token: String,
+    /// Local Plugin API port (default 51274). Changing it requires a restart;
+    /// the whole frontend + generated scripts read it dynamically.
+    #[serde(default = "default_api_port")]
+    pub api_port: u16,
     #[serde(default = "default_true")]
     pub sound_effects_enabled: bool,
     #[serde(default = "default_sound_volume")]
@@ -95,6 +99,7 @@ impl Default for AppSettings {
             enable_lazy_sha_calculation: true,
             history_retention_days: default_history_retention(),
             api_token: default_api_token(),
+            api_port: default_api_port(),
             sound_effects_enabled: true,
             sound_volume: default_sound_volume(),
             connected_server_repos: Vec::new(),
@@ -104,6 +109,7 @@ impl Default for AppSettings {
 
 fn default_true() -> bool { true }
 fn default_api_token() -> String { uuid::Uuid::new_v4().to_string() }
+fn default_api_port() -> u16 { 51274 }
 fn default_sound_volume() -> u32 { 70 }
 
 fn default_filter() -> String { "all".to_string() }

@@ -11,7 +11,12 @@ use tauri::Manager;
 use crate::state::AppData;
 use crate::models::profile::Profile;
 
-pub const API_PORT: u16 = 51274;
+pub const API_PORT: u16 = 51274;   // default — actual port is configurable in settings
+
+/// The port the API actually bound this session (settings `api_port`, default 51274).
+/// Script generators and commands read this so everything follows the setting.
+static EFFECTIVE_API_PORT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(51274);
+pub fn api_port() -> u16 { EFFECTIVE_API_PORT.load(Ordering::Relaxed) }
 #[derive(Serialize)]
 struct ApiError {
     error: String,
@@ -457,7 +462,7 @@ pub async fn start_api_server(
     // GET /api/health
     let health = warp::path!("api" / "health")
         .and(warp::get())
-        .map(|| warp::reply::json(&serde_json::json!({ "ok": true, "service": "BMM Plugin API", "port": API_PORT })));
+        .map(|| warp::reply::json(&serde_json::json!({ "ok": true, "service": "BMM Plugin API", "port": api_port() })));
 
     // GET /api/status
     let data_status = data.clone();
@@ -2290,16 +2295,33 @@ pub async fn start_api_server(
         }
     }));
 
-    let addr: SocketAddr = ([127, 0, 0, 1], API_PORT).into();
+    // Configurable port (settings.api_port, default 51274).
+    let port = {
+        let d = data.lock().unwrap();
+        let p = d.settings.api_port;
+        if p == 0 { API_PORT } else { p }
+    };
+    EFFECTIVE_API_PORT.store(port, Ordering::Relaxed);
+    let addr: SocketAddr = ([127, 0, 0, 1], port).into();
 
-    let (_, server) = warp::serve(routes)
-        .bind_with_graceful_shutdown(addr, async {
-            shutdown_rx.await.ok();
-        });
-
-    crate::commands::crash::log_line(format!("[PLUGIN-API] Server started on http://127.0.0.1:{}", API_PORT));
-    server.await;
-    crate::commands::crash::log_line("[PLUGIN-API] Server stopped.".to_string());
+    // try_bind: binding can fail (port held by a previous/zombie BMM instance,
+    // e.g. right after an in-app restart). bind_with_graceful_shutdown PANICS in
+    // that case and takes the whole app down — degrade gracefully instead.
+    match warp::serve(routes).try_bind_with_graceful_shutdown(addr, async {
+        shutdown_rx.await.ok();
+    }) {
+        Ok((_, server)) => {
+            crate::commands::crash::log_line(format!("[PLUGIN-API] Server started on http://127.0.0.1:{}", port));
+            server.await;
+            crate::commands::crash::log_line("[PLUGIN-API] Server stopped.".to_string());
+        }
+        Err(e) => {
+            crate::commands::crash::log_line(format!(
+                "[PLUGIN-API] Could not bind port {} ({}). Plugin API disabled for this session — is another BMM instance running?",
+                port, e
+            ));
+        }
+    }
 }
 
 pub fn compute_compare(

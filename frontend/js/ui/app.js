@@ -34,6 +34,7 @@ import { restoreThemeAtBoot } from '../features/themes/theme-engine.js';
 import { initThemeEditor } from '../features/themes/theme-editor.js';
 import { initThemeCatalog } from '../features/themes/theme-catalog.js';
 import { initCustomSelects } from './custom-select.js';
+import { initTooltips } from './tooltips.js';
 import { playBootSound, playCloseSound, setSoundEnabled, setSoundVolume } from './sound-engine.js';
 export { setSoundEnabled, setSoundVolume, playCloseSound };
 // Expose boot sound to inline loader script. If the loader already fired before this module
@@ -742,6 +743,7 @@ async function main() {
     initThemeEditor();
     initThemeCatalog();
     initCustomSelects();
+    initTooltips();
     document.getElementById('btn-restart-onboarding')?.addEventListener('click', () => {
         openTutorialHub();
     });
@@ -771,7 +773,9 @@ async function main() {
             loader.style.opacity = '0';
             loader.style.visibility = 'hidden';
             setTimeout(() => {
-                // Kill all GSAP tweens on loader elements before removing to prevent "target not found" warnings
+                // Kill the loader timeline + all tweens on loader elements before
+                // removing, so no scheduled step fires on missing targets.
+                window.__ldTimeline?.kill?.();
                 const gsapInst = window.gsap;
                 if (gsapInst) {
                     const targets = Array.from(loader.querySelectorAll('[id], .ld-char, .ld-word'));
@@ -785,8 +789,10 @@ async function main() {
     await initSettings();
     // ── Apply sound settings from config ──
     try {
-        const { getSettings } = await import('../core/api.js');
+        const { getSettings, setApiPort } = await import('../core/api.js');
         const cfg = await getSettings();
+        if (cfg.api_port)
+            setApiPort(cfg.api_port); // keep apiBase() in sync with settings
         const soundEnabled = cfg.sound_effects_enabled !== false;
         const soundVol = (cfg.sound_volume ?? 70) / 100;
         setSoundEnabled(soundEnabled);
