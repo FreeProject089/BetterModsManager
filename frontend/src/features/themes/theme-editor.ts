@@ -72,6 +72,15 @@ const TOKENS: Token[] = [
     { key:'--bmm-anim-speed',      label:'Animation speed',  type:'size',  group:'Effects', desc:'Global animation multiplier. 1 = normal, 0 = instant (disable).', mdn:'animation' },
     { key:'--bmm-intro-duration',  label:'Intro/exit speed', type:'size',  group:'Effects', desc:'Boot loader fade duration, e.g. 0.65s.', mdn:'transition' },
 
+    // Buttons (granular — change a button kind without touching the global accent)
+    { key:'--bmm-btn-primary-bg',     label:'Primary button bg',    type:'color', group:'Buttons', desc:'Background of primary (main action) buttons. Defaults to the accent.', mdn:'background-color' },
+    { key:'--bmm-btn-primary-text',   label:'Primary button text',  type:'color', group:'Buttons', desc:'Text colour of primary buttons.', mdn:'color' },
+    { key:'--bmm-btn-secondary-bg',   label:'Secondary button bg',  type:'color', group:'Buttons', desc:'Background of secondary buttons.', mdn:'background-color' },
+    { key:'--bmm-btn-secondary-text', label:'Secondary button text',type:'color', group:'Buttons', desc:'Text colour of secondary buttons.', mdn:'color' },
+    { key:'--bmm-btn-ghost-text',     label:'Ghost button text',    type:'color', group:'Buttons', desc:'Text colour of borderless ghost buttons.', mdn:'color' },
+    { key:'--bmm-btn-danger-bg',      label:'Danger button bg',     type:'color', group:'Buttons', desc:'Background of destructive (delete) buttons.', mdn:'background-color' },
+    { key:'--bmm-btn-danger-text',    label:'Danger button text',   type:'color', group:'Buttons', desc:'Text colour of destructive buttons.', mdn:'color' },
+
     // DevTools
     { key:'--bmm-devtools-bg',     label:'DevTools background', type:'color', group:'DevTools', desc:'Background of the BMM DevTools panel.', mdn:'background-color' },
     { key:'--bmm-devtools-accent', label:'DevTools accent',    type:'color', group:'DevTools', desc:'Accent colour of the DevTools panel.', mdn:'color' },
@@ -269,6 +278,7 @@ const GROUP_INFO: Record<string, { icon: string; desc: string }> = {
     'Shape':          { icon: '⬭',  desc: 'How rounded cards, buttons and inputs are.' },
     'Tasky Tooltips': { icon: '💬', desc: 'The little helper bubbles that pop up on hover.' },
     'Effects':        { icon: '🌟', desc: 'Glows, shadows, hover lift and animation speed.' },
+    'Buttons':        { icon: '🔘', desc: 'Recolour each button kind on its own, without touching the accent.' },
     'DevTools':       { icon: '🛠', desc: 'The developer tools overlay (F12).' },
 };
 
@@ -779,13 +789,15 @@ function stopPick(): void {
 }
 
 function onPickHover(e: MouseEvent): void {
-    if (_panel?.contains(e.target as Node)) return;
+    const tgt = e.target as HTMLElement;
+    if (_panel?.contains(tgt) || tgt?.closest?.('#bte-elov')) return;
     document.querySelectorAll('.bte-pick-highlight').forEach(e => e.classList.remove('bte-pick-highlight'));
-    (e.target as HTMLElement)?.classList.add('bte-pick-highlight');
+    tgt?.classList.add('bte-pick-highlight');
 }
 
 function onPickTokenClick(e: MouseEvent): void {
-    if (_panel?.contains(e.target as Node)) return;
+    const _t = e.target as HTMLElement;
+    if (_panel?.contains(_t) || _t?.closest?.('#bte-elov')) return;
     e.preventDefault(); e.stopPropagation();
     const el = e.target as HTMLElement;
     const cs = getComputedStyle(el);
@@ -797,6 +809,11 @@ function onPickTokenClick(e: MouseEvent): void {
         if (guessedToken) break;
     }
     stopPick();
+    // No mapped token → let the user recolour this element directly via an override.
+    if (!guessedToken) {
+        openElementOverrideEditor(el);
+        return;
+    }
     // Switch to simple tab
     _tab = 'simple';
     _panel?.querySelectorAll('.bte-tab').forEach(t => t.classList.toggle('active', (t as HTMLElement).dataset.bteTab === 'simple'));
@@ -815,24 +832,146 @@ function onPickTokenClick(e: MouseEvent): void {
     }
 }
 
+/** Build a stable-ish CSS selector from id, nearest view, or class chain. */
+function buildSelectorFor(el: HTMLElement): string {
+    if (el.id) return `#${el.id}`;
+    const view = el.closest('[id^="view-"]') as HTMLElement|null;
+    const prefix = view ? `#${view.id} ` : '';
+    const classes = Array.from(el.classList)
+        .filter(c => !['bte-pick-highlight'].includes(c) && !c.startsWith('bmm-') && !c.startsWith('bte-'))
+        .slice(0, 3).map(c => `.${c}`).join('');
+    return prefix + (classes || el.tagName.toLowerCase());
+}
+
 function onPickTargetClick(e: MouseEvent): void {
-    if (_panel?.contains(e.target as Node)) return;
+    const _t = e.target as HTMLElement;
+    if (_panel?.contains(_t) || _t?.closest?.('#bte-elov')) return;
     e.preventDefault(); e.stopPropagation();
-    const el = e.target as HTMLElement;
-    // Build a stable CSS selector from id, view, or class chain
-    let selector = '';
-    if (el.id) selector = `#${el.id}`;
-    else {
-        // Walk up to the nearest view and build a relative selector
-        const view = el.closest('[id^="view-"]') as HTMLElement|null;
-        const prefix = view ? `#${view.id} ` : '';
-        const classes = Array.from(el.classList)
-            .filter(c => !['bte-pick-highlight'].includes(c) && !c.startsWith('bmm-'))
-            .slice(0, 3).map(c => `.${c}`).join('');
-        selector = prefix + (classes || el.tagName.toLowerCase());
-    }
+    const selector = buildSelectorFor(e.target as HTMLElement);
     stopPick();
     _pickTargetCb?.(selector);
+}
+
+/** Convert an rgb()/rgba() computed colour to #rrggbb for <input type=color>. */
+function rgbToHex(col: string): string {
+    const m = col.match(/(\d+),\s*(\d+),\s*(\d+)/);
+    if (!m) return '#000000';
+    return '#' + [m[1], m[2], m[3]].map(n => parseInt(n).toString(16).padStart(2, '0')).join('');
+}
+
+/** Serialize an override's props to a CSS declaration block. */
+function propsToCss(props: Record<string, string>): string {
+    return Object.entries(props).map(([k, v]) => `${k}: ${v};`).join('\n');
+}
+/** Parse a CSS declaration block ("prop: value;" lines) back into a props map. */
+function cssToProps(css: string): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const decl of css.split(';')) {
+        const i = decl.indexOf(':');
+        if (i < 0) continue;
+        const k = decl.slice(0, i).trim();
+        const v = decl.slice(i + 1).trim();
+        if (k && v) out[k] = v;
+    }
+    return out;
+}
+
+/** Floating per-element editor: edit ANY CSS of any element via an
+ *  element_override — colours through quick pickers, everything else through a
+ *  free-form CSS box. Writes into _draft.element_overrides. Fully reversible.  */
+function openElementOverrideEditor(el: HTMLElement): void {
+    stopPick();                               // guarantee pick mode is fully off
+    document.getElementById('bte-elov')?.remove();
+    const cs = getComputedStyle(el);
+    if (!_draft.element_overrides) _draft.element_overrides = [];
+
+    let selector = buildSelectorFor(el);
+    let ov = _draft.element_overrides.find(o => o.selector === selector);
+    if (!ov) { ov = { selector, props: {} }; _draft.element_overrides.push(ov); }
+
+    const pop = document.createElement('div');
+    pop.id = 'bte-elov';
+    pop.className = 'bte-elov';
+    const row = (label: string, prop: string, cur: string) => `
+        <label class="bte-elov-row">
+            <span>${label}</span>
+            <input type="color" data-prop="${prop}" value="${rgbToHex(cur)}">
+            <button class="bte-elov-clear" data-prop="${prop}" title="${t('themes.clear')||'Clear'}">✕</button>
+        </label>`;
+    pop.innerHTML = `
+        <div class="bte-elov-head">
+            <strong>${t('themes.overrideElement')||'Edit this element'}</strong>
+            <button class="bte-elov-close">✕</button>
+        </div>
+        <label class="bte-elov-sellabel">${t('themes.selector')||'Selector'}
+            <input class="bte-elov-selinput" type="text" value="${escAttr(selector)}" spellcheck="false">
+        </label>
+        ${row(t('themes.text')||'Text', 'color', cs.color)}
+        ${row(t('themes.background')||'Background', 'background-color', cs.backgroundColor)}
+        ${row(t('themes.border')||'Border', 'border-color', cs.borderColor)}
+        <label class="bte-elov-csslabel">${t('themes.customCss')||'Custom CSS (any property)'}</label>
+        <textarea class="bte-elov-css" spellcheck="false" placeholder="border-radius: 12px;&#10;padding: 8px 14px;&#10;box-shadow: 0 4px 20px #000;&#10;font-size: 15px;">${escHtml(propsToCss(ov.props))}</textarea>
+        <p class="bte-elov-hint">${t('themes.overrideHint')||'Affects every element matching this selector. Live preview.'}</p>`;
+    document.body.appendChild(pop);
+
+    const r = el.getBoundingClientRect();
+    pop.style.left = Math.min(r.left, window.innerWidth - 300) + 'px';
+    pop.style.top = Math.min(r.bottom + 8, window.innerHeight - 360) + 'px';
+
+    const cssBox = pop.querySelector('.bte-elov-css') as HTMLTextAreaElement;
+    const refreshBox = () => { cssBox.value = propsToCss(ov!.props); };
+    const cleanupEmpty = () => {
+        if (Object.keys(ov!.props).length === 0)
+            _draft.element_overrides = _draft.element_overrides!.filter(o => o !== ov);
+    };
+
+    // Quick colour pickers → write a single prop, keep the CSS box in sync.
+    pop.querySelectorAll('input[type=color]').forEach(inp => {
+        inp.addEventListener('input', () => {
+            ov!.props[(inp as HTMLElement).dataset.prop!] = (inp as HTMLInputElement).value;
+            refreshBox(); previewTheme(_draft); updateDirty();
+        });
+    });
+    pop.querySelectorAll('.bte-elov-clear').forEach(btn => {
+        btn.addEventListener('click', () => {
+            delete ov!.props[(btn as HTMLElement).dataset.prop!];
+            refreshBox(); cleanupEmpty(); previewTheme(_draft); updateDirty();
+        });
+    });
+
+    // Free-form CSS box is the full source of truth for the props map.
+    cssBox.addEventListener('input', () => {
+        ov!.props = cssToProps(cssBox.value);
+        // keep override alive while typing even if momentarily empty
+        if (!_draft.element_overrides!.includes(ov!)) _draft.element_overrides!.push(ov!);
+        previewTheme(_draft); updateDirty();
+    });
+
+    // Editable selector — retarget the same override (e.g. broaden to all buttons).
+    const selInput = pop.querySelector('.bte-elov-selinput') as HTMLInputElement;
+    selInput.addEventListener('change', () => {
+        const next = selInput.value.trim();
+        if (next) { ov!.selector = next; selector = next; previewTheme(_draft); updateDirty(); }
+    });
+
+    pop.querySelector('.bte-elov-close')?.addEventListener('click', () => { cleanupEmpty(); pop.remove(); });
+
+    // Draggable by its header so it can never get stuck off-screen / under the panel.
+    const head = pop.querySelector('.bte-elov-head') as HTMLElement;
+    head.style.cursor = 'move';
+    head.addEventListener('mousedown', (md: MouseEvent) => {
+        if ((md.target as HTMLElement).closest('.bte-elov-close')) return;
+        md.preventDefault();
+        const sx = md.clientX, sy = md.clientY;
+        const ox = pop.offsetLeft, oy = pop.offsetTop;
+        const move = (mm: MouseEvent) => {
+            pop.style.left = Math.max(0, Math.min(ox + mm.clientX - sx, window.innerWidth - pop.offsetWidth)) + 'px';
+            pop.style.top  = Math.max(0, Math.min(oy + mm.clientY - sy, window.innerHeight - 40)) + 'px';
+        };
+        const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', up);
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════════

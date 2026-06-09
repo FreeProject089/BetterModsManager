@@ -36,9 +36,13 @@
     /* ── Semantic colours ─────────────────────────────────────────────────── */
     --bmm-cyan:    #06b6d4;
     --bmm-cyan-dim: rgba(6, 182, 212, 0.18);
+    --bmm-cyan-r: 6;   --bmm-cyan-g: 182; --bmm-cyan-b: 212;
     --bmm-success: #10b981;
+    --bmm-success-r: 16; --bmm-success-g: 185; --bmm-success-b: 129;
     --bmm-warning: #f59e0b;
+    --bmm-warning-r: 245; --bmm-warning-g: 158; --bmm-warning-b: 11;
     --bmm-danger:  #ef4444;
+    --bmm-danger-r: 239; --bmm-danger-g: 68; --bmm-danger-b: 68;
     --bmm-danger-dim: rgba(239, 68, 68, 0.15);
     --bmm-amber:   #f59e0b;
     --bmm-purple:  #a855f7;
@@ -85,6 +89,13 @@
     --bmm-tasky-bubble-text:   #e2e8f0;
     --bmm-tasky-bubble-blur:   30px;
     --bmm-tasky-bubble-radius: 12px;
+
+    /* ── Toasts (notifications) ───────────────────────────────────────────── */
+    --bmm-toast-bg:        var(--bmm-bg-elevated);
+    --bmm-toast-border:    var(--bmm-border);
+    --bmm-toast-text:      var(--bmm-text-primary);
+    --bmm-toast-shadow:    0 8px 24px rgba(0, 0, 0, 0.4);
+    --bmm-toast-blur:      12px;
 
     /* ── Loader / boot mascot ─────────────────────────────────────────────── */
     --bmm-loader-img:      none;          /* url('...') to replace spinning Tasky */

@@ -80,8 +80,26 @@ function getOrCreate(id: string): HTMLStyleElement {
     return el;
 }
 
+/** For any --bmm-<name> hex the theme sets, auto-emit --bmm-<name>-r/g/b
+ *  channel tokens so rgba(var(--bmm-<name>-r),…) tints follow the theme.   */
+function deriveChannels(vars: Record<string, string>): Record<string, string> {
+    const out: Record<string, string> = {};
+    const names = ['accent', 'cyan', 'success', 'warning', 'danger', 'purple'];
+    for (const n of names) {
+        const hex = vars[`--bmm-${n}`];
+        if (hex && /^#[0-9a-fA-F]{6}$/.test(hex.trim())) {
+            const { r, g, b } = rgb(hex.trim());
+            if (vars[`--bmm-${n}-r`] === undefined) out[`--bmm-${n}-r`] = String(r);
+            if (vars[`--bmm-${n}-g`] === undefined) out[`--bmm-${n}-g`] = String(g);
+            if (vars[`--bmm-${n}-b`] === undefined) out[`--bmm-${n}-b`] = String(b);
+        }
+    }
+    return out;
+}
+
 function buildVarsCSS(theme: BmmTheme): string {
-    const global = theme.vars ? Object.entries(theme.vars)
+    const merged = { ...(theme.vars || {}), ...deriveChannels(theme.vars || {}) };
+    const global = theme.vars ? Object.entries(merged)
         .map(([k, v]) => `  ${k}: ${v};`).join('\n') : '';
 
     const perPage = theme.pages ? Object.entries(theme.pages)
@@ -265,7 +283,7 @@ function startPatchObserver(theme: BmmTheme): void {
 
     const patchEl = (el: HTMLElement) => {
         if (!el.style?.cssText) return;
-        if (el.id?.startsWith('bmm-theme') || el.closest('#bmm-theme-editor')) return;
+        if (el.id?.startsWith('bmm-theme') || el.closest('#bmm-theme-editor') || el.closest('#bte-elov')) return;
         let txt = el.style.cssText;
         let changed = false;
         for (const [re, rep] of allPatches) {
@@ -509,267 +527,106 @@ function accentVars(hex: string, dimOpacity = 0.18, borderOpacity = 0.4): Record
     };
 }
 
+/** Light-mode surface overrides — inverts white-alpha glass tints to black-alpha. */
+function lightSurfaces(): Record<string, string> {
+    return {
+        '--bmm-surface-r': '0', '--bmm-surface-g': '0', '--bmm-surface-b': '0',
+        '--bmm-s02': 'rgba(0,0,0,0.02)', '--bmm-s03': 'rgba(0,0,0,0.03)',
+        '--bmm-s04': 'rgba(0,0,0,0.04)', '--bmm-s05': 'rgba(0,0,0,0.05)',
+        '--bmm-s06': 'rgba(0,0,0,0.06)', '--bmm-s07': 'rgba(0,0,0,0.07)',
+        '--bmm-s08': 'rgba(0,0,0,0.08)', '--bmm-s09': 'rgba(0,0,0,0.09)',
+        '--bmm-s10': 'rgba(0,0,0,0.10)', '--bmm-s12': 'rgba(0,0,0,0.12)',
+        '--bmm-s15': 'rgba(0,0,0,0.15)', '--bmm-s20': 'rgba(0,0,0,0.20)',
+        '--bmm-glass-bg': 'rgba(0,0,0,0.03)', '--bmm-glass-border': 'rgba(0,0,0,0.08)',
+        '--bmm-bg-hover': 'rgba(0,0,0,0.045)',
+    };
+}
+
 export const BUILTIN_THEMES: BmmTheme[] = [
-    // ── 1. Default (BMM blue) ──────────────────────────────────────────────────
+    // 1. BMM Default (blue)
     {
         id: 'bmm-default', name: 'BMM Default', author: 'BMM Team',
         description: 'The original BMM dark blue theme.', vars: {},
     },
-
-    // ── 2. Void — absolute black ───────────────────────────────────────────────
+    // 2. Sombre (Discord-style soft dark)
     {
-        id: 'bmm-void', name: 'Void', author: 'BMM Team',
-        description: 'Pure black base, electric blue accent.',
+        id: 'bmm-sombre', name: 'Sombre', author: 'BMM Team',
+        description: 'Soft dark grey like Discord, blurple accent.',
         vars: {
-            '--bmm-bg-base':      '#000000',
-            '--bmm-bg-elevated':  '#080808',
-            '--bmm-bg-sidebar':   '#040404',
-            '--bmm-bg-titlebar':  '#000000',
-            '--bmm-border':       'rgba(255,255,255,0.04)',
-            '--bmm-text-muted':   '#404040',
+            '--bmm-bg-base': '#1a1a1e', '--bmm-bg-elevated': '#232328',
+            '--bmm-bg-sidebar': '#161619', '--bmm-bg-titlebar': '#141417',
+            '--bmm-titlebar-bg': '#141417', '--bmm-loader-bg': '#141417',
+            '--bmm-text-primary': '#dbdee1', '--bmm-text-secondary': '#b5bac1',
+            '--bmm-text-muted': '#80848e', '--bmm-cyan': '#00a8fc',
+            '--bmm-success': '#23a559', '--bmm-warning': '#f0b232', '--bmm-danger': '#f23f43',
+            ...accentVars('#5865f2'),
+        },
+    },
+    // 3. Void / Noir (pure black)
+    {
+        id: 'bmm-void', name: 'Void / Noir', author: 'BMM Team',
+        description: 'Pure black, crisp electric-blue accent, hairline borders.',
+        vars: {
+            '--bmm-bg-base': '#000000', '--bmm-bg-elevated': '#0b0b0d',
+            '--bmm-bg-sidebar': '#060607', '--bmm-bg-titlebar': '#000000',
+            '--bmm-titlebar-bg': '#000000', '--bmm-loader-bg': '#000000',
+            '--bmm-border': 'rgba(255,255,255,0.055)', '--bmm-border-hover': 'rgba(255,255,255,0.13)',
+            '--bmm-text-primary': '#f5f5f7', '--bmm-text-secondary': '#a1a1a8',
+            '--bmm-text-muted': '#55555c', '--bmm-radius-card': '12px',
+            '--bmm-card-glow': '0 0 0 1px rgba(255,255,255,0.03)',
             ...accentVars('#4f8ef7'),
         },
     },
-
-    // ── 3. Midnight — very dark, purple ───────────────────────────────────────
+    // 4. Void / Light (light grey, neutral slate accent)
     {
-        id: 'bmm-midnight', name: 'Midnight', author: 'BMM Team',
-        description: 'Near-black with deep purple accent.',
-        vars: {
-            '--bmm-bg-base':     '#07070f',
-            '--bmm-bg-elevated': '#0d0d1c',
-            '--bmm-bg-sidebar':  '#05050c',
-            '--bmm-border':      'rgba(255,255,255,0.05)',
-            ...accentVars('#8b5cf6'),
-        },
-    },
-
-    // ── 4. Dracula ─────────────────────────────────────────────────────────────
-    {
-        id: 'bmm-dracula', name: 'Dracula', author: 'BMM Team',
-        description: 'Classic Dracula colour scheme.',
-        vars: {
-            '--bmm-bg-base':       '#282a36',
-            '--bmm-bg-elevated':   '#21222c',
-            '--bmm-bg-sidebar':    '#1e1f29',
-            '--bmm-bg-titlebar':   '#191a23',
-            '--bmm-border':        'rgba(98,114,164,0.2)',
-            '--bmm-text-primary':  '#f8f8f2',
-            '--bmm-text-secondary':'#bd93f9',
-            '--bmm-text-muted':    '#6272a4',
-            '--bmm-success':       '#50fa7b',
-            '--bmm-warning':       '#f1fa8c',
-            '--bmm-danger':        '#ff5555',
-            '--bmm-cyan':          '#8be9fd',
-            ...accentVars('#bd93f9'),
-        },
-    },
-
-    // ── 5. Tokyo Night ─────────────────────────────────────────────────────────
-    {
-        id: 'bmm-tokyo', name: 'Tokyo Night', author: 'BMM Team',
-        description: 'Blue-purple dark theme inspired by Tokyo nights.',
-        vars: {
-            '--bmm-bg-base':       '#1a1b2e',
-            '--bmm-bg-elevated':   '#16213e',
-            '--bmm-bg-sidebar':    '#0f3460',
-            '--bmm-bg-titlebar':   '#0d0d1a',
-            '--bmm-border':        'rgba(122,162,247,0.12)',
-            '--bmm-text-primary':  '#c0caf5',
-            '--bmm-text-secondary':'#9aa5ce',
-            '--bmm-text-muted':    '#565f89',
-            '--bmm-success':       '#9ece6a',
-            '--bmm-warning':       '#e0af68',
-            '--bmm-danger':        '#f7768e',
-            '--bmm-cyan':          '#7dcfff',
-            ...accentVars('#7aa2f7'),
-        },
-    },
-
-    // ── 6. Nord ────────────────────────────────────────────────────────────────
-    {
-        id: 'bmm-nord', name: 'Nord', author: 'BMM Team',
-        description: 'Arctic, north-bluish colour palette.',
-        vars: {
-            '--bmm-bg-base':       '#2e3440',
-            '--bmm-bg-elevated':   '#3b4252',
-            '--bmm-bg-sidebar':    '#252b37',
-            '--bmm-bg-titlebar':   '#242932',
-            '--bmm-border':        'rgba(76,86,106,0.4)',
-            '--bmm-text-primary':  '#eceff4',
-            '--bmm-text-secondary':'#e5e9f0',
-            '--bmm-text-muted':    '#4c566a',
-            '--bmm-success':       '#a3be8c',
-            '--bmm-warning':       '#ebcb8b',
-            '--bmm-danger':        '#bf616a',
-            '--bmm-cyan':          '#88c0d0',
-            ...accentVars('#81a1c1'),
-        },
-    },
-
-    // ── 7. Catppuccin Mocha ────────────────────────────────────────────────────
-    {
-        id: 'bmm-catppuccin', name: 'Catppuccin Mocha', author: 'BMM Team',
-        description: 'Soothing pastel theme — Mocha flavour.',
-        vars: {
-            '--bmm-bg-base':       '#1e1e2e',
-            '--bmm-bg-elevated':   '#181825',
-            '--bmm-bg-sidebar':    '#11111b',
-            '--bmm-bg-titlebar':   '#0d0d17',
-            '--bmm-border':        'rgba(108,112,134,0.2)',
-            '--bmm-text-primary':  '#cdd6f4',
-            '--bmm-text-secondary':'#bac2de',
-            '--bmm-text-muted':    '#6c7086',
-            '--bmm-success':       '#a6e3a1',
-            '--bmm-warning':       '#f9e2af',
-            '--bmm-danger':        '#f38ba8',
-            '--bmm-cyan':          '#89dceb',
-            ...accentVars('#cba6f7'),
-        },
-    },
-
-    // ── 8. Gruvbox Dark ────────────────────────────────────────────────────────
-    {
-        id: 'bmm-gruvbox', name: 'Gruvbox Dark', author: 'BMM Team',
-        description: 'Retro groove — warm earthy tones.',
-        vars: {
-            '--bmm-bg-base':       '#282828',
-            '--bmm-bg-elevated':   '#3c3836',
-            '--bmm-bg-sidebar':    '#1d2021',
-            '--bmm-bg-titlebar':   '#1d2021',
-            '--bmm-border':        'rgba(102,92,84,0.35)',
-            '--bmm-text-primary':  '#ebdbb2',
-            '--bmm-text-secondary':'#d5c4a1',
-            '--bmm-text-muted':    '#665c54',
-            '--bmm-success':       '#b8bb26',
-            '--bmm-warning':       '#fabd2f',
-            '--bmm-danger':        '#fb4934',
-            '--bmm-cyan':          '#83a598',
-            ...accentVars('#fe8019'),
-        },
-    },
-
-    // ── 9. Rose Pine ───────────────────────────────────────────────────────────
-    {
-        id: 'bmm-rosepine', name: 'Rosé Pine', author: 'BMM Team',
-        description: 'All natural pine, faux fur and gold.',
-        vars: {
-            '--bmm-bg-base':       '#191724',
-            '--bmm-bg-elevated':   '#1f1d2e',
-            '--bmm-bg-sidebar':    '#16141f',
-            '--bmm-bg-titlebar':   '#0f0d17',
-            '--bmm-border':        'rgba(110,106,134,0.2)',
-            '--bmm-text-primary':  '#e0def4',
-            '--bmm-text-secondary':'#908caa',
-            '--bmm-text-muted':    '#6e6a86',
-            '--bmm-success':       '#31748f',
-            '--bmm-warning':       '#f6c177',
-            '--bmm-danger':        '#eb6f92',
-            '--bmm-cyan':          '#9ccfd8',
-            ...accentVars('#c4a7e7'),
-        },
-    },
-
-    // ── 10. Ember — warm orange ────────────────────────────────────────────────
-    {
-        id: 'bmm-ember', name: 'Ember', author: 'BMM Team',
-        description: 'Warm dark with glowing orange accent.',
-        vars: {
-            '--bmm-bg-base':     '#120d08',
-            '--bmm-bg-elevated': '#1c1208',
-            '--bmm-bg-sidebar':  '#0e0a06',
-            '--bmm-cyan':        '#fbbf24',
-            '--bmm-cyan-dim':    'rgba(251,191,36,0.18)',
-            ...accentVars('#f97316'),
-        },
-    },
-
-    // ── 11. Ocean — teal ───────────────────────────────────────────────────────
-    {
-        id: 'bmm-ocean', name: 'Ocean', author: 'BMM Team',
-        description: 'Deep navy, teal & cyan.',
-        vars: {
-            '--bmm-bg-base':     '#081620',
-            '--bmm-bg-elevated': '#0d2030',
-            '--bmm-bg-sidebar':  '#071218',
-            ...accentVars('#06b6d4'),
-        },
-    },
-
-    // ── 12. Neon Green ────────────────────────────────────────────────────────
-    {
-        id: 'bmm-neongreen', name: 'Neon Green', author: 'BMM Team',
-        description: 'Black base with electric green terminal accent.',
-        vars: {
-            '--bmm-bg-base':       '#0a0f0a',
-            '--bmm-bg-elevated':   '#0d140d',
-            '--bmm-bg-sidebar':    '#080c08',
-            '--bmm-text-primary':  '#e0ffe0',
-            '--bmm-text-secondary':'#a0d0a0',
-            '--bmm-text-muted':    '#406040',
-            '--bmm-border':        'rgba(0,255,65,0.1)',
-            ...accentVars('#00ff41'),
-        },
-    },
-
-    // ── 13. Solarized Dark ────────────────────────────────────────────────────
-    {
-        id: 'bmm-solarized', name: 'Solarized Dark', author: 'BMM Team',
-        description: 'Classic Solarized dark colour scheme.',
-        vars: {
-            '--bmm-bg-base':       '#002b36',
-            '--bmm-bg-elevated':   '#073642',
-            '--bmm-bg-sidebar':    '#00212b',
-            '--bmm-bg-titlebar':   '#001a22',
-            '--bmm-border':        'rgba(7,54,66,0.7)',
-            '--bmm-text-primary':  '#fdf6e3',
-            '--bmm-text-secondary':'#eee8d5',
-            '--bmm-text-muted':    '#586e75',
-            '--bmm-success':       '#859900',
-            '--bmm-warning':       '#b58900',
-            '--bmm-danger':        '#dc322f',
-            '--bmm-cyan':          '#2aa198',
-            ...accentVars('#268bd2'),
-        },
-    },
-
-    // ── 14. Light Clean ───────────────────────────────────────────────────────
-    {
-        id: 'bmm-light', name: 'Light', author: 'BMM Team',
-        description: 'Bright and clean light mode with dark text.',
+        id: 'bmm-void-light', name: 'Void / Light', author: 'BMM Team',
+        description: 'Light grey surfaces with a neutral slate accent.',
         mode: 'light',
         vars: {
-            '--bmm-bg-base':       '#f8fafc',
-            '--bmm-bg-elevated':   '#ffffff',
-            '--bmm-bg-overlay':    'rgba(255,255,255,0.95)',
-            '--bmm-bg-sidebar':    '#f1f5f9',
-            '--bmm-bg-titlebar':   '#e2e8f0',
-            '--bmm-bg-hover':      'rgba(0,0,0,0.04)',
-            '--bmm-bg-active':     'rgba(37,99,235,0.1)',
-            '--bmm-border':        'rgba(0,0,0,0.1)',
-            '--bmm-border-hover':  'rgba(0,0,0,0.18)',
-            '--bmm-border-accent': 'rgba(37,99,235,0.4)',
-            '--bmm-text-primary':  '#0f172a',
-            '--bmm-text-secondary':'#334155',
-            '--bmm-text-muted':    '#64748b',
-            '--bmm-danger':        '#dc2626',
-            '--bmm-success':       '#15803d',
-            '--bmm-warning':       '#b45309',
-            '--bmm-cyan':          '#0284c7',
-            // Invert the surface overlay tint → all rgba(255,255,255,0.x) cards
-            // become rgba(0,0,0,0.x) which reads correctly on a white background
-            '--bmm-surface-r': '0', '--bmm-surface-g': '0', '--bmm-surface-b': '0',
-            // Pre-built surfaces (need to redefine because CSS vars can't reference
-            // other custom props from the same rule in all engines reliably)
-            '--bmm-s02': 'rgba(0,0,0,0.02)', '--bmm-s03': 'rgba(0,0,0,0.03)',
-            '--bmm-s04': 'rgba(0,0,0,0.04)', '--bmm-s05': 'rgba(0,0,0,0.05)',
-            '--bmm-s06': 'rgba(0,0,0,0.06)', '--bmm-s07': 'rgba(0,0,0,0.07)',
-            '--bmm-s08': 'rgba(0,0,0,0.08)', '--bmm-s09': 'rgba(0,0,0,0.09)',
-            '--bmm-s10': 'rgba(0,0,0,0.10)', '--bmm-s12': 'rgba(0,0,0,0.12)',
-            '--bmm-s15': 'rgba(0,0,0,0.15)', '--bmm-s20': 'rgba(0,0,0,0.20)',
-            '--bmm-glass-bg':     'rgba(0,0,0,0.03)',
-            '--bmm-glass-border': 'rgba(0,0,0,0.08)',
+            '--bmm-bg-base': '#e7e7ec', '--bmm-bg-elevated': '#f3f3f6',
+            '--bmm-bg-sidebar': '#dddde3', '--bmm-bg-titlebar': '#d4d4dc',
+            '--bmm-titlebar-bg': '#d4d4dc', '--bmm-loader-bg': '#e7e7ec',
+            '--bmm-border': 'rgba(0,0,0,0.10)', '--bmm-border-hover': 'rgba(0,0,0,0.18)',
+            '--bmm-text-primary': '#1a1a1e', '--bmm-text-secondary': '#3f3f46',
+            '--bmm-text-muted': '#71717a', '--bmm-success': '#16a34a',
+            '--bmm-warning': '#d97706', '--bmm-danger': '#dc2626', '--bmm-cyan': '#0891b2',
+            '--bmm-tasky-bubble-bg': 'rgba(255,255,255,0.9)', '--bmm-tasky-bubble-text': '#1a1a1e',
+            ...lightSurfaces(),
+            ...accentVars('#52525b'),
+        },
+    },
+    // 5. Full White (bright, adaptive dark text)
+    {
+        id: 'bmm-white', name: 'Full White', author: 'BMM Team',
+        description: 'Pure white interface — text always switches to dark for readability.',
+        mode: 'light',
+        vars: {
+            '--bmm-bg-base': '#ffffff', '--bmm-bg-elevated': '#ffffff', '--bmm-bg-overlay': '#ffffff',
+            '--bmm-bg-sidebar': '#f7f7f8', '--bmm-bg-titlebar': '#efeff1',
+            '--bmm-titlebar-bg': '#efeff1', '--bmm-loader-bg': '#ffffff',
+            '--bmm-border': 'rgba(0,0,0,0.11)', '--bmm-border-hover': 'rgba(0,0,0,0.2)',
+            '--bmm-text-primary': '#0a0a0a', '--bmm-text-secondary': '#3f3f46',
+            '--bmm-text-muted': '#71717a', '--bmm-success': '#15803d',
+            '--bmm-warning': '#b45309', '--bmm-danger': '#dc2626', '--bmm-cyan': '#0369a1',
+            '--bmm-tasky-bubble-bg': 'rgba(255,255,255,0.96)', '--bmm-tasky-bubble-text': '#0a0a0a',
+            '--bmm-shadow-card': '0 2px 12px rgba(0,0,0,0.08)',
+            ...lightSurfaces(),
             ...accentVars('#2563eb'),
+        },
+    },
+    // 6. Spotify Green
+    {
+        id: 'bmm-spotify', name: 'Spotify Green', author: 'BMM Team',
+        description: 'Spotify-style near-black with that iconic green accent.',
+        vars: {
+            '--bmm-bg-base': '#121212', '--bmm-bg-elevated': '#181818',
+            '--bmm-bg-sidebar': '#000000', '--bmm-bg-titlebar': '#0a0a0a',
+            '--bmm-titlebar-bg': '#0a0a0a', '--bmm-loader-bg': '#000000',
+            '--bmm-border': 'rgba(255,255,255,0.07)', '--bmm-text-primary': '#ffffff',
+            '--bmm-text-secondary': '#b3b3b3', '--bmm-text-muted': '#6a6a6a',
+            '--bmm-cyan': '#1ED760', '--bmm-success': '#1ED760',
+            '--bmm-radius-card': '12px', '--bmm-radius-btn': '500px',
+            ...accentVars('#1ED760'),
         },
     },
 ];

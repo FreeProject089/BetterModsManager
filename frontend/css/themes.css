@@ -307,8 +307,50 @@
     transition: background 0.3s ease;
 }
 
+/* ── Element override mini-editor (tokenless pick fallback) ───────────────── */
+.bte-elov {
+    position: fixed; z-index: 2147483647; width: 284px; max-height: 86vh; overflow-y: auto;
+    pointer-events: auto !important; isolation: isolate;
+    background: var(--bmm-bg-elevated); border: 1px solid var(--bmm-border-accent);
+    border-radius: 10px; padding: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    font-size: 12px; color: var(--bmm-text-primary);
+    animation: bteElovIn 0.16s ease;
+}
+@keyframes bteElovIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.bte-elov-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.bte-elov-head strong { font-size: 13px; }
+.bte-elov-close { background: none; border: none; color: var(--bmm-text-muted); cursor: pointer; font-size: 13px; }
+.bte-elov-close:hover { color: var(--bmm-text-primary); }
+.bte-elov-sel { display: block; font-size: 10px; color: var(--bmm-text-secondary);
+    background: var(--bmm-s05); padding: 4px 6px; border-radius: 5px; margin-bottom: 10px;
+    word-break: break-all; }
+.bte-elov-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.bte-elov-row > span { flex: 1; color: var(--bmm-text-secondary); }
+.bte-elov-row input[type=color] { width: 32px; height: 24px; border: none; border-radius: 5px;
+    background: none; cursor: pointer; padding: 0; }
+.bte-elov-clear { background: var(--bmm-s05); border: none; color: var(--bmm-text-muted);
+    width: 22px; height: 22px; border-radius: 5px; cursor: pointer; }
+.bte-elov-clear:hover { color: var(--bmm-danger); background: var(--bmm-danger-dim); }
+.bte-elov-sellabel { display: block; font-size: 10px; color: var(--bmm-text-secondary); margin-bottom: 10px; }
+.bte-elov-selinput { width: 100%; margin-top: 3px; box-sizing: border-box; font-family: var(--bmm-font-mono);
+    font-size: 11px; padding: 5px 7px; border-radius: 5px; border: 1px solid var(--bmm-border);
+    background: var(--bmm-s05); color: var(--bmm-text-primary); }
+.bte-elov-selinput:focus { outline: none; border-color: var(--bmm-border-accent); }
+.bte-elov-csslabel { display: block; font-size: 10px; color: var(--bmm-text-secondary); margin: 4px 0 4px; }
+.bte-elov-css { width: 100%; box-sizing: border-box; min-height: 78px; resize: vertical;
+    font-family: var(--bmm-font-mono); font-size: 11px; line-height: 1.5; padding: 7px 8px;
+    border-radius: 6px; border: 1px solid var(--bmm-border); background: var(--bmm-s05);
+    color: var(--bmm-text-primary); }
+.bte-elov-css:focus { outline: none; border-color: var(--bmm-border-accent); }
+.bte-elov-hint { margin: 6px 0 0; font-size: 10px; color: var(--bmm-text-muted); line-height: 1.4; }
+
 /* ── Pick mode highlight ──────────────────────────────────────────────────── */
 body.bte-picking * { cursor: crosshair !important; }
+/* The element-override popup must always stay interactive, even mid-pick */
+body.bte-picking #bte-elov, body.bte-picking #bte-elov * { cursor: auto !important; }
+#bte-elov input, #bte-elov textarea { cursor: text; }
+#bte-elov input[type=color], #bte-elov button { cursor: pointer; }
+#bte-elov.bte-pick-highlight, #bte-elov *.bte-pick-highlight { outline: none !important; background: revert !important; }
 .bte-pick-highlight {
     outline: 2px solid var(--bmm-accent) !important;
     outline-offset: 1px !important;
