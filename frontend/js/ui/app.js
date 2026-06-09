@@ -789,10 +789,18 @@ async function main() {
     await initSettings();
     // ── Apply sound settings from config ──
     try {
-        const { getSettings, setApiPort } = await import('../core/api.js');
+        const { getSettings, setApiPort, invoke: inv } = await import('../core/api.js');
         const cfg = await getSettings();
-        if (cfg.api_port)
-            setApiPort(cfg.api_port); // keep apiBase() in sync with settings
+        // Sync apiBase() with the port the server ACTUALLY bound this session —
+        // not settings.api_port, which may have been changed and needs a restart.
+        try {
+            const p = await inv('get_effective_api_port');
+            if (p) {
+                setApiPort(p);
+                applyTranslations();
+            } // re-sub port in docs examples
+        }
+        catch { }
         const soundEnabled = cfg.sound_effects_enabled !== false;
         const soundVol = (cfg.sound_volume ?? 70) / 100;
         setSoundEnabled(soundEnabled);

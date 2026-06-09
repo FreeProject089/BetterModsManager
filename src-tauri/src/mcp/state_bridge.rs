@@ -149,7 +149,13 @@ pub struct BmmSettings {
     pub enable_lazy_sha_calculation: bool,
     #[serde(default)]
     pub history_retention_days: u32,
+    #[serde(default)]
+    pub api_token: String,
+    #[serde(default = "default_api_port")]
+    pub api_port: u16,
 }
+
+fn default_api_port() -> u16 { 51274 }
 
 fn default_lang() -> String { "fr".to_string() }
 
@@ -176,6 +182,8 @@ impl Default for BmmSettings {
             show_sha_loading_animation: true,
             enable_lazy_sha_calculation: true,
             history_retention_days: 30,
+            api_token: String::new(),
+            api_port: default_api_port(),
         }
     }
 }

@@ -542,7 +542,10 @@ async function _refreshUqtData(): Promise<void> {
         ]);
         try {
             const liveTok = (document.getElementById('plug-token-display') as HTMLInputElement)?.value?.trim() || _apiToken;
-            const mpRes = await fetch(apiBase() + '/api/modpacks', { headers: { 'Authorization': `Bearer ${liveTok}` } });
+            const mpRes = await fetch(apiBase() + '/api/modpacks', {
+                headers: { 'Authorization': `Bearer ${liveTok}` },
+                signal: AbortSignal.timeout(3000),   // unreachable API must not hang the UI
+            });
             _allModpacks = (await mpRes.json().catch(() => ({}))).data || [];
         } catch { _allModpacks = []; }
     } catch { /* best effort */ }
@@ -582,11 +585,16 @@ function setupUnifiedQuickTest(container: HTMLElement): void {
         });
     };
 
-    const openDropdown = async () => {
-        await _refreshUqtData();
+    const openDropdown = () => {
+        // Open instantly with whatever data we have; refresh in the background and
+        // re-render when it lands (awaiting here made the dropdown feel frozen,
+        // especially when the API fetch inside is slow/unreachable).
         dropdown.style.display = 'block';
         renderDropdownList(search?.value || '');
         search?.focus();
+        _refreshUqtData().then(() => {
+            if (dropdown.style.display !== 'none') renderDropdownList(search?.value || '');
+        }).catch(() => {});
     };
     const closeDropdown = () => { dropdown.style.display = 'none'; };
 
@@ -4322,7 +4330,7 @@ function getEndpointDefs(): EndpointDef[] {
             method: 'GET', path: '/api/health', auth: false,
             desc: t('plugins.endpointHealth'), about: 'Sonde légère de disponibilité — aucune authentification requise. Utilise cet endpoint pour vérifier que le serveur API BMM est démarré et accessible.',
             fields: null,
-            responseStatuses: [{ code: 200, label: 'OK', body: '{ "ok": true, "service": "BMM Plugin API", "port": 51274 }' }],
+            responseStatuses: [{ code: 200, label: 'OK', body: `{ "ok": true, "service": "BMM Plugin API", "port": ${new URL(apiBase()).port} }` }],
         },
         {
             method: 'GET', path: '/api/status', auth: false,
@@ -5157,7 +5165,9 @@ async function handleApiTest() {
     } catch (e) {
         statusBadge.textContent = t('common.error') || 'Error';
         statusBadge.className = 'plug-tester-status plug-status-err';
-        respPre.textContent = (t('plugins.ptNetworkError') || 'Network error: {e}\n\nMake sure BMM is running and the API is on port 51274.').replace('{e}', String(e));
+        respPre.textContent = (t('plugins.ptNetworkError') || 'Network error: {e}\n\nMake sure BMM is running and the API is on port 51274.')
+            .replace('{e}', String(e))
+            .replace(/51274/g, new URL(apiBase()).port);
     }
 }
 
@@ -5955,7 +5965,7 @@ async function handleSaveScriptZip() {
         ``,
         `## Usage`,
         ``,
-        needsEnv ? `1. Open \`.env\` and verify your \`BMM_TOKEN\` is correct.\n2. Make sure BMM is running (API on port 51274).\n3. Run the script with \`${runner} bmm-script.${format}\`.` : `1. Make sure BMM is running.\n2. Run: \`${runner} bmm-script.${format}\``,
+        needsEnv ? `1. Open \`.env\` and verify your \`BMM_TOKEN\` is correct.\n2. Make sure BMM is running (API on port ${new URL(apiBase()).port}).\n3. Run the script with \`${runner} bmm-script.${format}\`.` : `1. Make sure BMM is running.\n2. Run: \`${runner} bmm-script.${format}\``,
         ``,
         `## Requirements`,
         _genFormatReqs(format),

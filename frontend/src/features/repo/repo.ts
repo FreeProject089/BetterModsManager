@@ -1573,15 +1573,6 @@ export function initRepo() {
 
         const fmt = (b) => { if (!b) return '0 B'; const u=['B','KB','MB','GB','TB']; const i=Math.floor(Math.log(b)/Math.log(1024)); return (b/Math.pow(1024,i)).toFixed(1)+' '+u[i]; };
 
-        // Optional public domain — when set, Copy buttons copy a shareable URL
-        // (https://domain/<folder>/repo.json) instead of the local file path.
-        const domainInput = document.getElementById('repo-hub-domain') as HTMLInputElement | null;
-        if (domainInput) {
-            domainInput.value = localStorage.getItem('bmm_hub_domain') || '';
-            domainInput.addEventListener('input', () => localStorage.setItem('bmm_hub_domain', domainInput.value.trim()));
-        }
-        const hubDomain = () => (domainInput?.value || '').trim().replace(/\/+$/, '');
-
         btnOpen.addEventListener('click', () => {
             hubDir = ''; pathInput.value = '';
             listEl.style.display = 'none'; listEl.innerHTML = '';
@@ -1627,16 +1618,10 @@ export function initRepo() {
                     // Add event listeners to copy buttons
                     document.querySelectorAll('.repo-hub-copy-btn').forEach(btn => {
                         btn.addEventListener('click', async () => {
-                            const dom = hubDomain();
-                            const repoFolder = btn.getAttribute('data-folder') || '.';
-                            // With a public domain configured → copy the shareable URL
-                            // (what others paste in BMM); otherwise the local file path.
-                            const value = dom
-                                ? `${dom}/${repoFolder === '.' ? '' : repoFolder + '/'}repo.json`
-                                : btn.getAttribute('data-path');
-                            if (value) {
-                                navigator.clipboard.writeText(value);
-                                toast((t('common.copied') || 'Copied!') + (dom ? ' (URL)' : ''), 'success');
+                            const path = btn.getAttribute('data-path');
+                            if (path) {
+                                navigator.clipboard.writeText(path);
+                                toast(t('common.copied') || 'Copied!', 'success');
                             }
                         });
                     });

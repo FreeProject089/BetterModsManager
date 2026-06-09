@@ -24,9 +24,17 @@
         .sb-item:hover { background:rgba(255,255,255,0.03); }
         .sb-item.active { background:rgba(6,182,212,0.1); border-left-color:var(--accent); }
         .sb-item .n { font-size:12px; font-weight:700; display:flex; align-items:center; gap:6px; width:100%; }
-        .sb-copy { background:none; border:none; cursor:pointer; color:var(--muted); padding:2px 4px; border-radius:4px; opacity:0; transition:.15s; flex-shrink:0; }
-        .sb-item:hover .sb-copy { opacity:1; }
-        .sb-copy:hover { color:var(--accent); background:rgba(6,182,212,0.1); }
+        /* Always-visible labeled copy pill — copying the repo.json URL is the
+           main action users come here for, so it must not hide until hover. */
+        .sb-copy {
+            display:flex; align-items:center; gap:6px; width:100%;
+            margin-top:7px; padding:5px 9px; cursor:pointer;
+            background:rgba(6,182,212,0.12); border:1px solid rgba(6,182,212,0.35);
+            border-radius:6px; color:var(--accent); font-size:10.5px; font-weight:700;
+            transition:.15s; flex-shrink:0;
+        }
+        .sb-copy:hover { background:rgba(6,182,212,0.25); border-color:var(--accent); }
+        .sb-copy svg { flex-shrink:0; }
         .sb-item .m { font-size:10px; color:var(--muted); margin-top:2px; }
         .sb-item .sc { color:var(--accent); }
         /* Main */
@@ -168,13 +176,14 @@ async function loadRepoList() {
         ? list.map(r => {
             const rUrl = `${location.origin}/${r.folder}/repo.json`;
             return `<div class="sb-item${currentRepo===r.folder?' active':''}" onclick="selectRepo('${r.folder}')">
-              <div class="n" style="justify-content:space-between;">
+              <div class="n">
                 <span>${esc(r.name)}${r.verified?' <span class="sc">✓</span>':''}</span>
-                <button class="sb-copy" title="Copy repo.json URL" onclick="event.stopPropagation();sbCopyUrl(this,'${rUrl}')">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                </button>
               </div>
               <div class="m">${r.mods} mods · ${r.profiles} prof · ${fmtBytes(r.size)}</div>
+              <button class="sb-copy" title="${rUrl}" onclick="event.stopPropagation();sbCopyUrl(this,'${rUrl}')">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span>Copy repo.json URL</span>
+              </button>
             </div>`;
           }).join('')
         : '<div style="color:var(--muted);font-size:12px;padding:12px;">No repos found.</div>';
@@ -400,7 +409,7 @@ document.getElementById('search').addEventListener('input', loadRepoList);
 function sbCopyUrl(btn, url) {
     navigator.clipboard.writeText(url).then(() => {
         const orig = btn.innerHTML;
-        btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+        btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg><span>Copied!</span>';
         btn.style.color = '#10b981';
         setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 1400);
     });

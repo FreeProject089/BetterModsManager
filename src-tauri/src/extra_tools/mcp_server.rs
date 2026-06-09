@@ -21,6 +21,7 @@
 //!   bmm-mcp-server generate-lightweight   # Generate standalone .bat server
 //!   bmm-mcp-server export-config <path>   # Export data.json
 //!   bmm-mcp-server info                   # Show BMM environment info
+//!   bmm-mcp-server api [--reveal]         # Show Plugin API URL/port/token
 
 #[path = "../mcp/mod.rs"]
 mod mcp;
@@ -221,6 +222,15 @@ enum Commands {
         /// Pack ID or Name
         id: String,
     },
+
+    // ── Plugin API ────────────────────────────────────────────────────
+
+    /// Show the local Plugin API URL, port & token (for scripts/plugins)
+    Api {
+        /// Print the full API token instead of a masked preview
+        #[arg(long, default_value_t = false)]
+        reveal: bool,
+    },
 }
 
 // ─── Fancy banner ─────────────────────────────────────────────────────────
@@ -323,6 +333,32 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
             if let Ok(all_mods) = mods::list_mods(None, None) {
                 println!("  {} {}", "Total Mods:".bold(), all_mods.len().to_string().cyan());
             }
+        }
+
+        // ── Plugin API ────────────────────────────────────────────────
+        Commands::Api { reveal } => {
+            let data = state_bridge::read_app_data()?;
+            let port = if data.settings.api_port == 0 { 51274 } else { data.settings.api_port };
+            let token = &data.settings.api_token;
+            let masked = if token.is_empty() {
+                "—".to_string()
+            } else if reveal {
+                token.clone()
+            } else if token.len() > 8 {
+                format!("{}…{}", &token[..4], &token[token.len() - 4..])
+            } else {
+                "••••".to_string()
+            };
+            println!("  {} http://127.0.0.1:{}", "API URL:".bold(), port.to_string().cyan());
+            println!("  {} {}", "Port:".bold(), port.to_string().cyan());
+            println!("  {} {}{}", "Token:".bold(), masked.yellow(),
+                if reveal || token.is_empty() { "".to_string() } else { "  (use --reveal to show)".dimmed().to_string() });
+            println!();
+            println!("  {}", "Quick test:".bold());
+            println!("    curl http://127.0.0.1:{}/api/health", port);
+            println!("    curl -H \"Authorization: Bearer <token>\" http://127.0.0.1:{}/api/mods", port);
+            println!();
+            println!("  {}", "Note: BMM must be running for the API to respond. The port is configurable in Settings → Identity & API (restart required).".dimmed());
         }
 
         // ── Profiles ─────────────────────────────────────────────────
@@ -493,8 +529,11 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
             upload_limit, server_version, password,
         } => {
             println!("  {} Generating standalone server script...", "⏳".yellow());
+            // Docker generation is a GUI-driven feature; the CLI generates the
+            // classic standalone script (no docker, default host type).
             match mods::generate_lightweight_server(
-                &repo_path, port, auto_start, cloudflare, upnp, upload_limit, server_version, &password
+                &repo_path, port, auto_start, cloudflare, upnp, upload_limit, server_version, &password,
+                false, "linux", "node",
             ) {
                 Ok(msg) => println!("  {} {}", "✓".green().bold(), msg),
                 Err(e) => println!("  {} {}", "✗".red().bold(), e),

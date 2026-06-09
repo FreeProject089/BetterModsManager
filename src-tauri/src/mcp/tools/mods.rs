@@ -322,6 +322,8 @@ pub fn add_mod_entry(name: &str, folder_path: &str, version: &str) -> Result<Str
         cached_files: None,
         last_scan_mtime: 0,
         file_hashes: None,
+        file_hashes_invalid: None,
+        file_hashes_timestamp: None,
     };
     
     data.mods.push(entry);

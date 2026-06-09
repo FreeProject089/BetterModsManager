@@ -176,6 +176,19 @@ export function applyTranslations(root: Document | Element = document): void {
         const key = (el as HTMLElement).dataset.i18nTooltip!;
         el.setAttribute('data-tooltip', t(key));
     });
+
+    // Substitute the default API port in docs/examples with the EFFECTIVE port
+    // (settings.api_port may differ from 51274). Covers static HTML examples
+    // (curl snippets, tables) and i18n strings mentioning the port.
+    try {
+        const port = localStorage.getItem('bmm_api_port') || '51274';
+        if (port !== '51274') {
+            const scope = root instanceof Document ? root : root;
+            scope.querySelectorAll('#view-docs code, #view-docs pre, #view-docs td, #view-docs p, #view-docs strong, #view-docs .plug-doc-p').forEach((el: Element) => {
+                if (el.innerHTML.includes('51274')) el.innerHTML = el.innerHTML.replace(/51274/g, port);
+            });
+        }
+    } catch { /* never break translations over this */ }
 }
 
 export async function refreshLanguages(): Promise<boolean> {

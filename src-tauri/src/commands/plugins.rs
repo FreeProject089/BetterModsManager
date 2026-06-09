@@ -367,6 +367,14 @@ pub fn get_api_token(state: State<'_, AppState>) -> Result<String, String> {
     Ok(data.settings.api_token.clone())
 }
 
+/// The port the API actually bound THIS session. The frontend must use this
+/// (not settings.api_port) so changing the setting doesn't break calls before
+/// the restart that rebinds the server.
+#[tauri::command]
+pub fn get_effective_api_port() -> u16 {
+    crate::api::api_port()
+}
+
 #[tauri::command]
 pub fn reset_api_token(state: State<'_, AppState>) -> Result<String, String> {
     let new_token = uuid::Uuid::new_v4().to_string();

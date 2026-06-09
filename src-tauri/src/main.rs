@@ -33,27 +33,24 @@ fn get_pending_deep_link() -> Option<String> {
 }
 
 /// Open the native WebView2 DevTools on demand (only when the user asks).
+/// Works in release too thanks to the tauri "devtools" feature — these used to
+/// be #[cfg(debug_assertions)]-gated, which made the button dead in production.
 #[tauri::command]
-fn open_devtools(_window: tauri::Window) {
-    #[cfg(debug_assertions)]
-    _window.open_devtools();
+fn open_devtools(window: tauri::Window) {
+    window.open_devtools();
 }
 
 /// Close the native WebView2 DevTools — frees the heavy DevTools process (the
 /// ~480 MB msedgewebview2 "DevTools" process) so it's only resident while open.
 #[tauri::command]
-fn close_devtools(_window: tauri::Window) {
-    #[cfg(debug_assertions)]
-    _window.close_devtools();
+fn close_devtools(window: tauri::Window) {
+    window.close_devtools();
 }
 
 /// Whether the native DevTools window is currently open.
 #[tauri::command]
-fn is_devtools_open(_window: tauri::Window) -> bool {
-    #[cfg(debug_assertions)]
-    { return _window.is_devtools_open(); }
-    #[allow(unreachable_code)]
-    false
+fn is_devtools_open(window: tauri::Window) -> bool {
+    window.is_devtools_open()
 }
 
 fn register_bmm_protocol() -> Result<(), Box<dyn std::error::Error>> {
@@ -462,6 +459,7 @@ fn main() {
             commands::plugins::set_plugin_permissions,
             commands::plugins::get_plugin_permissions,
             commands::plugins::get_api_token,
+            commands::plugins::get_effective_api_port,
             commands::plugins::reset_api_token,
             commands::plugins::generate_script,
             commands::plugins::export_plugin,

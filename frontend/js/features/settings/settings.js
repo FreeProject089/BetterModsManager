@@ -145,6 +145,17 @@ async function initDiscordRpcSettings() {
             toast(t('common.error') + ' : ' + err, 'error');
         }
     });
+    // Copy Creator ID (shown on the Discord profile card alongside the presence)
+    document.getElementById('btn-rpc-copy-creator')?.addEventListener('click', async () => {
+        try {
+            const id = await invoke('get_creator_id');
+            await navigator.clipboard.writeText(id || '');
+            toast(t('common.copied') || 'Copied!', 'success');
+        }
+        catch (err) {
+            toast(t('common.error') + ' : ' + err, 'error');
+        }
+    });
 }
 // ── Sound / Animation Settings ───────────────────────────
 async function initSoundSettings() {
@@ -1417,10 +1428,16 @@ async function initSecurityInfoCard() {
             const fresh = await getSettings();
             fresh.api_port = p;
             await invoke('update_settings', { settings: fresh });
-            const { setApiPort } = await import('../../core/api.js');
-            setApiPort(p);
-            if (urlEl)
-                urlEl.textContent = apiBase();
+            // Do NOT switch apiBase() now — the server still listens on the old
+            // port until restart; switching immediately would break every call.
+            toast(t('settings.identity.apiPortSaved') || 'API port saved — restart BMM to apply', 'success', 3500);
+        });
+        document.getElementById('btn-sic-reset-port')?.addEventListener('click', async () => {
+            const fresh = await getSettings();
+            fresh.api_port = 51274;
+            await invoke('update_settings', { settings: fresh });
+            if (portEl)
+                portEl.value = '51274';
             toast(t('settings.identity.apiPortSaved') || 'API port saved — restart BMM to apply', 'success', 3500);
         });
     }

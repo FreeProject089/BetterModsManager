@@ -7618,6 +7618,26 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                     <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
                                 </label>
                             </div>
+
+                            <!-- Creator ID quick-copy (shown on the Discord profile card) -->
+                            <div
+                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-top:10px">
+                                <div style="flex:1">
+                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                        data-i18n="settings.discordRpcCreatorId">Creator ID</div>
+                                    <div style="font-size:10px;color:var(--text-muted)"
+                                        data-i18n="settings.discordRpcCreatorIdDesc">Share your Creator ID with others
+                                    </div>
+                                </div>
+                                <button class="btn btn-sm btn-secondary" id="btn-rpc-copy-creator"
+                                    onmouseenter="window.showTaskyHelp('settings.identity.copyTip','icon-copy')"
+                                    onmouseleave="window.hideTaskyHelp()">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                    </svg>
+                                    <span data-i18n="common.copy">Copy</span>
+                                </button>
+                            </div>
                         </div>
 
                         <div class="glass-card"
@@ -7994,6 +8014,13 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                     onmouseleave="window.hideTaskyHelp()">
                                 <div class="sic-actions">
                                     <button class="sic-btn" id="btn-sic-save-port" data-i18n="settings.identity.apiPortSave">Apply</button>
+                                    <button class="sic-btn" id="btn-sic-reset-port" data-i18n-tooltip="settings.identity.apiPortReset"
+                                        onmouseenter="window.showTaskyHelp('settings.identity.apiPortReset','icon-help')"
+                                        onmouseleave="window.hideTaskyHelp()">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+                                        </svg>
+                                    </button>
                                 </div>
                             </div>
 
@@ -9908,10 +9935,6 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                         <div style="flex:1; min-width:140px;">
                             <label class="form-label" style="font-size:11px;" data-i18n="repo.hub.adminPw">Admin password (blank = open)</label>
                             <input type="text" id="repo-hub-adminpw" class="form-input" placeholder="admin" style="font-size:13px;">
-                        </div>
-                        <div style="flex:1.4; min-width:180px;">
-                            <label class="form-label" style="font-size:11px;" data-i18n="repo.hub.domain">Public domain/URL (optional)</label>
-                            <input type="text" id="repo-hub-domain" class="form-input" placeholder="https://mods.example.com" style="font-size:13px;">
                         </div>
                     </div>
                     <div style="margin-top:16px;">

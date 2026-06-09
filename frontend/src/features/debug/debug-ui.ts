@@ -534,6 +534,49 @@ class DebugUI {
         overlay.onclick = (e) => { if (e.target === overlay) close(); };
     }
 
+    /** REPL: evaluate a JS expression in the GLOBAL scope and print the result
+     *  (or error) into the JS pane. This was wired to the input but never
+     *  implemented — the REPL threw "evalJSCommand is not a function".        */
+    evalJSCommand(cmd) {
+        const out = this._get('js-errors');
+        const fmt = (v) => {
+            try {
+                if (v === undefined) return 'undefined';
+                if (v === null) return 'null';
+                if (typeof v === 'function') return v.toString().split('\n')[0] + ' …';
+                if (typeof v === 'object') return JSON.stringify(v, null, 2);
+                return String(v);
+            } catch { return String(v); }
+        };
+        const append = (html) => {
+            if (!out) return;
+            // Drop the "No JS errors recorded." placeholder on first output
+            if (out.children.length === 1 && out.textContent?.includes('No JS errors')) out.innerHTML = '';
+            const row = document.createElement('div');
+            row.style.cssText = 'font-family:JetBrains Mono,monospace;font-size:10.5px;padding:3px 4px;border-bottom:1px solid rgba(255,255,255,0.04);white-space:pre-wrap;word-break:break-word;';
+            row.innerHTML = html;
+            out.appendChild(row);
+            out.scrollTop = out.scrollHeight;
+        };
+        const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        append(`<span style="color:var(--debug-accent)">›</span> <span style="color:#cbd5e1">${esc(cmd)}</span>`);
+        try {
+            // Indirect eval → global scope (so `app`, `window.x`… resolve as expected)
+            const result = (0, eval)(cmd);
+            if (result instanceof Promise) {
+                append(`<span style="color:var(--text-muted)">⏳ Promise…</span>`);
+                result.then(
+                    (v) => append(`<span style="color:#34d399">←</span> ${esc(fmt(v))}`),
+                    (e) => append(`<span style="color:#f87171">✗ ${esc(e?.message || e)}</span>`),
+                );
+            } else {
+                append(`<span style="color:#34d399">←</span> ${esc(fmt(result))}`);
+            }
+        } catch (e) {
+            append(`<span style="color:#f87171">✗ ${esc(e?.message || e)}</span>`);
+        }
+    }
+
     showAlert(title, text) {
         if (!this.container) this.init();
         // Allow alerts if explicitly triggered, but they will only be visible if DevTools is open
