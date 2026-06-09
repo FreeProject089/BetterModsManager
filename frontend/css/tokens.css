@@ -47,6 +47,17 @@
     --bmm-amber:   #f59e0b;
     --bmm-purple:  #a855f7;
 
+    /* ── Diagrams (Help & other interactive flowcharts) ──────────────────── */
+    --bmm-diagram-node:        var(--bmm-bg-elevated);   /* node fill — follows theme */
+    --bmm-diagram-node-border: var(--bmm-border-accent);
+    --bmm-diagram-node-text:   var(--bmm-text-primary);
+
+    /* ── Benchmark / performance chart series ─────────────────────────────── */
+    --bmm-chart-cpu:        #3b82f6;
+    --bmm-chart-ram:        #ffffff;
+    --bmm-chart-disk-read:  #fbbf24;
+    --bmm-chart-disk-write: #f87171;
+
     /* ── Text ─────────────────────────────────────────────────────────────── */
     --bmm-text-primary:   #f1f5f9;
     --bmm-text-secondary: #94a3b8;

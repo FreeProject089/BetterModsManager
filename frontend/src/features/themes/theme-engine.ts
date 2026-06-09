@@ -23,6 +23,7 @@ export interface BmmTheme {
     pages?: Record<string, PageTheme>;   // view id → per-page overrides
     element_overrides?: ElementOverride[];
     custom_elements?: CustomElement[];
+    html_swaps?: HtmlSwap[];    // replace matching elements' innerHTML (e.g. icon SVG)
     mode?: 'dark' | 'light';    // triggers contrast patches for light themes
     catalog_url?: string;       // origin catalog (for attribution)
     bmm_min_version?: string;
@@ -47,6 +48,11 @@ interface ElementOverride {
     props: Record<string, string>;
 }
 
+export interface HtmlSwap {
+    selector: string;
+    html: string;       // sanitised markup that replaces matching elements' innerHTML
+}
+
 interface CustomElement {
     id: string;
     target: string;         // CSS selector of the host element
@@ -68,6 +74,8 @@ const THEMES_DIR_KEY   = 'bmm_themes_installed';
 let _activeTheme: BmmTheme | null = null;
 let _customElementObserver: MutationObserver | null = null;
 let _patchObserver: MutationObserver | null = null;
+let _htmlSwapObserver: MutationObserver | null = null;
+let _assetObserver: MutationObserver | null = null;
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 function getOrCreate(id: string): HTMLStyleElement {
@@ -290,6 +298,7 @@ function enforceLightContrast(root: Element | Document): void {
         try { return el.matches(ovSel) || !!el.closest(ovSel); } catch { return false; }
     };
     const scan = (el: HTMLElement) => {
+      try {
         if (!el || el.nodeType !== 1) return;
         if (el.closest('#bmm-theme-editor, #bte-elov, .bmm-csel-menu, #app-loader')) return;
         if (isOverridden(el)) return;
@@ -311,6 +320,18 @@ function enforceLightContrast(root: Element | Document): void {
             }
         }
 
+        // 1b) SVG icons whose colour (currentColor stroke/fill) is light AND sit on a
+        //     light background → retint to a readable token. Coloured icons (accent,
+        //     success…) are dark-ish so spared; icons on dark/coloured bg are skipped.
+        if (el.tagName === 'svg' || el.tagName === 'SVG') {
+            const sc = _parseRgb(cs.color);
+            if (sc && _lum(sc[0], sc[1], sc[2]) > 0.6 && _effectiveBgLum(el) > 0.5) {
+                el.style.setProperty('color', 'var(--bmm-text-secondary)', 'important');
+                el.setAttribute(CONTRAST_ATTR, 'svg');
+            }
+            return;
+        }
+
         // 2) Light text sitting on a light background → dark text token.
         let hasText = false;
         for (const n of el.childNodes) {
@@ -323,10 +344,13 @@ function enforceLightContrast(root: Element | Document): void {
             el.style.setProperty('color', 'var(--bmm-text-primary)', 'important');
             el.setAttribute(CONTRAST_ATTR, '1');
         }
+      } catch { /* never let one element abort the whole contrast pass */ }
     };
     const r = root as any;
-    if (r.nodeType === 1) scan(r as HTMLElement);
-    r.querySelectorAll?.('*').forEach((e: Element) => scan(e as HTMLElement));
+    try {
+        if (r.nodeType === 1) scan(r as HTMLElement);
+        r.querySelectorAll?.('*').forEach((e: Element) => scan(e as HTMLElement));
+    } catch { /* defensive */ }
 }
 
 function startPatchObserver(theme: BmmTheme): void {
@@ -470,6 +494,40 @@ function clearEnforcedOnOverrides(theme: BmmTheme): void {
     });
 }
 
+// ── HTML swaps — replace matching elements' innerHTML (e.g. swap an icon's SVG) ─
+const SWAP_ATTR = 'data-bmm-swap';
+function applyHtmlSwaps(theme: BmmTheme): void {
+    if (_htmlSwapObserver) { _htmlSwapObserver.disconnect(); _htmlSwapObserver = null; }
+    // Restore any previously-swapped elements not covered by the new theme.
+    document.querySelectorAll(`[${SWAP_ATTR}]`).forEach(el => {
+        const e = el as HTMLElement;
+        if (e.dataset.bmmSwapOrig !== undefined) e.innerHTML = e.dataset.bmmSwapOrig;
+        e.removeAttribute(SWAP_ATTR);
+        delete e.dataset.bmmSwapOrig;
+    });
+    const swaps = (theme.html_swaps || []).filter(s => s.selector && s.html);
+    if (!swaps.length) return;
+
+    const strip = (html: string) => html.replace(/<script[\s\S]*?<\/script>/gi, '');
+    const applyAll = () => {
+        for (const s of swaps) {
+            let nodes: NodeListOf<Element>;
+            try { nodes = document.querySelectorAll(s.selector); } catch { continue; }
+            nodes.forEach(node => {
+                const el = node as HTMLElement;
+                if (el.closest('#bmm-theme-editor, #bte-elov')) return;
+                if (el.getAttribute(SWAP_ATTR) === s.selector) return;   // already swapped
+                if (el.dataset.bmmSwapOrig === undefined) el.dataset.bmmSwapOrig = el.innerHTML;
+                el.innerHTML = strip(s.html);
+                el.setAttribute(SWAP_ATTR, s.selector);
+            });
+        }
+    };
+    applyAll();
+    _htmlSwapObserver = new MutationObserver(() => applyAll());
+    _htmlSwapObserver.observe(document.body, { childList: true, subtree: true });
+}
+
 // ── Custom elements — survive re-renders via MutationObserver ─────────────────
 function applyCustomElements(theme: BmmTheme): void {
     if (_customElementObserver) { _customElementObserver.disconnect(); _customElementObserver = null; }
@@ -511,12 +569,13 @@ export function applyTheme(theme: BmmTheme): void {
     getOrCreate(STYLE_CSS_ID).textContent   = buildCSSBlock(theme);
     getOrCreate(STYLE_FONTS_ID).textContent = buildFontsCSS(theme);
     getOrCreate(STYLE_PATCH_ID).textContent = buildPatchCSS(theme);
-    applyCustomElements(theme);
-    applyAssets(theme);
-    startPatchObserver(theme);
+    try { applyCustomElements(theme); } catch {}
+    try { applyHtmlSwaps(theme); } catch {}
+    try { applyAssets(theme); } catch {}
+    try { startPatchObserver(theme); } catch {}
     // Let element_overrides win: strip the enforcer's inline !important colours
     // from any element the user is explicitly styling via the pick tool.
-    clearEnforcedOnOverrides(theme);
+    try { clearEnforcedOnOverrides(theme); } catch {}
     // Disable all animations (intro/exit, Tasky spin, transitions) when speed = 0
     const speed = (theme.vars || {})['--bmm-anim-speed'];
     document.body.classList.toggle('bmm-no-anim', speed === '0' || speed === '0.0');
@@ -527,8 +586,15 @@ export function applyTheme(theme: BmmTheme): void {
 
 /** Apply image/video assets: replace the corner mascot, the boot loader mascot,
  *  and the app logo if the theme provides them (base64 data-URI or URL). */
+// Every Tasky image across BMM: corner mascot, boot loader, close/outro animation,
+// settings card icon, docs tooltip, tutorial hub, power mascots.
+const MASCOT_SELECTORS = [
+    '#app-mascot', '#loader-img', '#ld-logo', '#vhs-tasky-img',
+    '#settings-tasky-icon', '#tasky-mascot-img', '.tut-hub-mascot', '.bh-pow-mascot',
+];
 function applyAssets(theme: BmmTheme): void {
     const a = theme.assets || {};
+    const mascot = a.mascot;
     const setImg = (sel: string, val?: string) => {
         document.querySelectorAll(sel).forEach(node => {
             const el = node as HTMLImageElement;
@@ -536,15 +602,17 @@ function applyAssets(theme: BmmTheme): void {
             else if (el.dataset.bmmOrig) { el.src = el.dataset.bmmOrig; }   // restore default
         });
     };
-    // The mascot asset replaces EVERY Tasky image across BMM: the floating corner
-    // mascot, the spinning boot loader, the Settings "Tasky — Mascotte" card icon,
-    // and the tutorial-hub / power mascots.
-    const mascot = a.mascot;
-    setImg('#app-mascot', mascot);
-    setImg('#loader-img', mascot || a.loader);
-    setImg('#settings-tasky-icon', mascot);
-    setImg('#tasky-mascot-img', mascot);
-    setImg('.bh-pow-mascot', mascot);
+    const applyMascot = () => {
+        setImg('#loader-img', mascot || a.loader);
+        for (const sel of MASCOT_SELECTORS) if (sel !== '#loader-img') setImg(sel, mascot);
+    };
+    applyMascot();
+    // Re-apply to mascots created later (e.g. the tutorial hub opens on demand).
+    if (_assetObserver) { _assetObserver.disconnect(); _assetObserver = null; }
+    if (mascot || a.loader) {
+        _assetObserver = new MutationObserver(() => applyMascot());
+        _assetObserver.observe(document.body, { childList: true, subtree: true });
+    }
     // App logo (sidebar)
     if (a.logo) document.documentElement.style.setProperty('--bmm-nav-logo-url', `url("${a.logo}")`);
     else document.documentElement.style.removeProperty('--bmm-nav-logo-url');
@@ -558,6 +626,7 @@ export function resetTheme(): void {
     getOrCreate(STYLE_FONTS_ID).textContent = '';
     getOrCreate(STYLE_PATCH_ID).textContent = '';
     removeCustomElements();
+    applyHtmlSwaps({ id: '', name: '' } as BmmTheme);   // restores swapped elements
     if (_patchObserver) { _patchObserver.disconnect(); _patchObserver = null; }
     localStorage.removeItem(ACTIVE_KEY);
 }

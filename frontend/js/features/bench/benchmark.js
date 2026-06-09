@@ -587,13 +587,15 @@ function renderCharts(container, data, highlightIndex = null) {
     const ioCanvas = container.querySelector('#perf-chart-io');
     if (!mainCanvas || !ioCanvas)
         return;
+    // Resolve theme tokens so users can recolour the graphs from the theme editor.
+    const cv = (name, fb) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb;
     drawChart(mainCanvas, data, [
-        { key: 'cpu_usage', color: '#3b82f6', label: 'CPU %' },
-        { key: 'ram_usage', color: '#ffffff', label: 'RAM MB', scale: 0.1 }
+        { key: 'cpu_usage', color: cv('--bmm-chart-cpu', '#3b82f6'), label: 'CPU %' },
+        { key: 'ram_usage', color: cv('--bmm-chart-ram', '#ffffff'), label: 'RAM MB', scale: 0.1 }
     ], highlightIndex);
     drawChart(ioCanvas, data, [
-        { key: 'disk_read', color: '#fbbf24', label: 'Read' },
-        { key: 'disk_write', color: '#f87171', label: 'Write' }
+        { key: 'disk_read', color: cv('--bmm-chart-disk-read', '#fbbf24'), label: 'Read' },
+        { key: 'disk_write', color: cv('--bmm-chart-disk-write', '#f87171'), label: 'Write' }
     ], highlightIndex);
 }
 function drawChart(canvas, data, series, highlightIndex) {

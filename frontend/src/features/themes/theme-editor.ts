@@ -15,7 +15,7 @@ import {
     activateTheme, deleteTheme, BUILTIN_THEMES,
     isContrastEnforced, setContrastEnforced,
 } from './theme-engine.js';
-import type { BmmTheme, CustomElement } from './theme-engine.js';
+import type { BmmTheme, CustomElement, HtmlSwap } from './theme-engine.js';
 
 // ── Icons (lucide outline set, consistent across the editor) ────────────────────
 const ICON = {
@@ -96,8 +96,6 @@ const TOKENS: Token[] = [
     { key:'--bmm-card-hover-lift', label:'Card hover lift',  type:'size',  group:'Effects', desc:'How far cards rise on hover, e.g. -2px. 0 = no lift.', mdn:'transform' },
     { key:'--bmm-shadow-card',     label:'Card shadow',      type:'size',  group:'Effects', desc:'Drop shadow under cards.', mdn:'box-shadow' },
     { key:'--bmm-shadow-modal',    label:'Modal shadow',     type:'size',  group:'Effects', desc:'Drop shadow under modals.', mdn:'box-shadow' },
-    { key:'--bmm-anim-speed',      label:'Animation speed',  type:'size',  group:'Effects', desc:'Global animation multiplier. 1 = normal, 0 = instant (disable).', mdn:'animation' },
-    { key:'--bmm-intro-duration',  label:'Intro/exit speed', type:'size',  group:'Effects', desc:'Boot loader fade duration, e.g. 0.65s.', mdn:'transition' },
 
     // Buttons (granular — change a button kind without touching the global accent)
     { key:'--bmm-btn-primary-bg',     label:'Primary button bg',    type:'color', group:'Buttons', desc:'Background of primary (main action) buttons. Defaults to the accent.', mdn:'background-color' },
@@ -107,6 +105,23 @@ const TOKENS: Token[] = [
     { key:'--bmm-btn-ghost-text',     label:'Ghost button text',    type:'color', group:'Buttons', desc:'Text colour of borderless ghost buttons.', mdn:'color' },
     { key:'--bmm-btn-danger-bg',      label:'Danger button bg',     type:'color', group:'Buttons', desc:'Background of destructive (delete) buttons.', mdn:'background-color' },
     { key:'--bmm-btn-danger-text',    label:'Danger button text',   type:'color', group:'Buttons', desc:'Text colour of destructive buttons.', mdn:'color' },
+
+    // Intro / Outro (boot loader + close animation)
+    { key:'--bmm-loader-bg',     label:'Boot/exit background', type:'color', group:'Intro & Outro', desc:'Background of the startup & close screen.', mdn:'background-color' },
+    { key:'--bmm-loader-img',    label:'Boot mascot image',    type:'image', group:'Intro & Outro', desc:'Image shown spinning while BMM starts (url or pick a file).', mdn:'background-image' },
+    { key:'--bmm-intro-duration',label:'Intro/exit speed',     type:'size',  group:'Intro & Outro', desc:'Boot/exit fade duration, e.g. 0.65s. Lower = faster.', mdn:'transition' },
+    { key:'--bmm-anim-speed',    label:'Animation speed',      type:'size',  group:'Intro & Outro', desc:'Global animation multiplier. 1 = normal, 0 = instant (disable all).', mdn:'animation' },
+
+    // Diagrams (Help & other flowcharts)
+    { key:'--bmm-diagram-node',        label:'Node fill',     type:'color', group:'Diagrams', desc:'Fill colour of the boxes/nodes in the interactive diagrams.', mdn:'fill' },
+    { key:'--bmm-diagram-node-border', label:'Node border',   type:'color', group:'Diagrams', desc:'Border colour of diagram nodes.', mdn:'stroke' },
+    { key:'--bmm-diagram-node-text',   label:'Node text',     type:'color', group:'Diagrams', desc:'Text colour inside diagram nodes.', mdn:'color' },
+
+    // Benchmark charts
+    { key:'--bmm-chart-cpu',        label:'CPU line',          type:'color', group:'Charts', desc:'Colour of the CPU line on the performance graph.', mdn:'color' },
+    { key:'--bmm-chart-ram',        label:'RAM line',          type:'color', group:'Charts', desc:'Colour of the RAM line on the performance graph.', mdn:'color' },
+    { key:'--bmm-chart-disk-read',  label:'Disk read line',    type:'color', group:'Charts', desc:'Colour of the disk-read line on the I/O graph.', mdn:'color' },
+    { key:'--bmm-chart-disk-write', label:'Disk write line',   type:'color', group:'Charts', desc:'Colour of the disk-write line on the I/O graph.', mdn:'color' },
 
     // DevTools
     { key:'--bmm-devtools-bg',     label:'DevTools background', type:'color', group:'DevTools', desc:'Background of the BMM DevTools panel.', mdn:'background-color' },
@@ -155,11 +170,18 @@ function computedColorToToken(color: string): string|null {
 // ── State ──────────────────────────────────────────────────────────────────────
 let _panel: HTMLElement | null = null;
 let _draft: Partial<BmmTheme> = {};
+let _origTheme: BmmTheme | null = null;   // snapshot of the theme active when the editor opened (for Discard)
 let _tab: 'simple'|'elements'|'advanced'|'installed' = 'simple';
 let _pickMode: 'token'|'target'|null = null;   // token=edit token, target=pick element host
 let _pickTargetCb: ((sel: string) => void) | null = null;
 let _advPage = 'global';
 let _editingCeId: string | null = null;
+
+/** The global vars object the Simple tab writes to. */
+function targetVars(create = true): Record<string, string> | undefined {
+    if (create && !_draft.vars) _draft.vars = {};
+    return _draft.vars;
+}
 let _ro: ResizeObserver | null = null;
 const OVL_KEY = 'bmm_theme_editor_geom';
 const MIN_W = 420, MIN_H = 360;
@@ -177,6 +199,7 @@ export function openEditor(): void {
     if (!_panel) buildPanel();
     _panel!.style.display = 'flex';
     _draft = JSON.parse(JSON.stringify(getActiveTheme() || {}));
+    _origTheme = getActiveTheme() ? JSON.parse(JSON.stringify(getActiveTheme())) : null;
     renderTab(_tab);
     if (!_draft.custom_elements) _draft.custom_elements = [];
 }
@@ -235,7 +258,16 @@ function buildPanel(): void {
     _panel.querySelector('#bte-share')!.addEventListener('click', shareTheme);
     _panel.querySelector('#bte-export')!.addEventListener('click', doExport);
     _panel.querySelector('#bte-discard')!.addEventListener('click', () => {
-        _draft = {}; _draft.custom_elements = []; previewTheme({}); renderTab(_tab);
+        // Truly drop every unsaved change: restore the theme that was active on open.
+        if (_origTheme) {
+            _draft = JSON.parse(JSON.stringify(_origTheme));
+            applyTheme(JSON.parse(JSON.stringify(_origTheme)));
+        } else {
+            _draft = { custom_elements: [] };
+            resetTheme();
+        }
+        renderTab(_tab);
+        toast(t('themes.discarded')||'Changes discarded', 'info', 1500);
     });
     _panel.querySelectorAll('.bte-tab').forEach(tab =>
         tab.addEventListener('click', () => {
@@ -268,6 +300,48 @@ const PAGE_OPTIONS = [
     {id:'settings',label:'Settings'},{id:'credits',label:'Credits'},
 ];
 
+// Comprehensive, categorised list of unique elements you can recolour/edit
+// directly (opens the element editor for that selector — no need to pick).
+const TARGET_GROUPS: { cat: string; items: { label: string; sel: string }[] }[] = [
+    { cat: 'Buttons & inputs', items: [
+        { label: 'All buttons',        sel: '.btn' },
+        { label: 'Primary buttons',    sel: '.btn-primary' },
+        { label: 'Secondary buttons',  sel: '.btn-secondary' },
+        { label: 'Ghost buttons',      sel: '.btn-ghost' },
+        { label: 'Danger buttons',     sel: '.btn-danger' },
+        { label: 'Text inputs',        sel: '.input, input[type=text], textarea' },
+        { label: 'Dropdowns',          sel: '.bmm-csel-trigger' },
+        { label: 'Dropdown menus',     sel: '.bmm-csel-menu' },
+        { label: 'Toggles',            sel: '.toggle-slider' },
+    ]},
+    { cat: 'Surfaces', items: [
+        { label: 'Cards',              sel: '.glass-card' },
+        { label: 'Mod cards',          sel: '.mod-card' },
+        { label: 'Generic modals',     sel: '.modal-card, .modal.glass' },
+        { label: 'Toasts',             sel: '.toast' },
+        { label: 'Badges',             sel: '.badge' },
+        { label: 'Tasky tooltip',      sel: '.tasky-speech-bubble' },
+        { label: 'Scrollbars',         sel: '*::-webkit-scrollbar-thumb' },
+    ]},
+    { cat: 'Layout', items: [
+        { label: 'Title bar',          sel: '.titlebar' },
+        { label: 'Sidebar',            sel: '.sidebar' },
+        { label: 'Nav items',          sel: '.nav-item' },
+        { label: 'Active nav item',    sel: '.nav-item.active' },
+        { label: 'Page titles',        sel: '.view-title' },
+        { label: 'Section titles',     sel: '.card-title' },
+    ]},
+    { cat: 'Pages', items: PAGE_OPTIONS.map(p => ({ label: p.label, sel: `#view-${p.id}` })) },
+    { cat: 'Modals', items: [
+        { label: 'Tutorial hub',       sel: '.tut-hub-container' },
+        { label: 'Tutorial step panel',sel: '.tut-engine-panel' },
+        { label: 'Update / release',   sel: '#upd-card' },
+        { label: 'Docs browser',       sel: '.ptb-modal-card' },
+        { label: 'Theme catalog',      sel: '.tc-modal-card' },
+        { label: 'TOS / Privacy',      sel: '#modal-tos .modal, #modal-privacy .modal' },
+    ]},
+];
+
 /** Read the CURRENT computed value of a CSS variable from :root.
  *  This is what is actually applied on screen right now. */
 function computedVar(key: string): string {
@@ -290,6 +364,92 @@ function currentLabel(key: string, type: Token['type']): string {
     return cv.slice(0, 30) + (cv.length > 30 ? '…' : '');
 }
 
+// ── Auto-palette: generate a full coherent theme from one accent colour ─────────
+function _hexToRgb(hex: string): [number, number, number] {
+    const m = hex.replace('#', '');
+    const v = m.length === 3 ? m.split('').map(c => c + c).join('') : m;
+    return [parseInt(v.slice(0, 2), 16) || 0, parseInt(v.slice(2, 4), 16) || 0, parseInt(v.slice(4, 6), 16) || 0];
+}
+function _rgbToHexN(r: number, g: number, b: number): string {
+    return '#' + [r, g, b].map(n => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')).join('');
+}
+function _hexToHsl(hex: string): [number, number, number] {
+    let [r, g, b] = _hexToRgb(hex).map(x => x / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b); let h = 0, s = 0; const l = (max + min) / 2;
+    if (max !== min) {
+        const d = max - min; s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+        else if (max === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h /= 6;
+    }
+    return [h * 360, s * 100, l * 100];
+}
+function _hslToHex(h: number, s: number, l: number): string {
+    h /= 360; s = Math.max(0, Math.min(100, s)) / 100; l = Math.max(0, Math.min(100, l)) / 100;
+    const hue2rgb = (p: number, q: number, t: number) => {
+        if (t < 0) t += 1; if (t > 1) t -= 1;
+        if (t < 1 / 6) return p + (q - p) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
+    };
+    let r: number, g: number, b: number;
+    if (s === 0) { r = g = b = l; }
+    else { const q = l < 0.5 ? l * (1 + s) : l + s - l * s; const p = 2 * l - q; r = hue2rgb(p, q, h + 1 / 3); g = hue2rgb(p, q, h); b = hue2rgb(p, q, h - 1 / 3); }
+    return _rgbToHexN(r * 255, g * 255, b * 255);
+}
+function _accentVarsLocal(hex: string): Record<string, string> {
+    const [r, g, b] = _hexToRgb(hex);
+    return {
+        '--bmm-accent': hex, '--bmm-accent-dim': `rgba(${r},${g},${b},0.18)`,
+        '--bmm-accent-r': String(r), '--bmm-accent-g': String(g), '--bmm-accent-b': String(b),
+        '--bmm-border-accent': `rgba(${r},${g},${b},0.4)`,
+        '--bmm-accent-glow': `0 0 20px rgba(${r},${g},${b},0.35)`,
+    };
+}
+/** Build a full, coherent theme palette from a single accent colour. */
+function genPalette(accent: string, light: boolean): Partial<BmmTheme> {
+    const [h, s] = _hexToHsl(accent);
+    const bgSat = Math.min(s, 22);            // tint backgrounds subtly with the accent hue
+    const vars: Record<string, string> = { ..._accentVarsLocal(accent) };
+    if (light) {
+        Object.assign(vars, {
+            '--bmm-bg-base': _hslToHex(h, bgSat * 0.5, 95),
+            '--bmm-bg-elevated': '#ffffff',
+            '--bmm-bg-overlay': '#ffffff',
+            '--bmm-bg-sidebar': _hslToHex(h, bgSat * 0.4, 99),
+            '--bmm-bg-titlebar': _hslToHex(h, bgSat * 0.4, 97),
+            '--bmm-titlebar-bg': _hslToHex(h, bgSat * 0.4, 97),
+            '--bmm-loader-bg': _hslToHex(h, bgSat * 0.5, 95),
+            '--bmm-text-primary': _hslToHex(h, 12, 12),
+            '--bmm-text-secondary': _hslToHex(h, 8, 30),
+            '--bmm-text-muted': _hslToHex(h, 6, 48),
+            '--bmm-border': 'rgba(0,0,0,0.1)', '--bmm-border-hover': 'rgba(0,0,0,0.18)',
+            '--bmm-surface-r': '0', '--bmm-surface-g': '0', '--bmm-surface-b': '0',
+            '--bmm-color-scheme': 'light',
+            '--bmm-card-glow': '0 0 0 transparent', '--bmm-card-hover-lift': '0px',
+            '--bmm-shadow-card': '0 1px 3px rgba(0,0,0,0.06)',
+        });
+        return { vars, mode: 'light' };
+    }
+    Object.assign(vars, {
+        '--bmm-bg-base': _hslToHex(h, bgSat, 7),
+        '--bmm-bg-elevated': _hslToHex(h, bgSat, 11),
+        '--bmm-bg-sidebar': _hslToHex(h, bgSat, 5),
+        '--bmm-bg-titlebar': _hslToHex(h, bgSat, 4),
+        '--bmm-titlebar-bg': _hslToHex(h, bgSat, 4),
+        '--bmm-loader-bg': _hslToHex(h, bgSat, 4),
+        '--bmm-text-primary': _hslToHex(h, 10, 96),
+        '--bmm-text-secondary': _hslToHex(h, 8, 70),
+        '--bmm-text-muted': _hslToHex(h, 6, 45),
+        '--bmm-border': 'rgba(255,255,255,0.08)', '--bmm-border-hover': 'rgba(255,255,255,0.16)',
+        '--bmm-surface-r': '255', '--bmm-surface-g': '255', '--bmm-surface-b': '255',
+        '--bmm-color-scheme': 'dark',
+    });
+    return { vars, mode: 'dark' };
+}
+
 /** A unified, revertable list of every change in the current draft: token tweaks,
  *  fonts/sizes, custom element overrides and assets. Lets the user review and
  *  undo changes one by one instead of hunting through the groups.            */
@@ -309,15 +469,22 @@ function buildChangesPanel(): string {
     }
     for (const o of (_draft.element_overrides || [])) {
         rows.push(`<div class="bte-chg-row" data-chg="ov" data-key="${escAttr(o.selector)}">
-            <span class="bte-chg-name">🎯 <code>${escHtml(o.selector.slice(0, 30))}</code></span>
+            <span class="bte-chg-name">${gi('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>')} <code>${escHtml(o.selector.slice(0, 30))}</code></span>
             <span class="bte-chg-val">${Object.keys(o.props).length} ${t('themes.props')||'props'}</span>
             <button class="bte-chg-revert" title="${t('themes.revert')||'Revert'}">↩</button>
         </div>`);
     }
     for (const k of Object.keys(_draft.assets || {})) {
         rows.push(`<div class="bte-chg-row" data-chg="asset" data-key="${escAttr(k)}">
-            <span class="bte-chg-name">🖼 ${escHtml(k)}</span>
+            <span class="bte-chg-name">${gi('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>')} ${escHtml(k)}</span>
             <span class="bte-chg-val">${t('themes.custom')||'custom'}</span>
+            <button class="bte-chg-revert" title="${t('themes.revert')||'Revert'}">↩</button>
+        </div>`);
+    }
+    for (const s of (_draft.html_swaps || [])) {
+        rows.push(`<div class="bte-chg-row" data-chg="swap" data-key="${escAttr(s.selector)}">
+            <span class="bte-chg-name">${gi('<path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/>')} <code>${escHtml(s.selector.slice(0, 30))}</code></span>
+            <span class="bte-chg-val">${t('themes.iconSwap')||'icon'}</span>
             <button class="bte-chg-revert" title="${t('themes.revert')||'Revert'}">↩</button>
         </div>`);
     }
@@ -332,7 +499,7 @@ function buildChangesPanel(): string {
     return `
         <div class="bte-group bte-changes open">
             <button class="bte-group-head" type="button">
-                <span class="bte-group-title">📝 ${t('themes.yourChanges')||'Your changes'}</span>
+                <span class="bte-group-title">${gi('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>')} ${t('themes.yourChanges')||'Your changes'}</span>
                 <span class="bte-group-badge">${rows.length}</span>
                 <button class="bte-chg-revert-all" title="${t('themes.revertAll')||'Revert all'}">${t('themes.revertAll')||'Revert all'}</button>
                 <svg class="bte-group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
@@ -342,17 +509,23 @@ function buildChangesPanel(): string {
 }
 
 // Friendly per-group descriptions + icons
+/** Small lucide-style group icon (monochrome, follows currentColor — no emoji). */
+const gi = (paths: string) =>
+    `<svg class="bte-gi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
 const GROUP_INFO: Record<string, { icon: string; desc: string }> = {
-    'Background':     { icon: '🎨', desc: 'Colours behind the whole app, cards and bars.' },
-    'Accent':         { icon: '✨', desc: 'Highlight colours — buttons, active items, states.' },
-    'Borders':        { icon: '▢',  desc: 'Outlines around cards, inputs and panels.' },
-    'Text':           { icon: '🅰', desc: 'Text colours for different levels of importance.' },
-    'Typography':     { icon: '🔤', desc: 'Fonts and base text size of the whole interface.' },
-    'Shape':          { icon: '⬭',  desc: 'How rounded cards, buttons and inputs are.' },
-    'Tasky Tooltips': { icon: '💬', desc: 'The little helper bubbles that pop up on hover.' },
-    'Effects':        { icon: '🌟', desc: 'Glows, shadows, hover lift and animation speed.' },
-    'Buttons':        { icon: '🔘', desc: 'Recolour each button kind on its own, without touching the accent.' },
-    'DevTools':       { icon: '🛠', desc: 'The developer tools overlay (F12).' },
+    'Background':     { icon: gi('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>'), desc: 'Colours behind the whole app, cards and bars.' },
+    'Accent':         { icon: gi('<path d="m12 3 1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3z"/>'), desc: 'Highlight colours — buttons, active items, states.' },
+    'Borders':        { icon: gi('<rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 3"/>'), desc: 'Outlines around cards, inputs and panels.' },
+    'Text':           { icon: gi('<path d="M4 7V5h16v2M9 19h6M12 5v14"/>'), desc: 'Text colours for different levels of importance.' },
+    'Typography':     { icon: gi('<path d="M4 7V5h16v2M9 19h6M12 5v14"/>'), desc: 'Fonts and base text size of the whole interface.' },
+    'Shape':          { icon: gi('<path d="M12 2 2 7l10 5 10-5z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/>'), desc: 'How rounded cards, buttons and inputs are.' },
+    'Tasky Tooltips': { icon: gi('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'), desc: 'The little helper bubbles that pop up on hover.' },
+    'Effects':        { icon: gi('<path d="M13 2 3 14h9l-1 8 10-12h-9z"/>'), desc: 'Glows, shadows, hover lift and animation speed.' },
+    'Intro & Outro':  { icon: gi('<polygon points="5 3 19 12 5 21 5 3"/>'), desc: 'The startup/close screen — background, boot mascot image and speed.' },
+    'Buttons':        { icon: gi('<rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="8" cy="12" r="2"/>'), desc: 'Recolour each button kind on its own, without touching the accent.' },
+    'Charts':         { icon: gi('<path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/>'), desc: 'Line colours of the performance / benchmark graphs.' },
+    'Diagrams':       { icon: gi('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M7 10v4h7"/>'), desc: 'Node colours of the interactive flowcharts (Help & other).' },
+    'DevTools':       { icon: gi('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2z"/>'), desc: 'The developer tools overlay (F12).' },
 };
 
 const MDN_BASE = 'https://developer.mozilla.org/en-US/docs/Web/CSS/';
@@ -386,7 +559,7 @@ function buildSimpleTab(): string {
 
     const assetsHtml = `
         <div class="bte-group">
-            <div class="bte-group-title">🖼 ${t('themes.assets')||'Assets (images / video)'}</div>
+            <div class="bte-group-title">${gi('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>')} ${t('themes.assets')||'Assets (images / video)'}</div>
             <p class="bte-group-desc">${t('themes.assetsDesc')||'Replace BMM built-in images. Files are embedded into your theme.'}</p>
             ${assetRow('mascot', t('themes.assetMascot')||'Tasky mascot', 'image/*', 'Replace the floating Tasky mascot AND the spinning boot loader Tasky.')}
             ${assetRow('logo',   t('themes.assetLogo')||'Sidebar logo', 'image/*', 'Replace the BMM logo in the sidebar.')}
@@ -454,11 +627,31 @@ function buildSimpleTab(): string {
         ${buildChangesPanel()}
         <div class="bte-section-title">${t('themes.quickPresets')||'Quick presets'}</div>
         <div class="bte-presets">${presets}</div>
+        <div class="bte-gen-row">
+            <input type="color" id="bte-gen-color" value="${pickerHex('--bmm-accent', _draft.vars?.['--bmm-accent']||'')}" title="${escAttr(t('themes.genHint')||'Pick a colour to generate a full matching theme')}">
+            <button class="btn btn-secondary btn-sm" id="bte-gen-dark">${t('themes.genDark')||'Generate dark'}</button>
+            <button class="btn btn-secondary btn-sm" id="bte-gen-light">${t('themes.genLight')||'Generate light'}</button>
+        </div>
         <label class="bte-contrast-toggle" title="${escAttr(t('themes.contrastHint')||'Auto-darkens light text/surfaces on light themes. Turn off for full manual control.')}">
             <input type="checkbox" id="bte-contrast-toggle" ${isContrastEnforced() ? 'checked' : ''}>
             <span>${t('themes.contrastToggle')||'Auto contrast on light themes'}</span>
         </label>
         <div class="bte-sep"></div>
+        <div class="bte-group">
+            <button class="bte-group-head" type="button">
+                <span class="bte-group-title">${gi('<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18"/>')} ${t('themes.modalsTargets')||'Modals & shared elements'}</span>
+                <svg class="bte-group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="bte-group-body">
+                <p class="bte-group-desc">${t('themes.modalsHint')||'Click any element to edit it directly (colours, hover, CSS) — no need to open it first.'}</p>
+                ${TARGET_GROUPS.map(g => `
+                    <div class="bte-target-cat">${escHtml(g.cat)}</div>
+                    <div class="bte-targets">
+                        ${g.items.map(m => `<button class="bte-target-chip" data-sel="${escAttr(m.sel)}">${escHtml(m.label)}</button>`).join('')}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
         ${assetsHtml}
         ${groupsHtml}`;
 }
@@ -481,6 +674,8 @@ function wireSimple(): void {
                 delete _draft.assets[key];
                 if (key === 'wallpaper' && _draft.vars) _draft.vars['--bmm-app-bg-image'] = 'none';
             }
+            else if (type === 'swap' && _draft.html_swaps)
+                _draft.html_swaps = _draft.html_swaps.filter(s => s.selector !== key);
             else if (type === 'globalcss') _draft.global_css = '';
             previewTheme(_draft); renderTab('simple');
         });
@@ -498,15 +693,31 @@ function wireSimple(): void {
         toast(on ? (t('themes.contrastOn')||'Auto contrast enabled')
                  : (t('themes.contrastOff')||'Auto contrast disabled'), 'info', 1800);
     });
+    // Auto-palette: generate a full theme from the chosen colour
+    const genFrom = (light: boolean) => {
+        const color = (_panel?.querySelector('#bte-gen-color') as HTMLInputElement)?.value || '#3b82f6';
+        const p = genPalette(color, light);
+        _draft = { ..._draft, vars: { ...p.vars }, mode: p.mode, custom_elements: _draft.custom_elements };
+        previewTheme(_draft); renderTab('simple');
+        toast(t('themes.genDone')||'Theme generated — tweak anything below', 'success', 2000);
+    };
+    _panel?.querySelector('#bte-gen-dark')?.addEventListener('click', () => genFrom(false));
+    _panel?.querySelector('#bte-gen-light')?.addEventListener('click', () => genFrom(true));
+    // Modal / shared-element target chips → open the override editor for that selector
+    _panel?.querySelectorAll('.bte-target-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            openElementOverrideEditor(document.body, (chip as HTMLElement).dataset.sel!);
+        });
+    });
     _panel?.querySelectorAll('.bte-var-inp').forEach(inp => {
         inp.addEventListener('input', () => {
             const k = (inp as HTMLInputElement).dataset.var!;
             const v = (inp as HTMLInputElement).value;
-            if (!_draft.vars) _draft.vars = {};
+            const tv = targetVars()!;
             if (v.trim() === '') {
-                delete _draft.vars[k];
+                delete tv[k];
             } else {
-                _draft.vars[k] = v.trim();
+                tv[k] = v.trim();
                 syncAccentRgb(k, v.trim());
             }
             previewTheme(_draft); updateDirty();
@@ -518,8 +729,8 @@ function wireSimple(): void {
             const hex = (inp as HTMLInputElement).value;
             const txt = _panel!.querySelector(`.bte-color-text[data-var="${CSS.escape(k)}"]`) as HTMLInputElement|null;
             if (txt) txt.value = hex;
-            if (!_draft.vars) _draft.vars = {};
-            _draft.vars[k] = hex;
+            const tv = targetVars()!;
+            tv[k] = hex;
             syncAccentRgb(k, hex);
             previewTheme(_draft); updateDirty();
         });
@@ -533,14 +744,14 @@ function wireSimple(): void {
     });
     _panel?.querySelectorAll('.bte-token-revert').forEach(btn => {
         btn.addEventListener('click', () => {
-            if (_draft.vars) delete _draft.vars[(btn as HTMLElement).dataset.var!];
+            const tv = targetVars(false);
+            if (tv) delete tv[(btn as HTMLElement).dataset.var!];
             previewTheme(_draft); renderTab('simple');
         });
     });
     _panel?.querySelectorAll('.bte-img-clear').forEach(btn => {
         btn.addEventListener('click', () => {
-            if (!_draft.vars) _draft.vars = {};
-            _draft.vars[(btn as HTMLElement).dataset.var!] = 'none';
+            targetVars()![(btn as HTMLElement).dataset.var!] = 'none';
             previewTheme(_draft); renderTab('simple');
         });
     });
@@ -575,6 +786,25 @@ function wireSimple(): void {
 
 /** Open a hidden file input, read the chosen image/video as a base64 data-URI,
  *  store it in the theme's assets, and apply it live. */
+/** Open a file picker, read the chosen image as a base64 data-URI (≤4 MB). */
+function readImageFile(cb: (dataUri: string) => void): void {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        if (file.size > 4 * 1024 * 1024) {
+            toast(t('themes.assetTooBig') || 'File too large (max 4 MB for embedding). Use a URL instead.', 'warning', 4000);
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => cb(reader.result as string);
+        reader.readAsDataURL(file);
+    };
+    input.click();
+}
+
 function pickAsset(key: string, accept: string, isVideo: boolean): void {
     const input = document.createElement('input');
     input.type = 'file';
@@ -608,10 +838,11 @@ function pickAsset(key: string, accept: string, isVideo: boolean): void {
 function syncAccentRgb(k: string, v: string): void {
     if (k !== '--bmm-accent') return;
     const m = v.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
-    if (!m || !_draft.vars) return;
-    _draft.vars['--bmm-accent-r'] = String(parseInt(m[1], 16));
-    _draft.vars['--bmm-accent-g'] = String(parseInt(m[2], 16));
-    _draft.vars['--bmm-accent-b'] = String(parseInt(m[3], 16));
+    if (!m) return;
+    const tv = targetVars()!;
+    tv['--bmm-accent-r'] = String(parseInt(m[1], 16));
+    tv['--bmm-accent-g'] = String(parseInt(m[2], 16));
+    tv['--bmm-accent-b'] = String(parseInt(m[3], 16));
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -904,7 +1135,9 @@ function buildInstalledTab(): string {
                 const isActive = active?.id === th.id;
                 const isBuiltin = BUILTIN_THEMES.some(b => b.id === th.id);
                 return `<div class="bte-installed-item${isActive?' active':''}">
-                    <div class="bte-installed-accent" style="background:${th.vars?.['--bmm-accent']||'var(--bmm-accent)'}"></div>
+                    <div class="bte-installed-swatch" style="background:${th.vars?.['--bmm-bg-base']||'var(--bmm-bg-base)'};border-color:${th.vars?.['--bmm-border']||'rgba(128,128,128,0.4)'}">
+                        <span class="bte-installed-dot" style="background:${th.vars?.['--bmm-accent']||'var(--bmm-accent)'}"></span>
+                    </div>
                     <div class="bte-installed-info">
                         <div class="bte-installed-name">${escHtml(th.name)}${isBuiltin?`<span class="bte-builtin-tag">${t('themes.builtin')||'built-in'}</span>`:''}</div>
                         ${th.description ? `<div class="bte-installed-author">${escHtml(th.description)}</div>` : ''}
@@ -1135,13 +1368,18 @@ function colorInputHex(propVal: string | undefined, computed: string): string {
 /** Floating per-element editor: edit ANY CSS of any element via an
  *  element_override — including its :hover and :active states — through quick
  *  colour pickers and a free-form CSS box. Writes into _draft.element_overrides. */
-function openElementOverrideEditor(el: HTMLElement): void {
+function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
     stopPick();                               // guarantee pick mode is fully off
     document.getElementById('bte-elov')?.remove();
+    // When targeting by selector (modal picker) the element may not be mounted yet —
+    // fall back to <body> just for reading computed colours.
+    if (forcedSel && (!el || el === document.body)) {
+        el = (document.querySelector(forcedSel) as HTMLElement) || document.body;
+    }
     const cs = getComputedStyle(el);
     if (!_draft.element_overrides) _draft.element_overrides = [];
 
-    let base = buildSelectorFor(el);
+    let base = forcedSel || buildSelectorFor(el);
     let state = '';                            // '' | ':hover' | ':active'
     let ov!: ElementOverride;
 
@@ -1184,6 +1422,12 @@ function openElementOverrideEditor(el: HTMLElement): void {
             ${row(t('themes.text')||'Text', 'color')}
             ${row(t('themes.background')||'Background', 'background-color')}
             ${row(t('themes.border')||'Border', 'border-color')}
+            <div class="bte-elov-imgrow">
+                <button class="btn btn-secondary btn-xs bte-elov-img">${t('themes.replaceImage')||'Set / replace image'}</button>
+                <button class="btn btn-ghost btn-xs bte-elov-img-clear" title="${t('themes.clear')||'Clear'}">✕</button>
+            </div>
+            <label class="bte-elov-csslabel">${t('themes.replaceIcon')||'Replace icon (paste SVG)'}</label>
+            <textarea class="bte-elov-svg" spellcheck="false" placeholder='<svg viewBox="0 0 24 24" ...>…</svg>'></textarea>
             <label class="bte-elov-csslabel">${t('themes.customCss')||'Custom CSS (any property)'}</label>
             <textarea class="bte-elov-css" spellcheck="false" placeholder="border-radius: 12px;&#10;padding: 8px 14px;&#10;box-shadow: 0 4px 20px #000;&#10;font-size: 15px;"></textarea>
             <p class="bte-elov-hint">${t('themes.overrideHint')||'Affects every element matching this selector. Live preview.'}</p>
@@ -1228,6 +1472,41 @@ function openElementOverrideEditor(el: HTMLElement): void {
     cssBox.addEventListener('input', () => {
         ov.props = cssToProps(cssBox.value);
         if (!_draft.element_overrides!.includes(ov)) _draft.element_overrides!.push(ov);
+        previewTheme(_draft); updateDirty();
+    });
+
+    // Set / replace image: embeds a picked image as a background on the element
+    // (works to swap an icon or drop an image anywhere). Hides child SVG so an
+    // icon is fully replaced.
+    pop.querySelector('.bte-elov-img')?.addEventListener('click', () => {
+        readImageFile((dataUri) => {
+            ov.props['background-image'] = `url("${dataUri}")`;
+            ov.props['background-size'] = 'contain';
+            ov.props['background-repeat'] = 'no-repeat';
+            ov.props['background-position'] = 'center';
+            refresh(); previewTheme(_draft); updateDirty();
+            toast(t('themes.assetSet')||'Image applied', 'success', 1500);
+        });
+    });
+    pop.querySelector('.bte-elov-img-clear')?.addEventListener('click', () => {
+        ['background-image', 'background-size', 'background-repeat', 'background-position'].forEach(p => delete ov.props[p]);
+        refresh(); previewTheme(_draft); updateDirty();
+    });
+
+    // Replace content (paste SVG) — stored as an html_swap on the base selector.
+    const svgBox = pop.querySelector('.bte-elov-svg') as HTMLTextAreaElement;
+    svgBox.value = (_draft.html_swaps || []).find(s => s.selector === base)?.html || '';
+    svgBox.addEventListener('input', () => {
+        if (!_draft.html_swaps) _draft.html_swaps = [];
+        const html = svgBox.value.trim();
+        const existing = _draft.html_swaps.find(s => s.selector === base);
+        if (!html) {
+            _draft.html_swaps = _draft.html_swaps.filter(s => s.selector !== base);
+        } else if (existing) {
+            existing.html = html;
+        } else {
+            _draft.html_swaps.push({ selector: base, html });
+        }
         previewTheme(_draft); updateDirty();
     });
 

@@ -3763,27 +3763,26 @@ select.input-field option {
     display: flex;
     align-items: center;
     justify-content: center;
-    animation: tutHubIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    /* Fade only — NO transform here. Transforming the overlay would scale the
+       blurred backdrop, which makes the blur pop in after the animation. */
+    animation: tutHubFade 0.22s ease;
 }
 
 .tut-hub-overlay.closing {
-    animation: tutHubOut 0.25s ease forwards;
+    animation: tutHubFade 0.22s ease reverse forwards;
 }
+
+@keyframes tutHubFade { from { opacity: 0; } to { opacity: 1; } }
 
 @keyframes tutHubIn {
-    from { opacity: 0; transform: scale(0.95) translateY(12px); }
+    from { opacity: 0; transform: scale(0.96) translateY(10px); }
     to   { opacity: 1; transform: scale(1) translateY(0); }
-}
-
-@keyframes tutHubOut {
-    from { opacity: 1; transform: scale(1); }
-    to   { opacity: 0; transform: scale(0.96); }
 }
 
 .tut-hub-backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
 }
@@ -3799,10 +3798,11 @@ select.input-field option {
     border: 1px solid var(--bmm-s08);
     border-top: 2px solid rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.5);
     border-radius: 22px;
-    box-shadow: 0 32px 100px -16px rgba(0, 0, 0, 0.85),
-                0 0 0 1px rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.08),
-                inset 0 1px 0 var(--bmm-s07);
+    /* clean, theme-aware shadow (was a heavy hardcoded dark blob) */
+    box-shadow: var(--bmm-shadow-modal, 0 20px 60px rgba(0,0,0,0.4));
     overflow: hidden;
+    /* only the panel does the bouncy entrance */
+    animation: tutHubIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .tut-hub-header {
@@ -4292,17 +4292,9 @@ select.input-field option {
     overflow: hidden;
 }
 
-.tut-chips-scroller::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 32px;
-    height: 100%;
-    background: linear-gradient(to right, transparent, rgb(9, 14, 27));
-    pointer-events: none;
-    z-index: 1;
-}
+/* Edge fade removed — it rendered as an ugly hardcoded dark blob (esp. on light
+   themes). The scroller still scrolls; we just drop the visual shadow. */
+.tut-chips-scroller::after { content: none; }
 
 .tut-part-chips-wrap {
     display: flex;
@@ -5532,8 +5524,8 @@ select:focus {
     bottom: calc(100% + 6px);
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(10,10,20,0.95);
-    color: var(--text-primary);
+    background: var(--bmm-tasky-bubble-bg, rgba(10,10,20,0.95));
+    color: var(--bmm-tasky-bubble-text, var(--text-primary));
     font-size: 11px;
     padding: 4px 8px;
     border-radius: 6px;
@@ -5541,9 +5533,11 @@ select:focus {
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.15s;
-    z-index: 1000;
-    border: 1px solid var(--border);
+    /* Above modals/tutorial overlay (z ~2000100) so tooltips are never clipped. */
+    z-index: 2147483646;
+    border: 1px solid var(--bmm-tasky-bubble-border, var(--border));
     box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    backdrop-filter: blur(var(--bmm-tasky-bubble-blur, 0px));
 }
 [data-tooltip]:hover::after { opacity: 1; }
 
@@ -8457,12 +8451,15 @@ select:focus {
 .mermaid g.node polygon,
 .mermaid g.node circle,
 .mermaid g.node ellipse {
-    fill: rgba(30, 41, 59, 0.7) !important;
-    stroke: var(--border-accent) !important;
+    fill: var(--bmm-diagram-node, rgba(30, 41, 59, 0.7)) !important;
+    stroke: var(--bmm-diagram-node-border, var(--border-accent)) !important;
     stroke-width: 1.5px !important;
     rx: 10px !important;
     ry: 10px !important;
     transition: var(--transition);
+}
+.mermaid g.node .label, .mermaid g.node foreignObject div {
+    color: var(--bmm-diagram-node-text, var(--text-primary)) !important;
 }
 
 .mermaid .node:hover rect,
@@ -8628,6 +8625,22 @@ select:focus {
     stroke-width: 2px !important;
     fill-opacity: 0.05 !important;
 }
+
+/* ── Theme-aware diagram defaults (follow the active theme) ───────────────── */
+.mermaid .cluster rect {
+    fill: var(--bmm-bg-elevated) !important;
+    stroke: var(--bmm-diagram-node-border, var(--border-accent)) !important;
+}
+.mermaid .cluster-label, .mermaid .cluster-label *,
+.mermaid .nodeLabel, .mermaid .flowchart-label, .mermaid .label text, .mermaid text.label {
+    fill: var(--bmm-diagram-node-text, var(--text-primary)) !important;
+    color: var(--bmm-diagram-node-text, var(--text-primary)) !important;
+}
+.mermaid .edgePath path, .mermaid .flowchart-link,
+.mermaid .edgePaths path, .mermaid line.messageLine0 {
+    stroke: var(--bmm-text-muted) !important;
+}
+.mermaid marker path, .mermaid defs marker path { fill: var(--bmm-text-muted) !important; }
 
 .mermaid-container .cluster:hover rect {
     fill-opacity: 0.12 !important;
@@ -12069,6 +12082,7 @@ body.bmm-theme-light .bmm-csel-label { color: var(--bmm-text-primary) !important
 body.bmm-theme-light .mod-card,
 body.bmm-theme-light .glass-card,
 body.bmm-theme-light .card,
+body.bmm-theme-light .ptb-modal-body,
 body.bmm-theme-light [style*="backdrop-filter"] { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 
 /* Sidebar nav: readable when idle, blue (accent) when active or hovered */

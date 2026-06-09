@@ -36,7 +36,12 @@ export function initCustomSelects(): void {
 
 function enhanceAll(): void {
     document.querySelectorAll('select:not([data-bmm-csel]):not([multiple])')
-        .forEach(s => enhance(s as HTMLSelectElement));
+        .forEach(s => {
+            // Leave the theme editor's own selects native — enhancing them interferes
+            // with the editor's re-renders and control wiring.
+            if ((s as HTMLElement).closest('#bmm-theme-editor, #bte-elov')) return;
+            enhance(s as HTMLSelectElement);
+        });
 }
 
 function closeOpen(): void {
