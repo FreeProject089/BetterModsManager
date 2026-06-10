@@ -1,10 +1,10 @@
 {
   "lastUpdate": {
-    "en": "May 16th 2026",
-    "fr": "16 Mai 2026"
+    "en": "June 10th 2026",
+    "fr": "10 Juin 2026"
   },
-  "art": 87,
-  "code": 89,
+  "art": 92,
+  "code": 96,
   "categories": [
     {
       "name": {
@@ -26,7 +26,7 @@
             "fr": "Interface Commande (CLI)"
           },
           "status": "progress",
-          "percent": 95
+          "percent": 96
         },
         {
           "label": {
@@ -34,7 +34,7 @@
             "fr": "Intégration MCP (Model Context Protocol)"
           },
           "status": "progress",
-          "percent": 95
+          "percent": 97
         },
         {
           "label": {
@@ -42,7 +42,7 @@
             "fr": "Système P2P Sync"
           },
           "status": "progress",
-          "percent": 3
+          "percent": 2
         }
       ]
     },
@@ -58,7 +58,7 @@
             "fr": "Refonte Complète de la Doc"
           },
           "status": "progress",
-          "percent": 75
+          "percent": 85
         },
         {
           "label": {
@@ -66,7 +66,7 @@
             "fr": "Série de Vidéos Tutoriels"
           },
           "status": "progress",
-          "percent": 50
+          "percent": 52
         }
       ]
     },
@@ -82,7 +82,7 @@
             "fr": "Interface Glassmorphism v2"
           },
           "status": "progress",
-          "percent": 90
+          "percent": 93
         },
         {
           "label": {
