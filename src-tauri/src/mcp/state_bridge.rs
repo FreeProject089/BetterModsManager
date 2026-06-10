@@ -876,8 +876,10 @@ pub fn generate_lightweight_server(
     let data_dir = get_bmm_data_dir();
     let cf_path = data_dir.join("bin").join("cloudflared.exe").to_string_lossy().to_string();
 
-    let mut main_bat_path = output_path.join("BMM-Standalone-Server.bat");
-    
+    // Re-assigned (to the same value) in both branches below — declared without an
+    // initializer so the compiler enforces it and doesn't warn about a dead store.
+    let main_bat_path;
+
     if server_type == "server" {
         let package_template = include_str!("../templates/mini-server/package.json.template");
         let server_js_template = include_str!("../templates/mini-server/server.express.js.template");

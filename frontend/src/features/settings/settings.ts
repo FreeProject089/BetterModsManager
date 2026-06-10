@@ -139,16 +139,6 @@ async function initDiscordRpcSettings() {
         }
     });
 
-    // Copy Creator ID (shown on the Discord profile card alongside the presence)
-    document.getElementById('btn-rpc-copy-creator')?.addEventListener('click', async () => {
-        try {
-            const id = await invoke('get_creator_id') as string;
-            await navigator.clipboard.writeText(id || '');
-            toast(t('common.copied') || 'Copied!', 'success');
-        } catch (err) {
-            toast(t('common.error') + ' : ' + err, 'error');
-        }
-    });
 }
 
 // ── Sound / Animation Settings ───────────────────────────

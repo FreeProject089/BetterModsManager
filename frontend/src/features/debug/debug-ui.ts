@@ -173,11 +173,14 @@ class DebugUI {
                             <div class="debug-subtab" data-sub="css" data-i18n="dev.subtab.css">CSS</div>
                         </div>
                         <div class="debugger-subcontent" style="flex:1; position:relative; overflow:hidden">
+                            <!-- The old "Vanilla JS Debugger" (custom REPL/watchers) is gone:
+                                 the real Chrome DevTools console does all of it better. This
+                                 pane is now just the DevTools launcher. -->
                             <div class="debug-subpane active" id="subpane-js" style="height:100%; display:flex; flex-direction:column">
                                 <div style="padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2)">
                                     <div>
-                                        <div style="font-size:13px; font-weight:600; color:white; margin-bottom:2px" data-i18n="dev.title.js">Vanilla JS Debugger</div>
-                                        <div style="font-size:11px; color:var(--text-muted)" data-i18n="dev.msg.jsDesc">Press F12 to open Chrome DevTools or inspect below.</div>
+                                        <div style="font-size:13px; font-weight:600; color:white; margin-bottom:2px" data-i18n="dev.title.js">Chrome DevTools</div>
+                                        <div style="font-size:11px; color:var(--text-muted)" data-i18n="dev.msg.jsDesc">Open the full WebView2 inspector (console, sources, network).</div>
                                     </div>
                                     <div style="display:flex; gap:6px;">
                                         <button class="debug-btn debug-btn-primary" id="js-open-devtools" style="font-size:10px; padding:4px 12px" data-i18n="dev.btn.openDevtools">OPEN DEVTOOLS</button>
@@ -186,17 +189,6 @@ class DebugUI {
                                 </div>
                                 <div style="flex:1; overflow-y:auto; padding:8px" id="js-errors">
                                     <div style="color:var(--text-muted); font-size:10px" data-i18n="dev.msg.noJsErrors">No JS errors recorded.</div>
-                                </div>
-                                <div style="height:150px; border-top:1px solid var(--debug-border); display:flex; flex-direction:column">
-                                    <div style="padding:4px 8px; font-size:10px; color:var(--text-muted); background:rgba(0,0,0,0.2); display:flex; justify-content:space-between">
-                                        <span data-i18n="dev.label.repl">REPL & Watchers</span>
-                                        <button class="debug-btn debug-btn-ghost" id="js-add-watcher" style="padding:0; font-size:10px; height:auto" data-i18n="dev.btn.addWatcher">ADD</button>
-                                    </div>
-                                    <div style="flex:1; overflow-y:auto; padding:4px" id="js-watchers"></div>
-                                    <div style="display:flex; border-top:1px solid var(--debug-border)">
-                                        <span style="color:var(--debug-accent); padding:4px 8px; font-family:'JetBrains Mono'; font-size:11px">&gt;</span>
-                                        <input type="text" id="js-repl-input" style="flex:1; background:transparent; border:none; color:white; font-family:'JetBrains Mono'; font-size:11px; outline:none" data-i18n-placeholder="dev.placeholder.eval" placeholder="Evaluate an expression...">
-                                    </div>
                                 </div>
                             </div>
                             <div class="debug-subpane" id="subpane-rust" style="height:100%; flex-direction:column; display:none">
@@ -534,49 +526,6 @@ class DebugUI {
         overlay.onclick = (e) => { if (e.target === overlay) close(); };
     }
 
-    /** REPL: evaluate a JS expression in the GLOBAL scope and print the result
-     *  (or error) into the JS pane. This was wired to the input but never
-     *  implemented — the REPL threw "evalJSCommand is not a function".        */
-    evalJSCommand(cmd) {
-        const out = this._get('js-errors');
-        const fmt = (v) => {
-            try {
-                if (v === undefined) return 'undefined';
-                if (v === null) return 'null';
-                if (typeof v === 'function') return v.toString().split('\n')[0] + ' …';
-                if (typeof v === 'object') return JSON.stringify(v, null, 2);
-                return String(v);
-            } catch { return String(v); }
-        };
-        const append = (html) => {
-            if (!out) return;
-            // Drop the "No JS errors recorded." placeholder on first output
-            if (out.children.length === 1 && out.textContent?.includes('No JS errors')) out.innerHTML = '';
-            const row = document.createElement('div');
-            row.style.cssText = 'font-family:JetBrains Mono,monospace;font-size:10.5px;padding:3px 4px;border-bottom:1px solid rgba(255,255,255,0.04);white-space:pre-wrap;word-break:break-word;';
-            row.innerHTML = html;
-            out.appendChild(row);
-            out.scrollTop = out.scrollHeight;
-        };
-        const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-        append(`<span style="color:var(--debug-accent)">›</span> <span style="color:#cbd5e1">${esc(cmd)}</span>`);
-        try {
-            // Indirect eval → global scope (so `app`, `window.x`… resolve as expected)
-            const result = (0, eval)(cmd);
-            if (result instanceof Promise) {
-                append(`<span style="color:var(--text-muted)">⏳ Promise…</span>`);
-                result.then(
-                    (v) => append(`<span style="color:#34d399">←</span> ${esc(fmt(v))}`),
-                    (e) => append(`<span style="color:#f87171">✗ ${esc(e?.message || e)}</span>`),
-                );
-            } else {
-                append(`<span style="color:#34d399">←</span> ${esc(fmt(result))}`);
-            }
-        } catch (e) {
-            append(`<span style="color:#f87171">✗ ${esc(e?.message || e)}</span>`);
-        }
-    }
-
     showAlert(title, text) {
         if (!this.container) this.init();
         // Allow alerts if explicitly triggered, but they will only be visible if DevTools is open
@@ -638,30 +587,11 @@ class DebugUI {
                 await invoke('open_devtools');
             } catch (e) {
                 console.log("F12 is the standard fallback for opening DevTools.", e);
-                this.showAlert('Vanilla JS Debugger', "Tauri devtools API couldn't be invoked automatically. Please press F12 on your keyboard to open the Chrome DevTools inspector.");
+                this.showAlert('Chrome DevTools', "Tauri devtools API couldn't be invoked automatically. Please press F12 on your keyboard to open the Chrome DevTools inspector.");
             }
         });
         this._get('js-close-devtools')?.addEventListener('click', async () => {
             try { await invoke('close_devtools'); } catch (_) { /* ignore */ }
-        });
-
-        this._get('js-add-watcher')?.addEventListener('click', () => {
-            const input = this._get('js-repl-input');
-            const cmd = input?.value.trim();
-            if (cmd) {
-                this.evalJSCommand(cmd);
-                if (input) input.value = '';
-            }
-        });
-
-        this._get('js-repl-input')?.addEventListener('keydown', e => {
-            if (e.key === 'Enter') {
-                const val = e.target.value.trim();
-                if (val) {
-                    this.evalJSCommand(val);
-                    e.target.value = '';
-                }
-            }
         });
 
         // Debugger Rust

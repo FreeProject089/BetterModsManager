@@ -3565,6 +3565,11 @@
                                             <span style="font-size: 11px;" data-i18n="docs.gallery.btn.serverMode">Mode
                                                 Serveur</span>
                                         </button>
+                                        <button class="btn btn-ghost btn-sm" onclick="openDiagram('theme-system')"
+                                            style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                            <span style="font-size: 11px;" data-i18n="docs.gallery.btn.themeSystem">Système
+                                                de Thèmes</span>
+                                        </button>
                                     </div>
                                 </div>
                             </details>
@@ -7617,26 +7622,6 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                     <input type="checkbox" id="chk-discord-rpc" checked>
                                     <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
                                 </label>
-                            </div>
-
-                            <!-- Creator ID quick-copy (shown on the Discord profile card) -->
-                            <div
-                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-top:10px">
-                                <div style="flex:1">
-                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
-                                        data-i18n="settings.discordRpcCreatorId">Creator ID</div>
-                                    <div style="font-size:10px;color:var(--text-muted)"
-                                        data-i18n="settings.discordRpcCreatorIdDesc">Share your Creator ID with others
-                                    </div>
-                                </div>
-                                <button class="btn btn-sm btn-secondary" id="btn-rpc-copy-creator"
-                                    onmouseenter="window.showTaskyHelp('settings.identity.copyTip','icon-copy')"
-                                    onmouseleave="window.hideTaskyHelp()">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                                    </svg>
-                                    <span data-i18n="common.copy">Copy</span>
-                                </button>
                             </div>
                         </div>
 
