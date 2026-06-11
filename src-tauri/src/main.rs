@@ -197,7 +197,7 @@ fn main() {
             
             let _ = commands::ban_manager::load_bans(&app.handle());
             let _ = commands::whitelist_manager::load_whitelist(&app.handle());
-            let _ = commands::discord::init_discord_rpc(app.state::<AppState>());
+            let _ = commands::discord::init_discord_rpc(app.state::<AppState>(), app.handle());
 
             // Start local HTTP Plugin API on port 51274
             {

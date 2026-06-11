@@ -9,14 +9,22 @@ name = "better-mods-manager"
 path = "src/main.rs"
 
 # Standalone MCP server + CLI (bmm-mcp-server serve / profiles / mods / api …).
-# Gated behind the "mcp-bin" feature so `tauri build` does NOT pick it up —
-# tauri-bundler bundles every plain cargo binary and WiX (light.exe) then fails
-# the MSI. Build it on demand with:
-#   cargo build --release --features mcp-bin --bin bmm-mcp-server
-[[bin]]
+#
+# It is declared as an [[example]], NOT a [[bin]], on purpose:
+#   tauri-bundler harvests every cargo [[bin]] into the installer, but it IGNORES
+#   examples. As a [[bin]] this collided with the externalBin sidecar of the same
+#   name (binaries/bmm-mcp-server-<triple>.exe) → WiX light.exe LGHT0091
+#   "Duplicate symbol 'Component:bmm_mcp_server.exe'" → the MSI failed to bundle.
+#
+# The binary that SHIPS is the sidecar in tauri.conf.json
+# (`externalBin: ["binaries/bmm-mcp-server"]`). It is self-contained
+# (`#[path = "../mcp/mod.rs"] mod mcp;`), so building it as an example works
+# exactly like the old bin. To (re)build & refresh the shipped sidecar:
+#   cargo build --release --example bmm-mcp-server
+#   copy target\release\examples\bmm-mcp-server.exe binaries\bmm-mcp-server-x86_64-pc-windows-msvc.exe
+[[example]]
 name = "bmm-mcp-server"
 path = "src/extra_tools/mcp_server.rs"
-required-features = ["mcp-bin"]
 
 
 [build-dependencies]
@@ -86,5 +94,3 @@ mimalloc = { version = "0.1", default-features = false }
 # this feature is used for production builds or when `devPath` points to the filesystem
 # it is the default for `tauri build`
 custom-protocol = [ "tauri/custom-protocol" ]
-# opt-in build of the standalone MCP/CLI binary (see [[bin]] bmm-mcp-server)
-mcp-bin = []

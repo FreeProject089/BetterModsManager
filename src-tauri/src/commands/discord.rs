@@ -9,6 +9,7 @@ const DISCORD_CLIENT_ID: &str = "1486151779195555920"; // Placeholder BMM Client
 #[tauri::command]
 pub fn set_discord_presence(
     state: State<AppState>,
+    handle: tauri::AppHandle,
     details: String,
     status: String,
 ) -> Result<(), AppError> {
@@ -43,19 +44,41 @@ pub fn set_discord_presence(
         }
     }
 
+    // Resolve this user's Creator ID (ed25519 public key). Discord activity
+    // buttons can only OPEN a URL — they can't copy to the clipboard — so the
+    // "Copy Creator ID" button links to the BMM web page with the id in the
+    // query string (the page can surface/copy it). Discord caps activities at
+    // 2 buttons, so when a creator id exists we swap "Website" for it.
+    let creator_id = crate::commands::security::get_creator_id(handle).unwrap_or_default();
+
     // Update presence
     if let Some(client) = client_lock.as_mut() {
-        let version_text = format!("Better Mods Manager v{}", env!("CARGO_PKG_VERSION"));
+        let version_text = if creator_id.is_empty() {
+            format!("Better Mods Manager v{}", env!("CARGO_PKG_VERSION"))
+        } else {
+            format!("BMM v{} • Creator ID: {}", env!("CARGO_PKG_VERSION"), creator_id)
+        };
+        let creator_url = format!(
+            "https://freeproject089.github.io/BMM_Web/?creator={}",
+            creator_id
+        );
+
+        let mut buttons = vec![
+            discord_rich_presence::activity::Button::new("GitHub", "https://github.com/FreeProject089/BetterModsManager"),
+        ];
+        if creator_id.is_empty() {
+            buttons.insert(0, discord_rich_presence::activity::Button::new("Website", "https://freeproject089.github.io/BMM_Web/"));
+        } else {
+            buttons.insert(0, discord_rich_presence::activity::Button::new("Copy Creator ID", &creator_url));
+        }
+
         let payload = discord_rich_presence::activity::Activity::new()
             .details(&details)
             .state(&status)
             .assets(discord_rich_presence::activity::Assets::new()
                 .large_image("bmm_logo")
                 .large_text(&version_text))
-            .buttons(vec![
-                discord_rich_presence::activity::Button::new("Website", "https://freeproject089.github.io/BMM_Web/"),
-                discord_rich_presence::activity::Button::new("GitHub", "https://github.com/FreeProject089/BetterModsManager"),
-            ]);
+            .buttons(buttons);
 
         let _ = client.set_activity(payload);
     }
@@ -64,7 +87,7 @@ pub fn set_discord_presence(
 }
 
 #[tauri::command]
-pub fn init_discord_rpc(state: State<AppState>) -> Result<(), AppError> {
+pub fn init_discord_rpc(state: State<AppState>, handle: tauri::AppHandle) -> Result<(), AppError> {
     let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     if !data.settings.discord_rpc_enabled {
         return Ok(());
@@ -90,5 +113,5 @@ pub fn init_discord_rpc(state: State<AppState>) -> Result<(), AppError> {
     };
 
     drop(data);
-    set_discord_presence(state, format!("Profil: {}", profile_name), format!("{} mods activés", active_mods_count))
+    set_discord_presence(state, handle, format!("Profil: {}", profile_name), format!("{} mods activés", active_mods_count))
 }

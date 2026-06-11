@@ -835,6 +835,16 @@ async function main() {
             startOnboarding();
         }, 800);
     }
+    else {
+        // Not a first run → gently remind (once) that BMM has a Ko-fi.
+        try {
+            const { maybeShowKofiReminder } = await import('./kofi-modal.js');
+            maybeShowKofiReminder();
+        }
+        catch (e) {
+            console.error('kofi reminder failed', e);
+        }
+    }
     // ── Auto-Calibration trigger at startup ──
     setTimeout(async () => {
         try {

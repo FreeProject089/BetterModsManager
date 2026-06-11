@@ -85,6 +85,10 @@
                 "certificateThumbprint": null,
                 "digestAlgorithm": "sha256",
                 "timestampUrl": "",
+                "webviewInstallMode": {
+                    "type": "downloadBootstrapper",
+                    "silent": true
+                },
                 "nsis": {
                     "license": "nsis/license.txt"
                 },

@@ -576,6 +576,12 @@ export function applyTheme(theme: BmmTheme): void {
     // Let element_overrides win: strip the enforcer's inline !important colours
     // from any element the user is explicitly styling via the pick tool.
     try { clearEnforcedOnOverrides(theme); } catch {}
+    // When the new theme is NOT a light theme (or the enforcer is off), wipe EVERY
+    // inline contrast colour a previous light theme injected. Without this, already
+    // rendered dynamic elements (mod/profile cards) keep their stale light-mode
+    // colours after a Discard / Revert-all / preset / generator switch until they
+    // happen to re-render — exactly the "need to refresh to look right" bug.
+    try { if (theme.mode !== 'light' || !isContrastEnforced()) clearAllEnforced(); } catch {}
     // Disable all animations (intro/exit, Tasky spin, transitions) when speed = 0
     const speed = (theme.vars || {})['--bmm-anim-speed'];
     document.body.classList.toggle('bmm-no-anim', speed === '0' || speed === '0.0');
@@ -629,6 +635,12 @@ export function resetTheme(): void {
     removeCustomElements();
     applyHtmlSwaps({ id: '', name: '' } as BmmTheme);   // restores swapped elements
     if (_patchObserver) { _patchObserver.disconnect(); _patchObserver = null; }
+    if (_assetObserver) { _assetObserver.disconnect(); _assetObserver = null; }
+    // Wipe enforcer inline colours + reset the body flags, otherwise dynamic
+    // elements keep stale light-theme styling until they re-render.
+    clearAllEnforced();
+    document.body.classList.remove('bmm-theme-light', 'bmm-no-anim');
+    document.documentElement.style.removeProperty('--bmm-nav-logo-url');
     localStorage.removeItem(ACTIVE_KEY);
 }
 

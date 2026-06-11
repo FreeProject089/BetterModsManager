@@ -108,6 +108,9 @@ class DebugUI {
                     BMM DEVTOOLS
                 </div>
                 <div class="debug-controls">
+                    <button class="debug-btn" id="debug-btn-devtools" data-i18n-title="dev.btn.openDevtools" onmouseenter="window.showTaskyHelp('dev.msg.jsDesc', 'icon-help')" onmouseleave="window.hideTaskyHelp()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                    </button>
                     <button class="debug-btn" id="debug-btn-inspect" onmouseenter="window.showTaskyHelp('dev.tool.inspectTip', 'icon-help')" onmouseleave="window.hideTaskyHelp()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
                     </button>
@@ -156,32 +159,16 @@ class DebugUI {
                 </div>
                 <div class="debug-pane" id="pane-debugger">
                     <div class="debugger-layout" style="display:flex; height:100%; flex-direction:column">
+                        <!-- The JS debugger sub-tab was removed: the real Chrome DevTools
+                             (button in the header) does everything the custom JS pane did,
+                             better. RUST is now the default debugger sub-tab. -->
                         <div class="debugger-subtabs" style="display:flex; border-bottom:1px solid rgba(255,255,255,0.05); background:rgba(0,0,0,0.1)">
-                            <div class="debug-subtab active" data-sub="js" data-i18n="dev.subtab.js">JS</div>
-                            <div class="debug-subtab" data-sub="rust" data-i18n="dev.subtab.rust">RUST</div>
+                            <div class="debug-subtab active" data-sub="rust" data-i18n="dev.subtab.rust">RUST</div>
                             <div class="debug-subtab" data-sub="html" data-i18n="dev.subtab.html">HTML</div>
                             <div class="debug-subtab" data-sub="css" data-i18n="dev.subtab.css">CSS</div>
                         </div>
                         <div class="debugger-subcontent" style="flex:1; position:relative; overflow:hidden">
-                            <!-- The old "Vanilla JS Debugger" (custom REPL/watchers) is gone:
-                                 the real Chrome DevTools console does all of it better. This
-                                 pane is now just the DevTools launcher. -->
-                            <div class="debug-subpane active" id="subpane-js" style="height:100%; display:flex; flex-direction:column">
-                                <div style="padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2)">
-                                    <div>
-                                        <div style="font-size:13px; font-weight:600; color:white; margin-bottom:2px" data-i18n="dev.title.js">Chrome DevTools</div>
-                                        <div style="font-size:11px; color:var(--text-muted)" data-i18n="dev.msg.jsDesc">Open the full WebView2 inspector (console, sources, network).</div>
-                                    </div>
-                                    <div style="display:flex; gap:6px;">
-                                        <button class="debug-btn debug-btn-primary" id="js-open-devtools" style="font-size:10px; padding:4px 12px" data-i18n="dev.btn.openDevtools">OPEN DEVTOOLS</button>
-                                        <button class="debug-btn" id="js-close-devtools" style="font-size:10px; padding:4px 12px" data-i18n="dev.btn.closeDevtools">CLOSE DEVTOOLS</button>
-                                    </div>
-                                </div>
-                                <div style="flex:1; overflow-y:auto; padding:8px" id="js-errors">
-                                    <div style="color:var(--text-muted); font-size:10px" data-i18n="dev.msg.noJsErrors">No JS errors recorded.</div>
-                                </div>
-                            </div>
-                            <div class="debug-subpane" id="subpane-rust" style="height:100%; flex-direction:column; display:none">
+                            <div class="debug-subpane active" id="subpane-rust" style="height:100%; flex-direction:column; display:flex">
                                 <div style="padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2)">
                                     <div>
                                         <div style="font-size:13px; font-weight:600; color:white; margin-bottom:2px" data-i18n="dev.title.rust">Rust Debugger (GDB/LLDB)</div>
@@ -554,8 +541,8 @@ class DebugUI {
                 this.switchDebuggerSubtab(subId);
             });
         });
-        // Debugger JS
-        this._get('js-open-devtools')?.addEventListener('click', async () => {
+        // Open the real Chrome/WebView2 DevTools (header button — replaces the old JS sub-tab)
+        this._get('debug-btn-devtools')?.addEventListener('click', async () => {
             try {
                 await invoke('open_devtools');
             }
@@ -563,12 +550,6 @@ class DebugUI {
                 console.log("F12 is the standard fallback for opening DevTools.", e);
                 this.showAlert('Chrome DevTools', "Tauri devtools API couldn't be invoked automatically. Please press F12 on your keyboard to open the Chrome DevTools inspector.");
             }
-        });
-        this._get('js-close-devtools')?.addEventListener('click', async () => {
-            try {
-                await invoke('close_devtools');
-            }
-            catch (_) { /* ignore */ }
         });
         // Debugger Rust
         this._get('rust-copy-lldb')?.addEventListener('click', () => {

@@ -3796,22 +3796,41 @@ select.input-field option {
     flex-direction: column;
     background: var(--bmm-bg-elevated);
     border: 1px solid var(--bmm-s08);
-    border-top: 2px solid rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.5);
+    border-top: 2.5px solid var(--bmm-accent);
     border-radius: 22px;
-    /* clean, theme-aware shadow (was a heavy hardcoded dark blob) */
-    box-shadow: var(--bmm-shadow-modal, 0 20px 60px rgba(0,0,0,0.4));
+    /* clean, theme-aware shadow + a faint accent ring + inner top highlight */
+    box-shadow:
+        0 0 0 1px rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.08),
+        var(--bmm-shadow-modal, 0 20px 60px rgba(0,0,0,0.4)),
+        inset 0 1px 0 var(--bmm-s06);
     overflow: hidden;
     /* only the panel does the bouncy entrance */
     animation: tutHubIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* Soft decorative glow bleeding down from the top accent edge */
+.tut-hub-container::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 50%; transform: translateX(-50%);
+    width: 70%; height: 160px;
+    background: radial-gradient(ellipse at top,
+        rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.16) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+
 .tut-hub-header {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 22px 26px 18px;
     border-bottom: 1px solid var(--bmm-s06);
-    background: var(--bmm-s02);
+    background: linear-gradient(180deg,
+        rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.07) 0%,
+        var(--bmm-s02) 100%);
     flex-shrink: 0;
 }
 
@@ -3881,6 +3900,8 @@ select.input-field option {
 }
 
 .tut-hub-list {
+    position: relative;
+    z-index: 1;
     flex: 1;
     overflow-y: auto;
     padding: 18px 22px;
@@ -3896,6 +3917,8 @@ select.input-field option {
 .tut-hub-list::-webkit-scrollbar-thumb { background: var(--bmm-s10); border-radius: 2px; }
 
 .tut-hub-footer {
+    position: relative;
+    z-index: 1;
     padding: 12px 26px;
     border-top: 1px solid var(--bmm-s05);
     flex-shrink: 0;
@@ -4464,6 +4487,7 @@ select.input-field option {
 }
 
 .tut-avatar {
+    position: relative;
     width: 52px;
     height: 52px;
     flex-shrink: 0;
@@ -4474,8 +4498,30 @@ select.input-field option {
     background: rgba(var(--tut-panel-r, 59), var(--tut-panel-g, 130), var(--tut-panel-b, 246), 0.1) !important;
     border-radius: 16px !important;
     box-shadow: 0 0 18px rgba(var(--tut-panel-r, 59), var(--tut-panel-g, 130), var(--tut-panel-b, 246), 0.2) !important;
-    overflow: hidden;
+    overflow: visible;
 }
+/* Soft rotating glow ring — purely decorative, uses the active tutorial colour. */
+.tut-avatar::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 19px;
+    padding: 2px;
+    background: conic-gradient(from 0deg,
+        rgba(var(--tut-panel-r, 59), var(--tut-panel-g, 130), var(--tut-panel-b, 246), 0) 0deg,
+        rgba(var(--tut-panel-r, 59), var(--tut-panel-g, 130), var(--tut-panel-b, 246), 0.9) 140deg,
+        rgba(var(--tut-panel-r, 59), var(--tut-panel-g, 130), var(--tut-panel-b, 246), 0) 300deg);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask-composite: exclude;
+    animation: tutAvatarSpin 4s linear infinite;
+    pointer-events: none;
+    opacity: 0.8;
+}
+.tut-avatar > img { position: relative; z-index: 1; }
+@keyframes tutAvatarSpin { to { transform: rotate(360deg); } }
+.bmm-no-anim .tut-avatar::before { animation: none; opacity: 0.4; }
 
 .tut-avatar img {
     width: 82%;
