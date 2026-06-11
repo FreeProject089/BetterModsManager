@@ -1761,6 +1761,9 @@ body.is-maximized .titlebar-spacer {
 .content-area {
     flex: 1;
     overflow-y: auto;
+    /* Below a sane content width, scroll horizontally instead of letting toolbars
+       and filter bars wrap/squish (keeps the intended layout — see .view min-width). */
+    overflow-x: auto;
     position: relative;
 }
 
@@ -1769,6 +1772,9 @@ body.is-maximized .titlebar-spacer {
     display: none;
     padding: 28px 32px;
     max-width: 1100px;
+    /* Never shrink the content below this — narrower windows scroll (no deform). */
+    min-width: 840px;
+    box-sizing: border-box;
     min-height: 100%;
     animation: fadeIn 0.2s ease;
 }

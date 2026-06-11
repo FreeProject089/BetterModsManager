@@ -76,7 +76,8 @@
                 "../PRIVACY.md",
                 "../PRIVACY_FR.md",
                 "../frontend/Lang",
-                "../frontend/assets/tutorial-assets"
+                "../frontend/assets/tutorial-assets",
+                "../frontend/assets/links.json"
             ],
             "externalBin": [
                 "binaries/bmm-mcp-server"
@@ -124,7 +125,7 @@
                 "title": "Better Mod Manager",
                 "width": 1480,
                 "height": 960,
-                "minWidth": 1024,
+                "minWidth": 1120,
                 "minHeight": 680,
                 "resizable": true,
                 "fullscreen": false,

@@ -561,5 +561,37 @@ Chaque mod reçoit une empreinte de contenu déterministe pour que BMM reconnais
 
 ---
 
+## 48. Système de thèmes (v1.0.0)
+
+Un moteur de thèmes complet qui restyle 100% de BMM **sans aucune connaissance CSS**, tout en exposant le CSS brut pour les utilisateurs avancés. Ouvert depuis **Paramètres → Thème**.
+
+| Fonction | Description |
+| :--- | :--- |
+| **7 presets intégrés** | Thèmes prêts à l'emploi (Sombre, Void, Full White, Discord, Orange, Spotify…), thèmes clairs inclus. |
+| **Auto-palette** | Choisissez une seule couleur et générez un thème complet et cohérent, sombre ou clair. |
+| **Pioche d'éléments** | Clic droit sur n'importe quel élément pour éditer ses couleurs texte/fond/bordure, états survol & actif, CSS perso, icône (swap SVG) ou image. |
+| **Tokens de design** | Les thèmes sont du JSON de variables CSS `--bmm-*` injectées en blocs `<style>` — les fichiers sources ne sont jamais modifiés, tout est réversible. |
+| **Patcheur inline** | Un MutationObserver réécrit les couleurs inline codées en dur sur le contenu dynamique pour qu'il suive le thème. |
+| **Contraste auto** | Sur les thèmes clairs, les textes/surfaces clairs illisibles sont assombris automatiquement (désactivable). |
+| **Suivi des modifs** | Un panneau « Vos modifications » liste chaque édition avec revert individuel ; Discard / Tout annuler restaurent instantanément (y compris les cartes mods/profils dynamiques, sans rafraîchir). |
+| **Partage & installation** | Exportez un `.bmmtheme` (ZIP avec assets/polices), copiez un lien `bmm://theme/import-inline` en un clic, ou installez depuis le catalogue de thèmes. |
+
+---
+
+## 49. Bac à sable de traduction (v1.0.0)
+
+Un outil intégré (Paramètres → Bac à sable de traduction) qui permet à n'importe qui de créer ou corriger une langue sans toucher au code — il étend le système d'internationalisation dynamique (§6).
+
+| Fonction | Description |
+| :--- | :--- |
+| **Bac à sable sûr** | Éditez les clés de traduction de façon isolée ; rien ne change dans BMM avant l'export ou l'application. |
+| **Mode pointeur** | Cliquez sur n'importe quel élément de l'app pour sauter directement à sa clé i18n (ou signaler du texte codé en dur). |
+| **Scanner de texte codé en dur** | Analyse la source à la recherche de chaînes sans clé i18n, pour repérer les manques. |
+| **Mode overlay** | Détachez le bac à sable en un overlay déplaçable et redimensionnable pour éditer tout en utilisant l'app. |
+| **Export** | Sauvegardez votre langue en fichier `.json` (fichier complet, ordre préservé). |
+| **Partage en un clic** | Un bouton **Partager** produit un lien `bmm://language/import-inline` (compressé en gzip) ; pour les traductions complètes qui dépassent la taille limite du lien, il bascule sur l'export du `.json` à partager en fichier. |
+
+---
+
 *Better Mod Manager est développé par FreeProject089.*
 

@@ -312,6 +312,7 @@ fn main() {
             commands::settings::delete_language_file,
             commands::settings::get_all_languages_content,
             commands::settings::import_language,
+            commands::settings::import_language_data,
             commands::settings::get_resource_debug_info,
             commands::settings::get_tutorial_assets_path,
             commands::settings::export_tutorial_assets,

@@ -211,5 +211,20 @@ This version represents the transition to the 1.0 milestone, focusing on cross-p
 - **Profile "Disable All (Global)"**: added a one-click action on the Profiles page to disable every active mod at once (`disableAllRequestedMods()`), with a confirmation step; removed the now-redundant legacy "Active Mods (Global)" button.
 - **Tasky tooltip accuracy**: contextual help tooltips now track the cursor correctly even when the mouse stops before the debounce fires.
 
+## [IMPROVED] Customisation, Sharing & Polish
+- **Theme System**: full no-CSS theming engine (7 presets, single-colour auto-palette, right-click element editing, change tracker). Fixed Discard/Revert-all so it fully restores instantly (including dynamic mod/profile cards) with no refresh; the "Edit this element" popup now always spawns fully on-screen and scrolls if the window is short. Refreshed the editor's visuals (accent-aware glass styling).
+- **Translation Sandbox**: added a one-click **Share** button that produces a `bmm://language/import-inline` link embedding the whole translation (installed via the new `import_language_data` command). Fixed the overlay→restore sizing bug that left the panel stuck small.
+- **App Catalog & docs**: added Documentation cards for the App Catalog and Theme Editor, and a Catalogs & Browsers guide explaining every catalog/browser and how to add multiple sources.
+- **Discord Rich Presence**: activity buttons are now driven by `links.json` (GitHub-hosted with a bundled local backup) — the site button points to BetterCommunity by default, with a toggle to switch links, and a **Copy Creator ID** button when a Creator ID exists.
+- **Credits**: added a BetterCommunity website link.
+- **Ko-fi reminder**: shows on each start (unless you pick "Don't show again"), with a refreshed look.
+- **Interactive tutorial**: updated for the new systems (App Catalog, Translation Tool, Theme System, Plugins & API) with steps that highlight the real UI.
+- **BMM DevTools**: removed the redundant JS debugger sub-tab; DevTools open from a header button. The real Chrome/WebView2 inspector now works in release builds.
+- **Responsive**: the window no longer squishes its toolbars on small sizes — content keeps its layout and scrolls instead.
+
+## [FIXED] Installer / Build
+- Fixed the MSI bundling failure (`light.exe` LGHT0091 duplicate symbol) by shipping the MCP/CLI server as a cargo `[[example]]` (so tauri-bundler doesn't double-harvest it) while still bundling it via the `externalBin` sidecar. The bundled `bmm-mcp-server` is rebuilt and up to date, and the CLI/MCP ship in both the `.msi` and `.exe`.
+- Pinned WebView2 install to `downloadBootstrapper` (silent) so the installer fetches WebView2 if missing.
+
 ---
 *Release 1.0.0 represents the final consolidation of the core feature set.*

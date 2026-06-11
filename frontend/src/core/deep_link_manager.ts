@@ -349,6 +349,33 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             return;
         }
 
+        // ── Language: install a shared translation embedded in the link ───
+        if (action === 'language/import-inline') {
+            const data = parsedUrl.searchParams.get('data');
+            const code = parsedUrl.searchParams.get('code') || 'custom';
+            const gz   = parsedUrl.searchParams.get('gz') === '1';
+            if (data) {
+                try {
+                    // base64url → bytes
+                    const b64 = data.replace(/-/g, '+').replace(/_/g, '/');
+                    const bin = atob(b64);
+                    let content: string;
+                    if (gz) {
+                        const bytes = new Uint8Array(bin.length);
+                        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                        const ds = new (window as any).DecompressionStream('gzip');
+                        const buf = await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer();
+                        content = new TextDecoder().decode(buf);
+                    } else {
+                        content = decodeURIComponent(escape(bin));
+                    }
+                    const installed: string = await invoke('import_language_data', { code, content });
+                    toast(`${t('settings.langImported') || 'Language imported'}: ${installed}`, 'success');
+                } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+            }
+            return;
+        }
+
         // ── Restart BMM (via local API) ───────────────────────────────────
         if (action === 'restart') {
             try {

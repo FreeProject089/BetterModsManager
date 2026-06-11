@@ -623,5 +623,34 @@ L'identité de mod déterministe se trouve dans `models/mod_entry.rs`.
 
 ---
 
+## 47. Moteur du système de thèmes (v1.0.0)
+
+Un moteur de thèmes à variables CSS appliqué à l'exécution. Frontend : `frontend/src/features/themes/theme-engine.ts` (application/observation) et `theme-editor.ts` (l'éditeur flottant). Backend : `src-tauri/src/commands/themes.rs` persiste les thèmes installés en fichiers `.json` dans un dossier `themes/` du répertoire de données, plus `import_theme`/`export_theme` (`.bmmtheme` = ZIP) et `fetch_theme_catalogs`.
+
+| Mécanisme | Détail |
+| :--- | :--- |
+| **Injection de tokens** | `applyTheme()` écrit les variables CSS `--bmm-*` dans des blocs `<style>` dédiés (vars / css / fonts / patch) ; les fichiers sources ne sont jamais modifiés. |
+| **Patcheur inline** | Un `MutationObserver` réécrit les couleurs inline codées en dur sur le DOM inséré dynamiquement vers le token correspondant. |
+| **Moteur de contraste** | Sur les thèmes `mode: 'light'`, `enforceLightContrast()` assombrit les textes/surfaces clairs illisibles via inline `!important` (`data-bmm-contrast`) ; nettoyé (`clearAllEnforced()`) au retour vers un thème sombre pour que les cartes dynamiques se restaurent sans rafraîchir. |
+| **Overrides d'éléments** | L'outil pioche stocke des overrides par sélecteur (couleurs, états, CSS, swap SVG d'icône, image) appliqués en bloc CSS généré. |
+| **Auto-palette** | `genPalette()` dérive un jeu de tokens complet et cohérent (sombre/clair) depuis une seule couleur HSL. |
+| **Partage** | Export en `.bmmtheme`, lien `bmm://theme/import-inline`, ou installation depuis le catalogue de thèmes. |
+
+---
+
+## 48. Bac à sable de traduction (v1.0.0)
+
+`frontend/src/features/settings/i18n-sandbox.ts` — un éditeur non destructif au-dessus du système i18n (§10). Les éditions vivent dans une map mémoire `_sandbox` et ne touchent le disque qu'à l'export.
+
+| Mécanisme | Détail |
+| :--- | :--- |
+| **Modèle sandbox** | Les clés sont éditées par rapport à une langue de base ; `buildExportObject()` fusionne le fichier source complet avec les éditions, en préservant l'ordre et les clés meta. |
+| **Mode pointeur** | Cliquer un élément résout sa clé `data-i18n` (ou fait remonter le texte codé en dur) par parcours du DOM. |
+| **Scanner codé en dur** | `find_hardcoded_strings` (Rust) analyse la source à la recherche de littéraux sans clé i18n. |
+| **Mode overlay** | Le modal se détache en overlay déplaçable/redimensionnable ; le `style` inline d'origine est capturé et restauré tel quel à la sortie (évite que le panneau reste à la taille overlay). |
+| **Chemin d'installation** | Les `.json` exportés s'installent via `import_language` ; la commande `import_language_data(code, content)` accepte aussi du JSON brut. |
+
+---
+
 *Better Mod Manager est développé par FreeProject089 — Conçu pour une performance sans compromis, la sécurité des fichiers et une gestion moderne des mods.*
 

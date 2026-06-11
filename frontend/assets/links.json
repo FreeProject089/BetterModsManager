@@ -10,5 +10,15 @@
   "reddit":           "https://www.reddit.com/r/BetterModManager/",
   "kofi":             "https://ko-fi.com/I2I31ZIPPG",
   "kofi_community":   "https://ko-fi.com/bettercommunity",
-  "ed_forum":         "https://forum.dcs.world/topic/385941-better-modmanager/"
+  "ed_forum":         "https://forum.dcs.world/topic/385941-better-modmanager/",
+  "bettercommunity":  "https://bettercommunity.ch/",
+
+  "_comment_rpc": "Discord Rich Presence buttons. The first button links to rpc_link (or rpc_link_alt when rpc_use_alt is true), unless a Creator ID exists (then it becomes Copy Creator ID). The second button is rpc_link2. Edit freely — picked up from GitHub first, local copy as backup.",
+  "rpc_label":     "BetterCommunity",
+  "rpc_link":      "https://bettercommunity.ch/",
+  "rpc_label_alt": "Website",
+  "rpc_link_alt":  "https://freeproject089.github.io/BMM_Web/",
+  "rpc_use_alt":   false,
+  "rpc_label2":    "GitHub",
+  "rpc_link2":     "https://github.com/FreeProject089/BetterModsManager"
 }

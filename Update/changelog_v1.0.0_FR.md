@@ -189,5 +189,20 @@ Cette version marque la transition vers l'étape 1.0, en se concentrant sur l'ut
 - **"Tout désactiver (Global)" sur les profils** : action en un clic sur la page Profils pour désactiver tous les mods actifs d'un coup (`disableAllRequestedMods()`), avec confirmation ; suppression de l'ancien bouton redondant "Mods Actifs (Global)".
 - **Précision des tooltips Tasky** : les tooltips d'aide contextuelle suivent désormais le curseur correctement même si la souris s'arrête avant le déclenchement du debounce.
 
+## [AMÉLIORÉ] Personnalisation, Partage & Finitions
+- **Système de thèmes** : moteur de thèmes complet sans CSS (7 presets, auto-palette depuis une couleur, édition d'élément au clic droit, suivi des modifs). Correction de Discard/Tout annuler qui restaure désormais tout instantanément (y compris les cartes mods/profils dynamiques) sans rafraîchir ; la popup « Edit this element » apparaît toujours entièrement à l'écran et défile si la fenêtre est courte. Visuel de l'éditeur rafraîchi (style verre teinté par l'accent).
+- **Bac à sable de traduction** : ajout d'un bouton **Partager** en un clic qui produit un lien `bmm://language/import-inline` embarquant toute la traduction (installée via la nouvelle commande `import_language_data`). Correction du bug de taille overlay→restauration qui laissait le panneau coincé en petit.
+- **App Catalog & doc** : ajout de cartes Documentation pour l'App Catalog et l'éditeur de thèmes, et un guide Catalogues & Navigateurs expliquant chaque catalogue et comment ajouter plusieurs sources.
+- **Discord Rich Presence** : les boutons d'activité sont pilotés par `links.json` (hébergé sur GitHub avec une copie locale en backup) — le bouton site pointe vers BetterCommunity par défaut, avec une bascule pour changer de lien, et un bouton **Copy Creator ID** quand un Creator ID existe.
+- **Crédits** : ajout d'un lien vers le site BetterCommunity.
+- **Rappel Ko-fi** : s'affiche à chaque démarrage (sauf si vous choisissez « Ne plus afficher »), avec un visuel rafraîchi.
+- **Tutoriel interactif** : mis à jour pour les nouveaux systèmes (App Catalog, outil de traduction, système de thèmes, Plugins & API) avec des étapes qui mettent en surbrillance l'UI réelle.
+- **BMM DevTools** : suppression du sous-onglet débogueur JS redondant ; les DevTools s'ouvrent depuis un bouton d'en-tête. Le vrai inspecteur Chrome/WebView2 fonctionne désormais en build release.
+- **Réactif** : la fenêtre ne tasse plus ses barres d'outils en petite taille — le contenu garde sa mise en page et défile à la place.
+
+## [CORRIGÉ] Installeur / Build
+- Correction de l'échec de bundling MSI (`light.exe` LGHT0091 symbole dupliqué) en livrant le serveur MCP/CLI comme un `[[example]]` cargo (pour que tauri-bundler ne le récupère pas deux fois) tout en l'embarquant via le sidecar `externalBin`. Le `bmm-mcp-server` embarqué est reconstruit et à jour, et le CLI/MCP sont livrés dans le `.msi` et le `.exe`.
+- WebView2 épinglé en `downloadBootstrapper` (silencieux) pour que l'installeur télécharge WebView2 s'il manque.
+
 ---
 *La version 1.0.0 représente la consolidation finale de l'ensemble des fonctionnalités de base.*

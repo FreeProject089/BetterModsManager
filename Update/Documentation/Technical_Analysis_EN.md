@@ -696,5 +696,34 @@ Deterministic mod identity lives in `models/mod_entry.rs`.
 
 ---
 
+## 47. Theme System Engine (v1.0.0)
+
+A runtime CSS-variable theming engine. Frontend: `frontend/src/features/themes/theme-engine.ts` (apply/observe) and `theme-editor.ts` (the floating editor). Backend: `src-tauri/src/commands/themes.rs` persists installed themes as `.json` files in a `themes/` directory under the app data dir, plus `import_theme`/`export_theme` (`.bmmtheme` = ZIP) and `fetch_theme_catalogs`.
+
+| Mechanism | Detail |
+| :--- | :--- |
+| **Token injection** | `applyTheme()` writes `--bmm-*` CSS variables into dedicated `<style>` blocks (vars / css / fonts / patch); source files are never mutated. |
+| **Inline patcher** | A `MutationObserver` rewrites hardcoded inline colours on dynamically inserted DOM to the matching token, so late content follows the theme. |
+| **Contrast enforcer** | On `mode: 'light'` themes, `enforceLightContrast()` darkens unreadable light text/surfaces via inline `!important` (`data-bmm-contrast`); cleared (`clearAllEnforced()`) when switching back to a dark theme so dynamic cards revert without a refresh. |
+| **Element overrides** | The pick tool stores per-selector overrides (colours, states, CSS, icon SVG swap, image) applied as a generated CSS block. |
+| **Auto-palette** | `genPalette()` derives a full coherent dark/light token set from a single HSL seed colour. |
+| **Sharing** | Export to `.bmmtheme`, a `bmm://theme/import-inline` link, or install from the theme catalog. |
+
+---
+
+## 48. Translation Sandbox (v1.0.0)
+
+`frontend/src/features/settings/i18n-sandbox.ts` — a non-destructive editor over the i18n system (§10). Edits live in an in-memory `_sandbox` map and only touch disk on export.
+
+| Mechanism | Detail |
+| :--- | :--- |
+| **Sandbox model** | Keys are edited against a base language; `buildExportObject()` merges the full source file with sandbox edits, preserving order and meta keys. |
+| **Pointer mode** | Clicking any element resolves its `data-i18n` key (or surfaces hardcoded text) via DOM walking. |
+| **Hardcoded scanner** | `find_hardcoded_strings` (Rust) scans source for literals without an i18n key. |
+| **Overlay mode** | The modal detaches into a draggable/resizable overlay; the original inline `style` is snapshotted and restored verbatim on exit (avoids the panel sticking at overlay size). |
+| **Install path** | Exported `.json` files install via `import_language`; the `import_language_data(code, content)` command also accepts raw JSON. |
+
+---
+
 *Better Mod Manager is developed by FreeProject089 — Engineered for uncompromising performance, file safety, and modern mod management.*
 

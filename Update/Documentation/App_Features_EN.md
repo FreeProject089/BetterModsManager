@@ -665,5 +665,37 @@ Every mod gets a deterministic content fingerprint so BMM recognizes the same mo
 
 ---
 
+## 48. Theme System (v1.0.0)
+
+A complete theming engine that restyles 100% of BMM with **no CSS knowledge required**, while still exposing raw CSS for power users. Opened from **Settings → Theme**.
+
+| Feature | Description |
+| :--- | :--- |
+| **7 Built-in Presets** | Ready-made themes (Sombre, Void, Full White, Discord, Orange, Spotify…), including light themes. |
+| **Auto-Palette** | Pick a single colour and generate a full, coherent dark or light theme from it. |
+| **Element Picker** | Right-click any element in the app to edit its text/background/border colours, hover & active states, custom CSS, icon (SVG swap) or image. |
+| **Design Tokens** | Themes are JSON of `--bmm-*` CSS variables injected as `<style>` blocks — source files are never modified, everything is reversible. |
+| **Inline Patcher** | A MutationObserver rewrites hardcoded inline colours on dynamic content so it follows the theme too. |
+| **Auto-Contrast** | On light themes, unreadable light text/surfaces are darkened automatically (toggleable). |
+| **Change Tracker** | A "Your changes" panel lists every edit with per-item revert; Discard / Revert-all restore instantly (including dynamic mod/profile cards, no refresh). |
+| **Share & Install** | Export a `.bmmtheme` (ZIP with assets/fonts), copy a one-click `bmm://theme/import-inline` link, or install from the theme catalog. |
+
+---
+
+## 49. Translation Sandbox (v1.0.0)
+
+A built-in tool (Settings → Translation Sandbox) that lets anyone create or fix a language without touching code — extends the Dynamic Internationalization system (§6).
+
+| Feature | Description |
+| :--- | :--- |
+| **Safe Sandbox** | Edit translation keys in isolation; nothing changes in BMM until you export or apply. |
+| **Pointer Mode** | Click any element in the running app to jump straight to its i18n key (or flag hardcoded text). |
+| **Hardcoded Scanner** | Scans the source for strings without an i18n key, so translators/contributors can spot gaps. |
+| **Overlay Mode** | Detach the sandbox into a draggable, resizable overlay so you can edit while using the app. |
+| **Export** | Save your language as a `.json` file (full file, order preserved). |
+| **One-Click Share** | A **Share** button produces a `bmm://language/import-inline` link (gzip-compressed); for full translations that exceed the link size limit it falls back to exporting the `.json` to share as a file. |
+
+---
+
 *Better Mod Manager is developed by FreeProject089.*
 

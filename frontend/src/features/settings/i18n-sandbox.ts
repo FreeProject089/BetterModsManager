@@ -541,6 +541,7 @@ function toggleHighlight(force?: boolean): void {
 
 // ── Overlay / floating, draggable & resizable across all of BMM ─────────────────
 let _overlayMode = false;
+let _savedPanelStyle = '';   // the panel's original inline style, restored on overlay exit
 const OVL_KEY = 'bmm_i18n_overlay_geom';
 function toggleOverlayMode(modal: HTMLElement, force?: boolean): void {
     _overlayMode = force !== undefined ? force : !_overlayMode;
@@ -550,6 +551,11 @@ function toggleOverlayMode(modal: HTMLElement, force?: boolean): void {
 
     const MIN_W = 420, MIN_H = 320;
     if (_overlayMode) {
+        // Snapshot the panel's ORIGINAL inline style (width:96%; max-width:1080px;
+        // height:88vh; …). Overlay mode overwrites those with fixed px sizes; on exit
+        // we must put the originals back, otherwise clearing to '' collapses the
+        // panel to content size and it stays small. (Was the resize bug.)
+        _savedPanelStyle = panel.getAttribute('style') || '';
         modal.classList.add('i18n-overlay-active');
         modal.style.background = 'transparent';
         modal.style.pointerEvents = 'none';
@@ -590,10 +596,9 @@ function toggleOverlayMode(modal: HTMLElement, force?: boolean): void {
         modal.style.pointerEvents = '';
         modal.style.backdropFilter = '';
         if (modal.classList.contains('open')) document.body.style.overflow = 'hidden';
-        panel.style.position = panel.style.left = panel.style.top = panel.style.width = panel.style.height = '';
-        panel.style.transform = panel.style.transition = panel.style.animation = panel.style.margin = '';
-        panel.style.maxWidth = panel.style.maxHeight = '';
-        panel.style.resize = panel.style.overflow = panel.style.minWidth = panel.style.minHeight = panel.style.boxShadow = '';
+        // Restore the panel's original inline style verbatim — this brings back the
+        // full-size width/height/max-width and removes every overlay override at once.
+        panel.setAttribute('style', _savedPanelStyle);
         if (_pickMode) togglePickMode(false);
         if (_hlMode) toggleHighlight(false);
     }
@@ -720,3 +725,4 @@ function exportSandbox(): void {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast(`${t('i18n.exported') || 'Exported'} ${_baseLang}.json (${Object.keys(out).length} ${t('i18n.keys') || 'keys'})`, 'success');
 }
+

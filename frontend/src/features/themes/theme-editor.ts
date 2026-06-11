@@ -1519,9 +1519,27 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
         </div>`;
     document.body.appendChild(pop);
 
-    const r = el.getBoundingClientRect();
-    pop.style.left = Math.min(Math.max(8, r.left), window.innerWidth - 320) + 'px';
-    pop.style.top = Math.min(r.bottom + 8, window.innerHeight - 440) + 'px';
+    // Spawn fully inside the viewport so the drag grip / header is ALWAYS reachable
+    // (previously a short window pushed `top` negative → header off-screen). Cap the
+    // height to the viewport first, then measure the real popup box and clamp both
+    // axes; prefer placing below the picked element, flip above if it would overflow.
+    const M = 8;
+    pop.style.maxHeight = `calc(100vh - ${M * 2}px)`;
+    pop.style.overflowY = 'auto';
+    const r  = el.getBoundingClientRect();
+    const pw = pop.offsetWidth  || 320;
+    const ph = pop.offsetHeight || 440;
+    let left = r.left;
+    let top  = r.bottom + M;
+    if (top + ph > window.innerHeight - M) {
+        // not enough room below → try above the element, else just clamp
+        const above = r.top - ph - M;
+        top = above >= M ? above : top;
+    }
+    left = Math.max(M, Math.min(left, window.innerWidth  - pw - M));
+    top  = Math.max(M, Math.min(top,  window.innerHeight - ph - M));
+    pop.style.left = left + 'px';
+    pop.style.top  = top + 'px';
 
     const cssBox = pop.querySelector('.bte-elov-css') as HTMLTextAreaElement;
     const stateHint = pop.querySelector('.bte-elov-statehint') as HTMLElement;

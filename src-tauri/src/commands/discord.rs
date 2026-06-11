@@ -6,6 +6,80 @@ use tracing::{info, warn, error};
 
 const DISCORD_CLIENT_ID: &str = "1486151779195555920"; // Placeholder BMM Client ID
 
+// Where to fetch links.json remotely (kept in sync with frontend links-config.ts).
+const REMOTE_LINKS_URL: &str =
+    "https://raw.githubusercontent.com/FreeProject089/BetterModsManager/refs/heads/Tdev/frontend/assets/links.json";
+
+/// Resolved Discord RPC button config, read from links.json.
+struct RpcLinks {
+    label:  String,  // first button (site) label/url — or its alt, per `use_alt`
+    link:   String,
+    label2: String,  // second button (e.g. GitHub)
+    link2:  String,
+}
+
+impl Default for RpcLinks {
+    fn default() -> Self {
+        RpcLinks {
+            label:  "BetterCommunity".into(),
+            link:   "https://bettercommunity.ch/".into(),
+            label2: "GitHub".into(),
+            link2:  "https://github.com/FreeProject089/BetterModsManager".into(),
+        }
+    }
+}
+
+fn rpc_links_from_json(v: &serde_json::Value) -> RpcLinks {
+    let d = RpcLinks::default();
+    let use_alt = v.get("rpc_use_alt").and_then(|x| x.as_bool()).unwrap_or(false);
+    let s = |k: &str, fb: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or(fb).to_string();
+    if use_alt {
+        RpcLinks {
+            label:  s("rpc_label_alt", &d.label),
+            link:   s("rpc_link_alt",  &d.link),
+            label2: s("rpc_label2",    &d.label2),
+            link2:  s("rpc_link2",     &d.link2),
+        }
+    } else {
+        RpcLinks {
+            label:  s("rpc_label", &d.label),
+            link:   s("rpc_link",  &d.link),
+            label2: s("rpc_label2", &d.label2),
+            link2:  s("rpc_link2",  &d.link2),
+        }
+    }
+}
+
+/// Load RPC links: remote GitHub links.json first, then the bundled resource
+/// copy as backup, then hardcoded defaults. Network call is capped at ~2.5s so
+/// it never noticeably stalls presence updates.
+fn load_rpc_links(handle: &tauri::AppHandle) -> RpcLinks {
+    // 1. Remote (so links can change without an app update)
+    if let Ok(client) = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_millis(2500)).build()
+    {
+        if let Ok(resp) = client.get(REMOTE_LINKS_URL).send() {
+            if let Ok(text) = resp.text() {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                    return rpc_links_from_json(&json);
+                }
+            }
+        }
+    }
+    // 2. Bundled resource copy (offline backup)
+    if let Some(p) = handle.path_resolver().resolve_resource("../frontend/assets/links.json")
+        .or_else(|| handle.path_resolver().resolve_resource("frontend/assets/links.json"))
+    {
+        if let Ok(text) = std::fs::read_to_string(&p) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                return rpc_links_from_json(&json);
+            }
+        }
+    }
+    // 3. Hardcoded
+    RpcLinks::default()
+}
+
 #[tauri::command]
 pub fn set_discord_presence(
     state: State<AppState>,
@@ -49,7 +123,8 @@ pub fn set_discord_presence(
     // "Copy Creator ID" button links to the BMM web page with the id in the
     // query string (the page can surface/copy it). Discord caps activities at
     // 2 buttons, so when a creator id exists we swap "Website" for it.
-    let creator_id = crate::commands::security::get_creator_id(handle).unwrap_or_default();
+    let creator_id = crate::commands::security::get_creator_id(handle.clone()).unwrap_or_default();
+    let links = load_rpc_links(&handle);
 
     // Update presence
     if let Some(client) = client_lock.as_mut() {
@@ -63,11 +138,13 @@ pub fn set_discord_presence(
             creator_id
         );
 
+        // Button 2 is the configured site link (BetterCommunity by default).
         let mut buttons = vec![
-            discord_rich_presence::activity::Button::new("GitHub", "https://github.com/FreeProject089/BetterModsManager"),
+            discord_rich_presence::activity::Button::new(&links.label2, &links.link2),
         ];
+        // Button 1: Copy Creator ID when available, otherwise the configured site link.
         if creator_id.is_empty() {
-            buttons.insert(0, discord_rich_presence::activity::Button::new("Website", "https://freeproject089.github.io/BMM_Web/"));
+            buttons.insert(0, discord_rich_presence::activity::Button::new(&links.label, &links.link));
         } else {
             buttons.insert(0, discord_rich_presence::activity::Button::new("Copy Creator ID", &creator_url));
         }

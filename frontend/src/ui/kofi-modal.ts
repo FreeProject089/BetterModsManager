@@ -1,23 +1,28 @@
 // @ts-nocheck
 /**
- * kofi-modal.ts — One-time "support the project on Ko-fi" reminder.
+ * kofi-modal.ts — "support the project on Ko-fi" reminder.
  *
- * Shown once, on a normal start (NOT during the first-run onboarding, which is
- * already busy with the language picker + Tutorial Hub). Deliberately styled
- * differently from the standard BMM modals: warm Ko-fi gradient, mascot, soft
- * card — so it reads as a friendly nudge, not a system dialog.
+ * Shown on EVERY start (after onboarding), unless the user explicitly opted out
+ * via "Don't show again". Deliberately styled differently from the standard BMM
+ * modals: warm Ko-fi gradient, mascot, soft card — a friendly nudge, not a dialog.
  *
- * Gated by localStorage `bmm_kofi_reminded` so it never nags twice.
+ *   • "Maybe later"        → just closes; shows again next launch.
+ *   • "Don't show again"   → sets localStorage `bmm_kofi_optout` so it never shows.
  */
 import { t } from '../core/i18n.js';
+import { getLinks } from '../core/links-config.js';
 
-const KOFI_URL  = 'https://ko-fi.com/I2I31ZIPPG';
-const SEEN_KEY  = 'bmm_kofi_reminded';
+const OPTOUT_KEY = 'bmm_kofi_optout';
 
-/** Show the reminder once, unless onboarding is currently running. */
+function kofiUrl(): string {
+    try { return getLinks().kofi || 'https://ko-fi.com/I2I31ZIPPG'; }
+    catch { return 'https://ko-fi.com/I2I31ZIPPG'; }
+}
+
+/** Show the reminder on each start, unless the user opted out or onboarding is up. */
 export function maybeShowKofiReminder(): void {
     try {
-        if (localStorage.getItem(SEEN_KEY) === '1') return;
+        if (localStorage.getItem(OPTOUT_KEY) === '1') return;
         // Don't pile on top of the first-run onboarding overlay.
         if (document.getElementById('onboarding-overlay')) return;
         // Give the app a moment to settle visually.
@@ -27,8 +32,8 @@ export function maybeShowKofiReminder(): void {
 
 export function showKofiReminder(): void {
     if (document.getElementById('kofi-overlay')) return;
-    localStorage.setItem(SEEN_KEY, '1');
     injectStyles();
+    const KOFI_URL = kofiUrl();
 
     const overlay = document.createElement('div');
     overlay.id = 'kofi-overlay';
@@ -55,7 +60,10 @@ export function showKofiReminder(): void {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2 7h15a4 4 0 0 1 0 8h-1.1A6 6 0 0 1 10 19H7a5 5 0 0 1-5-5V7zm15 6a2 2 0 0 0 0-4h-1v4h1z"/></svg>
             <span>${t('kofi.support') || 'Support on Ko-fi'}</span>
           </a>
-          <button class="kofi-btn-ghost" id="kofi-later">${t('kofi.later') || 'Maybe later'}</button>
+          <div class="kofi-secondary-row">
+            <button class="kofi-btn-ghost" id="kofi-later">${t('kofi.later') || 'Maybe later'}</button>
+            <button class="kofi-btn-ghost kofi-btn-optout" id="kofi-optout">${t('kofi.dontShow') || "Don't show again"}</button>
+          </div>
         </div>
       </div>
     `;
@@ -68,8 +76,14 @@ export function showKofiReminder(): void {
         overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
         setTimeout(() => overlay.remove(), 400);
     };
+    // "Maybe later" / X → close, will show again next launch.
     overlay.querySelector('#kofi-close')?.addEventListener('click', close);
     overlay.querySelector('#kofi-later')?.addEventListener('click', close);
+    // "Don't show again" → persist opt-out so it never reappears.
+    overlay.querySelector('#kofi-optout')?.addEventListener('click', () => {
+        try { localStorage.setItem(OPTOUT_KEY, '1'); } catch {}
+        close();
+    });
     overlay.querySelector('#kofi-go')?.addEventListener('click', () => setTimeout(close, 150));
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 }
@@ -103,6 +117,9 @@ function injectStyles(): void {
     .kofi-title{margin:0 0 8px;font-size:19px;font-weight:800;color:var(--text-primary,#fff)}
     .kofi-text{margin:0 0 22px;font-size:13.5px;line-height:1.6;color:var(--text-secondary,#c8c8d4)}
     .kofi-actions{display:flex;flex-direction:column;gap:10px}
+    .kofi-secondary-row{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:2px}
+    .kofi-btn-optout{opacity:0.7;font-size:11.5px}
+    .kofi-btn-optout:hover{opacity:1;text-decoration:underline}
     .kofi-btn-primary{display:flex;align-items:center;justify-content:center;gap:9px;text-decoration:none;
       padding:12px 18px;border-radius:13px;font-size:14px;font-weight:800;color:#fff;cursor:pointer;
       background:linear-gradient(135deg,#ff6b4a,#ff5e5b);box-shadow:0 8px 22px rgba(255,94,91,0.4);transition:.18s}

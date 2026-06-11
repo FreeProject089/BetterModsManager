@@ -32,6 +32,7 @@ export interface BmmLinks {
     kofi:             string;
     kofi_community:   string;
     ed_forum:         string;
+    bettercommunity:  string;
 }
 
 const DEFAULTS: BmmLinks = {
@@ -47,6 +48,7 @@ const DEFAULTS: BmmLinks = {
     kofi:             'https://ko-fi.com/I2I31ZIPPG',
     kofi_community:   'https://ko-fi.com/bettercommunity',
     ed_forum:         'https://forum.dcs.world/topic/385941-better-modmanager/',
+    bettercommunity:  'https://bettercommunity.ch/',
 };
 
 let _links: BmmLinks = { ...DEFAULTS };

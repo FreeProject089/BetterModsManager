@@ -39,6 +39,7 @@ import { mcpServer } from './diagrams/mcp-server.js';
 import { dockerDeployment } from './diagrams/docker-deployment.js';
 import { modActivation } from './diagrams/mod-activation.js';
 import { themeSystem } from './diagrams/theme-system.js';
+import { appCatalog } from './diagrams/app-catalog.js';
 
 
 // Diagram Registry
@@ -82,6 +83,7 @@ export const diagrams = {
     'docker-deployment': dockerDeployment,
     'mod-activation': modActivation,
     'theme-system': themeSystem,
+    'app-catalog': appCatalog,
 };
 
 

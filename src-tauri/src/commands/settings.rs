@@ -11,52 +11,137 @@ pub struct ExportOptions {
     pub settings: bool,
     pub custom_tags: bool,
     pub disk_limits: bool,
+    // Extended sections (all optional → default false for old callers)
+    #[serde(default)] pub plugins: bool,
+    #[serde(default)] pub modpacks: bool,
+    #[serde(default)] pub launch_packs: bool,
+    #[serde(default)] pub themes: bool,
+    #[serde(default)] pub translations: bool,
+    #[serde(default)] pub apps: bool,
 }
 
-#[tauri::command]
-pub fn export_app_data(state: State<AppState>, dest_path: String, options: Option<ExportOptions>) -> Result<(), AppError> {
-    let _ = state.save(); // Save current memory to disk first
-    
-    if let Some(opts) = options {
-        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
-        let mut export_data = crate::state::AppData::default();
-        if opts.profiles { 
-            export_data.profiles = data.profiles.clone(); 
-            export_data.active_profile_id = data.active_profile_id.clone(); 
+// ── Helpers for the file-based data dirs ──────────────────────────────────────
+fn data_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
+    app.path_resolver().app_data_dir().unwrap_or_default()
+}
+/// Read every *.json in a dir into a { filename: parsed-json } map.
+fn read_json_dir(dir: &std::path::Path) -> serde_json::Map<String, serde_json::Value> {
+    let mut out = serde_json::Map::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let (Some(name), Ok(txt)) = (p.file_name().and_then(|s| s.to_str()), std::fs::read_to_string(&p)) {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) {
+                        out.insert(name.to_string(), v);
+                    }
+                }
+            }
         }
-        if opts.mods { export_data.mods = data.mods.clone(); }
-        if opts.settings { export_data.settings = data.settings.clone(); }
-        if opts.custom_tags { export_data.custom_tags = data.custom_tags.clone(); }
-        if opts.disk_limits { export_data.disk_limits = data.disk_limits.clone(); }
-        
-        let json = serde_json::to_string_pretty(&export_data)?;
-        std::fs::write(&dest_path, json)?;
-    } else {
-        std::fs::copy(&*state.data_path, dest_path)?;
     }
-    Ok(())
+    out
+}
+fn write_json_dir(dir: &std::path::Path, files: &serde_json::Map<String, serde_json::Value>) {
+    let _ = std::fs::create_dir_all(dir);
+    for (name, val) in files {
+        // Guard against path traversal in the embedded filename.
+        if name.contains('/') || name.contains('\\') || name.contains("..") { continue; }
+        if let Ok(txt) = serde_json::to_string_pretty(val) {
+            let _ = std::fs::write(dir.join(name), txt);
+        }
+    }
 }
 
 #[tauri::command]
-pub fn import_app_data(state: State<AppState>, src_path: String) -> Result<(), AppError> {
-    std::fs::copy(src_path, &*state.data_path)?;
-    // Reload state into memory
-    let new_state = AppState::load((*state.data_path).clone());
-    let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
-    let new_data = new_state.data.lock().map_err(|_| AppError::LockError("Failed to lock new AppState".to_string()))?;
-    *data = crate::state::AppData {
-        profiles: new_data.profiles.clone(),
-        mods: new_data.mods.clone(),
-        active_profile_id: new_data.active_profile_id.clone(),
-        custom_tags: new_data.custom_tags.clone(),
-        disk_limits: new_data.disk_limits.clone(),
-        settings: new_data.settings.clone(),
-        launch_packs: new_data.launch_packs.clone(),
-        installed_plugins: new_data.installed_plugins.clone(),
-        plugin_permissions: new_data.plugin_permissions.clone(),
-        modpacks: new_data.modpacks.clone(),
+pub fn export_app_data(state: State<AppState>, app_handle: tauri::AppHandle, dest_path: String, options: Option<ExportOptions>, extras: Option<serde_json::Value>) -> Result<(), AppError> {
+    let _ = state.save(); // Save current memory to disk first
+
+    let Some(opts) = options else {
+        // No options → raw copy of data.json (legacy behaviour)
+        std::fs::copy(&*state.data_path, dest_path)?;
+        return Ok(());
     };
+
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    let mut export_data = crate::state::AppData::default();
+    if opts.profiles { export_data.profiles = data.profiles.clone(); export_data.active_profile_id = data.active_profile_id.clone(); }
+    if opts.mods { export_data.mods = data.mods.clone(); }
+    if opts.settings { export_data.settings = data.settings.clone(); }
+    if opts.custom_tags { export_data.custom_tags = data.custom_tags.clone(); }
+    if opts.disk_limits { export_data.disk_limits = data.disk_limits.clone(); }
+    if opts.plugins { export_data.installed_plugins = data.installed_plugins.clone(); export_data.plugin_permissions = data.plugin_permissions.clone(); }
+    if opts.modpacks { export_data.modpacks = data.modpacks.clone(); }
+    if opts.launch_packs { export_data.launch_packs = data.launch_packs.clone(); }
+    drop(data);
+
+    // Versioned wrapper so we can carry file-based data + frontend extras alongside AppData.
+    let mut root = serde_json::Map::new();
+    root.insert("_bmm_backup".into(), serde_json::json!(2));
+    root.insert("app_data".into(), serde_json::to_value(&export_data)?);
+
+    let dir = data_dir(&app_handle);
+    if opts.themes {
+        let themes = read_json_dir(&dir.join("themes"));
+        if !themes.is_empty() { root.insert("themes".into(), serde_json::Value::Object(themes)); }
+    }
+    if opts.translations {
+        let langs = read_json_dir(&get_lang_dir(&app_handle));
+        if !langs.is_empty() { root.insert("translations".into(), serde_json::Value::Object(langs)); }
+    }
+    if opts.apps {
+        let mut apps = serde_json::Map::new();
+        if let Ok(t) = std::fs::read_to_string(dir.join("apps_state.json")) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&t) { apps.insert("apps_state.json".into(), v); }
+        }
+        if let Ok(t) = std::fs::read_to_string(dir.join("apps-catalog.json")) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&t) { apps.insert("apps-catalog.json".into(), v); }
+        }
+        if !apps.is_empty() { root.insert("apps".into(), serde_json::Value::Object(apps)); }
+    }
+    // Frontend-only data (e.g. server-repo favourites from localStorage)
+    if let Some(ex) = extras { if !ex.is_null() { root.insert("extras".into(), ex); } }
+
+    std::fs::write(&dest_path, serde_json::to_string_pretty(&serde_json::Value::Object(root))?)?;
     Ok(())
+}
+
+/// Import a backup. Returns the `extras` object (frontend localStorage data) so the
+/// caller can restore it before reloading. Supports both the v2 wrapper format and
+/// the legacy flat AppData file.
+#[tauri::command]
+pub fn import_app_data(state: State<AppState>, app_handle: tauri::AppHandle, src_path: String) -> Result<Option<serde_json::Value>, AppError> {
+    let raw = std::fs::read_to_string(&src_path)?;
+    let parsed: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|e| AppError::Internal(format!("Invalid backup file: {}", e)))?;
+
+    // v2 wrapper vs legacy flat AppData
+    let (app_data_val, extras) = if parsed.get("_bmm_backup").is_some() {
+        let dir = data_dir(&app_handle);
+        if let Some(serde_json::Value::Object(themes)) = parsed.get("themes") {
+            write_json_dir(&dir.join("themes"), themes);
+        }
+        if let Some(serde_json::Value::Object(langs)) = parsed.get("translations") {
+            write_json_dir(&get_lang_dir(&app_handle), langs);
+        }
+        if let Some(serde_json::Value::Object(apps)) = parsed.get("apps") {
+            for (name, val) in apps {
+                if name == "apps_state.json" || name == "apps-catalog.json" {
+                    if let Ok(txt) = serde_json::to_string_pretty(val) { let _ = std::fs::write(dir.join(name), txt); }
+                }
+            }
+        }
+        (parsed.get("app_data").cloned().unwrap_or(serde_json::Value::Null), parsed.get("extras").cloned())
+    } else {
+        (parsed, None)
+    };
+
+    if let Ok(new_data) = serde_json::from_value::<crate::state::AppData>(app_data_val) {
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        *data = new_data;
+        drop(data);
+        state.save()?;
+    }
+    Ok(extras)
 }
 
 #[tauri::command]
@@ -645,6 +730,26 @@ pub fn import_language(app_handle: tauri::AppHandle, path: Option<String>) -> Re
     } else {
         Err("Canceled".to_string())
     }
+}
+
+/// Install a language straight from JSON content (used by the `bmm://language/import-inline`
+/// share link, so a translation can be shared as a single link like themes are).
+#[tauri::command]
+pub fn import_language_data(app_handle: tauri::AppHandle, code: String, content: String) -> Result<String, String> {
+    use std::fs;
+    // Sanitise the lang code → safe filename (no path traversal).
+    let code = code.trim().to_lowercase();
+    let safe: String = code.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect();
+    if safe.is_empty() { return Err("Invalid language code".to_string()); }
+    if safe == "template" { return Err("Cannot overwrite template.json".to_string()); }
+    // Validate it's real JSON before writing.
+    serde_json::from_str::<serde_json::Value>(&content).map_err(|e| format!("Invalid JSON: {}", e))?;
+
+    let lang_dir = get_lang_dir(&app_handle);
+    if !lang_dir.exists() { fs::create_dir_all(&lang_dir).map_err(|e| e.to_string())?; }
+    let dest = lang_dir.join(format!("{}.json", safe));
+    fs::write(&dest, content).map_err(|e| e.to_string())?;
+    Ok(safe)
 }
 
 #[tauri::command]

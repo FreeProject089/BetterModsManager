@@ -1561,6 +1561,46 @@ export async function initSettings() {
                                 <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
                             </label>
                         </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportPlugins') || 'Plugins'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportPluginsDesc') || 'Installed plugins and their permissions'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-plugins" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportModpacks') || 'Modpacks & Launch Packs'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportModpacksDesc') || 'Your .BMP modpacks and application launch packs'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-modpacks" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportThemes') || 'Themes'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportThemesDesc') || 'Your installed custom themes'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-themes" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportTranslations') || 'Translations'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportTranslationsDesc') || 'Custom & imported language files'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-translations" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 9l1-5h16l1 5"/><path d="M5 9v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M9 13h6"/></svg></span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportApps') || 'App Catalog & favourites'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportAppsDesc') || 'Community catalog sources, favourites, installed apps & server-repo favourites'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-apps" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
                     </div>
 
                     <div class="exp-note">
@@ -1582,20 +1622,38 @@ export async function initSettings() {
             content.querySelector('.btn-close').onclick = close;
             
             content.querySelector('.btn-confirm-exp').onclick = async () => {
+                const exportApps = content.querySelector('#exp-apps').checked;
                 const options = {
                     profiles: content.querySelector('#exp-profiles').checked,
                     mods: content.querySelector('#exp-mods').checked,
                     settings: content.querySelector('#exp-settings').checked,
                     custom_tags: content.querySelector('#exp-tags').checked,
-                    disk_limits: true
+                    disk_limits: true,
+                    plugins: content.querySelector('#exp-plugins').checked,
+                    modpacks: content.querySelector('#exp-modpacks').checked,
+                    launch_packs: content.querySelector('#exp-modpacks').checked,
+                    themes: content.querySelector('#exp-themes').checked,
+                    translations: content.querySelector('#exp-translations').checked,
+                    apps: exportApps,
                 };
-                
+
+                // Frontend-only data (localStorage) — bundled into the backup so a
+                // restore is complete. Currently: server-repo favourites.
+                let extras: any = null;
+                if (exportApps) {
+                    extras = {};
+                    try {
+                        const repoFav = localStorage.getItem('bmm_repo_favorites');
+                        if (repoFav) extras['bmm_repo_favorites'] = repoFav;
+                    } catch {}
+                }
+
                 close();
 
                 const destPath = await saveFile({ defaultPath: 'bmm-backup.json', filters: [{ name: 'App Data Backup', extensions: ['json'] }] });
                 if (destPath) {
                     try {
-                        await invoke('export_app_data', { destPath, options });
+                        await invoke('export_app_data', { destPath, options, extras });
                         toast(t('settings.dataExported') || 'Data exported successfully', 'success');
                     } catch (e) { toast(t('settings.dataExportError', { err: String(e) }), 'error'); }
                 }
@@ -1610,7 +1668,13 @@ export async function initSettings() {
             if (srcPath) {
                 if (confirm(t('settings.dataImportConfirm'))) {
                     try {
-                        await invoke('import_app_data', { srcPath });
+                        const extras: any = await invoke('import_app_data', { srcPath });
+                        // Restore frontend-only data (localStorage) bundled in the backup.
+                        if (extras && typeof extras === 'object') {
+                            for (const [k, v] of Object.entries(extras)) {
+                                try { if (typeof v === 'string') localStorage.setItem(k, v); } catch {}
+                            }
+                        }
                         toast(t('settings.dataImported'), 'success');
                         setTimeout(() => window.location.reload(), 2000);
                     } catch (e) { toast(t('settings.dataImportError', { err: String(e) }), 'error'); }
