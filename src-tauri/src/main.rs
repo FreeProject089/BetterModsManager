@@ -293,6 +293,7 @@ fn main() {
             commands::settings::update_settings,
             commands::settings::apply_fs_security_mode_command,
             commands::settings::is_debug_mode,
+            commands::settings::is_dev_build,
             commands::settings::is_fsdm_mode,
             commands::settings::is_ptb_mode,
             commands::settings::is_update_disabled,

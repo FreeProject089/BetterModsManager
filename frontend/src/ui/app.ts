@@ -667,8 +667,9 @@ async function main() {
     // copy/paste still works, and in-app right-click features (the theme element
     // picker) still receive the event.
     try {
-        const isDebug = await invoke('is_debug_mode').catch(() => false);
-        if (!isDebug) {
+        // Dev builds (`tauri dev`) keep right-click Inspect + F12; release builds block them.
+        const isDev = await invoke('is_dev_build').catch(() => false);
+        if (!isDev) {
             document.addEventListener('contextmenu', (e) => {
                 const el = e.target as HTMLElement;
                 if (el && el.closest('input, textarea, [contenteditable="true"]')) return;

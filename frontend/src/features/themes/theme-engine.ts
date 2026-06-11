@@ -749,7 +749,12 @@ export async function activateTheme(id: string): Promise<void> {
 
 export async function exportTheme(id: string): Promise<void> {
     try {
-        await invoke('export_theme', { themeId: id });
+        // Pass the theme JSON as a fallback so built-in presets (which live in the
+        // bundled folder, not the installed-themes dir) can be exported too.
+        const known = BUILTIN_THEMES.find(b => b.id === id) || _installedThemes[id]
+            || (_activeTheme?.id === id ? _activeTheme : null);
+        const themeJson = known ? JSON.stringify(known) : null;
+        await invoke('export_theme', { themeId: id, themeJson });
         toast(t('themes.exported') || 'Theme exported', 'success');
     } catch (e) { toast(String(e), 'error'); }
 }

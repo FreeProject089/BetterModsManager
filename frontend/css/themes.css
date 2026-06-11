@@ -124,12 +124,13 @@
     animation: bteDirtyPulse 1.6s ease-in-out infinite;
 }
 @keyframes bteDirtyPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-.bte-footer-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; justify-content: flex-end; flex: 1 1 auto; }
-/* Uniform button height/baseline so the row never looks staggered. */
+.bte-footer-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex: 1 1 auto; }
+/* Uniform, compact buttons so all five fit one tidy row even on a small panel. */
 .bte-footer .btn {
-    white-space: nowrap; height: 30px; padding: 0 12px;
-    display: inline-flex; align-items: center; justify-content: center; line-height: 1;
+    white-space: nowrap; height: 29px; padding: 0 9px; font-size: 11.5px;
+    display: inline-flex; align-items: center; justify-content: center; line-height: 1; gap: 4px;
 }
+.bte-footer .btn svg { margin: 0 !important; }
 
 /* ── Simple tab — friendly UI ─────────────────────────────────────────────── */
 .bte-intro {

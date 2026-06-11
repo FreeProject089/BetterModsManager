@@ -176,6 +176,14 @@ pub fn reset_app_data(state: State<AppState>) -> Result<(), AppError> {
 }
 
 
+/// True only for a debug build (`tauri dev` / `cargo run`), false for release
+/// (`tauri build`). Used to allow the WebView2 right-click "Inspect" + F12 in dev
+/// while blocking them in production — independent of the app.cfg `prod` flag.
+#[tauri::command]
+pub fn is_dev_build() -> bool {
+    cfg!(debug_assertions)
+}
+
 #[tauri::command]
 pub fn is_debug_mode(app_handle: tauri::AppHandle) -> bool {
     if let Some(path) = resolve_path(&app_handle, "app.cfg") {

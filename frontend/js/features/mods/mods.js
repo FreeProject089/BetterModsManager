@@ -341,17 +341,29 @@ export async function refreshMods(autoScan = false, immediate = false) {
         if (autoScan && S.processingMods.size === 0) {
             // Throttle automatic scans by the user-configured interval (settings →
             // "Auto-scan interval", localStorage `bmm_scan_interval_sec`, default 0).
+            // The last-scan timestamp is persisted so the interval limits scan
+            // frequency ACROSS app launches/focus, not just within one session
+            // (otherwise it reset every start and felt like it had no effect).
             let minGapMs = 0;
             try {
                 minGapMs = Math.max(0, parseInt(localStorage.getItem('bmm_scan_interval_sec') || '0', 10) || 0) * 1000;
             }
             catch { }
+            let last = _lastAutoScan;
+            try {
+                last = parseInt(localStorage.getItem('bmm_last_auto_scan') || '0', 10) || _lastAutoScan;
+            }
+            catch { }
             const now = Date.now();
-            if (minGapMs === 0 || now - _lastAutoScan >= minGapMs) {
+            if (minGapMs === 0 || now - last >= minGapMs) {
                 const activeId = S.cachedActiveProfileId || await invoke('get_active_profile_id').catch(() => null);
                 if (activeId) {
                     await invoke('scan_mods_folder').catch(() => { });
                     _lastAutoScan = now;
+                    try {
+                        localStorage.setItem('bmm_last_auto_scan', String(now));
+                    }
+                    catch { }
                 }
             }
         }

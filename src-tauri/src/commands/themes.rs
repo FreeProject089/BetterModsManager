@@ -24,20 +24,36 @@ pub fn list_builtin_themes(app_handle: tauri::AppHandle) -> Result<String, Strin
         .or_else(|| app_handle.path_resolver().resolve_resource("../frontend/assets/builtin-themes"));
     let Some(dir) = dir else { return Ok("[]".into()); };
 
+    // Accept both plain .json theme files and .bmmtheme ZIP archives.
     let mut files: Vec<PathBuf> = Vec::new();
     if let Ok(entries) = std::fs::read_dir(&dir) {
         for e in entries.flatten() {
             let p = e.path();
-            if p.extension().and_then(|s| s.to_str()) == Some("json") { files.push(p); }
+            match p.extension().and_then(|s| s.to_str()) {
+                Some("json") | Some("bmmtheme") => files.push(p),
+                _ => {}
+            }
         }
     }
     files.sort(); // deterministic order (filename prefixed with NN-)
 
     let mut out: Vec<serde_json::Value> = Vec::new();
     for p in files {
-        if let Ok(raw) = std::fs::read_to_string(&p) {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) { out.push(v); }
-        }
+        let is_zip = p.extension().and_then(|s| s.to_str()) == Some("bmmtheme");
+        let raw = if is_zip {
+            // .bmmtheme = ZIP containing theme.json — extract it.
+            match std::fs::File::open(&p).ok()
+                .and_then(|f| zip::ZipArchive::new(f).ok())
+                .and_then(|mut a| a.by_name("theme.json").ok()
+                    .map(|mut e| { use std::io::Read; let mut s = String::new(); let _ = e.read_to_string(&mut s); s }))
+            {
+                Some(s) => s,
+                None => continue,
+            }
+        } else {
+            match std::fs::read_to_string(&p) { Ok(s) => s, Err(_) => continue }
+        };
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) { out.push(v); }
     }
     serde_json::to_string(&out).map_err(|e| e.to_string())
 }
@@ -171,9 +187,9 @@ pub async fn export_theme(
     app_handle: tauri::AppHandle,
     theme_id: String,
     dest_path: Option<String>,
+    theme_json: Option<String>,
 ) -> Result<(), String> {
     let theme_dir = themes_dir(&app_handle).join(&theme_id);
-    if !theme_dir.exists() { return Err(format!("Theme '{}' not found", theme_id)); }
 
     let save_path = match dest_path {
         Some(p) => std::path::PathBuf::from(p),
@@ -192,18 +208,27 @@ pub async fn export_theme(
     let mut zip = zip::ZipWriter::new(file);
     let opts = zip::write::FileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
+    use std::io::Write;
 
-    // Walk theme dir and add every file
-    for entry in jwalk::WalkDir::new(&theme_dir).into_iter().flatten() {
-        let p = entry.path();
-        if p.is_file() {
-            let rel = p.strip_prefix(&theme_dir).unwrap_or(&p);
-            let rel_str = rel.to_string_lossy().replace('\\', "/");
-            zip.start_file(rel_str, opts).map_err(|e| e.to_string())?;
-            let data = std::fs::read(&p).map_err(|e| e.to_string())?;
-            use std::io::Write;
-            zip.write_all(&data).map_err(|e| e.to_string())?;
+    if theme_dir.exists() {
+        // Installed theme → bundle its full folder (theme.json + assets + fonts).
+        for entry in jwalk::WalkDir::new(&theme_dir).into_iter().flatten() {
+            let p = entry.path();
+            if p.is_file() {
+                let rel = p.strip_prefix(&theme_dir).unwrap_or(&p);
+                let rel_str = rel.to_string_lossy().replace('\\', "/");
+                zip.start_file(rel_str, opts).map_err(|e| e.to_string())?;
+                let data = std::fs::read(&p).map_err(|e| e.to_string())?;
+                zip.write_all(&data).map_err(|e| e.to_string())?;
+            }
         }
+    } else if let Some(json) = theme_json {
+        // Not installed (built-in preset or unsaved draft) → write the supplied
+        // JSON straight into the .bmmtheme. Built-ins have no separate assets.
+        zip.start_file("theme.json", opts).map_err(|e| e.to_string())?;
+        zip.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+    } else {
+        return Err(format!("Theme '{}' not found", theme_id));
     }
     zip.finish().map_err(|e| e.to_string())?;
     Ok(())
