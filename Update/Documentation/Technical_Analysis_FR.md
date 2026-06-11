@@ -46,8 +46,14 @@ L'état global `AppState` enveloppe toutes les données mutables dans un `Arc<Mu
 | :--- | :--- | :--- |
 | `profiles` | `Vec<Profile>` | Tous les profils de jeu définis par l'utilisateur |
 | `mods` | `Vec<ModEntry>` | Tous les mods enregistrés dans chaque profil |
-| `tags` | `Vec<CustomTag>` | Étiquettes de taxonomie définies par l'utilisateur (nom + couleur) |
 | `active_profile_id` | `Option<String>` | UUID du profil actuellement sélectionné |
+| `custom_tags` | `Vec<TagDef>` | Étiquettes de taxonomie définies par l'utilisateur (nom + couleur) |
+| `disk_limits` | `HashMap<String, u64>` | Limites d'E/S disque par chemin (Mo/s) |
+| `settings` | `AppSettings` | Préférences/configuration de l'app |
+| `launch_packs` | `Vec<LaunchPack>` | Groupes de lancement d'applications |
+| `installed_plugins` | `Vec<InstalledPlugin>` | Manifestes des plugins installés |
+| `plugin_permissions` | `HashMap<String, Vec<String>>` | Permissions accordées par id de plugin |
+| `modpacks` | `Vec<LocalModpack>` | Modpacks `.bmp` stockés localement |
 
 ### Stratégie de persistance
 
@@ -82,21 +88,25 @@ L'état global `AppState` enveloppe toutes les données mutables dans un `Arc<Mu
 | `id` | `String` (UUID v4) | Identifiant unique |
 | `name` | `String` | Nom d'affichage |
 | `version` | `String` | Chaîne de version sémantique |
-| `author` | `String` | Attribution de l'auteur |
-| `description` | `String` | Description libre |
+| `author` | `Option<String>` | Attribution de l'auteur |
+| `description` | `Option<String>` | Description libre |
+| `dependencies` | `Vec<String>` | Dépendances déclarées du mod |
 | `mod_folder_path` | `PathBuf` | Chemin absolu vers le dossier racine du mod sur le disque |
 | `enabled` | `bool` | Indique si le mod est actuellement actif dans le jeu |
-| `status` | `ModStatus` | Enum: `Enabled`, `Disabled`, `AlreadyPresent` |
+| `status` | `ModStatus` | Enum: `Enabled`, `Disabled`, `Error(String)` |
 | `installed_files` | `Vec<String>` | Chemins des fichiers injectés dans la RACINE du jeu |
 | `tags` | `Vec<String>` | Noms des tags assignés |
 | `download_links` | `Vec<DownloadLink>` | Liens web (GitHub, NexusMods, etc.) avec type et label |
-| `sort_priority` | `u32` | Priorité d'installation pour les listes .MM |
+| `install_notes` | `String` | Instructions de placement/installation (héritées du `.MM`) |
+| `activation_order` | `u32` | Ordre d'activation (0 = premier appliqué), pour la résolution de conflits |
+| `file_hashes` | `Option<HashMap<String,String>>` | Map SHA-256 par fichier pour le moteur d'intégrité |
+| `content_id` | `Option<String>` | Empreinte de contenu déterministe (voir §46) |
 
 ---
 
 ## 5. Backend — Le moteur de copie intelligent (Smart Copy)
 
-Le cœur de la gestion des mods de BMM est le moteur de copie physique empilée (**Stacked Physical Copy**) dans `src-tauri/src/fs_utils.rs`.
+Le cœur de la gestion des mods de BMM est le moteur de copie physique empilée (**Stacked Physical Copy**) : les commandes `enable_mod`/`disable_mod` et `apply_mod_stacked`/`unapply_mod_stacked`/`run_mod_io_worker` sont dans `src-tauri/src/commands/mods.rs`, tandis que les primitives bas-niveau de copie par blocs + throttling sont dans `src-tauri/src/fs_utils.rs`.
 
 ### Flux d'activation (commande `enable_mod`)
 
@@ -186,7 +196,7 @@ Analyse directe des fichiers `.dat` d'OvGME via `parse_utf16_string()`.
 
 ## 9. Frontend — Architecture modulaire
 
-Architecture ES6 modulaire : `api.js`, `state.js`, `profiles.js`, `mods.js`, `i18n.js`, `utils.js`.
+Le frontend est en **TypeScript** (`// @ts-nocheck`) sous `frontend/src/`, compilé vers `frontend/js/` (voir §22). Les modules sont regroupés en `core/` (transversal), `features/` (logique par page) et `ui/` : `core/api.ts` (pont IPC), `core/i18n.ts` (i18n), `core/utils.ts` (`escHtml`/`escAttr`), `core/links-config.ts` (registre `links.json`), `features/profiles/profiles.ts`, `features/mods/*.ts`, `ui/app.ts` (boot + routage).
 
 ---
 

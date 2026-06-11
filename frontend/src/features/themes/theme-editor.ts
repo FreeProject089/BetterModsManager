@@ -308,18 +308,27 @@ const TARGET_GROUPS: { cat: string; items: { label: string; sel: string }[] }[] 
         { label: 'Primary buttons',    sel: '.btn-primary' },
         { label: 'Secondary buttons',  sel: '.btn-secondary' },
         { label: 'Ghost buttons',      sel: '.btn-ghost' },
+        { label: 'Accent buttons',     sel: '.btn-accent' },
         { label: 'Danger buttons',     sel: '.btn-danger' },
         { label: 'Text inputs',        sel: '.input, input[type=text], textarea' },
+        { label: 'Form inputs',        sel: '.form-input' },
+        { label: 'Form labels',        sel: '.form-label' },
         { label: 'Dropdowns',          sel: '.bmm-csel-trigger' },
         { label: 'Dropdown menus',     sel: '.bmm-csel-menu' },
-        { label: 'Toggles',            sel: '.toggle-slider' },
+        { label: 'Toggles',            sel: '.toggle-slider, .bmm-switch-track' },
+        { label: 'Toggle knob',        sel: '.bmm-switch-thumb' },
     ]},
     { cat: 'Surfaces', items: [
         { label: 'Cards',              sel: '.glass-card' },
         { label: 'Mod cards',          sel: '.mod-card' },
         { label: 'Generic modals',     sel: '.modal-card, .modal.glass' },
+        { label: 'Modal headers',      sel: '.modal-header' },
+        { label: 'Modal body',         sel: '.modal-body' },
+        { label: 'Modal footer',       sel: '.modal-footer' },
         { label: 'Toasts',             sel: '.toast' },
         { label: 'Badges',             sel: '.badge' },
+        { label: 'Search box',         sel: '.search-box' },
+        { label: 'Progress bars',      sel: '.progress-bar' },
         { label: 'Tasky tooltip',      sel: '.tasky-speech-bubble' },
         { label: 'Scrollbars',         sel: '*::-webkit-scrollbar-thumb' },
     ]},
@@ -393,6 +402,11 @@ const TARGET_GROUPS: { cat: string; items: { label: string; sel: string }[] }[] 
         { label: 'Settings cards',     sel: '#view-settings .glass-card' },
         { label: 'Storage manager',    sel: '#storage-manager-overlay .modal, #storage-manager-modal' },
         { label: 'Benchmark',          sel: '#perf-modal .modal, #perf-modal-overlay .modal' },
+        { label: 'Ko-fi reminder',     sel: '.kofi-card' },
+        { label: 'Onboarding card',    sel: '.onboarding-card' },
+        { label: 'Translation sandbox',sel: '#modal-i18n-sandbox .modal' },
+        { label: 'Add-mod modal',      sel: '#modal-add-mod .modal' },
+        { label: 'Export data modal',  sel: '.exp-opt-list' },
     ]},
 ];
 // Every per-page category also gets generic Buttons / Button text / Icons /
@@ -631,13 +645,21 @@ function buildSimpleTab(): string {
             </div>
         </div>`;
 
+    // Collapsible like every other group. Open by default if any asset is set.
+    const assetsCount = ['mascot', 'logo', 'wallpaper'].filter(k => assets[k]).length;
     const assetsHtml = `
-        <div class="bte-group">
-            <div class="bte-group-title">${gi('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>')} ${t('themes.assets')||'Assets (images / video)'}</div>
-            <p class="bte-group-desc">${t('themes.assetsDesc')||'Replace BMM built-in images. Files are embedded into your theme.'}</p>
-            ${assetRow('mascot', t('themes.assetMascot')||'Tasky mascot', 'image/*', 'Replace the floating Tasky mascot AND the spinning boot loader Tasky.')}
-            ${assetRow('logo',   t('themes.assetLogo')||'Sidebar logo', 'image/*', 'Replace the BMM logo in the sidebar.')}
-            ${assetRow('wallpaper', t('themes.assetWallpaper')||'App wallpaper', 'image/*,video/*', 'A full-app background image. Set blur & opacity in the Background group.', true)}
+        <div class="bte-group${assetsCount ? ' open' : ''}">
+            <button class="bte-group-head" type="button">
+                <span class="bte-group-title">${gi('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>')} ${t('themes.assets')||'Assets (images / video)'}</span>
+                ${assetsCount ? `<span class="bte-group-badge">${assetsCount}</span>` : ''}
+                <svg class="bte-group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="bte-group-body">
+                <p class="bte-group-desc">${t('themes.assetsDesc')||'Replace BMM built-in images. Files are embedded into your theme.'}</p>
+                ${assetRow('mascot', t('themes.assetMascot')||'Tasky mascot', 'image/*', 'Replace the floating Tasky mascot AND the spinning boot loader Tasky.')}
+                ${assetRow('logo',   t('themes.assetLogo')||'Sidebar logo', 'image/*', 'Replace the BMM logo in the sidebar.')}
+                ${assetRow('wallpaper', t('themes.assetWallpaper')||'App wallpaper', 'image/*,video/*', 'A full-app background image. Set blur & opacity in the Background group.', true)}
+            </div>
         </div>`;
 
     // Collapse all groups by default except the two most-used, so the panel isn't
@@ -1852,9 +1874,19 @@ function makeDraggable(panel: HTMLElement, handle: HTMLElement): void {
         e.preventDefault();
         const r = panel.getBoundingClientRect();
         const ox = e.clientX - r.left, oy = e.clientY - r.top;
+        // Clamp against the actual containing block. The panel lives in
+        // #app-window-outer which (transparent, decoration-less window) can carry
+        // a transform — so window.innerHeight is the wrong reference and let the
+        // panel slide fully off the bottom. Use the offset parent's rect and always
+        // keep the header (~HDR px) on screen so it stays grabbable.
+        const cb = (panel.offsetParent as HTMLElement) || document.documentElement;
+        const HDR = 52, KEEPX = 140;
         const move = (ev: MouseEvent) => {
-            panel.style.left = `${Math.max(0, Math.min(innerWidth-80, ev.clientX-ox))}px`;
-            panel.style.top  = `${Math.max(0, Math.min(innerHeight-40, ev.clientY-oy))}px`;
+            const pr = cb.getBoundingClientRect();
+            const left = ev.clientX - ox - pr.left;
+            const top  = ev.clientY - oy - pr.top;
+            panel.style.left = `${Math.max(0, Math.min(pr.width  - KEEPX, left))}px`;
+            panel.style.top  = `${Math.max(0, Math.min(pr.height - HDR,  top))}px`;
         };
         const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); saveGeom(); };
         document.addEventListener('mousemove', move);

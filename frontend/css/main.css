@@ -12971,12 +12971,29 @@ body.bmm-theme-light .nav-item:hover .nav-label { color: var(--bmm-accent) !impo
 }
 
 /* ── Filter bar responsive ───────────────────────────────────────────────── */
-.filter-bar { flex-wrap: wrap; }
+/* Never wrap into an ugly stack. The search box shrinks first; the view itself
+   scrolls horizontally below its min-width (see .view). A compact breakpoint
+   tightens spacing so the single-row layout survives narrow windows in style. */
+.filter-bar { flex-wrap: nowrap; }
+.filter-bar .search-box { min-width: 120px; }
 .filter-buttons {
     display: flex;
     align-items: center;
     gap: 6px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+}
+.lib-actions-tab { flex-wrap: nowrap; }
+.lib-actions-tab .view-actions { flex-wrap: nowrap; }
+
+/* Compact "second style" — kicks in on narrower windows before anything scrolls. */
+@media (max-width: 1220px) {
+    .filter-bar { gap: 8px; padding: 8px 10px; }
+    .filter-buttons { gap: 4px; }
+    .filter-bar .filter-btn { padding: 4px 9px; font-size: 11.5px; }
+    .lib-actions-tab .view-actions { gap: 2px; padding: 5px 8px; }
+    .view-action-util { padding: 4px 8px !important; font-size: 11px !important; }
+    .view-actions-sep { margin: 0 2px; }
 }
 
 /* ── Tutorial Hub — inner scroll (preserves shadow) ─────────────────────── */

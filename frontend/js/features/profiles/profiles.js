@@ -1012,7 +1012,7 @@ export async function renderProfiles() {
             const name = el.dataset.name || '';
             try {
                 await navigator.clipboard.writeText(id);
-                toast(`ID copié : ${name}`, 'success');
+                toast(t('common.idCopied', { name }) || `ID copied: ${name}`, 'success');
             }
             catch {
                 toast(id, 'info');

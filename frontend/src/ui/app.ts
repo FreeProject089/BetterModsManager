@@ -364,10 +364,10 @@ function initNavigation() {
 
                     if (payload.status === 'error' && payload.is_manual) {
                         const { toast } = await import('../ui/app.js');
-                        toast('Failed to hash mod ' + payload.mod_id, 'error');
+                        toast(t('toast.hashFailed', { id: payload.mod_id }) || ('Failed to hash mod ' + payload.mod_id), 'error');
                     } else if (payload.status === 'done' && payload.is_manual) {
                         const { toast } = await import('../ui/app.js');
-                        toast('Hash calculation completed', 'success');
+                        toast(t('toast.hashDone') || 'Hash calculation completed', 'success');
                     }
 
                     // Refresh main mod list — debounce background SHA refreshes to avoid 100+ rapid re-renders
@@ -659,6 +659,29 @@ function patchHtmlLinks(): void {
 // ── Boot ──────────────────────────────────────────────────
 async function main() {
     console.log('[BMM] App starting from generated TypeScript!');
+
+    // In production, block the WebView2 "Inspect" context menu and the F12 /
+    // Ctrl+Shift+I devtools shortcuts. DevTools stay reachable only via the BMM
+    // DevTool's "Open DevTools" button (the open_devtools command). Debug builds
+    // keep everything. Inputs/textareas keep their native right-click menu so
+    // copy/paste still works, and in-app right-click features (the theme element
+    // picker) still receive the event.
+    try {
+        const isDebug = await invoke('is_debug_mode').catch(() => false);
+        if (!isDebug) {
+            document.addEventListener('contextmenu', (e) => {
+                const el = e.target as HTMLElement;
+                if (el && el.closest('input, textarea, [contenteditable="true"]')) return;
+                e.preventDefault();
+            }, { capture: true });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'F12' || ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c'))) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }, { capture: true });
+        }
+    } catch { /* non-fatal */ }
 
     // Load external link registry first so every module can call getLinks() safely
     await loadLinks();

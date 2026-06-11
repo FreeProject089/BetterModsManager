@@ -1671,6 +1671,24 @@ export async function initSettings() {
             };
         });
     }
+    // ── Mod auto-scan interval (localStorage, throttles focus-triggered scans) ──
+    const scanIntervalEl = document.getElementById('scan-interval-sec');
+    if (scanIntervalEl) {
+        try {
+            scanIntervalEl.value = String(parseInt(localStorage.getItem('bmm_scan_interval_sec') || '0', 10) || 0);
+        }
+        catch {
+            scanIntervalEl.value = '0';
+        }
+        scanIntervalEl.addEventListener('change', () => {
+            const v = Math.max(0, Math.min(3600, parseInt(scanIntervalEl.value || '0', 10) || 0));
+            scanIntervalEl.value = String(v);
+            try {
+                localStorage.setItem('bmm_scan_interval_sec', String(v));
+            }
+            catch { }
+        });
+    }
     const importBtn = document.getElementById('btn-import-data');
     if (importBtn) {
         importBtn.addEventListener('click', async () => {

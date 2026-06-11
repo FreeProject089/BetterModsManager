@@ -41,6 +41,7 @@ const S = new Proxy(appState.state, {
 });
 
 let refreshTimeout = null;
+let _lastAutoScan = 0;   // timestamp of the last auto-scan (for the configurable interval)
 
 export async function initMods() {
   window._refreshModsFn = refreshMods;
@@ -288,20 +289,24 @@ export async function initMods() {
       await saveRetention(days);
   });
 
-  // File Drop
+  // File / folder drop → pre-fill the Add Mod modal. Works for BOTH a mod folder
+  // and a mod archive (.zip/.rar/.7z/.tar/.gz) — the backend detects which from
+  // the path; the `mod-folder` field holds either.
   listenFileDrop(async paths => {
     const libView = document.getElementById('view-library');
     if (!libView || !libView.classList.contains('active')) return;
     if (document.querySelector('.modal-overlay.open')) return;
-    if (paths && paths.length > 0) {
-      openAddModModal();
-      const folderInput = document.getElementById('mod-folder');
-      if (folderInput) folderInput.value = paths[0];
-      const nameInput = document.getElementById('mod-name');
-      if (nameInput) {
-        const parts = paths[0].replace(/\\/g, '/').split('/');
-        nameInput.value = parts[parts.length - 1] || '';
-      }
+    if (!paths || paths.length === 0) return;
+
+    const p = paths[0];
+    openAddModModal();
+    const folderInput = document.getElementById('mod-folder') as HTMLInputElement | null;
+    if (folderInput) folderInput.value = p;
+    const nameInput = document.getElementById('mod-name') as HTMLInputElement | null;
+    if (nameInput) {
+      const base = (p.replace(/\\/g, '/').split('/').pop() || '');
+      // Strip a known archive extension; a folder name is kept as-is.
+      nameInput.value = base.replace(/\.(zip|rar|7z|tar\.gz|tgz|tar)$/i, '');
     }
   });
 
@@ -355,8 +360,15 @@ export async function refreshMods(autoScan = false, immediate = false) {
 
   const doRefresh = async () => {
     if (autoScan && S.processingMods.size === 0) {
-      const activeId = S.cachedActiveProfileId || await invoke('get_active_profile_id').catch(() => null);
-      if (activeId) await invoke('scan_mods_folder').catch(() => {});
+      // Throttle automatic scans by the user-configured interval (settings →
+      // "Auto-scan interval", localStorage `bmm_scan_interval_sec`, default 0).
+      let minGapMs = 0;
+      try { minGapMs = Math.max(0, parseInt(localStorage.getItem('bmm_scan_interval_sec') || '0', 10) || 0) * 1000; } catch {}
+      const now = Date.now();
+      if (minGapMs === 0 || now - _lastAutoScan >= minGapMs) {
+        const activeId = S.cachedActiveProfileId || await invoke('get_active_profile_id').catch(() => null);
+        if (activeId) { await invoke('scan_mods_folder').catch(() => {}); _lastAutoScan = now; }
+      }
     }
     try {
       S.userTags = await invoke('get_tags').catch(() => []);

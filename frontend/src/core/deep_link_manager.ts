@@ -255,7 +255,7 @@ async function handleDeepLink(urlStr: string): Promise<void> {
         if (action === 'api') {
             const method = (parsedUrl.searchParams.get('method') || 'GET').toUpperCase();
             let apiPath = parsedUrl.searchParams.get('path') || '';
-            if (!apiPath.startsWith('/api/')) { toast('Deep link: invalid path', 'error'); return; }
+            if (!apiPath.startsWith('/api/')) { toast(t('toast.deeplinkInvalidPath') || 'Deep link: invalid path', 'error'); return; }
             const params: Record<string, string> = {};
             parsedUrl.searchParams.forEach((v, k) => { if (k !== 'method' && k !== 'path') params[k] = v; });
             try {

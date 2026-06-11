@@ -386,7 +386,7 @@ export async function showFileConflictSelectorAsync(e, filePath, mod1Id, mod2Id)
 
   openBtn.onclick = async () => {
     if (fileConflictSelectorState.selectedMods.size === 0) {
-      toast('Sélectionnez au moins un mod', 'warning');
+      toast(t('common.selectOneMod') || 'Select at least one mod', 'warning');
       return;
     }
 
@@ -396,7 +396,7 @@ export async function showFileConflictSelectorAsync(e, filePath, mod1Id, mod2Id)
       try {
         await invoke('open_mod_folder_at', { modId, relativePath: filePath });
       } catch (err) {
-        toast(`Erreur ouverture ${modId}: ${err}`, 'error');
+        toast(t('toast.openError', { id: modId, err: String(err) }) || `Error opening ${modId}: ${err}`, 'error');
       }
     }
   };
@@ -407,7 +407,7 @@ export async function showFileConflictSelectorAsync(e, filePath, mod1Id, mod2Id)
 export function showFileConflictSelector(e, filePath, mod1Id, mod2Id) {
   showFileConflictSelectorAsync(e, filePath, mod1Id, mod2Id).catch(err => {
     console.error('Erreur sélecteur conflit:', err);
-    toast('Erreur: ' + err, 'error');
+    toast((t('common.error') || 'Error') + ': ' + err, 'error');
   });
 }
 window.showFileConflictSelector = showFileConflictSelector;

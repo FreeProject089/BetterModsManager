@@ -441,7 +441,7 @@ export function createModCard(mod) {
             return;
         try {
             await navigator.clipboard.writeText(contentId);
-            toast('Content ID copié : ' + contentId.slice(0, 16) + '…', 'success', 2000);
+            toast(t('common.contentIdCopied', { id: contentId.slice(0, 16) }) || ('Content ID copied: ' + contentId.slice(0, 16) + '…'), 'success', 2000);
         }
         catch (err) {
             toast(t('common.error') + ' : ' + err, 'error');

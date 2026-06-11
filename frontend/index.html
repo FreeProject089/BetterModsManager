@@ -7670,6 +7670,21 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                     <span data-i18n="settings.shaRecalculateAllBtn">Recalculate All</span>
                                 </button>
                             </div>
+
+                            <!-- Mod auto-scan interval -->
+                            <div
+                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-top:12px">
+                                <div style="flex:1">
+                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                        data-i18n="settings.scanInterval">Auto-scan interval</div>
+                                    <div style="font-size:10px;color:var(--text-muted)"
+                                        data-i18n="settings.scanIntervalDesc">Minimum time between automatic mod-folder
+                                        scans (on app focus). 0 = scan every time.</div>
+                                </div>
+                                <input type="number" id="scan-interval-sec" class="form-input" min="0" max="3600"
+                                    style="padding:4px 8px;font-size:12px;border-radius:6px;width:70px">
+                                <span style="font-size:11px;color:var(--text-muted)" data-i18n="common.seconds">sec</span>
+                            </div>
                         </div>
                         <!-- ── Discord RPC Toggle ── -->
                         <div class="glass-card" id="settings-discord-rpc-card"

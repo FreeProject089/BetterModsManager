@@ -491,6 +491,7 @@ fn main() {
             commands::apps::scan_and_track_running_apps,
             // ── Themes ──────────────────────────────────────────────────────
             commands::themes::list_installed_themes,
+            commands::themes::list_builtin_themes,
             commands::themes::get_active_theme,
             commands::themes::set_active_theme,
             commands::themes::install_theme,

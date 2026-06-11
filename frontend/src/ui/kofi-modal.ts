@@ -97,7 +97,7 @@ function injectStyles(): void {
       background:rgba(10,8,12,0.55);backdrop-filter:blur(6px);opacity:0;transition:opacity .3s ease}
     .kofi-overlay.open{opacity:1}
     .kofi-overlay.closing{opacity:0}
-    .kofi-card{position:relative;width:min(420px,92vw);padding:34px 30px 26px;border-radius:22px;text-align:center;
+    .kofi-card{position:relative;width:min(420px,92vw);padding:34px 30px 26px;border-radius:22px;text-align:center;overflow:hidden;
       background:linear-gradient(160deg,#2a1d24 0%, var(--bg-elevated,#181420) 60%);
       border:1px solid rgba(255,107,74,0.35);
       box-shadow:0 24px 70px rgba(255,94,91,0.18),0 8px 30px rgba(0,0,0,0.5);

@@ -249,7 +249,7 @@ async function handleDeepLink(urlStr) {
             const method = (parsedUrl.searchParams.get('method') || 'GET').toUpperCase();
             let apiPath = parsedUrl.searchParams.get('path') || '';
             if (!apiPath.startsWith('/api/')) {
-                toast('Deep link: invalid path', 'error');
+                toast(t('toast.deeplinkInvalidPath') || 'Deep link: invalid path', 'error');
                 return;
             }
             const params = {};

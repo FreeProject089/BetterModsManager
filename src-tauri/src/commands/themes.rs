@@ -11,6 +11,37 @@ fn themes_dir(app_handle: &tauri::AppHandle) -> PathBuf {
         .join("themes")
 }
 
+/// Returns the bundled built-in themes as a JSON array string. They live as
+/// individual `.json` files in the bundled resource folder `builtin-themes/`
+/// (sorted by filename, e.g. `01-bmm-default.bmmtheme.json`). Add/remove a file
+/// to change the set of built-in presets — they are NOT hardcoded.
+#[tauri::command]
+pub fn list_builtin_themes(app_handle: tauri::AppHandle) -> Result<String, String> {
+    // Resolve the bundled resource dir (handles the `_up_` prefix Tauri uses for
+    // resources copied from outside src-tauri).
+    let dir = app_handle.path_resolver().resolve_resource("builtin-themes")
+        .or_else(|| app_handle.path_resolver().resolve_resource("_up_/frontend/assets/builtin-themes"))
+        .or_else(|| app_handle.path_resolver().resolve_resource("../frontend/assets/builtin-themes"));
+    let Some(dir) = dir else { return Ok("[]".into()); };
+
+    let mut files: Vec<PathBuf> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.extension().and_then(|s| s.to_str()) == Some("json") { files.push(p); }
+        }
+    }
+    files.sort(); // deterministic order (filename prefixed with NN-)
+
+    let mut out: Vec<serde_json::Value> = Vec::new();
+    for p in files {
+        if let Ok(raw) = std::fs::read_to_string(&p) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) { out.push(v); }
+        }
+    }
+    serde_json::to_string(&out).map_err(|e| e.to_string())
+}
+
 /// Returns the stored JSON for all installed themes as a JSON array string.
 #[tauri::command]
 pub fn list_installed_themes(app_handle: tauri::AppHandle) -> Result<String, String> {

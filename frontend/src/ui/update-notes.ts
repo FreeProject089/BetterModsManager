@@ -865,7 +865,7 @@ function showUpdateAvailableModal(info) {
                 progressBar.style.width = '100%';
 
                 if (result.errors && result.errors.length > 0) {
-                    toast(`Update partial: ${result.applied} applied, ${result.errors.length} errors`, 'warning');
+                    toast(t('toast.updatePartial', { applied: result.applied, errors: result.errors.length }) || `Update partial: ${result.applied} applied, ${result.errors.length} errors`, 'warning');
                 } else {
                     toast(t('update.incrementalSuccess') || `Update applied! ${result.applied} files updated, ${result.skipped} unchanged. Restart BMM to complete.`, 'success');
                 }

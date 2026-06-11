@@ -698,10 +698,13 @@ export function getCachedTheme(id: string): BmmTheme | undefined {
  *  localStorage (fast, no IPC) so there is no visible flash. */
 export async function restoreThemeAtBoot(): Promise<void> {
     initDataPage();
+    // Load the built-in presets from the bundled folder FIRST so every later
+    // BUILTIN_THEMES lookup (here + the theme editor) resolves correctly.
+    await loadBuiltinThemes();
     const activeId = localStorage.getItem(ACTIVE_KEY);
     if (!activeId) return;
 
-    // Built-in themes live in code, not on disk — restore them directly.
+    // Restore a built-in preset directly from the loaded set.
     const builtin = BUILTIN_THEMES.find(b => b.id === activeId);
     if (builtin) { applyTheme(builtin); return; }
 
@@ -757,171 +760,22 @@ function rgb(hex: string): { r: string; g: string; b: string } {
     const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
     return m ? { r: String(parseInt(m[1], 16)), g: String(parseInt(m[2], 16)), b: String(parseInt(m[3], 16)) } : { r: '59', g: '130', b: '246' };
 }
-function accentVars(hex: string, dimOpacity = 0.18, borderOpacity = 0.4): Record<string, string> {
-    const { r, g, b } = rgb(hex);
-    return {
-        '--bmm-accent':        hex,
-        '--bmm-accent-dim':    `rgba(${r},${g},${b},${dimOpacity})`,
-        '--bmm-accent-r':      r, '--bmm-accent-g': g, '--bmm-accent-b': b,
-        '--bmm-border-accent': `rgba(${r},${g},${b},${borderOpacity})`,
-        '--bmm-accent-glow':   `0 0 20px rgba(${r},${g},${b},0.35)`,
-    };
-}
 
-/** Light-mode surface overrides — inverts white-alpha glass tints to black-alpha. */
-function lightSurfaces(): Record<string, string> {
-    return {
-        '--bmm-surface-r': '0', '--bmm-surface-g': '0', '--bmm-surface-b': '0',
-        '--bmm-s02': 'rgba(0,0,0,0.02)', '--bmm-s03': 'rgba(0,0,0,0.03)',
-        '--bmm-s04': 'rgba(0,0,0,0.04)', '--bmm-s05': 'rgba(0,0,0,0.05)',
-        '--bmm-s06': 'rgba(0,0,0,0.06)', '--bmm-s07': 'rgba(0,0,0,0.07)',
-        '--bmm-s08': 'rgba(0,0,0,0.08)', '--bmm-s09': 'rgba(0,0,0,0.09)',
-        '--bmm-s10': 'rgba(0,0,0,0.10)', '--bmm-s12': 'rgba(0,0,0,0.12)',
-        '--bmm-s15': 'rgba(0,0,0,0.15)', '--bmm-s20': 'rgba(0,0,0,0.20)',
-        '--bmm-glass-bg': 'rgba(0,0,0,0.03)', '--bmm-glass-border': 'rgba(0,0,0,0.08)',
-        '--bmm-bg-hover': 'rgba(0,0,0,0.045)',
-        '--bmm-color-scheme': 'light',
-    };
-}
+/** Built-in theme presets. NOT hardcoded — loaded from the bundled
+ *  `builtin-themes/` resource folder (one .json per preset) by loadBuiltinThemes().
+ *  Add/remove a file there to change the set; the quick presets and the Installed
+ *  list pick it up automatically. */
+export let BUILTIN_THEMES: BmmTheme[] = [];
 
-export const BUILTIN_THEMES: BmmTheme[] = [
-    // 1. BMM Default (blue)
-    {
-        id: 'bmm-default', name: 'BMM Default', author: 'BMM Team',
-        description: 'The original BMM dark blue theme.', vars: {},
-    },
-    // 2. Sombre (Discord-style soft dark)
-    {
-        id: 'bmm-sombre', name: 'Sombre', author: 'BMM Team',
-        description: 'Soft dark grey like Discord, blurple accent.',
-        vars: {
-            '--bmm-bg-base': '#1a1a1e', '--bmm-bg-elevated': '#232328',
-            '--bmm-bg-overlay': '#26262b',
-            '--bmm-bg-sidebar': '#161619', '--bmm-bg-titlebar': '#141417',
-            '--bmm-titlebar-bg': '#141417', '--bmm-loader-bg': '#141417',
-            '--bmm-border': 'rgba(255,255,255,0.07)', '--bmm-border-hover': 'rgba(255,255,255,0.14)',
-            '--bmm-text-primary': '#dbdee1', '--bmm-text-secondary': '#b5bac1',
-            '--bmm-text-muted': '#80848e', '--bmm-cyan': '#00a8fc',
-            '--bmm-success': '#23a559', '--bmm-warning': '#f0b232', '--bmm-danger': '#f23f43',
-            '--bmm-radius-card': '12px',
-            '--bmm-shadow-card': '0 2px 10px rgba(0,0,0,0.25)',
-            '--bmm-tasky-bubble-bg': 'rgba(30,30,35,0.92)',
-            ...accentVars('#5865f2'),
-        },
-    },
-    // 3. Void / Noir (pure black, monochrome grey-white accent — NO blue)
-    {
-        id: 'bmm-void', name: 'Void / Noir', author: 'BMM Team',
-        description: 'Pure black, monochrome grey-white accent, hairline borders.',
-        vars: {
-            '--bmm-bg-base': '#000000', '--bmm-bg-elevated': '#0b0b0d',
-            '--bmm-bg-overlay': '#0e0e10',
-            '--bmm-bg-sidebar': '#060607', '--bmm-bg-titlebar': '#000000',
-            '--bmm-titlebar-bg': '#000000', '--bmm-loader-bg': '#000000',
-            '--bmm-border': 'rgba(255,255,255,0.07)', '--bmm-border-hover': 'rgba(255,255,255,0.18)',
-            '--bmm-text-primary': '#f5f5f7', '--bmm-text-secondary': '#a1a1a8',
-            '--bmm-text-muted': '#5c5c63', '--bmm-radius-card': '12px',
-            '--bmm-card-glow': '0 0 0 1px rgba(255,255,255,0.04)',
-            '--bmm-shadow-card': '0 4px 16px rgba(0,0,0,0.6)',
-            '--bmm-tasky-bubble-bg': 'rgba(12,12,14,0.94)',
-            // Grey-white accent — dark text on the light accent so buttons stay readable.
-            '--bmm-btn-primary-text': '#0a0a0a',
-            '--bmm-cyan': '#d4d4d8', '--bmm-success': '#34d399',
-            '--bmm-warning': '#fbbf24', '--bmm-danger': '#f87171',
-            ...accentVars('#d4d4d8'),
-        },
-    },
-    // 4. Full White — clean, flat light theme. Light-grey canvas so white cards pop.
-    {
-        id: 'bmm-white', name: 'Full White', author: 'BMM Team',
-        description: 'A clean, flat white interface — light-grey canvas, crisp white cards, dark text.',
-        mode: 'light',
-        vars: {
-            '--bmm-bg-base': '#f5f6f8',           // soft grey canvas
-            '--bmm-bg-elevated': '#ffffff',       // pure white cards/panels stand out
-            '--bmm-bg-overlay': '#ffffff',
-            '--bmm-bg-sidebar': '#ffffff', '--bmm-bg-titlebar': '#ffffff',
-            '--bmm-titlebar-bg': '#ffffff', '--bmm-loader-bg': '#f5f6f8',
-            '--bmm-border': 'rgba(0,0,0,0.09)', '--bmm-border-hover': 'rgba(0,0,0,0.18)',
-            '--bmm-border-accent': 'rgba(29,78,216,0.4)',
-            '--bmm-text-primary': '#18181b', '--bmm-text-secondary': '#3f3f46',
-            '--bmm-text-muted': '#71717a', '--bmm-success': '#15803d',
-            '--bmm-warning': '#b45309', '--bmm-danger': '#dc2626', '--bmm-cyan': '#0e7490',
-            '--bmm-tasky-bubble-bg': '#ffffff', '--bmm-tasky-bubble-text': '#18181b',
-            '--bmm-tasky-bubble-border': 'rgba(0,0,0,0.1)',
-            // Clean & flat: no glows, gentle shadows, square-ish radii.
-            '--bmm-card-glow': '0 0 0 transparent',
-            '--bmm-card-hover-lift': '0px',
-            '--bmm-shadow-card': '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-            '--bmm-shadow-modal': '0 12px 40px rgba(0,0,0,0.12)',
-            '--bmm-radius-card': '12px',
-            ...lightSurfaces(),
-            ...accentVars('#1d4ed8'),
-        },
-    },
-    // 5. Discord (authentic Discord dark palette)
-    {
-        id: 'bmm-discord', name: 'Discord', author: 'BMM Team',
-        description: 'The authentic Discord dark look — layered greys & blurple.',
-        vars: {
-            '--bmm-bg-base': '#313338', '--bmm-bg-elevated': '#2b2d31',
-            '--bmm-bg-overlay': '#383a40',
-            '--bmm-bg-sidebar': '#1e1f22', '--bmm-bg-titlebar': '#1e1f22',
-            '--bmm-titlebar-bg': '#1e1f22', '--bmm-loader-bg': '#1e1f22',
-            '--bmm-border': 'rgba(255,255,255,0.06)', '--bmm-border-hover': 'rgba(255,255,255,0.13)',
-            '--bmm-text-primary': '#f2f3f5', '--bmm-text-secondary': '#b5bac1',
-            '--bmm-text-muted': '#949ba4', '--bmm-cyan': '#00a8fc',
-            '--bmm-success': '#23a559', '--bmm-warning': '#f0b232', '--bmm-danger': '#f23f43',
-            '--bmm-radius-btn': '8px', '--bmm-radius-card': '8px',
-            '--bmm-shadow-card': '0 1px 4px rgba(0,0,0,0.3)',
-            '--bmm-card-hover-lift': '0px',
-            '--bmm-tasky-bubble-bg': 'rgba(30,31,34,0.94)',
-            ...accentVars('#5865f2'),
-        },
-    },
-    // 6. Orange / Noir (black with a vivid orange accent)
-    {
-        id: 'bmm-orange', name: 'Orange / Noir', author: 'BMM Team',
-        description: 'Deep black with a bold, warm orange accent.',
-        vars: {
-            '--bmm-bg-base': '#0a0a0a', '--bmm-bg-elevated': '#161614',
-            '--bmm-bg-overlay': '#1a1916',
-            '--bmm-bg-sidebar': '#000000', '--bmm-bg-titlebar': '#000000',
-            '--bmm-titlebar-bg': '#000000', '--bmm-loader-bg': '#000000',
-            '--bmm-border': 'rgba(255,255,255,0.07)', '--bmm-border-hover': 'rgba(255,140,26,0.35)',
-            '--bmm-text-primary': '#f6f1ea', '--bmm-text-secondary': '#b3aa9f',
-            '--bmm-text-muted': '#6c655c', '--bmm-radius-card': '12px',
-            '--bmm-cyan': '#ff8c1a', '--bmm-warning': '#ffb340',
-            '--bmm-success': '#4ade80', '--bmm-danger': '#ff5a5a',
-            '--bmm-card-glow': '0 0 22px rgba(255,106,0,0.08)',
-            '--bmm-shadow-card': '0 4px 16px rgba(0,0,0,0.5)',
-            '--bmm-tasky-bubble-bg': 'rgba(20,16,10,0.94)',
-            '--bmm-tasky-bubble-border': 'rgba(255,106,0,0.3)',
-            // Dark text on the bright orange buttons for contrast.
-            '--bmm-btn-primary-text': '#1a0d00',
-            ...accentVars('#ff6a00'),
-        },
-    },
-    // 7. Spotify Green
-    {
-        id: 'bmm-spotify', name: 'Spotify Green', author: 'BMM Team',
-        description: 'Spotify-style near-black with that iconic green accent.',
-        vars: {
-            '--bmm-bg-base': '#121212', '--bmm-bg-elevated': '#181818',
-            '--bmm-bg-overlay': '#1f1f1f',
-            '--bmm-bg-sidebar': '#000000', '--bmm-bg-titlebar': '#0a0a0a',
-            '--bmm-titlebar-bg': '#0a0a0a', '--bmm-loader-bg': '#000000',
-            '--bmm-border': 'rgba(255,255,255,0.07)', '--bmm-border-hover': 'rgba(255,255,255,0.16)',
-            '--bmm-text-primary': '#ffffff',
-            '--bmm-text-secondary': '#b3b3b3', '--bmm-text-muted': '#6a6a6a',
-            '--bmm-cyan': '#1ED760', '--bmm-success': '#1ED760',
-            '--bmm-warning': '#ffa42b', '--bmm-danger': '#f15e6c',
-            '--bmm-radius-card': '12px', '--bmm-radius-btn': '500px',
-            '--bmm-shadow-card': '0 4px 16px rgba(0,0,0,0.45)',
-            '--bmm-tasky-bubble-bg': 'rgba(18,18,18,0.95)',
-            // Dark text on the bright green buttons (Spotify style).
-            '--bmm-btn-primary-text': '#121212',
-            ...accentVars('#1ED760'),
-        },
-    },
-];
+/** Load built-in presets from disk. Awaited early at boot (before the active theme
+ *  is applied) so synchronous BUILTIN_THEMES lookups resolve correctly. */
+export async function loadBuiltinThemes(): Promise<void> {
+    try {
+        const raw = await invoke('list_builtin_themes') as string;
+        const arr = JSON.parse(raw || '[]');
+        BUILTIN_THEMES = Array.isArray(arr) ? arr : [];
+    } catch (e) {
+        console.error('[BMM] Failed to load built-in themes:', e);
+        BUILTIN_THEMES = [];
+    }
+}

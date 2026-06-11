@@ -2006,7 +2006,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             }
         } else if (p === '/api/modpacks/:id' && m === 'PUT') {
             const mpId = (overlay.querySelector('#plug-qt-s-modpack') as HTMLSelectElement)?.value || '';
-            if (!mpId) { toast('Sélectionnez un modpack', 'warning'); return; }
+            if (!mpId) { toast(t('plugins.selectModpack') || 'Select a modpack', 'warning'); return; }
             const updName    = (overlay.querySelector('#plug-qt-s-name')           as HTMLInputElement)?.value?.trim();
             const updDesc    = (overlay.querySelector('#plug-qt-s-description')    as HTMLInputElement)?.value?.trim();
             const updGname   = (overlay.querySelector('#plug-qt-s-game-name')      as HTMLInputElement)?.value?.trim();
@@ -2035,7 +2035,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
 
         } else if (p === '/api/modpacks/:id' && m === 'DELETE') {
             const mpId = (overlay.querySelector('#plug-qt-s-modpack') as HTMLSelectElement)?.value || '';
-            if (!mpId) { toast('Sélectionnez un modpack', 'warning'); return; }
+            if (!mpId) { toast(t('plugins.selectModpack') || 'Select a modpack', 'warning'); return; }
             resolvedPath = `/api/modpacks/${mpId}`;
             body = '';
 
@@ -2072,7 +2072,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             body = '{}';
         } else if (p === '/api/modpacks/create') {
             const name = (overlay.querySelector('#plug-qt-s-name') as HTMLInputElement)?.value?.trim() || '';
-            if (!name) { toast('Le nom du modpack est requis', 'warning'); return; }
+            if (!name) { toast(t('plugins.modpackNameRequired') || 'The modpack name is required', 'warning'); return; }
             const desc     = (overlay.querySelector('#plug-qt-s-desc')          as HTMLInputElement)?.value?.trim();
             const game     = (overlay.querySelector('#plug-qt-s-game')          as HTMLInputElement)?.value?.trim();
             const srLink   = (overlay.querySelector('#plug-qt-s-sr-link')       as HTMLInputElement)?.value?.trim();
@@ -2111,7 +2111,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
 
         } else if (p === '/api/repo/connect') {
             const repoUrl  = (overlay.querySelector('#plug-qt-s-repo-url')  as HTMLInputElement)?.value?.trim() || '';
-            if (!repoUrl) { toast('Entrez une URL repo.json', 'warning'); return; }
+            if (!repoUrl) { toast(t('plugins.enterRepoUrl') || 'Enter a repo.json URL', 'warning'); return; }
             overlay.remove();
             // Navigate to repo page and auto-fetch the repo (connect = fetch in the page)
             const repoNavBtnC = document.querySelector('.nav-item[data-view="repo"], .nav-btn[data-view="repo"]') as HTMLElement | null;
@@ -2198,7 +2198,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const ulStr       = (overlay.querySelector('#plug-qt-s-upload-limit')   as HTMLInputElement)?.value?.trim();
             const adminPw     = (overlay.querySelector('#plug-qt-s-admin-pw')       as HTMLInputElement)?.value?.trim();
             if (!profIds.length || !outputDir || !author) {
-                toast('Profil(s), output_dir et author_name sont obligatoires', 'warning');
+                toast(t('plugins.genFieldsRequired') || 'Profile(s), output_dir and author_name are required', 'warning');
                 return;
             }
             const genPl: any = {
@@ -7482,7 +7482,7 @@ function handlePluginChecksumModal(manifest: any, installDir: string, hash: stri
                 badge.classList.remove('plug-sha-badge--pending');
                 badge.dataset.full = newHash;
             }
-            toast('SHA256 recalculated', 'success');
+            toast(t('toast.shaRecalculated') || 'SHA256 recalculated', 'success');
         } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
     });
     ov.querySelector('#plug-sha-delete')?.addEventListener('click', async () => {

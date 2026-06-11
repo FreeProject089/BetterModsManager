@@ -10,44 +10,36 @@ const DISCORD_CLIENT_ID: &str = "1486151779195555920"; // Placeholder BMM Client
 const REMOTE_LINKS_URL: &str =
     "https://raw.githubusercontent.com/FreeProject089/BetterModsManager/refs/heads/Tdev/frontend/assets/links.json";
 
-/// Resolved Discord RPC button config, read from links.json.
+/// Resolved Discord RPC buttons, read from links.json.
+/// Button 1 = "Website" (its URL gets ?creator=<id> appended), button 2 = "GitHub".
 struct RpcLinks {
-    label:  String,  // first button (site) label/url — or its alt, per `use_alt`
-    link:   String,
-    label2: String,  // second button (e.g. GitHub)
-    link2:  String,
+    website: String, // selected by BoutonRPC1 (WebSiteRPC1 | WebSiteRPC2)
+    github:  String, // selected by BoutonRPC2 (github_RPC1 | github_RPC2)
 }
 
 impl Default for RpcLinks {
     fn default() -> Self {
         RpcLinks {
-            label:  "BetterCommunity".into(),
-            link:   "https://bettercommunity.ch/".into(),
-            label2: "GitHub".into(),
-            link2:  "https://github.com/FreeProject089/BetterModsManager".into(),
+            website: "https://bettercommunity.ch/".into(),
+            github:  "https://github.com/FreeProject089/BetterModsManager".into(),
         }
     }
 }
 
 fn rpc_links_from_json(v: &serde_json::Value) -> RpcLinks {
     let d = RpcLinks::default();
-    let use_alt = v.get("rpc_use_alt").and_then(|x| x.as_bool()).unwrap_or(false);
     let s = |k: &str, fb: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or(fb).to_string();
-    if use_alt {
-        RpcLinks {
-            label:  s("rpc_label_alt", &d.label),
-            link:   s("rpc_link_alt",  &d.link),
-            label2: s("rpc_label2",    &d.label2),
-            link2:  s("rpc_link2",     &d.link2),
+    // BoutonRPC1/2 may be a number or a string ("1"/"2"); default 1.
+    let pick = |k: &str| -> u8 {
+        match v.get(k) {
+            Some(serde_json::Value::Number(n)) => if n.as_u64() == Some(2) { 2 } else { 1 },
+            Some(serde_json::Value::String(s)) => if s.trim() == "2" { 2 } else { 1 },
+            _ => 1,
         }
-    } else {
-        RpcLinks {
-            label:  s("rpc_label", &d.label),
-            link:   s("rpc_link",  &d.link),
-            label2: s("rpc_label2", &d.label2),
-            link2:  s("rpc_link2",  &d.link2),
-        }
-    }
+    };
+    let website = if pick("BoutonRPC1") == 2 { s("WebSiteRPC2", &d.website) } else { s("WebSiteRPC1", &d.website) };
+    let github  = if pick("BoutonRPC2") == 2 { s("github_RPC2", &d.github) }  else { s("github_RPC1", &d.github) };
+    RpcLinks { website, github }
 }
 
 /// Load RPC links: remote GitHub links.json first, then the bundled resource
@@ -133,21 +125,20 @@ pub fn set_discord_presence(
         } else {
             format!("BMM v{} • Creator ID: {}", env!("CARGO_PKG_VERSION"), creator_id)
         };
-        let creator_url = format!(
-            "https://freeproject089.github.io/BMM_Web/?creator={}",
-            creator_id
-        );
 
-        // Button 2 is the configured site link (BetterCommunity by default).
-        let mut buttons = vec![
-            discord_rich_presence::activity::Button::new(&links.label2, &links.link2),
-        ];
-        // Button 1: Copy Creator ID when available, otherwise the configured site link.
-        if creator_id.is_empty() {
-            buttons.insert(0, discord_rich_presence::activity::Button::new(&links.label, &links.link));
+        // Button 1 = "Website": append ?creator=<id> (or &creator=<id> if the URL
+        // already has a query) so the site receives the user's Creator ID.
+        let website_url = if creator_id.is_empty() {
+            links.website.clone()
         } else {
-            buttons.insert(0, discord_rich_presence::activity::Button::new("Copy Creator ID", &creator_url));
-        }
+            let sep = if links.website.contains('?') { '&' } else { '?' };
+            format!("{}{}creator={}", links.website, sep, creator_id)
+        };
+
+        let buttons = vec![
+            discord_rich_presence::activity::Button::new("Website", &website_url),
+            discord_rich_presence::activity::Button::new("GitHub", &links.github),
+        ];
 
         let payload = discord_rich_presence::activity::Activity::new()
             .details(&details)

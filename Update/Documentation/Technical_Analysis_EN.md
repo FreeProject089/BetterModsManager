@@ -46,8 +46,14 @@ The global `AppState` wraps all mutable data in `Arc<Mutex<AppData>>`, ensuring 
 | :--- | :--- | :--- |
 | `profiles` | `Vec<Profile>` | All user-defined game profiles |
 | `mods` | `Vec<ModEntry>` | All registered mods across every profile |
-| `tags` | `Vec<CustomTag>` | User-defined taxonomy labels (name + color) |
 | `active_profile_id` | `Option<String>` | UUID of the currently selected profile |
+| `custom_tags` | `Vec<TagDef>` | User-defined taxonomy labels (name + color) |
+| `disk_limits` | `HashMap<String, u64>` | Per-path disk I/O speed limits (MB/s) |
+| `settings` | `AppSettings` | App preferences/configuration |
+| `launch_packs` | `Vec<LaunchPack>` | Application launch groups |
+| `installed_plugins` | `Vec<InstalledPlugin>` | Installed plugin manifests |
+| `plugin_permissions` | `HashMap<String, Vec<String>>` | Granted permissions per plugin id |
+| `modpacks` | `Vec<LocalModpack>` | Locally stored `.bmp` modpacks |
 
 ### Persistence Strategy
 
@@ -82,21 +88,25 @@ The global `AppState` wraps all mutable data in `Arc<Mutex<AppData>>`, ensuring 
 | `id` | `String` (UUID v4) | Unique identifier |
 | `name` | `String` | Display name |
 | `version` | `String` | Semantic version string |
-| `author` | `String` | Author attribution |
-| `description` | `String` | Freetext description |
+| `author` | `Option<String>` | Author attribution |
+| `description` | `Option<String>` | Freetext description |
+| `dependencies` | `Vec<String>` | Declared mod dependencies |
 | `mod_folder_path` | `PathBuf` | Absolute path to the mod's root folder on disk |
 | `enabled` | `bool` | Whether the mod is currently active in the game |
-| `status` | `ModStatus` | Enum: `Enabled`, `Disabled`, `AlreadyPresent` |
+| `status` | `ModStatus` | Enum: `Enabled`, `Disabled`, `Error(String)` |
 | `installed_files` | `Vec<String>` | Paths of files injected into the game ROOT |
 | `tags` | `Vec<String>` | Assigned tag names |
 | `download_links` | `Vec<DownloadLink>` | Web links (GitHub, NexusMods, etc.) with type and label |
-| `sort_priority` | `u32` | Installation priority for .MM lists |
+| `install_notes` | `String` | Placement/setup instructions (inherited from `.MM`) |
+| `activation_order` | `u32` | Activation order (0 = first applied), used for conflict resolution |
+| `file_hashes` | `Option<HashMap<String,String>>` | Per-file SHA-256 map for the integrity engine |
+| `content_id` | `Option<String>` | Deterministic content fingerprint (see §46) |
 
 ---
 
 ## 5. Backend — The Smart Copy Filesystem Engine
 
-The core of BMM's mod management is the **Stacked Physical Copy** engine in `src-tauri/src/fs_utils.rs`.
+The core of BMM's mod management is the **Stacked Physical Copy** engine: the `enable_mod`/`disable_mod` commands and `apply_mod_stacked`/`unapply_mod_stacked`/`run_mod_io_worker` live in `src-tauri/src/commands/mods.rs`, while the low-level chunked copy + throttling primitives live in `src-tauri/src/fs_utils.rs`.
 
 ### Activation Flow (`enable_mod` command)
 
@@ -198,16 +208,17 @@ BMM can directly parse OvGME's proprietary binary `.dat` configuration files.
 
 ## 9. Frontend — Modular Architecture
 
-The frontend uses a modular ES6 architecture for scalability.
+The frontend is **TypeScript** (`// @ts-nocheck`) under `frontend/src/`, compiled to `frontend/js/` (see §22). Modules are grouped into `core/` (cross-cutting), `features/` (per-page logic) and `ui/`.
 
 | Module | Responsibility |
 | :--- | :--- |
-| `api.js` | Direct IPC bridge with Tauri (invokes, listeners). |
-| `state.js` | Centralized state manager for UI-Backend sync. |
-| `profiles.js` | Profile management and grid rendering. |
-| `mods.js` | Library logic and conflict event handling. |
-| `i18n.js` | Dynamic internationalization engine. |
-| `utils.js` | Shared escapers and sanitizers. |
+| `core/api.ts` | Direct IPC bridge with Tauri (invokes, listeners, file pickers). |
+| `core/i18n.ts` | Dynamic internationalization engine. |
+| `core/utils.ts` | Shared escapers/sanitizers (`escHtml`, `escAttr`). |
+| `core/links-config.ts` | Central external-link registry (`links.json`). |
+| `features/profiles/profiles.ts` | Profile management and grid rendering. |
+| `features/mods/*.ts` | Library logic, mod list/detail, conflict handling. |
+| `ui/app.ts` | Boot sequence, view routing, global wiring. |
 
 ---
 
