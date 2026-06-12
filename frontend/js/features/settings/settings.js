@@ -1671,6 +1671,32 @@ export async function initSettings() {
             };
         });
     }
+    // ── Library toolbar density (body class drives the CSS modes; auto = responsive) ──
+    const applyToolbarDensity = (mode) => {
+        const m = ['full', 'compact', 'stacked'].includes(mode) ? mode : 'auto';
+        document.body.classList.remove('bmm-toolbar-auto', 'bmm-toolbar-full', 'bmm-toolbar-compact', 'bmm-toolbar-stacked');
+        document.body.classList.add('bmm-toolbar-' + m);
+    };
+    {
+        let mode = 'auto';
+        try {
+            mode = localStorage.getItem('bmm_toolbar_mode') || 'auto';
+        }
+        catch { }
+        applyToolbarDensity(mode);
+        const densityEl = document.getElementById('setting-toolbar-density');
+        if (densityEl) {
+            densityEl.value = mode;
+            densityEl.addEventListener('change', () => {
+                const m = densityEl.value || 'auto';
+                try {
+                    localStorage.setItem('bmm_toolbar_mode', m);
+                }
+                catch { }
+                applyToolbarDensity(m);
+            });
+        }
+    }
     // ── Mod auto-scan interval (localStorage, throttles focus-triggered scans) ──
     const scanIntervalEl = document.getElementById('scan-interval-sec');
     if (scanIntervalEl) {

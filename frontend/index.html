@@ -7528,6 +7528,19 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                         <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
                                     </label>
                                 </div>
+                                <!-- Toolbar density (Mod Library toolbar layout) -->
+                                <div style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                                    <div style="flex:1">
+                                        <div style="font-size:12px;font-weight:700;color:var(--text-primary)" data-i18n="settings.toolbarDensity">Library toolbar layout</div>
+                                        <div style="font-size:10px;color:var(--text-muted)" data-i18n="settings.toolbarDensityDesc">How the Mod Library toolbar adapts. Auto = pick the best for the window size.</div>
+                                    </div>
+                                    <select id="setting-toolbar-density" class="form-input" style="width:150px;padding:5px 8px;font-size:12px;border-radius:6px;">
+                                        <option value="auto" data-i18n="settings.toolbarAuto">Auto</option>
+                                        <option value="full" data-i18n="settings.toolbarFull">Full (labels)</option>
+                                        <option value="compact" data-i18n="settings.toolbarCompact">Compact (icons)</option>
+                                        <option value="stacked" data-i18n="settings.toolbarStacked">Stacked</option>
+                                    </select>
+                                </div>
                                 <!-- Volume slider -->
                                 <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-muted);flex-shrink:0;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
