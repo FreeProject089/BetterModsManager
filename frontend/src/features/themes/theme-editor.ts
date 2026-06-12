@@ -340,6 +340,16 @@ const TARGET_GROUPS: { cat: string; items: { label: string; sel: string }[] }[] 
         { label: 'Page titles',        sel: '.view-title' },
         { label: 'Section titles',     sel: '.card-title' },
     ]},
+    { cat: 'Library toolbar', items: [
+        { label: 'Filter bar',         sel: '.filter-bar, .lib-header-shell' },
+        { label: 'Search box',         sel: '.filter-bar .search-box' },
+        { label: 'Filter pills',       sel: '.filter-bar .filter-btn' },
+        { label: 'Active filter pill', sel: '.filter-bar .filter-btn.active' },
+        { label: 'Filter dropdowns',   sel: '.filter-bar .profile-select' },
+        { label: 'Action tab',         sel: '.lib-actions-tab .view-actions' },
+        { label: 'Action buttons',     sel: '.view-action-util' },
+        { label: 'Profile selector',   sel: '.profile-select-icon-wrap' },
+    ]},
     { cat: 'Pages', items: PAGE_OPTIONS.map(p => ({ label: p.label, sel: `#view-${p.id}` })) },
     // Per-page unique elements (things not covered by the shared classes above)
     { cat: 'Library', items: [
@@ -1529,6 +1539,21 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
             ${row(t('themes.text')||'Text', 'color')}
             ${row(t('themes.background')||'Background', 'background-color')}
             ${row(t('themes.border')||'Border', 'border-color')}
+            <div class="bte-elov-gradient">
+                <span class="bte-elov-grad-label">${t('themes.gradient')||'Gradient'}</span>
+                <input type="color" class="bte-grad-c1" value="#3b82f6" title="${t('themes.gradColor1')||'Start colour'}">
+                <input type="color" class="bte-grad-c2" value="#8b5cf6" title="${t('themes.gradColor2')||'End colour'}">
+                <select class="bte-grad-dir" title="${t('themes.gradDirection')||'Direction'}">
+                    <option value="135deg">↘</option>
+                    <option value="90deg">→</option>
+                    <option value="180deg">↓</option>
+                    <option value="45deg">↗</option>
+                    <option value="0deg">↑</option>
+                    <option value="circle">◉</option>
+                </select>
+                <button class="btn btn-secondary btn-xs bte-grad-apply">${t('themes.applyGradient')||'Apply'}</button>
+                <button class="btn btn-ghost btn-xs bte-grad-clear" title="${t('themes.clear')||'Clear'}">✕</button>
+            </div>
             <div class="bte-elov-imgrow">
                 <button class="btn btn-secondary btn-xs bte-elov-img">${t('themes.replaceImage')||'Set / replace image'}</button>
                 <button class="btn btn-ghost btn-xs bte-elov-img-clear" title="${t('themes.clear')||'Clear'}">✕</button>
@@ -1570,7 +1595,7 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
     };
     const refresh = () => {
         cssBox.value = propsToCss(ov.props);
-        pop.querySelectorAll('input[type=color]').forEach(inp => {
+        pop.querySelectorAll('input[type=color][data-prop]').forEach(inp => {
             const prop = (inp as HTMLElement).dataset.prop!;
             const computed = prop === 'color' ? cs.color : prop === 'background-color' ? cs.backgroundColor : cs.borderColor;
             (inp as HTMLInputElement).value = colorInputHex(ov.props[prop], computed);
@@ -1580,11 +1605,29 @@ function openElementOverrideEditor(el: HTMLElement, forcedSel?: string): void {
     refresh();
 
     // Quick colour pickers → write a single prop, keep the CSS box in sync.
-    pop.querySelectorAll('input[type=color]').forEach(inp => {
+    // (Scoped to [data-prop] so the gradient builder's colour inputs are excluded.)
+    pop.querySelectorAll('input[type=color][data-prop]').forEach(inp => {
         inp.addEventListener('input', () => {
             ov.props[(inp as HTMLElement).dataset.prop!] = (inp as HTMLInputElement).value;
             cssBox.value = propsToCss(ov.props); previewTheme(_draft); updateDirty();
         });
+    });
+
+    // Gradient builder → writes a `background` prop (linear or radial).
+    const gradApply = pop.querySelector('.bte-grad-apply');
+    gradApply?.addEventListener('click', () => {
+        const c1 = (pop.querySelector('.bte-grad-c1') as HTMLInputElement)?.value || '#3b82f6';
+        const c2 = (pop.querySelector('.bte-grad-c2') as HTMLInputElement)?.value || '#8b5cf6';
+        const dir = (pop.querySelector('.bte-grad-dir') as HTMLSelectElement)?.value || '135deg';
+        const grad = dir === 'circle'
+            ? `radial-gradient(circle, ${c1}, ${c2})`
+            : `linear-gradient(${dir}, ${c1}, ${c2})`;
+        ov.props['background'] = grad;
+        cssBox.value = propsToCss(ov.props); previewTheme(_draft); updateDirty();
+    });
+    pop.querySelector('.bte-grad-clear')?.addEventListener('click', () => {
+        delete ov.props['background'];
+        cssBox.value = propsToCss(ov.props); previewTheme(_draft); updateDirty();
     });
     pop.querySelectorAll('.bte-elov-clear').forEach(btn => {
         btn.addEventListener('click', () => {

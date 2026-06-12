@@ -522,6 +522,11 @@ body.bte-picking .bte-ce-pickbtn { background: var(--bmm-accent); color: #fff; }
 .bte-elov-sel { display: block; font-size: 10px; color: var(--bmm-text-secondary);
     background: var(--bmm-s05); padding: 4px 6px; border-radius: 5px; margin-bottom: 10px;
     word-break: break-all; }
+/* Gradient builder row (element editor) */
+.bte-elov-gradient { display: flex; align-items: center; gap: 6px; margin: 2px 0 10px; flex-wrap: wrap; }
+.bte-elov-grad-label { flex: 1; color: var(--bmm-text-secondary); font-size: 11.5px; }
+.bte-elov-gradient input[type=color] { width: 28px; height: 24px; border: none; border-radius: 5px; background: none; cursor: pointer; padding: 0; }
+.bte-elov-gradient .bte-grad-dir { height: 24px; border-radius: 5px; border: 1px solid var(--bmm-s09); background: rgba(0,0,0,0.3); color: var(--bmm-text-primary); font-size: 13px; cursor: pointer; }
 .bte-elov-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .bte-elov-row > span { flex: 1; color: var(--bmm-text-secondary); }
 .bte-elov-row input[type=color] { width: 32px; height: 24px; border: none; border-radius: 5px;

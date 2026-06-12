@@ -266,14 +266,14 @@ function _renderModpackList(container) {
         <div style="display:flex; align-items:center; gap:12px;">
             <div style="width:4px; height:20px; background:var(--accent); border-radius:2px;"></div>
             <span style="font-size:16px; font-weight:800; color:var(--text-primary); text-transform:uppercase; letter-spacing:0.5px;">${t('modpack.title')}</span>
-            <span style="font-size:12px; color:var(--text-muted); background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:10px; font-weight:600;" id="modpack-count-badge">${_modpacks.length}</span>
+            <span style="font-size:12px; color:var(--text-muted); background:var(--bmm-s05); padding:2px 8px; border-radius:10px; font-weight:600;" id="modpack-count-badge">${_modpacks.length}</span>
         </div>
-        <div style="display:flex; align-items:center; gap:12px; flex: 1; justify-content: flex-end;">
-            <div class="search-box" id="mp-search-wrap" style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:8px 12px;transition:border-color 0.2s; max-width: 250px; width: 100%;">
+        <div style="display:flex; align-items:center; gap:10px; flex:0 1 auto; justify-content: flex-end; background:var(--bmm-s02); border:1px solid var(--bmm-s06); border-radius:12px; padding:6px 8px;">
+            <div class="search-box" id="mp-search-wrap" style="display:flex;align-items:center;gap:8px;background:var(--bmm-s04);border:1px solid var(--bmm-s08);border-radius:10px;padding:8px 12px;transition:border-color 0.2s; max-width: 250px; width: 100%;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input type="text" id="modpack-search" placeholder="${t('common.search') || 'Rechercher...'}" style="flex:1; background:none; border:none; outline:none; font-size:13px; color:var(--text-primary);">
             </div>
-            <button id="modpack-create-btn" class="btn btn-primary" style="height:38px; padding:0 20px; font-size:12px; font-weight:700; border-radius:10px; background:linear-gradient(135deg, var(--accent) 0%, #0081ff 100%); border:none; box-shadow: 0 4px 15px rgba(0,194,255,0.25);">
+            <button id="modpack-create-btn" class="btn btn-primary" style="height:38px; padding:0 20px; font-size:12px; font-weight:700; border-radius:10px;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 ${t('modpack.create')}
             </button>
@@ -284,7 +284,7 @@ function _renderModpackList(container) {
     const searchInput = countHeader.querySelector('#modpack-search');
     const searchWrap = countHeader.querySelector('#mp-search-wrap');
     searchWrap.addEventListener('focusin', () => searchWrap.style.borderColor = 'rgba(0,194,255,0.35)');
-    searchWrap.addEventListener('focusout', () => searchWrap.style.borderColor = 'rgba(255,255,255,0.08)');
+    searchWrap.addEventListener('focusout', () => searchWrap.style.borderColor = 'var(--bmm-s08)');
 
     const countBadge = countHeader.querySelector('#modpack-count-badge');
 
@@ -295,7 +295,7 @@ function _renderModpackList(container) {
         const empty = document.createElement('div');
         empty.style.cssText = 'text-align:center;padding:60px 20px;color:var(--text-muted);display:flex;flex-direction:column;align-items:center;gap:16px;';
         empty.innerHTML = `
-            <div style="width:64px; height:64px; border-radius:20px; background:rgba(255,255,255,0.02); display:flex; align-items:center; justify-content:center; border:1px dashed rgba(255,255,255,0.1);">
+            <div style="width:64px; height:64px; border-radius:20px; background:var(--bmm-s02); display:flex; align-items:center; justify-content:center; border:1px dashed var(--bmm-s10);">
  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
                                 <path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>
@@ -353,7 +353,7 @@ function _renderModpackList(container) {
                          style="width:38px; height:20px; position:relative; cursor:pointer; flex-shrink:0;"
                          onmouseenter="window.showTaskyHelp('${escHtml(t('modpack.quickApplyDesc') || 'Cliquez pour activer ou désactiver ce pack.')}', 'zap')"
                          onmouseleave="window.hideTaskyHelp()">
-                        <div class="switch-bg" style="position:absolute; inset:0; border-radius:10px; background:${anyEnabled ? 'var(--success)' : 'rgba(255,255,255,0.1)'}; transition:all 0.3s; border:1px solid ${anyEnabled ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)'};"></div>
+                        <div class="switch-bg" style="position:absolute; inset:0; border-radius:10px; background:${anyEnabled ? 'var(--success)' : 'var(--bmm-s10)'}; transition:all 0.3s; border:1px solid ${anyEnabled ? 'rgba(16,185,129,0.3)' : 'var(--bmm-s05)'};"></div>
                         <div class="switch-knob" style="position:absolute; top:3px; ${anyEnabled ? 'right:3px' : 'left:3px'}; width:14px; height:14px; border-radius:50%; background:#fff; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
                     </div>
                 </div>
@@ -416,7 +416,7 @@ async function _openEditor(container, pack) {
             <h2 style="font-size:20px; font-weight:800; margin:0; color:var(--text-primary);">${pack ? escHtml(pack.name) : t('modpack.newPack')}</h2>
         </div>
         <div style="display:flex; gap:10px;">
-            <button class="btn btn-ghost" id="editor-cancel" style="border:1px solid rgba(255,255,255,0.05);">${t('common.cancel')}</button>
+            <button class="btn btn-ghost" id="editor-cancel" style="border:1px solid var(--bmm-s05);">${t('common.cancel')}</button>
             <button class="btn btn-primary" id="editor-save" style="background:linear-gradient(135deg, var(--accent) 0%, #0081ff 100%); border:none; box-shadow:0 4px 15px rgba(0,194,255,0.25); min-width:120px;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 ${t('modpack.save')}
@@ -453,9 +453,9 @@ async function _openEditor(container, pack) {
 
     // Multi-profile toggle (re-styled)
     const multiRow = document.createElement('label');
-    multiRow.style.cssText = 'display:flex; align-items:center; gap:12px; cursor:pointer; padding:16px; border-radius:14px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); transition:all 0.2s;';
+    multiRow.style.cssText = 'display:flex; align-items:center; gap:12px; cursor:pointer; padding:16px; border-radius:14px; background:var(--bmm-s03); border:1px solid var(--bmm-s05); transition:all 0.2s;';
     multiRow.onmouseenter = () => multiRow.style.borderColor = 'rgba(var(--accent-rgb), 0.2)';
-    multiRow.onmouseleave = () => multiRow.style.borderColor = 'rgba(255,255,255,0.05)';
+    multiRow.onmouseleave = () => multiRow.style.borderColor = 'var(--bmm-s05)';
 
     const multiCb = document.createElement('input');
     multiCb.type = 'checkbox';
@@ -585,7 +585,7 @@ function _renderPackModList(listEl) {
     listEl.innerHTML = '';
     if (_packMods.length === 0) {
         const empty = document.createElement('div');
-        empty.style.cssText = 'padding:40px 20px; text-align:center; color:var(--text-muted); border-radius:16px; border:1px dashed rgba(255,255,255,0.08); background:rgba(0,0,0,0.02); display:flex; flex-direction:column; align-items:center; gap:12px;';
+        empty.style.cssText = 'padding:40px 20px; text-align:center; color:var(--text-muted); border-radius:16px; border:1px dashed var(--bmm-s08); background:rgba(0,0,0,0.02); display:flex; flex-direction:column; align-items:center; gap:12px;';
         empty.innerHTML = `
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/>
@@ -616,7 +616,7 @@ function _renderPackModList(listEl) {
                 <button class="btn btn-icon btn-ghost btn-remove" style="color:var(--danger); opacity:0.5;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
             </div>
 
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.03);">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; padding-top:8px; border-top:1px solid var(--bmm-s03);">
                 <div style="display:flex; flex-direction:column; gap:4px;">
                     <label style="font-size:9px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">${t('modpack.modDownloadLink')}</label>
                     <input type="text" class="form-input dl-input" placeholder="https://..." value="${pm.download_link || ''}" style="font-size:11px; height:30px; padding:0 8px;">
@@ -635,7 +635,7 @@ function _renderPackModList(listEl) {
                     </label>
                     <div style="display:flex; align-items:center; gap:6px;">
                         <span style="font-size:9px; font-weight:800; color:var(--text-muted); text-transform:uppercase;">${t('modpack.modFallbackType')}</span>
-                        <select class="form-select fb-type-select" style="font-size:10px; height:24px; padding:0 4px; border-radius:4px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); color:var(--text-primary);">
+                        <select class="form-select fb-type-select" style="font-size:10px; height:24px; padding:0 4px; border-radius:4px; background:var(--bmm-s03); border:1px solid var(--bmm-s10); color:var(--text-primary);">
                             <option value="direct" ${pm.fallback_type === 'direct' ? 'selected' : ''}>${t('modpack.fallbackDirect') || 'Direct Link'}</option>
                             <option value="sr" ${pm.fallback_type === 'sr' ? 'selected' : ''}>${t('modpack.fallbackServerRepo') || 'Server Repo'}</option>
                         </select>
@@ -669,7 +669,7 @@ function _renderPackModList(listEl) {
             const dlist = card.querySelector('.deps-list');
             localMod.dependencies.forEach(did => {
                 const tag = document.createElement('span');
-                tag.style.cssText = 'font-size:9px; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.05); color:var(--text-muted);';
+                tag.style.cssText = 'font-size:9px; padding:2px 6px; border-radius:4px; background:var(--bmm-s05); border:1px solid var(--bmm-s05); color:var(--text-muted);';
                 const dmod = _allMods.find(m => m.id === did);
                 tag.textContent = dmod ? dmod.name : did;
                 dlist.appendChild(tag);
@@ -719,7 +719,7 @@ function _openMultiSelectModal(listEl) {
 
     // Header with search
     const header = document.createElement('div');
-    header.style.cssText = 'padding:20px 24px 0; border-bottom:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); flex-shrink:0;';
+    header.style.cssText = 'padding:20px 24px 0; border-bottom:1px solid var(--bmm-s06); background:var(--bmm-s02); flex-shrink:0;';
     header.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
             <div style="display:flex; align-items:center; gap:12px;">
@@ -738,7 +738,7 @@ function _openMultiSelectModal(listEl) {
             </button>
         </div>
         <div style="padding-bottom:16px; display:flex; align-items:center; gap:10px;">
-            <div style="flex:1; display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 12px; transition:border-color 0.2s;" id="ms-search-wrap">
+            <div style="flex:1; display:flex; align-items:center; gap:8px; background:var(--bmm-s04); border:1px solid var(--bmm-s08); border-radius:10px; padding:8px 12px; transition:border-color 0.2s;" id="ms-search-wrap">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input type="text" id="ms-search" placeholder="${t('common.search') || 'Rechercher...'}" style="flex:1; background:none; border:none; outline:none; font-size:13px; color:var(--text-primary);">
             </div>
@@ -793,7 +793,7 @@ function _openMultiSelectModal(listEl) {
         const alreadyInPack = _packMods.some(pm => String(pm.mod_id) === String(m.id));
 
         const row = document.createElement('label');
-        row.style.cssText = `display:flex; align-items:center; gap:14px; padding:10px 12px; border-radius:12px; cursor:pointer; transition:all 0.15s; border:1px solid transparent; background:${alreadyInPack ? 'rgba(0,194,255,0.08)' : 'rgba(255,255,255,0.02)'};`;
+        row.style.cssText = `display:flex; align-items:center; gap:14px; padding:10px 12px; border-radius:12px; cursor:pointer; transition:all 0.15s; border:1px solid transparent; background:${alreadyInPack ? 'rgba(0,194,255,0.08)' : 'var(--bmm-s02)'};`;
         if (alreadyInPack) row.style.borderColor = 'rgba(0,194,255,0.25)';
         if (_isAddingMods) {
             row.style.pointerEvents = 'none';
@@ -808,7 +808,7 @@ function _openMultiSelectModal(listEl) {
         });
         row.addEventListener('mouseleave', () => {
             if (!row.querySelector('input').checked) {
-                row.style.background = 'rgba(255,255,255,0.02)';
+                row.style.background = 'var(--bmm-s02)';
                 row.style.borderColor = 'transparent';
             } else if (alreadyInPack) {
                 row.style.background = 'rgba(0,194,255,0.08)';
@@ -836,7 +836,7 @@ function _openMultiSelectModal(listEl) {
         switchWrap.appendChild(track);
 
         cb.addEventListener('change', () => {
-            row.style.background = cb.checked ? 'rgba(0,194,255,0.08)' : 'rgba(255,255,255,0.02)';
+            row.style.background = cb.checked ? 'rgba(0,194,255,0.08)' : 'var(--bmm-s02)';
             row.style.borderColor = cb.checked ? 'rgba(0,194,255,0.25)' : 'transparent';
             updateSelCount();
         });
@@ -848,7 +848,7 @@ function _openMultiSelectModal(listEl) {
             <div style="display:flex; align-items:center; gap:5px; margin-top:3px; flex-wrap:wrap;">
                 <span style="font-size:10px; color:var(--text-muted);">v${escHtml(m.version || '?')}</span>
                 ${prof ? `<span style="font-size:9px; font-weight:700; color:var(--accent); background:rgba(0,194,255,0.1); border:1px solid rgba(0,194,255,0.2); border-radius:4px; padding:1px 6px;">${escHtml(prof.name)}</span>` : ''}
-                ${depCount > 0 ? `<span style="font-size:9px; color:var(--text-muted); background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.06); border-radius:4px; padding:1px 6px;">&rarr; ${depCount} ${t('modpack.dependenciesShort') || 'dep.'}</span>` : ''}
+                ${depCount > 0 ? `<span style="font-size:9px; color:var(--text-muted); background:var(--bmm-s05); border:1px solid var(--bmm-s06); border-radius:4px; padding:1px 6px;">&rarr; ${depCount} ${t('modpack.dependenciesShort') || 'dep.'}</span>` : ''}
                 ${alreadyInPack ? `<span style="font-size:8px; font-weight:800; color:var(--success); background:rgba(16,185,129,0.1); padding:1px 4px; border-radius:3px; text-transform:uppercase;">${t('modpack.alreadyAdded') || 'DÉJÀ AJOUTÉ'}</span>` : ''}
             </div>
         `;
@@ -862,11 +862,11 @@ function _openMultiSelectModal(listEl) {
 
     // Footer
     const footer = document.createElement('div');
-    footer.style.cssText = 'padding:14px 20px; border-top:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between; gap:12px; background:rgba(0,0,0,0.15); flex-shrink:0;';
+    footer.style.cssText = 'padding:14px 20px; border-top:1px solid var(--bmm-s05); display:flex; align-items:center; justify-content:space-between; gap:12px; background:rgba(0,0,0,0.15); flex-shrink:0;';
     footer.innerHTML = `
         <span style="font-size:11px; color:var(--text-muted);" id="ms-footer-count"></span>
         <div style="display:flex; gap:10px;">
-            <button class="btn btn-ghost" id="ms-cancel" style="border:1px solid rgba(255,255,255,0.07);">${t('common.cancel')}</button>
+            <button class="btn btn-ghost" id="ms-cancel" style="border:1px solid var(--bmm-s07);">${t('common.cancel')}</button>
             <button class="btn btn-primary" id="ms-confirm" style="background:linear-gradient(135deg, var(--accent) 0%, #0081ff 100%); border:none; box-shadow:0 4px 15px rgba(0,194,255,0.2); min-width:130px; opacity:0.5; transition:opacity 0.2s;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><polyline points="20 6 9 17 4 12"/></svg>
                 ${t('modpack.addMod')}
@@ -914,7 +914,7 @@ function _openMultiSelectModal(listEl) {
         header.querySelector('#ms-search-wrap').style.borderColor = 'rgba(0,194,255,0.35)';
     });
     header.querySelector('#ms-search-wrap').addEventListener('focusout', () => {
-        header.querySelector('#ms-search-wrap').style.borderColor = 'rgba(255,255,255,0.08)';
+        header.querySelector('#ms-search-wrap').style.borderColor = 'var(--bmm-s08)';
     });
 
     const close = () => {
@@ -1025,7 +1025,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
 
     const content = document.createElement('div');
     content.className = 'editor-section-card';
-    content.style.cssText = 'width:600px; max-width:90vw; max-height:85vh; display:flex; flex-direction:column; padding:24px; border-radius:16px; background:var(--bg-secondary); border:1px solid rgba(255,255,255,0.08); box-shadow:0 20px 50px rgba(0,0,0,0.5); transform:scale(0.95); transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);';
+    content.style.cssText = 'width:600px; max-width:90vw; max-height:85vh; display:flex; flex-direction:column; padding:24px; border-radius:16px; background:var(--bg-secondary); border:1px solid var(--bmm-s08); box-shadow:0 20px 50px rgba(0,0,0,0.5); transform:scale(0.95); transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);';
 
     // Build lists
     let modsHtml = '';
@@ -1053,7 +1053,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
                 : `<span style="color:var(--danger); font-weight:800;">${t('modpack.repair.linkMissing') || 'Lien Manquant'}</span>`;
 
         modsHtml += `
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:rgba(255,255,255,0.03); border-radius:12px; border:1px solid rgba(255,255,255,0.05); margin-bottom:8px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:var(--bmm-s03); border-radius:12px; border:1px solid var(--bmm-s05); margin-bottom:8px;">
                 <div style="display:flex; flex-direction:column; gap:4px;">
                     <div style="font-size:13px; font-weight:600; color:var(--text-primary);">${escHtml(m.mod_name)}</div>
                     <div style="font-size:10px; color:var(--text-muted);">${escHtml(m.mod_version)}</div>
@@ -1081,7 +1081,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
             ${modsHtml}
         </div>
         
-        <div id="repair-progress-container" style="display:none; flex-direction:column; gap:8px; margin-bottom:24px; padding:16px; background:rgba(0,0,0,0.2); border-radius:12px; border:1px solid rgba(255,255,255,0.03);">
+        <div id="repair-progress-container" style="display:none; flex-direction:column; gap:8px; margin-bottom:24px; padding:16px; background:rgba(0,0,0,0.2); border-radius:12px; border:1px solid var(--bmm-s03);">
             <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">
                 <span id="repair-status-text">${t('modpack.repair.preparing') || 'Préparation...'}</span>
                 <span id="repair-status-pct" style="color:#ff8800;">0%</span>
@@ -1092,7 +1092,7 @@ async function _showRepairModal(container, pack, report, onComplete) {
         </div>
 
         <div id="repair-actions" style="display:flex; justify-content:flex-end; gap:12px; margin-top:auto;">
-            <button id="repair-cancel" class="btn btn-ghost" style="border:1px solid rgba(255,255,255,0.05); border-radius:10px;">${t('modpack.repair.cancel') || 'Annuler'}</button>
+            <button id="repair-cancel" class="btn btn-ghost" style="border:1px solid var(--bmm-s05); border-radius:10px;">${t('modpack.repair.cancel') || 'Annuler'}</button>
             <button id="repair-start" class="btn btn-primary" style="background:linear-gradient(135deg, #ff8800 0%, #ff5500 100%); border:none; border-radius:10px; box-shadow:0 4px 15px rgba(255, 136, 0, 0.3); ${!canRepairAny ? 'opacity:0.5; cursor:not-allowed;' : ''}" ${!canRepairAny ? 'disabled' : ''}>
                 ${canRepairAny ? (t('modpack.repair.startBtn') || 'Réparer et Appliquer') : (t('modpack.repair.impossible') || 'Réparation Impossible')}
             </button>
@@ -1364,7 +1364,7 @@ function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' 
             'background:var(--bg-secondary,#0f172a);',
             'border:1px solid rgba(239,68,68,0.18);',
             'border-radius:20px;overflow:hidden;',
-            'box-shadow:0 0 0 1px rgba(255,255,255,0.04),0 32px 80px rgba(0,0,0,0.8);',
+            'box-shadow:0 0 0 1px var(--bmm-s04),0 32px 80px rgba(0,0,0,0.8);',
             'transform:scale(0.93) translateY(14px);',
             'transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);',
         ].join('');
@@ -1372,7 +1372,7 @@ function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' 
         const modsCount = pack.mods?.length || 0;
         const gameLine = pack.game_name ? ` · ${escHtml(pack.game_name)}` : '';
         const descBlock = pack.description
-            ? `<div style="font-size:11px;color:var(--text-muted);line-height:1.55;padding-top:10px;border-top:1px solid rgba(255,255,255,0.05);">${escHtml(pack.description)}</div>`
+            ? `<div style="font-size:11px;color:var(--text-muted);line-height:1.55;padding-top:10px;border-top:1px solid var(--bmm-s05);">${escHtml(pack.description)}</div>`
             : '';
 
         modal.innerHTML = `
@@ -1385,13 +1385,13 @@ function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' 
                     <h3 style="margin:0 0 3px;font-size:17px;font-weight:800;color:var(--text-primary);letter-spacing:-0.3px;">${t('modpack.deleteTitle') || 'Supprimer le launchpack'}</h3>
                     <p style="margin:0;font-size:12px;color:var(--text-muted);">${t('modpack.deleteSubtitle') || 'Cette action est irréversible. Le pack sera définitivement supprimé.'}</p>
                 </div>
-                <button id="dmod-close" style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.03);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);flex-shrink:0;transition:background 0.15s;" onmouseenter="this.style.background='rgba(255,255,255,0.07)'" onmouseleave="this.style.background='rgba(255,255,255,0.03)'">
+                <button id="dmod-close" style="width:28px;height:28px;border-radius:8px;border:1px solid var(--bmm-s06);background:var(--bmm-s03);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);flex-shrink:0;transition:background 0.15s;" onmouseenter="this.style.background='var(--bmm-s07)'" onmouseleave="this.style.background='var(--bmm-s03)'">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </div>
 
             <!-- ── Pack preview card ── -->
-            <div style="margin:18px 26px;padding:14px 16px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-radius:12px;">
+            <div style="margin:18px 26px;padding:14px 16px;background:rgba(255,255,255,0.025);border:1px solid var(--bmm-s06);border-radius:12px;">
                 <div style="display:flex;align-items:center;gap:12px;${pack.description ? 'margin-bottom:10px;' : ''}">
                     <div style="width:34px;height:34px;border-radius:9px;background:rgba(0,194,255,0.09);border:1px solid rgba(0,194,255,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#00c2ff)" stroke-width="2"><path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/><path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/></svg>
@@ -1406,11 +1406,11 @@ function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' 
 
             <!-- ── Actions ── -->
             <div style="padding:0 26px 24px;display:flex;align-items:center;gap:10px;">
-                <button id="dmod-edit" style="display:flex;align-items:center;gap:7px;padding:0 14px;height:34px;border-radius:9px;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;margin-right:auto;transition:all 0.15s;" onmouseenter="this.style.background='rgba(0,194,255,0.07)';this.style.borderColor='rgba(0,194,255,0.2)';this.style.color='var(--accent)'" onmouseleave="this.style.background='rgba(255,255,255,0.03)';this.style.borderColor='rgba(255,255,255,0.07)';this.style.color='var(--text-secondary)'">
+                <button id="dmod-edit" style="display:flex;align-items:center;gap:7px;padding:0 14px;height:34px;border-radius:9px;border:1px solid var(--bmm-s07);background:var(--bmm-s03);color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;margin-right:auto;transition:all 0.15s;" onmouseenter="this.style.background='rgba(0,194,255,0.07)';this.style.borderColor='rgba(0,194,255,0.2)';this.style.color='var(--accent)'" onmouseleave="this.style.background='var(--bmm-s03)';this.style.borderColor='var(--bmm-s07)';this.style.color='var(--text-secondary)'">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     ${t('modpack.edit') || 'Modifier'}
                 </button>
-                <button id="dmod-cancel" style="padding:0 16px;height:34px;border-radius:9px;border:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.03);color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;" onmouseenter="this.style.background='rgba(255,255,255,0.07)'" onmouseleave="this.style.background='rgba(255,255,255,0.03)'">${t('common.cancel') || 'Annuler'}</button>
+                <button id="dmod-cancel" style="padding:0 16px;height:34px;border-radius:9px;border:1px solid var(--bmm-s07);background:var(--bmm-s03);color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;" onmouseenter="this.style.background='var(--bmm-s07)'" onmouseleave="this.style.background='var(--bmm-s03)'">${t('common.cancel') || 'Annuler'}</button>
                 <button id="dmod-confirm" style="display:flex;align-items:center;gap:7px;padding:0 16px;height:34px;border-radius:9px;border:none;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(239,68,68,0.3);transition:all 0.15s;" onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 20px rgba(239,68,68,0.45)'" onmouseleave="this.style.transform='none';this.style.boxShadow='0 4px 16px rgba(239,68,68,0.3)'">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     ${t('modpack.deleteConfirmBtn') || 'Supprimer'}
@@ -1455,7 +1455,7 @@ export async function openQuickApplyModal() {
 
     // Header
     const header = document.createElement('div');
-    header.style.cssText = 'padding:20px 24px 0; border-bottom:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); flex-shrink:0;';
+    header.style.cssText = 'padding:20px 24px 0; border-bottom:1px solid var(--bmm-s06); background:var(--bmm-s02); flex-shrink:0;';
     header.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
             <div style="display:flex; align-items:center; gap:12px;">
@@ -1472,11 +1472,11 @@ export async function openQuickApplyModal() {
             </button>
         </div>
         <div style="padding-bottom:16px; display:flex; align-items:center; gap:10px;">
-            <div style="flex:1; display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 12px; transition:border-color 0.2s;" id="qa-search-wrap">
+            <div style="flex:1; display:flex; align-items:center; gap:8px; background:var(--bmm-s04); border:1px solid var(--bmm-s08); border-radius:10px; padding:8px 12px; transition:border-color 0.2s;" id="qa-search-wrap">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input type="text" id="qa-search" placeholder="${t('common.search') || 'Rechercher...'}" style="flex:1; background:none; border:none; outline:none; font-size:13px; color:var(--text-primary);">
             </div>
-            <select id="qa-filter" style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 12px; font-size:13px; color:var(--text-primary); outline:none; cursor:pointer;">
+            <select id="qa-filter" style="background:var(--bmm-s04); border:1px solid var(--bmm-s08); border-radius:10px; padding:8px 12px; font-size:13px; color:var(--text-primary); outline:none; cursor:pointer;">
                 <option value="all">${t('modpack.filterAll') || 'Tous'}</option>
                 <option value="single">${t('modpack.singleProfile') || 'Profil unique'}</option>
                 <option value="multi">${t('modpack.multiProfile') || 'Multi-profil'}</option>
@@ -1502,14 +1502,14 @@ export async function openQuickApplyModal() {
 
     _modpacks.forEach(pack => {
         const row = document.createElement('div');
-        row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); transition:background 0.2s, border-color 0.2s;';
+        row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-radius:12px; background:var(--bmm-s03); border:1px solid var(--bmm-s05); transition:background 0.2s, border-color 0.2s;';
         row.onmouseenter = () => {
-            row.style.background = 'rgba(255,255,255,0.05)';
+            row.style.background = 'var(--bmm-s05)';
             row.style.borderColor = 'rgba(0,194,255,0.2)';
         };
         row.onmouseleave = () => {
-            row.style.background = 'rgba(255,255,255,0.03)';
-            row.style.borderColor = 'rgba(255,255,255,0.05)';
+            row.style.background = 'var(--bmm-s03)';
+            row.style.borderColor = 'var(--bmm-s05)';
         };
 
         const modsCount = pack.mods ? pack.mods.length : 0;
@@ -1536,7 +1536,7 @@ const local = _allMods.find(m => m.id === mref.mod_id);
             </div>
             <div class="bmm-switch-wrap btn-apply ${anyEnabled ? 'active' : ''}" 
                  style="width:38px; height:20px; position:relative; cursor:pointer; flex-shrink:0;">
-                <div class="switch-bg" style="position:absolute; inset:0; border-radius:10px; background:${anyEnabled ? 'var(--success)' : 'rgba(255,255,255,0.1)'}; transition:all 0.3s; border:1px solid ${anyEnabled ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.05)'};"></div>
+                <div class="switch-bg" style="position:absolute; inset:0; border-radius:10px; background:${anyEnabled ? 'var(--success)' : 'var(--bmm-s10)'}; transition:all 0.3s; border:1px solid ${anyEnabled ? 'rgba(16,185,129,0.3)' : 'var(--bmm-s05)'};"></div>
                 <div class="switch-knob" style="position:absolute; top:3px; ${anyEnabled ? 'right:3px' : 'left:3px'}; width:14px; height:14px; border-radius:50%; background:#fff; transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
             </div>
         `;
@@ -1570,8 +1570,8 @@ const local = _allMods.find(m => m.id === mref.mod_id);
                 wrap.querySelector('.switch-knob').style.right = '3px';
             } else {
                 wrap.classList.remove('active');
-                wrap.querySelector('.switch-bg').style.background = 'rgba(255,255,255,0.1)';
-                wrap.querySelector('.switch-bg').style.borderColor = 'rgba(255,255,255,0.05)';
+                wrap.querySelector('.switch-bg').style.background = 'var(--bmm-s10)';
+                wrap.querySelector('.switch-bg').style.borderColor = 'var(--bmm-s05)';
                 wrap.querySelector('.switch-knob').style.right = 'auto';
                 wrap.querySelector('.switch-knob').style.left = '3px';
             }
@@ -1588,7 +1588,7 @@ const local = _allMods.find(m => m.id === mref.mod_id);
     const searchWrap = header.querySelector('#qa-search-wrap');
 
     searchInput.addEventListener('focus', () => { searchWrap.style.borderColor = 'var(--accent)'; });
-    searchInput.addEventListener('blur', () => { searchWrap.style.borderColor = 'rgba(255,255,255,0.08)'; });
+    searchInput.addEventListener('blur', () => { searchWrap.style.borderColor = 'var(--bmm-s08)'; });
 
     const applyFilters = () => {
         const q = searchInput.value.toLowerCase().trim();

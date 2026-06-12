@@ -1673,7 +1673,7 @@ export async function initSettings() {
     }
     // ── Library toolbar density (body class drives the CSS modes; auto = responsive) ──
     const applyToolbarDensity = (mode) => {
-        const m = ['full', 'compact', 'stacked'].includes(mode) ? mode : 'auto';
+        const m = ['full', 'compact', 'stacked', 'stacked-labels'].includes(mode) ? mode : 'auto';
         document.body.classList.remove('bmm-toolbar-auto', 'bmm-toolbar-full', 'bmm-toolbar-compact', 'bmm-toolbar-stacked');
         document.body.classList.add('bmm-toolbar-' + m);
     };

@@ -1825,6 +1825,17 @@ body.is-maximized .titlebar-spacer {
     align-items: center;
 }
 
+/* Group the Mod Mapper header controls onto a subtle surface so they don't float
+   bare on the page background. */
+#view-mapper .view-actions {
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--bmm-s02);
+    border: 1px solid var(--bmm-s06);
+    border-radius: 12px;
+    backdrop-filter: blur(8px);
+}
+
 /* Flat utility ghost buttons — no container, all at same level */
 .view-action-util {
     padding: 5px 11px !important;
@@ -2000,8 +2011,7 @@ body.is-maximized .titlebar-spacer {
 }
 
 .search-box {
-    flex: 1 1 180px;
-    min-width: 150px;
+    flex: 0 1 auto;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -2012,6 +2022,9 @@ body.is-maximized .titlebar-spacer {
     transition: var(--transition);
     max-width: 300px;
 }
+/* Only the library filter bar's search grows to fill the row (never vertically
+   in a column-flex panel like the global Active Mods search). */
+.filter-bar .search-box { flex: 1 1 180px; min-width: 150px; }
 
 .search-box:focus-within {
     border-color: rgba(99, 102, 241, 0.5);
@@ -13010,6 +13023,8 @@ body.bmm-theme-light .nav-item:hover .nav-label { color: var(--bmm-accent) !impo
     .lib-actions-tab .view-action-util svg { margin: 0; }
     /* Keep the Cancel-ops main label (it carries the dropdown affordance). */
     #cancel-ops-wrapper .view-action-util span:not([class]) { display: inline; }
+    /* Keep the Enable-all / Disable-all labels (incl. its hover panel item). */
+    #enable-all-container .view-action-util span { display: inline; }
     .filter-bar .filter-btn { padding: 4px 8px; }
     .filter-bar { gap: 6px; }
 }
@@ -13049,6 +13064,7 @@ body.bmm-toolbar-compact .lib-actions-tab .view-action-util span { display: none
 body.bmm-toolbar-compact .lib-actions-tab .view-action-util { padding: 5px 7px !important; }
 body.bmm-toolbar-compact .lib-actions-tab .view-action-util svg { margin: 0 !important; }
 body.bmm-toolbar-compact #cancel-ops-wrapper .view-action-util span:not([class]) { display: inline !important; }
+body.bmm-toolbar-compact #enable-all-container .view-action-util span { display: inline !important; }
 body.bmm-toolbar-compact .filter-bar { flex-wrap: nowrap !important; justify-content: space-between !important; }
 body.bmm-toolbar-compact .filter-bar .lib-filter-left { flex: 1 1 auto !important; flex-wrap: nowrap !important; }
 body.bmm-toolbar-compact .profile-select-icon-wrap { flex: 0 1 210px !important; margin-left: 0 !important; }
@@ -13058,6 +13074,8 @@ body.bmm-toolbar-compact .profile-select-icon-wrap select { width: 100% !importa
 body.bmm-toolbar-stacked .lib-actions-tab .view-action-util span { display: none !important; }
 body.bmm-toolbar-stacked .lib-actions-tab .view-action-util { padding: 5px 7px !important; }
 body.bmm-toolbar-stacked .lib-actions-tab .view-action-util svg { margin: 0 !important; }
+body.bmm-toolbar-stacked #cancel-ops-wrapper .view-action-util span:not([class]),
+body.bmm-toolbar-stacked #enable-all-container .view-action-util span { display: inline !important; }
 body.bmm-toolbar-stacked .filter-bar { flex-wrap: wrap !important; justify-content: flex-start !important; row-gap: 8px; }
 body.bmm-toolbar-stacked .filter-bar .lib-filter-left { flex: 1 1 100% !important; flex-wrap: wrap !important; }
 body.bmm-toolbar-stacked .filter-bar .search-box { flex: 1 1 220px !important; max-width: none !important; }
