@@ -41,6 +41,14 @@ The **Better Mods Manager (BMM) MCP Server** is a professional administrative co
 *   `bmm_create_launch_pack`: Creates a new pack (requires `name`, `executable_paths`, optional `icon_source_path`).
 *   `bmm_run_launch_pack`: Launches apps in a pack (requires `id`).
 *   `bmm_delete_launch_pack`: Deletes a pack (requires `id`).
+*   `bmm_open_launch_pack_folder`: Open the folder containing a pack's files (requires `id`).
+
+### 🔌 Plugins & API
+*   `bmm_list_plugins`: List installed BMM plugins (id, name, version, permissions, target game).
+*   `bmm_get_api_info`: Get the local Plugin API connection info — base URL, port and token. Pass `reveal: true` to return the full token instead of a masked preview.
+
+### 🛍 App Catalog
+*   `bmm_list_apps`: List the App Catalog state — installed companion apps, favourites, and your community catalog sources.
 
 ---
 

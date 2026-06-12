@@ -231,6 +231,12 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         reveal: bool,
     },
+
+    /// List installed plugins (id, name, version, permissions)
+    Plugins,
+
+    /// Show the App Catalog state (installed apps, favourites, community sources)
+    Apps,
 }
 
 // ─── Fancy banner ─────────────────────────────────────────────────────────
@@ -359,6 +365,50 @@ async fn run_cli_command(cmd: Commands) -> anyhow::Result<()> {
             println!("    curl -H \"Authorization: Bearer <token>\" http://127.0.0.1:{}/api/mods", port);
             println!();
             println!("  {}", "Note: BMM must be running for the API to respond. The port is configurable in Settings → Identity & API (restart required).".dimmed());
+        }
+
+        // ── Plugins ──────────────────────────────────────────────────
+        Commands::Plugins => {
+            let plugins = state_bridge::list_plugins()?;
+            if plugins.is_empty() {
+                println!("  {}", "No plugins installed.".dimmed());
+            } else {
+                let mut table = Table::new();
+                table.load_preset(UTF8_FULL_CONDENSED);
+                table.set_content_arrangement(ContentArrangement::Dynamic);
+                table.set_header(vec!["ID", "Name", "Version", "Permissions"]);
+                for p in &plugins {
+                    let s = |k: &str| p.get(k).and_then(|v| v.as_str()).unwrap_or("—").to_string();
+                    let perms = p.get("permissions").and_then(|v| v.as_array())
+                        .map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", "))
+                        .unwrap_or_else(|| "—".to_string());
+                    table.add_row(vec![s("id"), s("name"), s("version"), perms]);
+                }
+                println!("{table}");
+                println!("  {} {}", plugins.len().to_string().cyan().bold(), "plugin(s) installed".dimmed());
+            }
+        }
+
+        // ── App Catalog ──────────────────────────────────────────────
+        Commands::Apps => {
+            let apps = state_bridge::list_apps()?;
+            let installed = apps.get("installed").and_then(|v| v.as_object());
+            let favorites = apps.get("favorites").and_then(|v| v.as_array());
+            let sources = apps.get("community_sources").and_then(|v| v.as_array());
+
+            println!("  {}", "Installed apps:".bold());
+            match installed {
+                Some(m) if !m.is_empty() => for (id, _) in m { println!("    • {}", id.cyan()); },
+                _ => println!("    {}", "none".dimmed()),
+            }
+            println!();
+            println!("  {} {}", "Favourites:".bold(),
+                favorites.map(|a| a.len()).unwrap_or(0).to_string().cyan());
+            println!("  {}", "Community catalog sources:".bold());
+            match sources {
+                Some(a) if !a.is_empty() => for s in a { if let Some(u) = s.as_str() { println!("    • {}", u.dimmed()); } },
+                _ => println!("    {}", "none".dimmed()),
+            }
         }
 
         // ── Profiles ─────────────────────────────────────────────────

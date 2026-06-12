@@ -2000,7 +2000,8 @@ body.is-maximized .titlebar-spacer {
 }
 
 .search-box {
-    flex: 1;
+    flex: 1 1 180px;
+    min-width: 150px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -12975,14 +12976,19 @@ body.bmm-theme-light .nav-item:hover .nav-label { color: var(--bmm-accent) !impo
    scrolls horizontally below its min-width (see .view). A compact breakpoint
    tightens spacing so the single-row layout survives narrow windows in style. */
 .filter-bar { flex-wrap: nowrap; }
-.filter-bar .search-box { min-width: 120px; }
+.filter-bar .search-box { min-width: 150px; }
 .filter-buttons {
     display: flex;
     align-items: center;
     gap: 6px;
     flex-wrap: nowrap;
-    flex-shrink: 0;
+    flex-shrink: 1;   /* allow the group to shrink so its selects give room to search */
+    min-width: 0;
 }
+/* The pills (All / Enabled / Disabled) and the view toggle keep their size;
+   only the selects inside shrink (they have flex:0 1 … inline). */
+.filter-buttons .filter-btn,
+.filter-buttons .btn-icon { flex-shrink: 0; }
 .lib-actions-tab { flex-wrap: nowrap; }
 .lib-actions-tab .view-actions { flex-wrap: nowrap; }
 

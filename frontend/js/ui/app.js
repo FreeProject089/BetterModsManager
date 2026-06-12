@@ -638,31 +638,6 @@ function patchHtmlLinks() {
 // ── Boot ──────────────────────────────────────────────────
 async function main() {
     console.log('[BMM] App starting from generated TypeScript!');
-    // In production, block the WebView2 "Inspect" context menu and the F12 /
-    // Ctrl+Shift+I devtools shortcuts. DevTools stay reachable only via the BMM
-    // DevTool's "Open DevTools" button (the open_devtools command). Debug builds
-    // keep everything. Inputs/textareas keep their native right-click menu so
-    // copy/paste still works, and in-app right-click features (the theme element
-    // picker) still receive the event.
-    try {
-        // Dev builds (`tauri dev`) keep right-click Inspect + F12; release builds block them.
-        const isDev = await invoke('is_dev_build').catch(() => false);
-        if (!isDev) {
-            document.addEventListener('contextmenu', (e) => {
-                const el = e.target;
-                if (el && el.closest('input, textarea, [contenteditable="true"]'))
-                    return;
-                e.preventDefault();
-            }, { capture: true });
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'F12' || ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c'))) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
-            }, { capture: true });
-        }
-    }
-    catch { /* non-fatal */ }
     // Load external link registry first so every module can call getLinks() safely
     await loadLinks();
     patchHtmlLinks();
@@ -734,6 +709,29 @@ async function main() {
         await invoke('log_frontend_line', { line: '[BMM] App started from generated TypeScript!' });
     }
     catch (e) { }
+    // Block the WebView2 "Inspect" context menu + F12 / Ctrl+Shift+I,J,C in
+    // PRODUCTION only. Runs AFTER loadTauri() so the bridge is ready (otherwise
+    // is_dev_build threw "bridge not initialized" and defaulted to prod, killing
+    // right-click in dev). Dev builds keep everything; inputs keep native menus;
+    // the theme element picker still receives the event.
+    try {
+        const isDev = await invoke('is_dev_build').catch(() => true); // unknown → assume dev (don't block)
+        if (!isDev) {
+            document.addEventListener('contextmenu', (e) => {
+                const el = e.target;
+                if (el && el.closest('input, textarea, [contenteditable="true"]'))
+                    return;
+                e.preventDefault();
+            }, { capture: true });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'F12' || ((e.ctrlKey || e.metaKey) && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key))) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }, { capture: true });
+        }
+    }
+    catch { /* non-fatal */ }
     // Restore active theme ASAP (before first render to avoid flash)
     restoreThemeAtBoot().catch(() => { });
     await initI18n();

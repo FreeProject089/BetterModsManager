@@ -2,6 +2,7 @@ use rmcp::{ServerHandler, model::*, service::RequestContext, RoleServer};
 use serde_json::json;
 
 use crate::mcp::tools::{profiles, mods, diagnostics, launch_packs};
+use crate::mcp::state_bridge;
 
 #[derive(Clone)]
 pub struct BmmMcpServer;
@@ -213,6 +214,28 @@ impl BmmMcpServer {
     fn tool_open_launch_pack_folder(&self, id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
         match launch_packs::open_launch_pack_folder(id) {
             Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    // ── Plugins & API ───────────────────────────────────────────────────
+    fn tool_list_plugins(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::list_plugins() {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+    fn tool_get_api_info(&self, reveal: bool) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::get_api_info(reveal) {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    // ── App Catalog ─────────────────────────────────────────────────────
+    fn tool_list_apps(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::list_apps() {
+            Ok(v) => ok_json(&v),
             Err(e) => err_result(&e.to_string()),
         }
     }
@@ -504,6 +527,26 @@ impl ServerHandler for BmmMcpServer {
                     "required": ["id"]
                 })).unwrap()),
             ),
+            // ── Plugins & API ──────────────────────────────────────────
+            Tool::new(
+                "bmm_list_plugins",
+                "List installed BMM plugins (id, name, version, permissions, target game).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_get_api_info",
+                "Get the local Plugin API connection info (base URL, port, and token). Set reveal=true to return the full token instead of a masked preview.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "reveal": { "type": "boolean", "description": "Return the full API token (default false → masked)" } }
+                })).unwrap()),
+            ),
+            // ── App Catalog ────────────────────────────────────────────
+            Tool::new(
+                "bmm_list_apps",
+                "List the App Catalog state: installed companion apps, favourites, and community catalog sources.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
         ];
 
         std::future::ready(Ok(ListToolsResult {
@@ -656,6 +699,16 @@ impl ServerHandler for BmmMcpServer {
                     let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;
                     self.tool_open_launch_pack_folder(id)
                 }
+
+                // Plugins & API
+                "bmm_list_plugins" => self.tool_list_plugins(),
+                "bmm_get_api_info" => {
+                    let reveal = args.get("reveal").and_then(|v| v.as_bool()).unwrap_or(false);
+                    self.tool_get_api_info(reveal)
+                }
+
+                // App Catalog
+                "bmm_list_apps" => self.tool_list_apps(),
 
                 _ => Err(rmcp::ErrorData::new(ErrorCode::METHOD_NOT_FOUND, format!("Tool not found: {}", name), None)),
             }

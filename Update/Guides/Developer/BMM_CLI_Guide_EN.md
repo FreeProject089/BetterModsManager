@@ -145,7 +145,31 @@ bmm-mcp-server run-pack "My Pack"
 
 # Delete a pack
 bmm-mcp-server delete-pack <PACK_ID>
+
+# Open a pack's folder
+bmm-mcp-server open-pack <PACK_ID>
 ```
+
+---
+
+## 🔌 Plugins, API & App Catalog
+
+```bash
+# List installed plugins (id, name, version, permissions)
+bmm-mcp-server plugins
+
+# Show the local Plugin API URL, port & token (token masked)
+bmm-mcp-server api
+
+# Show the full API token (for scripts / plugins)
+bmm-mcp-server api --reveal
+
+# Show the App Catalog state (installed apps, favourites, community sources)
+bmm-mcp-server apps
+```
+
+> [!NOTE]
+> `plugins`, `apps` and the masked `api` read BMM's on-disk data, so they work even when BMM is closed. The API itself only responds while BMM is **running** (default port `51274`, configurable in Settings → Identity & API).
 
 ---
 

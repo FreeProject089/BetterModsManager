@@ -211,6 +211,10 @@ pub struct BmmAppData {
     pub settings: BmmSettings,
     #[serde(default)]
     pub launch_packs: Vec<LaunchPack>,
+    #[serde(default)]
+    pub installed_plugins: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub modpacks: Vec<serde_json::Value>,
 }
 
 // ─── Crash report content ────────────────────────────────────────────────
@@ -255,6 +259,43 @@ pub fn read_app_data() -> anyhow::Result<BmmAppData> {
     let data: BmmAppData = serde_json::from_str(&content)
         .map_err(|e| anyhow::anyhow!("Cannot parse data.json: {}", e))?;
     Ok(data)
+}
+
+/// List installed plugins (from data.json `installed_plugins`).
+pub fn list_plugins() -> anyhow::Result<Vec<serde_json::Value>> {
+    Ok(read_app_data()?.installed_plugins)
+}
+
+/// Read the App Catalog state (installed apps, favourites, community sources)
+/// from `apps_state.json` in the BMM data dir.
+pub fn list_apps() -> anyhow::Result<serde_json::Value> {
+    let path = get_bmm_data_dir().join("apps_state.json");
+    if !path.exists() {
+        return Ok(serde_json::json!({ "installed": {}, "favorites": [], "community_sources": [] }));
+    }
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| anyhow::anyhow!("Cannot read apps_state.json: {}", e))?;
+    serde_json::from_str(&content).map_err(|e| anyhow::anyhow!("Cannot parse apps_state.json: {}", e))
+}
+
+/// Plugin API connection info (token + port + base URL). `reveal` controls
+/// whether the full token or a masked preview is returned.
+pub fn get_api_info(reveal: bool) -> anyhow::Result<serde_json::Value> {
+    let s = read_app_data()?.settings;
+    let port = s.api_port;
+    let token = if reveal || s.api_token.is_empty() {
+        s.api_token.clone()
+    } else {
+        let t = &s.api_token;
+        let shown = t.chars().take(6).collect::<String>();
+        format!("{}…({} chars)", shown, t.len())
+    };
+    Ok(serde_json::json!({
+        "base_url": format!("http://127.0.0.1:{}", port),
+        "port": port,
+        "token": token,
+        "auth_header": "Authorization: Bearer <token>",
+    }))
 }
 
 /// List crash report zips across all report/archive directories

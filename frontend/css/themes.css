@@ -112,9 +112,12 @@
         rgba(0,0,0,0.1) 100%);
     flex-wrap: wrap;
 }
-.bte-dirty { font-size: 11px; color: var(--bmm-amber); flex: 1 1 auto; min-width: 0; font-weight: 600; }
+/* Empty → take NO space (was flex:1 1 auto, which grew and squeezed the action
+   buttons onto a second row). Only the non-empty pill claims width. */
+.bte-dirty { font-size: 11px; color: var(--bmm-amber); flex: 0 0 auto; min-width: 0; font-weight: 600; }
+.bte-dirty:empty { display: none; }
 .bte-dirty:not(:empty) {
-    flex: 0 0 auto; padding: 3px 9px; border-radius: 20px;
+    flex: 0 1 auto; padding: 3px 9px; border-radius: 20px; overflow: hidden; text-overflow: ellipsis;
     background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3);
     display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
 }

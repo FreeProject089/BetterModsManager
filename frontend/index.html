@@ -809,10 +809,10 @@
 
                         <!-- Filter bar: search + filter pills + selects + profile selector -->
                         <div class="filter-bar"
-                            style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;overflow:visible;padding:8px 12px;">
+                            style="display:flex;justify-content:space-between;align-items:center;flex-wrap:nowrap;gap:8px;overflow:visible;padding:8px 12px;">
 
-                            <!-- LEFT: search + filter pills + selects -->
-                            <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;flex-wrap:wrap;">
+                            <!-- LEFT: search + filter pills + selects (single row; shrinks, page scrolls if truly too narrow) -->
+                            <div style="display:flex;align-items:center;gap:10px;flex:1 1 auto;min-width:0;flex-wrap:nowrap;">
                                 <div class="search-box">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
@@ -841,11 +841,11 @@
                                         data-i18n="lib.filterDisabled">Inactifs</button>
 
                                     <select id="mod-tag-filter" class="profile-select"
-                                        style="width:130px;margin-left:6px;">
+                                        style="flex:0 1 130px;min-width:96px;margin-left:6px;">
                                         <option value="all" data-i18n="lib.tagFilterAll">Tous les tags</option>
                                     </select>
 
-                                    <select id="mod-sort" class="profile-select" style="width:120px;margin-left:3px;">
+                                    <select id="mod-sort" class="profile-select" style="flex:0 1 120px;min-width:96px;margin-left:3px;">
                                         <option value="name_asc" data-i18n="lib.sortNameAsc">Nom (A-Z)</option>
                                         <option value="name_desc" data-i18n="lib.sortNameDesc">Nom (Z-A)</option>
                                         <option value="status" data-i18n="lib.sortStatus">Statut (Actifs en 1er)
@@ -857,7 +857,7 @@
                             </div>
 
                             <!-- Profile selector: dynamic icon (user icon by default, updated via JS to active profile's icon) -->
-                            <div class="profile-select-icon-wrap" style="flex-shrink:0;">
+                            <div class="profile-select-icon-wrap" style="flex:0 1 210px;min-width:130px;">
                                 <span class="profile-icon-display">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
@@ -865,7 +865,7 @@
                                         <circle cx="12" cy="7" r="4" />
                                     </svg>
                                 </span>
-                                <select id="lib-profile-select" class="profile-select" style="width:210px;">
+                                <select id="lib-profile-select" class="profile-select" style="width:100%;max-width:210px;">
                                     <option value="" data-i18n="lib.selectProfile">— Sélectionnez un profil —</option>
                                 </select>
                             </div>
