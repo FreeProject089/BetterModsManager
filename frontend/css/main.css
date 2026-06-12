@@ -13014,6 +13014,23 @@ body.bmm-theme-light .nav-item:hover .nav-label { color: var(--bmm-accent) !impo
     .filter-bar { gap: 6px; }
 }
 
+/* Very narrow → stop forcing one row (it made controls OVERLAP). Wrap cleanly
+   into intentional rows instead: search + filters share the top row(s) and the
+   profile selector drops to its own full-width row, right-aligned. flex-start
+   kills the big space-between gap; wrapping kills the overlap. */
+@media (max-width: 1180px) {
+    .filter-bar { flex-wrap: wrap !important; justify-content: flex-start !important; row-gap: 8px; }
+    /* the left group (search + pills + selects) can itself wrap and takes the row */
+    .filter-bar .lib-filter-left { flex: 1 1 100% !important; flex-wrap: wrap !important; }
+    .filter-bar .search-box { flex: 1 1 220px; max-width: none; }
+    .filter-buttons { flex: 1 1 auto; }
+    .filter-buttons #mod-tag-filter,
+    .filter-buttons #mod-sort { flex: 1 1 120px; }
+    /* profile drops to its own row, right-aligned, never overlapping the selects */
+    .profile-select-icon-wrap { flex: 1 1 100% !important; margin-left: auto; }
+    .profile-select-icon-wrap select { width: 100% !important; max-width: 280px !important; }
+}
+
 /* ── Tutorial Hub — inner scroll (preserves shadow) ─────────────────────── */
 /* The overlay stays as a centred flex container — do NOT add overflow to it
    or the container's box-shadow gets clipped.
