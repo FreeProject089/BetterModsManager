@@ -4661,6 +4661,7 @@ function getEndpointDefs(): EndpointDef[] {
                 { name: 'removeModIds',      type: 'array',  required: false, desc: 'Mod IDs to remove from the repo.' },
                 { name: 'removeProfileIds',  type: 'array',  required: false, desc: 'Whole profile IDs to remove from the repo.' },
                 { name: 'addProfiles',       type: 'array',  required: false, desc: 'Profiles (with optional per-mod selection) to add: [{ "profileId": "…", "modIds": null }].' },
+                { name: 'modChangelogs',     type: 'object', required: false, desc: 'Per-mod author changelog, keyed by local mod id: { "<modId>": "Fixed X, added Y" }. Shown to users when the update is detected.' },
             ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "repo/update" }' },

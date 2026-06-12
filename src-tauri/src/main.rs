@@ -380,6 +380,8 @@ fn main() {
             commands::repo::export_server_repo,
             commands::repo::update_server_repo,
             commands::repo::read_local_repo,
+            commands::repo::check_mod_updates,
+            commands::repo::set_mod_update_config,
             commands::repo::scan_repo_hub,
             commands::repo::generate_repo_hub,
             commands::repo::get_profile_mod_list,

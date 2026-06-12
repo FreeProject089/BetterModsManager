@@ -90,6 +90,36 @@ pub struct ModEntry {
     /// None until first scan after this field was introduced.
     #[serde(default)]
     pub content_id: Option<String>,
+    // ── Update system ────────────────────────────────────────────────────
+    /// Repository this mod was synced from (normalised repo URL). None for
+    /// mods added manually / from a site.
+    #[serde(default)]
+    pub source_repo: Option<String>,
+    /// Stable id of this mod inside its `source_repo` manifest (survives across
+    /// version bumps, unlike content_id). Used to detect repo updates.
+    #[serde(default)]
+    pub repo_mod_id: Option<String>,
+    /// Optional per-mod "own repo" URL for mods added outside a repo (e.g. a
+    /// site download that publishes its own repo.json). Checked independently.
+    #[serde(default)]
+    pub update_url: Option<String>,
+    /// User-configured additional update sources. A mod can be linked to one or
+    /// more repos that act as updaters; each entry may carry the mod's id inside
+    /// that repo (falls back to `repo_mod_id` when empty). These are checked in
+    /// addition to `source_repo` / `update_url`.
+    #[serde(default)]
+    pub update_sources: Vec<UpdateSource>,
+}
+
+/// One configurable place to look for updates to a mod.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateSource {
+    /// Repo URL that can provide updates for this mod.
+    pub repo_url: String,
+    /// This mod's id inside that repo's manifest. `None`/empty → fall back to the
+    /// mod's main `repo_mod_id`.
+    #[serde(default)]
+    pub repo_mod_id: Option<String>,
 }
 
 /// A download link for a mod
@@ -153,6 +183,10 @@ impl ModEntry {
             file_hashes_timestamp: None,
             file_hashes_invalid: None,
             content_id: None,
+            source_repo: None,
+            repo_mod_id: None,
+            update_url: None,
+            update_sources: Vec::new(),
         }
     }
 

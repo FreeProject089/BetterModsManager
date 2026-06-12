@@ -269,6 +269,9 @@ struct RepoUpdateBody {
     /// [{ "profileId": "...", "modIds": ["...", ...] | null }]
     #[serde(default)]
     add_profiles: Vec<serde_json::Value>,
+    /// { "<modId>": "changelog text" } — per-mod author changelog.
+    #[serde(default)]
+    mod_changelogs: serde_json::Value,
 }
 
 /// POST /api/repo/host — start a static HTTP file server serving a generated repo
@@ -1655,6 +1658,7 @@ pub async fn start_api_server(
                     "removeModIds": body.remove_mod_ids,
                     "removeProfileIds": body.remove_profile_ids,
                     "addProfiles": body.add_profiles,
+                    "modChangelogs": body.mod_changelogs,
                 }
             }));
             warp::reply::with_status(
@@ -2682,6 +2686,10 @@ async fn do_api_repo_sync(
                         file_hashes_timestamp: None,
                         file_hashes_invalid: None,
                         content_id: None,
+                        source_repo: None,
+                        repo_mod_id: None,
+                        update_url: None,
+                        update_sources: Vec::new(),
                     });
                     new_id
                 }
@@ -2892,6 +2900,7 @@ async fn do_api_repo_gen(
                 files: Vec::new(),
                 download_links: mod_entry.download_links.clone(),
                 dependencies: dep_ids,
+                changelog: None,
             };
 
             // Archived mods (.zip) read from their extracted cache view.

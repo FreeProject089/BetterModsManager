@@ -50,6 +50,18 @@ export function getModCardHTML(mod, ctx) {
     else if (hasInterPotential) conflictHtml += `<div class="tag-conflict tag-inter-conflict potential" onmouseenter="window.showTaskyHelp('lib.conflictInterPotentialTip', 'warning')" onmouseleave="window.hideTaskyHelp()" onclick="window.openGlobalConflictModal('${mod.id}')" style="cursor:pointer"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Inter</div>`;
   }
 
+  // "Update available" tag — driven by the last update check (window.__bmmModUpdates)
+  let updateHtml = '';
+  try {
+    const upd = (window as any).__bmmModUpdates;
+    const info = upd && upd.get ? upd.get(mod.id) : null;
+    if (info) {
+      const tip = (info.current_version && info.new_version)
+        ? `${info.current_version} → ${info.new_version}` : (t('mod.updateAvailable') || 'Update available');
+      updateHtml = `<div class="tag-mod-update" onclick="window.bmmShowModUpdates && window.bmmShowModUpdates(); event.stopPropagation();" onmouseenter="window.showTaskyHelp('${escAttr(escJs(tip))}', 'package', true)" onmouseleave="window.hideTaskyHelp()" style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;background:rgba(46,204,113,0.16);color:#2ecc71;border:1px solid rgba(46,204,113,0.32);padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>${t('mod.updateTag') || 'Update'}</div>`;
+    }
+  } catch {}
+
   const processingHtml = isProcessing ? getLoadingOverlayHTML() : '';
 
   return `
@@ -75,6 +87,7 @@ export function getModCardHTML(mod, ctx) {
                 ${mod.enabled ? `<span class="badge badge-accent" style="font-size:9px;padding:1px 6px;border-radius:4px;font-family:var(--font-mono);font-weight:800;background:rgba(59,130,246,0.2);color:var(--accent);border:1px solid rgba(59,130,246,0.3)" onmouseenter="window.showTaskyHelp('mod.activationOrderTip', 'help')" onmouseleave="window.hideTaskyHelp()">#${mod.activation_order}</span>` : ''}
                 ${/\.(zip|rar|7z|tar|gz|tgz)$/i.test(mod.mod_folder_path || '') ? `<span class="mod-archive-badge" onmouseenter="window.showTaskyHelp('mod.archiveBadgeTip', 'package', false)" onmouseleave="window.hideTaskyHelp()"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>${t('mod.archiveBadge') || 'Archive'}</span>` : ''}
                 ${conflictHtml}
+                ${updateHtml}
             </div>
             <div class="mod-meta">
                 <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
@@ -95,9 +108,9 @@ export function getModCardHTML(mod, ctx) {
         <div class="mod-actions">
             <div class="mod-actions-dropdown">
             <button class="btn btn-sm btn-icon btn-dropdown-toggle" 
-                onclick="window.showGlobalDropdown(this, this.nextElementSibling); event.stopPropagation();" 
-                onmouseenter="window.showTaskyHelp('mod.openFolderTip', 'folder');" 
-                onmouseleave="window.hideTaskyHelp();" 
+                onclick="window.showGlobalDropdown(this, this.nextElementSibling); event.stopPropagation();"
+                onmouseenter="window.showTaskyHelp('mod.moreActionsTip', 'help');"
+                onmouseleave="window.hideTaskyHelp();"
                 style="background:rgba(255,255,255,0.05);color:var(--text-secondary);border:none;padding:4px 6px;border-radius:6px;cursor:pointer">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -151,6 +164,13 @@ export function getModCardHTML(mod, ctx) {
                         </svg>
                         <span>Copy Content ID</span>
                         <span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--accent);opacity:0.6;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${mod.content_id ? escHtml(mod.content_id.slice(0, 8)) + '…' : 'N/A'}</span>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" onclick="window.openModUpdateConfig && window.openModUpdateConfig('${mod.id}'); event.stopPropagation();"
+                         onmouseenter="window.showTaskyHelp('mod.updateConfigTip', 'package')"
+                         onmouseleave="window.hideTaskyHelp()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                        <span data-i18n="mod.updateConfig">${t('mod.updateConfig') || 'Configure updates'}</span>
                     </div>
                 </div>
             </div>

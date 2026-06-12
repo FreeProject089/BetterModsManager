@@ -1715,6 +1715,45 @@ export async function initSettings() {
             catch { }
         });
     }
+    // ── Mod update check interval (minutes) + global update repos ──
+    const updIntervalEl = document.getElementById('update-check-min');
+    if (updIntervalEl) {
+        try {
+            updIntervalEl.value = String(parseInt(localStorage.getItem('bmm_update_check_min') || '0', 10) || 0);
+        }
+        catch {
+            updIntervalEl.value = '0';
+        }
+        updIntervalEl.addEventListener('change', async () => {
+            const v = Math.max(0, Math.min(1440, parseInt(updIntervalEl.value || '0', 10) || 0));
+            updIntervalEl.value = String(v);
+            try {
+                localStorage.setItem('bmm_update_check_min', String(v));
+            }
+            catch { }
+            try {
+                (await import('../repo/mod-updates.js')).startAutoUpdateChecks();
+            }
+            catch { }
+        });
+    }
+    const globalReposEl = document.getElementById('global-update-repos');
+    if (globalReposEl) {
+        try {
+            const repos = JSON.parse(localStorage.getItem('bmm_update_repos') || '[]');
+            globalReposEl.value = Array.isArray(repos) ? repos.join('\n') : '';
+        }
+        catch {
+            globalReposEl.value = '';
+        }
+        globalReposEl.addEventListener('change', () => {
+            const list = globalReposEl.value.split('\n').map(s => s.trim()).filter(Boolean);
+            try {
+                localStorage.setItem('bmm_update_repos', JSON.stringify(list));
+            }
+            catch { }
+        });
+    }
     const importBtn = document.getElementById('btn-import-data');
     if (importBtn) {
         importBtn.addEventListener('click', async () => {

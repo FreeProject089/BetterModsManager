@@ -57,6 +57,10 @@ pub struct RepoMod {
     /// profiles are dropped). Bare mod ids.
     #[serde(default)]
     pub dependencies: Vec<String>,
+    /// Optional author-written changelog for this mod's current version, shown to
+    /// users when an update is available. Plain text / markdown.
+    #[serde(default)]
+    pub changelog: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

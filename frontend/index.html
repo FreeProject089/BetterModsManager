@@ -2216,6 +2216,18 @@
                                         </div>
                                     </div>
 
+                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                                        <button class="btn btn-secondary btn-sm" id="btn-check-mod-updates"
+                                            style="display:flex;align-items:center;gap:6px;padding:0 14px;height:30px;font-size:12px;font-weight:600;border-radius:6px;background:rgba(46,204,113,0.12);color:#2ecc71;border:1px solid rgba(46,204,113,0.25);">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                                                <path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                                            </svg>
+                                            <span data-i18n="repo.checkUpdatesBtn">Check for mod updates</span>
+                                        </button>
+                                        <span id="mod-updates-hint" style="font-size:11px;color:var(--text-muted);"></span>
+                                    </div>
+
                                     <div id="repo-sync-info-card"
                                         style="display:none;margin-top:12px;background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;border:1px solid rgba(255,255,255,0.06);">
                                         <div
@@ -7699,6 +7711,34 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                     style="padding:4px 8px;font-size:12px;border-radius:6px;width:70px">
                                 <span style="font-size:11px;color:var(--text-muted)" data-i18n="common.seconds">sec</span>
                             </div>
+
+                            <!-- Mod update check interval -->
+                            <div
+                                style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-top:12px">
+                                <div style="flex:1">
+                                    <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                        data-i18n="settings.updateCheckInterval">Mod update check interval</div>
+                                    <div style="font-size:10px;color:var(--text-muted)"
+                                        data-i18n="settings.updateCheckIntervalDesc">How often BMM automatically checks
+                                        linked repos for mod updates. 0 = manual only.</div>
+                                </div>
+                                <input type="number" id="update-check-min" class="form-input" min="0" max="1440"
+                                    style="padding:4px 8px;font-size:12px;border-radius:6px;width:70px">
+                                <span style="font-size:11px;color:var(--text-muted)" data-i18n="common.minutes">min</span>
+                            </div>
+
+                            <!-- Global update repos -->
+                            <div
+                                style="padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border);margin-top:12px">
+                                <div style="font-size:12px;font-weight:700;color:var(--text-primary)"
+                                    data-i18n="settings.globalUpdateRepos">Global update repositories</div>
+                                <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px"
+                                    data-i18n="settings.globalUpdateReposDesc">One repo URL per line. Any installed mod is
+                                    also checked against these repos (matched by its repo_mod_id).</div>
+                                <textarea id="global-update-repos" rows="3"
+                                    placeholder="https://example.com/repo.json"
+                                    style="width:100%;font-size:11px;font-family:var(--font-mono);padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:rgba(0,0,0,0.2);color:var(--text-secondary);resize:vertical"></textarea>
+                            </div>
                         </div>
                         <!-- ── Discord RPC Toggle ── -->
                         <div class="glass-card" id="settings-discord-rpc-card"
@@ -9960,7 +10000,13 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                     style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);cursor:pointer;white-space:nowrap;padding:6px 2px;">
                                     <input type="checkbox" id="repo-browser-online-filter"
                                         style="accent-color:var(--accent);width:13px;height:13px;">
-                                    Online only
+                                    <span data-i18n="repo.browseOnlineOnly">Online only</span>
+                                </label>
+                                <label
+                                    style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);cursor:pointer;white-space:nowrap;padding:6px 2px;">
+                                    <input type="checkbox" id="repo-browser-fav-filter"
+                                        style="accent-color:var(--accent);width:13px;height:13px;">
+                                    <span data-i18n="repo.browseFavOnly">Favourites only</span>
                                 </label>
                             </div>
                         </div>

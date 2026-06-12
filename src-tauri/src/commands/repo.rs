@@ -318,6 +318,7 @@ pub async fn export_server_repo(
                 files: Vec::new(),
                 download_links: mod_entry.download_links.clone(),
                 dependencies: dep_ids,
+                changelog: None,
             };
 
             // Archived mods (.zip) are read from their extracted cache view so the
@@ -565,6 +566,11 @@ pub struct RepoUpdateOps {
     /// Profiles (and optionally a subset of their mods) to add or update.
     #[serde(default)]
     pub add_profiles: Vec<ProfileAddSpec>,
+    /// Optional per-mod author changelog text, keyed by local mod id. Written to
+    /// the resulting `RepoMod.changelog` so users see "what changed" when an
+    /// update is detected. Accepts camelCase ("modChangelogs") from API callers.
+    #[serde(alias = "modChangelogs", default)]
+    pub mod_changelogs: std::collections::HashMap<String, String>,
 }
 
 #[tauri::command]
@@ -642,6 +648,7 @@ pub async fn update_server_repo(
     //    async runtime — and the whole UI — stays responsive. Cancellable per-file.
     let win = window.clone();
     let handle2 = handle.clone();
+    let mod_changelogs = ops.mod_changelogs.clone();
     let join = tokio::task::spawn_blocking(move || -> Result<RepoUpdateResult, String> {
         let total = pending.len().max(1);
         for (idx, pm) in pending.into_iter().enumerate() {
@@ -723,6 +730,9 @@ pub async fn update_server_repo(
                 dependencies: pm.mod_entry.dependencies.iter()
                     .map(|d| d.split_once("::").map(|(_, m)| m.to_string()).unwrap_or_else(|| d.clone()))
                     .collect(),
+                changelog: mod_changelogs.get(&pm.mod_entry.id)
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty()),
             };
 
             let prof = &mut repo.profiles[prof_idx];
@@ -956,6 +966,181 @@ pub fn get_profile_mod_list(state: State<AppState>, profile_id: String) -> Resul
     }
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     Ok(out)
+}
+
+/// Normalise a repo URL the same way `sync_server_repo` does, so origins recorded
+/// at sync time match what the update checker / config commands look up.
+pub fn normalize_repo_url(url: &str) -> String {
+    let mut u = url.trim().to_string();
+    if let Some(s) = u.strip_suffix("/repo.json") { u = s.to_string(); }
+    while u.ends_with('/') { u.pop(); }
+    u.to_lowercase()
+}
+
+/// One available mod update found by `check_mod_updates`.
+#[derive(serde::Serialize)]
+pub struct ModUpdateInfo {
+    pub mod_id: String,          // local ModEntry id
+    pub name: String,
+    pub current_version: String,
+    pub new_version: String,
+    pub repo_url: String,        // normalised source repo (or update_url)
+    pub repo_mod_id: String,
+    pub changelog: Option<String>,
+}
+
+/// A repo that could not be reached during an update check.
+#[derive(serde::Serialize)]
+pub struct RepoCheckError {
+    pub repo_url: String,
+    pub error: String,
+}
+
+/// Full result of an update check: available updates + the repos that failed.
+#[derive(serde::Serialize, Default)]
+pub struct ModUpdateCheckResult {
+    pub updates: Vec<ModUpdateInfo>,
+    pub errors: Vec<RepoCheckError>,
+    /// How many installed mods were actually update-trackable (linked to a repo
+    /// with a repo_mod_id). 0 means nothing is configured for updates yet — the
+    /// UI uses this to avoid a misleading "everything is up to date".
+    pub checked: usize,
+}
+
+/// Check every installed mod that is update-trackable against the repo(s) it is
+/// linked to. A mod is linked through any of:
+///   * `source_repo` + `repo_mod_id` (recorded automatically on sync),
+///   * `update_url` (+ `repo_mod_id`),
+///   * each user-configured `update_sources` entry, and
+///   * any caller-supplied `global_repos` (matched by the mod's `repo_mod_id`).
+///
+/// Each unique repo is fetched once. Repos that fail to respond are reported in
+/// `errors` (not silently dropped) so the UI can surface the problem.
+#[tauri::command]
+pub async fn check_mod_updates(
+    state: State<'_, AppState>,
+    handle: tauri::AppHandle,
+    global_repos: Option<Vec<String>>,
+) -> Result<ModUpdateCheckResult, String> {
+    // 1. Build, per mod, the list of (normalised repo_url, repo_mod_id) to check.
+    struct Candidate { mod_id: String, name: String, cur_ver: String, repo_url: String, rid: String }
+    let mut candidates: Vec<Candidate> = Vec::new();
+    let globals: Vec<String> = global_repos.unwrap_or_default()
+        .into_iter().map(|r| normalize_repo_url(&r)).filter(|r| !r.is_empty()).collect();
+    {
+        let data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
+        for m in &data.mods {
+            let main_rid = m.repo_mod_id.as_ref().filter(|r| !r.trim().is_empty()).cloned();
+            // de-dupe (repo_url, rid) pairs for this mod
+            let mut seen: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
+            let mut push = |repo: &str, rid: Option<String>, list: &mut Vec<Candidate>| {
+                let repo_n = normalize_repo_url(repo);
+                if repo_n.is_empty() { return; }
+                let rid = match rid.filter(|r| !r.trim().is_empty()) { Some(r) => r, None => return };
+                if seen.insert((repo_n.clone(), rid.clone())) {
+                    list.push(Candidate {
+                        mod_id: m.id.clone(), name: m.name.clone(), cur_ver: m.version.clone(),
+                        repo_url: repo_n, rid,
+                    });
+                }
+            };
+            if let Some(r) = &m.source_repo { push(r, main_rid.clone(), &mut candidates); }
+            if let Some(r) = &m.update_url  { push(r, main_rid.clone(), &mut candidates); }
+            for src in &m.update_sources {
+                let rid = src.repo_mod_id.clone().or_else(|| main_rid.clone());
+                push(&src.repo_url, rid, &mut candidates);
+            }
+            for g in &globals { push(g, main_rid.clone(), &mut candidates); }
+        }
+    }
+    let checked = candidates.iter().map(|c| c.mod_id.clone())
+        .collect::<std::collections::HashSet<_>>().len();
+    if candidates.is_empty() { return Ok(ModUpdateCheckResult::default()); }
+
+    let creator_id = crate::commands::security::get_creator_id(handle).ok();
+
+    // 2. Fetch each unique repo once; cache manifest mod maps + record failures.
+    let mut result = ModUpdateCheckResult { checked, ..Default::default() };
+    let mut repo_cache: std::collections::HashMap<String, Option<std::collections::HashMap<String, (String, Option<String>)>>> = std::collections::HashMap::new();
+    let mut flagged: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for c in candidates {
+        // already found an update for this mod from another source → skip
+        if flagged.contains(&c.mod_id) { continue; }
+
+        if !repo_cache.contains_key(&c.repo_url) {
+            match fetch_repo_info(c.repo_url.clone(), creator_id.clone()).await {
+                Ok(manifest) => {
+                    let mut map = std::collections::HashMap::new();
+                    for p in &manifest.profiles {
+                        for rm in &p.mods {
+                            map.entry(rm.id.clone()).or_insert((rm.version.clone(), rm.changelog.clone()));
+                        }
+                    }
+                    repo_cache.insert(c.repo_url.clone(), Some(map));
+                }
+                Err(e) => {
+                    result.errors.push(RepoCheckError { repo_url: c.repo_url.clone(), error: e });
+                    repo_cache.insert(c.repo_url.clone(), None);
+                }
+            }
+        }
+
+        if let Some(Some(map)) = repo_cache.get(&c.repo_url) {
+            if let Some((new_ver, changelog)) = map.get(&c.rid) {
+                if new_ver != &c.cur_ver {
+                    flagged.insert(c.mod_id.clone());
+                    result.updates.push(ModUpdateInfo {
+                        mod_id: c.mod_id,
+                        name: c.name,
+                        current_version: c.cur_ver,
+                        new_version: new_ver.clone(),
+                        repo_url: c.repo_url,
+                        repo_mod_id: c.rid,
+                        changelog: changelog.clone(),
+                    });
+                }
+            }
+        }
+    }
+    Ok(result)
+}
+
+/// Configure a mod's update linkage: its stable `repo_mod_id` and the list of
+/// repos that can update it. Empty strings clear the corresponding field.
+#[tauri::command]
+pub fn set_mod_update_config(
+    state: State<'_, AppState>,
+    mod_id: String,
+    repo_mod_id: Option<String>,
+    update_url: Option<String>,
+    update_sources: Option<Vec<crate::models::mod_entry::UpdateSource>>,
+) -> Result<(), String> {
+    {
+        let mut data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
+        let m = data.mods.iter_mut().find(|m| m.id == mod_id)
+            .ok_or_else(|| "Mod not found".to_string())?;
+        if let Some(rid) = repo_mod_id {
+            let t = rid.trim();
+            m.repo_mod_id = if t.is_empty() { None } else { Some(t.to_string()) };
+        }
+        if let Some(url) = update_url {
+            let t = url.trim();
+            m.update_url = if t.is_empty() { None } else { Some(normalize_repo_url(t)) };
+        }
+        if let Some(srcs) = update_sources {
+            m.update_sources = srcs.into_iter()
+                .filter(|s| !s.repo_url.trim().is_empty())
+                .map(|mut s| {
+                    s.repo_url = normalize_repo_url(&s.repo_url);
+                    s.repo_mod_id = s.repo_mod_id.filter(|r| !r.trim().is_empty());
+                    s
+                })
+                .collect();
+        }
+    }
+    let _ = state.save();
+    Ok(())
 }
 
 /// Read an existing repo.json and return its current profiles + mods so the UI
@@ -1324,6 +1509,16 @@ pub async fn sync_server_repo(
     let mods_dir = args.mods_dir;
     let backup_dir = args.backup_dir;
     let choices = args.choices;
+
+    // Normalised repo URL (strip /repo.json + trailing slashes, lowercase) recorded
+    // on each synced mod as its `source_repo`, so the update checker can match it
+    // back to this repo later. Mirrors the frontend's normRepoUrl().
+    let src_repo: String = {
+        let mut u = url.trim().to_string();
+        if let Some(s) = u.strip_suffix("/repo.json") { u = s.to_string(); }
+        while u.ends_with('/') { u.pop(); }
+        u.to_lowercase()
+    };
 
     state.install_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
     state.sync_paused.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -1704,6 +1899,10 @@ pub async fn sync_server_repo(
                 new_mod.download_links = repo_mod.download_links.clone();
                 // Carry over the (already cross-profile-filtered) dependencies.
                 new_mod.dependencies = repo_mod.dependencies.clone();
+                // Update-system origin tracking: remember which repo + stable mod id
+                // this came from, so check_mod_updates can detect newer versions.
+                new_mod.source_repo = Some(src_repo.clone());
+                new_mod.repo_mod_id = Some(repo_mod.id.clone());
 
                 let mut tag_ids = Vec::new();
                 for repo_tag in repo_mod.tags {
@@ -1728,6 +1927,8 @@ pub async fn sync_server_repo(
                     existing.tags = new_mod.tags;
                     existing.download_links = new_mod.download_links;
                     existing.dependencies = new_mod.dependencies;
+                    existing.source_repo = new_mod.source_repo;
+                    existing.repo_mod_id = new_mod.repo_mod_id;
                 }
             }
         }

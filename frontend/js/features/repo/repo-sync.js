@@ -4,6 +4,7 @@ import { toast, updateLibraryProfileSelector } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { renderProfiles } from '../profiles/profiles.js';
 import { formatBytes } from '../../core/utils.js';
+import { checkModUpdates } from './mod-updates.js';
 let lastFetchedRepo = null;
 let lastFetchedRepoSaltedId = null;
 // ── Repo verification detail modal ───────────────────────────────────────────
@@ -365,6 +366,11 @@ export function initRepoSync(elements) {
                     }
                     updateSyncPathsVisibility();
                 }
+                // Connecting to a repo → proactively detect updates for mods we
+                // already have installed from it (or any tracked repo). Silent so
+                // it never nags when everything is current; opens the modal if any
+                // update is found.
+                checkModUpdates(true).catch(() => { });
             }
             catch (err) {
                 const errMsg = String(err);

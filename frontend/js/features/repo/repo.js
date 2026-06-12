@@ -8,6 +8,7 @@ import { t } from '../../core/i18n.js';
 import { initRepoServer } from './repo-server.js';
 import { initRepoMonitoring } from './repo-monitoring.js';
 import { initRepoSync } from './repo-sync.js';
+import { initModUpdates } from './mod-updates.js';
 import { initRepoAdmin } from './repo-admin.js';
 // Normalise a repo URL so map lookups match regardless of trailing slash / repo.json
 export const normRepoUrl = (url) => {
@@ -325,6 +326,7 @@ export function initRepo() {
     initRepoMonitoring(elements);
     initRepoSync(elements);
     initRepoAdmin(elements);
+    initModUpdates();
     // ── Sync / Hosting tab switcher ──────────────────────────────────────
     const activateRepoTab = (name) => {
         const view = document.getElementById('view-repo');
@@ -983,6 +985,11 @@ export function initRepo() {
             else if (whitelistFilter === 'no-whitelist') {
                 filtered = filtered.filter(r => !r.whitelist_enabled);
             }
+            // Favourites: optional "favourites only" filter + always float favourites to the top.
+            const favOnly = document.getElementById('repo-browser-fav-filter')?.checked;
+            if (favOnly)
+                filtered = filtered.filter(r => isRepoFav(r.url));
+            filtered = [...filtered].sort((a, b) => (isRepoFav(b.url) ? 1 : 0) - (isRepoFav(a.url) ? 1 : 0));
             listEl.innerHTML = filtered.map(repo => `
                 <div class="repo-browser-item" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s ease;" data-url="${escAttr(repo.url)}">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
@@ -1246,6 +1253,10 @@ export function initRepo() {
         if (whitelistFilterEl) {
             whitelistFilterEl.addEventListener('change', renderRepoList);
         }
+        const favFilterEl = document.getElementById('repo-browser-fav-filter');
+        if (favFilterEl) {
+            favFilterEl.addEventListener('change', renderRepoList);
+        }
     };
     initRepoBrowser();
     // ── Repo Update (incremental) ──
@@ -1333,10 +1344,17 @@ export function initRepo() {
                     </div>
                     <div style="display:flex;flex-direction:column;gap:3px;">
                         ${p.mods.map(m => `
-                        <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-secondary);cursor:pointer;">
-                            <input type="checkbox" class="repo-up-keep-mod" data-mid="${escAttr(m.id)}" checked>
-                            <span>${escHtml(m.name)} <span style="color:var(--text-muted);">v${escHtml(m.version)}</span></span>
-                        </label>`).join('')}
+                        <div>
+                            <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-secondary);cursor:pointer;">
+                                <input type="checkbox" class="repo-up-keep-mod" data-mid="${escAttr(m.id)}" checked>
+                                <span>${escHtml(m.name)} <span style="color:var(--text-muted);">v${escHtml(m.version)}</span></span>
+                            </label>
+                            <div style="display:flex;align-items:center;gap:6px;margin:1px 0 3px 22px;font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">
+                                <span>repo_mod_id:</span>
+                                <span style="color:var(--text-secondary);user-select:all;">${escHtml(m.id)}</span>
+                                <button type="button" class="repo-up-copy-id" data-mid="${escAttr(m.id)}" title="${escAttr(t('common.copy') || 'Copy')}" style="border:none;background:rgba(255,255,255,0.06);color:var(--text-secondary);border-radius:3px;padding:1px 5px;cursor:pointer;font-size:9px;">${t('common.copy') || 'Copy'}</button>
+                            </div>
+                        </div>`).join('')}
                     </div>
                 </div>`).join('') || `<div style="color:var(--text-muted);font-size:12px;">${t('repo.update.empty') || 'Repo is empty'}</div>`;
             // Local profiles to add — expandable per-mod selection
@@ -1352,6 +1370,12 @@ export function initRepo() {
                 </div>`).join('');
             contentEl.style.display = 'block';
             btnApply.disabled = false;
+            currentEl.querySelectorAll('.repo-up-copy-id').forEach(b => b.addEventListener('click', (e) => {
+                e.preventDefault();
+                navigator.clipboard?.writeText(b.dataset.mid || '').then(() => {
+                    toast(t('repo.update.idCopied') || 'repo_mod_id copied', 'success');
+                }).catch(() => { });
+            }));
             currentEl.querySelectorAll('.repo-up-rm-profile').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const block = btn.closest('.ru-current-block');
@@ -1381,15 +1405,31 @@ export function initRepo() {
                             box.innerHTML = `
                                 <div style="font-size:10px;color:var(--text-muted);margin:6px 0 4px;">${t('repo.update.modsHint') || 'Checked mods will be added. Leave all checked to add the whole profile.'}</div>
                                 ${mods.map(m => `
-                                <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-secondary);cursor:pointer;padding:1px 0;">
-                                    <input type="checkbox" class="repo-up-add-mod" data-pid="${escAttr(pid)}" data-mid="${escAttr(m.id)}" checked>
-                                    <span>${escHtml(m.name)} <span style="color:var(--text-muted);">v${escHtml(m.version)}</span></span>
-                                </label>`).join('') || `<div style="font-size:11px;color:var(--text-muted);">${t('repo.update.noMods') || 'No mods in this profile'}</div>`}`;
+                                <div style="padding:1px 0;">
+                                    <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-secondary);cursor:pointer;">
+                                        <input type="checkbox" class="repo-up-add-mod" data-pid="${escAttr(pid)}" data-mid="${escAttr(m.id)}" checked>
+                                        <span>${escHtml(m.name)} <span style="color:var(--text-muted);">v${escHtml(m.version)}</span></span>
+                                    </label>
+                                    <input type="text" class="repo-up-mod-changelog" data-mid="${escAttr(m.id)}"
+                                        placeholder="${escAttr(t('repo.update.changelogPlaceholder') || 'Changelog for this version (optional)')}"
+                                        style="width:100%;margin:3px 0 2px 22px;max-width:calc(100% - 22px);font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid var(--bmm-s08,rgba(255,255,255,0.08));background:var(--bmm-s03,rgba(255,255,255,0.03));color:var(--text-secondary);" />
+                                    <div style="display:flex;align-items:center;gap:6px;margin:0 0 4px 22px;font-size:9px;color:var(--text-muted);font-family:var(--font-mono);">
+                                        <span>repo_mod_id:</span>
+                                        <span style="color:var(--text-secondary);user-select:all;">${escHtml(m.id)}</span>
+                                        <button type="button" class="repo-up-copy-id" data-mid="${escAttr(m.id)}" title="${escAttr(t('common.copy') || 'Copy')}" style="border:none;background:rgba(255,255,255,0.06);color:var(--text-secondary);border-radius:3px;padding:1px 5px;cursor:pointer;font-size:9px;">${t('common.copy') || 'Copy'}</button>
+                                    </div>
+                                </div>`).join('') || `<div style="font-size:11px;color:var(--text-muted);">${t('repo.update.noMods') || 'No mods in this profile'}</div>`}`;
                             box.dataset.loaded = '1';
                             // Selecting any mod auto-checks the profile
                             const profCb = addEl.querySelector(`.repo-up-add-profile[data-pid="${pid}"]`);
                             box.querySelectorAll('.repo-up-add-mod').forEach(cb => cb.addEventListener('change', () => { if (profCb)
                                 profCb.checked = true; }));
+                            box.querySelectorAll('.repo-up-copy-id').forEach(b => b.addEventListener('click', (e) => {
+                                e.preventDefault();
+                                navigator.clipboard?.writeText(b.dataset.mid || '').then(() => {
+                                    toast(t('repo.update.idCopied') || 'repo_mod_id copied', 'success');
+                                }).catch(() => { });
+                            }));
                         }
                         catch (e) {
                             box.innerHTML = `<div style="font-size:11px;color:var(--danger);">${escHtml(String(e))}</div>`;
@@ -1460,6 +1500,26 @@ export function initRepo() {
                 toast(t('repo.update.noChanges') || 'No changes selected', 'warning');
                 return;
             }
+            // Per-mod author changelogs (only for mods actually being added/updated)
+            const addedModIds = new Set();
+            addProfiles.forEach(p => {
+                const cbs = addEl.querySelectorAll(`.repo-up-add-mod[data-pid="${p.profile_id}"]`);
+                if (!cbs.length || p.mod_ids === null) {
+                    // whole profile → include every expanded mod row + leave room for non-expanded
+                    cbs.forEach(cb => { if (cb.checked)
+                        addedModIds.add(cb.dataset.mid); });
+                }
+                else {
+                    p.mod_ids.forEach(id => addedModIds.add(id));
+                }
+            });
+            const modChangelogs = {};
+            addEl.querySelectorAll('.repo-up-mod-changelog').forEach(inp => {
+                const mid = inp.dataset.mid;
+                const val = inp.value.trim();
+                if (val && addedModIds.has(mid))
+                    modChangelogs[mid] = val;
+            });
             const authorName = localStorage.getItem('bmm_last_author') || '';
             _ru.running = true;
             _ru.done = false;
@@ -1472,7 +1532,7 @@ export function initRepo() {
                 const res = await invoke('update_server_repo', {
                     repoDir,
                     authorName: authorName || null,
-                    ops: { remove_mod_ids: removeModIds, remove_profile_ids: removeProfileIds, add_profiles: addProfiles }
+                    ops: { remove_mod_ids: removeModIds, remove_profile_ids: removeProfileIds, add_profiles: addProfiles, mod_changelogs: modChangelogs }
                 });
                 _ru.running = false;
                 _ru.done = true;
