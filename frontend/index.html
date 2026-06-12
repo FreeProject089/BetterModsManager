@@ -833,12 +833,12 @@
                                             <line x1="3" y1="18" x2="21" y2="18" />
                                         </svg>
                                     </button>
-                                    <button class="filter-btn active" data-filter="all"
-                                        data-i18n="lib.filterAll">Tous</button>
-                                    <button class="filter-btn" data-filter="enabled"
-                                        data-i18n="lib.filterEnabled">Actifs</button>
-                                    <button class="filter-btn" data-filter="disabled"
-                                        data-i18n="lib.filterDisabled">Inactifs</button>
+                                    <select id="mod-status-filter" class="profile-select"
+                                        style="flex:0 1 120px;min-width:96px;">
+                                        <option value="all" data-i18n="lib.filterAll">All</option>
+                                        <option value="enabled" data-i18n="lib.filterEnabled">Enabled</option>
+                                        <option value="disabled" data-i18n="lib.filterDisabled">Disabled</option>
+                                    </select>
 
                                     <select id="mod-tag-filter" class="profile-select"
                                         style="flex:0 1 130px;min-width:96px;margin-left:6px;">

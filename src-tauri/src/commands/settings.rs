@@ -382,9 +382,18 @@ pub fn find_i18n_usages(app_handle: tauri::AppHandle, key: String) -> Result<Vec
         let path = entry.path();
         if !path.is_file() { continue; }
         let p_str = path.to_string_lossy().replace('\\', "/");
-        if p_str.contains("/Lang/") || p_str.contains("/node_modules/") || p_str.ends_with(".map") { continue; }
+        // Skip the compiled /js/ mirror (duplicates every src/*.ts hit), Lang/,
+        // node_modules, assets and source maps — so "Used in" is fast and shows
+        // each usage once (the real .ts source), not twice.
+        if p_str.contains("/Lang/") || p_str.contains("/node_modules/")
+            || p_str.contains("/js/") || p_str.contains("/assets/")
+            || p_str.ends_with(".map") { continue; }
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        if ext != "js" && ext != "html" && ext != "ts" { continue; }
+        // Source-first: .ts + .html. Only fall back to .js when no src/ exists
+        // (e.g. a production build that bundled js but not ts).
+        let has_src = frontend_dir.join("src").is_dir();
+        if has_src { if ext != "ts" && ext != "html" { continue; } }
+        else if ext != "js" && ext != "html" { continue; }
         // Prefer .ts source over compiled .js when both exist? Keep both but de-dup later by content.
         let content = match std::fs::read_to_string(&path) { Ok(c) => c, Err(_) => continue };
         if !content.contains(&key_q1) && !content.contains(&key_q2) { continue; }

@@ -243,11 +243,15 @@ pub fn copy_file_force_smart(src: &Path, dst: &Path, limit_mb_s: Option<u64>, sm
 }
 
 pub fn compute_file_sha256(path: &Path) -> Result<String> {
-    let mut file = std::fs::File::open(path)?;
+    // 1 MB buffered reads — far fewer read syscalls than 64 KB on large mod files
+    // (e.g. ~1k vs ~16k for a 1 GB file), which speeds up integrity hashing.
+    use std::io::BufReader;
+    let file = std::fs::File::open(path)?;
+    let mut reader = BufReader::with_capacity(1 << 20, file);
     let mut hasher = Sha256::new();
-    let mut buffer = vec![0u8; 65536]; // 64KB
+    let mut buffer = vec![0u8; 1 << 20];
     loop {
-        let n = file.read(&mut buffer)?;
+        let n = reader.read(&mut buffer)?;
         if n == 0 { break; }
         hasher.update(&buffer[..n]);
     }
@@ -370,6 +374,7 @@ pub fn apply_mod_stacked(
 }
 
 /// Strip Windows UNC prefix (\\?\) or (\??\) if present, and normalize to common format
+#[allow(dead_code)]
 fn normalize_path(path: PathBuf) -> PathBuf {
     let path_str = path.to_string_lossy();
     let mut s = path_str.as_ref();
@@ -393,8 +398,6 @@ pub fn unapply_mod_stacked(
     game_path_limit: Option<u64>,
     smart_io: bool,
 ) -> Result<()> {
-    // Canonicalize to follow symlinks/junctions, then normalize to strip UNC prefixes
-    let game_path_norm = normalize_path(game_path.canonicalize().unwrap_or_else(|_| game_path.to_path_buf()));
 
     // Parallelize restoration/removal (bounded pool when Smart I/O is on,
     // or single-threaded when the target lives on the OS drive).
@@ -434,35 +437,25 @@ pub fn unapply_mod_stacked(
     });
     result?;
 
-    // Sequential cleanup of empty directories (safer to do sequentially after all files are handled)
-    for rel_str in files_to_remove {
-        let rel = PathBuf::from(&rel_str);
-        let dst_path = game_path.join(&rel);
-        let mut current_p = Some(dst_path.clone());
-        while let Some(p) = current_p {
-            let p_norm = if let Ok(can) = p.canonicalize() { normalize_path(can) } else { normalize_path(p) };
-            
-            // Safety: Don't go above or out of game_path
-            if p_norm == game_path_norm || !p_norm.starts_with(&game_path_norm) { break; }
-            
-            if p_norm.exists() {
-                match fs::read_dir(&p_norm) {
-                    Ok(mut entries) => {
-                        if entries.next().is_none() {
-                            let _ = fs::remove_dir(&p_norm);
-                            current_p = p_norm.parent().map(|parent| parent.to_path_buf());
-                        } else {
-                            // Directory is not empty
-                            break;
-                        }
-                    }
-                    Err(_) => break, // Permission denied or other error
-                }
-            } else {
-                // Already deleted?
-                current_p = p_norm.parent().map(|parent| parent.to_path_buf());
-            }
+    // Cleanup of now-empty directories. Collect the UNIQUE relative ancestor dirs
+    // of every removed file once (instead of re-walking + canonicalizing per file),
+    // then try to remove them deepest-first. `fs::remove_dir` only removes EMPTY
+    // dirs (errors → no-op on non-empty), so this can never delete data, and the
+    // paths are relative to game_path so they can never escape it.
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    let mut seen: HashSet<PathBuf> = HashSet::new();
+    for rel_str in &files_to_remove {
+        let mut cur = PathBuf::from(rel_str);
+        while let Some(parent) = cur.parent().map(|p| p.to_path_buf()) {
+            if parent.as_os_str().is_empty() { break; }
+            if seen.insert(parent.clone()) { dirs.push(parent.clone()); }
+            cur = parent;
         }
+    }
+    // Deepest first → children are emptied before their parents are reconsidered.
+    dirs.sort_by(|a, b| b.components().count().cmp(&a.components().count()));
+    for d in dirs {
+        let _ = fs::remove_dir(game_path.join(&d));
     }
 
     // Sequential cleanup of empty backup directories

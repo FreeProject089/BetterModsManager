@@ -13610,6 +13610,29 @@ body.i18n-picking, body.i18n-picking * { cursor: crosshair !important; }
     content: '⠿'; position: absolute; right: 56px; top: 50%; transform: translateY(-50%);
     color: var(--text-muted); font-size: 16px; opacity: 0.5; pointer-events: none;
 }
+/* Overlay panel polish + accent edge */
+.i18n-overlay-active .modal {
+    border: 1px solid var(--bmm-s10) !important;
+    border-top: 2.5px solid var(--bmm-accent) !important;
+    border-radius: 16px !important;
+}
+
+/* Custom 8-direction resize handles (overlay mode) */
+.i18n-rsz { position: absolute; z-index: 40; }
+.i18n-rsz-n  { top: 0; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
+.i18n-rsz-s  { bottom: 0; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
+.i18n-rsz-e  { right: 0; top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+.i18n-rsz-w  { left: 0; top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+.i18n-rsz-ne { top: 0; right: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+.i18n-rsz-nw { top: 0; left: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+.i18n-rsz-se { bottom: 0; right: 0; width: 16px; height: 16px; cursor: nwse-resize; }
+.i18n-rsz-sw { bottom: 0; left: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+/* visible grip on the SE corner */
+.i18n-rsz-se::after {
+    content: ''; position: absolute; right: 3px; bottom: 3px; width: 7px; height: 7px;
+    border-right: 2px solid var(--bmm-s20); border-bottom: 2px solid var(--bmm-s20);
+}
+.i18n-rsz:hover { background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.18); }
 
 /* New language popover */
 .i18n-newlang-pop {

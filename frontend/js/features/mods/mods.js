@@ -146,6 +146,19 @@ export async function initMods() {
         }, { passive: true });
     }
     // Filter buttons
+    // Status filter is now a dropdown (#mod-status-filter), consistent with the
+    // tag/sort selects. (Legacy .filter-btn pills handler kept harmless in case any remain.)
+    const statusFilterEl = document.getElementById('mod-status-filter');
+    statusFilterEl?.addEventListener('change', async () => {
+        S.currentFilter = statusFilterEl.value || 'all';
+        renderModList(true);
+        try {
+            const settings = await invoke('get_settings');
+            settings.current_filter = S.currentFilter;
+            await invoke('update_settings', { settings });
+        }
+        catch (e) { }
+    });
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -291,6 +304,9 @@ export async function initMods() {
             S.currentFilter = settings.current_filter || 'all';
             S.currentSort = settings.current_sort_by || 'name_asc';
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === S.currentFilter));
+            const statusSel = document.getElementById('mod-status-filter');
+            if (statusSel)
+                statusSel.value = S.currentFilter;
             const sortSelect = document.getElementById('mod-sort');
             if (sortSelect)
                 sortSelect.value = S.currentSort;

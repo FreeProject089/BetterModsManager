@@ -60,6 +60,12 @@ export function initI18nSandbox(): void {
     modal.querySelectorAll('.i18n-sb-tab').forEach(tab =>
         tab.addEventListener('click', () => switchTab((tab as HTMLElement).dataset.i18nTab || 'keys')));
 
+    // Delegated key-row click (one listener, not one-per-row on every render).
+    document.getElementById('i18n-key-list')?.addEventListener('click', (e) => {
+        const row = (e.target as HTMLElement).closest('.i18n-key-row') as HTMLElement | null;
+        if (row?.dataset.key) selectKey(row.dataset.key);
+    });
+
     // Tools
     document.getElementById('i18n-pick-screen')?.addEventListener('click', () => togglePickMode());
     document.getElementById('i18n-highlight-hc')?.addEventListener('click', () => toggleHighlight());
@@ -204,8 +210,8 @@ function renderList(): void {
     if (statsEl) statsEl.innerHTML =
         `<b>${_allKeys.length}</b> ${t('i18n.keys') || 'keys'} · ${shown} ${t('i18n.shown') || 'shown'} · <span style="color:${missing ? 'var(--danger)' : 'var(--text-muted)'}">${missing} ${t('i18n.missingWord') || 'missing'}</span> · ${_baseLang.toUpperCase()}`;
 
-    listEl.querySelectorAll('.i18n-key-row').forEach(row =>
-        row.addEventListener('click', () => selectKey((row as HTMLElement).dataset.key!)));
+    // Row clicks use a single delegated listener (attached once in init), so we
+    // don't bind 1500 listeners on every render — that was the list's main lag.
 }
 
 function selectKey(key: string): void {
@@ -563,6 +569,11 @@ function toggleOverlayMode(modal: HTMLElement, force?: boolean): void {
         document.body.style.overflow = '';
         panel.style.pointerEvents = 'auto';
         panel.style.position = 'fixed';
+        // Kill the .glass backdrop-blur while floating — re-blurring the whole app
+        // behind the panel on every drag frame is the main source of drag lag.
+        panel.style.backdropFilter = 'none';
+        (panel.style as any).webkitBackdropFilter = 'none';
+        panel.style.willChange = 'left, top';
         // The modal is normally centered via transform/margin/animation — neutralise
         // those so fixed left/top place it exactly (otherwise it jumps/clips on 1st open).
         panel.style.transform = 'none';
@@ -571,11 +582,12 @@ function toggleOverlayMode(modal: HTMLElement, force?: boolean): void {
         panel.style.margin = '0';
         panel.style.maxWidth = 'none';
         panel.style.maxHeight = 'none';
-        panel.style.resize = 'both';
+        panel.style.resize = 'none';   // use our custom 8-direction handles instead
         panel.style.overflow = 'hidden';
         panel.style.minWidth = MIN_W + 'px';
         panel.style.minHeight = MIN_H + 'px';
-        panel.style.boxShadow = '0 20px 60px rgba(0,0,0,.6)';
+        panel.style.boxShadow = '0 24px 70px -10px rgba(0,0,0,.7), 0 8px 24px rgba(0,0,0,.4)';
+        addResizeHandles(panel, MIN_W, MIN_H);
         // restore saved geometry, clamped to min sizes and inside the viewport
         let geom: any = {};
         try { geom = JSON.parse(localStorage.getItem(OVL_KEY) || '{}'); } catch {}
@@ -591,6 +603,7 @@ function toggleOverlayMode(modal: HTMLElement, force?: boolean): void {
         observeResize(panel);
     } else {
         if (_ro) { _ro.disconnect(); _ro = null; }   // stop before clearing styles (avoid saving reset size)
+        removeResizeHandles(panel);
         modal.classList.remove('i18n-overlay-active');
         modal.style.background = '';
         modal.style.pointerEvents = '';
@@ -608,6 +621,46 @@ function observeResize(panel: HTMLElement): void {
     if (_ro) return;
     _ro = new ResizeObserver(() => saveGeom(panel));
     _ro.observe(panel);
+}
+
+/** Custom 8-direction resize handles (CSS `resize:both` only gives the SE corner).
+ *  Each handle drags one or two edges; the panel stays clamped to the viewport. */
+function addResizeHandles(panel: HTMLElement, minW: number, minH: number): void {
+    removeResizeHandles(panel);
+    const dirs = ['n','s','e','w','ne','nw','se','sw'];
+    for (const dir of dirs) {
+        const h = document.createElement('div');
+        h.className = 'i18n-rsz i18n-rsz-' + dir;
+        h.dataset.dir = dir;
+        h.addEventListener('mousedown', (md: MouseEvent) => {
+            md.preventDefault(); md.stopPropagation();
+            const r = panel.getBoundingClientRect();
+            const startX = md.clientX, startY = md.clientY;
+            const x0 = r.left, y0 = r.top, w0 = r.width, h0 = r.height;
+            const move = (mm: MouseEvent) => {
+                const dx = mm.clientX - startX, dy = mm.clientY - startY;
+                let nx = x0, ny = y0, nw = w0, nh = h0;
+                if (dir.includes('e')) nw = Math.max(minW, w0 + dx);
+                if (dir.includes('s')) nh = Math.max(minH, h0 + dy);
+                if (dir.includes('w')) { nw = Math.max(minW, w0 - dx); nx = x0 + (w0 - nw); }
+                if (dir.includes('n')) { nh = Math.max(minH, h0 - dy); ny = y0 + (h0 - nh); }
+                // clamp inside the viewport
+                nx = Math.max(0, Math.min(nx, innerWidth - 80));
+                ny = Math.max(0, Math.min(ny, innerHeight - 40));
+                nw = Math.min(nw, innerWidth - nx);
+                nh = Math.min(nh, innerHeight - ny);
+                panel.style.left = nx + 'px'; panel.style.top = ny + 'px';
+                panel.style.width = nw + 'px'; panel.style.height = nh + 'px';
+            };
+            const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); saveGeom(panel); };
+            document.addEventListener('mousemove', move);
+            document.addEventListener('mouseup', up);
+        });
+        panel.appendChild(h);
+    }
+}
+function removeResizeHandles(panel: HTMLElement): void {
+    panel.querySelectorAll('.i18n-rsz').forEach(h => h.remove());
 }
 function saveGeom(panel: HTMLElement): void {
     const r = panel.getBoundingClientRect();

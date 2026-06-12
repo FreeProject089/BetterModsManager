@@ -273,9 +273,9 @@ function _renderModpackList(container) {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2.5" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input type="text" id="modpack-search" placeholder="${t('common.search') || 'Rechercher...'}" style="flex:1; background:none; border:none; outline:none; font-size:13px; color:var(--text-primary);">
             </div>
-            <button id="modpack-create-btn" class="btn btn-primary" style="height:38px; padding:0 20px; font-size:12px; font-weight:700; border-radius:10px;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                ${t('modpack.create')}
+            <button id="modpack-create-btn" class="btn btn-primary" style="height:38px; padding:0 18px; font-size:12px; font-weight:700; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:8px; white-space:nowrap; flex-shrink:0;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>${t('modpack.create')}</span>
             </button>
         </div>
     `;
@@ -415,11 +415,11 @@ async function _openEditor(container, pack) {
             </div>
             <h2 style="font-size:20px; font-weight:800; margin:0; color:var(--text-primary);">${pack ? escHtml(pack.name) : t('modpack.newPack')}</h2>
         </div>
-        <div style="display:flex; gap:10px;">
-            <button class="btn btn-ghost" id="editor-cancel" style="border:1px solid var(--bmm-s05);">${t('common.cancel')}</button>
-            <button class="btn btn-primary" id="editor-save" style="background:linear-gradient(135deg, var(--accent) 0%, #0081ff 100%); border:none; box-shadow:0 4px 15px rgba(0,194,255,0.25); min-width:120px;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                ${t('modpack.save')}
+        <div style="display:flex; gap:8px; align-items:center; background:var(--bmm-s02); border:1px solid var(--bmm-s06); border-radius:12px; padding:6px 8px;">
+            <button class="btn btn-ghost" id="editor-cancel" style="border:1px solid var(--bmm-s05); display:inline-flex; align-items:center; justify-content:center; height:38px; padding:0 16px;">${t('common.cancel')}</button>
+            <button class="btn btn-primary" id="editor-save" style="display:inline-flex; align-items:center; justify-content:center; gap:8px; min-width:120px; height:38px; padding:0 18px; white-space:nowrap;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                <span>${t('modpack.save')}</span>
             </button>
         </div>
     `;
