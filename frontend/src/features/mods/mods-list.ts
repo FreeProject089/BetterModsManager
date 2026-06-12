@@ -454,6 +454,18 @@ export function createModCard(mod) {
     }
   });
 
+  card.querySelector('.btn-copy-repo-mod-id')?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    window.closeGlobalDropdown(true);
+    const rid = (e.currentTarget as HTMLElement).dataset.repoModId || mod.repo_mod_id || mod.id;
+    try {
+      await navigator.clipboard.writeText(rid);
+      toast(t('repo.update.idCopied') || 'repo_mod_id copied', 'success', 2000);
+    } catch (err) {
+      toast(t('common.error') + ' : ' + err, 'error');
+    }
+  });
+
   card.querySelector('.btn-edit-mod').addEventListener('click', (e) => {
     e.stopPropagation();
     window.closeGlobalDropdown(true);

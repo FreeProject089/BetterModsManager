@@ -360,18 +360,22 @@ export async function refreshMods(autoScan = false, immediate = false) {
             // The last-scan timestamp is persisted so the interval limits scan
             // frequency ACROSS app launches/focus, not just within one session
             // (otherwise it reset every start and felt like it had no effect).
-            let minGapMs = 0;
+            // 0 (or unset) means "use the default gap" rather than scanning every time.
+            const DEFAULT_SCAN_SEC = 30;
+            let secs = DEFAULT_SCAN_SEC;
             try {
-                minGapMs = Math.max(0, parseInt(localStorage.getItem('bmm_scan_interval_sec') || '0', 10) || 0) * 1000;
+                const v = Math.max(0, parseInt(localStorage.getItem('bmm_scan_interval_sec') || '0', 10) || 0);
+                secs = v === 0 ? DEFAULT_SCAN_SEC : v;
             }
             catch { }
+            const minGapMs = secs * 1000;
             let last = _lastAutoScan;
             try {
                 last = parseInt(localStorage.getItem('bmm_last_auto_scan') || '0', 10) || _lastAutoScan;
             }
             catch { }
             const now = Date.now();
-            if (minGapMs === 0 || now - last >= minGapMs) {
+            if (now - last >= minGapMs) {
                 const activeId = S.cachedActiveProfileId || await invoke('get_active_profile_id').catch(() => null);
                 if (activeId) {
                     await invoke('scan_mods_folder').catch(() => { });

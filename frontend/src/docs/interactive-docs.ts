@@ -40,6 +40,7 @@ import { dockerDeployment } from './diagrams/docker-deployment.js';
 import { modActivation } from './diagrams/mod-activation.js';
 import { themeSystem } from './diagrams/theme-system.js';
 import { appCatalog } from './diagrams/app-catalog.js';
+import { modUpdates } from './diagrams/mod-updates.js';
 
 
 // Diagram Registry
@@ -84,6 +85,7 @@ export const diagrams = {
     'mod-activation': modActivation,
     'theme-system': themeSystem,
     'app-catalog': appCatalog,
+    'mod-updates': modUpdates,
 };
 
 
@@ -421,7 +423,7 @@ function showTooltipImpl(key: string, iconClass: string, isLiteral: boolean) {
     if (finalIcon === 'heart' || finalIcon === 'credits') finalIcon = 'icon-heart';
     if (finalIcon === 'settings') finalIcon = 'icon-settings';
     if (finalIcon === 'layers' || finalIcon === 'mapper') finalIcon = 'icon-layers';
-    if (finalIcon === 'pin' || finalIcon === 'sticky') finalIcon = 'icon-toggle';
+    if (finalIcon === 'pin' || finalIcon === 'sticky' || finalIcon === 'icon-pin') finalIcon = 'icon-pin';
 
     // Text content logic
     let exp = key;

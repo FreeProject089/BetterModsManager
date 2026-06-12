@@ -260,6 +260,24 @@ export async function initApiActivity(): Promise<void> {
                 // pre-fills the repo dir and profile list, then lets the user confirm.
                 driveRepo('update', params);
                 break;
+            case 'mod/check-updates':
+                // Run a real update check (uses global repos from settings) and
+                // surface the results modal.
+                try { (await import('../features/repo/mod-updates.js')).checkModUpdates(false); }
+                catch (e) { console.warn('[api-exec] mod/check-updates', e); }
+                break;
+            case 'mod/update':
+                // Apply an update: jump to the connect/sync flow for the given repo,
+                // or just run a check when no repo URL was provided.
+                if (params.repoUrl) {
+                    document.dispatchEvent(new CustomEvent('bmm:repo-focus', {
+                        detail: { section: 'connect', prefill: { url: params.repoUrl } }
+                    }));
+                } else {
+                    try { (await import('../features/repo/mod-updates.js')).checkModUpdates(false); }
+                    catch (e) { console.warn('[api-exec] mod/update', e); }
+                }
+                break;
             case 'repo/host-stop':
                 gotoRepoPage();
                 setTimeout(async () => {

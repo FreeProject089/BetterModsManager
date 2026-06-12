@@ -1674,8 +1674,16 @@ export async function initSettings() {
     // ── Library toolbar density (body class drives the CSS modes; auto = responsive) ──
     const applyToolbarDensity = (mode) => {
         const m = ['full', 'compact', 'stacked', 'stacked-labels'].includes(mode) ? mode : 'auto';
-        document.body.classList.remove('bmm-toolbar-auto', 'bmm-toolbar-full', 'bmm-toolbar-compact', 'bmm-toolbar-stacked');
+        // Remove EVERY mode class (the old list forgot `stacked-labels`, which left
+        // it stuck when switching back to auto).
+        document.body.classList.remove('bmm-toolbar-auto', 'bmm-toolbar-full', 'bmm-toolbar-compact', 'bmm-toolbar-stacked', 'bmm-toolbar-stacked-labels');
         document.body.classList.add('bmm-toolbar-' + m);
+        // Force any width-based layout (and the responsive `auto` rules) to
+        // re-evaluate immediately, so the change applies without an app refresh.
+        try {
+            window.dispatchEvent(new Event('resize'));
+        }
+        catch { }
     };
     {
         let mode = 'auto';
@@ -1697,22 +1705,47 @@ export async function initSettings() {
             });
         }
     }
-    // ── Mod auto-scan interval (localStorage, throttles focus-triggered scans) ──
-    const scanIntervalEl = document.getElementById('scan-interval-sec');
-    if (scanIntervalEl) {
+    // ── Mod auto-scan interval (sec/min unit; stored as seconds in
+    //    bmm_scan_interval_sec. 0 = use the default gap, handled in mods.ts) ──
+    const scanValueEl = document.getElementById('scan-interval-value');
+    const scanUnitEl = document.getElementById('scan-interval-unit');
+    if (scanValueEl && scanUnitEl) {
+        // Restore: prefer the user's chosen display unit, else show seconds.
+        let storedSec = 0;
         try {
-            scanIntervalEl.value = String(parseInt(localStorage.getItem('bmm_scan_interval_sec') || '0', 10) || 0);
+            storedSec = Math.max(0, parseInt(localStorage.getItem('bmm_scan_interval_sec') || '0', 10) || 0);
         }
-        catch {
-            scanIntervalEl.value = '0';
+        catch { }
+        let unit = 'sec';
+        try {
+            unit = localStorage.getItem('bmm_scan_interval_unit') || 'sec';
         }
-        scanIntervalEl.addEventListener('change', () => {
-            const v = Math.max(0, Math.min(3600, parseInt(scanIntervalEl.value || '0', 10) || 0));
-            scanIntervalEl.value = String(v);
+        catch { }
+        scanUnitEl.value = (unit === 'min') ? 'min' : 'sec';
+        scanValueEl.value = String(scanUnitEl.value === 'min' ? Math.round(storedSec / 60) : storedSec);
+        const persist = () => {
+            const unitNow = scanUnitEl.value === 'min' ? 'min' : 'sec';
+            let v = Math.max(0, parseInt(scanValueEl.value || '0', 10) || 0);
+            const maxForUnit = unitNow === 'min' ? 60 : 3600;
+            v = Math.min(v, maxForUnit);
+            scanValueEl.value = String(v);
+            const secs = unitNow === 'min' ? v * 60 : v;
             try {
-                localStorage.setItem('bmm_scan_interval_sec', String(v));
+                localStorage.setItem('bmm_scan_interval_sec', String(secs));
+                localStorage.setItem('bmm_scan_interval_unit', unitNow);
             }
             catch { }
+        };
+        scanValueEl.addEventListener('change', persist);
+        scanUnitEl.addEventListener('change', () => {
+            // Re-display the same stored seconds in the newly selected unit.
+            let s = 0;
+            try {
+                s = Math.max(0, parseInt(localStorage.getItem('bmm_scan_interval_sec') || '0', 10) || 0);
+            }
+            catch { }
+            scanValueEl.value = String(scanUnitEl.value === 'min' ? Math.round(s / 60) : s);
+            persist();
         });
     }
     // ── Mod update check interval (minutes) + global update repos ──

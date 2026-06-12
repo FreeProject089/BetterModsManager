@@ -166,6 +166,17 @@ export function getModCardHTML(mod, ctx) {
                         <span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--accent);opacity:0.6;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${mod.content_id ? escHtml(mod.content_id.slice(0, 8)) + '…' : 'N/A'}</span>
                     </div>
                     <div class="dropdown-divider"></div>
+                    <div class="dropdown-item btn-copy-repo-mod-id" data-repo-mod-id="${escAttr(mod.repo_mod_id || mod.id)}"
+                         onmouseenter="window.showTaskyHelp('mod.copyRepoModIdTip', 'icon-copy')"
+                         onmouseleave="window.hideTaskyHelp()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        <span data-i18n="mod.copyRepoModId">${t('mod.copyRepoModId') || 'Copy repo_mod_id'}</span>
+                        <span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--cyan);opacity:0.6;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((mod.repo_mod_id || mod.id).slice(0, 8))}…</span>
+                    </div>
+                    <div class="dropdown-divider"></div>
                     <div class="dropdown-item" onclick="window.openModUpdateConfig && window.openModUpdateConfig('${mod.id}'); event.stopPropagation();"
                          onmouseenter="window.showTaskyHelp('mod.updateConfigTip', 'package')"
                          onmouseleave="window.hideTaskyHelp()">

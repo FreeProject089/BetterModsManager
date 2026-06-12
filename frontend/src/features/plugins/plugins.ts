@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase } from '../../core/api.js';
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon } from '../../ui/app.js';
-import { t } from '../../core/i18n.js';
+import { t, getLang } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { getLinks } from '../../core/links-config.js';
@@ -4101,6 +4101,8 @@ function buildEndpointRow(ep: EndpointDef): string {
         'POST /api/repo/sync':         'bmm://repo/sync?url=<repo_url>&profile=<repo_profile_id>',
         'POST /api/repo/gen':          'bmm://repo/gen',
         'POST /api/repo/update':       'bmm://repo/update?dir=<repoDir>',
+        'POST /api/mod/check-updates': 'bmm://mod/check-updates',
+        'POST /api/mod/update':        'bmm://mod/update?url=<repo_url>',
         'POST /api/repo/host':         'bmm://repo/host?dir=<serveDir>&port=<port>',
         'POST /api/apps/install':      'bmm://app/install?id=<id>&url=<url>&type=<fileType>&title=<title>',
         'POST /api/apps/launch':       'bmm://app/launch?id=<id>&exe=<exePath>',
@@ -4665,6 +4667,43 @@ function getEndpointDefs(): EndpointDef[] {
             ],
             responseStatuses: [
                 { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "repo/update" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/mod/config', auth: true,
+            desc: t('plugins.ep.modConfig') || 'Configure a mod\'s update sources',
+            about: 'Links an installed mod to the repo(s) that can update it. Set its stable <code>repoModId</code>, a primary <code>updateUrl</code> (for site mods), and/or a list of additional <code>updateSources</code>. These are what <code>POST /api/mod/check-updates</code> and the "Check for mod updates" button compare against.',
+            fields: [
+                { name: 'modId',         type: 'string', required: true,  desc: 'Local mod id to configure.' },
+                { name: 'repoModId',     type: 'string', required: false, desc: 'This mod\'s stable id inside its repo manifest. Empty string clears it.' },
+                { name: 'updateUrl',     type: 'string', required: false, desc: 'Primary update repo URL (for mods added from a site). Empty clears it.' },
+                { name: 'updateSources', type: 'array',  required: false, desc: 'Additional repos: [{ "repoUrl": "https://…/repo.json", "repoModId": "…" }]. repoModId is optional (falls back to repoModId above).' },
+            ],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "mod_id": "…" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/mod/check-updates', auth: true,
+            desc: t('plugins.ep.modCheckUpdates') || 'Check installed mods for updates',
+            about: 'Runs a real update check: every installed mod linked to a repo (via sync origin, configured update sources, or the global update repos in Settings) is compared against that repo\'s current version. Driven through the BMM UI, which opens the results modal. Unreachable repos are reported as errors.',
+            fields: [],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "mod/check-updates" }' },
+                e401,
+            ],
+        },
+        {
+            method: 'POST', path: '/api/mod/update', auth: true,
+            desc: t('plugins.ep.modUpdate') || 'Apply a mod update',
+            about: 'Applies an update by jumping to the sync flow pre-filled with the origin repo, where the delta-sync downloads only the changed files. Pass <code>repoUrl</code> to target a specific repo; omit it to just open the update check.',
+            fields: [
+                { name: 'repoUrl', type: 'string', required: false, desc: 'Origin repo URL to re-sync from. Omit to open the update check instead.' },
+            ],
+            responseStatuses: [
+                { code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "mod/update" }' },
                 e401,
             ],
         },
@@ -7820,6 +7859,8 @@ function renderDocs(container: HTMLElement) {
                 <button class="btn btn-sm btn-ghost" id="doc-guide-en">${IC.info} ${t('plugins.guideENBtn')}</button>
                 <button class="btn btn-sm btn-ghost" id="doc-guide-fr">${IC.info} ${t('plugins.guideFRBtn')}</button>
                 <button class="btn btn-sm btn-ghost" id="doc-catalog-guide">${IC.list} ${t('plugins.catalogGuideBtn')}</button>
+                <button class="btn btn-sm btn-ghost" id="doc-modupdate-api">${IC.info} ${t('plugins.modUpdateApiGuideBtn') || 'Mod Update API'}</button>
+                <button class="btn btn-sm btn-ghost" id="doc-modupdate-modding">${IC.info} ${t('plugins.modUpdateModdingGuideBtn') || 'Making your mod updatable'}</button>
             </div>
         </div>`;
 
@@ -7841,7 +7882,14 @@ function renderDocs(container: HTMLElement) {
         invoke('open_file', { path: 'Update\\Guides\\Mod_Identity_Guide_FR.md' }).catch(() => {});
     });
     container.querySelector('#doc-catalog-guide')?.addEventListener('click', () => {
-        invoke('open_file', { path: 'Update\\Guides\\Plugin_Catalog_Guide_EN.md' }).catch(() => {});
+        invoke('open_file', { path: 'Update\\Guides\\Catalogs-and-Repos\\Plugin_Catalog_Guide_EN.md' }).catch(() => {});
+    });
+    const _lng = (getLang && getLang() === 'fr') ? 'FR' : 'EN';
+    container.querySelector('#doc-modupdate-api')?.addEventListener('click', () => {
+        invoke('open_file', { path: `Update\\Guides\\Developer\\Mod_Update_API_Guide_${_lng}.md` }).catch(() => {});
+    });
+    container.querySelector('#doc-modupdate-modding')?.addEventListener('click', () => {
+        invoke('open_file', { path: `Update\\Guides\\Modding\\Mod_Update_Guide_${_lng}.md` }).catch(() => {});
     });
 }
 

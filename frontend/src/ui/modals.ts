@@ -151,13 +151,44 @@ window.showGlobalDropdown = (btn: HTMLElement, menu: HTMLElement): void => {
 
     const rect = btn.getBoundingClientRect();
     clone.style.position = 'fixed';
-    clone.style.top = (rect.bottom - 5) + 'px'; // Moved up to prevent overlap with tooltip
-    clone.style.right = (window.innerWidth - rect.right) + 'px'; // Align to right edge instead of left
-    clone.style.left = 'auto'; // Prevent left/right conflict
     clone.style.pointerEvents = 'auto';
+    clone.style.visibility = 'hidden'; // measure before showing to avoid a flash
+    clone.style.top = '0px';
+    clone.style.left = '0px';
+    clone.style.right = 'auto';
 
-    // Hover-out closing behavior & click outside
+    // Clamp into the viewport so the menu is ALWAYS fully visible (never off-screen),
+    // whatever the row height / compact mode / position in the list.
+    const GAP = 4, MARGIN = 8;
+    requestAnimationFrame(() => {
+        const mw = clone.offsetWidth || 200;
+        const mh = clone.offsetHeight || 100;
+        const vw = window.innerWidth, vh = window.innerHeight;
+
+        // Vertical: prefer below the button; flip above if it would overflow.
+        let top = rect.bottom + GAP;
+        if (top + mh > vh - MARGIN) {
+            const above = rect.top - GAP - mh;
+            top = above >= MARGIN ? above : Math.max(MARGIN, vh - mh - MARGIN);
+        }
+        // Horizontal: align right edge to the button, then clamp both sides.
+        let left = rect.right - mw;
+        if (left + mw > vw - MARGIN) left = vw - MARGIN - mw;
+        if (left < MARGIN) left = MARGIN;
+
+        clone.style.top = top + 'px';
+        clone.style.left = left + 'px';
+        clone.style.right = 'auto';
+        clone.style.visibility = 'visible';
+    });
+
+    // Close behaviour: outside click closes immediately. Hover-out closes after a
+    // grace delay, but ONLY via mouseenter/leave on the button & menu (not a global
+    // mousemove) — this fixes the compact-mode "closes while my mouse is still on
+    // it" bug, where fast movement over re-rendered rows was misread as leaving.
     let hoverTimeout: ReturnType<typeof setTimeout> | undefined;
+    const cancelClose = () => { if (hoverTimeout) { clearTimeout(hoverTimeout); hoverTimeout = undefined; } };
+    const scheduleClose = () => { cancelClose(); hoverTimeout = setTimeout(() => window.closeGlobalDropdown(), 450); };
 
     const outsideClick = (e: MouseEvent) => {
         if (!clone.contains(e.target as Node) && !btn.contains(e.target as Node)) {
@@ -165,28 +196,19 @@ window.showGlobalDropdown = (btn: HTMLElement, menu: HTMLElement): void => {
         }
     };
 
-    const mouseMove = (e: MouseEvent) => {
-        if (!clone.contains(e.target as Node) && !btn.contains(e.target as Node)) {
-            if (!hoverTimeout) {
-                hoverTimeout = setTimeout(() => {
-                    window.closeGlobalDropdown();
-                }, 300); // 300ms delay before closing
-            }
-        } else {
-            if (hoverTimeout) {
-                clearTimeout(hoverTimeout);
-                hoverTimeout = undefined;
-            }
-        }
-    };
-
+    clone.addEventListener('mouseenter', cancelClose);
+    clone.addEventListener('mouseleave', scheduleClose);
+    btn.addEventListener('mouseenter', cancelClose);
+    btn.addEventListener('mouseleave', scheduleClose);
     document.addEventListener('mousedown', outsideClick);
-    document.addEventListener('mousemove', mouseMove);
 
     (window as any).globalDropdownCleanup = () => {
         document.removeEventListener('mousedown', outsideClick);
-        document.removeEventListener('mousemove', mouseMove);
-        if (hoverTimeout) clearTimeout(hoverTimeout);
+        clone.removeEventListener('mouseenter', cancelClose);
+        clone.removeEventListener('mouseleave', scheduleClose);
+        btn.removeEventListener('mouseenter', cancelClose);
+        btn.removeEventListener('mouseleave', scheduleClose);
+        cancelClose();
         (window as any).globalDropdownCleanup = null;
     };
 

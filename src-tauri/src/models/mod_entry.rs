@@ -115,10 +115,11 @@ pub struct ModEntry {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct UpdateSource {
     /// Repo URL that can provide updates for this mod.
+    #[serde(alias = "repoUrl")]
     pub repo_url: String,
     /// This mod's id inside that repo's manifest. `None`/empty → fall back to the
     /// mod's main `repo_mod_id`.
-    #[serde(default)]
+    #[serde(default, alias = "repoModId")]
     pub repo_mod_id: Option<String>,
 }
 

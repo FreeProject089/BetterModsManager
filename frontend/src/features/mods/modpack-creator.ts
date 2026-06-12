@@ -52,6 +52,7 @@ let _profiles = [];
 let _activeProfileId = null;
 let _packMods = []; // ModpackModRef[] being assembled
 let _isAddingMods = false; // Background state for selection modal
+let _addCancelled = false; // Set when the user cancels an in-progress add
 let _currentAddingModName = ''; // Name of the mod currently being processed
 let _currentSelectionModalUpdateFn = null; // Ref to update UI from background
 let _currentSelectionModalOverlay = null; // Ref to current modal overlay for auto-close
@@ -865,7 +866,11 @@ function _openMultiSelectModal(listEl) {
     footer.style.cssText = 'padding:14px 20px; border-top:1px solid var(--bmm-s05); display:flex; align-items:center; justify-content:space-between; gap:12px; background:rgba(0,0,0,0.15); flex-shrink:0;';
     footer.innerHTML = `
         <span style="font-size:11px; color:var(--text-muted);" id="ms-footer-count"></span>
-        <div style="display:flex; gap:10px;">
+        <div style="display:flex; align-items:center; gap:14px;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-muted); cursor:pointer;" title="${t('modpack.autoUpdateSrcTip') || 'For mods linked to a repo, set that repo as a Server Repo fallback link.'}">
+                <input type="checkbox" id="ms-auto-update-src" checked>
+                <span>${t('modpack.autoUpdateSrc') || 'Auto-add update repo as fallback'}</span>
+            </label>
             <button class="btn btn-ghost" id="ms-cancel" style="border:1px solid var(--bmm-s07);">${t('common.cancel')}</button>
             <button class="btn btn-primary" id="ms-confirm" style="background:linear-gradient(135deg, var(--accent) 0%, #0081ff 100%); border:none; box-shadow:0 4px 15px rgba(0,194,255,0.2); min-width:130px; opacity:0.5; transition:opacity 0.2s;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><polyline points="20 6 9 17 4 12"/></svg>
@@ -925,14 +930,25 @@ function _openMultiSelectModal(listEl) {
         setTimeout(() => overlay.remove(), 220);
     };
 
-    footer.querySelector('#ms-cancel').addEventListener('click', close);
-    header.querySelector('#ms-close').addEventListener('click', close);
+    // Cancel: if mods are still being added, abort the in-progress run; otherwise close.
+    const cancelOrAbort = () => {
+        if (_isAddingMods) {
+            _addCancelled = true;
+            toast(t('modpack.addCancelled') || 'Stopping — finishing the current mod…', 'info');
+            return;
+        }
+        close();
+    };
+    footer.querySelector('#ms-cancel').addEventListener('click', cancelOrAbort);
+    header.querySelector('#ms-close').addEventListener('click', cancelOrAbort);
 
     confirmBtn.addEventListener('click', async () => {
         const checked = checkboxes.filter(cb => cb.checked);
         if (checked.length === 0) return;
 
         _isAddingMods = true;
+        _addCancelled = false;
+        const autoUpdateSrc = !!(footer.querySelector('#ms-auto-update-src') as HTMLInputElement)?.checked;
         updateSelCount(); // Show loading state in current modal
 
         // No more prevent-close here as per user request
@@ -945,7 +961,10 @@ function _openMultiSelectModal(listEl) {
         // Actually, we should only add the new ones, or rebuild the whole list.
         // The user wants uniqueness, so we filter out what's already there before pushing.
 
+        let cancelledDuringAdd = false;
         for (const cb of checked) {
+            // Stop early if the user hit Cancel during the run.
+            if (_addCancelled) { cancelledDuringAdd = true; break; }
             // Uniqueness check: avoid adding if already in _packMods
             const exists = _packMods.some(pm => String(pm.mod_id) === String(cb.value));
             if (exists) continue;
@@ -955,13 +974,22 @@ function _openMultiSelectModal(listEl) {
                 _currentAddingModName = targetMod ? targetMod.name : '';
                 if (_currentSelectionModalUpdateFn) _currentSelectionModalUpdateFn();
 
+                // If the mod is linked to a repo, optionally seed that repo as a
+                // Server Repo fallback download link so it stays updatable.
+                let fallbackLink = null, fallbackType = 'direct';
+                if (autoUpdateSrc && targetMod) {
+                    const repo = targetMod.source_repo || targetMod.update_url
+                        || (Array.isArray(targetMod.update_sources) && targetMod.update_sources[0]?.repo_url) || '';
+                    if (repo) { fallbackLink = repo; fallbackType = 'sr'; }
+                }
+
                 const ref = await invoke('build_modpack_mod_ref', {
                     modId: cb.value,
                     profileId: cb.dataset.profId || null,
                     includeDependencies: includeDeps,
                     downloadLink: null,
-                    fallbackLink: null,
-                    fallbackType: 'direct',
+                    fallbackLink,
+                    fallbackType,
                 });
                 _packMods.push(ref);
             } catch (e) {
@@ -970,10 +998,14 @@ function _openMultiSelectModal(listEl) {
             }
         }
 
-        // Also remove mods that were UNCHECKED in the modal
-        const selectedIds = checked.map(cb => String(cb.value));
-        _packMods = _packMods.filter(pm => selectedIds.includes(String(pm.mod_id)));
+        // Remove mods that were UNCHECKED in the modal — but only when the run
+        // completed; on cancel we keep whatever was already added and don't prune.
+        if (!cancelledDuringAdd) {
+            const selectedIds = checked.map(cb => String(cb.value));
+            _packMods = _packMods.filter(pm => selectedIds.includes(String(pm.mod_id)));
+        }
 
+        if (cancelledDuringAdd) toast(t('modpack.addStopped') || 'Adding stopped', 'info');
         if (errors > 0) toast(t('modpack.addModErrors')?.replace('{count}', String(errors)) || `${errors} mods ont échoué.`, 'warning');
         _renderPackModList(listEl);
 

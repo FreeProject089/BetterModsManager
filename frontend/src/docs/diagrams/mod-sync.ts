@@ -12,12 +12,14 @@ graph TD
     end
     subgraph UI_FEEDBACK ["<div class='group-label' data-cluster-id='UI'><i class='icon-user'></i> {{docs.diagram.cluster.UI}}</div>"]
         UPDATE["<div class='node-content'><i class='icon-refresh'></i> {{docs.diagram.sync.node.UPDATE}}</div>"]
+        TRACK["<div class='node-content'><i class='icon-shield'></i> {{docs.diagram.sync.node.TRACK}}</div>"]
     end
     SCAN["<div class='node-content'><i class='icon-search'></i> {{docs.diagram.sync.node.SCAN}}</div>"] -- "<span class='label-info' data-key='list'>{{docs.diagram.label.list}}</span>" --> AUDIT["<div class='node-content'><i class='icon-verify'></i> {{docs.diagram.sync.node.AUDIT}}</div>"]
     AUDIT -- "<span class='label-error' data-key='missing'>{{docs.diagram.label.missing}}</span>" --> APPLY["<div class='node-content'><i class='icon-patch'></i> {{docs.diagram.sync.node.APPLY}}</div>"]
     AUDIT -- "<span class='label-warning' data-key='obsolete'>{{docs.diagram.label.obsolete}}</span>" --> CLEAN["<div class='node-content'><i class='icon-trash'></i> {{docs.diagram.sync.node.CLEAN}}</div>"]
     APPLY -- "<span class='label-success' data-key='done'>{{docs.diagram.label.done}}</span>" --> UPDATE["<div class='node-content'><i class='icon-refresh'></i> {{docs.diagram.sync.node.UPDATE}}</div>"]
     CLEAN -- "<span class='label-success' data-key='done'>{{docs.diagram.label.done}}</span>" --> UPDATE
+    UPDATE -- "<span class='label-info' data-key='origin'>{{docs.diagram.label.origin}}</span>" --> TRACK
 
     %% Edge Styles
     linkStyle 0 stroke:#3b82f6,stroke-width:2px;
@@ -25,6 +27,7 @@ graph TD
     linkStyle 2 stroke:#f59e0b,stroke-width:2px;
     linkStyle 3 stroke:#10b981,stroke-width:2px;
     linkStyle 4 stroke:#10b981,stroke-width:2px;
+    linkStyle 5 stroke:#2ecc71,stroke-width:2px,stroke-dasharray:4 3;
 `,
     explanationPrefix: 'docs.diagram.sync.node.'
 };

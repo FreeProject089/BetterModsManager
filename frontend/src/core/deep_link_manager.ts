@@ -296,6 +296,26 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             return;
         }
 
+        // ── Mod updates: check / apply ────────────────────────────────────
+        if (action === 'mod/check-updates') {
+            const navBtn = document.querySelector('.nav-item[data-view="repo"], [data-view="repo"]') as HTMLElement | null;
+            navBtn?.click();
+            setTimeout(() => { import('../features/repo/mod-updates.js').then(m => m.checkModUpdates(false)).catch(() => {}); }, 400);
+            toast(`Deep Link: ${action}`, 'info');
+            return;
+        }
+        if (action === 'mod/update') {
+            const url = parsedUrl.searchParams.get('url') || '';
+            const navBtn = document.querySelector('.nav-item[data-view="repo"], [data-view="repo"]') as HTMLElement | null;
+            navBtn?.click();
+            setTimeout(() => {
+                if (url) document.dispatchEvent(new CustomEvent('bmm:repo-focus', { detail: { section: 'connect', prefill: { url } } }));
+                else import('../features/repo/mod-updates.js').then(m => m.checkModUpdates(false)).catch(() => {});
+            }, 400);
+            toast(`Deep Link: ${action}`, 'info');
+            return;
+        }
+
         // ── App Catalog: install / launch ─────────────────────────────────
         if (action === 'app/install') {
             const id = parsedUrl.searchParams.get('id');

@@ -138,21 +138,28 @@ function updateBadge(count: number): void {
 
 // ── Updates modal ────────────────────────────────────────────────────────────
 
-// Reuse the app's standard modal chrome (.modal-overlay + .modal) so the shadow,
-// blur, z-index and animation match every other modal, and interaction works.
+// Dedicated overlay with an explicit very-high z-index so it ALWAYS sits above
+// every other layer (tutorial/tasky overlays use z 2,000,000+, which is why the
+// standard .modal-overlay at z 5000 could end up un-clickable). Centered via flex
+// with padding so the card + its shadow always stay inside the BMM window.
+// z just below Tasky (1,000,000, pointer-events:none) so the mascot/frame stay on
+// top of the backdrop like every other modal — but well above all normal content.
+const OVERLAY_CSS = 'position:fixed;inset:0;z-index:999990;display:none;align-items:center;justify-content:center;padding:32px;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);pointer-events:auto;';
+
 function ensureOverlay(id: string): HTMLElement {
     let ov = document.getElementById(id);
-    if (ov) return ov;
+    if (ov) { ov.style.cssText = OVERLAY_CSS; return ov; }
     ov = document.createElement('div');
     ov.id = id;
-    ov.className = 'modal-overlay';
-    ov.addEventListener('click', (e) => { if (e.target === ov) ov!.classList.remove('open'); });
+    ov.style.cssText = OVERLAY_CSS;
+    ov.addEventListener('click', (e) => { if (e.target === ov) (ov as HTMLElement).style.display = 'none'; });
     document.body.appendChild(ov);
     return ov;
 }
 
-function openOverlay(ov: HTMLElement): void { ov.classList.add('open'); }
-function hideOverlay(ov: HTMLElement | null): void { ov?.classList.remove('open'); }
+// Show + move to the end of <body> so it wins the stacking order among peers.
+function openOverlay(ov: HTMLElement): void { document.body.appendChild(ov); ov.style.display = 'flex'; }
+function hideOverlay(ov: HTMLElement | null): void { if (ov) ov.style.display = 'none'; }
 
 export function closeUpdatesModal(): void {
     hideOverlay(document.getElementById('mod-updates-overlay'));
@@ -170,7 +177,8 @@ function openUpdatesModal(updates: any[], errors: any[] = []): void {
 
     const repoBlocks = [...byRepo.entries()].map(([repoUrl, mods]) => {
         const rows = mods.map(m => `
-            <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid var(--bmm-s06,rgba(255,255,255,0.06));">
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid var(--bmm-s06,rgba(255,255,255,0.06));cursor:pointer;">
+                <input type="checkbox" class="mod-update-cb" data-repo-url="${escAttr(repoUrl)}" data-mod-id="${escAttr(m.mod_id)}" checked style="margin-top:3px;flex-shrink:0;">
                 <div style="flex:1;min-width:0;">
                     <div style="font-weight:600;font-size:13px;color:var(--text-primary);">${escHtml(m.name)}</div>
                     <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
@@ -180,9 +188,9 @@ function openUpdatesModal(updates: any[], errors: any[] = []): void {
                     </div>
                     ${m.changelog ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:6px;white-space:pre-wrap;line-height:1.45;background:var(--bmm-s04,rgba(255,255,255,0.04));padding:6px 8px;border-radius:5px;">${escHtml(m.changelog)}</div>` : ''}
                 </div>
-            </div>`).join('');
+            </label>`).join('');
         return `
-            <div class="mod-updates-repo-block" style="background:var(--bmm-s03,rgba(255,255,255,0.03));border:1px solid var(--bmm-s06,rgba(255,255,255,0.06));border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+            <div class="mod-updates-repo-block" data-repo-url="${escAttr(repoUrl)}" style="background:var(--bmm-s03,rgba(255,255,255,0.03));border:1px solid var(--bmm-s06,rgba(255,255,255,0.06));border-radius:10px;padding:12px 14px;margin-bottom:12px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
                     <div style="min-width:0;">
                         <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-muted);">${t('repo.updateFromRepo') || 'From repository'}</div>
@@ -190,7 +198,7 @@ function openUpdatesModal(updates: any[], errors: any[] = []): void {
                     </div>
                     <button class="btn btn-primary btn-sm mod-updates-apply" data-repo-url="${escAttr(repoUrl)}"
                         style="flex-shrink:0;display:flex;align-items:center;gap:6px;padding:0 14px;height:30px;font-size:12px;font-weight:700;">
-                        ${t('repo.updateApply', { count: mods.length }) || `Update ${mods.length} mod(s)`}
+                        <span class="mua-label">${t('repo.updateApply', { count: mods.length }) || `Update ${mods.length} mod(s)`}</span>
                     </button>
                 </div>
                 ${rows}
@@ -208,7 +216,7 @@ function openUpdatesModal(updates: any[], errors: any[] = []): void {
         : '';
 
     ov.innerHTML = `
-        <div class="modal" style="width:min(620px,92vw);max-width:620px;overflow:hidden;">
+        <div class="modal glass" style="width:min(620px,92vw);max-width:620px;overflow:hidden;">
             <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--bmm-s06,rgba(255,255,255,0.06));">
                 <div style="display:flex;align-items:center;gap:10px;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -231,16 +239,43 @@ function openUpdatesModal(updates: any[], errors: any[] = []): void {
         </div>`;
 
     ov.querySelector('#mod-updates-close')?.addEventListener('click', closeUpdatesModal);
+
+    // Per-repo apply button reflects how many mods are checked in that block, and
+    // is disabled when none are selected — so the user chooses exactly what updates.
+    const refreshRepoBtn = (repoUrl: string) => {
+        const block = ov.querySelector(`.mod-updates-repo-block[data-repo-url="${CSS.escape(repoUrl)}"]`);
+        if (!block) return;
+        const n = block.querySelectorAll('.mod-update-cb:checked').length;
+        const btn = block.querySelector('.mod-updates-apply') as HTMLButtonElement | null;
+        const label = block.querySelector('.mua-label');
+        if (label) label.textContent = t('repo.updateApply', { count: n }) || `Update ${n} mod(s)`;
+        if (btn) { btn.disabled = n === 0; btn.style.opacity = n === 0 ? '0.45' : '1'; }
+    };
+    ov.querySelectorAll('.mod-update-cb').forEach(cb => {
+        cb.addEventListener('change', () => refreshRepoBtn((cb as HTMLElement).dataset.repoUrl || ''));
+    });
     ov.querySelectorAll('.mod-updates-apply').forEach(btn => {
-        btn.addEventListener('click', () => applyRepoUpdate((btn as HTMLElement).dataset.repoUrl || ''));
+        btn.addEventListener('click', () => {
+            const repoUrl = (btn as HTMLElement).dataset.repoUrl || '';
+            const block = (btn as HTMLElement).closest('.mod-updates-repo-block');
+            const selected = block
+                ? Array.from(block.querySelectorAll('.mod-update-cb:checked')).map(c => (c as HTMLElement).dataset.modId)
+                : [];
+            if (selected.length === 0) return;
+            applyRepoUpdate(repoUrl, selected as string[]);
+        });
     });
 
     openOverlay(ov);
 }
 
 /** Jump to the sync flow pre-filled with the repo URL; delta-sync performs the update. */
-function applyRepoUpdate(repoUrl: string): void {
+function applyRepoUpdate(repoUrl: string, selectedModIds?: string[]): void {
     closeUpdatesModal();
+    // Remember the user's per-mod choice so the sync screen can pre-tick exactly
+    // those mods (it falls back to "all" when no selection is provided).
+    (window as any).__bmmUpdateSelection = (selectedModIds && selectedModIds.length)
+        ? { repoUrl, modIds: selectedModIds } : null;
     document.dispatchEvent(new CustomEvent('bmm:repo-focus', {
         detail: { section: 'connect', prefill: { url: repoUrl } }
     }));
@@ -267,7 +302,7 @@ export function openModUpdateConfig(modId: string): void {
         </div>`;
 
     ov.innerHTML = `
-        <div class="modal" style="width:min(560px,92vw);max-width:560px;overflow:hidden;">
+        <div class="modal glass" style="width:min(560px,92vw);max-width:560px;overflow:hidden;">
             <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--bmm-s06,rgba(255,255,255,0.06));">
                 <div style="display:flex;flex-direction:column;min-width:0;">
                     <span style="font-size:14px;font-weight:700;color:var(--text-primary);">${t('repo.cfgTitle') || 'Update sources'}</span>

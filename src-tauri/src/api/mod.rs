@@ -274,6 +274,31 @@ struct RepoUpdateBody {
     mod_changelogs: serde_json::Value,
 }
 
+/// POST /api/mod/config — configure a mod's update linkage.
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ModConfigBody {
+    mod_id: String,
+    /// Stable id of this mod inside its repo manifest. Empty clears it.
+    #[serde(default)]
+    repo_mod_id: Option<String>,
+    /// Primary update URL (site mods). Empty clears it.
+    #[serde(default)]
+    update_url: Option<String>,
+    /// Additional update sources: [{ "repoUrl": "...", "repoModId": "..." }].
+    #[serde(default)]
+    update_sources: Option<Vec<crate::models::mod_entry::UpdateSource>>,
+}
+
+/// POST /api/mod/update — request applying an update (UI-driven).
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ModUpdateApiBody {
+    /// Origin repo URL to re-sync from. When omitted, just opens the update check.
+    #[serde(default)]
+    repo_url: Option<String>,
+}
+
 /// POST /api/repo/host — start a static HTTP file server serving a generated repo
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -1126,6 +1151,93 @@ pub async fn start_api_server(
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({ "ok": true, "mod_id": mod_id })),
                 StatusCode::OK,
+            )
+        });
+
+    // POST /api/mod/config  (auth) — configure a mod's update linkage.
+    let tok_mod_cfg = token.clone();
+    let data_mod_cfg = data.clone();
+    let path_mod_cfg = data_path.clone();
+    let mod_config = warp::path!("api" / "mod" / "config")
+        .and(warp::post())
+        .and(require_token(tok_mod_cfg))
+        .and(require_permission(token.clone(), "mods.write"))
+        .and(warp::body::json::<ModConfigBody>())
+        .and(with_data(data_mod_cfg))
+        .and(with_path(path_mod_cfg))
+        .map(|body: ModConfigBody, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
+            {
+                let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
+                let m = match data.mods.iter_mut().find(|m| m.id == body.mod_id) {
+                    Some(m) => m,
+                    None => return warp::reply::with_status(
+                        warp::reply::json(&ApiError { error: format!("Mod '{}' not found", body.mod_id) }),
+                        StatusCode::NOT_FOUND,
+                    ),
+                };
+                if let Some(rid) = body.repo_mod_id {
+                    let t = rid.trim();
+                    m.repo_mod_id = if t.is_empty() { None } else { Some(t.to_string()) };
+                }
+                if let Some(url) = body.update_url {
+                    let t = url.trim();
+                    m.update_url = if t.is_empty() { None } else { Some(crate::commands::repo::normalize_repo_url(t)) };
+                }
+                if let Some(srcs) = body.update_sources {
+                    m.update_sources = srcs.into_iter()
+                        .filter(|s| !s.repo_url.trim().is_empty())
+                        .map(|mut s| {
+                            s.repo_url = crate::commands::repo::normalize_repo_url(&s.repo_url);
+                            s.repo_mod_id = s.repo_mod_id.filter(|r| !r.trim().is_empty());
+                            s
+                        })
+                        .collect();
+                }
+            }
+            save_data(&d, &path);
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({ "ok": true, "mod_id": body.mod_id })),
+                StatusCode::OK,
+            )
+        });
+
+    // POST /api/mod/check-updates  (auth) — run an update check (UI-driven).
+    let tok_mod_check = token.clone();
+    let handle_mod_check = app_handle.clone();
+    let mod_check_updates = warp::path!("api" / "mod" / "check-updates")
+        .and(warp::post())
+        .and(require_token(tok_mod_check))
+        .and(with_app_handle(handle_mod_check))
+        .map(|handle: tauri::AppHandle| {
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "mod/check-updates", "params": {}
+            }));
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({
+                    "ok": true, "driven_by": "bmm-ui", "action": "mod/check-updates"
+                })),
+                StatusCode::ACCEPTED,
+            )
+        });
+
+    // POST /api/mod/update  (auth) — apply an update (UI-driven, delta re-sync).
+    let tok_mod_update = token.clone();
+    let handle_mod_update = app_handle.clone();
+    let mod_update = warp::path!("api" / "mod" / "update")
+        .and(warp::post())
+        .and(require_token(tok_mod_update))
+        .and(warp::body::json::<ModUpdateApiBody>())
+        .and(with_app_handle(handle_mod_update))
+        .map(|body: ModUpdateApiBody, handle: tauri::AppHandle| {
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "mod/update",
+                "params": { "repoUrl": body.repo_url }
+            }));
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({
+                    "ok": true, "driven_by": "bmm-ui", "action": "mod/update"
+                })),
+                StatusCode::ACCEPTED,
             )
         });
 
@@ -2264,6 +2376,9 @@ pub async fn start_api_server(
         .or(delete_profile)
         .or(update_mod)
         .or(delete_mod)
+        .or(mod_config)          // POST /api/mod/config
+        .or(mod_check_updates)   // POST /api/mod/check-updates
+        .or(mod_update)          // POST /api/mod/update
         .boxed();
 
     let group_e = update_modpack
