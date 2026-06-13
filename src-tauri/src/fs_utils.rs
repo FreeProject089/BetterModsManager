@@ -163,9 +163,8 @@ pub fn copy_file_force_smart(src: &Path, dst: &Path, limit_mb_s: Option<u64>, sm
     if let Some(parent) = dst.parent() {
         std::fs::create_dir_all(parent).ok();
     }
-    if dst.exists() {
-        let _ = ensure_removed(dst); // Clear permissions and delete if possible before overwrite
-    }
+    // ensure_removed() already no-ops if dst doesn't exist, so skip the extra stat call.
+    let _ = ensure_removed(dst); // Clear permissions and delete if possible before overwrite
 
     // ── Path 1: explicit MB/s throttle (already paces itself, just honor it) ──
     if let Some(limit) = limit_mb_s {
@@ -413,7 +412,7 @@ pub fn unapply_mod_stacked(
             // 1. Try to find another mod that provides this file (starting from most recent)
             for (_, mod_folder) in other_active_mods {
                 let mod_src = mod_folder.join(&rel);
-                if mod_src.exists() && mod_src.is_file() {
+                if mod_src.metadata().map(|m| m.is_file()).unwrap_or(false) {
                     copy_file_force_smart(&mod_src, &dst_path, game_path_limit, smart_io)?;
                     restored = true;
                     break;

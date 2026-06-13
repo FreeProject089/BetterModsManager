@@ -588,13 +588,16 @@ function toggleOverlayMode(modal: HTMLElement, force?: boolean): void {
         panel.style.minHeight = MIN_H + 'px';
         panel.style.boxShadow = '0 24px 70px -10px rgba(0,0,0,.7), 0 8px 24px rgba(0,0,0,.4)';
         addResizeHandles(panel, MIN_W, MIN_H);
-        // restore saved geometry, clamped to min sizes and inside the viewport
+        // restore saved geometry, clamped to min sizes and inside the containing block
+        // (not innerWidth/innerHeight — the panel's offsetParent may carry a transform).
         let geom: any = {};
         try { geom = JSON.parse(localStorage.getItem(OVL_KEY) || '{}'); } catch {}
-        const w = Math.max(MIN_W, Math.min(Number(geom.width) || Math.min(680, innerWidth * 0.8), innerWidth - 20));
-        const h = Math.max(MIN_H, Math.min(Number(geom.height) || Math.min(660, innerHeight * 0.78), innerHeight - 20));
-        const left = Math.max(0, Math.min(Number.isFinite(geom.left) ? geom.left : 60, innerWidth - w));
-        const top  = Math.max(0, Math.min(Number.isFinite(geom.top) ? geom.top : 60, innerHeight - 60));
+        const cbRect = ((panel.offsetParent as HTMLElement) || document.documentElement).getBoundingClientRect();
+        const cbW = cbRect.width || innerWidth, cbH = cbRect.height || innerHeight;
+        const w = Math.max(MIN_W, Math.min(Number(geom.width) || Math.min(680, cbW * 0.8), cbW - 20));
+        const h = Math.max(MIN_H, Math.min(Number(geom.height) || Math.min(660, cbH * 0.78), cbH - 20));
+        const left = Math.max(0, Math.min(Number.isFinite(geom.left) ? geom.left : 60, cbW - w));
+        const top  = Math.max(0, Math.min(Number.isFinite(geom.top) ? geom.top : 60, cbH - 60));
         panel.style.width = w + 'px';
         panel.style.height = h + 'px';
         panel.style.left = left + 'px';
@@ -644,11 +647,14 @@ function addResizeHandles(panel: HTMLElement, minW: number, minH: number): void 
                 if (dir.includes('s')) nh = Math.max(minH, h0 + dy);
                 if (dir.includes('w')) { nw = Math.max(minW, w0 - dx); nx = x0 + (w0 - nw); }
                 if (dir.includes('n')) { nh = Math.max(minH, h0 - dy); ny = y0 + (h0 - nh); }
-                // clamp inside the viewport
-                nx = Math.max(0, Math.min(nx, innerWidth - 80));
-                ny = Math.max(0, Math.min(ny, innerHeight - 40));
-                nw = Math.min(nw, innerWidth - nx);
-                nh = Math.min(nh, innerHeight - ny);
+                // clamp against the containing block (not innerWidth/innerHeight —
+                // the panel's offsetParent may carry a transform, like the theme editor).
+                const cb = (panel.offsetParent as HTMLElement) || document.documentElement;
+                const cbRect = cb.getBoundingClientRect();
+                nx = Math.max(0, Math.min(nx, cbRect.width - 80));
+                ny = Math.max(0, Math.min(ny, cbRect.height - 40));
+                nw = Math.min(nw, cbRect.width - nx);
+                nh = Math.min(nh, cbRect.height - ny);
                 panel.style.left = nx + 'px'; panel.style.top = ny + 'px';
                 panel.style.width = nw + 'px'; panel.style.height = nh + 'px';
             };
@@ -676,9 +682,13 @@ function makeDraggable(panel: HTMLElement, handle: HTMLElement): void {
         e.preventDefault();
         const rect = panel.getBoundingClientRect();
         const offX = e.clientX - rect.left, offY = e.clientY - rect.top;
+        // Clamp against the containing block (like the theme editor) so the panel
+        // can never be dragged fully off-screen, even inside a transformed ancestor.
+        const cb = (panel.offsetParent as HTMLElement) || document.documentElement;
         const move = (ev: MouseEvent) => {
-            panel.style.left = `${Math.max(0, Math.min(innerWidth - 80, ev.clientX - offX))}px`;
-            panel.style.top  = `${Math.max(0, Math.min(innerHeight - 40, ev.clientY - offY))}px`;
+            const cbRect = cb.getBoundingClientRect();
+            panel.style.left = `${Math.max(0, Math.min(cbRect.width - 80, ev.clientX - offX - cbRect.left))}px`;
+            panel.style.top  = `${Math.max(0, Math.min(cbRect.height - 40, ev.clientY - offY - cbRect.top))}px`;
         };
         const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); saveGeom(panel); };
         document.addEventListener('mousemove', move);

@@ -174,7 +174,7 @@ export function getModCardHTML(mod, ctx) {
                         <span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--cyan);opacity:0.6;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((mod.repo_mod_id || mod.id).slice(0, 8))}…</span>
                     </div>
                     <div class="dropdown-divider"></div>
-                    <div class="dropdown-item" onclick="window.openModUpdateConfig && window.openModUpdateConfig('${mod.id}'); event.stopPropagation();"
+                    <div class="dropdown-item" onclick="window.closeGlobalDropdown && window.closeGlobalDropdown(true); window.openModUpdateConfig && window.openModUpdateConfig('${mod.id}'); event.stopPropagation();"
                          onmouseenter="window.showTaskyHelp('mod.updateConfigTip', 'package')"
                          onmouseleave="window.hideTaskyHelp()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>

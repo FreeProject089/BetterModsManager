@@ -138,28 +138,23 @@ function updateBadge(count: number): void {
 
 // ── Updates modal ────────────────────────────────────────────────────────────
 
-// Dedicated overlay with an explicit very-high z-index so it ALWAYS sits above
-// every other layer (tutorial/tasky overlays use z 2,000,000+, which is why the
-// standard .modal-overlay at z 5000 could end up un-clickable). Centered via flex
-// with padding so the card + its shadow always stay inside the BMM window.
-// z just below Tasky (1,000,000, pointer-events:none) so the mascot/frame stay on
-// top of the backdrop like every other modal — but well above all normal content.
-const OVERLAY_CSS = 'position:fixed;inset:0;z-index:999990;display:none;align-items:center;justify-content:center;padding:32px;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);pointer-events:auto;';
-
+// Use the app's standard modal chrome (.modal-overlay + .modal glass) verbatim —
+// identical backdrop, blur, shadow, animation and z-index to e.g. the "New
+// profile" modal. No custom inline overlay styling.
 function ensureOverlay(id: string): HTMLElement {
     let ov = document.getElementById(id);
-    if (ov) { ov.style.cssText = OVERLAY_CSS; return ov; }
+    if (ov) { ov.className = 'modal-overlay'; ov.removeAttribute('style'); return ov; }
     ov = document.createElement('div');
     ov.id = id;
-    ov.style.cssText = OVERLAY_CSS;
-    ov.addEventListener('click', (e) => { if (e.target === ov) (ov as HTMLElement).style.display = 'none'; });
+    ov.className = 'modal-overlay';
+    ov.addEventListener('click', (e) => { if (e.target === ov) (ov as HTMLElement).classList.remove('open'); });
     document.body.appendChild(ov);
     return ov;
 }
 
-// Show + move to the end of <body> so it wins the stacking order among peers.
-function openOverlay(ov: HTMLElement): void { document.body.appendChild(ov); ov.style.display = 'flex'; }
-function hideOverlay(ov: HTMLElement | null): void { if (ov) ov.style.display = 'none'; }
+// Show via the standard `.open` class (CSS handles display:flex + fadeIn).
+function openOverlay(ov: HTMLElement): void { document.body.appendChild(ov); ov.classList.add('open'); }
+function hideOverlay(ov: HTMLElement | null): void { if (ov) ov.classList.remove('open'); }
 
 export function closeUpdatesModal(): void {
     hideOverlay(document.getElementById('mod-updates-overlay'));
@@ -302,7 +297,7 @@ export function openModUpdateConfig(modId: string): void {
         </div>`;
 
     ov.innerHTML = `
-        <div class="modal glass" style="width:min(560px,92vw);max-width:560px;overflow:hidden;">
+        <div class="modal glass" style="width:min(560px,92vw);max-width:560px;">
             <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--bmm-s06,rgba(255,255,255,0.06));">
                 <div style="display:flex;flex-direction:column;min-width:0;">
                     <span style="font-size:14px;font-weight:700;color:var(--text-primary);">${t('repo.cfgTitle') || 'Update sources'}</span>

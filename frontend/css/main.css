@@ -1828,12 +1828,83 @@ body.is-maximized .titlebar-spacer {
 /* Group the Mod Mapper header controls onto a subtle surface so they don't float
    bare on the page background. */
 #view-mapper .view-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 8px;
     padding: 8px 10px;
     background: var(--bmm-s02);
     border: 1px solid var(--bmm-s06);
     border-radius: 12px;
     backdrop-filter: blur(8px);
+}
+
+/* Profile picker — icon inside a clean field that fills available space */
+#view-mapper .mapper-profile-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 220px;
+    min-width: 180px;
+    max-width: 320px;
+    padding: 0 10px;
+    height: 34px;
+    background: var(--bmm-s03);
+    border: 1px solid var(--bmm-s07);
+    border-radius: 9px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+#view-mapper .mapper-profile-wrap:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.16);
+}
+#view-mapper .mapper-profile-ic { color: var(--text-muted); flex-shrink: 0; }
+#view-mapper .mapper-profile-wrap .profile-select {
+    flex: 1; width: 100%; min-width: 0;
+    background: transparent !important; border: none !important; box-shadow: none !important;
+    padding: 0 !important; height: 32px; color: var(--text-primary); font-size: 12.5px; cursor: pointer;
+}
+
+/* Vertical divider between the picker and the action buttons */
+#view-mapper .mapper-actions-sep {
+    width: 1px; align-self: stretch; margin: 2px 2px;
+    background: var(--bmm-s07); flex-shrink: 0;
+}
+
+/* Square icon-only refresh button, sized to match the field height */
+#view-mapper .mapper-icon-btn {
+    width: 34px; height: 34px; padding: 0 !important;
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+#view-mapper .view-actions .btn { height: 34px; }
+
+/* On narrow screens, let the title and the actions bar stack so the
+   profile picker / buttons get a full row instead of being squeezed. */
+@media (max-width: 860px) {
+    #view-mapper .view-header {
+        flex-wrap: wrap;
+    }
+    #view-mapper .view-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    #view-mapper .mapper-profile-wrap {
+        flex: 1 1 100%;
+        max-width: none;
+        order: 1;
+    }
+    #view-mapper .mapper-actions-sep {
+        display: none;
+    }
+    #view-mapper .view-actions .btn,
+    #view-mapper .view-actions button[id^="btn-mapper"] {
+        flex: 1 1 auto;
+    }
+    #view-mapper #btn-mapper-refresh,
+    #view-mapper #btn-mapper-preview {
+        order: -1;
+    }
 }
 
 /* Flat utility ghost buttons — no container, all at same level */
@@ -1854,6 +1925,64 @@ body.is-maximized .titlebar-spacer {
     color: var(--text-secondary) !important;
     transform: none !important;
     box-shadow: none !important;
+}
+
+/* Mapper help banner: hint strip above the two mapping panels */
+.mapper-help-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    background: var(--bmm-s02);
+    border: 1px solid var(--bmm-s06);
+    border-radius: 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.mapper-help-banner .help-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.mapper-help-banner .help-text {
+    flex-wrap: wrap;
+    row-gap: 6px;
+}
+
+.mapper-help-banner .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.mapper-help-banner .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-block;
+}
+
+.mapper-help-banner .dot.orange { background: #ff8800; }
+.mapper-help-banner .dot.green { background: var(--success); }
+
+@media (max-width: 860px) {
+    .mapper-help-banner {
+        flex-direction: column;
+    }
+    .mapper-help-banner .help-text {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px !important;
+    }
 }
 
 /* Vertical separator between util group and primary actions */
@@ -3082,6 +3211,47 @@ body.is-maximized .titlebar-spacer {
     justify-content: flex-end;
     gap: 8px;
     margin-top: 16px;
+}
+
+/* ═══════════════════════════════════
+   MODPACK EDITOR LAYOUT
+═══════════════════════════════════ */
+.modpack-editor-layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.editor-section-card {
+    background: var(--bmm-s02);
+    border: 1px solid var(--bmm-s06);
+    border-radius: 16px;
+    padding: 20px;
+    backdrop-filter: blur(8px);
+}
+
+.editor-section-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+}
+
+.editor-section-title svg {
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+@media (max-width: 980px) {
+    .modpack-editor-layout {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* ═══════════════════════════════════
@@ -13625,10 +13795,6 @@ body.i18n-picking, body.i18n-picking * { cursor: crosshair !important; }
 
 /* drag handle affordance in overlay mode */
 .i18n-overlay-active .i18n-drag-handle { cursor: move; }
-.i18n-overlay-active .i18n-drag-handle::after {
-    content: '⠿'; position: absolute; right: 56px; top: 50%; transform: translateY(-50%);
-    color: var(--text-muted); font-size: 16px; opacity: 0.5; pointer-events: none;
-}
 /* Overlay panel polish + accent edge */
 .i18n-overlay-active .modal {
     border: 1px solid var(--bmm-s10) !important;
@@ -13637,19 +13803,21 @@ body.i18n-picking, body.i18n-picking * { cursor: crosshair !important; }
 }
 
 /* Custom 8-direction resize handles (overlay mode) */
-.i18n-rsz { position: absolute; z-index: 40; }
-.i18n-rsz-n  { top: 0; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
-.i18n-rsz-s  { bottom: 0; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
-.i18n-rsz-e  { right: 0; top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
-.i18n-rsz-w  { left: 0; top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
-.i18n-rsz-ne { top: 0; right: 0; width: 14px; height: 14px; cursor: nesw-resize; }
-.i18n-rsz-nw { top: 0; left: 0; width: 14px; height: 14px; cursor: nwse-resize; }
-.i18n-rsz-se { bottom: 0; right: 0; width: 16px; height: 16px; cursor: nwse-resize; }
-.i18n-rsz-sw { bottom: 0; left: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+.i18n-rsz { position: absolute; z-index: 40; transition: background 0.12s ease; }
+.i18n-rsz:hover { background: rgba(6,182,212,0.16); }
+.i18n-rsz-n  { top: 0; left: 16px; right: 16px; height: 8px; cursor: ns-resize; }
+.i18n-rsz-s  { bottom: 0; left: 16px; right: 16px; height: 8px; cursor: ns-resize; }
+.i18n-rsz-e  { right: 0; top: 16px; bottom: 16px; width: 8px; cursor: ew-resize; }
+.i18n-rsz-w  { left: 0; top: 16px; bottom: 16px; width: 8px; cursor: ew-resize; }
+.i18n-rsz-ne { top: 0; right: 0; width: 18px; height: 18px; cursor: nesw-resize; border-radius: 0 16px 0 0; }
+.i18n-rsz-nw { top: 0; left: 0; width: 18px; height: 18px; cursor: nwse-resize; border-radius: 16px 0 0 0; }
+.i18n-rsz-se { bottom: 0; right: 0; width: 20px; height: 20px; cursor: nwse-resize; border-radius: 0 0 16px 0; }
+.i18n-rsz-sw { bottom: 0; left: 0; width: 18px; height: 18px; cursor: nesw-resize; border-radius: 0 0 0 16px; }
 /* visible grip on the SE corner */
 .i18n-rsz-se::after {
-    content: ''; position: absolute; right: 3px; bottom: 3px; width: 7px; height: 7px;
+    content: ''; position: absolute; right: 4px; bottom: 4px; width: 8px; height: 8px;
     border-right: 2px solid var(--bmm-s20); border-bottom: 2px solid var(--bmm-s20);
+    pointer-events: none;
 }
 .i18n-rsz:hover { background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.18); }
 
