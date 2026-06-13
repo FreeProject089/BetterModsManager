@@ -7782,10 +7782,10 @@ select:focus {
     border-radius: 16px;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-    overflow: hidden;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--bmm-s05);
     animation: modalIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
 
 .ptb-modal-header {
     padding: 22px 32px;

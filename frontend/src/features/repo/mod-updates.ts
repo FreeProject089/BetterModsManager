@@ -141,6 +141,11 @@ function updateBadge(count: number): void {
 // Use the app's standard modal chrome (.modal-overlay + .modal glass) verbatim —
 // identical backdrop, blur, shadow, animation and z-index to e.g. the "New
 // profile" modal. No custom inline overlay styling.
+// Mount overlays inside #app-window-outer (like every static modal) rather than
+// document.body — a body-level overlay sits in a different stacking/event context
+// than the rest of the modals, which caused click-through to the page behind.
+function overlayHost(): HTMLElement { return document.getElementById('app-window-outer') || document.body; }
+
 function ensureOverlay(id: string): HTMLElement {
     let ov = document.getElementById(id);
     if (ov) { ov.className = 'modal-overlay'; ov.removeAttribute('style'); return ov; }
@@ -148,12 +153,12 @@ function ensureOverlay(id: string): HTMLElement {
     ov.id = id;
     ov.className = 'modal-overlay';
     ov.addEventListener('click', (e) => { if (e.target === ov) (ov as HTMLElement).classList.remove('open'); });
-    document.body.appendChild(ov);
+    overlayHost().appendChild(ov);
     return ov;
 }
 
 // Show via the standard `.open` class (CSS handles display:flex + fadeIn).
-function openOverlay(ov: HTMLElement): void { document.body.appendChild(ov); ov.classList.add('open'); }
+function openOverlay(ov: HTMLElement): void { overlayHost().appendChild(ov); ov.classList.add('open'); }
 function hideOverlay(ov: HTMLElement | null): void { if (ov) ov.classList.remove('open'); }
 
 export function closeUpdatesModal(): void {
