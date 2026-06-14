@@ -8,6 +8,20 @@ use uuid::Uuid;
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 
+/// CWE-22: a launch-pack `name` is user/shared-content controlled and is also used
+/// as the `.lnk` filename. Strip path separators / traversal / illegal chars so the
+/// shortcut can never be written outside the pack dir (e.g. the Startup auto-run
+/// folder → persistence). Returns a safe non-empty stem.
+fn safe_lnk_stem(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c })
+        .collect();
+    let cleaned = cleaned.replace("..", "_");
+    let cleaned = cleaned.trim_matches(|c| c == '.' || c == ' ');
+    if cleaned.is_empty() { "launchpack".to_string() } else { cleaned.to_string() }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstalledApp {
     pub name: String,
@@ -80,7 +94,7 @@ pub fn create_launch_pack(
         .map_err(|e| AppError::Internal(format!("Failed to write .vbs launcher: {}", e)))?;
 
     // 3. Create the .lnk Shortcut via PowerShell
-    let lnk_path = pack_dir.join(format!("{}.lnk", name));
+    let lnk_path = pack_dir.join(format!("{}.lnk", safe_lnk_stem(&name)));
     let powershell_script = format!(
         "$WshShell = New-Object -ComObject WScript.Shell; \
          $Shortcut = $WshShell.CreateShortcut('{}'); \
@@ -189,7 +203,7 @@ pub fn update_launch_pack(
             }
         }
     }
-    let lnk_path = pack_dir.join(format!("{}.lnk", name));
+    let lnk_path = pack_dir.join(format!("{}.lnk", safe_lnk_stem(&name)));
     let powershell_script = format!(
         "$WshShell = New-Object -ComObject WScript.Shell; \
          $Shortcut = $WshShell.CreateShortcut('{}'); \

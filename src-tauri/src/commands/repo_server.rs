@@ -273,6 +273,17 @@ pub async fn start_repo_server(
                 let rel_path_encoded = tail.as_str();
                 let rel_path = percent_decode_str(rel_path_encoded).decode_utf8_lossy().into_owned();
 
+                // 0. CWE-22 path traversal: reject ANY parent-dir component up front.
+                // The `full_path.starts_with(&serve_dir)` guard below is NOT enough —
+                // Path::starts_with() is a component-prefix match, so
+                // `serve_dir.join("../secret")` still "starts_with" serve_dir while the
+                // OS resolves it OUTSIDE. This route is LAN-exposed, so traversal here =
+                // arbitrary file read off the host.
+                if rel_path.split(|c| c == '/' || c == '\\').any(|seg| seg == ".." || seg == "...") {
+                    println!("[Server] Security Block: path traversal attempt '{}' from {}", rel_path, ip);
+                    return Err(warp::reject::not_found());
+                }
+
                 // 1. Mandatory Creator ID for any file in /mods/
                 let is_mod_file = rel_path.starts_with("mods/") || rel_path.starts_with("mods\\");
                 if is_mod_file && key.is_none() {

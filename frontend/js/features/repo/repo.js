@@ -1741,8 +1741,7 @@ export function initRepo() {
             hostInput.value = path;
         try {
             if (window.__TAURI__) {
-                const { readTextFile } = window.__TAURI__.fs;
-                const content = await readTextFile(path + '/repo.json');
+                const content = await invoke('read_file_text', { path: path + '/repo.json' });
                 const repo = JSON.parse(content);
                 const pCount = repo.profiles ? repo.profiles.length : 0;
                 const pNames = repo.profiles ? repo.profiles.map(p => p.name).join(', ') : '';
@@ -1804,7 +1803,7 @@ export function initRepo() {
                 elements.inputExportPath.value = folder;
                 try {
                     if (window.__TAURI__) {
-                        const content = await window.__TAURI__.fs.readTextFile(folder + '/repo.json');
+                        const content = await invoke('read_file_text', { path: folder + '/repo.json' });
                         const repo = JSON.parse(content);
                         if (repo.seed && elements.inputExportSeed) {
                             elements.inputExportSeed.value = repo.seed;
