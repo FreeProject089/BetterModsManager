@@ -4,7 +4,8 @@
 //!
 //! The mirrored functions reproduce the exact algorithm/constants of the app:
 //!   - [`scan_jwalk`]      ≡ `fs_utils::list_mod_files` (parallel jwalk)
-//!   - [`sha256_file`]     ≡ `fs_utils::compute_file_sha256` (1 MiB buffered)
+//!   - [`blake3_file`]     ≡ `fs_utils::compute_file_hash` (BLAKE3, mmap+rayon — local content hash)
+//!   - [`sha256_file`]     ≡ `fs_utils::compute_file_sha256` (1 MiB buffered — repo/download wire format)
 //!   - [`copy_full_speed`] ≡ `copy_file_force_smart(.., None, false)` (Path 3)
 //!   - [`copy_smart_io`]   ≡ `copy_file_force_smart(.., None, true)`  (Path 2)
 
@@ -64,6 +65,7 @@ pub fn scan_std(root: &Path) -> Vec<PathBuf> {
 // ── Hashing ──────────────────────────────────────────────────────────────────
 
 /// SHA-256 of a file using the app's 1 MiB buffered-read strategy.
+/// The app keeps SHA-256 only as the repo/download **wire format**.
 pub fn sha256_file(path: &Path) -> std::io::Result<String> {
     use std::io::BufReader;
     let file = fs::File::open(path)?;
@@ -76,6 +78,15 @@ pub fn sha256_file(path: &Path) -> std::io::Result<String> {
         hasher.update(&buffer[..n]);
     }
     Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// BLAKE3 of a file, mirroring the app's `fs_utils::compute_file_hash` — a tree
+/// hash parallelised *within* a single large file (mmap + rayon). This is the
+/// app's local content hash (integrity / change-detection / modpack fingerprints).
+pub fn blake3_file(path: &Path) -> std::io::Result<String> {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update_mmap_rayon(path)?;
+    Ok(format!("b3:{}", hasher.finalize().to_hex()))
 }
 
 // ── Copying ──────────────────────────────────────────────────────────────────

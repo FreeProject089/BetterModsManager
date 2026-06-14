@@ -3683,6 +3683,10 @@
                                             <summary style="cursor:pointer;font-weight:600;color:var(--text-primary);font-size:12.5px;list-style:none;" data-i18n="docs.bench.faqQ3">Pourquoi mes résultats diffèrent-ils d'une fois à l'autre ?</summary>
                                             <p style="margin:8px 0 0;font-size:12px;" data-i18n="docs.bench.faqA3">La vitesse dépend de votre disque (SSD/HDD), du cache du système et de la charge en cours. Chaque opération est <strong>échantillonnée plusieurs fois</strong> et BMM affiche la médiane + la plage min–max pour lisser ces variations.</p>
                                         </details>
+                                        <details style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:9px;padding:10px 12px;">
+                                            <summary style="cursor:pointer;font-weight:600;color:var(--text-primary);font-size:12.5px;list-style:none;" data-i18n="docs.bench.faqQ4">BLAKE3 ou SHA-256 — lequel BMM utilise-t-il ?</summary>
+                                            <p style="margin:8px 0 0;font-size:12px;" data-i18n="docs.bench.faqA4"><strong>Les deux, à des fins différentes.</strong> Pour le hachage <strong>local</strong> (intégrité, détection de changement, empreintes de modpacks), BMM utilise <strong>BLAKE3</strong> : c'est un hash <em>en arbre</em>, donc un seul très gros fichier est haché sur <strong>tous les cœurs du CPU</strong> à la fois — là où SHA-256 reste séquentiel sur un fichier. Pour le format <strong>d'échange</strong> (sync de dépôt, vérification des téléchargements), BMM garde <strong>SHA-256</strong>. Les anciennes empreintes SHA-256 restent lisibles (les hashes sont étiquetés) et migrent vers BLAKE3 au prochain recalcul.</p>
+                                        </details>
                                     </div>
                                 </div>
                             </details>

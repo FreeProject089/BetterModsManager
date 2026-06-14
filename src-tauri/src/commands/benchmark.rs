@@ -310,20 +310,26 @@ fn run_app_benchmark_blocking(
     // Scale presets (file count / dirs / avg file size) for the synthetic dataset.
     // Approx total = files × avg: small ≈ 6 MB, medium ≈ 48 MB, large ≈ 160 MB,
     // xlarge ≈ 400 MB. (Each op is sampled fewer times at bigger sizes — see `reps`.)
-    // A "custom:<MB>" scale targets an explicit total dataset size: ~256 KB avg
-    // files, so file/dir counts are derived to hit the requested megabytes
-    // (clamped to a sane 1 MB … 4 GB range).
-    let custom_mb: Option<usize> = scale.as_deref()
+    // A "custom:<MB>[:<files>]" scale targets an explicit total dataset size, and
+    // optionally an explicit file count (for stress-testing many-file scans). When
+    // the count is omitted it's derived from ~256 KB average files. Both are
+    // clamped to sane ceilings (8 GB / 200k files).
+    let custom: Option<(usize, Option<usize>)> = scale.as_deref()
         .and_then(|s| s.strip_prefix("custom:"))
-        .and_then(|n| n.trim().parse::<usize>().ok())
-        .map(|mb| mb.clamp(1, 8192));
-    let (files, dirs, avg) = if let Some(mb) = custom_mb {
-        let avg = 256 * 1024usize;                       // 256 KB per file
-        let files = ((mb * 1024 * 1024) / avg).max(8);   // total ≈ mb MB
-        // Grow folders AND files-per-folder with size (≈√files dirs ⇒ files/dir
-        // also ≈√files), so a bigger dataset means a deeper, wider tree — closer
-        // to a real large library than a flat folder.
-        let dirs = ((files as f64).sqrt().round() as usize).clamp(4, 256);
+        .map(|rest| {
+            let mut p = rest.split(':');
+            let mb = p.next().and_then(|n| n.trim().parse::<usize>().ok()).unwrap_or(250).clamp(1, 8192);
+            let files = p.next().and_then(|n| n.trim().parse::<usize>().ok()).map(|f| f.clamp(1, 200_000));
+            (mb, files)
+        });
+    let custom_mb: Option<usize> = custom.map(|(mb, _)| mb);
+    let (files, dirs, avg) = if let Some((mb, files_opt)) = custom {
+        let total = mb * 1024 * 1024;
+        // Use the requested file count, else derive from ~256 KB average files.
+        let files = files_opt.unwrap_or_else(|| (total / (256 * 1024)).max(8));
+        let avg = (total / files).max(1);               // total stays ≈ mb MB
+        // ≈√files directories → a deeper, wider tree like a real large library.
+        let dirs = ((files as f64).sqrt().round() as usize).clamp(1, 1024);
         (files, dirs, avg)
     } else {
         match scale.as_deref().unwrap_or("medium") {

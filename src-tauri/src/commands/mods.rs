@@ -3030,7 +3030,7 @@ fn process_single_mod_hashing(
         // unzipped twin (content_id parity + correct integrity).
         let read_root = crate::archive::mod_read_root(&mod_path);
         if let Ok(current_files) = fs_utils::list_mod_files(&read_root) {
-            let mut tracker = crate::commands::resource_tracker::OpTracker::start("SHA/compute")
+            let mut tracker = crate::commands::resource_tracker::OpTracker::start("BLAKE3/compute")
                 .with_subject(id);
             let items: Vec<(String, std::path::PathBuf)> = current_files.iter()
                 .map(|f| (f.to_string_lossy().to_string(), read_root.join(f)))

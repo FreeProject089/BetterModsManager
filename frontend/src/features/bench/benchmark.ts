@@ -251,8 +251,11 @@ export async function openAdvancedPerfModal() {
                                 <button class="bench-seg" data-scale="custom" title="${t('bench.sizeCustomTip') || 'Custom total size'}">${t('bench.sizeCustom') || 'Custom'}</button>
                             </div>
                             <div id="bench-custom-wrap" style="display:none; align-items:center; gap:5px;">
-                                <input id="bench-custom-mb" type="number" min="1" max="8192" value="250" title="${t('bench.sizeCustomMaxTip') || 'Max total dataset size in MB (1–8192). Bigger = more folders and more files per folder.'}" style="width:78px; height:30px; background:rgba(0,0,0,0.32); border:1px solid var(--bmm-s08,rgba(255,255,255,0.08)); border-radius:8px; color:var(--text-primary); font-size:12px; font-weight:700; text-align:right; padding:0 7px;" />
+                                <input id="bench-custom-mb" type="number" min="1" max="8192" value="250" title="${t('bench.sizeCustomMaxTip') || 'Total dataset size in MB (1–8192).'}" style="width:74px; height:30px; background:rgba(0,0,0,0.32); border:1px solid var(--bmm-s08,rgba(255,255,255,0.08)); border-radius:8px; color:var(--text-primary); font-size:12px; font-weight:700; text-align:right; padding:0 7px;" />
                                 <span style="font-size:11px; font-weight:700; color:var(--text-muted);">MB</span>
+                                <span style="font-size:11px; color:var(--text-muted); margin:0 1px;">×</span>
+                                <input id="bench-custom-files" type="number" min="1" max="200000" placeholder="auto" title="${t('bench.filesCountTip') || 'Number of files (blank = auto from size). Raise it to stress-test scanning/hashing of many files.'}" style="width:78px; height:30px; background:rgba(0,0,0,0.32); border:1px solid var(--bmm-s08,rgba(255,255,255,0.08)); border-radius:8px; color:var(--text-primary); font-size:12px; font-weight:700; text-align:right; padding:0 7px;" />
+                                <span style="font-size:11px; font-weight:700; color:var(--text-muted);">${t('bench.filesUnit') || 'files'}</span>
                             </div>
                         </div>
                     </div>
@@ -646,8 +649,13 @@ export async function openAdvancedPerfModal() {
             let scaleArg = benchScale;
             if (benchScale === 'custom') {
                 const mbEl = content.querySelector('#bench-custom-mb') as HTMLInputElement | null;
-                const mb = Math.min(4096, Math.max(1, parseInt(mbEl?.value || '250', 10) || 250));
-                scaleArg = `custom:${mb}`;
+                const filesEl = content.querySelector('#bench-custom-files') as HTMLInputElement | null;
+                const mb = Math.min(8192, Math.max(1, parseInt(mbEl?.value || '250', 10) || 250));
+                const filesRaw = parseInt(filesEl?.value || '', 10);
+                // Append an explicit file count only when the user set one.
+                scaleArg = (filesRaw && filesRaw > 0)
+                    ? `custom:${mb}:${Math.min(200000, filesRaw)}`
+                    : `custom:${mb}`;
             }
             const report = await invoke('run_app_benchmark', { mode: benchMode, realSources, scale: scaleArg });
             lastBenchReport = report;

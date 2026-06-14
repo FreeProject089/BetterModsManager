@@ -260,7 +260,7 @@ function initNavigation() {
             let _shaRefreshDebounce = null;
             await listen('sha-status-changed', async (event) => {
                 const payload = event.payload; // { mod_id, status, is_manual }
-                console.log(`[SHA] Status changed for mod ${payload.mod_id}: ${payload.status}`);
+                console.log(`[BLAKE3] Hash status changed for mod ${payload.mod_id}: ${payload.status}`);
                 if (payload.status === 'calculating') {
                     const isLazy = !payload.is_manual;
                     const { getSettings } = await import('../core/api.js');
@@ -383,7 +383,7 @@ function initNavigation() {
             });
         }
         catch (e) {
-            console.error("[SHA] Failed to setup global listener", e);
+            console.error("[BLAKE3] Failed to setup global hash listener", e);
         }
     })();
     // Credits video visibility control

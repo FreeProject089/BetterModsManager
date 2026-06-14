@@ -67,6 +67,25 @@ fn bench_sha256(c: &mut Criterion) {
     g.finish();
 }
 
+fn bench_blake3(c: &mut Criterion) {
+    let mut g = c.benchmark_group("blake3");
+    for (name, spec) in [("medium_64k_files", TreeSpec::medium()), ("large_2m_files", TreeSpec::large())] {
+        let tree = make_tree(spec);
+        // Hash the single largest file — the case BLAKE3 wins on: it parallelises
+        // a single big file across all cores, where SHA-256 stays single-stream.
+        let biggest = tree.files.iter()
+            .max_by_key(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0))
+            .expect("a file")
+            .clone();
+        let sz = std::fs::metadata(&biggest).unwrap().len();
+        g.throughput(Throughput::Bytes(sz));
+        g.bench_with_input(BenchmarkId::from_parameter(name), &biggest, |b, p| {
+            b.iter(|| criterion::black_box(fs_mirror::blake3_file(p).unwrap()));
+        });
+    }
+    g.finish();
+}
+
 fn bench_copy(c: &mut Criterion) {
     let tree = make_tree(TreeSpec::large());
     let src = tree.files.iter()
@@ -92,5 +111,5 @@ fn bench_copy(c: &mut Criterion) {
     let _ = tree.bytes;
 }
 
-criterion_group!(benches, bench_scan, bench_sha256, bench_copy);
+criterion_group!(benches, bench_scan, bench_sha256, bench_blake3, bench_copy);
 criterion_main!(benches);

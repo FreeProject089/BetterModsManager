@@ -65,8 +65,10 @@ Then open **`benchmarks/results/index.html`** in a browser to present.
   Throughput is reported against the *uncompressed* size so formats compare fairly.
   Includes an invariant assert: every format reports the same file count.
 - **`fs_scan_copy`** — directory scan (**jwalk** shipped vs **walkdir** vs naïve
-  std recursion) across small/medium/large mod trees; SHA-256 with the 1 MiB
-  buffered strategy; full-speed `std::fs::copy` vs the 256 KiB smart-IO chunked copy.
+  std recursion) across small/medium/large mod trees; **BLAKE3** (the app's local
+  content hash — a tree hash, parallel *within* a big file) vs **SHA-256** (kept as
+  the repo/download wire format), both on the largest file; full-speed
+  `std::fs::copy` vs the 1 MiB smart-IO chunked copy.
 - **`repo_json`** — `serde_json` parse & serialize of `ServerRepo` swept by mod
   count, plus typed-struct vs untyped-`Value` parsing.
 
