@@ -183,6 +183,9 @@ pub struct BenchEnv {
     pub dataset_files: u64,
     pub smart_io: bool,
     pub reps: usize,
+    /// Drive/root the workspace ran on (e.g. "E:\\") — for "My mods" this is the
+    /// profile's / folder's real disk, so I/O numbers reflect that drive.
+    pub disk: String,
 }
 
 /// (median, min, max) of a sample set in ms.
@@ -283,9 +286,27 @@ fn run_app_benchmark_blocking(
         _ => (140, 10, 48 * 1024),
     };
 
-    let root = std::env::temp_dir().join(format!("bmm_app_bench_{}", std::process::id()));
+    let is_real = mode == "real";
+
+    // For "My mods", run the benchmark on the SAME DRIVE as the source — the
+    // profile's mods folder, or the imported folder — so disk throughput reflects
+    // where those mods actually live, not the system temp drive. (Activation,
+    // copy, extract… all happen next to the real data.) Sandbox uses the system
+    // temp dir; we also fall back to it if the source drive isn't writable.
+    let mut root = std::env::temp_dir().join(format!("bmm_app_bench_{}", std::process::id()));
+    if is_real {
+        if let Some(first) = real_sources.as_ref().and_then(|s| s.iter().find(|p| !p.is_empty() && Path::new(p).exists())) {
+            let src_path = Path::new(first);
+            let anchor = src_path.parent().unwrap_or(src_path);
+            root = anchor.join(format!(".bmm_bench_{}", std::process::id()));
+        }
+    }
     let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).map_err(e2s)?;
+    if std::fs::create_dir_all(&root).is_err() {
+        // Source drive not writable → fall back to the system temp dir.
+        root = std::env::temp_dir().join(format!("bmm_app_bench_{}", std::process::id()));
+        std::fs::create_dir_all(&root).map_err(e2s)?;
+    }
     let mod_dir = root.join("mod_src");
     let game_dir = root.join("game");
     let backup_dir = root.join("backup");
@@ -295,7 +316,6 @@ fn run_app_benchmark_blocking(
     let cancel_game = root.join("cancel_game");
     let cancel_backup = root.join("cancel_backup");
 
-    let is_real = mode == "real";
     let (dataset_bytes, dataset_files): (u64, u64);
 
     // Build the primary dataset.
@@ -479,6 +499,9 @@ fn run_app_benchmark_blocking(
 
     let total_ms = bench_start.elapsed().as_secs_f64() * 1000.0;
 
+    // Drive/root the workspace lived on (reported so the user sees which disk).
+    let disk = root.ancestors().last().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
+
     // Clean up the whole workspace.
     let _ = std::fs::remove_dir_all(&root);
 
@@ -487,7 +510,7 @@ fn run_app_benchmark_blocking(
             mode: if is_real { "real".into() } else { "sandbox".into() },
             os: std::env::consts::OS.into(),
             cores,
-            dataset_bytes, dataset_files, smart_io, reps,
+            dataset_bytes, dataset_files, smart_io, reps, disk,
         },
         results,
         total_ms,

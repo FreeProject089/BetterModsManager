@@ -1056,15 +1056,16 @@ function renderBenchResults(container: HTMLElement | null, report: any) {
         const w = Math.max(3, (op.ms / maxMs) * 100);
         const tp = fmtTput(op.throughput_mb_s);
         const range = (op.max_ms > op.min_ms) ? `<span style="color:var(--text-muted); font-weight:400; font-size:11px; font-family:var(--font-mono);"> ${fmtMs(op.min_ms)}–${fmtMs(op.max_ms)}</span>` : '';
+        const note = opNote(op);
         return `<div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:14px 16px;">
             <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;">
-                <span style="font-weight:700; color:#fff; font-size:13px;">${op.label}</span>
+                <span style="font-weight:700; color:#fff; font-size:13px;">${opLabel(op)}</span>
                 <span style="font-family:var(--font-mono); font-weight:800; color:${col}; white-space:nowrap;">${fmtMs(op.ms)}${tp ? ` · ${tp}` : ''}${range}</span>
             </div>
             <div style="height:6px; background:rgba(255,255,255,0.05); border-radius:3px; margin:9px 0 7px; overflow:hidden;">
                 <div style="height:100%; width:${w}%; background:${col}; border-radius:3px;"></div>
             </div>
-            <div style="font-size:11.5px; color:var(--text-muted); line-height:1.55;">${op.explanation || ''}${op.note ? ` <span style="color:${col}; font-weight:600;">(${op.note})</span>` : ''}</div>
+            <div style="font-size:11.5px; color:var(--text-muted); line-height:1.55;">${opDesc(op)}${note ? ` <span style="color:${col}; font-weight:600;">(${note})</span>` : ''}</div>
         </div>`;
     }).join('');
 
@@ -1079,6 +1080,7 @@ function renderBenchResults(container: HTMLElement | null, report: any) {
                 <span>${t('bench.colMode') || 'Mode'}: <b style="color:#fff; text-transform:capitalize;">${env.mode || ''}</b></span>
                 <span>${t('bench.colDataset') || 'Dataset'}: <b style="color:#fff;">${env.dataset_files || 0} ${t('bench.files') || 'files'} · ${dsMb} MB</b></span>
                 <span>CPU: <b style="color:#fff;">${env.cores || '?'} ${t('bench.cores') || 'cores'}</b></span>
+                ${env.disk ? `<span>${t('bench.disk') || 'Disk'}: <b style="color:#fff;">${env.disk}</b></span>` : ''}
                 ${env.reps ? `<span>${t('bench.samples') || 'Samples'}: <b style="color:#fff;">${env.reps}× ${t('bench.eachOp') || 'each op'}</b></span>` : ''}
                 <span>${t('bench.colTotal') || 'Total'}: <b style="color:#fff;">${fmtMs(report.total_ms || 0)}</b></span>
             </div>
@@ -1116,6 +1118,25 @@ function renderBenchResults(container: HTMLElement | null, report: any) {
     };
 }
 
+// ── i18n for benchmark results ───────────────────────────────────────────────
+// The backend sends stable ids + English label/explanation; we translate by id
+// (falling back to the backend text) so the whole results view is localised.
+const OP_LABEL_KEY: Record<string, string> = {
+    scan: 'bench.opScan', hash: 'bench.opHash', copy_full: 'bench.opCopyFull', copy_smart: 'bench.opCopySmart',
+    archive_extract: 'bench.opArchive', activate: 'bench.opActivate', deactivate: 'bench.opDeactivate', cancel: 'bench.opCancel',
+};
+const OP_DESC_KEY: Record<string, string> = {
+    scan: 'bench.d.scan', hash: 'bench.d.hash', copy_full: 'bench.d.copyFull', copy_smart: 'bench.d.copySmart',
+    archive_extract: 'bench.d.archive', activate: 'bench.d.activate', deactivate: 'bench.d.deactivate', cancel: 'bench.d.cancel',
+};
+function opLabel(op: any): string { const k = OP_LABEL_KEY[op.id]; return (k ? t(k) : '') || op.label || op.id; }
+function opDesc(op: any): string { const k = OP_DESC_KEY[op.id]; return (k ? t(k) : '') || op.explanation || ''; }
+function opNote(op: any): string {
+    if (op.id === 'scan') return `${op.items} ${t('bench.files') || 'files'}`;
+    if (op.id === 'cancel') return t('bench.d.cancelNote') || op.note || '';
+    return op.note || '';
+}
+
 // Inline SVG horizontal bar chart for a metric — used both in the live results
 // panel and the exported HTML, so they look identical to the dev-suite deck.
 function benchSvgChart(ops: any[], metric: 'time' | 'tput'): string {
@@ -1136,7 +1157,7 @@ function benchSvgChart(ops: any[], metric: 'time' | 'tput'): string {
         const y = top + i * rowH;
         const col = catColor[o.category] || '#3b82f6';
         const med = Math.max(2, (val(o) / max) * barW);
-        s += `<text x="${padL - 8}" y="${y + 15}" text-anchor="end" font-size="11" fill="#cbd5e1">${esc(o.label)}</text>`;
+        s += `<text x="${padL - 8}" y="${y + 15}" text-anchor="end" font-size="11" fill="#cbd5e1">${esc(opLabel(o))}</text>`;
         // For the time chart, draw the min–max sample range as a faint band behind
         // the median bar — a compact distribution view (like Criterion's spread).
         if (metric === 'time' && o.max_ms > o.min_ms) {
@@ -1165,12 +1186,12 @@ function buildBenchReportHtml(report: any): string {
         ${chartTput ? `<div class="card"><h2 style="font-size:13px;margin:0 0 10px;color:#94a3b8">Throughput · higher is better</h2>${chartTput}</div>` : ''}
     </div>`;
 
-    const rowsHtml = ops.map(op => `<tr>
-        <td style="font-weight:600;color:#f1f5f9;">${esc(op.label)}</td>
-        <td style="font-family:ui-monospace,monospace;color:${catColor[op.category] || '#3b82f6'};white-space:nowrap;">${fmtMs(op.ms)}</td>
+    const rowsHtml = ops.map(op => { const note = opNote(op); return `<tr>
+        <td style="font-weight:600;color:#f1f5f9;">${esc(opLabel(op))}</td>
+        <td style="font-family:ui-monospace,monospace;color:${catColor[op.category] || '#3b82f6'};white-space:nowrap;">${fmtMs(op.ms)}${op.max_ms > op.min_ms ? ` <span style="color:#64748b">(${fmtMs(op.min_ms)}–${fmtMs(op.max_ms)})</span>` : ''}</td>
         <td style="font-family:ui-monospace,monospace;color:#94a3b8;">${fmtTput(op.throughput_mb_s)}</td>
-        <td style="color:#94a3b8;font-size:12px;">${esc(op.explanation)}${op.note ? ` <em>(${esc(op.note)})</em>` : ''}</td>
-    </tr>`).join('');
+        <td style="color:#94a3b8;font-size:12px;">${esc(opDesc(op))}${note ? ` <em>(${esc(note)})</em>` : ''}</td>
+    </tr>`; }).join('');
 
     const dsMb = ((env.dataset_bytes || 0) / 1048576).toFixed(1);
     return `<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -1182,7 +1203,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}td{padding:9px 10px;bor
 th{text-align:left;padding:9px 10px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #1e293b}
 </style></head><body>
 <h1>BetterModsManager — Benchmark Report</h1>
-<div class="meta">${esc(new Date().toLocaleString())} · mode: <b style="color:#fff">${esc(env.mode)}</b> · dataset: <b style="color:#fff">${env.dataset_files || 0} files · ${dsMb} MB</b> · ${env.cores || '?'} cores${env.reps ? ` · ${env.reps}× samples/op` : ''} · ${esc(env.os)} · total ${fmtMs(report.total_ms || 0)}</div>
+<div class="meta">${esc(new Date().toLocaleString())} · mode: <b style="color:#fff">${esc(env.mode)}</b> · dataset: <b style="color:#fff">${env.dataset_files || 0} files · ${dsMb} MB</b> · ${env.cores || '?'} cores${env.disk ? ` · disk ${esc(env.disk)}` : ''}${env.reps ? ` · ${env.reps}× samples/op` : ''} · ${esc(env.os)} · total ${fmtMs(report.total_ms || 0)}</div>
 ${charts}
 <div class="card"><table><thead><tr><th>Operation</th><th>Time</th><th>Throughput</th><th>What it measures</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
 <footer style="color:#64748b;font-size:12px">Generated by BMM's in-app benchmark. Operations run on a ${esc(env.mode)} dataset; writes occur only in a temporary workspace.</footer>

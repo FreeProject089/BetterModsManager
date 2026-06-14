@@ -117,9 +117,10 @@ const critSections = Object.entries(crit).map(([group, rows]) => {
     ${svgBars(rows)}<p class="hint">lower is better${note}${htmlLink}</p>${violin}</section>`;
 }).join('\n');
 
+let jsData = null;
 let jsSections = '';
 if (existsSync(JS)) {
-  const jsData = JSON.parse(readFileSync(JS, 'utf8'));
+  jsData = JSON.parse(readFileSync(JS, 'utf8'));
   jsSections = jsData.suites.map((su) => {
     const rows = su.results.map((r) => ({ label: r.name, mean_ns: r.mean_ns, color: r.meta?.kind === 'optimized' ? '#10b981' : (r.meta?.kind === 'shipped' ? '#3b82f6' : '#a78bfa') }));
     return `<section class="card"><h3>${esc(su.suite)}<span class="src js">JS · micro-bench</span></h3>${svgBars(rows)}<p class="hint">lower is better</p></section>`;
@@ -135,6 +136,37 @@ const hyperSections = hyper.length
     }).join('\n')
   : `<section class="card muted"><h3>hyperfine: end-to-end<span class="src e2e">E2E · process</span></h3>
      <p>No hyperfine results yet. Run <code>benchmarks/hyperfine/run.ps1</code> (Windows) or <code>run.sh</code> (POSIX) after installing hyperfine.</p></section>`;
+
+// ── Highlights (headline numbers for the showcase) ───────────────────────────
+function mibps(row) {
+  if (!row || !row.throughput || row.throughput.unit !== 'Bytes' || row.mean_ns <= 0) return null;
+  return (row.throughput.n / (row.mean_ns / 1e9)) / (1 << 20);
+}
+function bestMibps(rows) {
+  let best = null;
+  for (const r of (rows || [])) { const m = mibps(r); if (m != null && (best == null || m > best.v)) best = { v: m, label: r.label }; }
+  return best;
+}
+const tiles = [];
+const _arc = bestMibps(crit['archive_extract_to']);
+if (_arc) tiles.push({ k: 'Archive extract', v: `${_arc.v.toFixed(0)} MiB/s`, s: `fastest: ${_arc.label}` });
+const _hsh = bestMibps(crit['sha256']);
+if (_hsh) tiles.push({ k: 'SHA-256 integrity', v: _hsh.v >= 1024 ? `${(_hsh.v / 1024).toFixed(2)} GiB/s` : `${_hsh.v.toFixed(0)} MiB/s`, s: 'hashing throughput' });
+const _jsn = bestMibps(crit['repo_json_parse']);
+if (_jsn) tiles.push({ k: 'repo.json parse', v: `${_jsn.v.toFixed(0)} MiB/s`, s: `${_jsn.label}` });
+const _cpy = bestMibps(crit['file_copy']);
+if (_cpy) tiles.push({ k: 'File copy', v: _cpy.v >= 1024 ? `${(_cpy.v / 1024).toFixed(2)} GiB/s` : `${_cpy.v.toFixed(0)} MiB/s`, s: 'in-process copy' });
+let _bestSpeedup = null;
+if (jsData) for (const su of jsData.suites) {
+  const sh = su.results.find(r => r.meta?.kind === 'shipped');
+  const op = su.results.find(r => r.meta?.kind === 'optimized');
+  if (sh && op && op.mean_ns > 0) { const x = sh.mean_ns / op.mean_ns; if (!_bestSpeedup || x > _bestSpeedup.x) _bestSpeedup = { x, name: su.suite }; }
+}
+if (_bestSpeedup) tiles.push({ k: 'Frontend speedup', v: `${_bestSpeedup.x.toFixed(1)}×`, s: 'optimized vs shipped' });
+const heroTiles = tiles.length
+  ? `<div class="hl">${tiles.map(t => `<div class="hl-tile"><div class="hl-v">${esc(t.v)}</div><div class="hl-k">${esc(t.k)}</div><div class="hl-s">${esc(t.s)}</div></div>`).join('')}</div>`
+  : '';
+const envLine = jsData ? `Node ${esc(jsData.node || '')} · ${esc(jsData.platform || '')}` : '';
 
 const critLink = existsSync(join(CRIT, 'report', 'index.html'))
   ? `<a href="../rust/target/criterion/report/index.html">Open Criterion's full interactive report ↗</a>` : '';
@@ -158,17 +190,23 @@ const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
   .src { font-size:10px; font-weight:700; padding:3px 8px; border-radius:99px; text-transform:uppercase; letter-spacing:.05em; }
   .src.rust{ background:rgba(251,146,60,.15); color:#fb923c; } .src.js{ background:rgba(96,165,250,.15); color:#60a5fa; } .src.e2e{ background:rgba(167,139,250,.15); color:#a78bfa; }
   .hint { color:#64748b; font-size:11px; margin:6px 0 0; }
+  .hl{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin:0 0 4px; }
+  .hl-tile{ background:linear-gradient(160deg,#13203a,#111a2e); border:1px solid #1e293b; border-top:2px solid #10b981; border-radius:14px; padding:16px 18px; }
+  .hl-v{ font-size:24px; font-weight:800; color:#f1f5f9; font-family:ui-monospace,monospace; letter-spacing:-.02em; }
+  .hl-k{ font-size:12.5px; color:#cbd5e1; margin-top:5px; font-weight:600; }
+  .hl-s{ font-size:11px; color:#64748b; margin-top:2px; }
   .legend{ display:flex; gap:16px; font-size:13px; margin:8px 0 0; color:#cbd5e1; }
   .legend i{ width:12px;height:12px;border-radius:3px;display:inline-block;vertical-align:-1px;margin-right:5px;}
   .links{ margin:10px 0 0; } .links a{ color:#60a5fa; margin-right:18px; font-size:13px; }
 </style></head><body>
 <header>
   <h1>BetterModsManager — Performance Benchmarks</h1>
-  <p>Generated ${new Date().toISOString()} · Criterion (Rust hot-paths) + micro-benchmarks (frontend) + hyperfine (end-to-end)</p>
+  <p>Generated ${new Date().toISOString()} · Criterion (Rust hot-paths) + micro-benchmarks (frontend) + hyperfine (end-to-end)${envLine ? ' · ' + envLine : ''}</p>
   <div class="legend"><span><i style="background:#3b82f6"></i>shipped / baseline</span><span><i style="background:#10b981"></i>optimized</span><span><i style="background:#fb923c"></i>Rust</span><span><i style="background:#a78bfa"></i>process E2E</span></div>
   <div class="links">${critLink}${jsLink}</div>
 </header>
 <main>
+  ${heroTiles ? `<h2>Highlights</h2>\n  ${heroTiles}` : ''}
   <h2>Rust — Criterion (in-process, steady state)</h2>
   ${critSections || '<div class="card muted"><p>No Criterion data. Run <code>cargo bench</code> in <code>benchmarks/rust</code>.</p></div>'}
   <h2>Frontend — JS/TS micro-benchmarks</h2>
