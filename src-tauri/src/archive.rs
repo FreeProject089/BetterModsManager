@@ -166,19 +166,18 @@ pub fn extract_to(path: &Path, dest: &Path) -> std::io::Result<()> {
 
 /// Extract a .zip across all cores. DEFLATE decompression is CPU-bound and was the
 /// app's slowest hot-path operation when serial. Strategy: enumerate entries once
-/// (creating directories), then decompress + write each file entry in parallel —
-/// each rayon task opens its own archive handle since `ZipArchive` isn't `Sync`.
-/// Zip-Slip safe (`enclosed_name`). Falls back to serial for pathologically large
-/// archives, where re-opening per entry would cost more than it saves.
+/// (creating directories), then decompress + write each file entry in parallel.
+/// `ZipArchive` isn't `Sync`, so each rayon **worker thread** opens its own handle
+/// once (via `try_for_each_init`) — not once per entry — so the central directory
+/// is parsed ~once per core instead of once per file. Zip-Slip safe
+/// (`enclosed_name`); serial fallback for pathologically large archives.
 fn extract_zip_parallel(path: &Path, dest: &Path) -> std::io::Result<()> {
     use rayon::prelude::*;
     let file = std::fs::File::open(path)?;
     let mut zip = zip::ZipArchive::new(file).map_err(io_err)?;
     let count = zip.len();
 
-    // Too many entries → the per-entry central-directory re-parse would dominate;
-    // use the library's serial extractor instead.
-    if count > 4000 {
+    if count > 8000 {
         return zip.extract(dest).map_err(io_err);
     }
 
@@ -197,17 +196,20 @@ fn extract_zip_parallel(path: &Path, dest: &Path) -> std::io::Result<()> {
     }
     drop(zip);
 
-    // Pass 2 (parallel): decompress + write each file with an independent handle.
-    file_indices.par_iter().try_for_each(|&i| -> std::io::Result<()> {
-        let f = std::fs::File::open(path)?;
-        let mut z = zip::ZipArchive::new(f).map_err(io_err)?;
-        let mut e = z.by_index(i).map_err(io_err)?;
-        let safe = match e.enclosed_name() { Some(p) => p.to_path_buf(), None => return Ok(()) };
-        let out = dest.join(&safe);
-        let mut w = std::io::BufWriter::new(std::fs::File::create(&out)?);
-        std::io::copy(&mut e, &mut w)?;
-        Ok(())
-    })?;
+    // Pass 2 (parallel): decompress + write each file. One archive handle per
+    // worker thread, reused across the entries that thread processes.
+    file_indices.par_iter().try_for_each_init(
+        || std::fs::File::open(path).ok().and_then(|f| zip::ZipArchive::new(f).ok()),
+        |archive, &i| -> std::io::Result<()> {
+            let z = archive.as_mut().ok_or_else(|| io_err("failed to open zip handle"))?;
+            let mut e = z.by_index(i).map_err(io_err)?;
+            let safe = match e.enclosed_name() { Some(p) => p.to_path_buf(), None => return Ok(()) };
+            let out = dest.join(&safe);
+            let mut w = std::io::BufWriter::new(std::fs::File::create(&out)?);
+            std::io::copy(&mut e, &mut w)?;
+            Ok(())
+        },
+    )?;
     Ok(())
 }
 

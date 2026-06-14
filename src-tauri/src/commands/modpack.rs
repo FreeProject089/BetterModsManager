@@ -121,9 +121,6 @@ pub async fn build_modpack_mod_ref(
     fallback_link: Option<String>,
     fallback_type: Option<String>,
 ) -> Result<crate::models::modpack::ModpackModRef, AppError> {
-    use sha2::{Digest, Sha256};
-    use std::io::Read;
-
     let (mod_entry, profile_name) = {
         let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
 
@@ -151,15 +148,9 @@ pub async fn build_modpack_mod_ref(
     for rel in &files {
         let full = mod_folder.join(rel);
         let size = std::fs::metadata(&full).map(|m| m.len()).unwrap_or(0);
-        let mut f = std::fs::File::open(&full).map_err(|e| e.to_string())?;
-        let mut hasher = Sha256::new();
-        let mut buf = vec![0u8; 64 * 1024];
-        loop {
-            let n = f.read(&mut buf).map_err(|e| e.to_string())?;
-            if n == 0 { break; }
-            hasher.update(&buf[..n]);
-        }
-        let sha = format!("{:x}", hasher.finalize());
+        // Tagged BLAKE3 (`b3:…`), parallel within large files. Stored in the
+        // `sha256` field (kept for serde back-compat); readers detect the tag.
+        let sha = crate::fs_utils::compute_file_hash(&full).map_err(|e| e.to_string())?;
         if first_sha.is_empty() { first_sha = sha.clone(); }
         file_manifest.push(crate::models::modpack::ModpackFileRef {
             relative_path: rel.to_string_lossy().replace('\\', "/"),
@@ -301,12 +292,8 @@ pub async fn check_modpack_integrity(
                     break;
                 }
                 
-                if let Ok(local_hash) = crate::fs_utils::compute_file_sha256(&local_file_path) {
-                    if local_hash != file_ref.sha256 {
-                        is_corrupted = true;
-                        break;
-                    }
-                } else {
+                // Algorithm-aware: new packs carry BLAKE3 (`b3:`), old packs SHA-256.
+                if !crate::fs_utils::file_matches_hash(&local_file_path, &file_ref.sha256) {
                     is_corrupted = true;
                     break;
                 }
@@ -344,10 +331,9 @@ fn find_file_by_hash_in_dir(dir: &std::path::Path, expected_hash: &str) -> Optio
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() {
-                if let Ok(hash) = crate::fs_utils::compute_file_sha256(&path) {
-                    if hash == expected_hash {
-                        return Some(path);
-                    }
+                // Algorithm-aware: expected_hash may be BLAKE3 (`b3:`) or SHA-256.
+                if crate::fs_utils::file_matches_hash(&path, expected_hash) {
+                    return Some(path);
                 }
             } else if path.is_dir() {
                 if let Some(found) = find_file_by_hash_in_dir(&path, expected_hash) {
@@ -427,12 +413,8 @@ pub async fn repair_modpack_mod(
             let local_path = target_dir.join(&file_ref.relative_path);
             let mut needs_download = true;
 
-            if local_path.exists() {
-                if let Ok(local_hash) = crate::fs_utils::compute_file_sha256(&local_path) {
-                    if local_hash == file_ref.sha256 {
-                        needs_download = false;
-                    }
-                }
+            if local_path.exists() && crate::fs_utils::file_matches_hash(&local_path, &file_ref.sha256) {
+                needs_download = false;
             }
 
             if needs_download {
@@ -496,12 +478,10 @@ pub async fn repair_modpack_mod(
                 let local_path = target_dir.join(&file_ref.relative_path);
                 let mut needs_fix = true;
                 
-                if local_path.exists() {
-                    if let Ok(h) = crate::fs_utils::compute_file_sha256(&local_path) {
-                        if h == file_ref.sha256 { needs_fix = false; }
-                    }
+                if local_path.exists() && crate::fs_utils::file_matches_hash(&local_path, &file_ref.sha256) {
+                    needs_fix = false;
                 }
-                
+
                 if needs_fix {
                     if let Some(found) = find_file_by_hash_in_dir(&target_dir, &file_ref.sha256) {
                         if let Some(parent) = local_path.parent() {

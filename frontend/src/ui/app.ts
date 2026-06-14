@@ -1281,6 +1281,7 @@ function initCredits() {
         { name: "Walkdir", v: "2.0", key: "walkdir", url: "https://github.com/BurntSushi/walkdir" },
         { name: "Zip", v: "0.6", key: "zip", url: "https://github.com/zip-rs/zip" },
         { name: "SHA2", v: "0.10", key: "sha2", url: "https://github.com/RustCrypto/hashes" },
+        { name: "BLAKE3", v: "1.5", key: "blake3", url: "https://github.com/BLAKE3-team/BLAKE3" },
         { name: "Discord RP", v: "0.2", key: "discord-rich-presence", url: "https://github.com/vionya/discord-rich-presence" },
         { name: "Warp", v: "0.3", key: "warp", url: "https://github.com/seanmonstar/warp" },
         { name: "Rayon", v: "1.8", key: "rayon", url: "https://github.com/rayon-rs/rayon" },

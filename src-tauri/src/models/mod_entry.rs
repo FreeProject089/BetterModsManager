@@ -296,35 +296,12 @@ fn collect_file_entries(root: &Path, current: &Path, out: &mut Vec<(String, u64)
 /// Updates `content_id` from already-computed `file_hashes` (true content hash).
 /// Skips if bmm.json declares an explicit id. Safe to call every time hashes are refreshed.
 pub fn update_content_id_from_hashes(entry: &mut ModEntry) {
-    // bmm.json declared id is never overridden
-    let bmm_json = entry.mod_folder_path.join("bmm.json");
-    if bmm_json.exists() {
-        if let Ok(raw) = std::fs::read_to_string(&bmm_json) {
-            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw) {
-                if val.get("id").and_then(|v| v.as_str()).map(|s| !s.trim().is_empty()).unwrap_or(false) {
-                    return;
-                }
-            }
-        }
+    // content_id is a cross-machine IDENTITY, not a content checksum. Derive it
+    // from bmm.json / the (path, size) fingerprint so it stays stable regardless
+    // of which hashing algorithm `file_hashes` uses — the SHA-256→BLAKE3 switch
+    // must NOT change a mod's identity (otherwise old and new installs of the same
+    // mod would stop matching across machines during the migration).
+    if let Some(id) = derive_content_id(&entry.mod_folder_path) {
+        entry.content_id = Some(id);
     }
-
-    if let Some(hashes) = &entry.file_hashes {
-        if !hashes.is_empty() {
-            entry.content_id = Some(content_id_from_file_hashes(hashes));
-        }
-    }
-}
-
-fn content_id_from_file_hashes(hashes: &std::collections::HashMap<String, String>) -> String {
-    use sha2::{Digest, Sha256};
-    let mut sorted: Vec<(&String, &String)> = hashes.iter().collect();
-    sorted.sort_unstable_by_key(|(k, _)| *k);
-    let mut hasher = Sha256::new();
-    for (path, hash) in sorted {
-        hasher.update(path.as_bytes());
-        hasher.update(b"\x00");
-        hasher.update(hash.as_bytes());
-        hasher.update(b"\x00");
-    }
-    format!("{:x}", hasher.finalize())[..32].to_string()
 }

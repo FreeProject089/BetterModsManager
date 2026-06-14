@@ -60,6 +60,10 @@ discord-rich-presence = "0.2.4"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "ico"] }
 futures = "0.3"
 sha2 = "0.10.9"
+# BLAKE3 for fast local content hashing: a tree hash that parallelises WITHIN a
+# single large file (mmap + rayon), unlike SHA-256. Used for file_hashes and the
+# modpack hash-match index. Repo delta-sync keeps its own SHA-256 (wire format).
+blake3 = { version = "1", features = ["rayon", "mmap"] }
 warp = "0.3"
 local-ip-address = "0.6"
 igd = "0.12"

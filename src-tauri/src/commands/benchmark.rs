@@ -439,18 +439,20 @@ fn run_app_benchmark_blocking(
         "Recursively walks the mod folder to enumerate every file (jwalk). Done whenever BMM reads a mod — hashing, conflicts, the file explorer.",
         s, dataset_bytes, nfiles as u64, false, Some(format!("{} files", nfiles))));
 
-    // 2. HASH — SHA-256 every file (the integrity-check workload).
-    emit(2, "Hashing files (SHA-256)")?;
+    // 2. HASH — BLAKE3 content hash of every file (the local change-detection /
+    //    file_hashes workload). BLAKE3 is a tree hash, so it parallelises both
+    //    across files AND within a single large file (mmap + rayon).
+    emit(2, "Hashing files (BLAKE3)")?;
     let hash_items: Vec<((), std::path::PathBuf)> = scanned.iter().map(|rel| ((), mod_dir.join(rel))).collect();
     let mut s = Vec::new();
     let mut hashed = 0u64;
     for _ in 0..reps {
         let t = Instant::now();
-        hashed = fs_utils::compute_file_sha256_bulk(&hash_items).len() as u64;
+        hashed = fs_utils::compute_file_hash_bulk(&hash_items).len() as u64;
         s.push(ms_of(t));
     }
-    results.push(make("hash", "SHA-256 integrity hash", "hash",
-        "Computes a SHA-256 of every file across all cores (rayon, 1 MiB buffered reads). This is the integrity/content-id workload used to detect changed mods and verify downloads.",
+    results.push(make("hash", "Content hash (BLAKE3)", "hash",
+        "Computes a BLAKE3 hash of every file — across all cores AND within each large file (mmap tree hash). This is the local file_hashes / change-detection workload. (Repo delta-sync and download verification keep SHA-256 as their wire format.)",
         s, dataset_bytes, hashed, true, None));
 
     // 3. COPY full-speed — std::fs::copy of the whole mod.
@@ -581,12 +583,12 @@ fn run_app_benchmark_blocking(
     // 10. VERIFY — re-hash every file and compare it to a precomputed digest. This
     //    is the integrity-verification workload (confirm a download, detect a
     //    tampered/corrupt mod), distinct from raw hashing because it also compares.
-    emit(10, "Verifying (SHA-256 compare)")?;
+    emit(10, "Verifying (BLAKE3 compare)")?;
     let verify_items: Vec<(usize, std::path::PathBuf)> = scanned.iter().enumerate()
         .map(|(i, rel)| (i, mod_dir.join(rel))).collect();
     // Precompute the expected digest per file (indexed), once, in parallel.
     let mut expected: Vec<Option<String>> = vec![None; scanned.len()];
-    for (i, h) in fs_utils::compute_file_sha256_bulk(&verify_items) { expected[i] = Some(h); }
+    for (i, h) in fs_utils::compute_file_hash_bulk(&verify_items) { expected[i] = Some(h); }
     let mut s = Vec::new();
     let mut verified = 0u64;
     let mut mismatches = 0u64;
@@ -595,7 +597,7 @@ fn run_app_benchmark_blocking(
         let mut ok = 0u64;
         let mut bad = 0u64;
         // Re-hash everything in parallel, then compare each result to its baseline.
-        for (i, got) in fs_utils::compute_file_sha256_bulk(&verify_items) {
+        for (i, got) in fs_utils::compute_file_hash_bulk(&verify_items) {
             match &expected[i] {
                 Some(e) if e == &got => ok += 1,
                 Some(_) => bad += 1,
@@ -609,8 +611,8 @@ fn run_app_benchmark_blocking(
     } else {
         format!("{} mismatch(es) detected!", mismatches)
     };
-    results.push(make("verify", "SHA-256 verification", "hash",
-        "Re-hashes every file and compares it against a known digest — the integrity check BMM runs to confirm a download finished intact or to detect a tampered/corrupt mod.",
+    results.push(make("verify", "Integrity verification (BLAKE3)", "hash",
+        "Re-hashes every file (BLAKE3) and compares it against the stored baseline — the integrity check BMM runs to detect a tampered or corrupt mod.",
         s, dataset_bytes, verified, true, Some(vnote)));
 
     let total_ms = bench_start.elapsed().as_secs_f64() * 1000.0;

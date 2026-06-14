@@ -273,6 +273,43 @@ pub fn compute_file_sha256_bulk<K: Clone + Send + Sync>(items: &[(K, PathBuf)]) 
         .collect()
 }
 
+// ── Local content hashing (BLAKE3, versioned format) ──────────────────────────
+// `file_hashes` and modpack hash-match values use BLAKE3, tagged `b3:` so the
+// algorithm is self-describing. BLAKE3 is a *tree* hash, so one very large file is
+// hashed across all cores (mmap + rayon) — the fix for mods dominated by a single
+// big file, where file-level parallelism can't help. Untagged digests are treated
+// as legacy SHA-256 so old baselines/modpacks still verify (dual-read).
+
+/// Compute a tagged BLAKE3 digest (`b3:<hex>`) for a file, parallel within the file.
+pub fn compute_file_hash(path: &Path) -> Result<String> {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update_mmap_rayon(path)
+        .with_context(|| format!("Failed to hash: {:?}", path))?;
+    Ok(format!("b3:{}", hasher.finalize().to_hex()))
+}
+
+/// Bulk version: rayon over files, and BLAKE3 parallel within each large file —
+/// covers both shapes (many small files AND a few huge files).
+pub fn compute_file_hash_bulk<K: Clone + Send + Sync>(items: &[(K, PathBuf)]) -> Vec<(K, String)> {
+    use rayon::prelude::*;
+    items
+        .par_iter()
+        .filter_map(|(k, p)| compute_file_hash(p).ok().map(|h| (k.clone(), h)))
+        .collect()
+}
+
+/// True if `path` matches a previously stored digest, using whatever algorithm the
+/// stored digest declares: `b3:`-tagged → BLAKE3, otherwise legacy SHA-256.
+pub fn file_matches_hash(path: &Path, stored: &str) -> bool {
+    if let Some(hex) = stored.strip_prefix("b3:") {
+        compute_file_hash(path)
+            .map(|h| h.strip_prefix("b3:").map(|x| x == hex).unwrap_or(false))
+            .unwrap_or(false)
+    } else {
+        compute_file_sha256(path).map(|h| h == stored).unwrap_or(false)
+    }
+}
+
 /// Backup a file from `game_path/rel` to `backup_root/_original/rel`.
 /// Only if it's NOT provided by another active mod.
 pub fn backup_original_file(

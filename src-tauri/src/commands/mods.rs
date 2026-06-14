@@ -492,7 +492,7 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), AppError> {
                             .map(|rel| (rel.clone(), base.join(rel)))
                             .collect();
                         let new_hashes: std::collections::HashMap<String, String> =
-                            crate::fs_utils::compute_file_sha256_bulk(&items).into_iter().collect();
+                            crate::fs_utils::compute_file_hash_bulk(&items).into_iter().collect();
                         m.file_hashes = Some(new_hashes);
                         update_content_id_from_hashes(m);
                     }
@@ -2107,15 +2107,10 @@ pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>,
                     } else if !dst.exists() {
                         altered.push(format!("[{}] {} (Manquant dans jeu)", m.name, rel.display()));
                         mod_has_issues = true;
-                    } else {
-                        if let Ok(new_hash) = crate::fs_utils::compute_file_sha256(&dst) {
-                            if new_hash != *old_hash {
-                                altered.push(format!("[{}] {} (Modifié/Corrompu)", m.name, rel.display()));
-                                mod_has_issues = true;
-                            }
-                        } else {
-                             mod_has_issues = true;
-                        }
+                    } else if !crate::fs_utils::file_matches_hash(&dst, old_hash) {
+                        // Algorithm-aware: BLAKE3 (`b3:`) or legacy SHA-256 baselines.
+                        altered.push(format!("[{}] {} (Modifié/Corrompu)", m.name, rel.display()));
+                        mod_has_issues = true;
                     }
                 }
                 
@@ -2578,7 +2573,7 @@ pub async fn get_mod_integrity(state: State<'_, AppState>, mod_id: String) -> Re
             .map(|f| (f.to_string_lossy().to_string(), mod_path.join(f)))
             .collect();
         let new_hashes: std::collections::HashMap<String, String> =
-            fs_utils::compute_file_sha256_bulk(&items).into_iter().collect();
+            fs_utils::compute_file_hash_bulk(&items).into_iter().collect();
 
         {
             let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
@@ -2611,12 +2606,9 @@ pub async fn get_mod_integrity(state: State<'_, AppState>, mod_id: String) -> Re
         let full_path = mod_path.join(rel_path);
         if !full_path.exists() {
             missing.push(rel_path.clone());
-        } else {
-            if let Ok(new_hash) = fs_utils::compute_file_sha256(&full_path) {
-                if new_hash != *old_hash {
-                    modified.push(rel_path.clone());
-                }
-            }
+        } else if !fs_utils::file_matches_hash(&full_path, old_hash) {
+            // Algorithm-aware: BLAKE3 (`b3:`) or legacy SHA-256 baselines.
+            modified.push(rel_path.clone());
         }
     }
 
@@ -2663,7 +2655,7 @@ pub async fn update_mod_hashes(state: State<'_, AppState>, mod_id: String) -> Re
         .map(|f| (f.to_string_lossy().to_string(), mod_path.join(f)))
         .collect();
     let new_hashes: std::collections::HashMap<String, String> =
-        fs_utils::compute_file_sha256_bulk(&items).into_iter().collect();
+        fs_utils::compute_file_hash_bulk(&items).into_iter().collect();
 
     {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
@@ -3050,7 +3042,7 @@ fn process_single_mod_hashing(
             // throttled sequential loop — this is a background op, so it can use
             // the full machine and finish far sooner.
             let new_hashes: std::collections::HashMap<String, String> =
-                fs_utils::compute_file_sha256_bulk(&items).into_iter().collect();
+                fs_utils::compute_file_hash_bulk(&items).into_iter().collect();
             let calculated = new_hashes.len();
             tracker.set("files", calculated as u64);
             tracker.set("bytes_read", bytes_total);

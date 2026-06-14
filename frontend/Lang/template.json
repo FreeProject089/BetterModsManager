@@ -2082,6 +2082,7 @@
   "credits.stackCrate.reqwest": "Ergonomic asynchronous HTTP client.",
   "credits.stackCrate.serde": "Framework for serializing and deserializing Rust data structures.",
   "credits.stackCrate.sha2": "SHA-2 family of cryptographic hash functions.",
+  "credits.stackCrate.blake3": "Fast cryptographic tree hash; parallel within a single file.",
   "credits.stackCrate.sysinfo": "Cross-platform system info: CPU, memory, disks and processes.",
   "credits.stackCrate.tauri": "Framework for building cross-platform desktop apps with a web frontend.",
   "credits.stackCrate.tempfile": "Securely creates and cleans up temporary files and directories.",

@@ -575,9 +575,16 @@ pub fn verify_integrity(mod_id: &str) -> anyhow::Result<HashMap<String, bool>> {
                 continue;
             }
             
-            // Re-calculate hash
-            let current_hash = compute_file_sha256(&full_path)?;
-            results.insert(rel.clone(), &current_hash == stored_hash);
+            // Algorithm-aware compare: `b3:`-tagged → BLAKE3, else legacy SHA-256.
+            let matches = if let Some(hex) = stored_hash.strip_prefix("b3:") {
+                let mut h = blake3::Hasher::new();
+                if h.update_mmap_rayon(&full_path).is_ok() {
+                    h.finalize().to_hex().as_str() == hex
+                } else { false }
+            } else {
+                compute_file_sha256(&full_path)? == *stored_hash
+            };
+            results.insert(rel.clone(), matches);
         }
     }
     
