@@ -3943,7 +3943,7 @@
   "docs.bench.opsB": "Les vraies opérations de BMM, chacune <strong>échantillonnée plusieurs fois</strong> (médiane + plage min/max) :",
   "docs.bench.resT": "Lire les résultats",
   "docs.bench.resB": "Chaque opération affiche sa <strong>médiane</strong> et la plage min–max, son <strong>débit</strong> (Mo/s) le cas échéant, et une explication. Deux <strong>graphiques SVG</strong> en haut résument le temps et le débit. <strong>Copier JSON</strong> copie le résultat complet ; <strong>Exporter le rapport</strong> enregistre un rapport HTML autonome (graphiques + tableau).",
-  "docs.bench.safe": "🛡️ Lecture seule : le benchmark ne modifie jamais vos mods ni votre jeu. Toutes les opérations s'exécutent dans un espace de travail temporaire.",
+  "docs.bench.safe": "Lecture seule : le benchmark ne modifie jamais vos mods ni votre jeu. Toutes les opérations s'exécutent dans un espace de travail temporaire.",
   "docs.bench.dev": "Pour les développeurs, une suite plus poussée (Criterion, hyperfine, micro-benchmarks JS) vit dans le dossier <code>benchmarks/</code> du dépôt.",
   "docs.tab.basic": "Basique",
   "docs.tab.faq": "FAQ",

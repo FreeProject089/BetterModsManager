@@ -57,6 +57,15 @@ function enhance(sel: HTMLSelectElement): void {
     ui.className = 'bmm-csel';
     if (sel.style.width) ui.style.width = sel.style.width;
     if (sel.style.flex) ui.style.flex = sel.style.flex;
+    // Carry the select's inline margins onto the visible wrapper — the native
+    // <select> is hidden (display:none ⇒ its margins are ignored), so without this
+    // an inline `margin-top` etc. would be lost and the trigger glues to its
+    // neighbour (e.g. the mapper expand/collapse buttons).
+    if (sel.style.margin) ui.style.margin = sel.style.margin;
+    if (sel.style.marginTop) ui.style.marginTop = sel.style.marginTop;
+    if (sel.style.marginBottom) ui.style.marginBottom = sel.style.marginBottom;
+    if (sel.style.marginLeft) ui.style.marginLeft = sel.style.marginLeft;
+    if (sel.style.marginRight) ui.style.marginRight = sel.style.marginRight;
     sel.insertAdjacentElement('afterend', ui);
 
     const trigger = document.createElement('button');

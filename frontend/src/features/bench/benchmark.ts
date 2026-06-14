@@ -240,6 +240,7 @@ export async function openAdvancedPerfModal() {
                             <button class="bench-seg" data-scale="small">S</button>
                             <button class="bench-seg active" data-scale="medium">M</button>
                             <button class="bench-seg" data-scale="large">L</button>
+                            <button class="bench-seg" data-scale="xlarge" title="${t('bench.xlargeTip') || '~400 MB'}">XL</button>
                         </div>
                     </div>
                     <div style="flex:1 1 auto;"></div>

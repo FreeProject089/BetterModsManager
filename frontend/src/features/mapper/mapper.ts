@@ -11,6 +11,10 @@ import { escHtml } from '../../core/utils.js';
 import type { Profile, ModEntry, FileTreeNode, EnrichedMod } from '../../types/models.js';
 
 let selectedModId: string | null = null;
+// Guard so a refresh can't run twice concurrently — WITHOUT disabling the <select>
+// (toggling `.disabled` on a custom-select-enhanced element left its trigger stuck,
+// so you couldn't pick another mod).
+let _mapperBusy = false;
 let activeProfile: Profile | null = null;
 let modTreeData: FileTreeNode[] = [];
 let gameTreeData: FileTreeNode[] = [];
@@ -72,6 +76,7 @@ export async function initMapper(): Promise<void> {
 
     // 2. Events
     modSelect?.addEventListener('change', async () => {
+        if (_mapperBusy) return;
         if (!modSelect.value && modSelect.value !== "") return;
         selectedModId = modSelect.value;
         selectedPaths.clear();
@@ -79,24 +84,20 @@ export async function initMapper(): Promise<void> {
         pendingDeletions.clear();
         updateSaveButtonVisibility();
         updateSelectionCounter();
-        
-        modSelect.disabled = true;
-        profileSelect.disabled = true;
+
+        _mapperBusy = true;
         try {
             await refreshModTree();
         } finally {
-            modSelect.disabled = false;
-            profileSelect.disabled = false;
+            _mapperBusy = false;
         }
     });
 
     profileSelect?.addEventListener('change', async () => {
         const newProfileId = profileSelect.value;
-        if (!newProfileId) return;
-        
-        modSelect.disabled = true;
-        profileSelect.disabled = true;
-        
+        if (!newProfileId || _mapperBusy) return;
+
+        _mapperBusy = true;
         try {
             await invoke('set_active_profile', { profileId: newProfileId });
             // Profile changed — force reload both trees and reset caches
@@ -106,11 +107,10 @@ export async function initMapper(): Promise<void> {
             await refreshGameTree(true);
             if (selectedModId) await refreshModTree(true);
             toast(t("common.saved"), "success");
-        } catch (e: any) { 
-            toast(e.message || e, "error"); 
+        } catch (e: any) {
+            toast(e.message || e, "error");
         } finally {
-            modSelect.disabled = false;
-            profileSelect.disabled = false;
+            _mapperBusy = false;
         }
     });
 

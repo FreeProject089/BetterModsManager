@@ -212,31 +212,31 @@ window.showGlobalDropdown = (btn: HTMLElement, menu: HTMLElement): void => {
         (window as any).globalDropdownCleanup = null;
     };
 
-    clone.querySelectorAll('.dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod').forEach(item => {
+    // Forward each cloned action to its matching ORIGINAL item. Matching by the
+    // SAME selector list gives a robust 1:1 index — the old code indexed ALL
+    // descendants (`querySelectorAll('*')`), which drifts if the clone is
+    // re-rendered/translated and could forward the click to the wrong item
+    // (e.g. "open active folder" doing nothing).
+    const ACTION_SEL = '.dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod';
+    const cloneActions = Array.from(clone.querySelectorAll(ACTION_SEL));
+    const origActions = Array.from(menu.querySelectorAll(ACTION_SEL));
+    cloneActions.forEach((item, i) => {
         const element = item as HTMLElement;
-        
+
         // Prevent tooltip conflicts on dropdown items
         element.addEventListener('mouseenter', (e) => {
             e.stopPropagation();
-            // Temporarily disable tooltips when dropdown is open
             (window as any).__dropdownOpen = true;
         });
-        
         element.addEventListener('mouseleave', (e) => {
             e.stopPropagation();
-            // Re-enable tooltips after leaving dropdown
-            setTimeout(() => {
-                (window as any).__dropdownOpen = false;
-            }, 100);
+            setTimeout(() => { (window as any).__dropdownOpen = false; }, 100);
         });
-        
+
         element.onclick = (e: MouseEvent) => {
             e.stopPropagation();
-            const originalItems = Array.from(menu.querySelectorAll('*'));
-            const idx = Array.from(clone.querySelectorAll('*')).indexOf(item);
-            if (originalItems[idx]) {
-                originalItems[idx].dispatchEvent(new MouseEvent('click', { bubbles: true }));
-            }
+            const orig = origActions[i];
+            if (orig) orig.dispatchEvent(new MouseEvent('click', { bubbles: true }));
             window.closeGlobalDropdown(true);
         };
     });

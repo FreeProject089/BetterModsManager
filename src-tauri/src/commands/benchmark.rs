@@ -295,11 +295,14 @@ fn run_app_benchmark_blocking(
     use crate::{archive, fs_utils};
     let e2s = |e: std::io::Error| e.to_string();
 
-    // Scale presets (file count / avg size) for the synthetic dataset.
+    // Scale presets (file count / dirs / avg file size) for the synthetic dataset.
+    // Approx total = files × avg: small ≈ 6 MB, medium ≈ 48 MB, large ≈ 160 MB,
+    // xlarge ≈ 400 MB. (Each op is sampled fewer times at bigger sizes — see `reps`.)
     let (files, dirs, avg) = match scale.as_deref().unwrap_or("medium") {
-        "small" => (60usize, 8usize, 8 * 1024usize),
-        "large" => (260, 16, 96 * 1024),
-        _ => (140, 10, 48 * 1024),
+        "small"  => (180usize, 10usize, 32 * 1024usize),
+        "large"  => (500, 16, 320 * 1024),
+        "xlarge" => (800, 20, 512 * 1024),
+        _ => (300, 12, 160 * 1024),
     };
 
     let is_real = mode == "real";
@@ -365,7 +368,7 @@ fn run_app_benchmark_blocking(
     // Each operation is sampled several times so we get a real distribution
     // (median + min/max), like Criterion — not a single noisy value. Fewer reps
     // for the bigger dataset to keep total wall time reasonable.
-    let reps: usize = match scale.as_deref().unwrap_or("medium") { "small" => 7, "large" => 3, _ => 5 };
+    let reps: usize = match scale.as_deref().unwrap_or("medium") { "small" => 7, "large" => 3, "xlarge" => 2, _ => 5 };
     let total_steps = 8u32;
     let emit = |step: u32, label: &str| {
         let _ = window.emit("app-benchmark-progress", serde_json::json!({ "step": step, "total": total_steps, "label": label }));

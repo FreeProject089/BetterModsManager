@@ -3429,7 +3429,7 @@
   "docs.bench.opsB": "BMM's real operations, each <strong>sampled several times</strong> (median + min/max range):",
   "docs.bench.resT": "Reading the results",
   "docs.bench.resB": "Each operation shows its <strong>median</strong> and min–max range, its <strong>throughput</strong> (MB/s) where relevant, and an explanation. Two <strong>SVG charts</strong> at the top summarise time and throughput. <strong>Copy JSON</strong> copies the full result; <strong>Export report</strong> saves a self-contained HTML report (charts + table).",
-  "docs.bench.safe": "🛡️ Read-only: the benchmark never modifies your mods or your game. Every operation runs in a temporary workspace.",
+  "docs.bench.safe": "Read-only: the benchmark never modifies your mods or your game. Every operation runs in a temporary workspace.",
   "docs.bench.dev": "For developers, a deeper suite (Criterion, hyperfine, JS micro-benchmarks) lives in the repo's <code>benchmarks/</code> folder.",
   "docs.tab.basic": "Basic",
   "docs.tab.faq": "FAQ",
