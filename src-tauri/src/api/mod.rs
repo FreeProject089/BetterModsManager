@@ -378,6 +378,16 @@ fn save_data(data: &Arc<std::sync::Mutex<AppData>>, path: &PathBuf) {
     }
 }
 
+/// Constant-time byte comparison (CWE-208): avoids the early-exit timing leak of
+/// `==`. Comparing lengths first is acceptable here — the token length is fixed.
+fn ct_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() { return false; }
+    let mut diff = 0u8;
+    for i in 0..a.len() { diff |= a[i] ^ b[i]; }
+    diff == 0
+}
+
 fn require_token(
     data: Arc<std::sync::Mutex<AppData>>,
 ) -> impl Filter<Extract = (), Error = warp::Rejection> + Clone {
@@ -392,7 +402,7 @@ fn require_token(
             };
             let provided = auth.unwrap_or_default();
             async move {
-                if provided == expected {
+                if ct_eq(&provided, &expected) {
                     Ok(())
                 } else {
                     Err(warp::reject::custom(Unauthorized))
@@ -2326,11 +2336,21 @@ pub async fn start_api_server(
         .or(apps_list)                 // /api/apps (GET)
         .boxed();
 
-    // CORS headers — allow any origin (local-only, Bearer token required)
-    let cors = warp::cors()
-        .allow_any_origin()
-        .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
-        .allow_headers(vec!["Content-Type", "Authorization"]);
+    // CORS (CWE-942) — in RELEASE, restrict to the Tauri WebView origins so an
+    // arbitrary website open in the user's browser can't READ the unauthenticated
+    // GET endpoints (mod/profile enumeration); the in-app tester (origin
+    // tauri.localhost) keeps working, and curl/deep-link clients send no Origin.
+    // In DEBUG (`tauri dev`) the WebView origin is the dev server, so we stay
+    // permissive to avoid breaking the in-app tester during development.
+    let cors = {
+        let b = warp::cors()
+            .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+            .allow_headers(vec!["Content-Type", "Authorization"]);
+        #[cfg(debug_assertions)]
+        { b.allow_any_origin() }
+        #[cfg(not(debug_assertions))]
+        { b.allow_origins(vec!["https://tauri.localhost", "tauri://localhost", "http://tauri.localhost"]) }
+    };
 
     // Split into boxed groups to avoid E0275 type-recursion overflow with deep Or<Or<...>> chains
     let group_a = health

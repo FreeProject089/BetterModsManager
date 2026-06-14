@@ -3,6 +3,23 @@ use tauri::AppHandle;
 use crate::models::app_catalog::*;
 use crate::commands::crash::log_line;
 
+/// CWE-22: reduce a catalog-supplied filename to a safe bare basename — strips any
+/// directory components / traversal, drops NTFS alternate-data-stream suffixes
+/// (`:`), and replaces anything that isn't filename-safe. Never returns empty.
+fn sanitize_download_name(name: &str, fallback_ext: &str) -> String {
+    let base = std::path::Path::new(name)
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let base = base.split(':').next().unwrap_or("").trim(); // drop ADS + trim
+    let cleaned: String = base
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ' ' | '(' | ')') { c } else { '_' })
+        .collect();
+    let cleaned = cleaned.trim_matches(|c| c == '.' || c == ' ');
+    if cleaned.is_empty() { format!("download.{}", fallback_ext) } else { cleaned.to_string() }
+}
+
 // ── State persistence ─────────────────────────────────────────────────────────
 
 fn state_path(app: &AppHandle) -> std::path::PathBuf {
@@ -584,8 +601,15 @@ pub async fn install_app(
     let storage_dir = target_dir.clone();
     let mut installer_launched = is_setup;
 
-    let file_name = if url_filename.is_empty() { format!("download.{}", ext) } else { url_filename.clone() };
+    // CWE-22: the filename comes from the (possibly untrusted) catalog URL, so a
+    // segment like `..\..\Startup\x.exe` could escape storage_dir. Sanitise to a
+    // bare, safe basename and verify the resolved path stays inside storage_dir.
+    let raw_name = if url_filename.is_empty() { format!("download.{}", ext) } else { url_filename.clone() };
+    let file_name = sanitize_download_name(&raw_name, &ext);
     let file_path = storage_dir.join(&file_name);
+    if file_path.parent() != Some(storage_dir.as_path()) {
+        return Err("Refused: unsafe download path".to_string());
+    }
     std::fs::write(&file_path, &bytes).map_err(|e| format!("Write failed: {}", e))?;
 
     let executables;

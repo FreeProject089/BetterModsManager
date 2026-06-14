@@ -465,6 +465,7 @@ fn main() {
             commands::plugins::get_plugin_permissions,
             commands::plugins::get_api_token,
             commands::plugins::get_effective_api_port,
+            commands::plugins::restart_api_server,
             commands::plugins::reset_api_token,
             commands::plugins::generate_script,
             commands::plugins::export_plugin,

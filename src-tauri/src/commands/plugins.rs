@@ -375,6 +375,41 @@ pub fn get_effective_api_port() -> u16 {
     crate::api::api_port()
 }
 
+/// Stop the running Plugin API server and re-spawn it on the CURRENT
+/// `settings.api_port`, so changing the port takes effect immediately without a
+/// full app restart. Returns the port it actually bound (read it back to refresh
+/// the UI / docs). All state access happens before any `.await`.
+#[tauri::command]
+pub async fn restart_api_server(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<u16, String> {
+    // Signal the current server to stop (graceful shutdown), snapshot what the
+    // server needs, and register the new shutdown channel — all before awaiting.
+    if let Some(tx) = state.api_shutdown_tx.lock().unwrap_or_else(|p| p.into_inner()).take() {
+        let _ = tx.send(());
+    }
+    let data_arc = state.data.clone();
+    let data_path = state.data_path.clone();
+    let creator_id = std::sync::Arc::new(
+        crate::commands::security::get_creator_id(app.clone()).unwrap_or_default()
+    );
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    *state.api_shutdown_tx.lock().unwrap_or_else(|p| p.into_inner()) = Some(tx);
+
+    // Let the OS release the old port before rebinding.
+    tokio::time::sleep(std::time::Duration::from_millis(350)).await;
+
+    let api_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        crate::api::start_api_server(data_arc, data_path, creator_id, rx, api_handle).await;
+    });
+
+    // Give it a moment to bind, then report the effective port.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    Ok(crate::api::api_port())
+}
+
 #[tauri::command]
 pub fn reset_api_token(state: State<'_, AppState>) -> Result<String, String> {
     let new_token = uuid::Uuid::new_v4().to_string();
@@ -1177,6 +1212,18 @@ pub async fn export_plugin(
 
 #[tauri::command]
 pub fn write_text_file(path: String, content: String) -> Result<(), String> {
+    // CWE-73 hardening: this command is reachable from the WebView, so an XSS
+    // could try to drop a file into an auto-run location. Reject path traversal
+    // and the Windows auto-start folder. Legit callers (plugin-script export,
+    // benchmark report export) pass an absolute path the user picked via the
+    // native save dialog, which is unaffected.
+    let norm = path.replace('/', "\\").to_lowercase();
+    if norm.contains("..") {
+        return Err("Refused: path traversal in target".to_string());
+    }
+    if norm.contains(r"\microsoft\windows\start menu\programs\startup") {
+        return Err("Refused: auto-start location".to_string());
+    }
     if let Some(parent) = std::path::Path::new(&path).parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }

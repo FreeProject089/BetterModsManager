@@ -348,6 +348,7 @@
   "settings.identity.apiPortTip": "Port local de l'API Plugins (51274 par défaut). Tout (frontend, scripts générés) suit automatiquement. Redémarrez BMM après modification.",
   "settings.identity.apiPortSave": "Appliquer",
   "settings.identity.apiPortSaved": "Port API enregistré — redémarrez BMM pour appliquer",
+  "settings.identity.apiPortApplied": "Port API appliqué — serveur relié à chaud",
   "settings.identity.apiPortInvalid": "Port invalide (1–65535)",
   "settings.identity.apiPortReset": "Réinitialiser au port par défaut (51274)",
   "settings.identity.version": "Version",

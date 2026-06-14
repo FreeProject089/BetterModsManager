@@ -181,18 +181,31 @@ export function applyTranslations(root = document) {
     // Substitute the default API port in docs/examples with the EFFECTIVE port
     // (settings.api_port may differ from 51274). Covers static HTML examples
     // (curl snippets, tables) and i18n strings mentioning the port.
+    // Idempotent: replaces BOTH the default 51274 AND the previously-shown port,
+    // so changing the port live (re-running applyTranslations) updates correctly.
     try {
         const port = localStorage.getItem('bmm_api_port') || '51274';
-        if (port !== '51274') {
-            const scope = root instanceof Document ? root : root;
+        const prev = _lastApiPortShown;
+        if (port !== '51274' || prev !== '51274') {
+            const scope = root;
             scope.querySelectorAll('#view-docs code, #view-docs pre, #view-docs td, #view-docs p, #view-docs strong, #view-docs .plug-doc-p').forEach((el) => {
-                if (el.innerHTML.includes('51274'))
-                    el.innerHTML = el.innerHTML.replace(/51274/g, port);
+                let html = el.innerHTML;
+                if (prev !== port && prev !== '51274' && html.includes(prev)) {
+                    html = html.replace(new RegExp(prev.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), port);
+                }
+                if (port !== '51274' && html.includes('51274')) {
+                    html = html.replace(/51274/g, port);
+                }
+                if (html !== el.innerHTML)
+                    el.innerHTML = html;
             });
         }
+        _lastApiPortShown = port;
     }
     catch { /* never break translations over this */ }
 }
+// Last API port substituted into the docs, so a live port change can rewrite it.
+let _lastApiPortShown = '51274';
 export async function refreshLanguages() {
     try {
         const { invoke } = await import('./api.js');

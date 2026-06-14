@@ -140,6 +140,22 @@ pub fn stop_benchmark(state: State<AppState>) {
 
 #[tauri::command]
 pub fn read_file_text(path: String) -> Result<String, String> {
+    // CWE-73 hardening: this command is reachable from the WebView. Reject path
+    // traversal and restrict to text formats — the only caller imports a benchmark
+    // session `.csv`. This limits arbitrary-file read (defense in depth; a full
+    // fix would pass a dialog-chosen handle rather than a free path).
+    if path.contains("..") {
+        return Err("Refused: path traversal".to_string());
+    }
+    const OK_EXT: &[&str] = &["csv", "json", "txt", "md", "log", "ini", "cfg", "xml", "yml", "yaml", "html"];
+    let ext = std::path::Path::new(&path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    if !OK_EXT.contains(&ext.as_str()) {
+        return Err("Refused: unsupported file type".to_string());
+    }
     std::fs::read_to_string(path).map_err(|e| e.to_string())
 }
 

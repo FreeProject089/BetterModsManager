@@ -1392,28 +1392,40 @@ async function initSecurityInfoCard() {
     // The displayed URL + port field reflect settings.api_port; changing the
     // port updates settings (server rebinds on next launch — restart needed).
     try {
-        const { getSettings, apiBase } = await import('../../core/api.js');
+        const { getSettings, apiBase, setApiPort } = await import('../../core/api.js');
+        const { applyTranslations } = await import('../../core/i18n.js');
         const cfg = await getSettings();
         const urlEl  = document.getElementById('sic-api-url');
         const portEl = document.getElementById('sic-api-port') as HTMLInputElement | null;
         if (urlEl) urlEl.textContent = apiBase();
         if (portEl) portEl.value = String(cfg.api_port || 51274);
-        document.getElementById('btn-sic-save-port')?.addEventListener('click', async () => {
-            const p = parseInt(portEl?.value || '', 10);
-            if (!p || p < 1 || p > 65535) { toast(t('settings.identity.apiPortInvalid') || 'Invalid port (1–65535)', 'warning'); return; }
+
+        // Save settings, rebind the API server LIVE on the new port, then refresh
+        // the displayed URL + docs examples from the port it actually bound.
+        const applyPort = async (p: number) => {
             const fresh = await getSettings();
             fresh.api_port = p;
             await invoke('update_settings', { settings: fresh });
-            // Do NOT switch apiBase() now — the server still listens on the old
-            // port until restart; switching immediately would break every call.
-            toast(t('settings.identity.apiPortSaved') || 'API port saved — restart BMM to apply', 'success', 3500);
+            try {
+                const bound = await invoke('restart_api_server') as number;
+                setApiPort(bound);
+                if (urlEl) urlEl.textContent = apiBase();
+                if (portEl) portEl.value = String(bound);
+                applyTranslations();   // re-substitute the port in the docs curl examples
+                toast(t('settings.identity.apiPortApplied') || `API port applied — now on :${bound}`, 'success', 3500);
+            } catch (e) {
+                // Couldn't rebind live → fall back to "restart to apply".
+                toast(t('settings.identity.apiPortSaved') || 'API port saved — restart BMM to apply', 'warning', 3500);
+            }
+        };
+
+        document.getElementById('btn-sic-save-port')?.addEventListener('click', async () => {
+            const p = parseInt(portEl?.value || '', 10);
+            if (!p || p < 1 || p > 65535) { toast(t('settings.identity.apiPortInvalid') || 'Invalid port (1–65535)', 'warning'); return; }
+            await applyPort(p);
         });
         document.getElementById('btn-sic-reset-port')?.addEventListener('click', async () => {
-            const fresh = await getSettings();
-            fresh.api_port = 51274;
-            await invoke('update_settings', { settings: fresh });
-            if (portEl) portEl.value = '51274';
-            toast(t('settings.identity.apiPortSaved') || 'API port saved — restart BMM to apply', 'success', 3500);
+            await applyPort(51274);
         });
     } catch (_) {}
 
