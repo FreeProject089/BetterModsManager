@@ -251,7 +251,7 @@ export async function openAdvancedPerfModal() {
                                 <button class="bench-seg" data-scale="custom" title="${t('bench.sizeCustomTip') || 'Custom total size'}">${t('bench.sizeCustom') || 'Custom'}</button>
                             </div>
                             <div id="bench-custom-wrap" style="display:none; align-items:center; gap:5px;">
-                                <input id="bench-custom-mb" type="number" min="1" max="4096" value="250" style="width:74px; height:30px; background:rgba(0,0,0,0.32); border:1px solid var(--bmm-s08,rgba(255,255,255,0.08)); border-radius:8px; color:var(--text-primary); font-size:12px; font-weight:700; text-align:right; padding:0 7px;" />
+                                <input id="bench-custom-mb" type="number" min="1" max="8192" value="250" title="${t('bench.sizeCustomMaxTip') || 'Max total dataset size in MB (1–8192). Bigger = more folders and more files per folder.'}" style="width:78px; height:30px; background:rgba(0,0,0,0.32); border:1px solid var(--bmm-s08,rgba(255,255,255,0.08)); border-radius:8px; color:var(--text-primary); font-size:12px; font-weight:700; text-align:right; padding:0 7px;" />
                                 <span style="font-size:11px; font-weight:700; color:var(--text-muted);">MB</span>
                             </div>
                         </div>
@@ -657,6 +657,9 @@ export async function openAdvancedPerfModal() {
             if (liveResults) { renderBenchResults(liveResults, report); liveResults.style.display = 'flex'; }
             const liveIntro = document.getElementById('bench-intro');
             if (liveIntro) liveIntro.style.display = 'none';
+            // Always notify completion — the modal may be closed/in the background.
+            const secs = report?.total_ms ? ` (${(report.total_ms / 1000).toFixed(1)}s)` : '';
+            toast((t('bench.done') || 'Benchmark finished') + secs, 'success');
         } catch (e) {
             const msg = String(e);
             if (/cancel/i.test(msg)) {

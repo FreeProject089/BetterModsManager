@@ -316,11 +316,14 @@ fn run_app_benchmark_blocking(
     let custom_mb: Option<usize> = scale.as_deref()
         .and_then(|s| s.strip_prefix("custom:"))
         .and_then(|n| n.trim().parse::<usize>().ok())
-        .map(|mb| mb.clamp(1, 4096));
+        .map(|mb| mb.clamp(1, 8192));
     let (files, dirs, avg) = if let Some(mb) = custom_mb {
         let avg = 256 * 1024usize;                       // 256 KB per file
         let files = ((mb * 1024 * 1024) / avg).max(8);   // total ≈ mb MB
-        let dirs = (files / 25).clamp(4, 64);
+        // Grow folders AND files-per-folder with size (≈√files dirs ⇒ files/dir
+        // also ≈√files), so a bigger dataset means a deeper, wider tree — closer
+        // to a real large library than a flat folder.
+        let dirs = ((files as f64).sqrt().round() as usize).clamp(4, 256);
         (files, dirs, avg)
     } else {
         match scale.as_deref().unwrap_or("medium") {
@@ -400,7 +403,7 @@ fn run_app_benchmark_blocking(
     } else {
         match scale.as_deref().unwrap_or("medium") { "small" => 7, "large" => 3, "xlarge" => 2, _ => 5 }
     };
-    let total_steps = 8u32;
+    let total_steps = 9u32;
     let emit = |step: u32, label: &str| -> Result<(), String> {
         if BENCH_CANCEL.load(std::sync::atomic::Ordering::SeqCst) {
             return Err("Benchmark cancelled".to_string());
@@ -550,6 +553,38 @@ fn run_app_benchmark_blocking(
     results.push(make("cancel", "Cancel an operation", "activation",
         "Starts a large (~48 MB) activation, then measures how quickly it stops after Cancel is requested. Lower = snappier cancellation; BMM checks the cancel flag between files.",
         s, 0, 1, false, Some("time from cancel → fully stopped".into())));
+
+    // 9. VERIFY — re-hash every file and compare it to a precomputed digest. This
+    //    is the integrity-verification workload (confirm a download, detect a
+    //    tampered/corrupt mod), distinct from raw hashing because it also compares.
+    emit(9, "Verifying (SHA-256 compare)")?;
+    let expected: Vec<Option<String>> = scanned.iter()
+        .map(|rel| fs_utils::compute_file_sha256(&mod_dir.join(rel)).ok())
+        .collect();
+    let mut s = Vec::new();
+    let mut verified = 0u64;
+    let mut mismatches = 0u64;
+    for _ in 0..reps {
+        let t = Instant::now();
+        let mut ok = 0u64;
+        let mut bad = 0u64;
+        for (rel, exp) in scanned.iter().zip(expected.iter()) {
+            match (fs_utils::compute_file_sha256(&mod_dir.join(rel)).ok(), exp) {
+                (Some(got), Some(e)) if &got == e => ok += 1,
+                (Some(_), Some(_)) => bad += 1,
+                _ => {}
+            }
+        }
+        verified = ok; mismatches = bad; s.push(ms_of(t));
+    }
+    let vnote = if mismatches == 0 {
+        format!("{} files verified — all match", verified)
+    } else {
+        format!("{} mismatch(es) detected!", mismatches)
+    };
+    results.push(make("verify", "SHA-256 verification", "hash",
+        "Re-hashes every file and compares it against a known digest — the integrity check BMM runs to confirm a download finished intact or to detect a tampered/corrupt mod.",
+        s, dataset_bytes, verified, true, Some(vnote)));
 
     let total_ms = bench_start.elapsed().as_secs_f64() * 1000.0;
 

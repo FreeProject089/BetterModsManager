@@ -440,7 +440,7 @@ export function openModUpdateConfig(modId: string): void {
                         placeholder="${escAttr(primaryKind === 'direct' ? (t('repo.cfgDirectUrlPh') || 'https://…/mod-latest.zip') : (t('repo.cfgRepoUrlPh') || 'Repo URL (https://…/repo.json)'))}"
                         style="flex:1;font-size:12px;padding:6px 8px;" />
                 </div>
-                <div style="font-size:10px;color:var(--text-muted);margin-bottom:14px;line-height:1.45;">${t('repo.cfgDirectHint') || 'For a Direct download, BMM watches the archive for a new build (by size/ETag) and re-downloads it on update. For a Server repo, it compares versions from the repo.json.'}</div>
+                <div style="font-size:10px;color:var(--text-muted);margin-bottom:14px;line-height:1.45;">${t('repo.cfgDirectHint') || 'For a Direct download, BMM detects a new build by comparing the archive\'s ETag, last-modified date and size together — or, if the host exposes none, a fingerprint of the file\'s first bytes — then re-downloads it on update. Redirect "latest" links are followed. For a Server repo, it compares versions from the repo.json instead.'}</div>
 
                 <label style="font-size:11px;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:2px;">${t('repo.cfgExtraSources') || 'Additional fallback sources'}</label>
                 <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">${t('repo.cfgExtraHint') || 'Tried only if the primary source has no update — each can be a repo or a direct download.'}</div>

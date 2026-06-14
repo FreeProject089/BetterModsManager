@@ -13342,7 +13342,8 @@ body.bmm-toolbar-stacked-labels .profile-select-icon-wrap select { width: 100% !
     position: sticky;
     top: 0;
     z-index: 15;
-    background: var(--bg-primary, #0b0f1e);
+    /* transparent row so the action pill floats exactly like when un-pinned */
+    background: transparent;
     padding-top: 2px;
 }
 #view-library.lib-sticky-header .lib-header-shell {
@@ -13350,7 +13351,6 @@ body.bmm-toolbar-stacked-labels .profile-select-icon-wrap select { width: 100% !
     /* ~42px = 6px padding + ~30px button + 6px padding on .view-actions */
     top: 42px;
     z-index: 14;
-    background: var(--bg-primary, #0b0f1e);
 }
 /* When sticky is OFF, reset to normal flow */
 #view-library:not(.lib-sticky-header) .lib-actions-tab,
@@ -13359,23 +13359,14 @@ body.bmm-toolbar-stacked-labels .profile-select-icon-wrap select { width: 100% !
     background: transparent;
 }
 
-/* When pinned, the bars float over the scrolling mod list — and the app can show
-   a wallpaper behind content, so a partial/translucent toolbar reveals either the
-   moving list (backdrop-filter blur) or a wallpaper mismatch (the see-through
-   "holes"). Fix: dock the header as ONE solid full-width toolbar. The action row
-   spans the full width (no transparent area beside the floating tab) with its
-   buttons kept on the right, both bars are fully opaque (base + the same subtle
-   overlay), blur is dropped, and the two bars overlap by 1px so no sliver of
-   content shows between them. */
-#view-library.lib-sticky-header .lib-actions-tab .view-actions {
-    width: 100%;
-    justify-content: flex-end;
-    backdrop-filter: none !important;
-    background-color: var(--bmm-bg-base, #0a0e17) !important;
-    background-image: linear-gradient(var(--bmm-s02), var(--bmm-s02)) !important;
-}
+/* Pinned must look exactly like un-pinned (same floating pill + filter bar), just
+   docked. The ONLY functional change: the pill and filter surfaces float over the
+   scrolling list, and their translucent + backdrop-blur look would show the moving
+   content through them. So keep the identical shape but make those two surfaces
+   fully opaque (page base + the same subtle overlay = visually identical) and drop
+   the blur — no see-through, same appearance. */
+#view-library.lib-sticky-header .lib-actions-tab .view-actions,
 #view-library.lib-sticky-header .lib-header-shell {
-    top: 41px;
     backdrop-filter: none !important;
     background-color: var(--bmm-bg-base, #0a0e17) !important;
     background-image: linear-gradient(var(--bmm-s02), var(--bmm-s02)) !important;
