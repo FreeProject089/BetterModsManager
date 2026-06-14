@@ -159,7 +159,10 @@ pub fn import_theme(app_handle: tauri::AppHandle, path: String) -> Result<String
             let mut entry = arc2.by_index(i).map_err(|e| e.to_string())?;
             let name = entry.name().to_string();
             if name == "theme.json" || name.starts_with("assets/") || name.starts_with("fonts/") {
-                let out_path = dest.join(&name);
+                // CWE-22 Zip Slip: enclosed_name() rejects entries that escape the
+                // archive root (e.g. "assets/../../evil"); skip those.
+                let safe = match entry.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
+                let out_path = dest.join(&safe);
                 if let Some(parent) = out_path.parent() { std::fs::create_dir_all(parent).ok(); }
                 if !entry.is_dir() {
                     let mut out = std::fs::File::create(&out_path).map_err(|e| e.to_string())?;

@@ -192,6 +192,20 @@ export function initThemeEditor(): void {
         if ((e.target as HTMLElement).closest('[data-open-theme-editor]')) openEditor();
     });
     document.addEventListener('bmm:theme-editor', () => openEditor());
+    // The panel is built once with inline t() strings, so a language switch would
+    // otherwise leave it in the old language until a full refresh. Rebuild it
+    // (and re-render the current tab) whenever the language changes.
+    document.addEventListener('langChanged', () => {
+        if (!_panel) return;
+        const wasOpen = _panel.style.display !== 'none';
+        _panel.remove();
+        _panel = null;
+        buildPanel();
+        if (wasOpen && _panel) {
+            (_panel as HTMLElement).style.display = 'flex';
+            renderTab(_tab);
+        }
+    });
     (window as any).openThemeEditor = openEditor;
 }
 
@@ -233,6 +247,7 @@ function buildPanel(): void {
         <div class="bte-footer">
             <span class="bte-dirty" id="bte-dirty"></span>
             <div class="bte-footer-actions">
+                <button class="btn btn-ghost btn-sm" id="bte-import-file" title="${t('themes.import')||'Import .bmmtheme / .json'}">${t('themes.import')||'⬆ Import .bmmtheme / .json'}</button>
                 <button class="btn btn-ghost btn-sm" id="bte-discard">${t('themes.discard')||'Discard'}</button>
                 <button class="btn btn-ghost btn-sm" id="bte-save-as" title="${t('themes.saveAsHint')||'Save as a new theme'}">${t('themes.saveAs')||'Save as…'}</button>
                 <button class="btn btn-secondary btn-sm" id="bte-save">${t('themes.saveTheme')||'Save'}</button>
@@ -257,6 +272,7 @@ function buildPanel(): void {
     _panel.querySelector('#bte-save-as')!.addEventListener('click', saveThemeAs);
     _panel.querySelector('#bte-share')!.addEventListener('click', shareTheme);
     _panel.querySelector('#bte-export')!.addEventListener('click', doExport);
+    _panel.querySelector('#bte-import-file')?.addEventListener('click', importFile);
     _panel.querySelector('#bte-discard')!.addEventListener('click', () => {
         // Truly drop every unsaved change: restore the theme that was active on open.
         if (_origTheme) {
@@ -655,7 +671,7 @@ function buildSimpleTab(): string {
             <div class="bte-asset-info">
                 <span class="bte-asset-label"
                     onmouseenter="window.showTaskyHelp('${escJs(desc)}','image',true)" onmouseleave="window.hideTaskyHelp()">${escHtml(label)}</span>
-                ${assets[key] ? `<span class="bte-asset-set">✓ set</span>` : `<span class="bte-asset-none">default</span>`}
+                ${assets[key] ? `<span class="bte-asset-set">✓ ${t('themes.assetSet')||'set'}</span>` : `<span class="bte-asset-none">${t('themes.assetDefault')||'default'}</span>`}
             </div>
             <div class="bte-asset-actions">
                 <button class="btn btn-xs btn-secondary bte-asset-pick" data-asset="${key}" data-accept="${accept}" data-video="${isVideo}">${t('themes.choose')||'Choose…'}</button>
@@ -674,9 +690,9 @@ function buildSimpleTab(): string {
             </button>
             <div class="bte-group-body">
                 <p class="bte-group-desc">${t('themes.assetsDesc')||'Replace BMM built-in images. Files are embedded into your theme.'}</p>
-                ${assetRow('mascot', t('themes.assetMascot')||'Tasky mascot', 'image/*', 'Replace the floating Tasky mascot AND the spinning boot loader Tasky.')}
-                ${assetRow('logo',   t('themes.assetLogo')||'Sidebar logo', 'image/*', 'Replace the BMM logo in the sidebar.')}
-                ${assetRow('wallpaper', t('themes.assetWallpaper')||'App wallpaper', 'image/*,video/*', 'A full-app background image. Set blur & opacity in the Background group.', true)}
+                ${assetRow('mascot', t('themes.assetMascot')||'Tasky mascot', 'image/*', t('themes.assetMascotDesc')||'Replace the floating Tasky mascot AND the spinning boot loader Tasky.')}
+                ${assetRow('logo',   t('themes.assetLogo')||'Sidebar logo', 'image/*', t('themes.assetLogoDesc')||'Replace the BMM logo in the sidebar.')}
+                ${assetRow('wallpaper', t('themes.assetWallpaper')||'App wallpaper', 'image/*,video/*', t('themes.assetWallpaperDesc')||'A full-app background image. Set blur & opacity in the Background group.', true)}
             </div>
         </div>`;
 
@@ -1272,7 +1288,6 @@ function buildInstalledTab(): string {
             }).join('')}
         </div>
         <div class="bte-install-bar">
-            <button class="btn btn-sm btn-ghost" id="bte-import-file">${t('themes.import')||'⬆ Import .bmmtheme'}</button>
             <button class="btn btn-sm btn-secondary" id="bte-open-catalog">${t('themes.catalogue')||'Browse catalogue'}</button>
         </div>`;
 }
@@ -1297,7 +1312,6 @@ function wireInstalled(): void {
             renderTab('installed');
         });
     });
-    _panel?.querySelector('#bte-import-file')?.addEventListener('click', importFile);
     _panel?.querySelector('#bte-open-catalog')?.addEventListener('click', () => (window as any).openThemeCatalog?.());
 }
 
@@ -1833,7 +1847,10 @@ export async function shareTheme(): Promise<void> {
 
 async function importFile(): Promise<void> {
     const { pickFile } = await import('../../core/api.js');
-    const path = await pickFile([{ name: 'BMM Theme', extensions: ['bmmtheme', 'zip', 'json'] }]);
+    const path = await pickFile([
+        { name: 'BMM Theme (.bmmtheme / .json)', extensions: ['bmmtheme', 'zip', 'json'] },
+        { name: 'All files', extensions: ['*'] },
+    ]);
     if (!path) return;
     try {
         const { invoke } = await import('../../core/api.js');

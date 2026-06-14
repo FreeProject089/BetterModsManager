@@ -8,6 +8,12 @@ let isLiveView = true;
 let isRecording = true;
 let benchmarkUnlisten = null;
 let benchProgressUnlisten = null;
+// Benchmark run state kept at module scope so the run survives closing/reopening
+// the modal (it keeps running in the background) and can be restored/cancelled.
+let lastBenchReport = null;
+let benchRunning = false;
+let benchLastPct = 0;
+let benchLastLabel = '';
 let hoverIndex = null;
 let miniMonitorActive = false;
 let seekIndex = null;
@@ -215,17 +221,28 @@ export async function openAdvancedPerfModal() {
                     </div>
                     <div style="display:flex; flex-direction:column; gap:6px;">
                         <span style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted);">${t('bench.scale') || 'Size'}</span>
-                        <div id="bench-scale-seg" style="display:flex; gap:3px; background:rgba(0,0,0,0.32); padding:3px; border-radius:9px;">
-                            <button class="bench-seg" data-scale="small">S</button>
-                            <button class="bench-seg active" data-scale="medium">M</button>
-                            <button class="bench-seg" data-scale="large">L</button>
-                            <button class="bench-seg" data-scale="xlarge" title="${t('bench.xlargeTip') || '~400 MB'}">XL</button>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <div id="bench-scale-seg" style="display:flex; gap:3px; background:rgba(0,0,0,0.32); padding:3px; border-radius:9px;">
+                                <button class="bench-seg" data-scale="small" title="${t('bench.sizeSmallTip') || '~6 MB'}">S</button>
+                                <button class="bench-seg active" data-scale="medium" title="${t('bench.sizeMediumTip') || '~48 MB'}">M</button>
+                                <button class="bench-seg" data-scale="large" title="${t('bench.sizeLargeTip') || '~160 MB'}">L</button>
+                                <button class="bench-seg" data-scale="xlarge" title="${t('bench.xlargeTip') || '~400 MB'}">XL</button>
+                                <button class="bench-seg" data-scale="custom" title="${t('bench.sizeCustomTip') || 'Custom total size'}">${t('bench.sizeCustom') || 'Custom'}</button>
+                            </div>
+                            <div id="bench-custom-wrap" style="display:none; align-items:center; gap:5px;">
+                                <input id="bench-custom-mb" type="number" min="1" max="4096" value="250" style="width:74px; height:30px; background:rgba(0,0,0,0.32); border:1px solid var(--bmm-s08,rgba(255,255,255,0.08)); border-radius:8px; color:var(--text-primary); font-size:12px; font-weight:700; text-align:right; padding:0 7px;" />
+                                <span style="font-size:11px; font-weight:700; color:var(--text-muted);">MB</span>
+                            </div>
                         </div>
                     </div>
                     <div style="flex:1 1 auto;"></div>
                     <button class="btn btn-primary" id="btn-bench-run" style="height:42px; padding:0 28px; border-radius:11px; font-weight:800; gap:8px;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                         ${t('bench.run') || 'Run Benchmark'}
+                    </button>
+                    <button class="btn btn-danger" id="btn-bench-cancel" style="display:none; height:42px; padding:0 22px; border-radius:11px; font-weight:800; gap:8px;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                        ${t('bench.cancel') || 'Cancel'}
                     </button>
                 </div>
 
@@ -428,7 +445,6 @@ export async function openAdvancedPerfModal() {
     injectBenchStyle();
     let benchMode = 'sandbox';
     let benchScale = 'medium';
-    let lastBenchReport = null;
     const subtitle = content.querySelector('#perf-subtitle');
     const liveControls = content.querySelector('#perf-live-controls');
     const liveView = content.querySelector('#perf-live-view');
@@ -520,9 +536,12 @@ export async function openAdvancedPerfModal() {
         if (isReal)
             loadProfiles();
     }));
+    const customWrap = content.querySelector('#bench-custom-wrap');
     content.querySelectorAll('#bench-scale-seg .bench-seg').forEach(b => (b.onclick = () => {
         benchScale = b.dataset.scale;
         setSeg('bench-scale-seg', 'scale', benchScale);
+        if (customWrap)
+            customWrap.style.display = benchScale === 'custom' ? 'inline-flex' : 'none';
     }));
     const srcAll = content.querySelector('#bench-src-all');
     const srcNone = content.querySelector('#bench-src-none');
@@ -546,13 +565,59 @@ export async function openAdvancedPerfModal() {
     benchProgressUnlisten = await listen('app-benchmark-progress', (event) => {
         const p = event.payload;
         const pct = Math.round((p.step / p.total) * 100);
-        if (progBar)
-            progBar.style.width = pct + '%';
-        if (progPct)
-            progPct.textContent = pct + '%';
-        if (progLabel)
-            progLabel.textContent = p.label + '…';
+        benchLastPct = pct;
+        benchLastLabel = p.label;
+        // Re-query by id so progress lands in whatever modal instance is open now
+        // (the run keeps going in the background across close/reopen).
+        const bar = document.getElementById('bench-progress-bar');
+        const pctEl = document.getElementById('bench-progress-pct');
+        const lblEl = document.getElementById('bench-progress-label');
+        if (bar)
+            bar.style.width = pct + '%';
+        if (pctEl)
+            pctEl.textContent = pct + '%';
+        if (lblEl)
+            lblEl.textContent = p.label + '…';
     });
+    const cancelBtn = content.querySelector('#btn-bench-cancel');
+    // Toggle the Run/Cancel/progress UI for a given running state.
+    const setRunningUI = (running) => {
+        if (runBtn) {
+            runBtn.style.display = running ? 'none' : '';
+        }
+        if (cancelBtn)
+            cancelBtn.style.display = running ? 'inline-flex' : 'none';
+        if (progWrap)
+            progWrap.style.display = running ? 'flex' : 'none';
+        if (running && introEl)
+            introEl.style.display = 'none';
+    };
+    if (cancelBtn)
+        cancelBtn.onclick = async () => {
+            try {
+                await invoke('cancel_app_benchmark');
+            }
+            catch { }
+            toast(t('bench.cancelling') || 'Cancelling…', 'info');
+        };
+    // Restore state when (re)opening: a run in progress shows live progress; an
+    // already-finished run shows its results.
+    if (benchRunning) {
+        setRunningUI(true);
+        if (progBar)
+            progBar.style.width = benchLastPct + '%';
+        if (progPct)
+            progPct.textContent = benchLastPct + '%';
+        if (progLabel)
+            progLabel.textContent = benchLastLabel ? benchLastLabel + '…' : '';
+    }
+    else if (lastBenchReport) {
+        renderBenchResults(resultsEl, lastBenchReport);
+        if (resultsEl)
+            resultsEl.style.display = 'flex';
+        if (introEl)
+            introEl.style.display = 'none';
+    }
     if (runBtn)
         runBtn.onclick = async () => {
             let realSources = [];
@@ -567,12 +632,10 @@ export async function openAdvancedPerfModal() {
                     return;
                 }
             }
-            runBtn.style.pointerEvents = 'none';
-            runBtn.style.opacity = '0.55';
-            if (progWrap)
-                progWrap.style.display = 'flex';
-            if (introEl)
-                introEl.style.display = 'none';
+            benchRunning = true;
+            benchLastPct = 0;
+            benchLastLabel = '';
+            setRunningUI(true);
             if (resultsEl)
                 resultsEl.style.display = 'none';
             if (progBar)
@@ -580,22 +643,45 @@ export async function openAdvancedPerfModal() {
             if (progPct)
                 progPct.textContent = '0%';
             try {
-                const report = await invoke('run_app_benchmark', { mode: benchMode, realSources, scale: benchScale });
+                // For a custom size, send "custom:<MB>" (the backend derives the file
+                // counts to hit that total).
+                let scaleArg = benchScale;
+                if (benchScale === 'custom') {
+                    const mbEl = content.querySelector('#bench-custom-mb');
+                    const mb = Math.min(4096, Math.max(1, parseInt(mbEl?.value || '250', 10) || 250));
+                    scaleArg = `custom:${mb}`;
+                }
+                const report = await invoke('run_app_benchmark', { mode: benchMode, realSources, scale: scaleArg });
                 lastBenchReport = report;
-                renderBenchResults(resultsEl, report);
-                if (resultsEl)
-                    resultsEl.style.display = 'flex';
+                // Re-query the results container by id: the modal may have been closed
+                // and reopened during the run, so the captured ref can be stale.
+                const liveResults = document.getElementById('bench-results');
+                if (liveResults) {
+                    renderBenchResults(liveResults, report);
+                    liveResults.style.display = 'flex';
+                }
+                const liveIntro = document.getElementById('bench-intro');
+                if (liveIntro)
+                    liveIntro.style.display = 'none';
             }
             catch (e) {
-                toast((t('bench.failed') || 'Benchmark failed') + ': ' + e, 'error');
-                if (introEl)
-                    introEl.style.display = 'block';
+                const msg = String(e);
+                if (/cancel/i.test(msg)) {
+                    toast(t('bench.cancelled') || 'Benchmark cancelled', 'info');
+                    const liveIntro = document.getElementById('bench-intro');
+                    if (liveIntro)
+                        liveIntro.style.display = 'block';
+                }
+                else {
+                    toast((t('bench.failed') || 'Benchmark failed') + ': ' + e, 'error');
+                    const liveIntro = document.getElementById('bench-intro');
+                    if (liveIntro)
+                        liveIntro.style.display = 'block';
+                }
             }
             finally {
-                runBtn.style.pointerEvents = '';
-                runBtn.style.opacity = '';
-                if (progWrap)
-                    progWrap.style.display = 'none';
+                benchRunning = false;
+                setRunningUI(false);
             }
         };
     // ── Footer buttons (context-aware: Benchmark report vs Live session) ─────
@@ -1270,6 +1356,8 @@ function injectBenchStyle() {
 }
 // Compatibility exports
 export function openBenchmarkModal() { openAdvancedPerfModal(); }
+// Allow inline doc/gallery buttons to open the benchmark panel directly.
+window.bmmOpenBenchmark = () => openAdvancedPerfModal();
 export function startBenchmark() { invoke('start_benchmark'); }
 export function stopBenchmark() { invoke('stop_benchmark'); }
 //# sourceMappingURL=benchmark.js.map

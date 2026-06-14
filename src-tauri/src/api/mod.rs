@@ -288,6 +288,9 @@ struct ModConfigBody {
     /// Additional update sources: [{ "repoUrl": "...", "repoModId": "..." }].
     #[serde(default)]
     update_sources: Option<Vec<crate::models::mod_entry::UpdateSource>>,
+    /// Direct-download archive URL for updates. Empty clears it.
+    #[serde(default)]
+    direct_url: Option<String>,
 }
 
 /// POST /api/mod/update — request applying an update (UI-driven).
@@ -1210,14 +1213,33 @@ pub async fn start_api_server(
                     m.update_url = if t.is_empty() { None } else { Some(crate::commands::repo::normalize_repo_url(t)) };
                 }
                 if let Some(srcs) = body.update_sources {
+                    let prev_sigs: std::collections::HashMap<String, Option<String>> = m.update_sources.iter()
+                        .filter(|s| s.is_direct())
+                        .map(|s| (s.repo_url.trim().to_string(), s.sig.clone()))
+                        .collect();
                     m.update_sources = srcs.into_iter()
                         .filter(|s| !s.repo_url.trim().is_empty())
                         .map(|mut s| {
-                            s.repo_url = crate::commands::repo::normalize_repo_url(&s.repo_url);
-                            s.repo_mod_id = s.repo_mod_id.filter(|r| !r.trim().is_empty());
+                            if s.is_direct() {
+                                s.kind = "direct".to_string();
+                                s.repo_url = s.repo_url.trim().to_string();
+                                s.repo_mod_id = None;
+                                s.sig = prev_sigs.get(&s.repo_url).cloned().flatten();
+                            } else {
+                                s.kind = "repo".to_string();
+                                s.repo_url = crate::commands::repo::normalize_repo_url(&s.repo_url);
+                                s.repo_mod_id = s.repo_mod_id.filter(|r| !r.trim().is_empty());
+                                s.sig = None;
+                            }
                             s
                         })
                         .collect();
+                }
+                if let Some(url) = body.direct_url {
+                    let t = url.trim();
+                    let new_url = if t.is_empty() { None } else { Some(t.to_string()) };
+                    if new_url != m.direct_url { m.direct_sig = None; }
+                    m.direct_url = new_url;
                 }
             }
             save_data(&d, &path);
@@ -2841,6 +2863,8 @@ async fn do_api_repo_sync(
                         repo_mod_id: None,
                         update_url: None,
                         update_sources: Vec::new(),
+                        direct_url: None,
+                        direct_sig: None,
                     });
                     new_id
                 }

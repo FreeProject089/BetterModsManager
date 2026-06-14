@@ -177,6 +177,12 @@ export function getModCardHTML(mod, ctx) {
                         <span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--cyan);opacity:0.6;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml((mod.repo_mod_id || mod.id).slice(0, 8))}…</span>
                     </div>
                     <div class="dropdown-divider"></div>
+                    <div class="dropdown-item" onclick="window.closeGlobalDropdown && window.closeGlobalDropdown(true); window.bmmCheckModUpdate && window.bmmCheckModUpdate('${mod.id}'); event.stopPropagation();"
+                         onmouseenter="window.showTaskyHelp('mod.checkUpdateTip', 'refresh')"
+                         onmouseleave="window.hideTaskyHelp()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+                        <span data-i18n="mod.checkUpdate">${t('mod.checkUpdate') || 'Check for updates'}</span>
+                    </div>
                     <div class="dropdown-item" onclick="window.closeGlobalDropdown && window.closeGlobalDropdown(true); window.openModUpdateConfig && window.openModUpdateConfig('${mod.id}'); event.stopPropagation();"
                          onmouseenter="window.showTaskyHelp('mod.updateConfigTip', 'package')"
                          onmouseleave="window.hideTaskyHelp()">

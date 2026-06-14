@@ -286,6 +286,16 @@ pub async fn run_app_benchmark(
     res
 }
 
+/// Set when the user cancels a running benchmark; checked at each step boundary.
+static BENCH_CANCEL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Request cancellation of an in-progress benchmark. The run aborts at the next
+/// step boundary and returns a "cancelled" error to the caller.
+#[tauri::command]
+pub fn cancel_app_benchmark() {
+    BENCH_CANCEL.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 fn run_app_benchmark_blocking(
     window: Window,
     mode: String,
@@ -293,16 +303,32 @@ fn run_app_benchmark_blocking(
     scale: Option<String>,
 ) -> Result<BenchReport, String> {
     use crate::{archive, fs_utils};
+    // Start from a clean cancel state for this run.
+    BENCH_CANCEL.store(false, std::sync::atomic::Ordering::SeqCst);
     let e2s = |e: std::io::Error| e.to_string();
 
     // Scale presets (file count / dirs / avg file size) for the synthetic dataset.
     // Approx total = files × avg: small ≈ 6 MB, medium ≈ 48 MB, large ≈ 160 MB,
     // xlarge ≈ 400 MB. (Each op is sampled fewer times at bigger sizes — see `reps`.)
-    let (files, dirs, avg) = match scale.as_deref().unwrap_or("medium") {
-        "small"  => (180usize, 10usize, 32 * 1024usize),
-        "large"  => (500, 16, 320 * 1024),
-        "xlarge" => (800, 20, 512 * 1024),
-        _ => (300, 12, 160 * 1024),
+    // A "custom:<MB>" scale targets an explicit total dataset size: ~256 KB avg
+    // files, so file/dir counts are derived to hit the requested megabytes
+    // (clamped to a sane 1 MB … 4 GB range).
+    let custom_mb: Option<usize> = scale.as_deref()
+        .and_then(|s| s.strip_prefix("custom:"))
+        .and_then(|n| n.trim().parse::<usize>().ok())
+        .map(|mb| mb.clamp(1, 4096));
+    let (files, dirs, avg) = if let Some(mb) = custom_mb {
+        let avg = 256 * 1024usize;                       // 256 KB per file
+        let files = ((mb * 1024 * 1024) / avg).max(8);   // total ≈ mb MB
+        let dirs = (files / 25).clamp(4, 64);
+        (files, dirs, avg)
+    } else {
+        match scale.as_deref().unwrap_or("medium") {
+            "small"  => (180usize, 10usize, 32 * 1024usize),
+            "large"  => (500, 16, 320 * 1024),
+            "xlarge" => (800, 20, 512 * 1024),
+            _ => (300, 12, 160 * 1024),
+        }
     };
 
     let is_real = mode == "real";
@@ -368,10 +394,19 @@ fn run_app_benchmark_blocking(
     // Each operation is sampled several times so we get a real distribution
     // (median + min/max), like Criterion — not a single noisy value. Fewer reps
     // for the bigger dataset to keep total wall time reasonable.
-    let reps: usize = match scale.as_deref().unwrap_or("medium") { "small" => 7, "large" => 3, "xlarge" => 2, _ => 5 };
+    let reps: usize = if let Some(mb) = custom_mb {
+        // Derive reps from the requested size so big customs stay reasonable.
+        if mb <= 20 { 7 } else if mb <= 120 { 5 } else if mb <= 320 { 3 } else { 2 }
+    } else {
+        match scale.as_deref().unwrap_or("medium") { "small" => 7, "large" => 3, "xlarge" => 2, _ => 5 }
+    };
     let total_steps = 8u32;
-    let emit = |step: u32, label: &str| {
+    let emit = |step: u32, label: &str| -> Result<(), String> {
+        if BENCH_CANCEL.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("Benchmark cancelled".to_string());
+        }
         let _ = window.emit("app-benchmark-progress", serde_json::json!({ "step": step, "total": total_steps, "label": label }));
+        Ok(())
     };
     let ms_of = |t: Instant| t.elapsed().as_secs_f64() * 1000.0;
 
@@ -392,7 +427,7 @@ fn run_app_benchmark_blocking(
     let bench_start = Instant::now();
 
     // 1. SCAN — recursive directory walk (jwalk), as on every mod read.
-    emit(1, "Scanning mod files");
+    emit(1, "Scanning mod files")?;
     let mut s = Vec::new();
     let mut scanned = Vec::new();
     for _ in 0..reps { let t = Instant::now(); scanned = fs_utils::list_mod_files(&mod_dir).map_err(|e| e.to_string())?; s.push(ms_of(t)); }
@@ -402,7 +437,7 @@ fn run_app_benchmark_blocking(
         s, dataset_bytes, nfiles as u64, false, Some(format!("{} files", nfiles))));
 
     // 2. HASH — SHA-256 every file (the integrity-check workload).
-    emit(2, "Hashing files (SHA-256)");
+    emit(2, "Hashing files (SHA-256)")?;
     let mut s = Vec::new();
     let mut hashed = 0u64;
     for _ in 0..reps {
@@ -416,7 +451,7 @@ fn run_app_benchmark_blocking(
         s, dataset_bytes, hashed, true, None));
 
     // 3. COPY full-speed — std::fs::copy of the whole mod.
-    emit(3, "Copying (full speed)");
+    emit(3, "Copying (full speed)")?;
     let mut s = Vec::new();
     for _ in 0..reps {
         let _ = std::fs::remove_dir_all(&copy_dst);
@@ -429,7 +464,7 @@ fn run_app_benchmark_blocking(
         s, dataset_bytes, nfiles as u64, true, None));
 
     // 4. COPY smart-IO — 256 KiB chunked copy with periodic yields.
-    emit(4, "Copying (Smart I/O)");
+    emit(4, "Copying (Smart I/O)")?;
     let mut s = Vec::new();
     for _ in 0..reps {
         let _ = std::fs::remove_dir_all(&copy_dst);
@@ -442,7 +477,7 @@ fn run_app_benchmark_blocking(
         s, dataset_bytes, nfiles as u64, true, None));
 
     // 5. ARCHIVE extract — build a .zip of the mod once, then extract it each rep.
-    emit(5, "Extracting archive (.zip)");
+    emit(5, "Extracting archive (.zip)")?;
     let zip_path = root.join("mod.zip");
     build_zip(&mod_dir, &scanned, &zip_path).map_err(e2s)?;
     let mut s = Vec::new();
@@ -457,7 +492,7 @@ fn run_app_benchmark_blocking(
         s, dataset_bytes, nfiles as u64, true, None));
 
     // 6. ACTIVATE — real apply_mod_stacked, sampled with an unapply reset between reps.
-    emit(6, "Activating mod");
+    emit(6, "Activating mod")?;
     let _ = std::fs::remove_dir_all(&game_dir);
     let _ = std::fs::remove_dir_all(&backup_dir);
     std::fs::create_dir_all(&game_dir).ok();
@@ -478,7 +513,7 @@ fn run_app_benchmark_blocking(
         s, dataset_bytes, applied_n, true, None));
 
     // 7. DEACTIVATE — real unapply_mod_stacked; apply (untimed) then time the unapply.
-    emit(7, "Deactivating mod");
+    emit(7, "Deactivating mod")?;
     let mut s = Vec::new();
     for _ in 0..reps {
         fs_utils::reset_mod_op_cancel();
@@ -493,7 +528,7 @@ fn run_app_benchmark_blocking(
         s, dataset_bytes, applied_n, true, None));
 
     // 8. CANCEL — start a large activation, request cancel, measure abort latency (sampled).
-    emit(8, "Testing cancel responsiveness");
+    emit(8, "Testing cancel responsiveness")?;
     let _ = gen_tree(&cancel_mod, 8, 2, 6 * 1024 * 1024, 0x1234); // ~48 MB, few big files
     let cancel_reps = reps.min(3).max(1);
     let mut s = Vec::new();

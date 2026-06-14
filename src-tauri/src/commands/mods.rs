@@ -2461,21 +2461,32 @@ pub fn get_conflict_file_tree(state: State<AppState>, mod_id: String, other_mod_
 
 #[tauri::command]
 pub async fn open_mod_active_folder(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
-    let (game_path, installed_files) = {
+    let (game_path, mod_folder, installed_files) = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
-        (p.game_path.clone(), m.installed_files.clone())
+        (p.game_path.clone(), m.mod_folder_path.clone(), m.installed_files.clone())
+    };
+
+    // Fallback when the mod has no tracked deployment (disabled / never installed):
+    // open the mod's own folder — far more useful than dumping the user at the
+    // game root, which is what made this action look broken.
+    let fallback = || -> Result<(), String> {
+        if mod_folder.exists() {
+            open_folder(mod_folder.to_string_lossy().to_string())
+        } else {
+            open_folder(game_path.to_string_lossy().to_string())
+        }
     };
 
     if installed_files.is_empty() {
-        return open_folder(game_path.to_string_lossy().to_string());
+        return fallback();
     }
 
     // Calculate common parent directory of all installed files
     let common_prefix = get_common_path(&installed_files);
-    
+
     // Ensure we join safely (relative prefix)
     let rel_prefix = if common_prefix.is_absolute() {
         common_prefix.strip_prefix("/").unwrap_or(&common_prefix).to_path_buf()
@@ -2484,11 +2495,11 @@ pub async fn open_mod_active_folder(state: State<'_, AppState>, mod_id: String) 
     };
 
     let target_dir = game_path.join(rel_prefix);
-    
+
     if target_dir.exists() && target_dir.is_dir() {
         open_folder(target_dir.to_string_lossy().to_string())
     } else {
-        open_folder(game_path.to_string_lossy().to_string())
+        fallback()
     }
 }
 

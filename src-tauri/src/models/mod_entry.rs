@@ -109,18 +109,44 @@ pub struct ModEntry {
     /// addition to `source_repo` / `update_url`.
     #[serde(default)]
     pub update_sources: Vec<UpdateSource>,
+    /// Optional direct-download archive URL used to update this mod (e.g. a
+    /// GitHub release asset or a site's "latest" zip). Updates are detected by
+    /// comparing the remote validator against `direct_sig`, and applied by
+    /// re-downloading + overwriting the mod folder.
+    #[serde(default)]
+    pub direct_url: Option<String>,
+    /// Last seen validator (ETag, Last-Modified or Content-Length) for
+    /// `direct_url`. A differing value on a later check means a new build is
+    /// available. None until a baseline is captured.
+    #[serde(default)]
+    pub direct_sig: Option<String>,
 }
 
-/// One configurable place to look for updates to a mod.
+/// One configurable place to look for updates to a mod. These act as fallbacks,
+/// tried after the mod's primary source. A source is either a repo (`kind =
+/// "repo"`, default) or a direct-download archive (`kind = "direct"`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct UpdateSource {
-    /// Repo URL that can provide updates for this mod.
+    /// The source URL: a repo.json for `repo`, an archive URL for `direct`.
     #[serde(alias = "repoUrl")]
     pub repo_url: String,
-    /// This mod's id inside that repo's manifest. `None`/empty → fall back to the
-    /// mod's main `repo_mod_id`.
+    /// (repo only) This mod's id inside that repo's manifest. `None`/empty → fall
+    /// back to the mod's main `repo_mod_id`.
     #[serde(default, alias = "repoModId")]
     pub repo_mod_id: Option<String>,
+    /// Source kind: `"repo"` (default) or `"direct"`.
+    #[serde(default = "default_source_kind")]
+    pub kind: String,
+    /// (direct only) Last seen validator (ETag/Last-Modified/size) for this
+    /// archive URL; a change means a new build. None until a baseline is captured.
+    #[serde(default)]
+    pub sig: Option<String>,
+}
+
+fn default_source_kind() -> String { "repo".to_string() }
+
+impl UpdateSource {
+    pub fn is_direct(&self) -> bool { self.kind.eq_ignore_ascii_case("direct") }
 }
 
 /// A download link for a mod
@@ -188,6 +214,8 @@ impl ModEntry {
             repo_mod_id: None,
             update_url: None,
             update_sources: Vec::new(),
+            direct_url: None,
+            direct_sig: None,
         }
     }
 

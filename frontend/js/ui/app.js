@@ -1227,7 +1227,18 @@ window.openStackModal = () => {
         { name: "Base64", v: "0.21", key: "base64", url: "https://github.com/marshallpierce/rust-base64" },
         { name: "Winreg", v: "0.52", key: "winreg", url: "https://github.com/gentoo90/winreg-rs" },
         { name: "Jwalk", v: "0.8", key: "jwalk", url: "https://github.com/Byron/jwalk" },
-        { name: "Hex", v: "0.4", key: "hex", url: "https://github.com/KokaKiwi/rust-hex" }
+        { name: "Hex", v: "0.4", key: "hex", url: "https://github.com/KokaKiwi/rust-hex" },
+        { name: "Serde JSON", v: "1.0", key: "serde-json", url: "https://github.com/serde-rs/json" },
+        { name: "Thiserror", v: "1.0", key: "thiserror", url: "https://github.com/dtolnay/thiserror" },
+        { name: "Futures", v: "0.3", key: "futures", url: "https://github.com/rust-lang/futures-rs" },
+        { name: "Flate2", v: "1.0", key: "flate2", url: "https://github.com/rust-lang/flate2-rs" },
+        { name: "Tar", v: "0.4", key: "tar", url: "https://github.com/alexcrichton/tar-rs" },
+        { name: "Sevenz Rust", v: "0.6", key: "sevenz-rust", url: "https://github.com/dyz1990/sevenz-rust" },
+        { name: "Unrar", v: "0.5", key: "unrar", url: "https://github.com/muja/unrar.rs" },
+        { name: "Ed25519 Dalek", v: "2.0", key: "ed25519-dalek", url: "https://github.com/dalek-cryptography/curve25519-dalek" },
+        { name: "IGD", v: "0.12", key: "igd", url: "https://github.com/sbstp/rust-igd" },
+        { name: "Local IP Address", v: "0.6", key: "local-ip-address", url: "https://github.com/EstebanBorai/local-ip-address" },
+        { name: "Lazy Static", v: "1.4", key: "lazy-static", url: "https://github.com/rust-lang-nursery/lazy-static.rs" }
     ];
     const frontend = [
         { name: "TypeScript", v: "5.7", key: "typescript", url: "https://www.typescriptlang.org/" },

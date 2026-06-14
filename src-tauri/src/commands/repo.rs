@@ -984,9 +984,14 @@ pub struct ModUpdateInfo {
     pub name: String,
     pub current_version: String,
     pub new_version: String,
-    pub repo_url: String,        // normalised source repo (or update_url)
+    pub repo_url: String,        // normalised source repo (or direct download URL)
     pub repo_mod_id: String,
     pub changelog: Option<String>,
+    /// True when this update comes from a direct-download URL (no repo manifest).
+    /// The UI applies it via `apply_direct_update` instead of the repo-sync flow,
+    /// and shows a "new build" label since the remote version is unknown.
+    #[serde(default)]
+    pub direct: bool,
 }
 
 /// A repo that could not be reached during an update check.
@@ -1024,12 +1029,21 @@ pub async fn check_mod_updates(
 ) -> Result<ModUpdateCheckResult, String> {
     // 1. Build, per mod, the list of (normalised repo_url, repo_mod_id) to check.
     struct Candidate { mod_id: String, name: String, cur_ver: String, repo_url: String, rid: String }
+    struct DirectCand { mod_id: String, name: String, cur_ver: String, url: String, sig: Option<String>, primary: bool }
     let mut candidates: Vec<Candidate> = Vec::new();
+    let mut directs: Vec<DirectCand> = Vec::new();
     let globals: Vec<String> = global_repos.unwrap_or_default()
         .into_iter().map(|r| normalize_repo_url(&r)).filter(|r| !r.is_empty()).collect();
     {
         let data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
         for m in &data.mods {
+            // Primary direct-download source (checked before fallbacks).
+            if let Some(u) = m.direct_url.as_ref().filter(|u| !u.trim().is_empty()) {
+                directs.push(DirectCand {
+                    mod_id: m.id.clone(), name: m.name.clone(), cur_ver: m.version.clone(),
+                    url: u.trim().to_string(), sig: m.direct_sig.clone(), primary: true,
+                });
+            }
             let main_rid = m.repo_mod_id.as_ref().filter(|r| !r.trim().is_empty()).cloned();
             // de-dupe (repo_url, rid) pairs for this mod
             let mut seen: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
@@ -1047,15 +1061,28 @@ pub async fn check_mod_updates(
             if let Some(r) = &m.source_repo { push(r, main_rid.clone(), &mut candidates); }
             if let Some(r) = &m.update_url  { push(r, main_rid.clone(), &mut candidates); }
             for src in &m.update_sources {
-                let rid = src.repo_mod_id.clone().or_else(|| main_rid.clone());
-                push(&src.repo_url, rid, &mut candidates);
+                if src.is_direct() {
+                    // Direct-download fallback.
+                    if !src.repo_url.trim().is_empty() {
+                        directs.push(DirectCand {
+                            mod_id: m.id.clone(), name: m.name.clone(), cur_ver: m.version.clone(),
+                            url: src.repo_url.trim().to_string(), sig: src.sig.clone(), primary: false,
+                        });
+                    }
+                } else {
+                    let rid = src.repo_mod_id.clone().or_else(|| main_rid.clone());
+                    push(&src.repo_url, rid, &mut candidates);
+                }
             }
             for g in &globals { push(g, main_rid.clone(), &mut candidates); }
         }
     }
     let checked = candidates.iter().map(|c| c.mod_id.clone())
+        .chain(directs.iter().map(|d| d.mod_id.clone()))
         .collect::<std::collections::HashSet<_>>().len();
-    if candidates.is_empty() { return Ok(ModUpdateCheckResult::default()); }
+    if candidates.is_empty() && directs.is_empty() {
+        return Ok(ModUpdateCheckResult::default());
+    }
 
     let creator_id = crate::commands::security::get_creator_id(handle).ok();
 
@@ -1098,12 +1125,240 @@ pub async fn check_mod_updates(
                         repo_url: c.repo_url,
                         repo_mod_id: c.rid,
                         changelog: changelog.clone(),
+                        direct: false,
                     });
                 }
             }
         }
     }
+
+    // 3. Direct-download sources: a changed remote validator means a new build.
+    for d in directs {
+        if flagged.contains(&d.mod_id) { continue; }
+        match fetch_url_validator(&d.url).await {
+            Ok(sig) => match &d.sig {
+                // First sight of this URL → record a baseline silently so a later
+                // change is detectable (avoids a misleading "update" on day one).
+                None => {
+                    if let Ok(mut data) = state.data.lock() {
+                        if let Some(m) = data.mods.iter_mut().find(|m| m.id == d.mod_id) {
+                            if d.primary {
+                                if m.direct_sig.is_none() { m.direct_sig = Some(sig); }
+                            } else if let Some(src) = m.update_sources.iter_mut()
+                                .find(|s| s.is_direct() && s.repo_url.trim() == d.url) {
+                                if src.sig.is_none() { src.sig = Some(sig); }
+                            }
+                        }
+                    }
+                    let _ = state.save();
+                }
+                Some(prev) if prev != &sig => {
+                    flagged.insert(d.mod_id.clone());
+                    result.updates.push(ModUpdateInfo {
+                        mod_id: d.mod_id,
+                        name: d.name,
+                        current_version: d.cur_ver,
+                        new_version: String::new(), // unknown — UI shows "new build"
+                        repo_url: d.url,
+                        repo_mod_id: String::new(),
+                        changelog: None,
+                        direct: true,
+                    });
+                }
+                _ => {}
+            },
+            Err(e) => result.errors.push(RepoCheckError { repo_url: d.url, error: e }),
+        }
+    }
     Ok(result)
+}
+
+/// Fetch a robust change-detection signature for a direct-download URL.
+///
+/// Rather than trusting a single header, it combines *every* validator the host
+/// exposes — ETag, Last-Modified and total size — so a change in any of them is
+/// caught. When the host exposes none (common on file lockers / dumb static
+/// hosts), it falls back to hashing the first 64 KB of the file plus its length,
+/// giving a real content fingerprint without downloading the whole archive.
+/// Redirects are followed so "latest" links that 302 to a versioned asset work.
+async fn fetch_url_validator(url: &str) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .timeout(std::time::Duration::from_secs(25))
+        .build().map_err(|e| e.to_string())?;
+
+    let mut parts: Vec<String> = Vec::new();
+    let mut have_strong = false;
+
+    // 1. Cheap HEAD for header validators.
+    if let Ok(resp) = client.head(url).send().await {
+        if resp.status().is_success() {
+            let h = resp.headers();
+            let get = |n: reqwest::header::HeaderName| h.get(n).and_then(|v| v.to_str().ok()).map(|s| s.to_string());
+            if let Some(e) = get(reqwest::header::ETAG) { parts.push(format!("etag:{e}")); have_strong = true; }
+            if let Some(lm) = get(reqwest::header::LAST_MODIFIED) { parts.push(format!("lm:{lm}")); have_strong = true; }
+            if let Some(cl) = get(reqwest::header::CONTENT_LENGTH) { parts.push(format!("len:{cl}")); }
+        }
+    }
+
+    // 2. Strong validator already → done (no need to pull any bytes).
+    if have_strong {
+        parts.sort();
+        return Ok(parts.join("|"));
+    }
+
+    // 3. No strong validator: fingerprint the first 64 KB via a ranged GET, and
+    //    capture the total size from Content-Range / Content-Length.
+    let resp = client.get(url)
+        .header(reqwest::header::RANGE, "bytes=0-65535")
+        .send().await.map_err(|e| e.to_string())?;
+    let code = resp.status().as_u16();
+    if !resp.status().is_success() && code != 206 {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    {
+        let h = resp.headers();
+        let total = h.get(reqwest::header::CONTENT_RANGE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|cr| cr.rsplit('/').next().map(|s| s.to_string()))
+            .filter(|t| t != "*")
+            .or_else(|| h.get(reqwest::header::CONTENT_LENGTH)
+                .and_then(|v| v.to_str().ok()).map(|s| s.to_string()));
+        if let Some(t) = total { parts.push(format!("total:{t}")); }
+    }
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    if !bytes.is_empty() {
+        let mut hasher = Sha256::new();
+        hasher.update(&bytes);
+        let digest = hasher.finalize();
+        parts.push(format!("p{}:{}", bytes.len(), hex::encode(&digest[..8])));
+    }
+
+    if parts.is_empty() {
+        return Err("Remote exposes no validator and served no content".to_string());
+    }
+    parts.sort();
+    Ok(parts.join("|"))
+}
+
+/// Detect a single shared top-level folder in an archive, so its files can be
+/// extracted directly into the mod folder (mirrors the repo/.bmmplug convention).
+/// Returns None when entries live at the archive root or under multiple roots.
+fn archive_single_root<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+) -> Option<std::path::PathBuf> {
+    let mut root: Option<String> = None;
+    let mut has_subpath = false;
+    for i in 0..archive.len() {
+        let file = archive.by_index(i).ok()?;
+        let name = match file.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
+        let mut comps = name.components();
+        let first = comps.next()?.as_os_str().to_string_lossy().to_string();
+        if comps.next().is_some() { has_subpath = true; }
+        match &root {
+            None => root = Some(first),
+            Some(r) if *r != first => return None,
+            _ => {}
+        }
+    }
+    if has_subpath { root.map(std::path::PathBuf::from) } else { None }
+}
+
+/// Apply a direct-download update: re-download the configured archive and
+/// overwrite the mod's folder in place (Zip Slip safe), then record the new
+/// remote validator so the update clears.
+#[tauri::command]
+pub async fn apply_direct_update(
+    state: State<'_, AppState>,
+    mod_id: String,
+    url: Option<String>,
+) -> Result<(), String> {
+    let (url, folder) = {
+        let data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
+        let m = data.mods.iter().find(|m| m.id == mod_id)
+            .ok_or_else(|| "Mod not found".to_string())?;
+        // Use the caller-supplied URL when it matches a configured direct source
+        // (primary or a fallback); otherwise fall back to the primary direct URL.
+        let wanted = url.map(|u| u.trim().to_string()).filter(|u| !u.is_empty());
+        let known = |u: &str| {
+            m.direct_url.as_deref().map(|p| p.trim() == u).unwrap_or(false)
+                || m.update_sources.iter().any(|s| s.is_direct() && s.repo_url.trim() == u)
+        };
+        let url = match wanted {
+            Some(u) if known(&u) => u,
+            _ => m.direct_url.clone()
+                .map(|u| u.trim().to_string())
+                .filter(|u| !u.is_empty())
+                .ok_or_else(|| "No direct download URL configured".to_string())?,
+        };
+        (url, m.mod_folder_path.clone())
+    };
+
+    let folder_c = folder.clone();
+    let url_c = url.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        let response = reqwest::blocking::get(&url_c)
+            .map_err(|e| format!("Download failed: {}", e))?;
+        if !response.status().is_success() {
+            return Err(format!("HTTP error: {}", response.status()));
+        }
+        let bytes = response.bytes().map_err(|e| format!("Read failed: {}", e))?;
+        std::fs::create_dir_all(&folder_c).map_err(|e| e.to_string())?;
+
+        let is_zip = bytes.len() >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B;
+        if is_zip {
+            let cursor = std::io::Cursor::new(&bytes);
+            let mut archive = zip::ZipArchive::new(cursor)
+                .map_err(|e| format!("Zip error: {}", e))?;
+            let strip = archive_single_root(&mut archive);
+            for i in 0..archive.len() {
+                let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+                // CWE-22 Zip Slip: enclosed_name() returns None for escaping paths.
+                let safe = match file.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
+                let rel = match &strip {
+                    Some(pfx) => safe.strip_prefix(pfx).map(|p| p.to_path_buf()).unwrap_or(safe),
+                    None => safe,
+                };
+                if rel.as_os_str().is_empty() { continue; }
+                let outpath = folder_c.join(&rel);
+                if file.name().ends_with('/') {
+                    std::fs::create_dir_all(&outpath).ok();
+                } else {
+                    if let Some(parent) = outpath.parent() { std::fs::create_dir_all(parent).ok(); }
+                    let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
+                    std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+                }
+            }
+        } else {
+            // Non-archive payload: save it as a single file under the mod folder.
+            let raw = url_c.split(|c| c == '?' || c == '#').next().unwrap_or(&url_c);
+            let name = raw.rsplit(|c| c == '/' || c == '\\').next()
+                .filter(|s| !s.is_empty()).unwrap_or("mod_file");
+            std::fs::write(folder_c.join(name), &bytes).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }).await.map_err(|e| e.to_string())??;
+
+    // Record the new validator as the baseline for whichever source we used, and
+    // refresh the fingerprint.
+    let new_sig = fetch_url_validator(&url).await.ok();
+    {
+        let mut data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
+        if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+            if m.direct_url.as_deref().map(|p| p.trim() == url).unwrap_or(false) {
+                m.direct_sig = new_sig.clone();
+            }
+            for s in m.update_sources.iter_mut().filter(|s| s.is_direct() && s.repo_url.trim() == url) {
+                s.sig = new_sig.clone();
+            }
+            m.content_id = crate::models::mod_entry::derive_content_id(&m.mod_folder_path);
+            m.cached_files = None;
+            m.last_scan_mtime = 0;
+        }
+    }
+    let _ = state.save();
+    Ok(())
 }
 
 /// Configure a mod's update linkage: its stable `repo_mod_id` and the list of
@@ -1115,6 +1370,7 @@ pub fn set_mod_update_config(
     repo_mod_id: Option<String>,
     update_url: Option<String>,
     update_sources: Option<Vec<crate::models::mod_entry::UpdateSource>>,
+    direct_url: Option<String>,
 ) -> Result<(), String> {
     {
         let mut data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
@@ -1128,12 +1384,35 @@ pub fn set_mod_update_config(
             let t = url.trim();
             m.update_url = if t.is_empty() { None } else { Some(normalize_repo_url(t)) };
         }
+        if let Some(url) = direct_url {
+            let t = url.trim();
+            let new_url = if t.is_empty() { None } else { Some(t.to_string()) };
+            // Changing the URL invalidates the stored signature so the next check
+            // re-captures a baseline instead of falsely flagging an update.
+            if new_url != m.direct_url { m.direct_sig = None; }
+            m.direct_url = new_url;
+        }
         if let Some(srcs) = update_sources {
+            // Preserve already-captured direct-download baselines by URL so a
+            // re-save doesn't reset change-detection.
+            let prev_sigs: std::collections::HashMap<String, Option<String>> = m.update_sources.iter()
+                .filter(|s| s.is_direct())
+                .map(|s| (s.repo_url.trim().to_string(), s.sig.clone()))
+                .collect();
             m.update_sources = srcs.into_iter()
                 .filter(|s| !s.repo_url.trim().is_empty())
                 .map(|mut s| {
-                    s.repo_url = normalize_repo_url(&s.repo_url);
-                    s.repo_mod_id = s.repo_mod_id.filter(|r| !r.trim().is_empty());
+                    if s.is_direct() {
+                        s.kind = "direct".to_string();
+                        s.repo_url = s.repo_url.trim().to_string();
+                        s.repo_mod_id = None;
+                        s.sig = prev_sigs.get(&s.repo_url).cloned().flatten();
+                    } else {
+                        s.kind = "repo".to_string();
+                        s.repo_url = normalize_repo_url(&s.repo_url);
+                        s.repo_mod_id = s.repo_mod_id.filter(|r| !r.trim().is_empty());
+                        s.sig = None;
+                    }
                     s
                 })
                 .collect();

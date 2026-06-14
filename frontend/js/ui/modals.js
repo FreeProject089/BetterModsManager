@@ -130,19 +130,26 @@ window.showGlobalDropdown = (btn, menu) => {
     requestAnimationFrame(() => {
         const mw = clone.offsetWidth || 200;
         const mh = clone.offsetHeight || 100;
-        const vw = window.innerWidth, vh = window.innerHeight;
+        // Clamp to the visible BMM app window (rounded, inset titlebar/borders),
+        // not the raw viewport — otherwise the menu can spill outside the window
+        // chrome. Fall back to the viewport if the container isn't found.
+        const host = document.getElementById('app-window-outer');
+        const hb = host ? host.getBoundingClientRect()
+            : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+        const minX = hb.left + MARGIN, maxX = hb.right - MARGIN;
+        const minY = hb.top + MARGIN, maxY = hb.bottom - MARGIN;
         // Vertical: prefer below the button; flip above if it would overflow.
         let top = rect.bottom + GAP;
-        if (top + mh > vh - MARGIN) {
+        if (top + mh > maxY) {
             const above = rect.top - GAP - mh;
-            top = above >= MARGIN ? above : Math.max(MARGIN, vh - mh - MARGIN);
+            top = above >= minY ? above : Math.max(minY, maxY - mh);
         }
         // Horizontal: align right edge to the button, then clamp both sides.
         let left = rect.right - mw;
-        if (left + mw > vw - MARGIN)
-            left = vw - MARGIN - mw;
-        if (left < MARGIN)
-            left = MARGIN;
+        if (left + mw > maxX)
+            left = maxX - mw;
+        if (left < minX)
+            left = minX;
         clone.style.top = top + 'px';
         clone.style.left = left + 'px';
         clone.style.right = 'auto';

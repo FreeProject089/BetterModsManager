@@ -168,9 +168,14 @@ export function closeUpdatesModal(): void {
 function openUpdatesModal(updates: any[], errors: any[] = []): void {
     const ov = ensureOverlay('mod-updates-overlay');
 
-    // Group updates by origin repo so the user can update a whole repo at once.
+    // Direct-download updates apply via a one-click re-download, not the repo
+    // sync flow, so they are rendered in their own blocks.
+    const directUpdates = updates.filter(u => u.direct);
+    const repoUpdates = updates.filter(u => !u.direct);
+
+    // Group repo updates by origin repo so the user can update a whole repo at once.
     const byRepo = new Map<string, any[]>();
-    for (const u of updates) {
+    for (const u of repoUpdates) {
         if (!byRepo.has(u.repo_url)) byRepo.set(u.repo_url, []);
         byRepo.get(u.repo_url)!.push(u);
     }
@@ -205,6 +210,23 @@ function openUpdatesModal(updates: any[], errors: any[] = []): void {
             </div>`;
     }).join('');
 
+    const directBlocks = directUpdates.map(m => `
+        <div class="mod-updates-repo-block" style="background:var(--bmm-s03,rgba(255,255,255,0.03));border:1px solid var(--bmm-s06,rgba(255,255,255,0.06));border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                <div style="min-width:0;">
+                    <div style="font-weight:600;font-size:13px;color:var(--text-primary);">${escHtml(m.name)}</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">
+                        <span style="opacity:0.8;">${escHtml(m.current_version)}</span>
+                        <span style="margin:0 7px;color:#2ecc71;font-weight:700;">${t('repo.directNewBuild') || 'new build available'}</span>
+                    </div>
+                    <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-muted);margin-top:8px;">${t('repo.directFrom') || 'Direct download'}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);word-break:break-all;">${escHtml(m.repo_url)}</div>
+                </div>
+                <button class="btn btn-primary btn-sm mod-direct-apply" data-mod-id="${escAttr(m.mod_id)}" data-url="${escAttr(m.repo_url || '')}"
+                    style="flex-shrink:0;height:30px;padding:0 14px;font-size:12px;font-weight:700;">${t('repo.directUpdateBtn') || 'Update now'}</button>
+            </div>
+        </div>`).join('');
+
     const errorBlock = errors.length ? `
         <div style="background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:10px;padding:10px 12px;margin-bottom:12px;">
             <div style="font-size:11px;font-weight:700;color:#e74c3c;margin-bottom:6px;">${t('repo.updatesRepoErrorsTitle') || 'Some repos could not be reached'}</div>
@@ -233,6 +255,7 @@ function openUpdatesModal(updates: any[], errors: any[] = []): void {
             <div style="padding:16px 18px;overflow-y:auto;flex:1 1 auto;min-height:0;">
                 <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px;line-height:1.5;">${t('repo.updatesDesc') || 'These installed mods have a newer version in a repository they are linked to. Updating re-syncs only the changed files.'}</p>
                 ${errorBlock}
+                ${directBlocks}
                 ${repoBlocks}
                 ${emptyMsg}
             </div>
@@ -253,6 +276,12 @@ function openUpdatesModal(updates: any[], errors: any[] = []): void {
     };
     ov.querySelectorAll('.mod-update-cb').forEach(cb => {
         cb.addEventListener('change', () => refreshRepoBtn((cb as HTMLElement).dataset.repoUrl || ''));
+    });
+    ov.querySelectorAll('.mod-direct-apply').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const el = btn as HTMLElement;
+            applyDirectUpdate(el.dataset.modId || '', btn as HTMLButtonElement, el.dataset.url || undefined);
+        });
     });
     ov.querySelectorAll('.mod-updates-apply').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -282,6 +311,73 @@ function applyRepoUpdate(repoUrl: string, selectedModIds?: string[]): void {
     toast(t('repo.updateSyncHint') || 'Select the profile(s) to update, then start the sync', 'info');
 }
 
+/** Apply a direct-download update in place: re-download the archive and overwrite
+ *  the mod folder, then refresh state and re-check so the entry clears. */
+async function applyDirectUpdate(modId: string, btn?: HTMLButtonElement, url?: string): Promise<void> {
+    if (!modId) return;
+    const prevLabel = btn?.textContent || '';
+    if (btn) { btn.disabled = true; btn.textContent = t('repo.directUpdating') || 'Updating…'; }
+    try {
+        await invoke('apply_direct_update', { modId, url: url || null });
+        toast(t('repo.directUpdateDone') || 'Mod updated from its direct download', 'success');
+        // Drop it from the cached results and refresh the library + badges.
+        _lastUpdates = _lastUpdates.filter(u => u.mod_id !== modId);
+        setUpdateState(_lastUpdates);
+        updateBadge(_lastUpdates.length);
+        try { appState.set('allMods', await invoke('get_mods')); } catch {}
+        // Remove the row's block; close the modal when nothing is left to review.
+        const block = btn?.closest('.mod-updates-repo-block');
+        block?.remove();
+        if (!_lastUpdates.length && !_lastErrors.length) closeUpdatesModal();
+    } catch (e) {
+        toast((t('repo.directUpdateFailed') || 'Direct update failed') + ': ' + e, 'error');
+        if (btn) { btn.disabled = false; btn.textContent = prevLabel; }
+    }
+}
+
+/** Check a single mod for updates: runs a full check (repos are fetched once and
+ *  cached) then surfaces only this mod's result. */
+/** True when a mod is linked to at least one place we can check for updates. */
+function modHasUpdateSource(mod: any): boolean {
+    if (!mod) return false;
+    const hasRid = !!(mod.repo_mod_id && String(mod.repo_mod_id).trim());
+    return !!(
+        (mod.source_repo && hasRid) ||
+        (mod.update_url && String(mod.update_url).trim()) ||
+        (mod.direct_url && String(mod.direct_url).trim()) ||
+        (Array.isArray(mod.update_sources) && mod.update_sources.length) ||
+        (getGlobalUpdateRepos().length && hasRid)
+    );
+}
+
+export async function checkSingleModUpdate(modId: string): Promise<void> {
+    if (!modId) return;
+    const mod = ((appState.state.allMods || []) as any[]).find(m => m.id === modId);
+    const name = mod?.name || modId;
+    // No linked source → checking is meaningless; guide the user to configure one
+    // instead of falsely reporting "up to date".
+    if (!modHasUpdateSource(mod)) {
+        toast(t('repo.modNoSource', { name }) || `"${name}" has no update source — use "Configure updates" to link a repo or direct download`, 'info');
+        openModUpdateConfig(modId);
+        return;
+    }
+    toast(t('repo.checkingMod', { name }) || `Checking "${name}" for updates…`, 'info');
+    try {
+        const { updates, errors } = await fetchModUpdates();
+        _lastUpdates = updates; _lastErrors = errors;
+        setUpdateState(updates);
+        updateBadge(updates.length);
+        const mine = updates.filter(u => u.mod_id === modId);
+        if (mine.length) {
+            openUpdatesModal(mine, []);
+        } else {
+            toast(t('repo.modUpToDate', { name }) || `"${name}" is up to date`, 'success');
+        }
+    } catch (e) {
+        toast((t('repo.updatesCheckFailed') || 'Update check failed') + ': ' + e, 'error');
+    }
+}
+
 // ── Per-mod update-source config modal ───────────────────────────────────────
 
 export function openModUpdateConfig(modId: string): void {
@@ -291,15 +387,30 @@ export function openModUpdateConfig(modId: string): void {
 
     const ov = ensureOverlay('mod-update-config-overlay');
     const sources: any[] = Array.isArray(mod.update_sources) ? [...mod.update_sources] : [];
+    // Single typed primary: a direct download takes precedence as the primary
+    // kind when configured, otherwise it's a server repo.
+    const primaryKind = (mod.direct_url && mod.direct_url.trim()) ? 'direct' : 'repo';
+    const primaryUrl = primaryKind === 'direct' ? (mod.direct_url || '') : (mod.update_url || '');
 
-    const sourceRow = (s: any, i: number) => `
+    const kindOptions = (kind: string) => `
+        <option value="repo" ${kind !== 'direct' ? 'selected' : ''}>${t('repo.cfgKindRepo') || 'Server repo'}</option>
+        <option value="direct" ${kind === 'direct' ? 'selected' : ''}>${t('repo.cfgKindDirect') || 'Direct download'}</option>`;
+
+    const sourceRow = (s: any, i: number) => {
+        const kind = s.kind === 'direct' ? 'direct' : 'repo';
+        const repoPh = escAttr(t('repo.cfgRepoUrlPh') || 'Repo URL (https://…/repo.json)');
+        const directPh = escAttr(t('repo.cfgDirectUrlPh') || 'https://…/mod-latest.zip');
+        return `
         <div class="muc-source" data-i="${i}" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
-            <input type="text" class="muc-src-url form-input" placeholder="${escAttr(t('repo.cfgRepoUrlPh') || 'Repo URL (https://…/repo.json)')}"
+            <select class="muc-src-kind" style="flex:0 0 auto;font-size:11px;padding:5px 6px;min-width:104px;">${kindOptions(kind)}</select>
+            <input type="text" class="muc-src-url form-input" data-repo-ph="${repoPh}" data-direct-ph="${directPh}"
+                placeholder="${kind === 'direct' ? directPh : repoPh}"
                 value="${escAttr(s.repo_url || '')}" style="flex:2;font-size:11px;padding:5px 7px;" />
             <input type="text" class="muc-src-rid form-input" placeholder="${escAttr(t('repo.cfgModIdPh') || 'repo_mod_id (optional)')}"
-                value="${escAttr(s.repo_mod_id || '')}" style="flex:1;font-size:11px;padding:5px 7px;" />
+                value="${escAttr(s.repo_mod_id || '')}" style="flex:1;font-size:11px;padding:5px 7px;${kind === 'direct' ? 'display:none;' : ''}" />
             <button class="muc-src-del" title="${escAttr(t('common.remove') || 'Remove')}" style="flex-shrink:0;width:26px;height:26px;border:none;border-radius:5px;background:rgba(231,76,60,0.15);color:#e74c3c;cursor:pointer;font-weight:700;">✕</button>
         </div>`;
+    };
 
     ov.innerHTML = `
         <div class="modal glass" style="width:min(560px,92vw);max-width:560px;">
@@ -320,13 +431,21 @@ export function openModUpdateConfig(modId: string): void {
                     placeholder="${escAttr(t('repo.cfgModIdPh') || 'repo_mod_id (optional)')}" style="width:100%;font-size:12px;padding:6px 8px;margin-bottom:6px;" />
                 ${mod.source_repo ? `<div style="font-size:10px;color:var(--text-muted);margin-bottom:12px;">${t('repo.cfgOrigin') || 'Origin repo'}: <span style="color:var(--text-secondary);word-break:break-all;">${escHtml(mod.source_repo)}</span></div>` : '<div style="margin-bottom:12px;"></div>'}
 
-                <label style="font-size:11px;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:4px;">${t('repo.cfgPrimaryUrl') || 'Primary update URL (for site mods)'}</label>
-                <input type="text" id="muc-update-url" class="form-input" value="${escAttr(mod.update_url || '')}"
-                    placeholder="${escAttr(t('repo.cfgRepoUrlPh') || 'Repo URL (https://…/repo.json)')}" style="width:100%;font-size:12px;padding:6px 8px;margin-bottom:14px;" />
+                <label style="font-size:11px;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:4px;">${t('repo.cfgPrimarySource') || 'Primary update source'}</label>
+                <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
+                    <select id="muc-primary-kind" style="flex:0 0 auto;font-size:12px;padding:6px 7px;min-width:120px;">${kindOptions(primaryKind)}</select>
+                    <input type="text" id="muc-primary-url" class="form-input" value="${escAttr(primaryUrl)}"
+                        data-repo-ph="${escAttr(t('repo.cfgRepoUrlPh') || 'Repo URL (https://…/repo.json)')}"
+                        data-direct-ph="${escAttr(t('repo.cfgDirectUrlPh') || 'https://…/mod-latest.zip')}"
+                        placeholder="${escAttr(primaryKind === 'direct' ? (t('repo.cfgDirectUrlPh') || 'https://…/mod-latest.zip') : (t('repo.cfgRepoUrlPh') || 'Repo URL (https://…/repo.json)'))}"
+                        style="flex:1;font-size:12px;padding:6px 8px;" />
+                </div>
+                <div style="font-size:10px;color:var(--text-muted);margin-bottom:14px;line-height:1.45;">${t('repo.cfgDirectHint') || 'For a Direct download, BMM watches the archive for a new build (by size/ETag) and re-downloads it on update. For a Server repo, it compares versions from the repo.json.'}</div>
 
-                <label style="font-size:11px;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:6px;">${t('repo.cfgExtraSources') || 'Additional update repos'}</label>
+                <label style="font-size:11px;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:2px;">${t('repo.cfgExtraSources') || 'Additional fallback sources'}</label>
+                <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;">${t('repo.cfgExtraHint') || 'Tried only if the primary source has no update — each can be a repo or a direct download.'}</div>
                 <div id="muc-sources">${sources.map((s, i) => sourceRow(s, i)).join('')}</div>
-                <button id="muc-add-source" class="btn btn-secondary btn-sm" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ ${t('repo.cfgAddSource') || 'Add repo'}</button>
+                <button id="muc-add-source" class="btn btn-secondary btn-sm" style="font-size:11px;padding:4px 10px;margin-top:4px;">+ ${t('repo.cfgAddSource') || 'Add fallback'}</button>
             </div>
             <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--bmm-s06,rgba(255,255,255,0.06));">
                 <button id="muc-cancel" class="btn btn-secondary btn-sm">${t('common.cancel') || 'Cancel'}</button>
@@ -337,26 +456,54 @@ export function openModUpdateConfig(modId: string): void {
     const close = () => hideOverlay(ov);
     const srcWrap = ov.querySelector('#muc-sources') as HTMLElement;
     let counter = sources.length;
-    const wireDel = () => ov.querySelectorAll('.muc-src-del').forEach(b => {
-        b.onclick = () => (b.closest('.muc-source') as HTMLElement)?.remove();
-    });
-    wireDel();
+
+    // Swap a URL field's placeholder to match the selected kind.
+    const applyKindPh = (sel: HTMLSelectElement, urlInput: HTMLInputElement | null, rid?: HTMLInputElement | null) => {
+        const direct = sel.value === 'direct';
+        if (urlInput) urlInput.placeholder = (direct ? urlInput.dataset.directPh : urlInput.dataset.repoPh) || '';
+        if (rid) rid.style.display = direct ? 'none' : '';
+    };
+    const wireRow = (row: HTMLElement) => {
+        const sel = row.querySelector('.muc-src-kind') as HTMLSelectElement | null;
+        const url = row.querySelector('.muc-src-url') as HTMLInputElement | null;
+        const rid = row.querySelector('.muc-src-rid') as HTMLInputElement | null;
+        const del = row.querySelector('.muc-src-del') as HTMLElement | null;
+        if (del) del.onclick = () => row.remove();
+        if (sel) sel.onchange = () => applyKindPh(sel, url, rid);
+    };
+    ov.querySelectorAll('.muc-source').forEach(r => wireRow(r as HTMLElement));
+
+    // Primary kind toggle.
+    const primKind = ov.querySelector('#muc-primary-kind') as HTMLSelectElement | null;
+    const primUrl = ov.querySelector('#muc-primary-url') as HTMLInputElement | null;
+    if (primKind) primKind.onchange = () => applyKindPh(primKind, primUrl);
+
     ov.querySelector('#muc-add-source')?.addEventListener('click', () => {
         srcWrap.insertAdjacentHTML('beforeend', sourceRow({}, counter++));
-        wireDel();
+        wireRow(srcWrap.lastElementChild as HTMLElement);
     });
     ov.querySelector('#muc-close')?.addEventListener('click', close);
     ov.querySelector('#muc-cancel')?.addEventListener('click', close);
     ov.querySelector('#muc-save')?.addEventListener('click', async () => {
         const repoModId = (ov.querySelector('#muc-repo-mod-id') as HTMLInputElement).value.trim();
-        const updateUrl = (ov.querySelector('#muc-update-url') as HTMLInputElement).value.trim();
-        const updateSources = Array.from(ov.querySelectorAll('.muc-source')).map(row => ({
-            repo_url: (row.querySelector('.muc-src-url') as HTMLInputElement).value.trim(),
-            repo_mod_id: (row.querySelector('.muc-src-rid') as HTMLInputElement).value.trim() || null,
-        })).filter(s => s.repo_url);
+        const pKind = (ov.querySelector('#muc-primary-kind') as HTMLSelectElement).value;
+        const pUrl = (ov.querySelector('#muc-primary-url') as HTMLInputElement).value.trim();
+        // One typed primary → routes to either update_url (repo) or direct_url; the
+        // other is cleared so there is never both at once.
+        const updateUrl = pKind === 'direct' ? '' : pUrl;
+        const directUrl = pKind === 'direct' ? pUrl : '';
+        const updateSources = Array.from(ov.querySelectorAll('.muc-source')).map(row => {
+            const kind = (row.querySelector('.muc-src-kind') as HTMLSelectElement).value === 'direct' ? 'direct' : 'repo';
+            const rid = (row.querySelector('.muc-src-rid') as HTMLInputElement).value.trim();
+            return {
+                repo_url: (row.querySelector('.muc-src-url') as HTMLInputElement).value.trim(),
+                repo_mod_id: kind === 'direct' ? null : (rid || null),
+                kind,
+            };
+        }).filter(s => s.repo_url);
         try {
             await invoke('set_mod_update_config', {
-                modId, repoModId, updateUrl, updateSources,
+                modId, repoModId, updateUrl, updateSources, directUrl,
             });
             toast(t('repo.cfgSaved') || 'Update sources saved', 'success');
             close();
@@ -398,7 +545,10 @@ export function showModUpdates(): void {
 export function initModUpdates(): void {
     const btn = document.getElementById('btn-check-mod-updates');
     if (btn) btn.addEventListener('click', () => checkModUpdates(false));
+    const libBtn = document.getElementById('btn-lib-check-updates');
+    if (libBtn) libBtn.addEventListener('click', () => checkModUpdates(false));
     (window as any).openModUpdateConfig = openModUpdateConfig;
     (window as any).bmmShowModUpdates = showModUpdates;
+    (window as any).bmmCheckModUpdate = checkSingleModUpdate;
     startAutoUpdateChecks();
 }

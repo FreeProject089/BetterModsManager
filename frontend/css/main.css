@@ -1881,6 +1881,38 @@ body.is-maximized .titlebar-spacer {
 }
 #view-mapper .view-actions .btn { height: 34px; }
 
+/* Fixed-size mapper toolbar: the bar and the profile picker keep a stable width
+   regardless of the selected profile name. Long names ellipsize inside the
+   custom-select trigger instead of stretching the select — or the whole bar
+   (the trigger's intrinsic min-content used to widen everything). */
+#view-mapper .view-actions.mapper-actions {
+    width: 440px;
+    max-width: 100%;
+    flex: 0 0 auto;
+}
+#view-mapper .mapper-profile-wrap {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+#view-mapper .mapper-profile-wrap .bmm-csel,
+#view-mapper .mapper-profile-wrap .profile-select {
+    flex: 1 1 auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+#view-mapper .mapper-profile-wrap .bmm-csel-trigger {
+    width: 100% !important;
+    min-width: 0 !important;
+}
+#view-mapper .mapper-profile-wrap .bmm-csel-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* On narrow screens, let the title and the actions bar stack so the
    profile picker / buttons get a full row instead of being squeezed.
    The profile row / buttons row split is already the default layout. */
@@ -1888,7 +1920,7 @@ body.is-maximized .titlebar-spacer {
     #view-mapper .view-header {
         flex-wrap: wrap;
     }
-    #view-mapper .view-actions {
+    #view-mapper .view-actions.mapper-actions {
         width: 100%;
     }
     #view-mapper .view-actions .btn,
@@ -13325,6 +13357,28 @@ body.bmm-toolbar-stacked-labels .profile-select-icon-wrap select { width: 100% !
 #view-library:not(.lib-sticky-header) .lib-header-shell {
     position: relative;
     background: transparent;
+}
+
+/* When pinned, the bars float over the scrolling mod list — and the app can show
+   a wallpaper behind content, so a partial/translucent toolbar reveals either the
+   moving list (backdrop-filter blur) or a wallpaper mismatch (the see-through
+   "holes"). Fix: dock the header as ONE solid full-width toolbar. The action row
+   spans the full width (no transparent area beside the floating tab) with its
+   buttons kept on the right, both bars are fully opaque (base + the same subtle
+   overlay), blur is dropped, and the two bars overlap by 1px so no sliver of
+   content shows between them. */
+#view-library.lib-sticky-header .lib-actions-tab .view-actions {
+    width: 100%;
+    justify-content: flex-end;
+    backdrop-filter: none !important;
+    background-color: var(--bmm-bg-base, #0a0e17) !important;
+    background-image: linear-gradient(var(--bmm-s02), var(--bmm-s02)) !important;
+}
+#view-library.lib-sticky-header .lib-header-shell {
+    top: 41px;
+    backdrop-filter: none !important;
+    background-color: var(--bmm-bg-base, #0a0e17) !important;
+    background-image: linear-gradient(var(--bmm-s02), var(--bmm-s02)) !important;
 }
 
 /* ── Security modal — responsive ─────────────────────────────────────────── */

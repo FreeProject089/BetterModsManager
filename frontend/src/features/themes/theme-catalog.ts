@@ -73,7 +73,7 @@ function buildModal(): void {
             <div id="theme-cat-list" style="flex:1;overflow-y:auto;padding:16px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;"></div>
             <div class="modal-footer" style="padding:12px 18px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:var(--bmm-text-muted);">
                 <span id="theme-cat-count"></span>
-                <button class="btn btn-ghost btn-sm" id="theme-cat-import-file">${t('themes.importFile') || 'Import .bmmtheme file'}</button>
+                <button class="btn btn-ghost btn-sm" id="theme-cat-import-file">${t('themes.importFile') || 'Import .bmmtheme / .json file'}</button>
             </div>
         </div>`;
 
@@ -208,7 +208,10 @@ function addCommunitySource(): void {
 
 async function importFromFile(): Promise<void> {
     const { pickFile } = await import('../../core/api.js');
-    const path = await pickFile([{ name: 'BMM Theme', extensions: ['bmmtheme', 'json'] }]);
+    const path = await pickFile([
+        { name: 'BMM Theme (.bmmtheme / .json)', extensions: ['bmmtheme', 'zip', 'json'] },
+        { name: 'All files', extensions: ['*'] },
+    ]);
     if (!path) return;
     try {
         const raw: string = await invoke('import_theme', { path });
