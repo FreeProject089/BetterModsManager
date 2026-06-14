@@ -3366,6 +3366,43 @@
                     <div id="docs-tab-advanced" class="docs-tab-content" style="display: none;">
                         <div class="settings-sections" style="display: flex; flex-direction: column; gap: 24px;">
 
+                            <!-- Benchmark & Performance -->
+                            <details class="glass-card" style="border-top: 2px solid var(--accent); padding: 0;">
+                                <summary style="padding: 24px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; list-style: none;">
+                                    <span style="display: flex; align-items: center; gap: 12px;">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                                        <span style="letter-spacing: 0.05em; font-weight: 600;" data-i18n="docs.bench.title">BENCHMARK &amp; PERFORMANCES</span>
+                                    </span>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" style="transition: transform 0.2s;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div style="padding: 20px 24px 24px 24px; border-top: 1px solid rgba(255,255,255,0.05); font-size: 13px; color: var(--text-secondary); line-height: 1.7;">
+                                    <p style="margin:0 0 16px;" data-i18n="docs.bench.intro">Le bouton Benchmark (icône d'activité) ouvre un panneau à deux onglets : <strong>Live Monitor</strong> (CPU / RAM / disque en temps réel pendant que vous utilisez BMM) et <strong>Benchmark</strong> (mesure la vitesse réelle des opérations de BMM sur un jeu de données contrôlé).</p>
+
+                                    <h4 style="color:var(--text-primary);font-size:13px;font-weight:700;margin:16px 0 6px;" data-i18n="docs.bench.modesT">Deux modes de données</h4>
+                                    <p style="margin:0 0 14px;" data-i18n="docs.bench.modesB"><strong>Sandbox</strong> (par défaut, sûr) : BMM génère de faux mods dans un dossier temporaire — rien de personnel n'est touché. <strong>Mes mods</strong> : un sélecteur de profils apparaît — choisissez un profil, plusieurs, tous, ou un dossier personnalisé ; BMM utilise une <em>copie</em> de ces vrais fichiers comme données de test. Dans les deux cas, toutes les écritures se font dans un espace temporaire supprimé à la fin — <strong>votre dossier de jeu n'est jamais modifié</strong>.</p>
+
+                                    <h4 style="color:var(--text-primary);font-size:13px;font-weight:700;margin:16px 0 6px;" data-i18n="docs.bench.opsT">Ce qui est mesuré</h4>
+                                    <p style="margin:0 0 8px;" data-i18n="docs.bench.opsB">Les vraies opérations de BMM, chacune <strong>échantillonnée plusieurs fois</strong> (médiane + plage min/max) :</p>
+                                    <ul style="margin:0 0 14px;padding-left:18px;columns:2;column-gap:28px;">
+                                        <li data-i18n="bench.opScan">Analyse des fichiers du mod</li>
+                                        <li data-i18n="bench.opHash">Hachage d'intégrité SHA-256</li>
+                                        <li data-i18n="bench.opCopyFull">Copie — pleine vitesse</li>
+                                        <li data-i18n="bench.opCopySmart">Copie — Smart I/O</li>
+                                        <li data-i18n="bench.opArchive">Extraction des mods archivés</li>
+                                        <li data-i18n="bench.opActivate">Activation d'un mod</li>
+                                        <li data-i18n="bench.opDeactivate">Désactivation d'un mod</li>
+                                        <li data-i18n="bench.opCancel">Annulation d'une opération</li>
+                                    </ul>
+
+                                    <h4 style="color:var(--text-primary);font-size:13px;font-weight:700;margin:16px 0 6px;" data-i18n="docs.bench.resT">Lire les résultats</h4>
+                                    <p style="margin:0 0 14px;" data-i18n="docs.bench.resB">Chaque opération affiche sa <strong>médiane</strong> et la plage min–max, son <strong>débit</strong> (Mo/s) le cas échéant, et une explication. Deux <strong>graphiques SVG</strong> en haut résument le temps et le débit. <strong>Copier JSON</strong> copie le résultat complet ; <strong>Exporter le rapport</strong> enregistre un rapport HTML autonome (graphiques + tableau).</p>
+
+                                    <div style="margin-top:6px;padding:12px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:10px;color:#10b981;font-size:12.5px;" data-i18n="docs.bench.safe">🛡️ Lecture seule : le benchmark ne modifie jamais vos mods ni votre jeu. Toutes les opérations s'exécutent dans un espace de travail temporaire.</div>
+
+                                    <p style="margin:14px 0 0;font-size:12px;color:var(--text-muted);" data-i18n="docs.bench.dev">Pour les développeurs, une suite plus poussée (Criterion, hyperfine, micro-benchmarks JS) vit dans le dossier <code>benchmarks/</code> du dépôt.</p>
+                                </div>
+                            </details>
+
                             <!-- Diagram Gallery -->
                             <details class="glass-card" style="border-top: 2px solid var(--accent); padding: 0;">
                                 <summary
@@ -6550,6 +6587,11 @@
                                     <li><code>bmm://repo/gen</code> · <code>bmm://repo/update?dir=...</code> · <code>bmm://repo/host?dir=...&amp;port=8080</code></li>
                                     <li><code>bmm://app/install?id=X&amp;url=...&amp;type=exe</code> &nbsp;— Install a catalog app</li>
                                     <li><code>bmm://app/launch?id=X&amp;exe=C:/path.exe</code> &nbsp;— Launch an installed app</li>
+                                    <li><code>bmm://mod/check-updates</code>                 &nbsp;— Check every linked mod for updates</li>
+                                    <li><code>bmm://mod/update?id=mod-id</code>             &nbsp;— Update a specific mod (omit id = open updates)</li>
+                                    <li><code>bmm://theme/apply?id=theme-id</code>          &nbsp;— Apply an installed theme</li>
+                                    <li><code>bmm://theme/import?path=theme.json</code>     &nbsp;— Import a theme file</li>
+                                    <li><code>bmm://theme/editor</code>                      &nbsp;— Open the theme editor</li>
                                     <li><code>bmm://language/import?path=fr.json</code>        &nbsp;— Import a translation</li>
                                     <li><code>bmm://restart</code>                            &nbsp;— Restart BMM</li>
                                     <li><code>bmm://install?url=...&amp;name=ModName</code>     &nbsp;— One-click mod install</li>
@@ -6629,6 +6671,7 @@ start "" "bmm://mod/enable?id=my-mod-folder"</pre>
                                         <h4>POST — Bearer token</h4>
                                         <ul>
                                             <li><code>POST /api/mods/enable</code> · <code>/disable</code></li>
+                                            <li><code>POST /api/mod/config</code> · <code>/mod/check-updates</code> · <code>/mod/update</code> — update linkage &amp; checks</li>
                                             <li><code>POST /api/profiles</code> · <code>/activate</code></li>
                                             <li><code>POST /api/plugins/apply</code> · <code>/compare</code></li>
                                             <li><code>POST /api/modpacks/enable</code> · <code>/disable</code> · <code>/create</code></li>

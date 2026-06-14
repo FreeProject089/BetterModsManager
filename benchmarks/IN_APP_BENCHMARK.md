@@ -12,6 +12,42 @@ operations on a controlled dataset and shows you exactly how fast each one is.
 
 ---
 
+## How it fits together
+
+```mermaid
+flowchart TB
+    subgraph InApp["In-app benchmark — ships in BMM"]
+        U([User]) --> Modal["Benchmark tab<br/>(Live Monitor / Benchmark)"]
+        Modal -->|Sandbox or My mods| Cmd["run_app_benchmark<br/>Rust command"]
+        Cmd --> DS{Dataset mode}
+        DS -->|sandbox| Synth["Synthetic mod tree<br/>(temp workspace)"]
+        DS -->|real| Real["Copy of selected profiles' mods<br/>(temp, read-only)"]
+        Synth --> Ops
+        Real --> Ops
+        Ops["Sampled operations<br/>median + min/max<br/>scan · hash · copy x2 · extract<br/>activate · deactivate · cancel"]
+        Ops --> Res["Results panel<br/>SVG charts + table"]
+        Res --> Exp["Export HTML report<br/>(self-contained)"]
+    end
+
+    subgraph DevSuite["Developer suite — benchmarks/, CLI only"]
+        Crit["cargo bench<br/>Criterion (violin SVGs)"] --> Deck
+        Jsb["node bench.mjs<br/>JS micro-bench"] --> Deck
+        Hf["hyperfine<br/>end-to-end timing"] --> Deck
+        Deck["make-report.mjs<br/>results/index.html deck"]
+    end
+
+    classDef app fill:#10b98122,stroke:#10b981,color:#e2e8f0
+    classDef dev fill:#3b82f622,stroke:#3b82f6,color:#e2e8f0
+    class U,Modal,Cmd,DS,Synth,Real,Ops,Res,Exp app
+    class Crit,Jsb,Hf,Deck dev
+```
+
+Both halves drive the **same real code paths** (`fs_utils`, `archive`); the in-app
+side runs them once per click on your machine, the dev side runs them hundreds of
+times for statistical regression tracking.
+
+---
+
 ## What it measures — and yes, it's the *complete* set
 
 The benchmark runs the same code BMM uses in normal operation. Every operation BMM
@@ -41,11 +77,18 @@ Pick the dataset with the **Sandbox / My mods** switch:
   reproducible) in a temp folder, runs every operation on it, then deletes it.
   Nothing of yours is touched. Pick a size: **S / M / L** (more files / bigger files).
 
-- **My mods (advanced).** You pick one of your real mod folders; BMM uses **a copy of
-  its files** as realistic test data (capped at 200 MB / 4000 files so a huge profile
-  can't hang the run). **Your game folder is never modified** — activation/deactivation
-  in the benchmark always run against a throwaway temp “game” directory. The folder you
-  pick is only **read**.
+- **My mods (advanced).** A **profile picker** appears — choose which real mods to use
+  as the dataset:
+  - **one profile** (click its chip),
+  - **several** profiles (multi-select chips),
+  - **all** of them (the *All* button), or
+  - a **custom folder** (the *Folder* button — for anything not in a profile).
+
+  BMM uses **a copy of those files** as realistic test data (the combined selection is
+  capped at 200 MB / 6000 files so a huge multi-profile pick can't hang the run).
+  **Your game folder is never modified** — activation/deactivation in the benchmark
+  always run against a throwaway temp “game” directory. The selected folders are only
+  **read**.
 
 In both modes, all writes happen inside a temporary workspace that is removed when the
 run finishes.
@@ -54,16 +97,20 @@ run finishes.
 
 ## Reading the results
 
-Each operation shows:
+Every operation is **sampled several times** (7× / 5× / 3× for S / M / L) so you get a
+real distribution, not one noisy number — like Criterion. Results show:
 
-- a **time** (µs / ms / s) and, where it makes sense, a **throughput** (MB/s — bytes
-  processed ÷ time),
-- a **bar** sized relative to the slowest operation (quick visual of where time goes),
-- a one‑line **explanation** of what that step is.
+- the **median** time (µs / ms / s) plus the **min–max range** of the samples,
+- a **throughput** (MB/s) where it makes sense,
+- two **inline SVG charts** at the top — *Operation time* (with the min–max spread drawn
+  as a faint band behind each median bar) and *Throughput*,
+- a one‑line **explanation** per operation.
 
-The header strip shows the **mode**, **dataset size** (files + MB), your **CPU core
-count**, and the **total** wall time. **Copy JSON** puts the full structured result on
-your clipboard so you can paste it into a bug report or compare runs.
+The header strip shows the **mode**, **dataset size** (files + MB), **CPU core count**,
+the **samples/op**, and the **total** wall time. **Copy JSON** copies the full structured
+result (including every sample) to your clipboard; **Export report** saves a
+self-contained **HTML report** (the same SVG charts + table) you can attach to a bug
+report — the same presentable style as the dev-suite deck.
 
 ### Interpreting it
 - **Smart I/O vs full‑speed copy** — Smart I/O is intentionally a little slower; the gap
