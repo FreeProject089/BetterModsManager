@@ -11,15 +11,12 @@ export async function initTitlebar(): Promise<void> {
     try {
         if (window.__TAURI__?.window) {
             const w = window.__TAURI__.window as any;
-            tauriWindow = w.appWindow || (typeof w.getCurrent === 'function' ? w.getCurrent() : null);
+            // Prefer getCurrent() — it returns the full WebviewWindow (with
+            // startResizing / maximize / …). Fall back to appWindow.
+            tauriWindow = (typeof w.getCurrent === 'function' ? w.getCurrent() : null) || w.appWindow || null;
         }
-
-        if (!tauriWindow || typeof tauriWindow.startResizing !== 'function') {
-            try {
-                const { appWindow, getCurrent } = await import('https://unpkg.com/@tauri-apps/api@1/window.js') as any;
-                tauriWindow = appWindow || getCurrent();
-            } catch (_e) { /* ignore */ }
-        }
+        // No CDN fallback: importing from unpkg violates the CSP, and the Tauri
+        // global API (withGlobalTauri) is always present in the packaged WebView.
 
         document.getElementById('tb-min')?.addEventListener('click', () => tauriWindow?.minimize());
 

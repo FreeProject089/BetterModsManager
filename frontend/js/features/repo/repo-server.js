@@ -16,7 +16,7 @@ export function initRepoServer(elements) {
     async function subscribeServerEvents() {
         if (!window.__TAURI__)
             return;
-        const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
+        const { listen } = window.__TAURI__.event;
         _unlistenConnected = await listen('bmm://server-client-connected', (event) => {
             const { ip, creator_id, protocol } = event.payload;
             const id = creator_id || t('repo.notifClientAnonymous');

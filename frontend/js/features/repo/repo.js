@@ -1316,7 +1316,7 @@ export function initRepo() {
             if (_ruListenerAttached || !window.__TAURI__)
                 return;
             _ruListenerAttached = true;
-            const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
+            const { listen } = window.__TAURI__.event;
             await listen('bmm://repo-export-progress', (event) => {
                 if (!_ru.running)
                     return; // ignore generic export events
@@ -1887,7 +1887,7 @@ export function initRepo() {
                     elements.btnCancelExport.disabled = false;
                 }
                 if (window.__TAURI__) {
-                    const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
+                    const { listen } = window.__TAURI__.event;
                     unlisten = await listen('bmm://repo-export-progress', (event) => {
                         const { step, progress } = event.payload;
                         if (progress !== undefined) {

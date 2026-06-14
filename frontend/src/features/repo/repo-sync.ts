@@ -539,7 +539,7 @@ export function initRepoSync(elements) {
                 }
 
                 if (window.__TAURI__) {
-                    const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
+                    const { listen } = (window as any).__TAURI__.event;
                     unlisten = await listen('bmm://repo-sync-progress', (event) => {
                         const { step, progress, current_file } = event.payload;
                         if (progress !== undefined) {

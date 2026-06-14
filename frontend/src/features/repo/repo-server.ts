@@ -51,7 +51,7 @@ export function initRepoServer(elements) {
     // ── Subscribe to server-side events ──────────────────────────────────────
     async function subscribeServerEvents() {
         if (!window.__TAURI__) return;
-        const { listen } = await import('https://unpkg.com/@tauri-apps/api@1/event.js');
+        const { listen } = (window as any).__TAURI__.event;
 
         _unlistenConnected = await listen('bmm://server-client-connected', (event) => {
             const { ip, creator_id, protocol } = event.payload;
