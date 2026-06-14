@@ -403,7 +403,7 @@ fn run_app_benchmark_blocking(
     } else {
         match scale.as_deref().unwrap_or("medium") { "small" => 7, "large" => 3, "xlarge" => 2, _ => 5 }
     };
-    let total_steps = 9u32;
+    let total_steps = 10u32;
     let emit = |step: u32, label: &str| -> Result<(), String> {
         if BENCH_CANCEL.load(std::sync::atomic::Ordering::SeqCst) {
             return Err("Benchmark cancelled".to_string());
@@ -511,12 +511,36 @@ fn run_app_benchmark_blocking(
         let rm: Vec<String> = applied.iter().map(|p| p.to_string_lossy().to_string()).collect();
         let _ = fs_utils::unapply_mod_stacked(&game_dir, &backup_dir, rm, &[], None, smart_io);
     }
-    results.push(make("activate", "Activate mod", "activation",
-        "The real activation path: backs up any original game files, then copies the mod's files into the game folder (stacked, parallel). This is exactly what 'enable' does.",
+    results.push(make("activate", "Activate mod (unpacked)", "activation",
+        "Enabling an already-unpacked mod: backs up any original game files, then copies the mod's files into the game folder (stacked, parallel). This is what 'enable' does for a folder mod.",
         s, dataset_bytes, applied_n, true, None));
 
-    // 7. DEACTIVATE — real unapply_mod_stacked; apply (untimed) then time the unapply.
-    emit(7, "Deactivating mod")?;
+    // 7. ACTIVATE (archived) — cold-enable a zipped mod: extract the .zip, then
+    //    apply it. Includes the one-time extraction, so it's the real first-time
+    //    cost of enabling an archived mod (vs the unpacked Activate above).
+    emit(7, "Activating archived mod (.zip)")?;
+    let _ = std::fs::remove_dir_all(&game_dir);
+    let _ = std::fs::remove_dir_all(&backup_dir);
+    std::fs::create_dir_all(&game_dir).ok();
+    let mut s = Vec::new();
+    let mut applied_zip_n = 0u64;
+    for _ in 0..reps {
+        fs_utils::reset_mod_op_cancel();
+        let _ = std::fs::remove_dir_all(&extract_dst);
+        let t = Instant::now();
+        archive::extract_to(&zip_path, &extract_dst).map_err(|e| e.to_string())?;
+        let applied = fs_utils::apply_mod_stacked(&extract_dst, &game_dir, &backup_dir, &HashSet::new(), None, None, smart_io).map_err(|e| e.to_string())?;
+        s.push(ms_of(t));
+        applied_zip_n = applied.len() as u64;
+        let rm: Vec<String> = applied.iter().map(|p| p.to_string_lossy().to_string()).collect();
+        let _ = fs_utils::unapply_mod_stacked(&game_dir, &backup_dir, rm, &[], None, smart_io);
+    }
+    results.push(make("activate_zip", "Activate archived mod (.zip)", "activation",
+        "Cold-enabling a zipped mod: decompress the .zip to cache, then apply its files. Includes the one-time extraction — the real cost the first time you enable an archived (.zip/.7z/.rar) mod. The gap vs the unpacked Activate is the decompression overhead.",
+        s, dataset_bytes, applied_zip_n, true, None));
+
+    // 8. DEACTIVATE — real unapply_mod_stacked; apply (untimed) then time the unapply.
+    emit(8, "Deactivating mod")?;
     let mut s = Vec::new();
     for _ in 0..reps {
         fs_utils::reset_mod_op_cancel();
@@ -530,8 +554,8 @@ fn run_app_benchmark_blocking(
         "The real deactivation path: for each file, restores the backed-up original (or removes a mod-added file) and cleans empty dirs. This is exactly what 'disable' does.",
         s, dataset_bytes, applied_n, true, None));
 
-    // 8. CANCEL — start a large activation, request cancel, measure abort latency (sampled).
-    emit(8, "Testing cancel responsiveness")?;
+    // 9. CANCEL — start a large activation, request cancel, measure abort latency (sampled).
+    emit(9, "Testing cancel responsiveness")?;
     let _ = gen_tree(&cancel_mod, 8, 2, 6 * 1024 * 1024, 0x1234); // ~48 MB, few big files
     let cancel_reps = reps.min(3).max(1);
     let mut s = Vec::new();
@@ -554,10 +578,10 @@ fn run_app_benchmark_blocking(
         "Starts a large (~48 MB) activation, then measures how quickly it stops after Cancel is requested. Lower = snappier cancellation; BMM checks the cancel flag between files.",
         s, 0, 1, false, Some("time from cancel → fully stopped".into())));
 
-    // 9. VERIFY — re-hash every file and compare it to a precomputed digest. This
+    // 10. VERIFY — re-hash every file and compare it to a precomputed digest. This
     //    is the integrity-verification workload (confirm a download, detect a
     //    tampered/corrupt mod), distinct from raw hashing because it also compares.
-    emit(9, "Verifying (SHA-256 compare)")?;
+    emit(10, "Verifying (SHA-256 compare)")?;
     let verify_items: Vec<(usize, std::path::PathBuf)> = scanned.iter().enumerate()
         .map(|(i, rel)| (i, mod_dir.join(rel))).collect();
     // Precompute the expected digest per file (indexed), once, in parallel.
