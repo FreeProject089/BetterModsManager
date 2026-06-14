@@ -828,8 +828,17 @@ class DebugUI {
             if (isDragging) {
                 const dx = e.clientX - startX;
                 const dy = e.clientY - startY;
-                this.container.style.left = (initialLeft + dx) + 'px';
-                this.container.style.top = (initialTop + dy) + 'px';
+                // Clamp inside the BMM window so the panel can never be dragged out
+                // of view and become ungrabbable. Keep a strip always on-screen.
+                const w = this.container.offsetWidth;
+                const KEEP = 160; // min visible width on either edge
+                const HDR = 44; // header height kept reachable
+                let nx = initialLeft + dx;
+                let ny = initialTop + dy;
+                nx = Math.max(KEEP - w, Math.min(nx, window.innerWidth - KEEP));
+                ny = Math.max(0, Math.min(ny, window.innerHeight - HDR));
+                this.container.style.left = nx + 'px';
+                this.container.style.top = ny + 'px';
             }
             if (isResizing) {
                 const dx = e.clientX - startX;
@@ -1605,8 +1614,14 @@ class DebugUI {
                 if (data.top !== undefined) {
                     this.container.style.bottom = 'auto';
                     this.container.style.right = 'auto';
-                    this.container.style.top = data.top + 'px';
-                    this.container.style.left = data.left + 'px';
+                    // Clamp a restored position back into view (window may have
+                    // shrunk, or it was saved while partly off-screen).
+                    const w = data.width || this.container.offsetWidth || 320;
+                    const KEEP = 160, HDR = 44;
+                    const left = Math.max(KEEP - w, Math.min(data.left, window.innerWidth - KEEP));
+                    const top = Math.max(0, Math.min(data.top, window.innerHeight - HDR));
+                    this.container.style.top = top + 'px';
+                    this.container.style.left = left + 'px';
                 }
                 if (data.width)
                     this.container.style.width = data.width + 'px';

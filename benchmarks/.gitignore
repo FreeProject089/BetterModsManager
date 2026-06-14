@@ -1,0 +1,4 @@
+# Generated benchmark artifacts — re-created by the run scripts, not committed.
+rust/target/
+js/results/
+results/

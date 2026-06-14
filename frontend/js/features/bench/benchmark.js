@@ -1,11 +1,13 @@
-import { invoke, listen } from '../../core/api.js';
+import { invoke, listen, pickFile, pickFolder, saveFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
+import { toast } from '../../ui/app.js';
 import { showTaskyHelp, hideTaskyHelp } from '../../docs/interactive-docs.js';
 let benchmarkData = [];
 let isAdvancedMode = false;
 let isLiveView = true;
 let isRecording = true;
 let benchmarkUnlisten = null;
+let benchProgressUnlisten = null;
 let hoverIndex = null;
 let miniMonitorActive = false;
 let seekIndex = null;
@@ -88,6 +90,11 @@ export async function openAdvancedPerfModal() {
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 12px;">
+                <div id="perf-tabs" style="display:flex; gap:4px; background:rgba(0,0,0,0.28); padding:3px; border-radius:10px; margin-right:6px;">
+                    <button class="perf-tab active" data-mode="live">${t('bench.tabLive') || 'Live Monitor'}</button>
+                    <button class="perf-tab" data-mode="bench">${t('bench.tabBench') || 'Benchmark'}</button>
+                </div>
+                <div id="perf-live-controls" style="display: flex; align-items: center; gap: 12px;">
                 <button class="btn btn-ghost btn-sm" id="btn-perf-rec" style="gap:8px; border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; color: #ef4444;">
                     <div id="rec-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 8px #ef4444;"></div>
                     <span id="rec-text">${t('bench.stopRec') || 'Stop Recording'}</span>
@@ -104,12 +111,14 @@ export async function openAdvancedPerfModal() {
                     </label>
                     <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">${t('bench.advanced') || 'Advanced'}</span>
                 </div>
+                </div>
                 <button class="modal-close" id="perf-modal-close" style="position: static; margin-left: 20px;">&times;</button>
             </div>
         </div>
 
         <div class="modal-body" style="padding: 32px; overflow-y: auto; overflow-x: visible; flex: 1; display: flex; flex-direction: column; gap: 24px; z-index: 1;">
-            
+            <div id="perf-live-view" style="display:flex; flex-direction:column; gap:24px;">
+
             <!-- Real-time Stats + Averages -->
             <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
                 <div class="glass-card" style="padding: 24px; background: rgba(0,0,0,0.3); border-radius: 20px; position: relative; overflow: hidden;">
@@ -168,7 +177,7 @@ export async function openAdvancedPerfModal() {
             <!-- Advanced Metrics with Tasky Help -->
             <div id="perf-advanced-section" style="display: none; flex-direction: column; gap: 20px;">
                 <div style="height: 1px; background: var(--border); margin: 8px 0;"></div>
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
                     <div class="glass-card" style="padding: 20px; background: rgba(59, 130, 246, 0.05); border-radius: 12px; position: relative;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">${t('bench.network') || 'Net Latency'}</span>
@@ -190,14 +199,80 @@ export async function openAdvancedPerfModal() {
                         </div>
                         <span id="perf-vram-val" style="font-size: 20px; font-weight: 900; color: #fff; font-family: var(--font-mono);">-- MB</span>
                     </div>
-                    <div class="glass-card" style="padding: 20px; background: rgba(59, 130, 246, 0.05); border-radius: 12px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">${t('bench.swap') || 'Swap Memory'}</span>
-                            <span class="tasky-info" data-help="swap" style="cursor: help; color: var(--accent); opacity: 0.6;">?</span>
+                </div>
+            </div>
+            </div> <!-- /perf-live-view -->
+
+            <!-- ── Benchmark view ───────────────────────────────────────── -->
+            <div id="perf-bench-view" style="display:none; flex-direction:column; gap:20px;">
+                <div class="glass-card" style="padding:18px 22px; background:rgba(0,0,0,0.28); border-radius:16px; display:flex; flex-wrap:wrap; align-items:flex-end; gap:22px;">
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        <span style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted);">${t('bench.dataset') || 'Dataset'}</span>
+                        <div id="bench-mode-seg" style="display:flex; gap:3px; background:rgba(0,0,0,0.32); padding:3px; border-radius:9px;">
+                            <button class="bench-seg active" data-mode="sandbox">${t('bench.sandbox') || 'Sandbox'}</button>
+                            <button class="bench-seg" data-mode="real">${t('bench.myMods') || 'My mods'}</button>
                         </div>
-                        <span id="perf-swap-val" style="font-size: 20px; font-weight: 900; color: #fff; font-family: var(--font-mono);">-- MB</span>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        <span style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted);">${t('bench.scale') || 'Size'}</span>
+                        <div id="bench-scale-seg" style="display:flex; gap:3px; background:rgba(0,0,0,0.32); padding:3px; border-radius:9px;">
+                            <button class="bench-seg" data-scale="small">S</button>
+                            <button class="bench-seg active" data-scale="medium">M</button>
+                            <button class="bench-seg" data-scale="large">L</button>
+                        </div>
+                    </div>
+                    <div style="flex:1 1 auto;"></div>
+                    <button class="btn btn-primary" id="btn-bench-run" style="height:42px; padding:0 28px; border-radius:11px; font-weight:800; gap:8px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        ${t('bench.run') || 'Run Benchmark'}
+                    </button>
+                </div>
+
+                <div id="bench-realnote" style="display:none; font-size:12px; color:#fbbf24; background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.2); border-radius:10px; padding:10px 14px;">
+                    ${t('bench.realNote') || '“My mods” uses the real mods of the selected profile(s) as test data — they are only read, never changed. Every operation (copy, activate, deactivate…) runs in a temporary workspace, so your game folder is never touched. Gives you numbers for your actual library instead of synthetic files.'}
+                </div>
+
+                <div id="bench-sources" style="display:none; flex-direction:column; gap:10px; background:rgba(0,0,0,0.22); border:1px solid var(--border); border-radius:12px; padding:14px 16px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                        <span style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); display:flex; align-items:center; gap:8px;">
+                            ${t('bench.chooseProfiles') || 'Profiles to benchmark'}
+                            <span id="bench-src-count" style="font-size:10px; font-weight:700; color:var(--accent); background:rgba(59,130,246,0.12); padding:2px 7px; border-radius:99px;"></span>
+                        </span>
+                        <div style="display:flex; gap:6px;">
+                            <button class="bench-seg" id="bench-src-all">${t('bench.selectAll') || 'All'}</button>
+                            <button class="bench-seg" id="bench-src-none">${t('bench.selectNone') || 'None'}</button>
+                            <button class="bench-seg" id="bench-src-custom" style="display:inline-flex; align-items:center; gap:5px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>${t('bench.customFolder') || 'Folder'}</button>
+                        </div>
+                    </div>
+                    <div id="bench-src-list" style="display:flex; flex-wrap:wrap; gap:8px; max-height:168px; overflow-y:auto; padding:2px;"></div>
+                </div>
+
+                <div id="bench-progress-wrap" style="display:none; flex-direction:column; gap:8px;">
+                    <div style="display:flex; justify-content:space-between; font-size:12px;">
+                        <span id="bench-progress-label" style="color:var(--text-secondary); font-weight:600;"></span>
+                        <span id="bench-progress-pct" style="color:var(--accent); font-family:var(--font-mono); font-weight:700;">0%</span>
+                    </div>
+                    <div style="height:8px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden;">
+                        <div id="bench-progress-bar" style="height:100%; width:0%; background:var(--accent); transition:width .2s ease; box-shadow:0 0 10px var(--accent);"></div>
                     </div>
                 </div>
+
+                <div id="bench-intro" style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:16px; padding:28px 30px; color:var(--text-secondary); font-size:13px; line-height:1.7;">
+                    <h3 style="margin:0 0 12px; font-size:15px; color:#fff;">${t('bench.introTitle') || 'Full operation benchmark'}</h3>
+                    ${t('bench.introBody') || 'Runs BMM’s real hot-path operations on a controlled dataset and reports how fast each one is, with throughput. It covers everything BMM does to your mods:'}
+                    <ul style="margin:12px 0 0; padding-left:18px; columns:2; gap:24px;">
+                        <li>${t('bench.opScan') || 'Scanning mod files'}</li>
+                        <li>${t('bench.opHash') || 'SHA-256 integrity hashing'}</li>
+                        <li>${t('bench.opCopyFull') || 'Copy — full speed'}</li>
+                        <li>${t('bench.opCopySmart') || 'Copy — Smart I/O'}</li>
+                        <li>${t('bench.opArchive') || 'Extracting archived mods'}</li>
+                        <li>${t('bench.opActivate') || 'Activating a mod'}</li>
+                        <li>${t('bench.opDeactivate') || 'Deactivating a mod'}</li>
+                        <li>${t('bench.opCancel') || 'Cancelling an operation'}</li>
+                    </ul>
+                </div>
+
+                <div id="bench-results" style="display:none; flex-direction:column; gap:18px;"></div>
             </div>
         </div>
 
@@ -252,6 +327,10 @@ export async function openAdvancedPerfModal() {
         if (benchmarkUnlisten) {
             benchmarkUnlisten();
             benchmarkUnlisten = null;
+        }
+        if (benchProgressUnlisten) {
+            benchProgressUnlisten();
+            benchProgressUnlisten = null;
         }
         await invoke('stop_benchmark');
         if (globalTooltip)
@@ -344,6 +423,279 @@ export async function openAdvancedPerfModal() {
     };
     setupCanvasHover(content.querySelector('#perf-chart-main'), 'main');
     setupCanvasHover(content.querySelector('#perf-chart-io'), 'io');
+    // ── Benchmark view wiring ───────────────────────────────────────────────
+    injectBenchStyle();
+    let benchMode = 'sandbox';
+    let benchScale = 'medium';
+    let lastBenchReport = null;
+    const subtitle = content.querySelector('#perf-subtitle');
+    const liveControls = content.querySelector('#perf-live-controls');
+    const liveView = content.querySelector('#perf-live-view');
+    const benchView = content.querySelector('#perf-bench-view');
+    const setSeg = (segId, key, val) => content.querySelectorAll(`#${segId} .bench-seg`).forEach(b => {
+        const el = b;
+        el.classList.toggle('active', el.dataset[key] === val);
+    });
+    // ── Real-mode source selection (which profile(s) / folders to benchmark) ──
+    let benchProfiles = [];
+    const benchSelected = new Set();
+    const benchCustom = [];
+    const sourcesPanel = content.querySelector('#bench-sources');
+    const srcList = content.querySelector('#bench-src-list');
+    const escA = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const shortPath = (p) => p.replace(/[\\/]+$/, '').split(/[\\/]/).slice(-2).join('/');
+    const folderIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+    const xIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;opacity:.7;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    const checkIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>';
+    const renderSrcChips = () => {
+        if (!srcList)
+            return;
+        const prof = benchProfiles.map(p => {
+            const on = benchSelected.has(p.id);
+            return `<button class="bench-chip ${on ? 'active' : ''}" data-pid="${escA(p.id)}" title="${escA(p.mods_path || '')}" style="display:inline-flex;align-items:center;gap:6px;">${on ? checkIcon : ''}${escA(p.name || p.id)}</button>`;
+        }).join('');
+        const custom = benchCustom.map((f, i) => `<button class="bench-chip active" data-custom="${i}" title="${escA(f)}" style="display:inline-flex;align-items:center;gap:6px;">${folderIcon}${escA(shortPath(f))}${xIcon}</button>`).join('');
+        srcList.innerHTML = (prof + custom) || `<span style="font-size:12px;color:var(--text-muted);">${t('bench.noProfilesFound') || 'No profiles found — use the Folder button.'}</span>`;
+        srcList.querySelectorAll('.bench-chip[data-pid]').forEach(c => (c.onclick = () => {
+            const id = c.dataset.pid;
+            if (benchSelected.has(id))
+                benchSelected.delete(id);
+            else
+                benchSelected.add(id);
+            renderSrcChips();
+        }));
+        srcList.querySelectorAll('.bench-chip[data-custom]').forEach(c => (c.onclick = () => {
+            benchCustom.splice(Number(c.dataset.custom), 1);
+            renderSrcChips();
+        }));
+        const countEl = content.querySelector('#bench-src-count');
+        if (countEl) {
+            const n = benchSelected.size + benchCustom.length;
+            countEl.textContent = `${n} ${t('bench.selected') || 'selected'}`;
+            countEl.style.display = n ? 'inline-block' : 'none';
+        }
+    };
+    const loadProfiles = async () => {
+        if (benchProfiles.length) {
+            renderSrcChips();
+            return;
+        }
+        try {
+            const activeId = await invoke('get_active_profile_id');
+            benchProfiles = await invoke('get_profiles') || [];
+            const def = benchProfiles.find(p => p.id === activeId) || benchProfiles[0];
+            if (def)
+                benchSelected.add(def.id); // default: the active profile
+        }
+        catch {
+            benchProfiles = [];
+        }
+        renderSrcChips();
+    };
+    const switchPerfMode = (mode) => {
+        content.querySelectorAll('.perf-tab').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+        const isBench = mode === 'bench';
+        if (liveView)
+            liveView.style.display = isBench ? 'none' : 'flex';
+        if (benchView)
+            benchView.style.display = isBench ? 'flex' : 'none';
+        if (liveControls)
+            liveControls.style.display = isBench ? 'none' : 'flex';
+        if (subtitle)
+            subtitle.textContent = isBench
+                ? (t('bench.subtitleBench') || 'Operation Benchmark')
+                : (t('bench.subtitle') || 'Live Diagnostics & Replay');
+    };
+    content.querySelectorAll('.perf-tab').forEach(b => (b.onclick = () => switchPerfMode(b.dataset.mode)));
+    content.querySelectorAll('#bench-mode-seg .bench-seg').forEach(b => (b.onclick = () => {
+        benchMode = b.dataset.mode;
+        setSeg('bench-mode-seg', 'mode', benchMode);
+        const isReal = benchMode === 'real';
+        const note = content.querySelector('#bench-realnote');
+        if (note)
+            note.style.display = isReal ? 'block' : 'none';
+        if (sourcesPanel)
+            sourcesPanel.style.display = isReal ? 'flex' : 'none';
+        if (isReal)
+            loadProfiles();
+    }));
+    content.querySelectorAll('#bench-scale-seg .bench-seg').forEach(b => (b.onclick = () => {
+        benchScale = b.dataset.scale;
+        setSeg('bench-scale-seg', 'scale', benchScale);
+    }));
+    const srcAll = content.querySelector('#bench-src-all');
+    const srcNone = content.querySelector('#bench-src-none');
+    const srcCustom = content.querySelector('#bench-src-custom');
+    if (srcAll)
+        srcAll.onclick = () => { benchProfiles.forEach(p => benchSelected.add(p.id)); renderSrcChips(); };
+    if (srcNone)
+        srcNone.onclick = () => { benchSelected.clear(); renderSrcChips(); };
+    if (srcCustom)
+        srcCustom.onclick = async () => { const f = await pickFolder(); if (f) {
+            benchCustom.push(f);
+            renderSrcChips();
+        } };
+    const runBtn = content.querySelector('#btn-bench-run');
+    const progWrap = content.querySelector('#bench-progress-wrap');
+    const progBar = content.querySelector('#bench-progress-bar');
+    const progLabel = content.querySelector('#bench-progress-label');
+    const progPct = content.querySelector('#bench-progress-pct');
+    const introEl = content.querySelector('#bench-intro');
+    const resultsEl = content.querySelector('#bench-results');
+    benchProgressUnlisten = await listen('app-benchmark-progress', (event) => {
+        const p = event.payload;
+        const pct = Math.round((p.step / p.total) * 100);
+        if (progBar)
+            progBar.style.width = pct + '%';
+        if (progPct)
+            progPct.textContent = pct + '%';
+        if (progLabel)
+            progLabel.textContent = p.label + '…';
+    });
+    if (runBtn)
+        runBtn.onclick = async () => {
+            let realSources = [];
+            if (benchMode === 'real') {
+                // Gather the selected profiles' real mod folders + any custom folders.
+                realSources = [
+                    ...benchProfiles.filter(p => benchSelected.has(p.id)).map(p => p.mods_path).filter(Boolean),
+                    ...benchCustom,
+                ];
+                if (!realSources.length) {
+                    toast(t('bench.noProfile') || 'Select at least one profile or folder, or use Sandbox mode.', 'error');
+                    return;
+                }
+            }
+            runBtn.style.pointerEvents = 'none';
+            runBtn.style.opacity = '0.55';
+            if (progWrap)
+                progWrap.style.display = 'flex';
+            if (introEl)
+                introEl.style.display = 'none';
+            if (resultsEl)
+                resultsEl.style.display = 'none';
+            if (progBar)
+                progBar.style.width = '0%';
+            if (progPct)
+                progPct.textContent = '0%';
+            try {
+                const report = await invoke('run_app_benchmark', { mode: benchMode, realSources, scale: benchScale });
+                lastBenchReport = report;
+                renderBenchResults(resultsEl, report);
+                if (resultsEl)
+                    resultsEl.style.display = 'flex';
+            }
+            catch (e) {
+                toast((t('bench.failed') || 'Benchmark failed') + ': ' + e, 'error');
+                if (introEl)
+                    introEl.style.display = 'block';
+            }
+            finally {
+                runBtn.style.pointerEvents = '';
+                runBtn.style.opacity = '';
+                if (progWrap)
+                    progWrap.style.display = 'none';
+            }
+        };
+    // ── Footer buttons (context-aware: Benchmark report vs Live session) ─────
+    const inBenchMode = () => !!benchView && benchView.style.display !== 'none';
+    const footExport = content.querySelector('#btn-perf-export');
+    const footClear = content.querySelector('#btn-perf-clear');
+    const footImport = content.querySelector('#btn-perf-import');
+    if (footExport)
+        footExport.onclick = async () => {
+            if (inBenchMode()) {
+                // Export the operation-benchmark results as a real HTML+SVG report.
+                if (!lastBenchReport) {
+                    toast(t('bench.runFirst') || 'Run a benchmark first', 'info');
+                    return;
+                }
+                const dest = await saveFile({ defaultPath: 'bmm-benchmark-report.html', filters: [{ name: 'HTML', extensions: ['html'] }] });
+                if (!dest)
+                    return;
+                try {
+                    await invoke('write_text_file', { path: dest, content: buildBenchReportHtml(lastBenchReport) });
+                    toast((t('bench.reportSaved') || 'Report saved') + ': ' + dest, 'success');
+                }
+                catch (e) {
+                    toast((t('bench.reportFailed') || 'Could not save report') + ': ' + e, 'error');
+                }
+            }
+            else {
+                // Export the live monitoring session as CSV.
+                if (!benchmarkData.length) {
+                    toast(t('bench.noSession') || 'No session data to export yet', 'info');
+                    return;
+                }
+                const dest = await saveFile({ defaultPath: 'bmm-session.csv', filters: [{ name: 'CSV', extensions: ['csv'] }] });
+                if (!dest)
+                    return;
+                try {
+                    await invoke('export_benchmark_csv', { dataJson: JSON.stringify(benchmarkData), destPath: dest });
+                    toast((t('bench.sessionSaved') || 'Session exported') + ': ' + dest, 'success');
+                }
+                catch (e) {
+                    toast((t('bench.reportFailed') || 'Export failed') + ': ' + e, 'error');
+                }
+            }
+        };
+    if (footClear)
+        footClear.onclick = () => {
+            if (inBenchMode()) {
+                lastBenchReport = null;
+                if (resultsEl) {
+                    resultsEl.style.display = 'none';
+                    resultsEl.innerHTML = '';
+                }
+                if (introEl)
+                    introEl.style.display = 'block';
+            }
+            else {
+                benchmarkData = [];
+                renderCharts(content, benchmarkData);
+                renderActivityMap(content, benchmarkData);
+            }
+            toast(t('bench.cleared') || 'Cleared', 'success');
+        };
+    if (footImport)
+        footImport.onclick = async () => {
+            const src = await pickFile({ filters: [{ name: 'CSV session', extensions: ['csv'] }] });
+            if (!src)
+                return;
+            try {
+                const text = await invoke('read_file_text', { path: src });
+                const lines = text.split(/\r?\n/).filter(l => l.trim());
+                // Skip header row; columns: Timestamp,CPU,RAM,DiskR,DiskW,Net,VMem,Swap,GlobalCPU,Uptime
+                const pts = [];
+                for (const line of lines.slice(1)) {
+                    const c = line.split(',');
+                    if (c.length < 5)
+                        continue;
+                    pts.push({
+                        timestamp: Number(c[0]) || 0, cpu_usage: Number(c[1]) || 0, ram_usage: Number(c[2]) || 0,
+                        disk_read: Number(c[3]) || 0, disk_write: Number(c[4]) || 0,
+                        network_latency: Number(c[5]) || undefined, ram_virtual: Number(c[6]) || undefined,
+                        ram_swap: Number(c[7]) || undefined, global_cpu: Number(c[8]) || undefined, process_uptime: Number(c[9]) || undefined,
+                    });
+                }
+                if (!pts.length) {
+                    toast(t('bench.importEmpty') || 'No data found in file', 'error');
+                    return;
+                }
+                benchmarkData = pts;
+                isLiveView = false;
+                if (liveBtn)
+                    liveBtn.style.display = 'block';
+                switchPerfMode('live');
+                updateStatsView(content, benchmarkData[benchmarkData.length - 1]);
+                renderCharts(content, benchmarkData);
+                renderActivityMap(content, benchmarkData);
+                toast((t('bench.imported') || 'Session imported') + ` (${pts.length} pts)`, 'success');
+            }
+            catch (e) {
+                toast((t('bench.importFailed') || 'Import failed') + ': ' + e, 'error');
+            }
+        };
     // Live Monitoring
     benchmarkUnlisten = await listen('benchmark-point', (event) => {
         const point = event.payload;
@@ -590,14 +942,17 @@ function renderCharts(container, data, highlightIndex = null) {
     // Resolve theme tokens so users can recolour the graphs from the theme editor.
     const cv = (name, fb) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb;
     drawChart(mainCanvas, data, [
-        { key: 'cpu_usage', color: cv('--bmm-chart-cpu', '#3b82f6'), label: 'CPU %' },
-        { key: 'ram_usage', color: cv('--bmm-chart-ram', '#ffffff'), label: 'RAM MB', scale: 0.1 }
+        { key: 'cpu_usage', color: cv('--bmm-chart-cpu', '#3b82f6'), label: 'CPU', fmt: v => `${v.toFixed(1)}%` },
+        { key: 'ram_usage', color: cv('--bmm-chart-ram', '#e2e8f0'), label: 'RAM', fmt: v => formatUnit(v, 'MB') }
     ], highlightIndex);
     drawChart(ioCanvas, data, [
-        { key: 'disk_read', color: cv('--bmm-chart-disk-read', '#fbbf24'), label: 'Read' },
-        { key: 'disk_write', color: cv('--bmm-chart-disk-write', '#f87171'), label: 'Write' }
+        { key: 'disk_read', color: cv('--bmm-chart-disk-read', '#fbbf24'), label: 'Read', fmt: v => formatUnit(v, 'KB/s') },
+        { key: 'disk_write', color: cv('--bmm-chart-disk-write', '#f87171'), label: 'Write', fmt: v => formatUnit(v, 'KB/s') }
     ], highlightIndex);
 }
+// Professional time-series chart: padded plot area, horizontal gridlines with
+// %-of-scale labels, an X time axis, a live-value legend (real units), and
+// per-series auto-scaling so every metric is readable regardless of magnitude.
 function drawChart(canvas, data, series, highlightIndex) {
     const ctx = canvas.getContext('2d');
     if (!ctx)
@@ -607,61 +962,285 @@ function drawChart(canvas, data, series, highlightIndex) {
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
     ctx.scale(dpr, dpr);
-    const w = rect.width, h = rect.height;
-    ctx.clearRect(0, 0, w, h);
-    if (data.length < 2)
+    const W = rect.width, H = rect.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = '10px ui-monospace, monospace';
+    ctx.textBaseline = 'middle';
+    // Plot area (leave room for axis labels + a legend strip on top).
+    const PADL = 40, PADR = 12, PADT = 26, PADB = 20;
+    const px = PADL, py = PADT, pw = Math.max(1, W - PADL - PADR), ph = Math.max(1, H - PADT - PADB);
+    const muted = 'rgba(148,163,184,0.55)';
+    const grid = 'rgba(148,163,184,0.12)';
+    // Per-series max (with 15% headroom) so each line uses the full height.
+    const maxOf = (s) => {
+        let m = 0;
+        for (const p of data) {
+            const v = p[s.key] || 0;
+            if (v > m)
+                m = v;
+        }
+        return m * 1.15 || 1;
+    };
+    const maxes = series.map(maxOf);
+    // ── Horizontal gridlines + %-of-scale labels ──
+    ctx.strokeStyle = grid;
+    ctx.fillStyle = muted;
+    ctx.lineWidth = 1;
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+        const y = py + (ph * i) / 4;
+        ctx.beginPath();
+        ctx.moveTo(px, y);
+        ctx.lineTo(px + pw, y);
+        ctx.stroke();
+        ctx.fillText(`${100 - i * 25}%`, px - 6, y);
+    }
+    if (data.length < 2) {
+        ctx.textAlign = 'center';
+        ctx.fillStyle = muted;
+        ctx.fillText('collecting samples…', px + pw / 2, py + ph / 2);
         return;
-    let maxVal = 1;
-    data.forEach(p => series.forEach(s => {
-        const val = p[s.key] * (s.scale || 1);
-        if (val > maxVal)
-            maxVal = val;
-    }));
-    maxVal *= 1.2;
-    series.forEach(s => {
+    }
+    // ── X time axis (oldest → newest) ──
+    ctx.textAlign = 'center';
+    ctx.fillStyle = muted;
+    const tFmt = (ts) => new Date(ts * 1000).toLocaleTimeString([], { minute: '2-digit', second: '2-digit' });
+    for (let i = 0; i <= 3; i++) {
+        const idx = Math.round(((data.length - 1) * i) / 3);
+        const x = px + (pw * i) / 3;
+        if (data[idx])
+            ctx.fillText(tFmt(data[idx].timestamp), x, py + ph + 11);
+    }
+    // ── Series lines + gradient fill (each normalized to its own max) ──
+    series.forEach((s, si) => {
+        const max = maxes[si];
         ctx.beginPath();
         ctx.strokeStyle = s.color;
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2;
         ctx.lineJoin = 'round';
         data.forEach((p, i) => {
-            const x = (i / (data.length - 1)) * w;
-            const y = Math.max(2, h - (p[s.key] * (s.scale || 1) / maxVal) * h);
+            const x = px + (i / (data.length - 1)) * pw;
+            const y = py + ph - Math.min(ph, ((p[s.key] || 0) / max) * ph);
             if (i === 0)
                 ctx.moveTo(x, y);
             else
                 ctx.lineTo(x, y);
         });
         ctx.stroke();
-        ctx.lineTo(w, h);
-        ctx.lineTo(0, h);
-        const grad = ctx.createLinearGradient(0, 0, 0, h);
-        grad.addColorStop(0, s.color + '33');
+        ctx.lineTo(px + pw, py + ph);
+        ctx.lineTo(px, py + ph);
+        ctx.closePath();
+        const grad = ctx.createLinearGradient(0, py, 0, py + ph);
+        grad.addColorStop(0, s.color + '2e');
         grad.addColorStop(1, s.color + '00');
         ctx.fillStyle = grad;
         ctx.fill();
     });
-    // Hover or Highlight logic
+    // ── Legend (top strip): colour chip + label + live/peak value in real units ──
     const index = highlightIndex !== null ? highlightIndex : hoverIndex;
+    const sample = (index !== null && data[index]) ? data[index] : data[data.length - 1];
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    let lx = px;
+    series.forEach((s) => {
+        ctx.fillStyle = s.color;
+        ctx.fillRect(lx, PADT / 2 - 4, 9, 9);
+        lx += 13;
+        ctx.fillStyle = '#e2e8f0';
+        const txt = `${s.label} ${s.fmt(sample[s.key] || 0)}`;
+        ctx.fillText(txt, lx, PADT / 2);
+        lx += ctx.measureText(txt).width + 18;
+    });
+    // ── Hover / replay crosshair + markers ──
     if (index !== null && data[index]) {
-        const x = (index / (data.length - 1)) * w;
+        const x = px + (index / (data.length - 1)) * pw;
         ctx.beginPath();
-        ctx.strokeStyle = highlightIndex !== null ? 'var(--accent)' : 'rgba(255,255,255,0.4)';
-        ctx.setLineDash([5, 5]);
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, h);
+        ctx.strokeStyle = highlightIndex !== null ? (cssAccent()) : 'rgba(255,255,255,0.4)';
+        ctx.setLineDash([4, 4]);
+        ctx.moveTo(x, py);
+        ctx.lineTo(x, py + ph);
         ctx.stroke();
         ctx.setLineDash([]);
-        series.forEach(s => {
-            const y = Math.max(2, h - (data[index][s.key] * (s.scale || 1) / maxVal) * h);
+        series.forEach((s, si) => {
+            const y = py + ph - Math.min(ph, ((data[index][s.key] || 0) / maxes[si]) * ph);
             ctx.beginPath();
             ctx.fillStyle = s.color;
-            ctx.arc(x, y, 5, 0, Math.PI * 2);
+            ctx.arc(x, y, 4, 0, Math.PI * 2);
             ctx.fill();
             ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 1.5;
             ctx.stroke();
         });
     }
+}
+function cssAccent() {
+    return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#3b82f6';
+}
+// ── Benchmark results rendering ──────────────────────────────────────────────
+function renderBenchResults(container, report) {
+    if (!container || !report)
+        return;
+    const ops = report.results || [];
+    const env = report.env || {};
+    const maxMs = Math.max(...ops.map(o => o.ms), 0.0001);
+    const fmtMs = (ms) => ms < 1 ? `${(ms * 1000).toFixed(0)} µs` : ms < 1000 ? `${ms.toFixed(1)} ms` : `${(ms / 1000).toFixed(2)} s`;
+    const fmtTput = (v) => (v == null) ? '' : (v >= 1000 ? `${(v / 1000).toFixed(2)} GB/s` : `${v.toFixed(0)} MB/s`);
+    const catColor = { scan: '#a78bfa', hash: '#22d3ee', io: '#3b82f6', archive: '#fbbf24', activation: '#10b981' };
+    const rows = ops.map(op => {
+        const col = catColor[op.category] || '#3b82f6';
+        const w = Math.max(3, (op.ms / maxMs) * 100);
+        const tp = fmtTput(op.throughput_mb_s);
+        const range = (op.max_ms > op.min_ms) ? `<span style="color:var(--text-muted); font-weight:400; font-size:11px; font-family:var(--font-mono);"> ${fmtMs(op.min_ms)}–${fmtMs(op.max_ms)}</span>` : '';
+        return `<div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:14px 16px;">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;">
+                <span style="font-weight:700; color:#fff; font-size:13px;">${op.label}</span>
+                <span style="font-family:var(--font-mono); font-weight:800; color:${col}; white-space:nowrap;">${fmtMs(op.ms)}${tp ? ` · ${tp}` : ''}${range}</span>
+            </div>
+            <div style="height:6px; background:rgba(255,255,255,0.05); border-radius:3px; margin:9px 0 7px; overflow:hidden;">
+                <div style="height:100%; width:${w}%; background:${col}; border-radius:3px;"></div>
+            </div>
+            <div style="font-size:11.5px; color:var(--text-muted); line-height:1.55;">${op.explanation || ''}${op.note ? ` <span style="color:${col}; font-weight:600;">(${op.note})</span>` : ''}</div>
+        </div>`;
+    }).join('');
+    const dsMb = ((env.dataset_bytes || 0) / 1048576).toFixed(1);
+    const cardStyle = 'background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:14px; padding:16px 18px;';
+    const chartTitle = (txt, sub) => `<h4 style="margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted);">${txt} <span style="color:#64748b; text-transform:none; font-weight:400;">· ${sub}</span></h4>`;
+    const chartTput = benchSvgChart(ops, 'tput');
+    container.innerHTML = `
+        <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:center; justify-content:space-between; padding:4px 2px;">
+            <div style="display:flex; gap:18px; flex-wrap:wrap; font-size:12px; color:var(--text-muted);">
+                <span>${t('bench.colMode') || 'Mode'}: <b style="color:#fff; text-transform:capitalize;">${env.mode || ''}</b></span>
+                <span>${t('bench.colDataset') || 'Dataset'}: <b style="color:#fff;">${env.dataset_files || 0} ${t('bench.files') || 'files'} · ${dsMb} MB</b></span>
+                <span>CPU: <b style="color:#fff;">${env.cores || '?'} ${t('bench.cores') || 'cores'}</b></span>
+                ${env.reps ? `<span>${t('bench.samples') || 'Samples'}: <b style="color:#fff;">${env.reps}× ${t('bench.eachOp') || 'each op'}</b></span>` : ''}
+                <span>${t('bench.colTotal') || 'Total'}: <b style="color:#fff;">${fmtMs(report.total_ms || 0)}</b></span>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-ghost btn-sm" id="bench-copy-json" style="font-weight:700;">${t('bench.copyJson') || 'Copy JSON'}</button>
+                <button class="btn btn-primary btn-sm" id="bench-export-html" style="font-weight:700;">${t('bench.exportReport') || 'Export report'}</button>
+            </div>
+        </div>
+        <div style="display:grid; grid-template-columns:${chartTput ? '1fr 1fr' : '1fr'}; gap:14px;">
+            <div style="${cardStyle}">${chartTitle(t('bench.chartTime') || 'Operation time', t('bench.lowerBetter') || 'lower is better')}${benchSvgChart(ops, 'time')}</div>
+            ${chartTput ? `<div style="${cardStyle}">${chartTitle(t('bench.chartTput') || 'Throughput', t('bench.higherBetter') || 'higher is better')}${chartTput}</div>` : ''}
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px;">${rows}</div>`;
+    const copyBtn = container.querySelector('#bench-copy-json');
+    if (copyBtn)
+        copyBtn.onclick = async () => {
+            try {
+                await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+                toast(t('bench.copied') || 'Results copied to clipboard', 'success');
+            }
+            catch {
+                toast(t('bench.copyFailed') || 'Could not copy', 'error');
+            }
+        };
+    const exportBtn = container.querySelector('#bench-export-html');
+    if (exportBtn)
+        exportBtn.onclick = async () => {
+            try {
+                const dest = await saveFile({ defaultPath: 'bmm-benchmark-report.html', filters: [{ name: 'HTML', extensions: ['html'] }] });
+                if (!dest)
+                    return;
+                await invoke('write_text_file', { path: dest, content: buildBenchReportHtml(report) });
+                toast((t('bench.reportSaved') || 'Report saved') + ': ' + dest, 'success');
+            }
+            catch (e) {
+                toast((t('bench.reportFailed') || 'Could not save report') + ': ' + e, 'error');
+            }
+        };
+}
+// Inline SVG horizontal bar chart for a metric — used both in the live results
+// panel and the exported HTML, so they look identical to the dev-suite deck.
+function benchSvgChart(ops, metric) {
+    const catColor = { scan: '#a78bfa', hash: '#22d3ee', io: '#3b82f6', archive: '#fbbf24', activation: '#10b981' };
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const rows = metric === 'tput' ? ops.filter(o => o.throughput_mb_s != null) : ops.slice();
+    if (!rows.length)
+        return '';
+    const val = (o) => metric === 'tput' ? (o.throughput_mb_s || 0) : o.ms;
+    const fmt = metric === 'tput'
+        ? (v) => v >= 1000 ? `${(v / 1000).toFixed(2)} GB/s` : `${v.toFixed(0)} MB/s`
+        : (v) => v < 1 ? `${(v * 1000).toFixed(0)} µs` : v < 1000 ? `${v.toFixed(1)} ms` : `${(v / 1000).toFixed(2)} s`;
+    const max = Math.max(...rows.map(val), 1e-9);
+    const W = 460, rowH = 30, padL = 150, padR = 96, top = 6, barW = W - padL - padR;
+    const H = top + rows.length * rowH + 6;
+    let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,sans-serif">`;
+    s += `<line x1="${padL}" y1="${top}" x2="${padL}" y2="${H - 6}" stroke="rgba(148,163,184,0.25)" stroke-width="1"/>`;
+    rows.forEach((o, i) => {
+        const y = top + i * rowH;
+        const col = catColor[o.category] || '#3b82f6';
+        const med = Math.max(2, (val(o) / max) * barW);
+        s += `<text x="${padL - 8}" y="${y + 15}" text-anchor="end" font-size="11" fill="#cbd5e1">${esc(o.label)}</text>`;
+        // For the time chart, draw the min–max sample range as a faint band behind
+        // the median bar — a compact distribution view (like Criterion's spread).
+        if (metric === 'time' && o.max_ms > o.min_ms) {
+            const xMin = (o.min_ms / max) * barW, xMax = (o.max_ms / max) * barW;
+            s += `<rect x="${padL + xMin}" y="${y + 7}" width="${Math.max(1, xMax - xMin)}" height="11" rx="2" fill="${col}" opacity="0.28"/>`;
+        }
+        s += `<rect x="${padL}" y="${y + 5}" width="${med}" height="15" rx="3" fill="${col}"/>`;
+        s += `<text x="${padL + Math.max(med, metric === 'time' && o.max_ms > o.min_ms ? (o.max_ms / max) * barW : med) + 6}" y="${y + 15}" font-size="10.5" fill="#e2e8f0" font-family="ui-monospace,monospace">${fmt(val(o))}</text>`;
+    });
+    return s + '</svg>';
+}
+// Build a self-contained HTML report (inline SVG charts + table) from a
+// BenchReport — the same presentable format as the dev suite's deck.
+function buildBenchReportHtml(report) {
+    const ops = report.results || [];
+    const env = report.env || {};
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const fmtMs = (ms) => ms < 1 ? `${(ms * 1000).toFixed(0)} µs` : ms < 1000 ? `${ms.toFixed(1)} ms` : `${(ms / 1000).toFixed(2)} s`;
+    const fmtTput = (v) => (v == null) ? '' : (v >= 1000 ? `${(v / 1000).toFixed(2)} GB/s` : `${v.toFixed(0)} MB/s`);
+    const catColor = { scan: '#a78bfa', hash: '#22d3ee', io: '#3b82f6', archive: '#fbbf24', activation: '#10b981' };
+    const chartTput = benchSvgChart(ops, 'tput');
+    const charts = `<div style="display:grid;grid-template-columns:${chartTput ? '1fr 1fr' : '1fr'};gap:16px">
+        <div class="card"><h2 style="font-size:13px;margin:0 0 10px;color:#94a3b8">Operation time · lower is better</h2>${benchSvgChart(ops, 'time')}</div>
+        ${chartTput ? `<div class="card"><h2 style="font-size:13px;margin:0 0 10px;color:#94a3b8">Throughput · higher is better</h2>${chartTput}</div>` : ''}
+    </div>`;
+    const rowsHtml = ops.map(op => `<tr>
+        <td style="font-weight:600;color:#f1f5f9;">${esc(op.label)}</td>
+        <td style="font-family:ui-monospace,monospace;color:${catColor[op.category] || '#3b82f6'};white-space:nowrap;">${fmtMs(op.ms)}</td>
+        <td style="font-family:ui-monospace,monospace;color:#94a3b8;">${fmtTput(op.throughput_mb_s)}</td>
+        <td style="color:#94a3b8;font-size:12px;">${esc(op.explanation)}${op.note ? ` <em>(${esc(op.note)})</em>` : ''}</td>
+    </tr>`).join('');
+    const dsMb = ((env.dataset_bytes || 0) / 1048576).toFixed(1);
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>BMM — Benchmark Report</title>
+<style>:root{color-scheme:dark}body{margin:0;background:#0a0f1e;color:#e2e8f0;font:15px/1.5 system-ui,sans-serif;padding:32px}
+h1{margin:0 0 4px;font-size:24px}.meta{color:#94a3b8;font-size:13px;margin-bottom:24px}
+.card{background:#111a2e;border:1px solid #1e293b;border-radius:14px;padding:20px 24px;margin-bottom:18px}
+table{width:100%;border-collapse:collapse;font-size:14px}td{padding:9px 10px;border-bottom:1px solid #1e293b;vertical-align:top}
+th{text-align:left;padding:9px 10px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #1e293b}
+</style></head><body>
+<h1>BetterModsManager — Benchmark Report</h1>
+<div class="meta">${esc(new Date().toLocaleString())} · mode: <b style="color:#fff">${esc(env.mode)}</b> · dataset: <b style="color:#fff">${env.dataset_files || 0} files · ${dsMb} MB</b> · ${env.cores || '?'} cores${env.reps ? ` · ${env.reps}× samples/op` : ''} · ${esc(env.os)} · total ${fmtMs(report.total_ms || 0)}</div>
+${charts}
+<div class="card"><table><thead><tr><th>Operation</th><th>Time</th><th>Throughput</th><th>What it measures</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+<footer style="color:#64748b;font-size:12px">Generated by BMM's in-app benchmark. Operations run on a ${esc(env.mode)} dataset; writes occur only in a temporary workspace.</footer>
+</body></html>`;
+}
+// One-time styles for the perf tabs + benchmark segmented controls.
+function injectBenchStyle() {
+    if (document.getElementById('perf-bench-style'))
+        return;
+    const s = document.createElement('style');
+    s.id = 'perf-bench-style';
+    s.textContent = `
+        .perf-tab { background:transparent; border:none; color:var(--text-muted); font-size:12px; font-weight:700;
+            padding:6px 14px; border-radius:8px; cursor:pointer; transition:all .15s; }
+        .perf-tab:hover { color:var(--text-secondary); }
+        .perf-tab.active { background:var(--accent); color:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+        .bench-seg { background:transparent; border:none; color:var(--text-muted); font-size:12px; font-weight:700;
+            min-width:38px; padding:7px 14px; border-radius:7px; cursor:pointer; transition:all .15s; }
+        .bench-seg:hover { color:var(--text-secondary); }
+        .bench-seg.active { background:rgba(255,255,255,0.10); color:#fff; }
+        .bench-chip { background:rgba(255,255,255,0.05); border:1px solid var(--border); color:var(--text-secondary);
+            font-size:12px; font-weight:600; padding:6px 12px; border-radius:8px; cursor:pointer; transition:all .15s; }
+        .bench-chip:hover { border-color:var(--bmm-s15, rgba(255,255,255,0.15)); color:#fff; }
+        .bench-chip.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+    `;
+    document.head.appendChild(s);
 }
 // Compatibility exports
 export function openBenchmarkModal() { openAdvancedPerfModal(); }

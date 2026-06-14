@@ -1,0 +1,67 @@
+# BMM benchmark crate — isolated from src-tauri so it can NEVER affect the shipped
+# MSI build (tauri-bundler only harvests src-tauri's [[bin]]; this crate is not a
+# workspace member of it). The archive hot-path is the REAL code: src/lib.rs
+# #[path]-includes ../../../src-tauri/src/archive.rs verbatim (it has zero crate::
+# deps), so there is no drift. The FS-scan/copy and repo-JSON benches mirror the
+# real algorithms/schema faithfully (those modules in the app pull in tauri / the
+# whole models graph, which we deliberately keep out of this lightweight crate).
+[package]
+name = "bmm-benchmarks"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "bmm_benchmarks"
+path = "src/lib.rs"
+# Don't let `cargo bench` run the lib's libtest harness — it would choke on
+# Criterion's CLI flags (e.g. --measurement-time). Only the [[bench]] targets run.
+bench = false
+test = false
+
+# Thin CLI so hyperfine can time WHOLE-PROCESS end-to-end cost (startup + a real
+# archive extract / dir scan), complementing Criterion's in-process timings.
+[[bin]]
+name = "bmm-bench-cli"
+path = "src/main.rs"
+bench = false
+test = false
+
+[dependencies]
+# ── deps required to compile the REAL archive.rs verbatim ──
+zip = { version = "0.6", features = ["deflate"] }
+tar = "0.4"
+flate2 = "1"
+sevenz-rust = "0.6"
+unrar = "0.5"
+# ── deps for the faithful FS / JSON mirrors ──
+jwalk = "0.8"
+walkdir = "2"
+rayon = "1.8"
+sha2 = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# ── fixtures ──
+tempfile = "3"
+rand = "0.8"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+# Each bench disables the libtest harness so Criterion owns `fn main`.
+[[bench]]
+name = "archive_extraction"
+harness = false
+
+[[bench]]
+name = "fs_scan_copy"
+harness = false
+
+[[bench]]
+name = "repo_json"
+harness = false
+
+# Optimised benches — measuring debug builds would be meaningless.
+[profile.bench]
+opt-level = 3
+lto = "thin"

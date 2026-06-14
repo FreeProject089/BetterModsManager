@@ -18,3 +18,6 @@ tmp/
 .vscode
 .agent/
 dist/
+
+benchmarks/rust/target/debug/
+benchmarks/rust/target/release/

@@ -1,0 +1,12 @@
+{
+  "name": "bmm-js-benchmarks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dependency-free micro-benchmarks for BMM frontend hot-paths (mod-list filter/sort, i18n interpolation).",
+  "scripts": {
+    "bench": "node bench.mjs",
+    "report": "node report.mjs",
+    "all": "node bench.mjs && node report.mjs"
+  }
+}

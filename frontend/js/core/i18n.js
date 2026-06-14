@@ -48,10 +48,31 @@ export async function initI18n() {
 export function t(key, params = {}) {
     const dict = translations[currentLang] || translations.fr || {};
     let str = dict[key] || (translations.fr && translations.fr[key]) || key;
-    for (const [k, v] of Object.entries(params)) {
-        str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+    // Single-pass {placeholder} substitution. t() runs hundreds of times per
+    // render; the old code compiled a fresh RegExp per param on every call
+    // (benchmarked ~6× slower — see benchmarks/js). One linear scan, no RegExp.
+    if (str.indexOf('{') === -1)
+        return str;
+    let out = '';
+    let i = 0;
+    const n = str.length;
+    while (i < n) {
+        const open = str.indexOf('{', i);
+        if (open === -1) {
+            out += str.slice(i);
+            break;
+        }
+        const close = str.indexOf('}', open + 1);
+        if (close === -1) {
+            out += str.slice(i);
+            break;
+        }
+        out += str.slice(i, open);
+        const name = str.slice(open + 1, close);
+        out += Object.prototype.hasOwnProperty.call(params, name) ? params[name] : str.slice(open, close + 1);
+        i = close + 1;
     }
-    return str;
+    return out;
 }
 export function getLang() {
     return currentLang;

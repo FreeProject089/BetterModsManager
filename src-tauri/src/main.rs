@@ -371,6 +371,7 @@ fn main() {
             commands::benchmark::start_benchmark,
             commands::benchmark::stop_benchmark,
             commands::benchmark::export_benchmark_csv,
+            commands::benchmark::run_app_benchmark,
             commands::benchmark::read_file_text,
             commands::disk::get_system_disks,
             commands::disk::set_disk_limit,
