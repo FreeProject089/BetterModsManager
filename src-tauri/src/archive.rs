@@ -136,9 +136,7 @@ pub fn extract_to(path: &Path, dest: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dest)?;
     match kind_of(path) {
         Some(Kind::Zip) => {
-            let file = std::fs::File::open(path)?;
-            let mut zip = zip::ZipArchive::new(file).map_err(io_err)?;
-            zip.extract(dest).map_err(io_err)?;
+            extract_zip_parallel(path, dest)?;
         }
         Some(Kind::Tar) => {
             let file = std::fs::File::open(path)?;
@@ -163,6 +161,53 @@ pub fn extract_to(path: &Path, dest: &Path) -> std::io::Result<()> {
         }
         None => return Err(io_err("not an archive")),
     }
+    Ok(())
+}
+
+/// Extract a .zip across all cores. DEFLATE decompression is CPU-bound and was the
+/// app's slowest hot-path operation when serial. Strategy: enumerate entries once
+/// (creating directories), then decompress + write each file entry in parallel —
+/// each rayon task opens its own archive handle since `ZipArchive` isn't `Sync`.
+/// Zip-Slip safe (`enclosed_name`). Falls back to serial for pathologically large
+/// archives, where re-opening per entry would cost more than it saves.
+fn extract_zip_parallel(path: &Path, dest: &Path) -> std::io::Result<()> {
+    use rayon::prelude::*;
+    let file = std::fs::File::open(path)?;
+    let mut zip = zip::ZipArchive::new(file).map_err(io_err)?;
+    let count = zip.len();
+
+    // Too many entries → the per-entry central-directory re-parse would dominate;
+    // use the library's serial extractor instead.
+    if count > 4000 {
+        return zip.extract(dest).map_err(io_err);
+    }
+
+    // Pass 1 (serial, cheap): create directories and collect the file entries.
+    let mut file_indices: Vec<usize> = Vec::new();
+    for i in 0..count {
+        let e = zip.by_index(i).map_err(io_err)?;
+        let safe = match e.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
+        let out = dest.join(&safe);
+        if e.is_dir() {
+            std::fs::create_dir_all(&out).ok();
+        } else {
+            if let Some(parent) = out.parent() { std::fs::create_dir_all(parent).ok(); }
+            file_indices.push(i);
+        }
+    }
+    drop(zip);
+
+    // Pass 2 (parallel): decompress + write each file with an independent handle.
+    file_indices.par_iter().try_for_each(|&i| -> std::io::Result<()> {
+        let f = std::fs::File::open(path)?;
+        let mut z = zip::ZipArchive::new(f).map_err(io_err)?;
+        let mut e = z.by_index(i).map_err(io_err)?;
+        let safe = match e.enclosed_name() { Some(p) => p.to_path_buf(), None => return Ok(()) };
+        let out = dest.join(&safe);
+        let mut w = std::io::BufWriter::new(std::fs::File::create(&out)?);
+        std::io::copy(&mut e, &mut w)?;
+        Ok(())
+    })?;
     Ok(())
 }
 

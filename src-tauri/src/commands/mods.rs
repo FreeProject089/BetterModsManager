@@ -487,13 +487,12 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), AppError> {
                     // Re-hash folders here only (archives are hashed on demand to
                     // avoid extracting large archives synchronously at startup).
                     if m.file_hashes.is_some() && !is_arch {
-                        let mut new_hashes = std::collections::HashMap::new();
-                        for rel in &f_strings {
-                            let full_path = m.mod_folder_path.join(rel);
-                            if let Ok(h) = crate::fs_utils::compute_file_sha256(&full_path) {
-                                new_hashes.insert(rel.clone(), h);
-                            }
-                        }
+                        let base = m.mod_folder_path.clone();
+                        let items: Vec<(String, std::path::PathBuf)> = f_strings.iter()
+                            .map(|rel| (rel.clone(), base.join(rel)))
+                            .collect();
+                        let new_hashes: std::collections::HashMap<String, String> =
+                            crate::fs_utils::compute_file_sha256_bulk(&items).into_iter().collect();
                         m.file_hashes = Some(new_hashes);
                         update_content_id_from_hashes(m);
                     }
@@ -2575,14 +2574,12 @@ pub async fn get_mod_integrity(state: State<'_, AppState>, mod_id: String) -> Re
     if needs_baseline {
         // Auto-initialize baseline hashes if missing
         let current_files = fs_utils::list_mod_files(&mod_path).map_err(|e| e.to_string())?;
-        let mut new_hashes = std::collections::HashMap::new();
-        for f in &current_files {
-            let full_path = mod_path.join(f);
-            if let Ok(h) = fs_utils::compute_file_sha256(&full_path) {
-                new_hashes.insert(f.to_string_lossy().to_string(), h);
-            }
-        }
-        
+        let items: Vec<(String, std::path::PathBuf)> = current_files.iter()
+            .map(|f| (f.to_string_lossy().to_string(), mod_path.join(f)))
+            .collect();
+        let new_hashes: std::collections::HashMap<String, String> =
+            fs_utils::compute_file_sha256_bulk(&items).into_iter().collect();
+
         {
             let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
@@ -2662,14 +2659,11 @@ pub async fn update_mod_hashes(state: State<'_, AppState>, mod_id: String) -> Re
     let mod_path = crate::archive::mod_read_root(&mod_path);
 
     let current_files = fs_utils::list_mod_files(&mod_path).map_err(|e| e.to_string())?;
-    let mut new_hashes = std::collections::HashMap::new();
-
-    for f in current_files {
-        let full_path = mod_path.join(&f);
-        if let Ok(hash) = fs_utils::compute_file_sha256(&full_path) {
-            new_hashes.insert(f.to_string_lossy().to_string(), hash);
-        }
-    }
+    let items: Vec<(String, std::path::PathBuf)> = current_files.iter()
+        .map(|f| (f.to_string_lossy().to_string(), mod_path.join(f)))
+        .collect();
+    let new_hashes: std::collections::HashMap<String, String> =
+        fs_utils::compute_file_sha256_bulk(&items).into_iter().collect();
 
     {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
@@ -3046,25 +3040,18 @@ fn process_single_mod_hashing(
         if let Ok(current_files) = fs_utils::list_mod_files(&read_root) {
             let mut tracker = crate::commands::resource_tracker::OpTracker::start("SHA/compute")
                 .with_subject(id);
-            let mut new_hashes = std::collections::HashMap::new();
-            let mut calculated = 0;
-            let mut bytes_total: u64 = 0;
-
-            for f in current_files {
-                let full_path = read_root.join(&f);
-                if let Ok(meta) = std::fs::metadata(&full_path) {
-                    bytes_total += meta.len();
-                }
-                if let Ok(hash) = fs_utils::compute_file_sha256(&full_path) {
-                    new_hashes.insert(f.to_string_lossy().to_string(), hash);
-                    calculated += 1;
-                }
-
-                // Yield occasionally if mod is huge
-                if calculated % 50 == 0 {
-                    std::thread::sleep(std::time::Duration::from_millis(10));
-                }
-            }
+            let items: Vec<(String, std::path::PathBuf)> = current_files.iter()
+                .map(|f| (f.to_string_lossy().to_string(), read_root.join(f)))
+                .collect();
+            let bytes_total: u64 = items.iter()
+                .filter_map(|(_, p)| std::fs::metadata(p).ok().map(|m| m.len()))
+                .sum();
+            // Hash every file across all cores at once (rayon) instead of a
+            // throttled sequential loop — this is a background op, so it can use
+            // the full machine and finish far sooner.
+            let new_hashes: std::collections::HashMap<String, String> =
+                fs_utils::compute_file_sha256_bulk(&items).into_iter().collect();
+            let calculated = new_hashes.len();
             tracker.set("files", calculated as u64);
             tracker.set("bytes_read", bytes_total);
             tracker.finish();

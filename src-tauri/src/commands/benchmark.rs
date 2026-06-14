@@ -441,16 +441,16 @@ fn run_app_benchmark_blocking(
 
     // 2. HASH — SHA-256 every file (the integrity-check workload).
     emit(2, "Hashing files (SHA-256)")?;
+    let hash_items: Vec<((), std::path::PathBuf)> = scanned.iter().map(|rel| ((), mod_dir.join(rel))).collect();
     let mut s = Vec::new();
     let mut hashed = 0u64;
     for _ in 0..reps {
         let t = Instant::now();
-        let mut h = 0u64;
-        for rel in &scanned { if fs_utils::compute_file_sha256(&mod_dir.join(rel)).is_ok() { h += 1; } }
-        hashed = h; s.push(ms_of(t));
+        hashed = fs_utils::compute_file_sha256_bulk(&hash_items).len() as u64;
+        s.push(ms_of(t));
     }
     results.push(make("hash", "SHA-256 integrity hash", "hash",
-        "Computes a SHA-256 of every file (1 MiB buffered reads). This is the integrity/content-id workload used to detect changed mods and verify downloads.",
+        "Computes a SHA-256 of every file across all cores (rayon, 1 MiB buffered reads). This is the integrity/content-id workload used to detect changed mods and verify downloads.",
         s, dataset_bytes, hashed, true, None));
 
     // 3. COPY full-speed — std::fs::copy of the whole mod.
@@ -558,9 +558,11 @@ fn run_app_benchmark_blocking(
     //    is the integrity-verification workload (confirm a download, detect a
     //    tampered/corrupt mod), distinct from raw hashing because it also compares.
     emit(9, "Verifying (SHA-256 compare)")?;
-    let expected: Vec<Option<String>> = scanned.iter()
-        .map(|rel| fs_utils::compute_file_sha256(&mod_dir.join(rel)).ok())
-        .collect();
+    let verify_items: Vec<(usize, std::path::PathBuf)> = scanned.iter().enumerate()
+        .map(|(i, rel)| (i, mod_dir.join(rel))).collect();
+    // Precompute the expected digest per file (indexed), once, in parallel.
+    let mut expected: Vec<Option<String>> = vec![None; scanned.len()];
+    for (i, h) in fs_utils::compute_file_sha256_bulk(&verify_items) { expected[i] = Some(h); }
     let mut s = Vec::new();
     let mut verified = 0u64;
     let mut mismatches = 0u64;
@@ -568,11 +570,12 @@ fn run_app_benchmark_blocking(
         let t = Instant::now();
         let mut ok = 0u64;
         let mut bad = 0u64;
-        for (rel, exp) in scanned.iter().zip(expected.iter()) {
-            match (fs_utils::compute_file_sha256(&mod_dir.join(rel)).ok(), exp) {
-                (Some(got), Some(e)) if &got == e => ok += 1,
-                (Some(_), Some(_)) => bad += 1,
-                _ => {}
+        // Re-hash everything in parallel, then compare each result to its baseline.
+        for (i, got) in fs_utils::compute_file_sha256_bulk(&verify_items) {
+            match &expected[i] {
+                Some(e) if e == &got => ok += 1,
+                Some(_) => bad += 1,
+                None => {}
             }
         }
         verified = ok; mismatches = bad; s.push(ms_of(t));
