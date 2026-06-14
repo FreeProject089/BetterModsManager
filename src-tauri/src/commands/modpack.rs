@@ -547,8 +547,11 @@ pub async fn repair_modpack_mod(
             
             for i in 0..archive.len() {
                 let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
-                let outpath = target_dir.join(file.name());
-                
+                // CWE-22 Zip Slip: never join the raw entry name — use enclosed_name()
+                // (None ⇒ the entry would escape target_dir via `..`/absolute → skip).
+                let safe = match file.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
+                let outpath = target_dir.join(&safe);
+
                 if file.name().ends_with('/') {
                     std::fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
                 } else {

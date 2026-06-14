@@ -72,6 +72,12 @@ pub struct AppSettings {
     pub sound_volume: u32, // 0–100
     #[serde(default)]
     pub connected_server_repos: Vec<ConnectedServerRepo>,
+    /// Per-plugin API tokens: token string → plugin_id. CWE-862/863: the API
+    /// resolves a caller's identity (and thus permissions) from THIS map by token,
+    /// not from the spoofable `X-BMM-Plugin-Id` header. The main `api_token` stays
+    /// the admin token (full access). Empty by default ⇒ behaviour unchanged.
+    #[serde(default)]
+    pub plugin_tokens: std::collections::HashMap<String, String>,
 }
 
 impl Default for AppSettings {
@@ -103,6 +109,7 @@ impl Default for AppSettings {
             sound_effects_enabled: true,
             sound_volume: default_sound_volume(),
             connected_server_repos: Vec::new(),
+            plugin_tokens: std::collections::HashMap::new(),
         }
     }
 }

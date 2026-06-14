@@ -185,10 +185,17 @@ fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf) -> Result<PluginManif
         let name = file.name().to_string();
         if name.ends_with('/') { continue; }
 
-        let strip = name.find('/').map(|i| &name[i+1..]).unwrap_or(&name);
-        if strip.is_empty() { continue; }
+        // CWE-22 Zip Slip: resolve a CONTAINED relative path (None ⇒ the entry uses
+        // `..`/absolute to escape → skip). The old `name[after first '/']` slice kept
+        // any `..` in the remainder, so a crafted .bmmplug could write outside the dir.
+        let safe = match file.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
+        // Strip the top-level folder (plugins are zipped inside a root dir), keep the rest.
+        let mut stripped = std::path::PathBuf::new();
+        for c in safe.components().skip(1) { stripped.push(c.as_os_str()); }
+        let rel = if stripped.as_os_str().is_empty() { safe.clone() } else { stripped };
+        if rel.as_os_str().is_empty() { continue; }
 
-        let dest = plugin_dir.join(strip);
+        let dest = plugin_dir.join(&rel);
         if let Some(parent) = dest.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
@@ -420,6 +427,51 @@ pub fn reset_api_token(state: State<'_, AppState>) -> Result<String, String> {
     let _ = state.save();
     log_line("[PLUGINS] API token reset".to_string());
     Ok(new_token)
+}
+
+// ── Per-plugin API tokens (CWE-862/863) ────────────────────────────────────
+// A plugin should call the API with its OWN token (not the shared admin token),
+// so the server resolves its identity from the token and limits it to its
+// declared permissions. The admin `api_token` keeps full access.
+
+/// Issue (or replace) the per-plugin API token bound to `plugin_id`. Returns it.
+#[tauri::command]
+pub fn create_plugin_token(state: State<'_, AppState>, plugin_id: String) -> Result<String, String> {
+    if plugin_id.trim().is_empty() { return Err("plugin_id required".to_string()); }
+    let token = uuid::Uuid::new_v4().to_string();
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        // One token per plugin: drop any previous token for this plugin first.
+        data.settings.plugin_tokens.retain(|_, pid| pid != &plugin_id);
+        data.settings.plugin_tokens.insert(token.clone(), plugin_id.clone());
+    }
+    let _ = state.save();
+    log_line(format!("[PLUGINS] Issued API token for plugin '{}'", plugin_id));
+    Ok(token)
+}
+
+/// Revoke a plugin's API token (by plugin_id). Returns true if one was removed.
+#[tauri::command]
+pub fn revoke_plugin_token(state: State<'_, AppState>, plugin_id: String) -> Result<bool, String> {
+    let removed = {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let before = data.settings.plugin_tokens.len();
+        data.settings.plugin_tokens.retain(|_, pid| pid != &plugin_id);
+        before != data.settings.plugin_tokens.len()
+    };
+    if removed {
+        let _ = state.save();
+        log_line(format!("[PLUGINS] Revoked API token for plugin '{}'", plugin_id));
+    }
+    Ok(removed)
+}
+
+/// List the plugin_ids that currently have an API token (token values are NEVER
+/// returned).
+#[tauri::command]
+pub fn list_plugin_tokens(state: State<'_, AppState>) -> Vec<String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    data.settings.plugin_tokens.values().cloned().collect()
 }
 
 // ── Script Generation ──────────────────────────────────────────────────────

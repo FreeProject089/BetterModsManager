@@ -394,15 +394,19 @@ fn require_token(
     warp::header::optional::<String>("authorization")
         .and_then(move |auth: Option<String>| {
             // Read the LIVE token from settings on every request so that
-            // regenerating the token (reset_api_token) takes effect immediately
-            // without needing to restart the API server.
-            let expected = {
-                let d = data.lock().unwrap_or_else(|p| p.into_inner());
-                format!("Bearer {}", d.settings.api_token)
-            };
+            // regenerating the token (reset_api_token) takes effect immediately.
+            // Accept the admin token (full access) OR any issued per-plugin token
+            // (CWE-862/863); the caller's identity/permissions are resolved later
+            // in require_permission from the SAME token, not a spoofable header.
             let provided = auth.unwrap_or_default();
+            let ok = {
+                let d = data.lock().unwrap_or_else(|p| p.into_inner());
+                let token = provided.strip_prefix("Bearer ").unwrap_or("");
+                ct_eq(token, &d.settings.api_token)
+                    || (!token.is_empty() && d.settings.plugin_tokens.contains_key(token))
+            };
             async move {
-                if ct_eq(&provided, &expected) {
+                if ok {
                     Ok(())
                 } else {
                     Err(warp::reject::custom(Unauthorized))
@@ -453,22 +457,34 @@ fn require_permission(
     data: Arc<std::sync::Mutex<AppData>>,
     permission: &'static str,
 ) -> impl Filter<Extract = (), Error = warp::Rejection> + Clone {
-    warp::header::optional::<String>("x-bmm-plugin-id")
-        .and_then(move |plugin_id: Option<String>| {
+    // CWE-862/863: resolve the caller's identity from the BEARER TOKEN, never from
+    // the spoofable `X-BMM-Plugin-Id` header. (require_token already gated this
+    // route, so the token here is the admin token or a known per-plugin token.)
+    warp::header::optional::<String>("authorization")
+        .and_then(move |auth: Option<String>| {
             let d = data.clone();
             async move {
-                if let Some(pid) = plugin_id {
-                    let data = d.lock().unwrap_or_else(|p| p.into_inner());
-                    let perms = data.plugin_permissions.get(&pid).cloned().unwrap_or_default();
-                    if !perms.contains(&permission.to_string()) {
-                        return Err(warp::reject::custom(PermissionDenied {
-                            required: permission,
-                            plugin_id: pid,
-                        }));
-                    }
+                let provided = auth.unwrap_or_default();
+                let token = provided.strip_prefix("Bearer ").unwrap_or("");
+                let data = d.lock().unwrap_or_else(|p| p.into_inner());
+                // Admin token → full access (curl / CLI / MCP / in-app tester).
+                if ct_eq(token, &data.settings.api_token) {
+                    return Ok(());
                 }
-                // No plugin ID header → admin / direct access: allow everything
-                Ok(())
+                // Per-plugin token → identity (and thus permissions) resolved from
+                // the token map; the plugin cannot escalate by omitting/forging the
+                // old header.
+                if let Some(pid) = data.settings.plugin_tokens.get(token) {
+                    let perms = data.plugin_permissions.get(pid).cloned().unwrap_or_default();
+                    if perms.contains(&permission.to_string()) {
+                        return Ok(());
+                    }
+                    return Err(warp::reject::custom(PermissionDenied {
+                        required: permission,
+                        plugin_id: pid.clone(),
+                    }));
+                }
+                Err(warp::reject::custom(Unauthorized))
             }
         })
         .untuple_one()

@@ -1340,7 +1340,17 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 </div>
             </div>
             <div style="padding:9px 12px;background:rgba(6,182,212,0.07);border:1px solid rgba(6,182,212,0.2);border-radius:8px;font-size:10px;color:var(--cyan);line-height:1.5;">
-              ${t('plugins.qtPermHint') || 'Without the <code>X-BMM-Plugin-Id</code> header → admin access (all allowed). With the header → only the granted permissions below are allowed for that plugin.'}
+              ${t('plugins.qtPermHint') || 'Each plugin should authenticate with its OWN token (below) — its API access is then limited to the granted permissions. The admin token always has full access. The old <code>X-BMM-Plugin-Id</code> header is no longer trusted for identity.'}
+            </div>
+            <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:11px;display:flex;flex-direction:column;gap:7px;">
+                <label class="plug-form-label" style="margin:0;">${t('plugins.qtTokenTitle') || 'Plugin API token'}</label>
+                <div style="font-size:10px;color:var(--text-muted);line-height:1.5;">${t('plugins.qtTokenHint') || 'Give this plugin its OWN token so its access is limited to the permissions above. The plugin then sends <code>Authorization: Bearer &lt;token&gt;</code> (never the admin token).'}</div>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <input type="text" id="plug-qt-token-out" class="input" readonly placeholder="${t('plugins.qtTokenNone') || 'no token yet'}" style="font-family:var(--font-mono);font-size:11px;flex:1;">
+                    <button type="button" id="plug-qt-token-gen" class="btn btn-xs btn-secondary" style="font-size:10px;white-space:nowrap;">${t('plugins.qtTokenGen') || 'Generate'}</button>
+                    <button type="button" id="plug-qt-token-copy" class="btn btn-xs btn-ghost" style="font-size:10px;">${t('common.copy') || 'Copy'}</button>
+                    <button type="button" id="plug-qt-token-revoke" class="btn btn-xs btn-ghost" style="font-size:10px;color:var(--danger);">${t('plugins.qtTokenRevoke') || 'Revoke'}</button>
+                </div>
             </div>
         </div>`;
 
@@ -1830,6 +1840,33 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                     });
                 } catch {}
             }
+        });
+
+        // ── Per-plugin API token (CWE-862/863): issue / copy / revoke ──────────
+        const tokGetPid = () => (overlay.querySelector('#plug-qt-perm-id') as HTMLInputElement)?.value?.trim()
+            || (overlay.querySelector('#plug-qt-perm-sel') as HTMLSelectElement)?.value || '';
+        const tokOut = () => overlay.querySelector('#plug-qt-token-out') as HTMLInputElement | null;
+        overlay.querySelector('#plug-qt-token-gen')?.addEventListener('click', async () => {
+            const pid = tokGetPid();
+            if (!pid) { toast(t('plugins.qtPermNoId') || 'Enter a plugin_id first', 'warning'); return; }
+            try {
+                const tok = await invoke('create_plugin_token', { pluginId: pid }) as string;
+                const o = tokOut(); if (o) o.value = tok;
+                toast(t('plugins.qtTokenIssued') || 'Plugin token issued', 'success');
+            } catch (e) { toast(String(e), 'error'); }
+        });
+        overlay.querySelector('#plug-qt-token-copy')?.addEventListener('click', async () => {
+            const v = tokOut()?.value;
+            if (v) { try { await navigator.clipboard.writeText(v); toast(t('plugins.qtTokenCopied') || 'Copied', 'success'); } catch {} }
+        });
+        overlay.querySelector('#plug-qt-token-revoke')?.addEventListener('click', async () => {
+            const pid = tokGetPid();
+            if (!pid) return;
+            try {
+                const removed = await invoke('revoke_plugin_token', { pluginId: pid }) as boolean;
+                const o = tokOut(); if (o) o.value = '';
+                toast(removed ? (t('plugins.qtTokenRevoked') || 'Token revoked') : (t('plugins.qtTokenNoneToRevoke') || 'No token for this plugin'), removed ? 'success' : 'info');
+            } catch (e) { toast(String(e), 'error'); }
         });
     }
 

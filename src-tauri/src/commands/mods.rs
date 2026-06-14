@@ -1695,7 +1695,9 @@ pub async fn download_mod(
 
             for i in 0..archive.len() {
                 let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
-                let outpath = target_dir_for_thread.join(file.name());
+                // CWE-22 Zip Slip: use enclosed_name() (None ⇒ entry escapes → skip).
+                let safe = match file.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
+                let outpath = target_dir_for_thread.join(&safe);
                 if file.name().ends_with('/') {
                     std::fs::create_dir_all(&outpath).ok();
                 } else {
@@ -1965,7 +1967,9 @@ pub async fn install_from_modlist(
                                 return Err("Cancelled".to_string());
                             }
                             let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
-                            let outpath = t_dir.join(file.name());
+                            // CWE-22 Zip Slip: use enclosed_name() (None ⇒ escape → skip).
+                            let safe = match file.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
+                            let outpath = t_dir.join(&safe);
                             if file.name().ends_with('/') {
                                 std::fs::create_dir_all(&outpath).ok();
                             } else {
