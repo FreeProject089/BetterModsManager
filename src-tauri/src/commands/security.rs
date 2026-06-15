@@ -112,6 +112,123 @@ fn get_hwid_v3() -> String {
 fn get_hwid_v3() -> String { "non_windows_v3_identity".to_string() }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// HWID v4 — WMIC-free.
+// `wmic` was removed from Windows 11 24H2+, so v3's hardware markers silently come
+// back empty on modern machines, weakening the identity. v4 reads the same markers
+// via a single CIM (PowerShell Get-CimInstance) call, falling back to `wmic` only
+// on older Windows where PowerShell/CIM yields nothing. Registry markers are kept.
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(target_os = "windows")]
+fn get_cim_hwid_fields() -> std::collections::BTreeMap<&'static str, String> {
+    use std::process::Command;
+    use std::collections::BTreeMap;
+    let mut out: BTreeMap<&'static str, String> = BTreeMap::new();
+    // One PowerShell call collects everything as KEY=VALUE lines.
+    let script = "\
+$ErrorActionPreference='SilentlyContinue';\
+$cs=Get-CimInstance Win32_ComputerSystemProduct;\
+$bb=Get-CimInstance Win32_BaseBoard;\
+$bios=Get-CimInstance Win32_BIOS;\
+$cpu=Get-CimInstance Win32_Processor|Select-Object -First 1;\
+$disk=Get-CimInstance Win32_DiskDrive|Sort-Object Index|Select-Object -First 1;\
+$vol=Get-CimInstance Win32_LogicalDisk -Filter \"DeviceID='C:'\";\
+Write-Output \"SystemUUID=$($cs.UUID)\";\
+Write-Output \"BaseboardSerial=$($bb.SerialNumber)\";\
+Write-Output \"BiosSerial=$($bios.SerialNumber)\";\
+Write-Output \"CpuId=$($cpu.ProcessorId)\";\
+Write-Output \"DiskSn=$($disk.SerialNumber)\";\
+Write-Output \"DiskModel=$($disk.Model)\";\
+Write-Output \"VolumeSn=$($vol.VolumeSerialNumber)\"";
+    if let Ok(o) = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
+        .output()
+    {
+        let s = String::from_utf8_lossy(&o.stdout);
+        for line in s.lines() {
+            if let Some((k, v)) = line.split_once('=') {
+                let v = v.trim();
+                if v.is_empty() || v.eq_ignore_ascii_case("FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF") { continue; }
+                let key: Option<&'static str> = match k.trim() {
+                    "SystemUUID" => Some("SystemUUID"),
+                    "BaseboardSerial" => Some("BaseboardSerial"),
+                    "BiosSerial" => Some("BiosSerial"),
+                    "CpuId" => Some("CpuId"),
+                    "DiskSn" => Some("DiskSn"),
+                    "DiskModel" => Some("DiskModel"),
+                    "VolumeSn" => Some("VolumeSn"),
+                    _ => None,
+                };
+                if let Some(k) = key { out.insert(k, v.to_string()); }
+            }
+        }
+    }
+    out
+}
+
+#[cfg(target_os = "windows")]
+fn get_hwid_v4() -> String {
+    use winreg::enums::*;
+    use winreg::RegKey;
+    use std::collections::BTreeMap;
+
+    let mut m: BTreeMap<&str, String> = BTreeMap::new();
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    if let Ok(crypto) = hklm.open_subkey("SOFTWARE\\Microsoft\\Cryptography") {
+        if let Ok(v) = crypto.get_value::<String, _>("MachineGuid") { m.insert("MachineGuid", v); }
+    }
+    if let Ok(cv) = hklm.open_subkey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion") {
+        if let Ok(v) = cv.get_value::<String, _>("ProductId") { m.insert("ProductId", v); }
+        if let Ok(v) = cv.get_value::<u32, _>("InstallDate") { m.insert("InstallDate", v.to_string()); }
+    }
+
+    // Hardware markers via CIM (works where wmic is gone).
+    for (k, v) in get_cim_hwid_fields() { m.insert(k, v); }
+
+    // Old Windows where PowerShell/CIM produced nothing → fall back to wmic.
+    let have_hw = ["SystemUUID", "CpuId", "BaseboardSerial", "BiosSerial", "DiskSn"]
+        .iter().any(|k| m.contains_key(*k));
+    if !have_hw {
+        let bb = get_wmic_value("baseboard", "serialnumber");
+        if !bb.is_empty() { m.insert("BaseboardSerial", bb); }
+        let bios = get_wmic_value("bios", "serialnumber");
+        if !bios.is_empty() { m.insert("BiosSerial", bios); }
+        let uuid = get_wmic_value("csproduct", "uuid");
+        if !uuid.is_empty() && uuid != "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF" { m.insert("SystemUUID", uuid); }
+        let cpu = get_wmic_value("cpu", "processorid");
+        if !cpu.is_empty() { m.insert("CpuId", cpu); }
+        let dsn = get_wmic_value("diskdrive", "serialnumber");
+        if !dsn.is_empty() { m.insert("DiskSn", dsn); }
+    }
+
+    if m.is_empty() { return "fallback_v4_emergency_identity".to_string(); }
+    let mut raw = String::from("BMM-HWID-V4|");
+    for (k, v) in &m { raw.push_str(k); raw.push(':'); raw.push_str(v); raw.push('|'); }
+    raw
+}
+
+#[cfg(not(target_os = "windows"))]
+fn get_hwid_v4() -> String { "non_windows_v4_identity".to_string() }
+
+/// v4 seed derivation: domain-separated, then iterated SHA-256 as a work factor so
+/// a known Creator ID can't be cheaply brute-forced back to a forged HWID. Cheap
+/// one-time cost (only on a brand-new install, before the key is cached).
+fn derive_seed_v4(hwid: &str, machine_guid: &str) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(b"BMM-CREATOR-ID-V4|");
+    h.update(hwid.as_bytes());
+    h.update(b"|MG:");
+    h.update(machine_guid.as_bytes());
+    let mut cur: [u8; 32] = h.finalize().into();
+    for _ in 0..200_000 {
+        let mut hh = Sha256::new();
+        hh.update(cur);
+        hh.update(b"BMM-V4-KDF");
+        cur = hh.finalize().into();
+    }
+    cur
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Registry persistence — sealed key cache
 //   HKCU\SOFTWARE\BetterModsManager\Identity
 //     V  (REG_DWORD) = 3
@@ -143,6 +260,15 @@ fn compute_seal(seed_hex: &str, machine_guid: &str) -> String {
     hex::encode(h.finalize())
 }
 
+fn compute_seal_v4(seed_hex: &str, machine_guid: &str) -> String {
+    let mut h = Sha256::new();
+    h.update(seed_hex.as_bytes());
+    h.update(b"|");
+    h.update(machine_guid.as_bytes());
+    h.update(b"|BMM-SEAL-V4");
+    hex::encode(h.finalize())
+}
+
 /// Writes the signing key seed + seal to registry.
 /// Silently ignores errors — registry is best-effort hardening,
 /// the app works fine without it.
@@ -152,11 +278,11 @@ fn write_key_to_registry(seed: &[u8; 32]) {
     use winreg::RegKey;
     let seed_hex = hex::encode(seed);
     let machine_guid = get_machine_guid();
-    let seal = compute_seal(&seed_hex, &machine_guid);
+    let seal = compute_seal_v4(&seed_hex, &machine_guid);
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     if let Ok((key, _)) = hkcu.create_subkey("SOFTWARE\\BetterModsManager\\Identity") {
-        let version: u32 = 3;
+        let version: u32 = 4;
         let _ = key.set_value("V", &version);
         let _ = key.set_value("K", &seed_hex);
         let _ = key.set_value("S", &seal);
@@ -167,8 +293,9 @@ fn write_key_to_registry(seed: &[u8; 32]) {
 fn write_key_to_registry(_seed: &[u8; 32]) {}
 
 /// Returns the cached signing key seed from registry if the seal is valid.
+/// Returns `(seed, version)` from the registry if the seal is valid.
 #[cfg(target_os = "windows")]
-fn read_key_from_registry() -> Option<[u8; 32]> {
+fn read_key_from_registry() -> Option<([u8; 32], u32)> {
     use winreg::enums::*;
     use winreg::RegKey;
 
@@ -176,24 +303,28 @@ fn read_key_from_registry() -> Option<[u8; 32]> {
     let key  = hkcu.open_subkey("SOFTWARE\\BetterModsManager\\Identity").ok()?;
 
     let version: u32 = key.get_value("V").ok()?;
-    if version != 3 { return None; } // old format — re-derive
-
     let seed_hex: String  = key.get_value("K").ok()?;
     let stored_seal: String = key.get_value("S").ok()?;
 
-    // Verify seal
+    // Verify the seal with the algorithm matching the stored version. v3 entries
+    // still validate (and are promoted to v4 by load_or_generate_keys), so the
+    // Creator ID is preserved across the upgrade.
     let machine_guid = get_machine_guid();
-    let expected = compute_seal(&seed_hex, &machine_guid);
+    let expected = match version {
+        4 => compute_seal_v4(&seed_hex, &machine_guid),
+        3 => compute_seal(&seed_hex, &machine_guid),
+        _ => return None, // unknown/older format — re-derive
+    };
     if expected != stored_seal { return None; } // tampered / wrong machine
 
     // Decode seed
     let bytes = hex::decode(&seed_hex).ok()?;
     let arr: [u8; 32] = bytes.try_into().ok()?;
-    Some(arr)
+    Some((arr, version))
 }
 
 #[cfg(not(target_os = "windows"))]
-fn read_key_from_registry() -> Option<[u8; 32]> { None }
+fn read_key_from_registry() -> Option<([u8; 32], u32)> { None }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Salted HWID (for external use — e.g. download tokens)
@@ -223,7 +354,7 @@ pub fn get_keys_path(handle: &AppHandle) -> Result<PathBuf, String> {
     if !app_dir.exists() {
         fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
     }
-    Ok(app_dir.join("creator_v3.key"))
+    Ok(app_dir.join("creator_v4.key"))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -241,72 +372,42 @@ pub fn get_keys_path(handle: &AppHandle) -> Result<PathBuf, String> {
 pub fn load_or_generate_keys(handle: &AppHandle) -> Result<SigningKey, String> {
     let path = get_keys_path(handle)?;
 
-    // ── 1. Registry (fastest, most tamper-resistant) ─────────────────────
-    if let Some(seed) = read_key_from_registry() {
-        let key = SigningKey::from_bytes(&seed);
-        // Re-sync file cache if missing
-        if !path.exists() {
-            let _ = fs::write(&path, &seed);
-        }
-        return Ok(key);
+    let app_dir = handle.path_resolver().app_data_dir();
+    let v3_path = app_dir.as_ref().map(|d| d.join("creator_v3.key"));
+    let v2_path = app_dir.as_ref().map(|d| d.join("creator_v2.key"));
+
+    // ── 1. Registry (fastest, most tamper-resistant; v4 or migratable v3) ─
+    if let Some((seed, version)) = read_key_from_registry() {
+        // Promote to v4 storage only when needed (migrating a v3 entry, or the
+        // file cache is missing) — keeps the same seed, so the Creator ID is
+        // unchanged, and avoids a registry write on every call.
+        if version != 4 { write_key_to_registry(&seed); }
+        if !path.exists() { let _ = fs::write(&path, &seed); }
+        return Ok(SigningKey::from_bytes(&seed));
     }
 
-    // ── 2. File cache (legacy v2 key or v3 key from previous run) ────────
-    // Accept both 32-byte raw seeds (current) and anything coercible
-    if path.exists() {
-        if let Ok(raw) = fs::read(&path) {
-            if let Ok(arr) = raw.try_into() as Result<[u8;32], _> {
-                let key = SigningKey::from_bytes(&arr);
-                // Promote to registry so future runs hit path 1
-                write_key_to_registry(&arr);
-                return Ok(key);
+    // ── 2. File cache — v4, then legacy v3, then legacy v2 (32-byte raw seed)
+    //    Any existing key is reused as-is (same seed → same Creator ID) and
+    //    promoted to v4 storage. Only a brand-new machine reaches step 3.
+    for candidate in [Some(path.clone()), v3_path.clone(), v2_path.clone()].into_iter().flatten() {
+        if candidate.exists() {
+            if let Ok(raw) = fs::read(&candidate) {
+                if let Ok(arr) = <[u8; 32]>::try_from(raw) {
+                    let _ = fs::write(&path, &arr);
+                    write_key_to_registry(&arr);
+                    return Ok(SigningKey::from_bytes(&arr));
+                }
             }
         }
     }
 
-    // Also try the old v2 key file name for seamless migration
-    let v2_path = handle
-        .path_resolver()
-        .app_data_dir()
-        .map(|d| d.join("creator_v2.key"))
-        .unwrap_or_default();
-
-    if v2_path.exists() {
-        if let Ok(raw) = fs::read(&v2_path) {
-            if let Ok(arr) = raw.try_into() as Result<[u8;32], _> {
-                let key = SigningKey::from_bytes(&arr);
-                // Upgrade: write to new v3 file + registry
-                let _ = fs::write(&path, &arr);
-                write_key_to_registry(&arr);
-                return Ok(key);
-            }
-        }
-    }
-
-    // ── 3. Hardware derivation — runs only on very first launch ──────────
-    let hwid = get_hwid_v3();
-
-    // Round 1
-    let mut h1 = Sha256::new();
-    h1.update(hwid.as_bytes());
-    h1.update(b"BMM-CREATOR-ID-V3-SALT-Z8K9J2L7M4X5Q1W6");
-    let round1: [u8; 32] = h1.finalize().into();
-
-    // Round 2 — additional hardening pass
-    let mut h2 = Sha256::new();
-    h2.update(&round1);
-    h2.update(b"BMM-ROUND2-V3-HARDENING");
-    // Mix in MachineGuid again for extra binding
-    h2.update(get_machine_guid().as_bytes());
-    let seed: [u8; 32] = h2.finalize().into();
-
-    let key = SigningKey::from_bytes(&seed);
-
-    // Persist in both storages
+    // ── 3. Fresh v4 derivation — first launch on a new machine ───────────
+    //    WMIC-free HWID + iterated-SHA256 KDF.
+    let seed = derive_seed_v4(&get_hwid_v4(), &get_machine_guid());
     let _ = fs::write(&path, &seed);
     write_key_to_registry(&seed);
 
-    Ok(key)
+    Ok(SigningKey::from_bytes(&seed))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
