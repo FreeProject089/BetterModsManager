@@ -280,17 +280,33 @@ pub async fn run_app_benchmark(
     real_sources: Option<Vec<String>>,
     scale: Option<String>,
 ) -> Result<BenchReport, String> {
+    // Refuse to start a second run while one is still in flight (e.g. a just-
+    // cancelled run that hasn't finished aborting). Without this, two runs would
+    // share the same temp workspace and the new run would clear the cancel flag
+    // out from under the old one. The frontend turns this into a "try again" hint.
+    if BENCH_RUNNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return Err("A benchmark is already running".to_string());
+    }
+    struct RunningGuard;
+    impl Drop for RunningGuard {
+        fn drop(&mut self) { BENCH_RUNNING.store(false, std::sync::atomic::Ordering::SeqCst); }
+    }
+    let _guard = RunningGuard; // clears BENCH_RUNNING on any exit (ok / err / panic)
+
     let res = tauri::async_runtime::spawn_blocking(move || run_app_benchmark_blocking(window, mode, real_sources, scale))
         .await
         .map_err(|e| format!("benchmark task failed: {e}"))?;
     res
 }
 
-/// Set when the user cancels a running benchmark; checked at each step boundary.
+/// Set when the user cancels a running benchmark; checked at each step boundary
+/// AND between reps of the long steps so cancellation is responsive.
 static BENCH_CANCEL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// True while a run is in flight, to reject overlapping runs.
+static BENCH_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Request cancellation of an in-progress benchmark. The run aborts at the next
-/// step boundary and returns a "cancelled" error to the caller.
+/// step/rep boundary and returns a "cancelled" error to the caller.
 #[tauri::command]
 pub fn cancel_app_benchmark() {
     BENCH_CANCEL.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -493,6 +509,7 @@ fn run_app_benchmark_blocking(
     build_zip(&mod_dir, &scanned, &zip_path).map_err(e2s)?;
     let mut s = Vec::new();
     for _ in 0..reps {
+        if BENCH_CANCEL.load(std::sync::atomic::Ordering::SeqCst) { return Err("Benchmark cancelled".to_string()); }
         let _ = std::fs::remove_dir_all(&extract_dst);
         let t = Instant::now();
         archive::extract_to(&zip_path, &extract_dst).map_err(|e| e.to_string())?;
@@ -533,6 +550,7 @@ fn run_app_benchmark_blocking(
     let mut s = Vec::new();
     let mut applied_zip_n = 0u64;
     for _ in 0..reps {
+        if BENCH_CANCEL.load(std::sync::atomic::Ordering::SeqCst) { return Err("Benchmark cancelled".to_string()); }
         fs_utils::reset_mod_op_cancel();
         let _ = std::fs::remove_dir_all(&extract_dst);
         let t = Instant::now();

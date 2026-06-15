@@ -31,6 +31,9 @@ let lastBenchReport: any = null;
 let benchRunning = false;
 let benchLastPct = 0;
 let benchLastLabel = '';
+// Bumped on every run/cancel so a stale (still-aborting) run can't clobber the UI
+// of a newer one.
+let benchRunGen = 0;
 let hoverIndex: number | null = null;
 let miniMonitorActive = false;
 let seekIndex: number | null = null;
@@ -392,7 +395,12 @@ export async function openAdvancedPerfModal() {
     };
 
     closeBtn.onclick = cleanup;
-    
+    // Clicking the backdrop (outside the modal card) closes it. A running benchmark
+    // keeps going in the background and is restored on reopen.
+    overlay.addEventListener('mousedown', (e) => {
+        if (e.target === overlay) cleanup();
+    });
+
     recBtn.onclick = async () => {
         isRecording = !isRecording;
         if (isRecording) {
@@ -609,6 +617,13 @@ export async function openAdvancedPerfModal() {
     };
     if (cancelBtn) cancelBtn.onclick = async () => {
         try { await invoke('cancel_app_benchmark'); } catch {}
+        // Reset the UI immediately so the user can set up and start a new run right
+        // away; the old run keeps aborting in the background (its result is ignored
+        // via the generation guard, and the backend rejects an overlapping start
+        // until it has fully stopped).
+        benchRunGen++;
+        benchRunning = false;
+        setRunningUI(false);
         toast(t('bench.cancelling') || 'Cancelling…', 'info');
     };
 
@@ -638,50 +653,68 @@ export async function openAdvancedPerfModal() {
                 return;
             }
         }
+        // Tag this run; if a cancel or a newer run happens, this one's results are
+        // ignored so it can't clobber the UI.
+        const myGen = ++benchRunGen;
         benchRunning = true; benchLastPct = 0; benchLastLabel = '';
         setRunningUI(true);
         if (resultsEl) resultsEl.style.display = 'none';
         if (progBar) progBar.style.width = '0%';
         if (progPct) progPct.textContent = '0%';
+
+        // For a custom size, send "custom:<MB>[:<files>]".
+        let scaleArg = benchScale;
+        if (benchScale === 'custom') {
+            const mbEl = content.querySelector('#bench-custom-mb') as HTMLInputElement | null;
+            const filesEl = content.querySelector('#bench-custom-files') as HTMLInputElement | null;
+            const mb = Math.min(8192, Math.max(1, parseInt(mbEl?.value || '250', 10) || 250));
+            const filesRaw = parseInt(filesEl?.value || '', 10);
+            scaleArg = (filesRaw && filesRaw > 0)
+                ? `custom:${mb}:${Math.min(200000, filesRaw)}`
+                : `custom:${mb}`;
+        }
         try {
-            // For a custom size, send "custom:<MB>" (the backend derives the file
-            // counts to hit that total).
-            let scaleArg = benchScale;
-            if (benchScale === 'custom') {
-                const mbEl = content.querySelector('#bench-custom-mb') as HTMLInputElement | null;
-                const filesEl = content.querySelector('#bench-custom-files') as HTMLInputElement | null;
-                const mb = Math.min(8192, Math.max(1, parseInt(mbEl?.value || '250', 10) || 250));
-                const filesRaw = parseInt(filesEl?.value || '', 10);
-                // Append an explicit file count only when the user set one.
-                scaleArg = (filesRaw && filesRaw > 0)
-                    ? `custom:${mb}:${Math.min(200000, filesRaw)}`
-                    : `custom:${mb}`;
+            // A just-cancelled run may still be aborting; the backend rejects an
+            // overlapping start with "already running" — retry briefly until free.
+            let report: any = null;
+            for (let attempt = 0; ; attempt++) {
+                if (myGen !== benchRunGen) return; // superseded
+                try {
+                    report = await invoke('run_app_benchmark', { mode: benchMode, realSources, scale: scaleArg });
+                    break;
+                } catch (err) {
+                    if (/already running/i.test(String(err)) && attempt < 30) {
+                        await new Promise(r => setTimeout(r, 300));
+                        continue;
+                    }
+                    throw err;
+                }
             }
-            const report = await invoke('run_app_benchmark', { mode: benchMode, realSources, scale: scaleArg });
+            if (myGen !== benchRunGen) return; // a newer run/cancel happened
             lastBenchReport = report;
-            // Re-query the results container by id: the modal may have been closed
-            // and reopened during the run, so the captured ref can be stale.
+            // Re-query by id: the modal may have been closed/reopened during the run.
             const liveResults = document.getElementById('bench-results') as HTMLElement | null;
             if (liveResults) { renderBenchResults(liveResults, report); liveResults.style.display = 'flex'; }
             const liveIntro = document.getElementById('bench-intro');
             if (liveIntro) liveIntro.style.display = 'none';
-            // Always notify completion — the modal may be closed/in the background.
             const secs = report?.total_ms ? ` (${(report.total_ms / 1000).toFixed(1)}s)` : '';
             toast((t('bench.done') || 'Benchmark finished') + secs, 'success');
         } catch (e) {
+            if (myGen !== benchRunGen) return; // ignore a superseded run's error
             const msg = String(e);
+            const liveIntro = document.getElementById('bench-intro');
             if (/cancel/i.test(msg)) {
                 toast(t('bench.cancelled') || 'Benchmark cancelled', 'info');
-                const liveIntro = document.getElementById('bench-intro');
-                if (liveIntro) liveIntro.style.display = 'block';
             } else {
                 toast((t('bench.failed') || 'Benchmark failed') + ': ' + e, 'error');
-                const liveIntro = document.getElementById('bench-intro');
-                if (liveIntro) liveIntro.style.display = 'block';
             }
+            if (liveIntro) liveIntro.style.display = 'block';
         } finally {
-            benchRunning = false;
-            setRunningUI(false);
+            // Only the current run owns the shared UI state.
+            if (myGen === benchRunGen) {
+                benchRunning = false;
+                setRunningUI(false);
+            }
         }
     };
 

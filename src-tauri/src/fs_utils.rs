@@ -260,19 +260,6 @@ pub fn compute_file_sha256(path: &Path) -> Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-/// Hash many files in parallel across all cores (rayon). For each input
-/// `(key, path)` whose file hashes successfully, returns `(key, hex_digest)`;
-/// unreadable files are skipped. This is the multi-core replacement for a
-/// sequential loop of `compute_file_sha256` — integrity hashing is the app's
-/// single biggest CPU cost, and it parallelises near-linearly with file count.
-pub fn compute_file_sha256_bulk<K: Clone + Send + Sync>(items: &[(K, PathBuf)]) -> Vec<(K, String)> {
-    use rayon::prelude::*;
-    items
-        .par_iter()
-        .filter_map(|(k, p)| compute_file_sha256(p).ok().map(|h| (k.clone(), h)))
-        .collect()
-}
-
 // ── Local content hashing (BLAKE3, versioned format) ──────────────────────────
 // `file_hashes` and modpack hash-match values use BLAKE3, tagged `b3:` so the
 // algorithm is self-describing. BLAKE3 is a *tree* hash, so one very large file is

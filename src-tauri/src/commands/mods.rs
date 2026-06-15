@@ -442,6 +442,10 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), AppError> {
 
     log_line("[CACHE] Populating mod file cache for the first time...");
     let mut needs_save = false;
+    // Folder mods that need their integrity baseline refreshed. We do NOT hash
+    // them here (that would run under 4 held locks and could freeze the UI on a
+    // big mod); we record them and hash AFTER the locks are released.
+    let mut to_hash: Vec<(String, std::path::PathBuf, Vec<String>)> = Vec::new();
 
     {
         let mut cache = state.mod_files_cache.lock().map_err(|_| AppError::LockError("Failed to lock mod_files_cache".to_string()))?;
@@ -484,16 +488,12 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), AppError> {
                     };
                     m.cached_files = Some(f_strings.clone());
 
-                    // Re-hash folders here only (archives are hashed on demand to
-                    // avoid extracting large archives synchronously at startup).
+                    // Re-hash folder mods to refresh their integrity baseline — but
+                    // DEFER the actual hashing to after the locks drop (below) so a
+                    // big mod never freezes the UI. content_id is path+size based, so
+                    // it's cheap and stays inline. Archives are hashed on demand.
                     if m.file_hashes.is_some() && !is_arch {
-                        let base = m.mod_folder_path.clone();
-                        let items: Vec<(String, std::path::PathBuf)> = f_strings.iter()
-                            .map(|rel| (rel.clone(), base.join(rel)))
-                            .collect();
-                        let new_hashes: std::collections::HashMap<String, String> =
-                            crate::fs_utils::compute_file_hash_bulk(&items).into_iter().collect();
-                        m.file_hashes = Some(new_hashes);
+                        to_hash.push((m.id.clone(), m.mod_folder_path.clone(), f_strings.clone()));
                         update_content_id_from_hashes(m);
                     }
 
@@ -512,14 +512,39 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), AppError> {
     }
     
     *last_update = Some(Instant::now());
-    
+
+    // Release every lock BEFORE hashing so no other command blocks while we read
+    // file contents (this is what used to freeze the UI on big mods).
+    drop(last_update);
+    drop(data);
+
+    if !to_hash.is_empty() {
+        // Hash each deferred mod with BLAKE3 (parallel across files AND within a
+        // large file). No locks are held here, so the UI stays fully responsive.
+        let hashed: Vec<(String, std::collections::HashMap<String, String>)> = to_hash
+            .into_iter()
+            .map(|(mod_id, base, rels)| {
+                let items: Vec<(String, std::path::PathBuf)> =
+                    rels.iter().map(|rel| (rel.clone(), base.join(rel))).collect();
+                let map = crate::fs_utils::compute_file_hash_bulk(&items).into_iter().collect();
+                (mod_id, map)
+            })
+            .collect();
+        // Re-acquire the data lock only briefly to store the results.
+        if let Ok(mut data) = state.data.lock() {
+            for (mod_id, map) in hashed {
+                if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+                    m.file_hashes = Some(map);
+                }
+            }
+        }
+        needs_save = true;
+    }
+
     if needs_save {
-        // Drop other locks before saving to be safe, although save() only takes data lock
-        drop(last_update);
-        drop(data); 
         let _ = state.save();
     }
-    
+
     Ok(())
 }
 
