@@ -51,6 +51,13 @@ export function requestCancelCurrentOnly() {
         invoke('kill_current_mod_op');
     }
     catch (_) { }
+    // Mark the in-flight op(s) as cancelled so the toggle finalizer shows the
+    // "cancelled" toast and the success toast is suppressed — even when the backend
+    // returns Ok instead of a CANCELLED error after being killed.
+    for (const [modId, state] of _opState.entries()) {
+        if (S.processingMods.has(modId))
+            state.cancelled = true;
+    }
     // Brief spinner feedback so the user sees the click registered
     _setCancelBtnState(true, true);
     setTimeout(() => _updateCancelBtn(), 500);

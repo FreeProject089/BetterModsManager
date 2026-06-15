@@ -399,16 +399,21 @@ export function createModCard(mod) {
         // Dropdown is now handled via CSS :hover for better stability and to prevent ghosting.
         // We only keep JS for specific click actions if needed, but for now we follow the "hover to open" request via CSS.
     }
+    // "Source folder" → the active profile's game directory (where mods deploy).
     card.querySelector('.btn-open-folder').addEventListener('click', async (e) => {
         e.stopPropagation();
         window.closeGlobalDropdown(true);
         try {
-            await invoke('open_folder', { path: mod.mod_folder_path });
+            await invoke('open_active_game_folder');
         }
         catch (err) {
             toast(t('common.error') + ' : ' + err, 'error');
         }
     });
+    // "Active folder" → conditional: if the mod is enabled, open where its files are
+    // deployed in the game directory; if not, open the mod's own library folder.
+    // (open_mod_active_folder resolves the deployed path, falling back to the mod
+    // folder when there are no installed files.)
     card.querySelector('.btn-open-active-folder').addEventListener('click', async (e) => {
         e.stopPropagation();
         window.closeGlobalDropdown(true);

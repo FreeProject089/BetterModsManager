@@ -1307,7 +1307,7 @@ function initCredits() {
         { name: "Tar", v: "0.4", key: "tar", url: "https://github.com/alexcrichton/tar-rs" },
         { name: "Sevenz Rust", v: "0.6", key: "sevenz-rust", url: "https://github.com/dyz1990/sevenz-rust" },
         { name: "Unrar", v: "0.5", key: "unrar", url: "https://github.com/muja/unrar.rs" },
-        { name: "Ed25519 Dalek", v: "2.0", key: "ed25519-dalek", url: "https://github.com/dalek-cryptography/curve25519-dalek" },
+        { name: "Ed25519 Dalek", v: "2.0", key: "ed25519-dalek", url: "https://github.com/dalek-cryptography/ed25519-dalek" },
         { name: "IGD", v: "0.12", key: "igd", url: "https://github.com/sbstp/rust-igd" },
         { name: "Local IP Address", v: "0.6", key: "local-ip-address", url: "https://github.com/EstebanBorai/local-ip-address" },
         { name: "Lazy Static", v: "1.4", key: "lazy-static", url: "https://github.com/rust-lang-nursery/lazy-static.rs" }

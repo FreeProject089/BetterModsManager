@@ -2480,46 +2480,53 @@ pub fn get_conflict_file_tree(state: State<AppState>, mod_id: String, other_mod_
 
 #[tauri::command]
 pub async fn open_mod_active_folder(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
-    let (game_path, mod_folder, installed_files) = {
+    let (game_path, mod_folder, installed_files, enabled) = {
         let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
-        (p.game_path.clone(), m.mod_folder_path.clone(), m.installed_files.clone())
+        let enabled = m.enabled || p.active_mods.contains(&m.id);
+        (p.game_path.clone(), m.mod_folder_path.clone(), m.installed_files.clone(), enabled)
     };
 
-    // Fallback when the mod has no tracked deployment (disabled / never installed):
-    // open the mod's own folder — far more useful than dumping the user at the
-    // game root, which is what made this action look broken.
-    let fallback = || -> Result<(), String> {
-        if mod_folder.exists() {
+    // Disabled mod → there's no deployment; open its own library folder.
+    if !enabled {
+        return if mod_folder.exists() {
             open_folder(mod_folder.to_string_lossy().to_string())
         } else {
             open_folder(game_path.to_string_lossy().to_string())
+        };
+    }
+
+    // Enabled → open where the files were deployed in the game directory. Use the
+    // tracked installed_files; if that list wasn't recorded (some activation paths),
+    // fall back to the mod's own file layout — the deploy mirrors it 1:1.
+    let mut rels = installed_files;
+    if rels.is_empty() {
+        let read_root = crate::archive::mod_read_root(&mod_folder);
+        if let Ok(files) = fs_utils::list_mod_files(&read_root) {
+            rels = files.iter().map(|p| p.to_string_lossy().to_string()).collect();
         }
-    };
-
-    if installed_files.is_empty() {
-        return fallback();
+    }
+    if rels.is_empty() {
+        return open_folder(game_path.to_string_lossy().to_string());
     }
 
-    // Calculate common parent directory of all installed files
-    let common_prefix = get_common_path(&installed_files);
-
-    // Ensure we join safely (relative prefix)
-    let rel_prefix = if common_prefix.is_absolute() {
-        common_prefix.strip_prefix("/").unwrap_or(&common_prefix).to_path_buf()
-    } else {
-        common_prefix
-    };
-
-    let target_dir = game_path.join(rel_prefix);
-
-    if target_dir.exists() && target_dir.is_dir() {
-        open_folder(target_dir.to_string_lossy().to_string())
-    } else {
-        fallback()
+    // Deepest existing directory under the game path that contains the mod's files:
+    // start at the common prefix and walk UP until we hit a real folder (handles
+    // multi-root mods, where the common prefix may be empty → game root).
+    let common = get_common_path(&rels);
+    let mut prefix = if common.is_absolute() {
+        common.strip_prefix("/").unwrap_or(&common).to_path_buf()
+    } else { common };
+    loop {
+        let cand = game_path.join(&prefix);
+        if cand.is_dir() {
+            return open_folder(cand.to_string_lossy().to_string());
+        }
+        if !prefix.pop() { break; }
     }
+    open_folder(game_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -2535,6 +2542,23 @@ pub async fn open_mod_backup_folder(state: State<'_, AppState>, _mod_id: String)
         open_folder(backup_path.to_string_lossy().to_string())
     } else {
         Err("Dossier backup introuvable".to_string())
+    }
+}
+
+/// Open the active profile's game directory (where mods are deployed).
+#[tauri::command]
+pub async fn open_active_game_folder(state: State<'_, AppState>) -> Result<(), String> {
+    let game_path = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
+        let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
+        p.game_path.clone()
+    };
+
+    if game_path.exists() {
+        open_folder(game_path.to_string_lossy().to_string())
+    } else {
+        Err("Dossier du jeu introuvable".to_string())
     }
 }
 

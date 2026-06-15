@@ -61,6 +61,15 @@ pub struct RepoMod {
     /// users when an update is available. Plain text / markdown.
     #[serde(default)]
     pub changelog: Option<String>,
+    /// Author-configured update sources, shared so a downloader inherits how this
+    /// mod is updated (a site repo.json, a direct-download archive, fallbacks).
+    /// Signatures are NOT shared — the receiver captures its own baseline.
+    #[serde(default)]
+    pub update_url: Option<String>,
+    #[serde(default)]
+    pub direct_url: Option<String>,
+    #[serde(default)]
+    pub update_sources: Vec<crate::models::mod_entry::UpdateSource>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

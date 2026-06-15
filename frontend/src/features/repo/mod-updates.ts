@@ -55,13 +55,25 @@ export function modHasUpdate(modId: string): boolean {
 // ── Check ─────────────────────────────────────────────────────────────────────
 
 /** Run a check; returns the raw `{ updates, errors, checked }` result. */
-export async function fetchModUpdates(): Promise<{ updates: any[]; errors: any[]; checked: number }> {
+export async function fetchModUpdates(): Promise<{ updates: any[]; errors: any[]; checked: number; baselined: string[]; directSources: any[] }> {
     const res = await invoke('check_mod_updates', { globalRepos: getGlobalUpdateRepos() });
     return {
         updates: Array.isArray(res?.updates) ? res.updates : [],
         errors: Array.isArray(res?.errors) ? res.errors : [],
         checked: typeof res?.checked === 'number' ? res.checked : 0,
+        baselined: Array.isArray(res?.baselined) ? res.baselined : [],
+        directSources: Array.isArray(res?.direct_sources) ? res.direct_sources : [],
     };
+}
+
+/** All update-source URLs configured on a mod (for matching against check errors). */
+function modSourceUrls(mod: any): string[] {
+    const out: string[] = [];
+    if (mod?.source_repo) out.push(String(mod.source_repo));
+    if (mod?.update_url) out.push(String(mod.update_url));
+    if (mod?.direct_url) out.push(String(mod.direct_url));
+    if (Array.isArray(mod?.update_sources)) for (const s of mod.update_sources) if (s?.repo_url) out.push(String(s.repo_url));
+    return out.map(u => u.trim()).filter(Boolean);
 }
 
 /**
@@ -77,7 +89,7 @@ export async function checkModUpdates(silent = false): Promise<number> {
     if (btn && !silent) btn.disabled = true;
     if (hint && !silent) hint.textContent = t('repo.checkingUpdates') || 'Checking…';
     try {
-        const { updates, errors, checked } = await fetchModUpdates();
+        const { updates, errors, checked, baselined } = await fetchModUpdates();
         _lastUpdates = updates; _lastErrors = errors;
         setUpdateState(updates);
         updateBadge(updates.length);
@@ -92,10 +104,16 @@ export async function checkModUpdates(silent = false): Promise<number> {
         }
         if (updates.length === 0 && errors.length === 0) {
             if (!silent) {
-                toast(noneLinked
-                    ? (t('repo.updatesNoneLinkedHint') || 'No mods are linked to a repo. Use "Configure updates" on a mod, or add a global update repo in Settings.')
-                    : (t('repo.updatesNone') || 'Everything is up to date'),
-                    noneLinked ? 'info' : 'success');
+                if (noneLinked) {
+                    toast(t('repo.updatesNoneLinkedHint') || 'No mods are linked to a repo. Use "Configure updates" on a mod, or add a global update repo in Settings.', 'info');
+                } else if (baselined.length) {
+                    // First time we saw these direct downloads — baseline recorded,
+                    // nothing to compare yet. Be honest rather than say "up to date".
+                    toast(t('repo.updatesBaselined', { count: baselined.length })
+                        || `Now tracking ${baselined.length} direct download(s) — re-check later to detect changes.`, 'info');
+                } else {
+                    toast(t('repo.updatesNone') || 'Everything is up to date', 'success');
+                }
             }
             return 0;
         }
@@ -165,13 +183,28 @@ export function closeUpdatesModal(): void {
     hideOverlay(document.getElementById('mod-updates-overlay'));
 }
 
-function openUpdatesModal(updates: any[], errors: any[] = []): void {
+function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources: any[] = []): void {
     const ov = ensureOverlay('mod-updates-overlay');
 
     // Direct-download updates apply via a one-click re-download, not the repo
     // sync flow, so they are rendered in their own blocks.
     const directUpdates = updates.filter(u => u.direct);
     const repoUpdates = updates.filter(u => !u.direct);
+    // Neutral "re-download available" blocks for direct sources with no detected
+    // change — a direct download has no version, so it's always re-downloadable.
+    const reDownloadBlocks = reDownloadSources.map(s => `
+        <div class="mod-updates-repo-block" style="background:var(--bmm-s03,rgba(255,255,255,0.03));border:1px solid var(--bmm-s06,rgba(255,255,255,0.06));border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                <div style="min-width:0;">
+                    <div style="font-weight:600;font-size:13px;color:var(--text-primary);">${escHtml(s.name || '')}</div>
+                    <div style="font-size:11.5px;color:var(--text-secondary);margin-top:3px;">${t('repo.directNoChange') || 'No change detected since last download'}${s.detail ? ` · <span style="color:var(--text-primary);">${escHtml(s.detail)}</span>` : ''}</div>
+                    <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-muted);margin-top:8px;">${t('repo.directFrom') || 'Direct download'}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);word-break:break-all;">${escHtml(s.url || '')}</div>
+                </div>
+                <button class="btn btn-secondary btn-sm mod-direct-apply" data-mod-id="${escAttr(s.mod_id)}" data-url="${escAttr(s.url || '')}"
+                    style="flex-shrink:0;height:30px;padding:0 14px;font-size:12px;font-weight:700;">${t('repo.directUpdateBtn') || 'Re-download'}</button>
+            </div>
+        </div>`).join('');
 
     // Group repo updates by origin repo so the user can update a whole repo at once.
     const byRepo = new Map<string, any[]>();
@@ -211,19 +244,21 @@ function openUpdatesModal(updates: any[], errors: any[] = []): void {
     }).join('');
 
     const directBlocks = directUpdates.map(m => `
-        <div class="mod-updates-repo-block" style="background:var(--bmm-s03,rgba(255,255,255,0.03));border:1px solid var(--bmm-s06,rgba(255,255,255,0.06));border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+        <div class="mod-updates-repo-block" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.28);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
                 <div style="min-width:0;">
-                    <div style="font-weight:600;font-size:13px;color:var(--text-primary);">${escHtml(m.name)}</div>
-                    <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">
-                        <span style="opacity:0.8;">${escHtml(m.current_version)}</span>
-                        <span style="margin:0 7px;color:#2ecc71;font-weight:700;">${t('repo.directNewBuild') || 'new build available'}</span>
+                    <div style="display:flex;align-items:center;gap:7px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.4" style="flex-shrink:0;"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+                        <span style="font-weight:700;font-size:12.5px;color:#f59e0b;">${t('repo.directMaybe') || 'BMM may have detected an update'}</span>
                     </div>
+                    <div style="font-weight:600;font-size:13px;color:var(--text-primary);margin-top:5px;">${escHtml(m.name)}</div>
+                    ${m.detail ? `<div style="font-size:11.5px;color:var(--text-secondary);margin-top:4px;">${t('repo.directDetected') || 'Detected'}: <span style="color:var(--text-primary);font-weight:600;">${escHtml(m.detail)}</span></div>` : ''}
                     <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-muted);margin-top:8px;">${t('repo.directFrom') || 'Direct download'}</div>
                     <div style="font-size:11px;color:var(--text-secondary);word-break:break-all;">${escHtml(m.repo_url)}</div>
+                    <div style="font-size:10px;color:var(--text-muted);margin-top:6px;line-height:1.4;">${t('repo.directMaybeHint') || 'A direct download has no version number — BMM only knows the file changed. Re-download if you want the latest.'}</div>
                 </div>
                 <button class="btn btn-primary btn-sm mod-direct-apply" data-mod-id="${escAttr(m.mod_id)}" data-url="${escAttr(m.repo_url || '')}"
-                    style="flex-shrink:0;height:30px;padding:0 14px;font-size:12px;font-weight:700;">${t('repo.directUpdateBtn') || 'Update now'}</button>
+                    style="flex-shrink:0;height:30px;padding:0 14px;font-size:12px;font-weight:700;">${t('repo.directUpdateBtn') || 'Re-download'}</button>
             </div>
         </div>`).join('');
 
@@ -233,8 +268,13 @@ function openUpdatesModal(updates: any[], errors: any[] = []): void {
             ${errors.map(e => `<div style="font-size:11px;color:var(--text-secondary);word-break:break-all;margin:2px 0;">• ${escHtml(e.repo_url)} <span style="color:var(--text-muted);">— ${escHtml(String(e.error || '').slice(0, 120))}</span></div>`).join('')}
         </div>` : '';
 
-    const emptyMsg = (updates.length === 0)
+    const emptyMsg = (updates.length === 0 && reDownloadSources.length === 0)
         ? `<div style="font-size:12px;color:var(--text-muted);padding:6px 0;">${t('repo.updatesNone') || 'Everything is up to date'}</div>`
+        : '';
+    // When the modal only shows re-downloadable (unchanged) direct sources, lead
+    // with an explanatory note instead of the repo-update blurb.
+    const reDownloadNote = (updates.length === 0 && reDownloadSources.length > 0)
+        ? `<p style="font-size:12px;color:var(--text-muted);margin:0 0 14px;line-height:1.5;">${t('repo.directReDownloadDesc') || 'No update detected. A direct download has no version, so BMM cannot tell if it is newer than what you have — but you can re-download it anytime.'}</p>`
         : '';
 
     ov.innerHTML = `
@@ -245,18 +285,20 @@ function openUpdatesModal(updates: any[], errors: any[] = []): void {
                         <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
                         <path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
                     </svg>
-                    <span style="font-size:15px;font-weight:700;color:var(--text-primary);">${t('repo.updatesTitle') || 'Mod updates available'}</span>
-                    <span style="font-size:11px;font-weight:700;color:#2ecc71;background:rgba(46,204,113,0.14);padding:2px 8px;border-radius:100px;">${updates.length}</span>
+                    <span style="font-size:15px;font-weight:700;color:var(--text-primary);">${updates.length === 0 && reDownloadSources.length > 0 ? (t('repo.directReDownloadTitle') || 'Direct download') : (t('repo.updatesTitle') || 'Mod updates available')}</span>
+                    ${updates.length > 0 ? `<span style="font-size:11px;font-weight:700;color:#2ecc71;background:rgba(46,204,113,0.14);padding:2px 8px;border-radius:100px;">${updates.length}</span>` : ''}
                 </div>
                 <button id="mod-updates-close" style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;background:transparent;border:none;border-radius:6px;cursor:pointer;color:var(--text-secondary);">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </div>
             <div style="padding:16px 18px;overflow-y:auto;flex:1 1 auto;min-height:0;">
-                <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px;line-height:1.5;">${t('repo.updatesDesc') || 'These installed mods have a newer version in a repository they are linked to. Updating re-syncs only the changed files.'}</p>
+                ${updates.length > 0 ? `<p style="font-size:12px;color:var(--text-muted);margin:0 0 14px;line-height:1.5;">${t('repo.updatesDesc') || 'These installed mods have a newer version in a repository they are linked to. Updating re-syncs only the changed files.'}</p>` : ''}
+                ${reDownloadNote}
                 ${errorBlock}
                 ${directBlocks}
                 ${repoBlocks}
+                ${reDownloadBlocks}
                 ${emptyMsg}
             </div>
         </div>`;
@@ -363,15 +405,28 @@ export async function checkSingleModUpdate(modId: string): Promise<void> {
     }
     toast(t('repo.checkingMod', { name }) || `Checking "${name}" for updates…`, 'info');
     try {
-        const { updates, errors } = await fetchModUpdates();
+        const { updates, errors, directSources } = await fetchModUpdates();
         _lastUpdates = updates; _lastErrors = errors;
         setUpdateState(updates);
         updateBadge(updates.length);
         const mine = updates.filter(u => u.mod_id === modId);
+        const mineDirect = directSources.filter((d: any) => d.mod_id === modId);
         if (mine.length) {
+            // A real change/update was detected (repo version or changed direct file).
             openUpdatesModal(mine, []);
+        } else if (mineDirect.length) {
+            // No change detected, but the mod has direct-download source(s): always
+            // actionable — show them with the current remote info + Re-download.
+            openUpdatesModal([], [], mineDirect);
         } else {
-            toast(t('repo.modUpToDate', { name }) || `"${name}" is up to date`, 'success');
+            // If this mod's source(s) couldn't be reached, say so rather than lie.
+            const srcs = modSourceUrls(mod);
+            const err = errors.find((e: any) => srcs.some(s => s === e.repo_url || e.repo_url?.includes(s) || s.includes(e.repo_url)));
+            if (err) {
+                toast((t('repo.modSourceUnreachable', { name }) || `Couldn't reach the update source for "${name}"`) + `: ${String(err.error || '').slice(0, 100)}`, 'warning');
+            } else {
+                toast(t('repo.modUpToDate', { name }) || `"${name}" is up to date`, 'success');
+            }
         }
     } catch (e) {
         toast((t('repo.updatesCheckFailed') || 'Update check failed') + ': ' + e, 'error');

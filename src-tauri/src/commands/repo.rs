@@ -319,6 +319,10 @@ pub async fn export_server_repo(
                 download_links: mod_entry.download_links.clone(),
                 dependencies: dep_ids,
                 changelog: None,
+                update_url: mod_entry.update_url.clone(),
+                direct_url: mod_entry.direct_url.clone(),
+                update_sources: mod_entry.update_sources.iter()
+                    .map(|s| crate::models::mod_entry::UpdateSource { sig: None, ..s.clone() }).collect(),
             };
 
             // Archived mods (.zip) are read from their extracted cache view so the
@@ -733,6 +737,10 @@ pub async fn update_server_repo(
                 changelog: mod_changelogs.get(&pm.mod_entry.id)
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty()),
+                update_url: pm.mod_entry.update_url.clone(),
+                direct_url: pm.mod_entry.direct_url.clone(),
+                update_sources: pm.mod_entry.update_sources.iter()
+                    .map(|s| crate::models::mod_entry::UpdateSource { sig: None, ..s.clone() }).collect(),
             };
 
             let prof = &mut repo.profiles[prof_idx];
@@ -989,9 +997,28 @@ pub struct ModUpdateInfo {
     pub changelog: Option<String>,
     /// True when this update comes from a direct-download URL (no repo manifest).
     /// The UI applies it via `apply_direct_update` instead of the repo-sync flow,
-    /// and shows a "new build" label since the remote version is unknown.
+    /// and shows a tentative "maybe an update" label since the remote version is
+    /// unknown — only that the file content changed.
     #[serde(default)]
     pub direct: bool,
+    /// (direct only) Human-readable summary of what we actually know about the
+    /// change — e.g. a size delta or which validator moved — shown in the UI.
+    #[serde(default)]
+    pub detail: Option<String>,
+}
+
+/// A configured direct-download source with its current remote state. Always
+/// returned (changed or not) so the UI can always offer a manual re-download —
+/// a direct download has no version, so there's nothing to be "up to date" about.
+#[derive(serde::Serialize)]
+pub struct DirectSourceInfo {
+    pub mod_id: String,
+    pub name: String,
+    pub url: String,
+    /// Human summary of the current remote (e.g. "Remote: 12.3 MB").
+    pub detail: String,
+    /// True when the remote differs from the baseline captured when configured.
+    pub changed: bool,
 }
 
 /// A repo that could not be reached during an update check.
@@ -1010,6 +1037,15 @@ pub struct ModUpdateCheckResult {
     /// with a repo_mod_id). 0 means nothing is configured for updates yet — the
     /// UI uses this to avoid a misleading "everything is up to date".
     pub checked: usize,
+    /// Mod ids for which a direct-download baseline was captured for the FIRST time
+    /// this run (nothing to compare against yet). The UI says "now tracking" rather
+    /// than "up to date" so the user understands a future change will be detected.
+    #[serde(default)]
+    pub baselined: Vec<String>,
+    /// Every configured direct-download source with its current remote state, so
+    /// the UI can always offer a manual re-download (and highlight changes).
+    #[serde(default)]
+    pub direct_sources: Vec<DirectSourceInfo>,
 }
 
 /// Check every installed mod that is update-trackable against the repo(s) it is
@@ -1126,47 +1162,65 @@ pub async fn check_mod_updates(
                         repo_mod_id: c.rid,
                         changelog: changelog.clone(),
                         direct: false,
+                        detail: None,
                     });
                 }
             }
         }
     }
 
-    // 3. Direct-download sources: a changed remote validator means a new build.
+    // 3. Direct-download sources. A direct download has no version, so we ALWAYS
+    //    surface the source (for a manual re-download) and additionally flag it as
+    //    an "update" when its remote content changed since the baseline.
     for d in directs {
-        if flagged.contains(&d.mod_id) { continue; }
         match fetch_url_validator(&d.url).await {
-            Ok(sig) => match &d.sig {
-                // First sight of this URL → record a baseline silently so a later
-                // change is detectable (avoids a misleading "update" on day one).
-                None => {
-                    if let Ok(mut data) = state.data.lock() {
-                        if let Some(m) = data.mods.iter_mut().find(|m| m.id == d.mod_id) {
-                            if d.primary {
-                                if m.direct_sig.is_none() { m.direct_sig = Some(sig); }
-                            } else if let Some(src) = m.update_sources.iter_mut()
-                                .find(|s| s.is_direct() && s.repo_url.trim() == d.url) {
-                                if src.sig.is_none() { src.sig = Some(sig); }
+            Ok(sig) => {
+                let changed = matches!(&d.sig, Some(prev) if *prev != sig);
+                result.direct_sources.push(DirectSourceInfo {
+                    mod_id: d.mod_id.clone(),
+                    name: d.name.clone(),
+                    url: d.url.clone(),
+                    detail: sig_human_size(&sig)
+                        .map(|s| format!("Remote: {s}"))
+                        .unwrap_or_else(|| "Remote file reachable".to_string()),
+                    changed,
+                });
+                match &d.sig {
+                    // No baseline yet (shouldn't normally happen — baselines are
+                    // captured when the source is configured) → record one now.
+                    None => {
+                        if let Ok(mut data) = state.data.lock() {
+                            if let Some(m) = data.mods.iter_mut().find(|m| m.id == d.mod_id) {
+                                if d.primary {
+                                    if m.direct_sig.is_none() { m.direct_sig = Some(sig); }
+                                } else if let Some(src) = m.update_sources.iter_mut()
+                                    .find(|s| s.is_direct() && s.repo_url.trim() == d.url) {
+                                    if src.sig.is_none() { src.sig = Some(sig); }
+                                }
                             }
                         }
+                        let _ = state.save();
+                        if !result.baselined.contains(&d.mod_id) { result.baselined.push(d.mod_id.clone()); }
                     }
-                    let _ = state.save();
+                    Some(prev) if *prev != sig => {
+                        if !flagged.contains(&d.mod_id) {
+                            flagged.insert(d.mod_id.clone());
+                            result.updates.push(ModUpdateInfo {
+                                mod_id: d.mod_id,
+                                name: d.name,
+                                current_version: d.cur_ver,
+                                new_version: String::new(),
+                                repo_url: d.url,
+                                repo_mod_id: String::new(),
+                                changelog: None,
+                                direct: true,
+                                detail: Some(describe_sig_change(prev, &sig)),
+                            });
+                        }
+                    }
+                    _ => {}
                 }
-                Some(prev) if prev != &sig => {
-                    flagged.insert(d.mod_id.clone());
-                    result.updates.push(ModUpdateInfo {
-                        mod_id: d.mod_id,
-                        name: d.name,
-                        current_version: d.cur_ver,
-                        new_version: String::new(), // unknown — UI shows "new build"
-                        repo_url: d.url,
-                        repo_mod_id: String::new(),
-                        changelog: None,
-                        direct: true,
-                    });
-                }
-                _ => {}
-            },
+            }
             Err(e) => result.errors.push(RepoCheckError { repo_url: d.url, error: e }),
         }
     }
@@ -1181,6 +1235,48 @@ pub async fn check_mod_updates(
 /// hosts), it falls back to hashing the first 64 KB of the file plus its length,
 /// giving a real content fingerprint without downloading the whole archive.
 /// Redirects are followed so "latest" links that 302 to a versioned asset work.
+/// Human-readable summary of how a direct-download validator changed (size delta
+/// when known, else which validator moved) — shown so the user sees the data BMM
+/// actually has, since a direct download exposes no version number.
+fn describe_sig_change(old: &str, new: &str) -> String {
+    let size_of = |s: &str| -> Option<u64> {
+        for p in s.split('|') {
+            if let Some(v) = p.strip_prefix("len:").or_else(|| p.strip_prefix("total:")) {
+                if let Ok(n) = v.trim().parse::<u64>() { return Some(n); }
+            }
+        }
+        None
+    };
+    let human = |b: u64| -> String {
+        let f = b as f64;
+        if f >= 1_048_576.0 { format!("{:.1} MB", f / 1_048_576.0) }
+        else if f >= 1024.0 { format!("{:.0} KB", f / 1024.0) }
+        else { format!("{} B", b) }
+    };
+    if let (Some(a), Some(b)) = (size_of(old), size_of(new)) {
+        if a != b { return format!("Size: {} → {}", human(a), human(b)); }
+    }
+    let has = |s: &str, k: &str| s.split('|').any(|p| p.starts_with(k));
+    if has(old, "etag:") || has(new, "etag:") { "Remote file changed (ETag)".to_string() }
+    else if has(old, "lm:") || has(new, "lm:") { "Remote file changed (last-modified date)".to_string() }
+    else { "Remote file content changed".to_string() }
+}
+
+/// Extract a human-readable size from a validator signature, if it carries one.
+fn sig_human_size(sig: &str) -> Option<String> {
+    for p in sig.split('|') {
+        if let Some(v) = p.strip_prefix("len:").or_else(|| p.strip_prefix("total:")) {
+            if let Ok(b) = v.trim().parse::<u64>() {
+                let f = b as f64;
+                return Some(if f >= 1_048_576.0 { format!("{:.1} MB", f / 1_048_576.0) }
+                    else if f >= 1024.0 { format!("{:.0} KB", f / 1024.0) }
+                    else { format!("{} B", b) });
+            }
+        }
+    }
+    None
+}
+
 async fn fetch_url_validator(url: &str) -> Result<String, String> {
     use sha2::{Digest, Sha256};
     let client = reqwest::Client::builder()
@@ -1364,7 +1460,7 @@ pub async fn apply_direct_update(
 /// Configure a mod's update linkage: its stable `repo_mod_id` and the list of
 /// repos that can update it. Empty strings clear the corresponding field.
 #[tauri::command]
-pub fn set_mod_update_config(
+pub async fn set_mod_update_config(
     state: State<'_, AppState>,
     mod_id: String,
     repo_mod_id: Option<String>,
@@ -1419,6 +1515,43 @@ pub fn set_mod_update_config(
         }
     }
     let _ = state.save();
+
+    // Capture baselines for any direct-download sources that don't have one yet, so
+    // the FIRST "check for updates" is already meaningful (no "tracking started").
+    let pending: Vec<String> = {
+        let data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
+        let mut urls = Vec::new();
+        if let Some(m) = data.mods.iter().find(|m| m.id == mod_id) {
+            if m.direct_sig.is_none() {
+                if let Some(u) = m.direct_url.as_ref().filter(|u| !u.trim().is_empty()) {
+                    urls.push(u.trim().to_string());
+                }
+            }
+            for s in &m.update_sources {
+                if s.is_direct() && s.sig.is_none() && !s.repo_url.trim().is_empty() {
+                    urls.push(s.repo_url.trim().to_string());
+                }
+            }
+        }
+        urls
+    };
+    let mut captured = false;
+    for url in pending {
+        if let Ok(sig) = fetch_url_validator(&url).await {
+            let mut data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
+            if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+                if m.direct_url.as_deref().map(|p| p.trim() == url).unwrap_or(false) && m.direct_sig.is_none() {
+                    m.direct_sig = Some(sig.clone());
+                }
+                for s in m.update_sources.iter_mut()
+                    .filter(|s| s.is_direct() && s.repo_url.trim() == url && s.sig.is_none()) {
+                    s.sig = Some(sig.clone());
+                }
+            }
+            captured = true;
+        }
+    }
+    if captured { let _ = state.save(); }
     Ok(())
 }
 
@@ -2182,6 +2315,13 @@ pub async fn sync_server_repo(
                 // this came from, so check_mod_updates can detect newer versions.
                 new_mod.source_repo = Some(src_repo.clone());
                 new_mod.repo_mod_id = Some(repo_mod.id.clone());
+                // Inherit the author's configured update sources (a site repo, a
+                // direct-download archive, fallbacks). Signatures are not shared —
+                // the receiver captures its own baseline on the first check.
+                new_mod.update_url = repo_mod.update_url.clone();
+                new_mod.direct_url = repo_mod.direct_url.clone();
+                new_mod.update_sources = repo_mod.update_sources.iter()
+                    .map(|s| crate::models::mod_entry::UpdateSource { sig: None, ..s.clone() }).collect();
 
                 let mut tag_ids = Vec::new();
                 for repo_tag in repo_mod.tags {
@@ -2208,6 +2348,14 @@ pub async fn sync_server_repo(
                     existing.dependencies = new_mod.dependencies;
                     existing.source_repo = new_mod.source_repo;
                     existing.repo_mod_id = new_mod.repo_mod_id;
+                    // Only fill update sources when the local mod has none — never
+                    // clobber a user's own customised sources on re-sync.
+                    if existing.update_url.is_none() { existing.update_url = new_mod.update_url; }
+                    if existing.direct_url.is_none() {
+                        existing.direct_url = new_mod.direct_url;
+                        if existing.direct_url.is_some() { existing.direct_sig = None; }
+                    }
+                    if existing.update_sources.is_empty() { existing.update_sources = new_mod.update_sources; }
                 }
             }
         }

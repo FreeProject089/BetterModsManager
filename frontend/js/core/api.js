@@ -99,7 +99,7 @@ export async function invoke(command, args = {}) {
         // Network/DNS failures (unreachable repo URL, dead tunnel, offline) are
         // expected runtime conditions the caller surfaces via a toast — don't
         // log them as hard errors.
-        const isNetwork = /dns error|error sending request|error trying to connect|connection (refused|reset|closed)|failed to connect|timed out|os error 11001|Hôte inconnu|name resolution|no address/i.test(errStr);
+        const isNetwork = /dns error|error sending request|error trying to connect|connection (refused|reset|closed)|failed to connect|timed out|os error 11001|Hôte inconnu|name resolution|no address|NETWORK_ERROR|NO_RELEASE/i.test(errStr);
         // User-facing validation errors (path not found, wrong format, etc.): the
         // Rust backend throws AppError::NotFound / validation messages that are
         // already shown to the user as toasts by the caller — downgrade to warn.

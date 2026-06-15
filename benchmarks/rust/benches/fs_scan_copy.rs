@@ -103,7 +103,7 @@ fn bench_copy(c: &mut Criterion) {
         let dst = dst_dir.path().join("out_full.bin");
         b.iter(|| { fs_mirror::copy_full_speed(&src, &dst).unwrap(); });
     });
-    g.bench_function("smart_io_256k", |b| {
+    g.bench_function("smart_io_1m", |b| {
         let dst = dst_dir.path().join("out_smart.bin");
         b.iter(|| { fs_mirror::copy_smart_io(&src, &dst).unwrap(); });
     });

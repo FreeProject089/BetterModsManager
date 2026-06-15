@@ -3076,6 +3076,10 @@ async fn do_api_repo_gen(
                 download_links: mod_entry.download_links.clone(),
                 dependencies: dep_ids,
                 changelog: None,
+                update_url: mod_entry.update_url.clone(),
+                direct_url: mod_entry.direct_url.clone(),
+                update_sources: mod_entry.update_sources.iter()
+                    .map(|s| crate::models::mod_entry::UpdateSource { sig: None, ..s.clone() }).collect(),
             };
 
             // Archived mods (.zip) read from their extracted cache view.

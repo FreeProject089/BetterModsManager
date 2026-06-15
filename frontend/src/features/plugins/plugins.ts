@@ -3220,8 +3220,7 @@ function renderScripts(container: HTMLElement) {
                         </button>
                         <div class="plug-uqt-dropdown" id="plug-uqt-dropdown" style="display:none;">
                             <div class="plug-uqt-search-row">
-                                <span class="plug-qt-search-ic">${IC.search || ''}</span>
-                                <input type="text" id="plug-uqt-search" class="input input-sm" placeholder="${t('plugins.quickTestSearch') || 'Search… (GET, /api/mods, modpack…)'}" spellcheck="false">
+                                <input type="text" id="plug-uqt-search"  placeholder="${t('plugins.quickTestSearch') || 'Search… (GET, /api/mods, modpack…)'}" spellcheck="false">
                             </div>
                             <div class="plug-uqt-list" id="plug-uqt-list"></div>
                         </div>

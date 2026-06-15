@@ -331,6 +331,7 @@ fn main() {
             commands::mods::check_mod_metadata,
             commands::mods::open_mod_active_folder,
             commands::mods::open_mod_backup_folder,
+            commands::mods::open_active_game_folder,
             commands::mods::get_mod_integrity,
             commands::mods::update_mod_hashes,
             commands::mods::delete_mod_hashes,

@@ -17,6 +17,90 @@ let benchLastLabel = '';
 // Bumped on every run/cancel so a stale (still-aborting) run can't clobber the UI
 // of a newer one.
 let benchRunGen = 0;
+// Loaded/run benchmark reports kept for side-by-side comparison (capped).
+let benchCompare = [];
+/** Add a report to the comparison set (most-recent first, max 6). */
+function addBenchToCompare(label, report) {
+    if (!report || !Array.isArray(report.results))
+        return;
+    benchCompare.unshift({ label, report });
+    if (benchCompare.length > 6)
+        benchCompare.length = 6;
+}
+/** Flatten a benchmark report to CSV (one row per operation). */
+function benchReportToCsv(report) {
+    const head = 'id,label,category,ms,min_ms,max_ms,throughput_mb_s,bytes,items,note';
+    const esc = (v) => {
+        const s = v == null ? '' : String(v);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = (report.results || []).map((o) => [o.id, o.label, o.category, o.ms, o.min_ms, o.max_ms, o.throughput_mb_s, o.bytes, o.items, o.note]
+        .map(esc).join(','));
+    return [head, ...rows].join('\n');
+}
+/** Parse a benchmark report from JSON or CSV text into the report shape. */
+function parseBenchReportText(text) {
+    const trimmed = text.trim();
+    if (trimmed.startsWith('{')) {
+        try {
+            const j = JSON.parse(trimmed);
+            if (Array.isArray(j.results))
+                return j;
+        }
+        catch { }
+        return null;
+    }
+    // CSV: split respecting simple quoting.
+    const lines = trimmed.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2)
+        return null;
+    const splitCsv = (line) => {
+        const out = [];
+        let cur = '';
+        let q = false;
+        for (let i = 0; i < line.length; i++) {
+            const c = line[i];
+            if (q) {
+                if (c === '"') {
+                    if (line[i + 1] === '"') {
+                        cur += '"';
+                        i++;
+                    }
+                    else
+                        q = false;
+                }
+                else
+                    cur += c;
+            }
+            else if (c === '"')
+                q = true;
+            else if (c === ',') {
+                out.push(cur);
+                cur = '';
+            }
+            else
+                cur += c;
+        }
+        out.push(cur);
+        return out;
+    };
+    const head = splitCsv(lines[0]).map(h => h.trim());
+    const idx = (k) => head.indexOf(k);
+    const num = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+    const results = lines.slice(1).map(l => {
+        const c = splitCsv(l);
+        const ms = num(c[idx('ms')] ?? '') ?? 0;
+        return {
+            id: c[idx('id')] || '', label: c[idx('label')] || c[idx('id')] || '',
+            category: c[idx('category')] || '', ms,
+            min_ms: num(c[idx('min_ms')] ?? '') ?? ms, max_ms: num(c[idx('max_ms')] ?? '') ?? ms,
+            samples: [], throughput_mb_s: num(c[idx('throughput_mb_s')] ?? ''),
+            bytes: num(c[idx('bytes')] ?? '') ?? 0, items: num(c[idx('items')] ?? '') ?? 0,
+            note: c[idx('note')] || null,
+        };
+    });
+    return { env: {}, results, total_ms: 0 };
+}
 let hoverIndex = null;
 let miniMonitorActive = false;
 let seekIndex = null;
@@ -697,6 +781,10 @@ export async function openAdvancedPerfModal() {
                 if (myGen !== benchRunGen)
                     return; // a newer run/cancel happened
                 lastBenchReport = report;
+                // Keep each finished run for side-by-side comparison.
+                const stamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const sizeMb = report?.env?.dataset_bytes ? ` · ${(report.env.dataset_bytes / 1048576).toFixed(0)}MB` : '';
+                addBenchToCompare(`${stamp}${sizeMb}`, report);
                 // Re-query by id: the modal may have been closed/reopened during the run.
                 const liveResults = document.getElementById('bench-results');
                 if (liveResults) {
@@ -739,16 +827,25 @@ export async function openAdvancedPerfModal() {
     if (footExport)
         footExport.onclick = async () => {
             if (inBenchMode()) {
-                // Export the operation-benchmark results as a real HTML+SVG report.
+                // Export the benchmark report as JSON, CSV or a standalone HTML report —
+                // chosen by the file extension the user picks.
                 if (!lastBenchReport) {
                     toast(t('bench.runFirst') || 'Run a benchmark first', 'info');
                     return;
                 }
-                const dest = await saveFile({ defaultPath: 'bmm-benchmark-report.html', filters: [{ name: 'HTML', extensions: ['html'] }] });
+                const dest = await saveFile({ defaultPath: 'bmm-benchmark.json', filters: [
+                        { name: 'JSON', extensions: ['json'] },
+                        { name: 'CSV', extensions: ['csv'] },
+                        { name: 'HTML report', extensions: ['html'] },
+                    ] });
                 if (!dest)
                     return;
+                const lower = dest.toLowerCase();
+                const content = lower.endsWith('.csv') ? benchReportToCsv(lastBenchReport)
+                    : lower.endsWith('.html') ? buildBenchReportHtml(lastBenchReport)
+                        : JSON.stringify(lastBenchReport, null, 2);
                 try {
-                    await invoke('write_text_file', { path: dest, content: buildBenchReportHtml(lastBenchReport) });
+                    await invoke('write_text_file', { path: dest, content });
                     toast((t('bench.reportSaved') || 'Report saved') + ': ' + dest, 'success');
                 }
                 catch (e) {
@@ -793,6 +890,40 @@ export async function openAdvancedPerfModal() {
         };
     if (footImport)
         footImport.onclick = async () => {
+            // In benchmark mode, import a benchmark report (JSON or CSV) → render it and
+            // add it to the comparison set.
+            if (inBenchMode()) {
+                const src = await pickFile({ filters: [
+                        { name: 'Benchmark report', extensions: ['json', 'csv'] },
+                        { name: 'All files', extensions: ['*'] },
+                    ] });
+                if (!src)
+                    return;
+                try {
+                    const text = await invoke('read_file_text', { path: src });
+                    const report = parseBenchReportText(text);
+                    if (!report || !report.results.length) {
+                        toast(t('bench.importEmpty') || 'No data found in file', 'error');
+                        return;
+                    }
+                    lastBenchReport = report;
+                    const name = (src.split(/[\\/]/).pop() || 'import').replace(/\.(json|csv)$/i, '');
+                    addBenchToCompare(name, report);
+                    const liveResults = document.getElementById('bench-results');
+                    if (liveResults) {
+                        renderBenchResults(liveResults, report);
+                        liveResults.style.display = 'flex';
+                    }
+                    const liveIntro = document.getElementById('bench-intro');
+                    if (liveIntro)
+                        liveIntro.style.display = 'none';
+                    toast((t('bench.imported') || 'Imported') + `: ${name}`, 'success');
+                }
+                catch (e) {
+                    toast((t('bench.importFailed') || 'Import failed') + ': ' + e, 'error');
+                }
+                return;
+            }
             const src = await pickFile({ filters: [{ name: 'CSV session', extensions: ['csv'] }] });
             if (!src)
                 return;
@@ -1210,6 +1341,53 @@ function drawChart(canvas, data, series, highlightIndex) {
 function cssAccent() {
     return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#3b82f6';
 }
+/** Side-by-side comparison table across the runs in `benchCompare`. Per row,
+ *  the best value (highest throughput, else lowest time) is highlighted green. */
+function benchCompareHtml() {
+    if (benchCompare.length < 2)
+        return '';
+    const esc = (s) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const runs = benchCompare;
+    const order = [];
+    const labelById = {};
+    for (const r of runs)
+        for (const o of (r.report.results || [])) {
+            if (!(o.id in labelById)) {
+                labelById[o.id] = o.label || o.id;
+                order.push(o.id);
+            }
+        }
+    const fmtTput = (v) => v == null ? '—' : (v >= 1000 ? `${(v / 1000).toFixed(2)} GB/s` : `${v.toFixed(0)} MB/s`);
+    const fmtMs = (ms) => ms < 1 ? `${(ms * 1000).toFixed(0)}µs` : ms < 1000 ? `${ms.toFixed(1)}ms` : `${(ms / 1000).toFixed(2)}s`;
+    const th = `<th style="text-align:left; padding:6px 8px; color:var(--text-muted); font-weight:600;">${t('bench.cmpOp') || 'Operation'}</th>` +
+        runs.map(r => `<th style="text-align:right; padding:6px 8px; color:#fff; font-weight:700; white-space:nowrap;">${esc(r.label)}</th>`).join('');
+    const body = order.map(id => {
+        const cells = runs.map(r => (r.report.results || []).find((o) => o.id === id));
+        const hasTput = cells.some(c => c && c.throughput_mb_s != null);
+        let bestIdx = -1, bestVal = hasTput ? -Infinity : Infinity;
+        cells.forEach((c, i) => { if (!c)
+            return; const v = hasTput ? (c.throughput_mb_s ?? -Infinity) : c.ms; if (hasTput ? v > bestVal : v < bestVal) {
+            bestVal = v;
+            bestIdx = i;
+        } });
+        const tds = cells.map((c, i) => {
+            if (!c)
+                return `<td style="text-align:right; padding:6px 8px; color:var(--text-muted);">—</td>`;
+            const txt = hasTput ? fmtTput(c.throughput_mb_s) : fmtMs(c.ms);
+            const best = i === bestIdx && runs.length > 1;
+            return `<td style="text-align:right; padding:6px 8px; font-family:var(--font-mono); color:${best ? '#10b981' : '#cbd5e1'}; font-weight:${best ? '800' : '500'};">${txt}</td>`;
+        }).join('');
+        return `<tr style="border-top:1px solid var(--border);"><td style="padding:6px 8px; color:#fff; font-weight:600;">${esc(labelById[id])}</td>${tds}</tr>`;
+    }).join('');
+    return `<div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:14px; padding:16px 18px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <h4 style="margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted);">${(t('bench.cmpTitle') || 'Comparison').replace('{n}', String(runs.length))} <span style="color:#64748b; text-transform:none; font-weight:400;">· ${runs.length} ${t('bench.cmpRuns') || 'runs'}</span></h4>
+            <button class="btn btn-ghost btn-sm" id="bench-clear-compare" style="font-weight:700;">${t('bench.cmpClear') || 'Clear comparison'}</button>
+        </div>
+        <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12px;"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>
+        <p style="margin:8px 0 0; font-size:11px; color:var(--text-muted);">${t('bench.cmpHint') || 'Green = best per row (highest throughput, or lowest time).'}</p>
+    </div>`;
+}
 // ── Benchmark results rendering ──────────────────────────────────────────────
 function renderBenchResults(container, report) {
     if (!container || !report)
@@ -1260,7 +1438,8 @@ function renderBenchResults(container, report) {
             <div style="${cardStyle}">${chartTitle(t('bench.chartTime') || 'Operation time', t('bench.lowerBetter') || 'lower is better')}${benchSvgChart(ops, 'time')}</div>
             ${chartTput ? `<div style="${cardStyle}">${chartTitle(t('bench.chartTput') || 'Throughput', t('bench.higherBetter') || 'higher is better')}${chartTput}</div>` : ''}
         </div>
-        <div style="display:flex; flex-direction:column; gap:10px;">${rows}</div>`;
+        <div style="display:flex; flex-direction:column; gap:10px;">${rows}</div>
+        ${benchCompareHtml()}`;
     const copyBtn = container.querySelector('#bench-copy-json');
     if (copyBtn)
         copyBtn.onclick = async () => {
@@ -1285,6 +1464,13 @@ function renderBenchResults(container, report) {
             catch (e) {
                 toast((t('bench.reportFailed') || 'Could not save report') + ': ' + e, 'error');
             }
+        };
+    const clearCmpBtn = container.querySelector('#bench-clear-compare');
+    if (clearCmpBtn)
+        clearCmpBtn.onclick = () => {
+            // Keep only the run currently on screen, drop the rest of the comparison.
+            benchCompare = lastBenchReport ? benchCompare.filter(r => r.report === lastBenchReport).slice(0, 1) : [];
+            renderBenchResults(container, report);
         };
 }
 // ── i18n for benchmark results ───────────────────────────────────────────────

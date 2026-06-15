@@ -97,14 +97,15 @@ pub fn copy_full_speed(src: &Path, dst: &Path) -> std::io::Result<u64> {
     fs::copy(src, dst)
 }
 
-/// Path 2 of `copy_file_force_smart`: 256 KiB chunked copy. The benchmark variant
-/// omits the 200 µs micro-yield every 8 chunks (that sleep exists purely to free
-/// the WebView2 message pump and would only add noise to a throughput measurement).
+/// Path 2 of `copy_file_force_smart`: 1 MiB chunked copy (matches the shipped code
+/// since the smart-copy tuning). The micro-yield (a short sleep on a 16 MiB byte
+/// budget, purely to free the WebView2 message pump) is omitted here — it would
+/// only add noise to a throughput measurement.
 pub fn copy_smart_io(src: &Path, dst: &Path) -> std::io::Result<()> {
     if let Some(parent) = dst.parent() { fs::create_dir_all(parent).ok(); }
     let mut src_file = fs::File::open(src)?;
     let mut dst_file = fs::File::create(dst)?;
-    let mut buffer = vec![0u8; 256 * 1024];
+    let mut buffer = vec![0u8; 1 << 20]; // 1 MiB
     loop {
         let n = src_file.read(&mut buffer)?;
         if n == 0 { break; }
