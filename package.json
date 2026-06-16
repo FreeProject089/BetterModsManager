@@ -6,7 +6,8 @@
     "scripts": {
         "tauri": "tauri",
         "dev": "concurrently \"npm run watch\" \"npx tauri dev\"",
-        "build": "tsc --project frontend && npx tauri build && node scripts/gen-update-manifest.mjs",
+        "build": "node scripts/security-guard.mjs && tsc --project frontend && npx tauri build && node scripts/gen-update-manifest.mjs",
+        "security-guard": "node scripts/security-guard.mjs",
         "gen-manifest": "node scripts/gen-update-manifest.mjs",
         "typecheck": "tsc --project frontend --noEmit",
         "watch": "tsc --project frontend --watch",

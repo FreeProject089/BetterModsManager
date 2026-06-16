@@ -558,8 +558,36 @@ pub async fn install_app(
     version: Option<String>,
     category: Option<String>,
     thumb: Option<String>,
+    sha256: Option<String>,
+    allow_insecure: Option<bool>,
+    allow_bad_checksum: Option<bool>,
 ) -> Result<InstallResult, String> {
     log_line(format!("[APPS] Installing {} from {}", app_id, download_url));
+
+    // CWE-494: code is fetched then executed/extracted on this machine, so the
+    // transport should be authenticated. HTTPS is always allowed. Plain HTTP is
+    // allowed only when the user explicitly accepted the warning shown by the UI
+    // (`allow_insecure`) — an HTTP source can be MITM-swapped for a malicious
+    // binary. Any other scheme (file://, ftp://, …) is always rejected.
+    {
+        let scheme = download_url.split("://").next().unwrap_or("").to_ascii_lowercase();
+        match scheme.as_str() {
+            "https" => {}
+            "http" => {
+                if !allow_insecure.unwrap_or(false) {
+                    // Recognisable marker the frontend turns into a confirm dialog.
+                    return Err("INSECURE_HTTP".to_string());
+                }
+                log_line(format!("[APPS] WARNING: installing {} over plain HTTP (user accepted)", app_id));
+            }
+            _ => {
+                return Err(format!(
+                    "Refused: unsupported download scheme '{}://…' (only http/https).",
+                    scheme
+                ));
+            }
+        }
+    }
 
     // Prepare target directory
     let target_dir = std::path::PathBuf::from(&install_path).join(&app_id);
@@ -580,6 +608,47 @@ pub async fn install_app(
     }
 
     let bytes = resp.bytes().await.map_err(|e| format!("Read failed: {}", e))?;
+
+    // CWE-494: verify integrity of the downloaded payload before it is ever
+    // written/executed. If the catalog declares a sha256 and it does NOT match,
+    // we warn the user (marker the UI turns into a confirm modal) and only
+    // proceed if they explicitly accepted (`allow_bad_checksum`) — it's a strong
+    // reminder, not a hard ban. If the catalog omits a checksum we only warn in
+    // the log.
+    {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(&bytes);
+        let actual = hex::encode(hasher.finalize());
+        match sha256.as_ref().map(|s| s.trim().trim_start_matches("sha256:").to_ascii_lowercase()) {
+            Some(expected) if !expected.is_empty() => {
+                if expected != actual {
+                    if !allow_bad_checksum.unwrap_or(false) {
+                        // Marker parsed by the frontend: SHA_MISMATCH:<expected>:<actual>
+                        return Err(format!("SHA_MISMATCH:{}:{}", expected, actual));
+                    }
+                    log_line(format!(
+                        "[APPS] WARNING: sha256 MISMATCH for {} (expected {}, got {}) — user chose to install anyway",
+                        app_id, expected, actual
+                    ));
+                } else {
+                    log_line(format!("[APPS] sha256 verified OK for {}", app_id));
+                }
+            }
+            _ => {
+                // No checksum declared: warn the user (overridable) instead of
+                // silently installing unverified code.
+                if !allow_bad_checksum.unwrap_or(false) {
+                    // Marker parsed by the frontend: NO_CHECKSUM:<actual sha256>
+                    return Err(format!("NO_CHECKSUM:{}", actual));
+                }
+                log_line(format!(
+                    "[APPS] WARNING: no sha256 in catalog for {} — integrity not verified, user chose to install anyway (sha256 of payload: {})",
+                    app_id, actual
+                ));
+            }
+        }
+    }
 
     let ext = file_type.to_lowercase();
 

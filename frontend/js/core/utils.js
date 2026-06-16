@@ -14,6 +14,43 @@ export function escHtml(str) {
 export function escAttr(str) {
     return escHtml(str);
 }
+/**
+ * CWE-79: tagged template that HTML-escapes every interpolated `${}` by default.
+ * Use it to build markup from untrusted data without remembering to wrap each
+ * value in escHtml():
+ *
+ *   el.innerHTML = safeHtml`<h3>${mod.name}</h3><p>${mod.description}</p>`;
+ *
+ * Arrays are joined (already-built fragments). When a value is *known* trusted
+ * markup (e.g. a sub-template you already escaped), wrap it in `trustedHtml(...)`
+ * to opt out of escaping for that one slot.
+ */
+export class TrustedHtml {
+    value;
+    constructor(value) {
+        this.value = value;
+    }
+}
+export function trustedHtml(html) {
+    return new TrustedHtml(html);
+}
+export function safeHtml(strings, ...values) {
+    let out = strings[0];
+    for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        if (v instanceof TrustedHtml) {
+            out += v.value;
+        }
+        else if (Array.isArray(v)) {
+            out += v.map(x => x instanceof TrustedHtml ? x.value : escHtml(String(x))).join('');
+        }
+        else {
+            out += escHtml(v == null ? '' : String(v));
+        }
+        out += strings[i + 1];
+    }
+    return out;
+}
 export function escJs(str) {
     if (str == null)
         return '';

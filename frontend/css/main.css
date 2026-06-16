@@ -10746,6 +10746,33 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 }
 .plug-toolbar .input { flex: 1; min-width: 180px; }
 
+/* Community catalog sources panel */
+.plug-sources-panel {
+    background: var(--bg-secondary, rgba(255,255,255,0.03));
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 16px;
+}
+.plug-sources-desc { font-size: 12px; color: var(--text-muted); margin: 0 0 10px; }
+.plug-sources-add { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.plug-sources-add .input { flex: 1; min-width: 200px; }
+.plug-sources-list { display: flex; flex-direction: column; gap: 6px; }
+.plug-sources-empty { font-size: 12px; color: var(--text-muted); margin: 0; opacity: .7; }
+.plug-source-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+.plug-source-icon { color: var(--text-muted); display: flex; flex-shrink: 0; }
+.plug-source-url {
+    flex: 1; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.plug-source-del { flex-shrink: 0; color: var(--red, #ef4444); }
+
 /* Empty / error states */
 .plug-empty {
     text-align: center;

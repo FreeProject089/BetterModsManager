@@ -2431,6 +2431,53 @@ pub fn get_mod_conflicts(state: State<AppState>, mod_id: String) -> Result<Vec<C
     Ok(Vec::new())
 }
 
+/// Batched conflict computation for EVERY mod in a single call.
+///
+/// The frontend used to call `get_mod_conflicts` once per mod (in batches of 5),
+/// which on a big library meant hundreds of IPC round-trips + lock acquisitions
+/// on every refresh/import — the main source of UI lag. This computes them all
+/// behind one lock pass and returns a `mod_id -> conflicts` map (mods with no
+/// conflict are omitted to keep the payload small).
+#[tauri::command]
+pub fn get_all_mod_conflicts(state: State<AppState>) -> Result<std::collections::HashMap<String, Vec<ConflictReport>>, String> {
+    ensure_cache_populated(&state)?;
+
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+
+    // Pre-canonicalize each profile's mods_path ONCE (instead of per-mod, per-profile)
+    // so the owner-profile resolution below is cheap even for thousands of mods.
+    let prof_canon: Vec<(&String, std::path::PathBuf)> = data.profiles.iter()
+        .map(|p| (&p.id, p.mods_path.canonicalize().unwrap_or_else(|_| p.mods_path.clone())))
+        .collect();
+    let active_canon = data.active_profile_id.as_ref().and_then(|aid|
+        prof_canon.iter().find(|(pid, _)| *pid == aid).map(|(pid, path)| (*pid, path.clone())));
+
+    let mut out: std::collections::HashMap<String, Vec<ConflictReport>> = std::collections::HashMap::new();
+    for m in &data.mods {
+        let mod_p_can = m.mod_folder_path.canonicalize().unwrap_or_else(|_| m.mod_folder_path.clone());
+
+        // Resolve the profile that owns this mod: active first, then any owner,
+        // then fall back to the active profile (mirrors get_mod_conflicts).
+        let mut prof_id: Option<&String> = None;
+        if let Some((aid, apath)) = &active_canon {
+            if mod_p_can.starts_with(apath) { prof_id = Some(*aid); }
+        }
+        if prof_id.is_none() {
+            for (pid, ppath) in &prof_canon {
+                if mod_p_can.starts_with(ppath) { prof_id = Some(*pid); break; }
+            }
+        }
+        if prof_id.is_none() { prof_id = data.active_profile_id.as_ref(); }
+
+        if let Some(pid) = prof_id {
+            let reports = calculate_conflicts_from_cache(m, &data, pid, &state);
+            if !reports.is_empty() { out.insert(m.id.clone(), reports); }
+        }
+    }
+
+    Ok(out)
+}
+
 pub fn invalidate_cache(state: &State<AppState>) {
     let mut last_update = state.last_cache_update.lock().unwrap_or_else(|p| p.into_inner());
     *last_update = None; // Force re-population on next call

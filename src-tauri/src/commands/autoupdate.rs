@@ -298,7 +298,29 @@ pub async fn apply_incremental_update(
             status: "downloading".to_string(),
         });
 
+        // CWE-494/22 (defense-in-depth): the manifest is fetched from GitHub over
+        // HTTPS, but treat its contents as data, not trust. Reject any per-file URL
+        // that isn't HTTPS (no plain-HTTP swap) and any path that tries to escape the
+        // install root via traversal segments before joining/writing.
+        if !file_entry.download_url.to_ascii_lowercase().starts_with("https://") {
+            let err = format!("Refused (non-HTTPS update URL) for {}", file_entry.path);
+            log_line(format!("[UPDATE] {}", err));
+            errors.push(err);
+            continue;
+        }
+        if file_entry.path.split(|c| c == '/' || c == '\\').any(|seg| seg == ".." || seg == "...") {
+            let err = format!("Refused (path traversal in manifest) for {}", file_entry.path);
+            log_line(format!("[UPDATE] {}", err));
+            errors.push(err);
+            continue;
+        }
         let dest_path = install_root.join(&file_entry.path);
+        if !dest_path.starts_with(&install_root) {
+            let err = format!("Refused (escapes install root) for {}", file_entry.path);
+            log_line(format!("[UPDATE] {}", err));
+            errors.push(err);
+            continue;
+        }
 
         // Check if local file already matches the expected hash (skip if unchanged)
         if dest_path.exists() {

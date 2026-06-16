@@ -156,6 +156,23 @@ pub fn read_file_text(path: String) -> Result<String, String> {
     if !OK_EXT.contains(&ext.as_str()) {
         return Err("Refused: unsupported file type".to_string());
     }
+    // Defense in depth: refuse obvious credential/secret-store locations even when
+    // they carry an allowed extension (e.g. a browser `Login Data`/`.json` token store).
+    let norm = path.replace('/', "\\").to_lowercase();
+    const BLOCKED_READ_DIRS: &[&str] = &[
+        r"\.ssh\", r"\.aws\", r"\.gnupg\", r"\.config\gh\",
+        r"\appdata\local\google\chrome\user data", r"\appdata\roaming\mozilla",
+        r"\microsoft\credentials", r"\windows\system32",
+    ];
+    if BLOCKED_READ_DIRS.iter().any(|d| norm.contains(d)) {
+        return Err("Refused: protected location".to_string());
+    }
+    // Bound the read so a free-path read can't slurp a huge file into the WebView.
+    if let Ok(meta) = std::fs::metadata(&path) {
+        if meta.len() > 25 * 1024 * 1024 {
+            return Err("Refused: file too large (max 25 MB)".to_string());
+        }
+    }
     std::fs::read_to_string(path).map_err(|e| e.to_string())
 }
 

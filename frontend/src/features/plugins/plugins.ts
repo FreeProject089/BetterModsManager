@@ -429,6 +429,55 @@ function buildPluginCard(plugin: any, source: 'installed' | 'catalog') {
 
 // ── Tab: Catalog ───────────────────────────────────────────────────────────
 
+// Community plugin catalogs the user added (http/https URLs or local .json paths).
+// Persisted in localStorage so they survive restarts.
+const PLUG_CAT_SOURCES_KEY = 'bmm_plugin_catalogs';
+function getPluginCatalogSources(): string[] {
+    try { return JSON.parse(localStorage.getItem(PLUG_CAT_SOURCES_KEY) || '[]'); }
+    catch { return []; }
+}
+function setPluginCatalogSources(list: string[]): void {
+    localStorage.setItem(PLUG_CAT_SOURCES_KEY, JSON.stringify(list));
+}
+function isUrlSource(src: string): boolean {
+    return /^https?:\/\//i.test(src.trim());
+}
+
+// Fetch one community source (URL → fetch_plugin_catalog ; local path → read+parse).
+async function fetchCommunityCatalog(src: string): Promise<any[]> {
+    let cat: any;
+    if (isUrlSource(src)) {
+        cat = await invoke('fetch_plugin_catalog', { catalogUrl: src });
+    } else {
+        const text = await invoke('read_file_text', { path: src });
+        cat = JSON.parse(text);
+    }
+    const plugins = (cat?.plugins || []) as any[];
+    // Community sources are never "official" — force the community badge/warning.
+    return plugins.map(p => ({ ...p, official: false, _source: src }));
+}
+
+// Merge official catalog + all community sources, de-duped by id (official wins).
+async function fetchMergedPluginCatalog(): Promise<{ plugins: any[]; errors: string[] }> {
+    const errors: string[] = [];
+    let official: any[] = [];
+    try {
+        const cat = await invoke('fetch_plugin_catalog', { catalogUrl: getLinks().plugin_catalog });
+        official = cat?.plugins || [];
+    } catch (e) { errors.push(`${t('plugins.catalogOfficial') || 'Official catalog'}: ${e}`); }
+
+    const byId = new Map<string, any>();
+    for (const p of official) byId.set(p.id, p);
+
+    for (const src of getPluginCatalogSources()) {
+        try {
+            const plugins = await fetchCommunityCatalog(src);
+            for (const p of plugins) if (!byId.has(p.id)) byId.set(p.id, p);
+        } catch (e) { errors.push(`${src}: ${e}`); }
+    }
+    return { plugins: [...byId.values()], errors };
+}
+
 async function renderCatalog(container: HTMLElement) {
     container.innerHTML = `
         <div class="plug-community-banner">
@@ -444,7 +493,17 @@ async function renderCatalog(container: HTMLElement) {
                 <input type="text" id="plug-catalog-search" class="input plug-search-input" placeholder="${t('plugins.searchPlaceholder')}">
             </div>
             <button class="btn btn-sm btn-ghost" id="plug-refresh-catalog">${IC.refresh} ${t('plugins.refresh')}</button>
+            <button class="btn btn-sm btn-ghost" id="plug-toggle-sources">${IC.globe} ${t('plugins.communityCatalogs') || 'Community catalogs'}</button>
             <button class="btn btn-sm btn-secondary" id="plug-import-file-cat">${IC.upload} ${t('plugins.importFile')}</button>
+        </div>
+        <div id="plug-sources-panel" class="plug-sources-panel" style="display:none">
+            <p class="plug-sources-desc">${t('plugins.communityCatalogsDesc') || 'Import custom plugin catalogs by HTTPS/HTTP link or local .json file. Community plugins are unverified — install at your own risk.'}</p>
+            <div class="plug-sources-add">
+                <input type="text" id="plug-source-input" class="input" placeholder="https://.../catalog.json">
+                <button class="btn btn-sm btn-accent" id="plug-source-add">${IC.plus} ${t('common.add') || 'Add'}</button>
+                <button class="btn btn-sm btn-ghost" id="plug-source-file">${IC.upload} ${t('plugins.importJsonFile') || 'Import .json'}</button>
+            </div>
+            <div id="plug-sources-list" class="plug-sources-list"></div>
         </div>
         <div id="plug-catalog-grid" class="plug-grid">
             <div class="plug-loading">${t('common.loading')}</div>
@@ -459,8 +518,44 @@ async function renderCatalog(container: HTMLElement) {
         filterCatalogGrid((e.target as HTMLInputElement).value);
     });
 
+    // ── Community-catalog sources management ──────────────────────────────────
+    const panel = container.querySelector('#plug-sources-panel') as HTMLElement;
+    container.querySelector('#plug-toggle-sources')?.addEventListener('click', () => {
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    });
+    const reloadCatalog = async () => { _catalog = null; await renderCatalog(container); };
+    const addSource = async (src: string) => {
+        src = src.trim();
+        if (!src) return;
+        const list = getPluginCatalogSources();
+        if (list.includes(src)) { toast(t('plugins.sourceExists') || 'Source already added', 'info'); return; }
+        // Validate it actually loads before persisting.
+        try { await fetchCommunityCatalog(src); }
+        catch (e) { toast(`${t('plugins.sourceLoadFail') || 'Could not load catalog'}: ${e}`, 'error'); return; }
+        list.push(src);
+        setPluginCatalogSources(list);
+        toast(t('plugins.sourceAdded') || 'Catalog added', 'success');
+        await reloadCatalog();
+    };
+    container.querySelector('#plug-source-add')?.addEventListener('click', () => {
+        const inp = container.querySelector('#plug-source-input') as HTMLInputElement;
+        addSource(inp.value);
+    });
+    container.querySelector('#plug-source-input')?.addEventListener('keydown', (e: any) => {
+        if (e.key === 'Enter') { e.preventDefault(); addSource(e.target.value); }
+    });
+    container.querySelector('#plug-source-file')?.addEventListener('click', async () => {
+        const path = await pickFile({ filters: [{ name: 'JSON catalog', extensions: ['json'] }] });
+        if (path) await addSource(path);
+    });
+    renderSourcesList(container);
+
     try {
-        if (!_catalog) _catalog = await invoke('fetch_plugin_catalog', { catalogUrl: getLinks().plugin_catalog });
+        if (!_catalog) {
+            const merged = await fetchMergedPluginCatalog();
+            _catalog = { version: '', plugins: merged.plugins };
+            if (merged.errors.length && merged.plugins.length === 0) throw new Error(merged.errors.join('; '));
+        }
         renderCatalogGrid(_catalog.plugins);
     } catch (e) {
         const grid = document.getElementById('plug-catalog-grid');
@@ -472,6 +567,30 @@ async function renderCatalog(container: HTMLElement) {
                 <a class="btn btn-sm btn-ghost" href="${getLinks().plugin_github}" target="_blank">${IC.globe} GitHub</a>
             </div>`;
     }
+}
+
+function renderSourcesList(container: HTMLElement) {
+    const list = container.querySelector('#plug-sources-list') as HTMLElement;
+    if (!list) return;
+    const sources = getPluginCatalogSources();
+    if (!sources.length) {
+        list.innerHTML = `<p class="plug-sources-empty">${t('plugins.noCommunityCatalogs') || 'No community catalogs added yet.'}</p>`;
+        return;
+    }
+    list.innerHTML = sources.map(src => `
+        <div class="plug-source-row">
+            <span class="plug-source-icon">${isUrlSource(src) ? IC.globe : IC.folder}</span>
+            <span class="plug-source-url" title="${escAttr(src)}">${escHtml(src)}</span>
+            <button class="btn btn-xs btn-ghost plug-source-del" data-src="${escAttr(src)}">${IC.trash}</button>
+        </div>`).join('');
+    list.querySelectorAll('.plug-source-del').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const src = (btn as HTMLElement).dataset.src!;
+            setPluginCatalogSources(getPluginCatalogSources().filter(s => s !== src));
+            _catalog = null;
+            await renderCatalog(container);
+        });
+    });
 }
 
 function renderCatalogGrid(plugins: any[]) {

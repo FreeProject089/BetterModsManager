@@ -173,6 +173,19 @@ export async function saveFile(
     }
 }
 
+/** Native yes/no confirmation dialog. Returns true if the user accepted. */
+export async function askConfirm(
+    message: string,
+    options: { title?: string; type?: 'info' | 'warning' | 'error' } = {}
+): Promise<boolean> {
+    try {
+        if (_dialog?.ask) return await _dialog.ask(message, options) as boolean;
+        if (_dialog?.confirm) return await _dialog.confirm(message, options) as boolean;
+    } catch { /* fall through */ }
+    // Browser/mock fallback.
+    try { return window.confirm(message); } catch { return false; }
+}
+
 export async function getSettings(): Promise<AppSettings> {
     return await invoke('get_settings') as AppSettings;
 }

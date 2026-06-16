@@ -5,6 +5,21 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { getLinks } from '../../core/links-config.js';
 
+// Renders a labelled, fully-visible (wrapping) + copyable hash block for the
+// checksum warning modals. Inline styles so it works inside the generic confirm
+// modal without depending on extra CSS.
+function hashBlock(label: string, hash: string): string {
+    const h = escHtml(hash);
+    return `<div style="margin-top:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted)">${escHtml(label)}</span>
+            <button type="button" onclick="navigator.clipboard.writeText('${h}');this.textContent='✓';"
+                style="font-size:10px;padding:2px 8px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text-secondary);cursor:pointer">copy</button>
+        </div>
+        <code style="display:block;font-family:var(--font-mono);font-size:11px;line-height:1.5;word-break:break-all;white-space:pre-wrap;user-select:all;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text-secondary)">${h}</code>
+    </div>`;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface AppEntry {
@@ -12,7 +27,7 @@ interface AppEntry {
     md_link?: string; category: string; price: string;
     tags: string[]; version?: string; requirements?: string;
     images?: { thumb?: string; extra?: string[] };
-    download: { url: string; file_type: string; size?: number };
+    download: { url: string; file_type: string; size?: number; sha256?: string };
     official?: boolean; partner?: boolean; source_label?: string;
 }
 interface InstallResult {
@@ -1078,6 +1093,7 @@ function openAppEditor(index: number | null) {
         </div>
         <div>${field('size', 'Size (bytes)', String((existing.download as any)?.size||''), '10485760')}</div>
       </div>
+      ${field('sha256', t('apps.create.fSha')||'SHA-256 checksum (recommended — verified before install)', (existing.download as any)?.sha256||'', 'e3b0c44298fc1c149afbf4c8996fb924…')}
       <div class="apps-install-footer">
         <button class="btn btn-ghost" id="cr-app-cancel">${t('common.cancel')||'Cancel'}</button>
         <button class="btn btn-accent" id="cr-app-save">${t('common.confirm')||'Save'}</button>
@@ -1107,6 +1123,7 @@ function openAppEditor(index: number | null) {
                 url:       get('dl-url'),
                 file_type: (document.getElementById('cr-filetype') as HTMLSelectElement)?.value || 'exe',
                 size:      parseInt(get('size')) || undefined,
+                sha256:    get('sha256') || undefined,
             } as any,
         };
 
@@ -1541,7 +1558,27 @@ function openInstallModal(app: AppEntry) {
             : (t('apps.downloading')||'Downloading…');
 
         try {
-            const result: InstallResult = await invoke('install_app', {
+            // CWE-494: if the source is plain HTTP, warn the user first and only
+            // proceed (allowInsecure) if they explicitly accept the risk.
+            let allowInsecure = false;
+            if (/^http:\/\//i.test(app.download.url.trim())) {
+                const ok = await window.confirmCustom!(
+                    t('apps.install.httpWarnTitle') || 'Insecure source (HTTP)',
+                    t('apps.install.httpWarn') ||
+                     'This app downloads over an insecure HTTP connection (not HTTPS). The file could be tampered with in transit. Install anyway?',
+                    'warning',
+                    { yesLabel: t('apps.install.httpWarnYes') || 'Install anyway', noLabel: t('common.cancel') || 'Cancel' }
+                );
+                if (!ok) {
+                    progress.style.display = 'none';
+                    confirmBtn.disabled = false;
+                    cancelBtn.disabled = false;
+                    return;
+                }
+                allowInsecure = true;
+            }
+
+            const doInstall = (allowBadChecksum: boolean): Promise<InstallResult> => invoke('install_app', {
                 appId:       app.id,
                 appTitle:    app.title,
                 downloadUrl: app.download.url,
@@ -1550,7 +1587,50 @@ function openInstallModal(app: AppEntry) {
                 version:     app.version || null,
                 category:    app.category,
                 thumb:       app.images?.thumb || null,
+                sha256:      app.download.sha256 || null,
+                allowInsecure,
+                allowBadChecksum,
             });
+
+            let result: InstallResult;
+            try {
+                result = await doInstall(false);
+            } catch (err) {
+                // CWE-494: a checksum mismatch OR a missing checksum is a strong
+                // reminder, not a hard ban. Warn the user and let them install
+                // anyway if they accept.
+                const msg = String(err);
+                const mm = msg.match(/SHA_MISMATCH:([^:\s]*):([^:\s]*)/);
+                const nc = msg.match(/NO_CHECKSUM:([^:\s]*)/);
+                if (!mm && !nc) throw err;
+
+                let body: string;
+                if (mm) {
+                    body = (t('apps.install.shaWarn') ||
+                        'The downloaded file does not match the expected checksum. It may have been modified or corrupted. Install anyway?') +
+                        hashBlock(t('apps.install.shaExpected') || 'Expected', mm[1]) +
+                        hashBlock(t('apps.install.shaActual') || 'Downloaded', mm[2]);
+                } else {
+                    body = (t('apps.install.noShaWarn') ||
+                        'This app has no published checksum, so its integrity cannot be verified. Install anyway?') +
+                        hashBlock(t('apps.install.shaActual') || 'Downloaded', nc![1]);
+                }
+
+                const ok = await window.confirmCustom!(
+                    mm ? (t('apps.install.shaWarnTitle') || 'Checksum mismatch')
+                       : (t('apps.install.noShaWarnTitle') || 'Unverified download'),
+                    body,
+                    'warning',
+                    { yesLabel: t('apps.install.shaWarnYes') || 'Install anyway', noLabel: t('common.cancel') || 'Cancel' }
+                );
+                if (!ok) {
+                    progress.style.display = 'none';
+                    confirmBtn.disabled = false;
+                    cancelBtn.disabled = false;
+                    return;
+                }
+                result = await doInstall(true);
+            }
 
             fill.style.width = '100%';
             await refreshState();

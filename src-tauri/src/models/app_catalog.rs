@@ -14,6 +14,9 @@ pub struct AppDownload {
     pub url: String,
     pub file_type: String, // "zip" | "exe" | "msi" | "script"
     pub size: Option<u64>,
+    /// Optional sha256 checksum (CWE-494). Verified before install when present.
+    #[serde(default)]
+    pub sha256: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

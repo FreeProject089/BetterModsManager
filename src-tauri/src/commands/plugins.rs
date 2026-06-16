@@ -1265,16 +1265,37 @@ pub async fn export_plugin(
 #[tauri::command]
 pub fn write_text_file(path: String, content: String) -> Result<(), String> {
     // CWE-73 hardening: this command is reachable from the WebView, so an XSS
-    // could try to drop a file into an auto-run location. Reject path traversal
-    // and the Windows auto-start folder. Legit callers (plugin-script export,
-    // benchmark report export) pass an absolute path the user picked via the
-    // native save dialog, which is unaffected.
+    // could try to drop a file into an auto-run location. Reject path traversal,
+    // restrict to the file types legit callers actually write (plugin scripts and
+    // benchmark/report exports), and refuse known auto-run / OS system locations.
+    // Legit callers pass an absolute path the user picked via the native save
+    // dialog, which always carries one of these extensions.
     let norm = path.replace('/', "\\").to_lowercase();
     if norm.contains("..") {
         return Err("Refused: path traversal in target".to_string());
     }
-    if norm.contains(r"\microsoft\windows\start menu\programs\startup") {
-        return Err("Refused: auto-start location".to_string());
+    // Extension allowlist: scripts the generator emits + textual report formats.
+    const ALLOWED_WRITE_EXT: &[&str] = &[
+        "ps1", "bat", "cmd", "sh", "py", "js", "mjs", "ts", "vbs", "lua", "rb", "pl",
+        "txt", "csv", "json", "md", "log", "yaml", "yml", "ini", "conf", "xml",
+    ];
+    let ext = std::path::Path::new(&path)
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    if !ALLOWED_WRITE_EXT.contains(&ext.as_str()) {
+        return Err(format!("Refused: '.{}' is not an allowed export type", ext));
+    }
+    // Auto-run / OS locations an attacker would target for persistence.
+    const BLOCKED_WRITE_DIRS: &[&str] = &[
+        r"\microsoft\windows\start menu\programs\startup", // per-user + all-users Startup
+        r"\windows\system32",
+        r"\windows\syswow64",
+        r"\windows\tasks",
+        r"\system volume information",
+    ];
+    if BLOCKED_WRITE_DIRS.iter().any(|d| norm.contains(d)) {
+        return Err("Refused: auto-start / system location".to_string());
     }
     if let Some(parent) = std::path::Path::new(&path).parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;

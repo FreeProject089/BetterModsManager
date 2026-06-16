@@ -160,6 +160,23 @@ export async function saveFile(options = {}) {
         return null;
     }
 }
+/** Native yes/no confirmation dialog. Returns true if the user accepted. */
+export async function askConfirm(message, options = {}) {
+    try {
+        if (_dialog?.ask)
+            return await _dialog.ask(message, options);
+        if (_dialog?.confirm)
+            return await _dialog.confirm(message, options);
+    }
+    catch { /* fall through */ }
+    // Browser/mock fallback.
+    try {
+        return window.confirm(message);
+    }
+    catch {
+        return false;
+    }
+}
 export async function getSettings() {
     return await invoke('get_settings');
 }

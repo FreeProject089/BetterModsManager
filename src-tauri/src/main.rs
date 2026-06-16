@@ -325,6 +325,7 @@ fn main() {
             commands::mods::toggle_all_mods,
             commands::mods::check_conflicts,
             commands::mods::get_mod_conflicts,
+            commands::mods::get_all_mod_conflicts,
             commands::mods::get_conflict_file_tree,
             commands::mods::list_mod_files_recursive,
             commands::mods::path_join,

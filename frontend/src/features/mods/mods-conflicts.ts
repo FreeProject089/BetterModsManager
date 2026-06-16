@@ -15,38 +15,28 @@ let conflictCheckGeneration = 0;
 export async function checkAllConflicts() {
   const currentGen = ++conflictCheckGeneration;
 
-  const allModsGlobal = await invoke('get_all_mods').catch(() => []);
-  const existingModIds = new Set(allModsGlobal.map(m => m.id));
-
-  Object.keys(S.conflictCache).forEach(mid => {
-    if (!existingModIds.has(mid)) delete S.conflictCache[mid];
-  });
-
-  const activeId = S.cachedActiveProfileId || await invoke('get_active_profile_id').catch(() => null);
-  if (!activeId && allModsGlobal.length === 0) return;
-
-  const BATCH_SIZE = 5;
-  const mods = [...allModsGlobal];
-  for (let i = 0; i < mods.length; i += BATCH_SIZE) {
-    const batch = mods.slice(i, i + BATCH_SIZE);
-    
-    if (currentGen !== conflictCheckGeneration) return;
-    
-    const results = await Promise.allSettled(batch.map(m => invoke('get_mod_conflicts', { modId: m.id })));
-
-    if (currentGen !== conflictCheckGeneration) return;
-
-    results.forEach((res, idx) => {
-      const mod = batch[idx];
-      if (mod && res.status === 'fulfilled' && res.value && res.value.length > 0) {
-        S.conflictCache[mod.id] = res.value;
-      } else if (mod) {
-        delete S.conflictCache[mod.id];
-      }
-    });
-
-    batch.forEach(mod => updateConflictBadgeOnCard(mod.id));
+  // ONE batched IPC call instead of N/5 round-trips (was the main import/large-
+  // library lag): the backend computes every mod's conflicts behind a single
+  // lock pass and returns a `mod_id -> conflicts` map (conflict-free mods omitted).
+  let conflictMap: Record<string, any[]> = {};
+  try {
+    conflictMap = await invoke('get_all_mod_conflicts');
+  } catch {
+    return; // backend unavailable / no active profile — leave cache untouched
   }
+
+  if (currentGen !== conflictCheckGeneration) return;
+
+  // Rebuild the cache from the fresh map (drops stale/deleted mods automatically).
+  const newCache: Record<string, any[]> = {};
+  for (const id in conflictMap) {
+    if (conflictMap[id] && conflictMap[id].length > 0) newCache[id] = conflictMap[id];
+  }
+
+  // Update only the badges that actually changed to avoid touching every card.
+  const changed = new Set<string>([...Object.keys(S.conflictCache), ...Object.keys(newCache)]);
+  S.conflictCache = newCache;
+  changed.forEach(id => updateConflictBadgeOnCard(id));
 
   saveConflictCache();
 }
