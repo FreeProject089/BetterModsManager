@@ -78,6 +78,13 @@ pub struct AppSettings {
     /// the admin token (full access). Empty by default ⇒ behaviour unchanged.
     #[serde(default)]
     pub plugin_tokens: std::collections::HashMap<String, String>,
+    /// CWE-942: extra CORS origins the user explicitly allows so they can call
+    /// the local API from other web services (e.g. a dashboard). Empty ⇒ only the
+    /// Tauri WebView origins are allowed (the secure default). A single `"*"`
+    /// entry means "allow any origin" (opt-in, the user accepted the risk).
+    /// Changing this requires an API restart.
+    #[serde(default)]
+    pub api_cors_origins: Vec<String>,
 }
 
 impl Default for AppSettings {
@@ -110,6 +117,7 @@ impl Default for AppSettings {
             sound_volume: default_sound_volume(),
             connected_server_repos: Vec::new(),
             plugin_tokens: std::collections::HashMap::new(),
+            api_cors_origins: Vec::new(),
         }
     }
 }

@@ -10746,6 +10746,78 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 }
 .plug-toolbar .input { flex: 1; min-width: 180px; }
 
+/* Built-in theme tag + hidden card in the theme catalogue */
+.btc-builtin-tag { font-size:9px; font-weight:700; padding:1px 6px; border-radius:4px;
+    background:rgba(59,130,246,0.15); color:#60a5fa; vertical-align:middle; }
+.btc-card-hidden { opacity:.6; }
+
+/* ── Reorderable settings cards ─────────────────────────────────────────── */
+.cardorder-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    padding:8px 12px; margin-bottom:14px; border:1px dashed var(--border); border-radius:10px;
+    background:rgba(255,255,255,0.02); }
+.cardorder-hint { font-size:11px; color:var(--text-muted); }
+.cardorder-actions { display:flex; gap:6px; margin-left:auto; }
+.cardorder-import-row { display:flex; gap:6px; width:100%; }
+.cardorder-import-row .input { flex:1; font-size:12px; }
+.card-drag-handle { display:none; position:absolute; top:10px; right:10px; z-index:5;
+    background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:6px;
+    color:var(--text-muted); cursor:grab; padding:3px 5px; line-height:0; opacity:.7; transition:opacity .15s; }
+/* Handles + drag affordances only appear in Edit-layout mode. */
+.cardorder-editing .card-drag-handle { display:block; }
+.cardorder-editing > .glass-card { cursor:move; outline:1px dashed rgba(255,255,255,0.12); }
+.cardorder-editing > .glass-card:hover { outline-color:var(--accent); }
+.card-drag-handle:active { cursor:grabbing; }
+.card-dragging { opacity:.55; outline:2px dashed var(--accent) !important; }
+
+/* ── Scheduler / automation ─────────────────────────────────────────────── */
+.sched-row { display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:10px 12px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px; }
+.sched-row-main { display:flex; align-items:center; gap:12px; min-width:0; }
+.sched-row-text { display:flex; flex-direction:column; min-width:0; }
+.sched-row-text strong { font-size:13px; color:var(--text-primary); }
+.sched-row-sub { font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sched-row-actions { display:flex; gap:6px; flex-shrink:0; }
+.sched-toggle { flex-shrink:0; }
+
+.sched-modal { width:680px; max-width:94vw; display:flex; flex-direction:column; max-height:88vh; }
+.sched-modal .modal-body.sched-body { flex:1; overflow-y:auto; padding:18px 22px; display:block; }
+.sched-modal .modal-header, .sched-modal .sched-footer { flex-shrink:0; }
+.sched-footer { display:flex; justify-content:flex-end; gap:10px; padding:14px 22px; border-top:1px solid var(--border); }
+.sched-label { display:block; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--text-muted); margin:14px 0 6px; }
+.sched-steps { display:flex; flex-direction:column; gap:8px; }
+.sched-step { background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:8px; padding:8px 10px; }
+.sched-step-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.sched-step-tag { font-size:10px; font-weight:800; padding:2px 7px; border-radius:5px; letter-spacing:.05em; }
+.sched-do { background:rgba(59,130,246,0.15); color:#60a5fa; }
+.sched-if { background:rgba(245,158,11,0.15); color:#f59e0b; }
+.sched-wait { background:rgba(16,185,129,0.15); color:#10b981; }
+.sched-branch { margin-top:6px; padding-left:10px; border-left:2px solid var(--border); }
+.sched-branch-label { font-size:10px; font-weight:800; color:var(--text-muted); margin:4px 0; }
+.sched-add-row { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+.sched-cond { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.sched-cond-params { display:inline-flex; align-items:center; gap:4px; flex-wrap:wrap; }
+.sched-act-params { display:inline-flex; align-items:center; gap:4px; flex-wrap:wrap; }
+.sched-body .input { font-size:12px; }
+.sched-hint-inline { font-weight:500; text-transform:none; letter-spacing:0; color:var(--text-muted); opacity:.7; font-size:10px; }
+.sched-legend { display:flex; flex-direction:column; gap:5px; margin:0 0 10px; padding:10px 12px;
+    background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; }
+.sched-legend span { font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:8px; line-height:1.4; }
+.sched-legend .sched-step-tag { flex-shrink:0; }
+.sched-add-row .sched-add-do { color:#60a5fa; }
+.sched-add-row .sched-add-if { color:#f59e0b; }
+.sched-add-row .sched-add-wait { color:#10b981; }
+.sched-chip { display:inline-flex; align-items:center; gap:5px; border:1px solid var(--border);
+    background:rgba(255,255,255,0.03); border-radius:999px; padding:4px 11px; font-weight:600; transition:all .12s; }
+.sched-chip svg { opacity:.9; }
+.sched-add-do:hover { background:rgba(96,165,250,0.14); border-color:rgba(96,165,250,0.4); }
+.sched-add-if:hover { background:rgba(245,158,11,0.14); border-color:rgba(245,158,11,0.4); }
+.sched-add-wait:hover { background:rgba(16,185,129,0.14); border-color:rgba(16,185,129,0.4); }
+.sched-add-delay { color:#94a3b8; }
+.sched-add-delay:hover { background:rgba(148,163,184,0.14); border-color:rgba(148,163,184,0.4); }
+.sched-cond-label { font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); font-weight:700; }
+.sched-row-desc { font-size:11px; color:var(--text-secondary); opacity:.85; }
+
 /* Community catalog sources panel */
 .plug-sources-panel {
     background: var(--bg-secondary, rgba(255,255,255,0.03));
@@ -12292,7 +12364,7 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .bmm-csel-menu {
     display: none;
     position: fixed; z-index: 2147483600;
-    max-width: 340px; overflow-y: auto; overflow-x: hidden;
+    max-width: min(460px, 92vw); overflow-y: auto; overflow-x: hidden;
     background: var(--bmm-bg-elevated); border: 1px solid var(--bmm-border-accent);
     border-radius: 9px; padding: 4px; box-shadow: 0 12px 34px rgba(0,0,0,0.45);
     pointer-events: auto;

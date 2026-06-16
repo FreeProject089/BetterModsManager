@@ -1277,7 +1277,7 @@ pub fn write_text_file(path: String, content: String) -> Result<(), String> {
     // Extension allowlist: scripts the generator emits + textual report formats.
     const ALLOWED_WRITE_EXT: &[&str] = &[
         "ps1", "bat", "cmd", "sh", "py", "js", "mjs", "ts", "vbs", "lua", "rb", "pl",
-        "txt", "csv", "json", "md", "log", "yaml", "yml", "ini", "conf", "xml",
+        "txt", "csv", "json", "md", "log", "yaml", "yml", "ini", "conf", "xml", "bmmpa",
     ];
     let ext = std::path::Path::new(&path)
         .extension()

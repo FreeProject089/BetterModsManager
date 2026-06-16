@@ -14,6 +14,7 @@ const COMMUNITY_SRC_KEY = 'bmm_theme_community_sources';
 
 let _modal: HTMLElement | null = null;
 let _catalog: BmmTheme[] = [];
+let _builtins: any[] = [];   // all built-in presets incl. hidden (_hidden flag)
 let _filter = '';
 let _communitySources: string[] = [];
 
@@ -127,6 +128,9 @@ async function fetchCatalog(force = false): Promise<void> {
     } catch {
         _catalog = [];
     }
+    // Built-in presets (incl. hidden ones, for reinstall).
+    try { _builtins = JSON.parse(await invoke('list_builtin_themes_all') as string || '[]'); }
+    catch { _builtins = []; }
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -140,14 +144,44 @@ function renderCatalog(): void {
         !_filter || th.name.toLowerCase().includes(_filter) || (th.author || '').toLowerCase().includes(_filter) || (th.description || '').toLowerCase().includes(_filter)
     );
 
-    if (!filtered.length) {
+    // ── Built-in / default themes section (apply · uninstall · reinstall) ──────
+    const builtinsFiltered = _builtins.filter(th =>
+        !_filter || (th.name || '').toLowerCase().includes(_filter));
+    const builtinsHtml = builtinsFiltered.map(th => {
+        const accentColor = th.vars?.['--bmm-accent'] || '#3b82f6';
+        const hidden = !!th._hidden;
+        return `
+            <div class="btc-card${hidden ? ' btc-card-hidden' : ''}" data-theme-id="${escAttr(th.id)}">
+                <div class="btc-preview">
+                    <div class="btc-preview-placeholder" style="background:linear-gradient(135deg,${accentColor}22 0%,${accentColor}08 100%);">
+                        <div class="btc-preview-swatches">
+                            ${Object.values(th.vars || {}).slice(0, 5).filter((v: any) => typeof v === 'string' && (v.startsWith('#') || v.startsWith('rgb'))).map((c: any) => `<span class="btc-swatch" style="background:${c}"></span>`).join('')}
+                        </div>
+                        <span class="btc-preview-name">${escHtml(th.name)}</span>
+                    </div>
+                </div>
+                <div class="btc-info">
+                    <div class="btc-name">${escHtml(th.name)} <span class="btc-builtin-tag">${t('themes.builtin') || 'Default'}</span></div>
+                    <div class="btc-author">${escHtml(th.author || 'BMM')}</div>
+                </div>
+                <div class="btc-actions">
+                    ${hidden
+                        ? `<button class="btn btn-xs btn-secondary btc-reinstall" data-id="${escAttr(th.id)}">${t('themes.reinstall') || 'Reinstall'}</button>`
+                        : `<button class="btn btn-xs btn-accent btc-activate" data-id="${escAttr(th.id)}">${t('themes.activate') || 'Apply'}</button>
+                           <button class="btn btn-xs btn-ghost btc-uninstall" data-id="${escAttr(th.id)}" style="color:var(--danger)">${t('themes.uninstall') || 'Uninstall'}</button>`}
+                </div>
+            </div>`;
+    }).join('');
+
+    if (!filtered.length && !builtinsFiltered.length) {
         listEl.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--bmm-text-muted);">${t('themes.noCatalog') || 'No themes found.'}</div>`;
         if (countEl) countEl.textContent = '';
         return;
     }
 
-    if (countEl) countEl.textContent = `${filtered.length} ${t('themes.themes') || 'theme(s)'}`;
-    listEl.innerHTML = filtered.map(th => {
+    if (countEl) countEl.textContent = `${filtered.length + builtinsFiltered.length} ${t('themes.themes') || 'theme(s)'}`;
+    const sectionHead = (label: string) => `<div class="btc-section-head" style="grid-column:1/-1;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--bmm-text-muted);margin:6px 0 2px;">${escHtml(label)}</div>`;
+    const catalogHtml = filtered.map(th => {
         const isInstalled = installed.has(th.id);
         const accentColor = th.vars?.['--bmm-accent'] || '#3b82f6';
         return `
@@ -175,6 +209,32 @@ function renderCatalog(): void {
                 </div>
             </div>`;
     }).join('');
+
+    listEl.innerHTML =
+        (builtinsFiltered.length ? sectionHead(t('themes.defaultThemes') || 'Default themes') + builtinsHtml : '') +
+        (filtered.length ? sectionHead(t('themes.catalogThemes') || 'Catalogue') + catalogHtml : '');
+
+    // ── Built-in uninstall / reinstall ────────────────────────────────────────
+    const refreshBuiltins = async () => {
+        try { _builtins = JSON.parse(await invoke('list_builtin_themes_all') as string || '[]'); } catch {}
+        const { loadBuiltinThemes } = await import('./theme-engine.js');
+        await loadBuiltinThemes(); // refresh the BUILTIN_THEMES used by every selector
+        renderCatalog();
+    };
+    listEl.querySelectorAll('.btc-uninstall').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            await invoke('set_builtin_hidden', { themeId: (btn as HTMLElement).dataset.id!, hidden: true });
+            toast(t('themes.uninstalled') || 'Theme uninstalled', 'success');
+            await refreshBuiltins();
+        });
+    });
+    listEl.querySelectorAll('.btc-reinstall').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            await invoke('set_builtin_hidden', { themeId: (btn as HTMLElement).dataset.id!, hidden: false });
+            toast(t('themes.reinstalled') || 'Theme reinstalled', 'success');
+            await refreshBuiltins();
+        });
+    });
 
     // Wire actions
     listEl.querySelectorAll('.btc-install').forEach(btn => {

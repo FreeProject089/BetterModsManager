@@ -17,6 +17,18 @@ fn themes_dir(app_handle: &tauri::AppHandle) -> PathBuf {
 /// to change the set of built-in presets — they are NOT hardcoded.
 #[tauri::command]
 pub fn list_builtin_themes(app_handle: tauri::AppHandle) -> Result<String, String> {
+    list_builtin_themes_impl(&app_handle, false)
+}
+
+/// Like `list_builtin_themes` but includes hidden ("uninstalled") presets too,
+/// each tagged with `"_hidden": true`. Used by the catalogue to offer reinstall.
+#[tauri::command]
+pub fn list_builtin_themes_all(app_handle: tauri::AppHandle) -> Result<String, String> {
+    list_builtin_themes_impl(&app_handle, true)
+}
+
+fn list_builtin_themes_impl(app_handle: &tauri::AppHandle, include_hidden: bool) -> Result<String, String> {
+    let hidden = get_hidden_builtins(app_handle.clone());
     // Resolve the bundled resource dir (handles the `_up_` prefix Tauri uses for
     // resources copied from outside src-tauri).
     let dir = app_handle.path_resolver().resolve_resource("builtin-themes")
@@ -53,9 +65,49 @@ pub fn list_builtin_themes(app_handle: tauri::AppHandle) -> Result<String, Strin
         } else {
             match std::fs::read_to_string(&p) { Ok(s) => s, Err(_) => continue }
         };
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) { out.push(v); }
+        if let Ok(mut v) = serde_json::from_str::<serde_json::Value>(&raw) {
+            let id = v["id"].as_str().unwrap_or("").to_string();
+            let is_hidden = hidden.contains(&id);
+            if is_hidden && !include_hidden { continue; } // filtered out of normal listings
+            if include_hidden {
+                if let Some(obj) = v.as_object_mut() {
+                    obj.insert("_hidden".into(), serde_json::Value::Bool(is_hidden));
+                    obj.insert("_builtin".into(), serde_json::Value::Bool(true));
+                }
+            }
+            out.push(v);
+        }
     }
     serde_json::to_string(&out).map_err(|e| e.to_string())
+}
+
+// ── Built-in "uninstall" (hide) support ───────────────────────────────────────
+// Built-in presets live in bundled resources and can't be truly deleted, but the
+// user can hide ("uninstall") them so they vanish from every theme selector, and
+// restore ("reinstall") them later. The hidden set is a small JSON id list.
+
+fn hidden_builtins_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    app.path_resolver().app_data_dir().map(|d| d.join("hidden_builtins.json"))
+}
+
+#[tauri::command]
+pub fn get_hidden_builtins(app_handle: tauri::AppHandle) -> Vec<String> {
+    hidden_builtins_path(&app_handle)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+/// Hides (`hidden=true`) or restores (`false`) a built-in theme by id.
+#[tauri::command]
+pub fn set_builtin_hidden(app_handle: tauri::AppHandle, theme_id: String, hidden: bool) -> Result<(), String> {
+    let mut list = get_hidden_builtins(app_handle.clone());
+    if hidden { if !list.contains(&theme_id) { list.push(theme_id); } }
+    else { list.retain(|x| x != &theme_id); }
+    let path = hidden_builtins_path(&app_handle).ok_or("no data dir")?;
+    if let Some(parent) = path.parent() { std::fs::create_dir_all(parent).ok(); }
+    std::fs::write(path, serde_json::to_string(&list).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())
 }
 
 /// Returns the stored JSON for all installed themes as a JSON array string.

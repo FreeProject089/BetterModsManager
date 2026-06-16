@@ -10,6 +10,8 @@ import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
 import { formatBytes, escHtml } from '../../core/utils.js';
 import { initBetaHub, openBugReportModal, openFeedbackModal } from '../betahub/betahub-modals.js';
 import { initLaunchPackSettings } from './launch_packs.js';
+import { initScheduler } from './scheduler.js';
+import { initCardReorder } from './card-order.js';
 // ── GitHub PAT helper ─────────────────────────────────────
 export async function getGithubPat() {
     try {
@@ -1481,6 +1483,11 @@ export async function initSettings() {
     initI18nSandbox();
     await initSecuritySettings();
     await initLaunchPackSettings();
+    initScheduler().catch(() => { });
+    try {
+        initCardReorder();
+    }
+    catch (e) { }
     initSecurityInfoCard().catch(() => { });
     // Tags Settings
     const btnCreateTag = document.getElementById('btn-create-tag');

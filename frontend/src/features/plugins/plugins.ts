@@ -7428,6 +7428,11 @@ async function renderPerms(container: HTMLElement) {
     const apiNoAuthAllow  = localStorage.getItem('bmm_api_public_allow') !== 'blocked';
     const unsafeAllowed   = localStorage.getItem('bmm_unsafe_plugins_allow') === 'allowed';
 
+    // CORS origins (persisted backend-side; require an API restart to take effect).
+    const _settings: any = await invoke('get_settings').catch(() => ({}));
+    let corsOrigins: string[] = Array.isArray(_settings.api_cors_origins) ? _settings.api_cors_origins.slice() : [];
+    const corsAllowAny = corsOrigins.includes('*');
+
     container.innerHTML = `
         <p class="plug-perms-desc">${IC.shield} ${t('plugins.permsDesc')}</p>
 
@@ -7481,9 +7486,98 @@ async function renderPerms(container: HTMLElement) {
             </div>
         </div>
 
+        <!-- ── CORS (cross-origin API access) ──────────────────── -->
+        <div class="plug-section-card" style="margin-bottom:14px;">
+            <h3 class="plug-section-title" style="margin-bottom:10px;">${IC.globe} ${t('plugins.corsTitle') || 'CORS — cross-origin API access'}</h3>
+            <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px;line-height:1.5;">${t('plugins.corsDesc') || 'Allow web pages hosted on other origins to call your local BMM API from the browser. Leave empty to keep the secure default (only BMM itself). Changes require an API restart.'}</p>
+
+            <div class="plug-perm-global-card" style="margin-bottom:10px;${corsAllowAny ? 'border-color:rgba(239,68,68,0.35);' : ''}">
+                <div class="plug-perm-global-inner">
+                    <div class="plug-perm-global-icon" style="color:${corsAllowAny ? 'var(--danger)' : 'var(--text-muted)'};">${IC.alert}</div>
+                    <div class="plug-perm-global-text">
+                        <strong>${t('plugins.corsAnyTitle') || 'Allow any origin (*)'}</strong>
+                        <span class="plug-perm-global-sub">${t('plugins.corsAnyDesc') || 'Any website can read your API responses. Convenient for development, risky in general — prefer listing specific origins below.'}</span>
+                    </div>
+                    <label class="plug-toggle" style="margin-left:auto;">
+                        <input type="checkbox" id="plug-cors-any" ${corsAllowAny ? 'checked' : ''}>
+                        <span class="plug-toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div id="plug-cors-specific" style="${corsAllowAny ? 'opacity:.45;pointer-events:none;' : ''}">
+                <div class="plug-sources-add" style="margin-bottom:10px;">
+                    <input type="text" id="plug-cors-input" class="input" placeholder="https://my-dashboard.example.com">
+                    <button class="btn btn-sm btn-accent" id="plug-cors-add">${IC.plus} ${t('common.add') || 'Add'}</button>
+                </div>
+                <div id="plug-cors-list" class="plug-sources-list"></div>
+            </div>
+            <p class="plug-perm-global-warn" style="margin-top:10px;">${IC.alert} ${t('plugins.corsRestartWarn') || 'Restart BMM (or the API) for CORS changes to take effect.'}</p>
+        </div>
+
         <!-- ── Per-plugin permissions ──────────────────────────── -->
         <h3 class="plug-section-title" style="margin-bottom:8px;">${IC.puzzle} ${t('plugins.perPluginPermTitle') || 'Permissions par plugin'}</h3>
         <div id="plug-perms-list"></div>`;
+
+    // ── CORS handlers ─────────────────────────────────────────────────────────
+    const saveCors = async () => {
+        try {
+            const s: any = await invoke('get_settings');
+            s.api_cors_origins = corsOrigins;
+            await invoke('update_settings', { settings: s });
+        } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+    };
+    const renderCorsList = () => {
+        const list = container.querySelector('#plug-cors-list') as HTMLElement;
+        if (!list) return;
+        const specific = corsOrigins.filter(o => o !== '*');
+        list.innerHTML = specific.length
+            ? specific.map(o => `
+                <div class="plug-source-row">
+                    <span class="plug-source-icon">${IC.globe}</span>
+                    <span class="plug-source-url" title="${escAttr(o)}">${escHtml(o)}</span>
+                    <button class="btn btn-xs btn-ghost plug-cors-del" data-o="${escAttr(o)}">${IC.trash}</button>
+                </div>`).join('')
+            : `<p class="plug-sources-empty">${t('plugins.corsNone') || 'No extra origins — API is reachable only from BMM itself.'}</p>`;
+        list.querySelectorAll('.plug-cors-del').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const o = (btn as HTMLElement).dataset.o!;
+                corsOrigins = corsOrigins.filter(x => x !== o);
+                await saveCors();
+                renderCorsList();
+            });
+        });
+    };
+    renderCorsList();
+    const addCorsOrigin = async (raw: string) => {
+        const o = raw.trim().replace(/\/+$/, '');
+        if (!o) return;
+        if (o !== '*' && !/^https?:\/\/[^\s/]+$/i.test(o)) {
+            toast(t('plugins.corsInvalid') || 'Enter a valid origin, e.g. https://example.com', 'warning');
+            return;
+        }
+        if (corsOrigins.includes(o)) { toast(t('plugins.sourceExists') || 'Already added', 'info'); return; }
+        corsOrigins.push(o);
+        await saveCors();
+        renderCorsList();
+        const inp = container.querySelector('#plug-cors-input') as HTMLInputElement;
+        if (inp) inp.value = '';
+    };
+    container.querySelector('#plug-cors-add')?.addEventListener('click', () => {
+        addCorsOrigin((container.querySelector('#plug-cors-input') as HTMLInputElement).value);
+    });
+    container.querySelector('#plug-cors-input')?.addEventListener('keydown', (e: any) => {
+        if (e.key === 'Enter') { e.preventDefault(); addCorsOrigin(e.target.value); }
+    });
+    container.querySelector('#plug-cors-any')?.addEventListener('change', async (e) => {
+        const on = (e.target as HTMLInputElement).checked;
+        corsOrigins = on
+            ? Array.from(new Set([...corsOrigins, '*']))
+            : corsOrigins.filter(o => o !== '*');
+        await saveCors();
+        const spec = container.querySelector('#plug-cors-specific') as HTMLElement;
+        if (spec) spec.style.cssText = on ? 'opacity:.45;pointer-events:none;' : '';
+    });
 
     container.querySelector('#plug-global-allow')?.addEventListener('change', (e) => {
         if ((e.target as HTMLInputElement).checked) {

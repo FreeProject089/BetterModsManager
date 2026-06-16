@@ -8210,6 +8210,39 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                         </div>
 
 
+                        <!-- ── Scheduler / Automation ── -->
+                        <div class="glass-card" id="settings-scheduler-section" style="margin-bottom: 24px;">
+                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                                    stroke-width="2.2">
+                                    <circle cx="12" cy="12" r="9" />
+                                    <path d="M12 7v5l3 3" />
+                                </svg>
+                                <span data-i18n="sched.title">Planification &amp; automatisation</span>
+                            </h3>
+                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6"
+                                data-i18n="sched.desc">
+                                Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un
+                                profil… avec conditions (si/sinon) et commandes personnalisées. Les tâches s'exécutent
+                                tant que BMM est ouvert.
+                            </p>
+                            <div id="scheduler-list-container"
+                                style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+                                <!-- Injected from JS -->
+                            </div>
+                            <div style="display:flex;gap:10px">
+                                <button class="btn btn-primary btn-sm" id="btn-create-schedule" style="gap:8px">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2.5">
+                                        <line x1="12" y1="5" x2="12" y2="19" />
+                                        <line x1="5" y1="12" x2="19" y2="12" />
+                                    </svg>
+                                    <span data-i18n="sched.create">Nouvelle tâche planifiée</span>
+                                </button>
+                            </div>
+                        </div>
+
+
                         <!-- ── Security Mode ── -->
                         <div class="glass-card" id="settings-security-section" style="margin-bottom: 24px;">
                             <h3 class="card-title" style="display:flex;align-items:center;gap:10px">

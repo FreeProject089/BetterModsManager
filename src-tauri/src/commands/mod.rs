@@ -28,3 +28,4 @@ pub mod plugins;
 pub mod resource_tracker;
 pub mod apps;
 pub mod themes;
+pub mod scheduler;

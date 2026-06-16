@@ -2380,14 +2380,37 @@ pub async fn start_api_server(
     // tauri.localhost) keeps working, and curl/deep-link clients send no Origin.
     // In DEBUG (`tauri dev`) the WebView origin is the dev server, so we stay
     // permissive to avoid breaking the in-app tester during development.
+    // User-configurable extra origins (Plugins & API → CORS). Read once at start
+    // (changing it requires an API restart). A single "*" means "allow any origin".
+    let user_cors_origins: Vec<String> = {
+        let d = data.lock().unwrap_or_else(|p| p.into_inner());
+        d.settings.api_cors_origins.iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    };
+    let cors_allow_any = user_cors_origins.iter().any(|o| o == "*");
+
     let cors = {
         let b = warp::cors()
             .allow_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
             .allow_headers(vec!["Content-Type", "Authorization"]);
-        #[cfg(debug_assertions)]
-        { b.allow_any_origin() }
-        #[cfg(not(debug_assertions))]
-        { b.allow_origins(vec!["https://tauri.localhost", "tauri://localhost", "http://tauri.localhost"]) }
+        if cors_allow_any {
+            // Explicit user opt-in: any website may call the API.
+            b.allow_any_origin()
+        } else {
+            // Default Tauri WebView origins + any extra origins the user added.
+            let mut origins: Vec<String> = vec![
+                "https://tauri.localhost".into(),
+                "tauri://localhost".into(),
+                "http://tauri.localhost".into(),
+            ];
+            origins.extend(user_cors_origins.iter().filter(|o| *o != "*").cloned());
+            #[cfg(debug_assertions)]
+            { let _ = &origins; b.allow_any_origin() }
+            #[cfg(not(debug_assertions))]
+            { b.allow_origins(origins.iter().map(|s| s.as_str())) }
+        }
     };
 
     // Split into boxed groups to avoid E0275 type-recursion overflow with deep Or<Or<...>> chains

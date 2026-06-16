@@ -109,8 +109,13 @@ function enhance(sel: HTMLSelectElement): void {
 
     const position = () => {
         const r = trigger.getBoundingClientRect();
-        menu.style.left = r.left + 'px';
-        menu.style.width = Math.max(r.width, 150) + 'px';
+        // Width fits the longest option (so labels aren't truncated), but never
+        // narrower than the trigger and never wider than the CSS max-width.
+        menu.style.width = 'max-content';
+        menu.style.minWidth = Math.max(r.width, 150) + 'px';
+        // Keep the menu on-screen: if it would overflow the right edge, pull left.
+        const left = Math.min(r.left, window.innerWidth - menu.offsetWidth - 8);
+        menu.style.left = Math.max(8, left) + 'px';
         const below = window.innerHeight - r.bottom;
         if (below < 260 && r.top > below) {
             menu.style.top = 'auto';

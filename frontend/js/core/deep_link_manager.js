@@ -495,6 +495,28 @@ async function handleDeepLink(urlStr) {
             }
             return;
         }
+        // ── Settings card layout (reorderable cards) ─────────────────────────
+        if (action === 'settings/layout') {
+            const code = parsedUrl.searchParams.get('code');
+            if (code) {
+                try {
+                    sessionStorage.setItem('bmm_pending_layout', code);
+                }
+                catch { }
+                const navBtn = document.querySelector('.nav-item[data-view="settings"], [data-view="settings"]');
+                navBtn?.click();
+                setTimeout(() => { import('../features/settings/card-order.js').then(m => m.initCardReorder()).catch(() => { }); }, 600);
+            }
+            return;
+        }
+        // ── Scheduler: run a specific task by id (Windows Task Scheduler hook) ──
+        if (action === 'schedule/run') {
+            const id = parsedUrl.searchParams.get('id');
+            if (id) {
+                setTimeout(() => { import('../features/settings/scheduler.js').then(m => m.runTaskById(id)).catch(() => { }); }, 900);
+            }
+            return;
+        }
         if (action === 'import' || action === 'install' || action === 'download') {
             const modUrl = parsedUrl.searchParams.get('url');
             const modNameFromUrl = parsedUrl.searchParams.get('name') || t('mod.unknownName') || 'Mod Inconnu';
