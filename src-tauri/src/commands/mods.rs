@@ -519,26 +519,17 @@ fn ensure_cache_populated(state: &State<AppState>) -> Result<(), AppError> {
     drop(data);
 
     if !to_hash.is_empty() {
-        // Hash each deferred mod with BLAKE3 (parallel across files AND within a
-        // large file). No locks are held here, so the UI stays fully responsive.
-        let hashed: Vec<(String, std::collections::HashMap<String, String>)> = to_hash
-            .into_iter()
-            .map(|(mod_id, base, rels)| {
-                let items: Vec<(String, std::path::PathBuf)> =
-                    rels.iter().map(|rel| (rel.clone(), base.join(rel))).collect();
-                let map = crate::fs_utils::compute_file_hash_bulk(&items).into_iter().collect();
-                (mod_id, map)
-            })
-            .collect();
-        // Re-acquire the data lock only briefly to store the results.
-        if let Ok(mut data) = state.data.lock() {
-            for (mod_id, map) in hashed {
-                if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
-                    m.file_hashes = Some(map);
-                }
+        // Defer re-hashing to the THROTTLED background queue instead of hashing
+        // everything synchronously here. The background thread hashes one mod at a
+        // time, on the capped hash pool, with a pause between each — so importing
+        // or scanning a profile with many mods no longer freezes the UI.
+        let mut q = state.sha_queue.lock().unwrap_or_else(|p| p.into_inner());
+        for (mod_id, _, _) in &to_hash {
+            if !q.iter().any(|x| x == mod_id) {
+                q.push_back(mod_id.clone());
             }
         }
-        needs_save = true;
+        log_line(format!("[CACHE] Queued {} mod(s) for throttled background re-hash", to_hash.len()));
     }
 
     if needs_save {
@@ -3134,9 +3125,9 @@ fn process_single_mod_hashing(
             let bytes_total: u64 = items.iter()
                 .filter_map(|(_, p)| std::fs::metadata(p).ok().map(|m| m.len()))
                 .sum();
-            // Hash every file across all cores at once (rayon) instead of a
-            // throttled sequential loop — this is a background op, so it can use
-            // the full machine and finish far sooner.
+            // Hash this mod's files on the capped hash pool (bounded cores) so
+            // even a big mod leaves headroom for the UI. The bg loop also pauses
+            // between mods, so a freshly imported profile hashes without freezing.
             let new_hashes: std::collections::HashMap<String, String> =
                 fs_utils::compute_file_hash_bulk(&items).into_iter().collect();
             let calculated = new_hashes.len();

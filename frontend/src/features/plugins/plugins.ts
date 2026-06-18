@@ -3270,6 +3270,7 @@ function renderScripts(container: HTMLElement) {
         { m: 'POST', p: '/api/modpacks/disable',        l: t('plugins.ep.disableMp')   || 'Disable Modpack',      icon: IC.folder,   body: '{"modpack_id":""}' },
         { m: 'POST', p: '/api/modpacks/create',         l: t('plugins.ep.createMp')    || 'Create Modpack',       icon: IC.plus,     body: '{"name":"","profile_id":""}' },
         { m: 'POST', p: '/api/restart',                 l: t('plugins.ep.restart')     || 'Restart BMM',          icon: IC.refresh,  body: '' },
+        { m: 'POST', p: '/api/benchmark',               l: t('plugins.ep.benchmark')   || 'Run Benchmark',        icon: IC.zap,      body: '{"dataset":"sandbox","size":"M"}' },
         { m: 'POST', p: '/api/repo/connect',            l: t('plugins.ep.repoConnect') || 'Connect Repo',         icon: IC.globe,    body: '{"url":"","name":""}' },
         { m: 'POST', p: '/api/repo/sync',               l: t('plugins.ep.repoSync')    || 'Sync Repo',            icon: IC.refresh,  body: '{}' },
         { m: 'POST', p: '/api/repo/gen',                l: t('plugins.ep.repoGen')     || 'Gen Repo',             icon: IC.upload,   body: '{}' },
@@ -3683,6 +3684,7 @@ function renderScripts(container: HTMLElement) {
         pathInp.value   = path;
         const bodyHints: Record<string, string> = {
             // POST / PUT
+            '/api/benchmark':        '{\n  "dataset": "sandbox",\n  "size": "M"\n}',
             '/api/mods/enable':      '{\n  "mod_id": ""\n}',
             '/api/mods/disable':     '{\n  "mod_id": ""\n}',
             '/api/mods/:id':         '{\n  "name": ""\n}',
@@ -4258,6 +4260,7 @@ function buildEndpointRow(ep: EndpointDef): string {
         'POST /api/repo/update':       'bmm://repo/update?dir=<repoDir>',
         'POST /api/mod/check-updates': 'bmm://mod/check-updates',
         'POST /api/mod/update':        'bmm://mod/update?url=<repo_url>',
+        'POST /api/benchmark':         'bmm://benchmark/run?dataset=<sandbox|real>&size=<S|M|L|XL|CUSTOM>&mb=<custom_mb>',
         'POST /api/repo/host':         'bmm://repo/host?dir=<serveDir>&port=<port>',
         'POST /api/apps/install':      'bmm://app/install?id=<id>&url=<url>&type=<fileType>&title=<title>',
         'POST /api/apps/launch':       'bmm://app/launch?id=<id>&exe=<exePath>',

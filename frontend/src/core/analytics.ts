@@ -31,11 +31,19 @@ function persistSeenViews(): void {
     try { localStorage.setItem('bmm_seen_views', JSON.stringify([..._seenViews])); } catch {}
 }
 
-/** A new random id every app launch → lets us group events into sessions. */
-const _sessionId = (() => {
+/** A new random id every app launch → lets us group events into sessions.
+ *  Reassigned to the saved id when a page reload (Ctrl+F5) resumes a session. */
+let _sessionId = (() => {
     try { return (crypto as any).randomUUID(); }
     catch { return 's-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 })();
+
+// sessionStorage survives a reload but is cleared when the app window closes, so
+// its presence means "this load is a refresh, resume the session" (a refresh
+// must NOT count as a session end).
+function persistSession(): void {
+    try { sessionStorage.setItem('bmm_sess', JSON.stringify({ id: _sessionId, start: _sessionStart, journey: _journey.slice(-200) })); } catch {}
+}
 
 /** A persistent anonymous id (stable across launches) as a fallback identity when
  *  the Creator ID isn't available — so it's "always the same person", never who. */
@@ -150,9 +158,20 @@ async function startCollection(): Promise<void> {
         // Stable anonymous identity: Creator ID if available, else a persistent uuid.
         _distinctId = profile?.distinct_id || anonId();
         const extras = await bmmProfileExtras();
+        // Resume the session on a reload (Ctrl+F5) instead of starting a new one.
+        const saved = (() => { try { return JSON.parse(sessionStorage.getItem('bmm_sess') || 'null'); } catch { return null; } })();
+        const resumed = !!(saved && saved.id);
+        if (resumed) {
+            _sessionId = saved.id;
+            if (saved.start) _sessionStart = saved.start;
+            if (Array.isArray(saved.journey)) _journey = saved.journey;
+        }
         // Identify the (anonymous) user once with spec profile + BMM-specific bits + retention anchors.
         track('$identify', { $set: { ...profile, ...extras, anon_id: anonId(), first_seen: firstSeen() } });
-        track('session_start', { ts: new Date().toISOString(), first_seen: firstSeen() });
+        if (!resumed) {
+            track('session_start', { ts: new Date().toISOString(), first_seen: firstSeen() });
+        }
+        persistSession();
         (window as any).bmmTrack = (event: string, props?: Record<string, any>) => track(event, props || {});
         initModalTracking();
         initAutocapture();
@@ -163,7 +182,10 @@ async function startCollection(): Promise<void> {
     } catch {}
     // Periodic flush; also flush before the window closes.
     if (_flushTimer === null) _flushTimer = window.setInterval(() => flush(), 90000);
-    window.addEventListener('beforeunload', () => { trackSessionEnd(); flush(); }, { once: true });
+    // On unload we DON'T end the session — a reload (Ctrl+F5) also fires this and
+    // must keep the session alive. We just persist state + flush; the real
+    // session_end is sent by the Tauri close handler (registerCloseHandler).
+    window.addEventListener('beforeunload', () => { persistSession(); flush(); }, { once: true });
     startPerfSampling();
     collectWebVitals();
     maybePeriodicBenchmark();   // weekly telemetry benchmark (if allowed)

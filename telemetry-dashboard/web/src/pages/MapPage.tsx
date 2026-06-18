@@ -1,120 +1,235 @@
-import { useEffect, useState } from "react";
-import * as echarts from "echarts";
-import { useStats } from "../lib/store";
-import { Card, Empty } from "../components/ui";
-import { Chart } from "../components/Chart";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { createRoot, type Root } from "react-dom/client";
+import { useStats, apiGet } from "../lib/store";
+import { ProfileAvatar, Flag } from "../components/visuals";
+import { fmtDateTime, dur } from "../lib/format";
 
-let worldReady = false;
+// Light raster basemap (CARTO Voyager) — no API key, looks like the Rybbit map.
+const STYLE: any = {
+  version: 8,
+  glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
+  sources: {
+    base: {
+      type: "raster",
+      tiles: ["https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"],
+      tileSize: 256,
+      attribution: "© OpenStreetMap © CARTO",
+    },
+  },
+  layers: [{ id: "base", type: "raster", source: "base" }],
+};
+
+const ADMIN1_URL = "https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_1_states_provinces.geojson";
+
+type Tab = "points" | "pays" | "subdivisions";
 
 export default function MapPage() {
   const s = useStats()!;
-  const [mode, setMode] = useState<"2d" | "globe">("2d");
-  const [ready, setReady] = useState(worldReady);
-  const [glReady, setGlReady] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  // register the locally-bundled world map once (no CDN → works offline)
-  useEffect(() => {
-    if (worldReady) {
-      setReady(true);
-      return;
-    }
-    fetch("/world.json")
-      .then((r) => r.json())
-      .then((geo) => {
-        echarts.registerMap("world", geo as any);
-        worldReady = true;
-        setReady(true);
-      })
-      .catch(() => setFailed(true));
-  }, []);
-
-  useEffect(() => {
-    if (mode !== "globe" || glReady) return;
-    import("echarts-gl").then(() => setGlReady(true)).catch(() => setFailed(true));
-  }, [mode, glReady]);
+  const [mode, setMode] = useState<"2d" | "globe">("globe");
+  const [tab, setTab] = useState<Tab>("points");
+  const [sessions, setSessions] = useState<any[]>([]);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<{ m: maplibregl.Marker; root: Root }[]>([]);
+  const admin1Loaded = useRef(false);
 
   const users = s.map?.users || [];
   const repos = s.map?.repos || [];
-  const userData = users.map((u: any) => ({ value: [u.lon, u.lat, u.count], name: `${u.country || ""} · ${u.count} user(s)` }));
-  const repoData = repos.map((r: any) => ({ value: [r.lon, r.lat, r.count], name: `${r.host || r.country || ""}` }));
-  const countryData = (s.geo || []).map((g: any) => ({ name: g.country, value: g.count }));
-  const maxC = Math.max(1, ...countryData.map((c: any) => c.value));
   const total = users.length + repos.length;
+  const maxC = Math.max(1, ...(s.geo || []).map((g: any) => g.count));
 
-  // 2D: ONE geo component (so scatter points align with the basemap), with
-  // data-coloured country regions (choropleth) + overlaid user/repo points.
-  const colorFor = (c: number) => {
-    const a = Math.max(0.15, Math.min(1, c / maxC));
-    return `rgba(91,140,255,${a})`;
-  };
-  const regions = countryData.map((d: any) => ({ name: d.name, itemStyle: { areaColor: colorFor(d.value) } }));
-  const map2d: any = {
-    tooltip: { trigger: "item", formatter: (p: any) => p.name },
-    geo: {
-      map: "world",
-      roam: true,
-      itemStyle: { areaColor: "#161b22", borderColor: "#2a313b", borderWidth: 0.5 },
-      emphasis: { itemStyle: { areaColor: "#22304a" }, label: { show: false } },
-      regions,
-      scaleLimit: { min: 1, max: 8 },
-    },
-    series: [
-      { name: "Users", type: "effectScatter", coordinateSystem: "geo", data: userData, symbolSize: (v: any) => 6 + Math.min(20, v[2] * 3), itemStyle: { color: "#37d399" }, rippleEffect: { scale: 2.5 }, zlevel: 2 },
-      { name: "Repos", type: "scatter", coordinateSystem: "geo", data: repoData, symbolSize: (v: any) => 5 + Math.min(16, v[2] * 2), itemStyle: { color: "#a78bfa" }, zlevel: 3 },
-    ],
+  const ccOf = (id: string) => s.users.find((u) => u.creator_id === id)?.cc;
+
+  // recent sessions for the live panel
+  useEffect(() => {
+    const load = () => apiGet("/api/sessions").then((r) => setSessions(r.sessions || []));
+    load();
+    const t = setInterval(load, 8000);
+    return () => clearInterval(t);
+  }, []);
+
+  // create the map once
+  useEffect(() => {
+    if (!boxRef.current || mapRef.current) return;
+    const map = new maplibregl.Map({
+      container: boxRef.current,
+      style: STYLE,
+      center: [10, 35],
+      zoom: 1.4,
+      attributionControl: false,
+      maxPitch: 0,
+    });
+    mapRef.current = map;
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+    map.on("load", () => {
+      map.setProjection({ type: mode === "globe" ? "globe" : "mercator" } as any);
+      // country choropleth source (local, offline-safe)
+      fetch("/world.json").then((r) => r.json()).then((geo) => {
+        if (!map.getSource("countries")) {
+          map.addSource("countries", { type: "geojson", data: geo });
+          map.addLayer({
+            id: "country-fill",
+            type: "fill",
+            source: "countries",
+            layout: { visibility: "none" },
+            paint: { "fill-color": "rgba(91,140,255,0.05)", "fill-outline-color": "rgba(255,255,255,0.15)" },
+          });
+        }
+        applyChoropleth();
+      }).catch(() => {});
+      rebuildMarkers();
+    });
+    return () => {
+      markersRef.current.forEach((x) => { try { x.root.unmount(); } catch {} x.m.remove(); });
+      markersRef.current = [];
+      map.remove();
+      mapRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // projection toggle
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map && map.isStyleLoaded()) {
+      try { map.setProjection({ type: mode === "globe" ? "globe" : "mercator" } as any); } catch {}
+    }
+  }, [mode]);
+
+  // avatar markers for located users (limited for performance)
+  const rebuildMarkers = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    markersRef.current.forEach((x) => { try { x.root.unmount(); } catch {} x.m.remove(); });
+    markersRef.current = [];
+    if (tab === "subdivisions") return; // markers off in the subdivisions choropleth view
+    const pts = [
+      ...users.map((u: any) => ({ ...u, kind: "user" })),
+      ...repos.map((r: any) => ({ ...r, kind: "repo" })),
+    ].slice(0, 200);
+    for (const p of pts) {
+      if (p.lon == null || p.lat == null) continue;
+      const el = document.createElement("div");
+      el.style.cursor = "pointer";
+      const root = createRoot(el);
+      root.render(
+        <div className="rounded-full ring-2 ring-white/40 shadow" style={{ width: 30, height: 30, overflow: "hidden", background: p.kind === "repo" ? "#a78bfa" : "#13161b" }}>
+          {p.kind === "user" ? <ProfileAvatar name={`${p.country}-${p.count}-${p.lat}`} size={30} /> : null}
+        </div>
+      );
+      const m = new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat])
+        .setPopup(new maplibregl.Popup({ offset: 18, closeButton: false }).setHTML(`<div style="font:12px Inter,sans-serif">${p.country || p.host || ""} · ${p.count} ${p.kind === "repo" ? "repo" : "user(s)"}</div>`))
+        .addTo(map);
+      markersRef.current.push({ m, root });
+    }
   };
 
-  // 3D textured globe (echarts-gl) + scatter3D points.
-  const globe: any = {
-    backgroundColor: "transparent",
-    globe: {
-      baseTexture: "/earth-dark.jpg",
-      heightTexture: "/earth-topology.png",
-      displacementScale: 0.05,
-      shading: "realistic",
-      environment: "#0b0d10",
-      realisticMaterial: { roughness: 0.85, metalness: 0 },
-      postEffect: { enable: true, SSAO: { enable: true, radius: 2 } },
-      light: { main: { intensity: 2, shadow: false }, ambient: { intensity: 0.25 } },
-      viewControl: { autoRotate: true, autoRotateSpeed: 8, distance: 180 },
-    },
-    series: [
-      { type: "scatter3D", coordinateSystem: "globe", data: userData, symbolSize: (v: any) => 6 + Math.min(18, v[2] * 3), itemStyle: { color: "#37d399", opacity: 0.95 }, label: { show: false } },
-      { type: "scatter3D", coordinateSystem: "globe", data: repoData, symbolSize: 7, itemStyle: { color: "#a78bfa" } },
-    ],
+  // choropleth (Pays = countries by user count; Subdivisions = admin-1 with users)
+  const applyChoropleth = () => {
+    const map = mapRef.current;
+    if (!map || !map.getLayer("country-fill")) return;
+    if (tab === "pays") {
+      const expr: any[] = ["match", ["get", "name"]];
+      for (const g of s.geo || []) {
+        const a = Math.max(0.15, Math.min(0.85, g.count / maxC));
+        expr.push(g.country, `rgba(55,211,153,${a})`);
+      }
+      expr.push("rgba(255,255,255,0.02)");
+      map.setPaintProperty("country-fill", "fill-color", expr as any);
+      map.setLayoutProperty("country-fill", "visibility", "visible");
+    } else if (tab === "subdivisions") {
+      map.setLayoutProperty("country-fill", "visibility", "none");
+      ensureSubdivisions();
+    } else {
+      map.setLayoutProperty("country-fill", "visibility", "none");
+    }
   };
+
+  // lazily fetch admin-1 regions for the subdivisions view (large → on demand)
+  const ensureSubdivisions = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    const regionNames = new Set((s.regions || []).map((r: any) => String(r.region).split("·").pop()!.trim()));
+    const paint = (): any => {
+      const expr: any[] = ["match", ["get", "name"]];
+      let any = false;
+      regionNames.forEach((n) => { if (n) { expr.push(n, "rgba(55,211,153,0.6)"); any = true; } });
+      expr.push("rgba(255,255,255,0.03)");
+      return any ? expr : "rgba(255,255,255,0.03)";
+    };
+    if (admin1Loaded.current) {
+      if (map.getLayer("admin1-fill")) {
+        map.setPaintProperty("admin1-fill", "fill-color", paint());
+        map.setLayoutProperty("admin1-fill", "visibility", "visible");
+      }
+      return;
+    }
+    fetch(ADMIN1_URL).then((r) => r.json()).then((geo) => {
+      admin1Loaded.current = true;
+      if (!map.getSource("admin1")) map.addSource("admin1", { type: "geojson", data: geo });
+      if (!map.getLayer("admin1-fill")) {
+        map.addLayer({ id: "admin1-fill", type: "fill", source: "admin1", paint: { "fill-color": paint(), "fill-outline-color": "rgba(255,255,255,0.12)" } });
+      }
+    }).catch(() => {});
+  };
+
+  // re-apply when data/tab change
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    rebuildMarkers();
+    applyChoropleth();
+    if (map.getLayer("admin1-fill") && tab !== "subdivisions") map.setLayoutProperty("admin1-fill", "visibility", "none");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, s.updated]);
+
+  const TABS: { k: Tab; label: string }[] = useMemo(() => [
+    { k: "points", label: "Coordonnées" },
+    { k: "pays", label: "Pays" },
+    { k: "subdivisions", label: "Subdivisions" },
+  ], []);
 
   return (
-    <Card
-      title="Geography"
-      right={
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-sub">approximate only — never precise</span>
-          <div className="flex gap-1">
-            <button onClick={() => setMode("2d")} className={`pill ${mode === "2d" ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>2D map</button>
-            <button onClick={() => setMode("globe")} className={`pill ${mode === "globe" ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>3D globe</button>
-          </div>
+    <div className="relative">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold">Geography</h2>
+          <span className="text-xs text-sub">approximate only — never precise · {users.length} users · {repos.length} repos</span>
         </div>
-      }
-    >
-      <div className="flex items-center gap-4 mb-3 text-xs text-sub">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-good inline-block" /> Users ({users.length})</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: "#a78bfa" }} /> Repo hosts ({repos.length})</span>
+        <div className="flex gap-1">
+          {TABS.map((t) => (
+            <button key={t.k} onClick={() => setTab(t.k)} className={`pill ${tab === t.k ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>{t.label}</button>
+          ))}
+          <span className="w-px bg-line mx-1" />
+          <button onClick={() => setMode("2d")} className={`pill ${mode === "2d" ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>2D</button>
+          <button onClick={() => setMode("globe")} className={`pill ${mode === "globe" ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>3D globe</button>
+        </div>
       </div>
 
-      {failed ? (
-        <Empty>Map assets failed to load.</Empty>
-      ) : mode === "2d" ? (
-        ready ? <Chart option={map2d} height={560} /> : <Empty>Loading world map…</Empty>
-      ) : glReady ? (
-        <Chart option={globe} height={560} />
-      ) : (
-        <Empty>Loading 3D globe…</Empty>
-      )}
-      {total === 0 && !failed && (
-        <div className="text-center text-xs text-sub mt-2">No located users yet — locations resolve server-side from each client's IP once users opt in and connect.</div>
-      )}
-    </Card>
+      <div className="relative card overflow-hidden" style={{ height: 620 }}>
+        <div ref={boxRef} style={{ position: "absolute", inset: 0 }} />
+        {total === 0 && (
+          <div className="absolute inset-x-0 bottom-3 text-center text-xs text-sub pointer-events-none">
+            No located users yet — locations resolve server-side from each client's IP once users opt in.
+          </div>
+        )}
+        {/* live sessions panel */}
+        <div className="absolute right-3 bottom-3 w-72 max-h-[55%] overflow-y-auto card bg-panel/90 backdrop-blur p-2">
+          <div className="text-[11px] uppercase tracking-wide text-sub px-1 pb-1">Sessions</div>
+          {sessions.length ? sessions.slice(0, 8).map((r) => (
+            <Link to={`/users/${encodeURIComponent(r.distinct_id)}`} key={r.session_id} className="flex items-center gap-2 px-1 py-1.5 rounded-lg hover:bg-panel2 text-xs">
+              <ProfileAvatar name={r.distinct_id} size={20} />
+              <Flag cc={ccOf(r.distinct_id)} />
+              <span className="truncate flex-1">{r.entry || "—"} → {r.exit || "—"}</span>
+              <span className="text-sub">{dur(r.duration_s)}</span>
+            </Link>
+          )) : <div className="text-xs text-sub px-1 py-2">No sessions.</div>}
+        </div>
+      </div>
+      <div className="text-[11px] text-sub mt-2">Last update {fmtDateTime(s.updated)}</div>
+    </div>
   );
 }

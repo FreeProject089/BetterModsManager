@@ -268,21 +268,44 @@ pub fn compute_file_sha256(path: &Path) -> Result<String> {
 // as legacy SHA-256 so old baselines/modpacks still verify (dual-read).
 
 /// Compute a tagged BLAKE3 digest (`b3:<hex>`) for a file, parallel within the file.
+/// A SIZE-CAPPED thread pool used for ALL mod hashing. BLAKE3 is so fast it will
+/// otherwise saturate every core (rayon defaults to all CPUs) and freeze the UI
+/// while importing/scanning many mods. We cap it to ~half the cores (max 4) so
+/// hashing always leaves headroom for the UI thread.
+fn hash_pool() -> &'static rayon::ThreadPool {
+    use std::sync::OnceLock;
+    static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
+    POOL.get_or_init(|| {
+        let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+        let threads = (cores / 2).clamp(1, 4);
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .thread_name(|i| format!("bmm-hash-{}", i))
+            .build()
+            .unwrap_or_else(|_| rayon::ThreadPoolBuilder::new().num_threads(1).build().expect("hash pool"))
+    })
+}
+
 pub fn compute_file_hash(path: &Path) -> Result<String> {
     let mut hasher = blake3::Hasher::new();
-    hasher.update_mmap_rayon(path)
+    // Sequential mmap (NOT update_mmap_rayon): per-file work stays on a single
+    // pool thread so a big file can't grab every core. Parallelism comes from the
+    // bounded pool processing several files at once.
+    hasher.update_mmap(path)
         .with_context(|| format!("Failed to hash: {:?}", path))?;
     Ok(format!("b3:{}", hasher.finalize().to_hex()))
 }
 
-/// Bulk version: rayon over files, and BLAKE3 parallel within each large file —
-/// covers both shapes (many small files AND a few huge files).
+/// Bulk version: parallel ACROSS files on the bounded hash pool (capped cores),
+/// keeping the machine responsive even while hashing a freshly imported profile.
 pub fn compute_file_hash_bulk<K: Clone + Send + Sync>(items: &[(K, PathBuf)]) -> Vec<(K, String)> {
     use rayon::prelude::*;
-    items
-        .par_iter()
-        .filter_map(|(k, p)| compute_file_hash(p).ok().map(|h| (k.clone(), h)))
-        .collect()
+    hash_pool().install(|| {
+        items
+            .par_iter()
+            .filter_map(|(k, p)| compute_file_hash(p).ok().map(|h| (k.clone(), h)))
+            .collect()
+    })
 }
 
 /// True if `path` matches a previously stored digest, using whatever algorithm the

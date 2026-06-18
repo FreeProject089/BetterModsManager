@@ -103,6 +103,10 @@ export default function UserDetail() {
             <Info k="CPU" v={u.config?.cpu || "—"} />
             <Info k="GPU" v={u.config?.gpu || "—"} />
             <Info k="RAM" v={u.config?.ram_gb ? `${u.config.ram_gb} GB` : "—"} />
+            <Info k="Displays" v={u.config?.monitor_count ? `${u.config.monitor_count} · ${u.config?.primary_resolution || ""}` : (u.config?.primary_resolution || "—")} />
+            {Array.isArray(u.config?.monitors) && u.config.monitors.length > 0 && (
+              <Info k="Monitors" v={<span className="text-xs">{u.config.monitors.map((m: string) => m.replace(/\|/g, " ")).join(", ")}</span>} />
+            )}
             <Info k="Theme" v={u.config?.theme ? `${u.config.theme} (${u.config.theme_kind || "?"})` : "—"} />
             <Info k="IP" v={<span className="font-mono text-xs">{u.ips?.[0] || "—"}</span>} />
           </div>

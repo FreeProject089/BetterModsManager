@@ -302,6 +302,19 @@ struct ModUpdateApiBody {
     repo_url: Option<String>,
 }
 
+#[derive(serde::Deserialize)]
+struct BenchmarkApiBody {
+    /// "sandbox" (default) or "real".
+    #[serde(default)]
+    dataset: Option<String>,
+    /// S | M | L | XL | CUSTOM (default M).
+    #[serde(default)]
+    size: Option<String>,
+    /// Dataset size in MB when size == CUSTOM.
+    #[serde(default)]
+    mb: Option<u64>,
+}
+
 /// POST /api/repo/host — start a static HTTP file server serving a generated repo
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -1283,6 +1296,30 @@ pub async fn start_api_server(
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({
                     "ok": true, "driven_by": "bmm-ui", "action": "mod/update"
+                })),
+                StatusCode::ACCEPTED,
+            )
+        });
+
+    // POST /api/benchmark  (auth) — launch a benchmark (UI-driven, so it runs with
+    // the window context). Body: { dataset?: "sandbox"|"real", size?: S|M|L|XL|CUSTOM, mb?: number }.
+    let tok_bench = token.clone();
+    let handle_bench = app_handle.clone();
+    let benchmark = warp::path!("api" / "benchmark")
+        .and(warp::post())
+        .and(require_token(tok_bench))
+        .and(warp::body::json::<BenchmarkApiBody>())
+        .and(with_app_handle(handle_bench))
+        .map(|body: BenchmarkApiBody, handle: tauri::AppHandle| {
+            let dataset = if body.dataset.as_deref() == Some("real") { "real" } else { "sandbox" };
+            let size = body.size.unwrap_or_else(|| "M".into()).to_uppercase();
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "benchmark/run",
+                "params": { "dataset": dataset, "size": size, "mb": body.mb }
+            }));
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({
+                    "ok": true, "driven_by": "bmm-ui", "action": "benchmark/run", "dataset": dataset, "size": size
                 })),
                 StatusCode::ACCEPTED,
             )
@@ -2459,6 +2496,7 @@ pub async fn start_api_server(
         .or(mod_config)          // POST /api/mod/config
         .or(mod_check_updates)   // POST /api/mod/check-updates
         .or(mod_update)          // POST /api/mod/update
+        .or(benchmark)           // POST /api/benchmark
         .boxed();
 
     let group_e = update_modpack

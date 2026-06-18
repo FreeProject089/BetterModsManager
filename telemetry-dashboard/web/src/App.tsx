@@ -1,35 +1,40 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Route, Routes } from "react-router-dom";
 import { StoreProvider, useStats, useStore } from "./lib/store";
 import Layout from "./components/Layout";
-import Overview from "./pages/Overview";
-import Live from "./pages/Live";
-import Events from "./pages/Events";
-import Sessions from "./pages/Sessions";
-import Pages from "./pages/Pages";
-import MapPage from "./pages/MapPage";
-import Funnels from "./pages/Funnels";
-import Journeys from "./pages/Journeys";
-import Retention from "./pages/Retention";
-import Goals from "./pages/Goals";
-import Users from "./pages/Users";
-import UserDetail from "./pages/UserDetail";
-import Bmm from "./pages/Bmm";
-import Admin from "./pages/Admin";
 
+// Code-split every page so heavy deps (MapLibre, ECharts) load only on demand,
+// keeping the initial bundle small.
+const Overview = lazy(() => import("./pages/Overview"));
+const Live = lazy(() => import("./pages/Live"));
+const Events = lazy(() => import("./pages/Events"));
+const Sessions = lazy(() => import("./pages/Sessions"));
+const Pages = lazy(() => import("./pages/Pages"));
+const MapPage = lazy(() => import("./pages/MapPage"));
+const Funnels = lazy(() => import("./pages/Funnels"));
+const Journeys = lazy(() => import("./pages/Journeys"));
+const Retention = lazy(() => import("./pages/Retention"));
+const Goals = lazy(() => import("./pages/Goals"));
+const Users = lazy(() => import("./pages/Users"));
+const UserDetail = lazy(() => import("./pages/UserDetail"));
+const Bmm = lazy(() => import("./pages/Bmm"));
+const Admin = lazy(() => import("./pages/Admin"));
+
+function Spinner({ label }: { label: string }) {
+  return (
+    <div className="h-full flex items-center justify-center text-sub">
+      <div className="flex items-center gap-3">
+        <span className="w-4 h-4 rounded-full border-2 border-brand border-t-transparent animate-spin" />
+        {label}
+      </div>
+    </div>
+  );
+}
 function Gate({ children }: { children: React.ReactNode }) {
   const stats = useStats();
-  if (!stats) {
-    return (
-      <div className="h-full flex items-center justify-center text-sub">
-        <div className="flex items-center gap-3">
-          <span className="w-4 h-4 rounded-full border-2 border-brand border-t-transparent animate-spin" />
-          Connecting to telemetry stream…
-        </div>
-      </div>
-    );
-  }
-  return <>{children}</>;
+  if (!stats) return <Spinner label="Connecting to telemetry stream…" />;
+  // Suspense boundary for the lazily-loaded page chunk.
+  return <Suspense fallback={<Spinner label="Loading…" />}>{children}</Suspense>;
 }
 
 // Full-screen login shown when the dashboard requires the private key.

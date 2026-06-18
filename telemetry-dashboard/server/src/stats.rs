@@ -139,6 +139,9 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
             "theme": s.get("theme"), "theme_kind": s.get("theme_kind"), "tasky": s.get("tasky"),
             // BMM content counts + how the app accesses the filesystem
             "counts": s.get("counts"), "access": s.get("fs_security_mode").or_else(|| s.get("access")),
+            // displays / peripherals (EDID identity + active resolution)
+            "monitors": s.get("monitors"), "monitor_count": s.get("monitor_count"),
+            "primary_resolution": s.get("primary_resolution"), "resolutions": s.get("resolutions"),
         });
         if let Some(v) = s.get("app_version").and_then(Value::as_str) {
             if !u.versions.iter().any(|x| x == v) {
@@ -705,11 +708,13 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
     let retention = db::retention_cohorts(pool, 8).await;
     let retention_daily = db::retention_cohorts_daily(pool, 30).await;
     // Bucketed activity for the overview granularity selector.
+    // Each granularity keeps ~24-30 well-spread points over a sensible window so
+    // the chart never bunches everything against one edge.
     let buckets = json!({
-        "15m": db::timeseries(pool, 900_000, 96).await,
-        "30m": db::timeseries(pool, 1_800_000, 48).await,
-        "1h": db::timeseries(pool, 3_600_000, 24).await,
-        "1d": db::timeseries(pool, 86_400_000, 30).await,
+        "15m": db::timeseries(pool, 900_000, 24).await,    // last 6h
+        "30m": db::timeseries(pool, 1_800_000, 24).await,  // last 12h
+        "1h": db::timeseries(pool, 3_600_000, 24).await,   // last 24h
+        "1d": db::timeseries(pool, 86_400_000, 30).await,  // last 30d
     });
     let pending = db::pending_deletion_count(pool).await;
 

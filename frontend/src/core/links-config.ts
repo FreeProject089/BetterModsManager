@@ -53,7 +53,7 @@ const DEFAULTS: BmmLinks = {
     // refuses plain HTTP), so during local testing expose the dashboard with an
     // HTTPS tunnel (ngrok/cloudflared) and paste the tunnel URL here + "/batch/".
     // e.g. 'https://abcd-1234.ngrok-free.app/batch/'. Empty = buffer locally only.
-    analytics_endpoint: '',   // ← your ngrok/cloudflared HTTPS URL, MUST end with /batch/
+    analytics_endpoint: 'https://unskilled-surreal-mutiny.ngrok-free.dev/batch/',   // ← your ngrok/cloudflared HTTPS URL, MUST end with /batch/
     analytics_key:      'bmm_pk_3aab75ffc7b964990178682c918f117767ba2657',   // PUBLIC ingest key — safe to ship
     github_repo:      'https://github.com/FreeProject089/BetterModsManager',
     discord:          'https://discord.com/invite/CTaaEF9R75',
@@ -68,7 +68,7 @@ let _links: BmmLinks = { ...DEFAULTS };
 let _loaded = false;
 
 async function tryFetch(url: string): Promise<BmmLinks | null> {
-    try {
+    try {   
         const res = await fetch(url, { cache: 'no-cache' });
         if (res.ok) {
             const data = await res.json();

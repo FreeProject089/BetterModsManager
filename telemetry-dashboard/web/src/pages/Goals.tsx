@@ -48,12 +48,12 @@ export default function Goals() {
               <option key={k} value={k}>{TYPE_LABEL[k]}</option>
             ))}
           </select>
-          <select value={target} onChange={(e) => setTarget(e.target.value)} className="md:col-span-3 bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand">
-            <option value="">— choose target —</option>
+          <input list="goal-targets" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="target (type or pick any)" className="md:col-span-3 bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand" />
+          <datalist id="goal-targets">
             {options.map((o: string) => (
-              <option key={o} value={o}>{o}</option>
+              <option key={o} value={o} />
             ))}
-          </select>
+          </datalist>
           <div className="md:col-span-2 flex items-center gap-2">
             <span className="text-xs text-sub whitespace-nowrap">reach</span>
             <input value={count} onChange={(e) => setCount(e.target.value.replace(/[^0-9]/g, ""))} type="number" min={1} className="w-full bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand" />

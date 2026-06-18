@@ -18,6 +18,24 @@ function Spark({ data, color = "#5b8cff" }: { data: number[]; color?: string }) 
   );
 }
 
+function Bars({ rows }: { rows: { label: string; cc?: string; value: number }[] }) {
+  if (!rows.length) return <Empty>No data.</Empty>;
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  return (
+    <div className="space-y-1">
+      {rows.slice(0, 8).map((r) => (
+        <div key={r.label} className="flex items-center gap-2 text-sm py-0.5">
+          <span className="w-36 truncate flex items-center gap-1.5">{r.cc ? <Flag cc={r.cc} /> : null} {r.label || "—"}</span>
+          <div className="flex-1 h-2 rounded bg-panel2 overflow-hidden">
+            <div className="h-full bg-brand" style={{ width: `${(r.value / max) * 100}%` }} />
+          </div>
+          <span className="w-10 text-right text-sub">{nf(r.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function KpiSpark({ label, value, data, color }: { label: string; value: React.ReactNode; data: number[]; color?: string }) {
   return (
     <div className="kpi">
@@ -113,6 +131,18 @@ export default function Overview() {
         </Card>
         <Card title="Top paths" right={<Link to="/funnels" className="text-xs text-brand">Funnels</Link>}>
           {paths.length ? <Chart option={pathOpt} height={220} /> : <Empty>No navigation paths yet</Empty>}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card title="Users by country" right={<Link to="/map" className="text-xs text-brand">Map</Link>}>
+          <Bars rows={(s.geo || []).map((g: any) => ({ label: g.country, cc: s.country_cc?.[g.country], value: g.count }))} />
+        </Card>
+        <Card title="Operating systems">
+          <Bars rows={(s.os || []).map((o: any) => ({ label: o.k, value: o.v }))} />
+        </Card>
+        <Card title="GPU vendors">
+          <Bars rows={(s.gpu || []).map((g: any) => ({ label: g.k, value: g.v }))} />
         </Card>
       </div>
 

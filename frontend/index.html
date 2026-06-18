@@ -9496,41 +9496,56 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
 
         <!-- License Modal -->
         <div class="modal-overlay" id="modal-license">
-            <div class="modal glass" style="max-width: 600px; width: 90%;">
-                <div class="modal-header">
-                    <h2 class="modal-title">GNU General Public License v3.0</h2>
+            <div class="modal glass legal-modal">
+                <div class="modal-header legal-modal-header">
+                    <div style="display:flex;align-items:center;gap:14px">
+                        <div class="legal-id">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <path d="M14 2v6h6" /><path d="M9 13h6M9 17h6" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="legal-title">GNU General Public License v3.0</h2>
+                            <p class="legal-sub" data-i18n="license.subtitle">Free software license · GPL-3.0</p>
+                        </div>
+                    </div>
                     <button class="modal-close" data-close="modal-license">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                     </button>
                 </div>
-                <div class="modal-body"
-                    style="max-height: 500px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 20px; margin-top:10px; border: 1px solid var(--border);">
-                    <pre id="license-content" data-i18n="license.loading"
-                        style="white-space: pre-wrap; word-wrap: break-word; font-family: var(--font-mono); font-size: 11px; line-height: 1.6; color: rgba(255,255,255,0.7); margin: 0; text-align: left;">Chargement de la licence...</pre>
+                <div class="legal-body">
+                    <pre id="license-content" data-i18n="license.loading">Chargement de la licence...</pre>
                 </div>
             </div>
         </div>
 
         <!-- TOS (Terms of Service) Modal -->
         <div class="modal-overlay" id="modal-tos" data-prevent-close="true">
-            <div class="modal glass" style="max-width: 600px; width: 90%;">
-                <div class="modal-header">
-                    <h2 class="modal-title" data-i18n="credits.eula">Terms of Service</h2>
+            <div class="modal glass legal-modal">
+                <div class="modal-header legal-modal-header">
+                    <div style="display:flex;align-items:center;gap:14px">
+                        <div class="legal-id">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <path d="M14 2v6h6" /><path d="M16 13H8M16 17H8M10 9H8" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="legal-title" data-i18n="credits.eula">Terms of Service</h2>
+                            <p class="legal-sub" data-i18n="tos.subtitle">Please read before accepting</p>
+                        </div>
+                    </div>
                     <button class="modal-close" data-close="modal-tos" id="btn-tos-close" style="display:none">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                     </button>
                 </div>
-                <div class="modal-body"
-                    style="max-height: 500px; overflow-y: auto; background: var(--bmm-s03); border-radius: 12px; padding: 22px 24px; margin-top:10px; border: 1px solid var(--border); line-height: 1.7; color: var(--text-secondary);">
-                    <div id="tos-content" style="text-align: left;">Loading…</div>
+                <div class="legal-body">
+                    <div id="tos-content">Loading…</div>
                 </div>
                 <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:12px;padding:20px;">
                     <button class="btn btn-danger" id="btn-tos-quit" data-i18n="eula.quit">Quit BMM</button>
@@ -9541,18 +9556,27 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
 
         <!-- Privacy Policy Modal -->
         <div class="modal-overlay" id="modal-privacy">
-            <div class="modal glass" style="max-width: 600px; width: 90%;">
-                <div class="modal-header">
-                    <h2 class="modal-title" data-i18n="credits.privacy">Privacy Policy</h2>
+            <div class="modal glass legal-modal">
+                <div class="modal-header legal-modal-header">
+                    <div style="display:flex;align-items:center;gap:14px">
+                        <div class="legal-id">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="legal-title" data-i18n="credits.privacy">Privacy Policy</h2>
+                            <p class="legal-sub" data-i18n="privacy.subtitle">Opt-in · privacy-first</p>
+                        </div>
+                    </div>
                     <button class="modal-close" data-close="modal-privacy" id="btn-privacy-close">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                     </button>
                 </div>
-                <div class="modal-body"
-                    style="max-height: 500px; overflow-y: auto; background: var(--bmm-s03); border-radius: 12px; padding: 22px 24px; margin-top:10px; border: 1px solid var(--border); line-height: 1.7; color: var(--text-secondary);">
-                    <div id="privacy-content" style="text-align: left;">Loading…</div>
+                <div class="legal-body">
+                    <div id="privacy-content">Loading…</div>
                 </div>
             </div>
         </div>

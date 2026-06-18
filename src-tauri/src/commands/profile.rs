@@ -125,9 +125,10 @@ pub fn update_profile(
         return Err(AppError::NotFound(format!("Le dossier des mods n'existe pas : {}", payload.mods_path)));
     }
 
-    {
+    let mods_path_changed = {
         let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         if let Some(p) = data.profiles.iter_mut().find(|x| x.id == profile_id) {
+            let changed = p.mods_path != mods_p;
             p.name = payload.name;
             p.game_name = payload.game_name;
             p.game_path = game_p.clone();
@@ -135,12 +136,21 @@ pub fn update_profile(
             p.backup_path = PathBuf::from(&payload.backup_path);
             p.color = payload.color;
             p.icon = payload.icon;
+            changed
         } else {
             warn!("Profile not found for update: {}", profile_id);
             return Err(AppError::NotFound("Profile not found".to_string()));
         }
-    }
+    };
     state.save()?;
+
+    // If the mods folder changed, rescan it and detect mods missing a hash — they
+    // get queued for the THROTTLED background hashing (no UI freeze).
+    if mods_path_changed {
+        crate::commands::mods::invalidate_cache(&state);
+        crate::commands::mods::populate_sha_queue(state.clone());
+        log_line(format!("[PROFILE] Mods folder changed for '{}' → cache invalidated, unhashed mods queued for background hashing", profile_id));
+    }
 
     // Dynamic Scope Extension
     let mode = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?.settings.fs_security_mode.clone();

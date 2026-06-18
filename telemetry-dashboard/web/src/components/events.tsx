@@ -20,6 +20,24 @@ export const TYPES: Record<TypeKey, { label: string; color: string; icon: string
   error: { label: "Erreur", color: "#f06363", icon: ICON.alert },
   event: { label: "Événement", color: "#9aa3ad", icon: ICON.bolt },
 };
+// Friendly label for "generic" events so the timeline shows WHAT happened.
+const EVENT_LABELS: Record<string, string> = {
+  perf: "Performance",
+  webvitals: "Web Vitals",
+  session_start: "Début de session",
+  session_end: "Fin de session",
+  benchmark: "Benchmark",
+  tutorial: "Tutoriel",
+  feature: "Fonctionnalité",
+  modal_open: "Modal",
+  repo_connect: "Connexion repo",
+  repo_host: "Hébergement repo",
+  $identify: "Identification",
+};
+export function eventLabel(e: any): string {
+  if (e.detail) return e.detail;
+  return EVENT_LABELS[e.event] || e.event || "Événement";
+}
 export function classify(e: any): TypeKey {
   switch (e.event) {
     case "page_enter": return "page";
@@ -53,7 +71,7 @@ export function EventTimeline({ events, hidden }: { events: any[]; hidden?: Set<
             <span className="w-6 h-6 rounded-full bg-panel2 text-[11px] flex items-center justify-center shrink-0">{i + 1}</span>
             <EvIcon type={k} />
             <span className="text-sm flex-1 truncate">
-              {k === "page" ? <span className="font-medium">{e.view}</span> : <span>{e.detail || TYPES[k].label}</span>}
+              {k === "page" ? <span className="font-medium">{e.view}</span> : <span>{eventLabel(e)}</span>}
               {k === "page" && e.dwell_ms ? <span className="text-sub text-xs"> · {Math.round(e.dwell_ms / 1000)}s</span> : null}
             </span>
             <span className="text-sub text-[11px] shrink-0">{(e.ts || "").slice(11, 19)}</span>

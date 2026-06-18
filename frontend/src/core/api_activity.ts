@@ -278,6 +278,15 @@ export async function initApiActivity(): Promise<void> {
                     catch (e) { console.warn('[api-exec] mod/update', e); }
                 }
                 break;
+            case 'benchmark/run': {
+                const dataset = params.dataset === 'real' ? 'real' : 'sandbox';
+                const size = String(params.size || 'M').toUpperCase();
+                const scaleMap: Record<string, string> = { S: 'small', M: 'medium', L: 'large', XL: 'xlarge' };
+                const scale = size === 'CUSTOM' ? `custom:${Math.max(1, parseInt(params.mb, 10) || 256)}` : (scaleMap[size] || 'medium');
+                toast(t('bench.deeplinkStart') || `Benchmark (${dataset} ${size}) started…`, 'info');
+                run('run_app_benchmark', { mode: dataset, realSources: [], scale }, t('bench.done') || 'Benchmark done');
+                break;
+            }
             case 'repo/host-stop':
                 gotoRepoPage();
                 setTimeout(async () => {

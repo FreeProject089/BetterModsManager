@@ -517,6 +517,19 @@ async function handleDeepLink(urlStr) {
             }
             return;
         }
+        // ── Benchmark: bmm://benchmark/run?dataset=sandbox&size=M[&mb=512] ──────
+        if (action === 'benchmark/run') {
+            const dataset = parsedUrl.searchParams.get('dataset') === 'real' ? 'real' : 'sandbox';
+            const size = (parsedUrl.searchParams.get('size') || 'M').toUpperCase();
+            const scaleMap = { S: 'small', M: 'medium', L: 'large', XL: 'xlarge' };
+            const mb = parseInt(parsedUrl.searchParams.get('mb') || '', 10);
+            const scale = size === 'CUSTOM' ? `custom:${Math.max(1, mb || 256)}` : (scaleMap[size] || 'medium');
+            toast(t('bench.deeplinkStart') || `Benchmark (${dataset} ${size}) started…`, 'info');
+            invoke('run_app_benchmark', { mode: dataset, realSources: [], scale })
+                .then((r) => toast(`${t('bench.done') || 'Benchmark done'}: ${Math.round(Number(r?.total_ms) || 0)} ms`, 'success'))
+                .catch((e) => toast(`${t('common.error') || 'Error'}: ${e}`, 'error'));
+            return;
+        }
         if (action === 'import' || action === 'install' || action === 'download') {
             const modUrl = parsedUrl.searchParams.get('url');
             const modNameFromUrl = parsedUrl.searchParams.get('name') || t('mod.unknownName') || 'Mod Inconnu';

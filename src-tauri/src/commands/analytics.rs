@@ -59,25 +59,41 @@ pub fn set_analytics_consent(state: State<AppState>, app_handle: AppHandle, enab
 }
 
 // ── System profile (collected once, sent as a $set on the user) ───────────────
-struct CimInfo { gpus: Vec<String>, os: String, model: String, manuf: String, board: String }
+struct CimInfo {
+    gpus: Vec<String>,
+    os: String,
+    model: String,
+    manuf: String,
+    board: String,
+    // displays: EDID-derived monitor identity (maker|model|year) + active resolutions
+    monitors: Vec<String>,
+    resolutions: Vec<String>,
+}
 
-/// One CIM call: ALL GPUs, OS caption, motherboard, and VM signals.
+/// One CIM call: ALL GPUs, OS caption, motherboard, VM signals, and connected
+/// displays (EDID identity via WmiMonitorID + active resolution per controller).
 fn cim_system() -> CimInfo {
     let script = "$ErrorActionPreference='SilentlyContinue';\
-        Get-CimInstance Win32_VideoController | ForEach-Object { Write-Output \"GPU=$($_.Name)\" };\
+        Get-CimInstance Win32_VideoController | ForEach-Object { Write-Output \"GPU=$($_.Name)\"; if($_.CurrentHorizontalResolution){ Write-Output \"RES=$($_.CurrentHorizontalResolution)x$($_.CurrentVerticalResolution)@$($_.CurrentRefreshRate)\" } };\
         $o=(Get-CimInstance Win32_OperatingSystem).Caption;\
         $cs=Get-CimInstance Win32_ComputerSystem;\
         $bb=Get-CimInstance Win32_BaseBoard;\
         Write-Output \"OS=$o\";\
         Write-Output \"MODEL=$($cs.Model)\"; Write-Output \"MANUF=$($cs.Manufacturer)\";\
-        Write-Output \"BOARD=$($bb.Manufacturer) $($bb.Product)\"";
+        Write-Output \"BOARD=$($bb.Manufacturer) $($bb.Product)\";\
+        Get-CimInstance -Namespace root\\wmi -ClassName WmiMonitorID | ForEach-Object {\
+            $mk=(($_.ManufacturerName | Where-Object {$_ -gt 0} | ForEach-Object {[char]$_}) -join '');\
+            $nm=(($_.UserFriendlyName | Where-Object {$_ -gt 0} | ForEach-Object {[char]$_}) -join '');\
+            Write-Output \"MON=$mk|$nm|$($_.YearOfManufacture)\" }";
     let out = std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
         .output();
-    let mut info = CimInfo { gpus: Vec::new(), os: String::new(), model: String::new(), manuf: String::new(), board: String::new() };
+    let mut info = CimInfo { gpus: Vec::new(), os: String::new(), model: String::new(), manuf: String::new(), board: String::new(), monitors: Vec::new(), resolutions: Vec::new() };
     if let Ok(o) = out {
         for line in String::from_utf8_lossy(&o.stdout).lines() {
             if let Some(v) = line.strip_prefix("GPU=") { let v = v.trim(); if !v.is_empty() { info.gpus.push(v.to_string()); } }
+            else if let Some(v) = line.strip_prefix("RES=") { let v = v.trim(); if !v.is_empty() && !v.starts_with("x") { info.resolutions.push(v.to_string()); } }
+            else if let Some(v) = line.strip_prefix("MON=") { let v = v.trim().trim_matches('|'); if !v.is_empty() && v != "||" { info.monitors.push(v.to_string()); } }
             else if let Some(v) = line.strip_prefix("OS=") { info.os = v.trim().to_string(); }
             else if let Some(v) = line.strip_prefix("MODEL=") { info.model = v.trim().to_string(); }
             else if let Some(v) = line.strip_prefix("MANUF=") { info.manuf = v.trim().to_string(); }
@@ -229,6 +245,10 @@ pub async fn analytics_system_profile(state: State<'_, AppState>, app_handle: Ap
         "disk_count": disk_count,
         "disk_total_gb": (disk_total_gb * 10.0).round() / 10.0,
         "disks": disks_json,
+        "monitors": cim.monitors,                 // EDID identity: maker|model|year
+        "monitor_count": cim.monitors.len(),
+        "resolutions": cim.resolutions,           // active resolution(s) e.g. 2560x1440@144
+        "primary_resolution": cim.resolutions.first().cloned().unwrap_or_default(),
         "profiles_summary": profiles,
         "private_ip": private_ip,
         "public_ip": public_ip,

@@ -58,6 +58,7 @@ let _mods: any[] = [];
 let _modpacks: any[] = [];
 let _themes: any[] = [];
 let _apps: any[] = [];
+let _disks: any[] = [];
 
 // ── Persistence ──────────────────────────────────────────────────────────────
 async function loadTasks(): Promise<void> {
@@ -194,7 +195,10 @@ async function syncOsSchedule(task: Task): Promise<void> {
 
 async function runTask(task: Task): Promise<void> {
     try {
-        await runSteps(task.steps, task);
+        // Per-run variable store: actions (e.g. a benchmark) write measured values
+        // here, and `value` conditions read them → "if disk speed > X then Apply".
+        const ctx: Record<string, number> = {};
+        await runSteps(task.steps, task, ctx);
         task.lastResult = 'ok';
         toast(`${t('sched.ran') || 'Ran'}: ${task.name}`, 'success');
     } catch (e) {
@@ -206,17 +210,17 @@ async function runTask(task: Task): Promise<void> {
     renderScheduleList();
 }
 
-async function runSteps(steps: Step[], task: Task): Promise<void> {
+async function runSteps(steps: Step[], task: Task, ctx: Record<string, number>): Promise<void> {
     for (const step of steps || []) {
         if (step.kind === 'action') {
-            await runAction(step.action, task);
+            await runAction(step.action, task, ctx);
         } else if (step.kind === 'delay') {
             await new Promise(r => setTimeout(r, Math.max(0, step.seconds) * 1000));
         } else if (step.kind === 'waitFor') {
-            await waitForCondition(step.condition, step.timeoutSec);
+            await waitForCondition(step.condition, step.timeoutSec, ctx);
         } else if (step.kind === 'if') {
-            const ok = await evalCondition(step.condition);
-            await runSteps(ok ? step.then : step.else, task);
+            const ok = await evalCondition(step.condition, ctx);
+            await runSteps(ok ? step.then : step.else, task, ctx);
         }
     }
 }
@@ -224,12 +228,12 @@ async function runSteps(steps: Step[], task: Task): Promise<void> {
 // Polls a condition until it becomes true or the timeout elapses (then throws,
 // aborting the rest of the workflow). This is what makes "wait until all mods are
 // active, then launch X" possible.
-async function waitForCondition(cond: Condition, timeoutSec: number): Promise<void> {
+async function waitForCondition(cond: Condition, timeoutSec: number, ctx: Record<string, number>): Promise<void> {
     const deadline = Date.now() + Math.max(1, timeoutSec || 60) * 1000;
     const pollMs = 2000;
     // eslint-disable-next-line no-constant-condition
     while (true) {
-        if (await evalCondition(cond)) return;
+        if (await evalCondition(cond, ctx)) return;
         if (Date.now() >= deadline) {
             throw new Error(t('sched.waitTimeout') || 'Timed out waiting for condition');
         }
@@ -238,7 +242,10 @@ async function waitForCondition(cond: Condition, timeoutSec: number): Promise<vo
 }
 
 // ── Action dispatch ───────────────────────────────────────────────────────────
-async function runAction(action: Action, task: Task): Promise<void> {
+// Size preset → run_app_benchmark `scale` string.
+const BENCH_SCALE: Record<string, string> = { S: 'small', M: 'medium', L: 'large', XL: 'xlarge' };
+
+async function runAction(action: Action, task: Task, ctx: Record<string, number>): Promise<void> {
     const p = action.params || {};
     switch (action.type) {
         case 'profile.activate':
@@ -275,9 +282,73 @@ async function runAction(action: Action, task: Task): Promise<void> {
         }
         case 'deeplink':
             await runDeepLink(p.url); break;
+
+        // ── Benchmarks ────────────────────────────────────────────────────────
+        case 'benchmark.run': {
+            const dataset = p.dataset === 'real' ? 'real' : 'sandbox';
+            const size = String(p.size || 'M').toUpperCase();
+            const scale = size === 'CUSTOM'
+                ? `custom:${Math.max(1, parseInt(p.customMb, 10) || 256)}`
+                : (BENCH_SCALE[size] || 'medium');
+            const sources: string[] = dataset === 'real'
+                ? (Array.isArray(p.sources) ? p.sources : (p.sources ? [p.sources] : []))
+                : [];
+            const report: any = await invoke('run_app_benchmark', { mode: dataset, realSources: sources, scale });
+            const totalMs = Number(report?.total_ms) || 0;
+            const bytes = Number(report?.env?.dataset_bytes ?? report?.dataset_bytes) || 0;
+            ctx['benchmark.total_ms'] = totalMs;
+            if (bytes > 0 && totalMs > 0) ctx['benchmark.mbps'] = Math.round((bytes / 1048576) / (totalMs / 1000) * 10) / 10;
+            toast(`${task.name}: benchmark ${Math.round(totalMs)} ms${ctx['benchmark.mbps'] ? ` · ${ctx['benchmark.mbps']} MB/s` : ''}`, 'info');
+            break;
+        }
+
+        // ── Storage Manager ──────────────────────────────────────────────────
+        case 'storage.calibration':
+            await setSettingFlag('auto_io_calibration', !!p.enabled); break;
+        case 'storage.smartIo':
+            await setSettingFlag('smart_io_enabled', !!p.enabled); break;
+        case 'storage.flag':                       // generic: toggle ANY boolean setting (e.g. a future "dcp")
+            if (p.key) await setSettingFlag(String(p.key), !!p.enabled);
+            break;
+        case 'storage.diskBenchmark': {
+            const mount = p.mountPoint || (await firstDiskMount());
+            if (!mount) throw new Error('No disk to benchmark');
+            const r: any = await invoke('benchmark_disk', { mountPoint: mount });
+            ctx['disk.read_mbps'] = Number(r?.read_mb_s) || 0;
+            ctx['disk.write_mbps'] = Number(r?.write_mb_s) || 0;
+            ctx['disk.suggested_limit'] = Number(r?.suggested_limit) || 0;
+            toast(`${task.name}: ${mount} ${ctx['disk.read_mbps']}↓ / ${ctx['disk.write_mbps']}↑ MB/s`, 'info');
+            break;
+        }
+        case 'storage.applyLimit': {
+            const mount = p.mountPoint || (await firstDiskMount());
+            if (!mount) throw new Error('No disk selected');
+            const limit = p.limitMbS != null && p.limitMbS !== ''
+                ? Math.max(1, parseInt(p.limitMbS, 10) || 0)
+                : Math.round(ctx['disk.suggested_limit'] || 0);
+            await invoke('set_disk_limit', { mountPoint: mount, limitMbS: limit > 0 ? limit : null });
+            toast(`${task.name}: ${mount} limit → ${limit > 0 ? limit + ' MB/s' : 'unlimited'}`, 'success');
+            break;
+        }
+        case 'var.set':                            // store a literal value for later conditions
+            ctx[String(p.name || 'var')] = Number(p.value) || 0; break;
+
         default:
             throw new Error(`Unknown action: ${action.type}`);
     }
+}
+
+/** Flip one boolean field in AppSettings and persist (read-modify-write). */
+async function setSettingFlag(key: string, value: boolean): Promise<void> {
+    const settings: any = await invoke('get_settings');
+    settings[key] = value;
+    await invoke('update_settings', { settings });
+}
+async function firstDiskMount(): Promise<string> {
+    try {
+        const disks: any[] = await invoke('get_system_disks');
+        return disks?.[0]?.mount_point || '';
+    } catch { return ''; }
 }
 
 async function applyModpack(modpackId: string, enable: boolean): Promise<void> {
@@ -299,15 +370,30 @@ async function runDeepLink(url: string): Promise<void> {
 }
 
 // ── Condition evaluation ──────────────────────────────────────────────────────
-async function evalCondition(cond: Condition): Promise<boolean> {
-    let r = await evalConditionRaw(cond);
+async function evalCondition(cond: Condition, ctx: Record<string, number> = {}): Promise<boolean> {
+    let r = await evalConditionRaw(cond, ctx);
     return cond.negate ? !r : r;
 }
-async function evalConditionRaw(cond: Condition): Promise<boolean> {
+async function evalConditionRaw(cond: Condition, ctx: Record<string, number>): Promise<boolean> {
     const p = cond.params || {};
     const now = new Date();
     switch (cond.type) {
         case 'always': return true;
+        case 'value': {
+            // Compare a captured value (e.g. disk.write_mbps, benchmark.mbps) to a threshold.
+            const left = Number(ctx[String(p.source)] ?? NaN);
+            const right = Number(p.value);
+            if (Number.isNaN(left)) return false;
+            switch (p.op) {
+                case '>': return left > right;
+                case '<': return left < right;
+                case '>=': return left >= right;
+                case '<=': return left <= right;
+                case '==': return left === right;
+                case '!=': return left !== right;
+                default: return false;
+            }
+        }
         case 'profileActive': {
             const id = await invoke('get_active_profile_id').catch(() => null);
             return id === p.id;
@@ -453,6 +539,7 @@ async function loadPickers(): Promise<void> {
         invoke('list_installed_themes').catch(() => '[]'),
         invoke('get_apps_state').catch(() => ({ installed: {} })),
     ]);
+    _disks = await invoke('get_system_disks').catch(() => []) as any[];
     _profiles = profiles as any[];
     _mods = mods as any[];
     _modpacks = modpacks as any[];
@@ -694,6 +781,13 @@ const ACTION_TYPES: { v: string; label: string; needs?: string }[] = [
     { v: 'theme.set', label: 'Set theme', needs: 'theme' },
     { v: 'app.launch', label: 'Launch app', needs: 'app' },
     { v: 'notify', label: 'Show notification', needs: 'message' },
+    { v: 'benchmark.run', label: 'Run benchmark', needs: 'benchmark' },
+    { v: 'storage.diskBenchmark', label: 'Storage: benchmark a disk', needs: 'disk' },
+    { v: 'storage.applyLimit', label: 'Storage: apply disk speed limit', needs: 'applyLimit' },
+    { v: 'storage.calibration', label: 'Storage: Performance Auto-Calibration', needs: 'toggle' },
+    { v: 'storage.smartIo', label: 'Storage: Smart I/O', needs: 'toggle' },
+    { v: 'storage.flag', label: 'Storage: toggle a setting (advanced)', needs: 'flag' },
+    { v: 'var.set', label: 'Set a value (for conditions)', needs: 'var' },
     { v: 'custom.command', label: 'Run custom command', needs: 'command' },
     { v: 'deeplink', label: 'Run bmm:// deeplink', needs: 'url' },
 ];
@@ -753,6 +847,20 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             </details>
             <span class="sched-cmd-hint">${t('sched.cmdHint') || 'Tip: tick “Allow custom commands” at the bottom of this task, or it won’t run.'}</span>
         </div>`;
+    else if (needs === 'benchmark') host.innerHTML = `
+        <select class="input sched-b-dataset" style="max-width:120px">
+            <option value="sandbox"${params.dataset !== 'real' ? ' selected' : ''}>${t('bench.sandbox') || 'Sandbox'}</option>
+            <option value="real"${params.dataset === 'real' ? ' selected' : ''}>${t('bench.real') || 'Real'}</option>
+        </select>
+        <select class="input sched-b-size" style="max-width:100px">
+            ${['S', 'M', 'L', 'XL', 'CUSTOM'].map(s => `<option value="${s}"${(params.size || 'M') === s ? ' selected' : ''}>${s}</option>`).join('')}
+        </select>
+        <input class="input sched-b-mb" type="number" min="1" placeholder="MB" value="${escAttr(params.customMb || '')}" style="max-width:90px;display:${(params.size || 'M') === 'CUSTOM' ? 'inline-block' : 'none'}">`;
+    else if (needs === 'toggle') host.innerHTML = `<label style="font-size:12px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> ${t('sched.enableOn') || 'Enable (uncheck = disable)'}</label>`;
+    else if (needs === 'flag') host.innerHTML = `<input class="input sched-f-key" placeholder="${escAttr(t('sched.settingKey') || 'setting key (e.g. dcp)')}" value="${escAttr(params.key || '')}" style="max-width:180px"><label style="font-size:12px;margin-left:8px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> on</label>`;
+    else if (needs === 'disk') host.innerHTML = `<select class="input sched-disk" style="max-width:240px">${diskOptions(params.mountPoint)}</select>`;
+    else if (needs === 'applyLimit') host.innerHTML = `<select class="input sched-disk" style="max-width:200px">${diskOptions(params.mountPoint)}</select><input class="input sched-limit" type="number" min="1" placeholder="${escAttr(t('sched.limitPh') || 'MB/s (empty = suggested)')}" value="${escAttr(params.limitMbS || '')}" style="max-width:200px;margin-left:6px">`;
+    else if (needs === 'var') host.innerHTML = `<input class="input sched-v-name" placeholder="name" value="${escAttr(params.name || '')}" style="max-width:140px"><input class="input sched-v-val" type="number" placeholder="value" value="${escAttr(params.value || '')}" style="max-width:120px;margin-left:6px">`;
 
     const sel = host.querySelector('.sched-p') as HTMLInputElement | HTMLSelectElement;
     if (sel) {
@@ -777,9 +885,30 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         const d = await pickFolder().catch(() => null);
         if (d) { params.workingDir = d; (host.querySelector('.sched-p-wd') as HTMLInputElement).value = d; }
     });
+    // benchmark / storage / var editors
+    host.querySelector('.sched-b-dataset')?.addEventListener('change', (e) => { params.dataset = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-b-size')?.addEventListener('change', (e) => {
+        params.size = (e.target as HTMLSelectElement).value;
+        const mb = host.querySelector('.sched-b-mb') as HTMLElement | null;
+        if (mb) mb.style.display = params.size === 'CUSTOM' ? 'inline-block' : 'none';
+    });
+    host.querySelector('.sched-b-mb')?.addEventListener('input', (e) => { params.customMb = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-en')?.addEventListener('change', (e) => { params.enabled = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-f-key')?.addEventListener('input', (e) => { params.key = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-disk')?.addEventListener('change', (e) => { params.mountPoint = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-limit')?.addEventListener('input', (e) => { params.limitMbS = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-v-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-v-val')?.addEventListener('input', (e) => { params.value = (e.target as HTMLInputElement).value; });
 }
 
-const COND_TYPES = ['always', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'online', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
+function diskOptions(selected: string): string {
+    return `<option value="">— ${t('sched.pick') || 'select'} —</option>` +
+        _disks.map((d: any) => `<option value="${escAttr(d.mount_point)}"${d.mount_point === selected ? ' selected' : ''}>${escHtml(d.mount_point)}${d.name ? ' · ' + escHtml(d.name) : ''}</option>`).join('');
+}
+
+const COND_TYPES = ['always', 'value', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'online', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
+// Values a preceding action can capture (used by the `value` condition).
+const VALUE_SOURCES = ['disk.read_mbps', 'disk.write_mbps', 'disk.suggested_limit', 'benchmark.mbps', 'benchmark.total_ms'];
 function conditionEditor(cond: Condition): HTMLElement {
     const el = document.createElement('div');
     const render = () => {
@@ -821,6 +950,18 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
         host.innerHTML = `<input class="input sched-cp-prog" placeholder="program" value="${escAttr(p.program || '')}" style="max-width:160px"> <input class="input sched-cp-args" placeholder="args" value="${escAttr(p.args || '')}" style="max-width:140px">`;
         host.querySelector('.sched-cp-prog')?.addEventListener('input', (e) => { p.program = (e.target as HTMLInputElement).value; });
         host.querySelector('.sched-cp-args')?.addEventListener('input', (e) => { p.args = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'value') {
+        host.innerHTML = `
+            <select class="input sched-cp-src" style="max-width:170px">
+                ${VALUE_SOURCES.map(s => `<option value="${s}"${p.source === s ? ' selected' : ''}>${escHtml(s)}</option>`).join('')}
+            </select>
+            <select class="input sched-cp-op" style="max-width:70px">
+                ${['>', '<', '>=', '<=', '==', '!='].map(o => `<option value="${o}"${p.op === o ? ' selected' : ''}>${o}</option>`).join('')}
+            </select>
+            <input class="input sched-cp-val" type="number" placeholder="value" value="${escAttr(p.value ?? '')}" style="max-width:110px">`;
+        host.querySelector('.sched-cp-src')?.addEventListener('change', (e) => { p.source = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-op')?.addEventListener('change', (e) => { p.op = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
     } else host.innerHTML = '';
 
     const cp = host.querySelector('.sched-cp') as HTMLSelectElement;
