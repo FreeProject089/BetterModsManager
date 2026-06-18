@@ -21,6 +21,31 @@ pub struct AppState {
     pub dirty: AtomicBool,
     /// De-dupes concurrent geo lookups.
     pub geo_inflight: Arc<Mutex<HashSet<String>>>,
+    /// Per-IP token bucket for ingest rate limiting (tokens, last refill).
+    pub rate: std::sync::Mutex<std::collections::HashMap<String, (f64, std::time::Instant)>>,
+}
+
+impl AppState {
+    /// Token-bucket: returns false when the IP has exceeded `per_min` req/min.
+    pub fn allow(&self, key: &str, per_min: i64) -> bool {
+        let burst = (per_min as f64).max(1.0);
+        let refill = burst / 60.0; // tokens per second
+        let now = std::time::Instant::now();
+        let mut m = self.rate.lock().unwrap();
+        if m.len() > 20_000 {
+            m.clear(); // crude cap so the map can't grow unbounded
+        }
+        let e = m.entry(key.to_string()).or_insert((burst, now));
+        let elapsed = now.duration_since(e.1).as_secs_f64();
+        e.0 = (e.0 + elapsed * refill).min(burst);
+        e.1 = now;
+        if e.0 >= 1.0 {
+            e.0 -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl AppState {
@@ -33,6 +58,7 @@ impl AppState {
             cache: RwLock::new(json!({ "updated": 0 })),
             dirty: AtomicBool::new(false),
             geo_inflight: Arc::new(Mutex::new(HashSet::new())),
+            rate: std::sync::Mutex::new(std::collections::HashMap::new()),
         })
     }
 }

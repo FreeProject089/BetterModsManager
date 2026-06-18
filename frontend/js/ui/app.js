@@ -478,32 +478,11 @@ export function initNavbarLangDropdown() {
     });
 }
 // ── Offline Detection ─────────────────────────────────────
+// Real reachability (probe), a guard (requireOnline) + safeFetch live in
+// core/offline.ts. Online features call window.bmmRequireOnline(...) so they
+// show a message instead of erroring when there's no connection.
 function initOfflineDetection() {
-    const banner = document.getElementById('offline-banner');
-    if (!banner)
-        return;
-    function updateStatus() {
-        if (navigator.onLine) {
-            banner.classList.remove('visible');
-        }
-        else {
-            banner.classList.add('active'); // active matches the CSS transition
-            banner.classList.add('visible');
-        }
-    }
-    window.addEventListener('online', () => {
-        banner.classList.remove('visible');
-        setTimeout(() => banner.classList.remove('active'), 400);
-    });
-    window.addEventListener('offline', () => {
-        banner.classList.add('active');
-        setTimeout(() => banner.classList.add('visible'), 10);
-    });
-    // Initial check
-    if (!navigator.onLine) {
-        banner.classList.add('active');
-        banner.classList.add('visible');
-    }
+    import('../core/offline.js').then(m => m.initOffline()).catch(() => { });
 }
 // ── Profile selector in Library ───────────────────────────
 export async function updateLibraryProfileSelector() {

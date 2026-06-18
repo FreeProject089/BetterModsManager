@@ -6,7 +6,7 @@ import { Chart, axisX, axisY } from "../components/Chart";
 export default function Funnels() {
   const s = useStats()!;
   const views = useMemo(() => s.pages.map((p) => p.view), [s.pages]);
-  const modals = useMemo(() => (s.modals || []).map((m: any) => m.k), [s.modals]);
+  const modals = useMemo(() => (s as any).modals_all || (s.modals || []).map((m: any) => m.k), [s]);
   const [steps, setSteps] = useState<string[]>(["", "", ""]);
   const [res, setRes] = useState<any | null>(null);
 

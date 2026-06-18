@@ -3,15 +3,16 @@ import { useStats } from "../lib/store";
 import { Card, Kpi, Empty, Drawer } from "../components/ui";
 import { Chart, axisX, axisY } from "../components/Chart";
 import { Flag } from "../components/visuals";
-import { nf, vitalClass } from "../lib/format";
+import { nf, vitalClass, fmtVital } from "../lib/format";
 import type { PageRow } from "../lib/types";
 
-const METRICS: { key: string; label: string; unit: string; good: number; poor: number }[] = [
-  { key: "lcp", label: "LCP", unit: "s", good: 2.5, poor: 4 },
-  { key: "fcp", label: "FCP", unit: "s", good: 1.8, poor: 3 },
-  { key: "inp", label: "INP", unit: "ms", good: 200, poor: 500 },
-  { key: "cls", label: "CLS", unit: "", good: 0.1, poor: 0.25 },
-  { key: "ttfb", label: "TTFB", unit: "ms", good: 800, poor: 1800 },
+// thresholds in MS (CLS unitless) — matches what the client sends.
+const METRICS: { key: string; label: string; good: number; poor: number }[] = [
+  { key: "lcp", label: "LCP", good: 2500, poor: 4000 },
+  { key: "fcp", label: "FCP", good: 1800, poor: 3000 },
+  { key: "inp", label: "INP", good: 200, poor: 500 },
+  { key: "cls", label: "CLS", good: 0.1, poor: 0.25 },
+  { key: "ttfb", label: "TTFB", good: 800, poor: 1800 },
 ];
 const PCTS = ["p50", "p75", "p90", "p99"] as const;
 const TABS = ["Pages", "Countries", "Operating systems", "GPU"] as const;
@@ -26,11 +27,10 @@ export default function Pages() {
   const [sel, setSel] = useState<PageRow | null>(null);
   const m = METRICS.find((x) => x.key === metric)!;
   const series = s.webvitals_series || [];
-
   const kpi = (key: string) => (wvp[key] && wvp[key][pct] != null ? wvp[key][pct] : wv[key]);
 
   const graph = {
-    grid: { left: 44, right: 16, top: 16, bottom: 26 },
+    grid: { left: 52, right: 70, top: 16, bottom: 26 },
     xAxis: axisX(series.map((r: any) => (r.hour || "").slice(11) + "h")),
     yAxis: axisY(),
     series: [
@@ -44,9 +44,10 @@ export default function Pages() {
         markLine: {
           silent: true,
           symbol: "none",
+          label: { fontSize: 10 },
           data: [
-            { yAxis: m.good, lineStyle: { color: "#37d399", type: "dashed" }, label: { formatter: `Good ≤${m.good}${m.unit}`, color: "#37d399", position: "insideEndTop" } },
-            { yAxis: m.poor, lineStyle: { color: "#f4b740", type: "dashed" }, label: { formatter: `Needs work ≤${m.poor}${m.unit}`, color: "#f4b740", position: "insideEndTop" } },
+            { yAxis: m.good, lineStyle: { color: "#37d399", type: "dashed" }, label: { formatter: `Good ≤ ${fmtVital(metric, m.good)}`, color: "#37d399", position: "end" } },
+            { yAxis: m.poor, lineStyle: { color: "#f4b740", type: "dashed" }, label: { formatter: `Needs ≤ ${fmtVital(metric, m.poor)}`, color: "#f4b740", position: "end" } },
           ],
         },
       },
@@ -59,19 +60,15 @@ export default function Pages() {
         <h2 className="text-lg font-semibold">Web Vitals</h2>
         <div className="flex gap-1">
           {PCTS.map((p) => (
-            <button key={p} onClick={() => setPct(p)} className={`pill ${pct === p ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>
-              {p.toUpperCase()}
-            </button>
+            <button key={p} onClick={() => setPct(p)} className={`pill ${pct === p ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>{p.toUpperCase()}</button>
           ))}
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="LCP" value={<span className={vitalClass("lcp", kpi("lcp"))}>{kpi("lcp") ?? "—"} s</span>} />
-        <Kpi label="CLS" value={<span className={vitalClass("cls", kpi("cls"))}>{kpi("cls") ?? "—"}</span>} />
-        <Kpi label="INP" value={<span className={vitalClass("inp", kpi("inp"))}>{kpi("inp") ?? "—"} ms</span>} />
-        <Kpi label="FCP" value={<span className={vitalClass("fcp", kpi("fcp"))}>{kpi("fcp") ?? "—"} s</span>} />
-        <Kpi label="TTFB" value={<span className={vitalClass("ttfb", kpi("ttfb"))}>{kpi("ttfb") ?? "—"} ms</span>} />
+        {METRICS.map((x) => (
+          <Kpi key={x.key} label={x.label} value={<span className={vitalClass(x.key, kpi(x.key))}>{fmtVital(x.key, kpi(x.key))}</span>} />
+        ))}
         <Kpi label="Samples" value={nf(wv.n)} />
       </div>
 
@@ -80,9 +77,7 @@ export default function Pages() {
         right={
           <div className="flex gap-1">
             {METRICS.map((x) => (
-              <button key={x.key} onClick={() => setMetric(x.key)} className={`pill ${metric === x.key ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>
-                {x.label}
-              </button>
+              <button key={x.key} onClick={() => setMetric(x.key)} className={`pill ${metric === x.key ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>{x.label}</button>
             ))}
           </div>
         }
@@ -90,14 +85,57 @@ export default function Pages() {
         {series.length ? <Chart option={graph} height={300} /> : <Empty>No web-vitals samples yet. They arrive once per app launch.</Empty>}
       </Card>
 
+      {s.perf && (
+        <>
+          <h2 className="text-lg font-semibold pt-1">App performance</h2>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <Kpi label="FPS (avg)" value={s.perf.fps_avg ?? "—"} />
+            <Kpi label="Frame time" value={`${s.perf.frametime_avg_ms ?? "—"} ms`} />
+            <Kpi label="Worst frame (jank)" value={`${s.perf.frametime_worst_ms ?? "—"} ms`} />
+            <Kpi label="JS heap" value={`${s.perf.heap_avg_mb ?? "—"} MB`} />
+            <Kpi label="Benchmark" value={`${s.perf.bench_mbps_avg ?? "—"} MB/s`} />
+          </div>
+          <Card title="Per view — rendering" right={<span className="text-xs text-sub">FPS / frame time / jank / heap</span>}>
+            {(s.perf.byView || []).length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr>
+                      <th className="th">View</th>
+                      <th className="th text-right">FPS</th>
+                      <th className="th text-right">Frame ms</th>
+                      <th className="th text-right">Worst (jank)</th>
+                      <th className="th text-right">Heap MB</th>
+                      <th className="th text-right">Samples</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(s.perf.byView || []).map((v: any) => (
+                      <tr key={v.view} className="hover:bg-panel2">
+                        <td className="td">{v.view}</td>
+                        <td className={`td text-right ${v.fps < 30 ? "text-bad" : v.fps < 50 ? "text-warn" : "text-good"}`}>{v.fps}</td>
+                        <td className="td text-right">{v.ft}</td>
+                        <td className={`td text-right ${v.worst > 100 ? "text-bad" : v.worst > 50 ? "text-warn" : "text-sub"}`}>{v.worst}</td>
+                        <td className="td text-right text-sub">{v.heap}</td>
+                        <td className="td text-right text-sub">{v.n}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <Empty>No performance samples yet.</Empty>
+            )}
+          </Card>
+        </>
+      )}
+
       <Card
         title="Breakdown"
         right={
           <div className="flex gap-1">
             {TABS.map((x) => (
-              <button key={x} onClick={() => setTab(x)} className={`pill ${tab === x ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>
-                {x}
-              </button>
+              <button key={x} onClick={() => setTab(x)} className={`pill ${tab === x ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>{x}</button>
             ))}
           </div>
         }
@@ -126,11 +164,11 @@ export default function Pages() {
                       <td className="td">{p.view}</td>
                       <td className="td text-right">{nf(p.enters)}</td>
                       <td className="td text-right text-sub">{Math.round((p.avg_dwell_ms || 0) / 1000)}s</td>
-                      <td className={`td text-right ${vitalClass("lcp", p.lcp)}`}>{p.lcp ?? "—"}</td>
-                      <td className={`td text-right ${vitalClass("cls", p.cls)}`}>{p.cls ?? "—"}</td>
-                      <td className={`td text-right ${vitalClass("inp", p.inp)}`}>{p.inp ?? "—"}</td>
-                      <td className={`td text-right ${vitalClass("fcp", p.fcp)}`}>{p.fcp ?? "—"}</td>
-                      <td className={`td text-right ${vitalClass("ttfb", p.ttfb)}`}>{p.ttfb ?? "—"}</td>
+                      <td className={`td text-right ${vitalClass("lcp", p.lcp)}`}>{fmtVital("lcp", p.lcp)}</td>
+                      <td className={`td text-right ${vitalClass("cls", p.cls)}`}>{fmtVital("cls", p.cls)}</td>
+                      <td className={`td text-right ${vitalClass("inp", p.inp)}`}>{fmtVital("inp", p.inp)}</td>
+                      <td className={`td text-right ${vitalClass("fcp", p.fcp)}`}>{fmtVital("fcp", p.fcp)}</td>
+                      <td className={`td text-right ${vitalClass("ttfb", p.ttfb)}`}>{fmtVital("ttfb", p.ttfb)}</td>
                       <td className="td text-right text-sub">{p.fps ?? "—"}</td>
                       <td className="td text-right">{nf(p.events || 0)}</td>
                     </tr>
@@ -167,7 +205,7 @@ export default function Pages() {
                 {METRICS.map((x) => (
                   <div key={x.key} className="flex items-center justify-between px-1 py-1">
                     <span className="text-sub">{x.label}</span>
-                    <span className={vitalClass(x.key, (sel as any)[x.key])}>{(sel as any)[x.key] ?? "—"} {x.unit}</span>
+                    <span className={vitalClass(x.key, (sel as any)[x.key])}>{fmtVital(x.key, (sel as any)[x.key])}</span>
                   </div>
                 ))}
               </div>

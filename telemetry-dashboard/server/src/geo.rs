@@ -81,10 +81,9 @@ pub fn resolve_geo(
             inflight.lock().await.remove(&k);
             return;
         }
-        let url = format!(
-            "https://ip-api.com/json/{}?fields=status,country,countryCode,regionName,city,lat,lon,query",
-            urlencoding(&k)
-        );
+        // ipwho.is — free HTTPS geolocation, no API key. (ip-api.com's HTTPS is a
+        // paid feature; its free tier is HTTP-only, which we won't use server-side.)
+        let url = format!("https://ipwho.is/{}", urlencoding(&k));
         let res = reqwest::Client::new()
             .get(&url)
             .timeout(std::time::Duration::from_secs(8))
@@ -92,14 +91,14 @@ pub fn resolve_geo(
             .await;
         if let Ok(resp) = res {
             if let Ok(j) = resp.json::<Value>().await {
-                if j.get("status").and_then(Value::as_str) == Some("success") {
+                if j.get("success").and_then(Value::as_bool) == Some(true) {
                     let data = json!({
                         "country": j.get("country"),
-                        "cc": j.get("countryCode"),
-                        "region": j.get("regionName"),
+                        "cc": j.get("country_code"),
+                        "region": j.get("region"),
                         "city": j.get("city"),
-                        "lat": j.get("lat"),
-                        "lon": j.get("lon"),
+                        "lat": j.get("latitude"),
+                        "lon": j.get("longitude"),
                     });
                     let _ = sqlx::query(
                         "INSERT INTO geo(key,data,at) VALUES($1,$2,$3)

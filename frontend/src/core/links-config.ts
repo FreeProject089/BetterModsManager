@@ -25,10 +25,13 @@ export interface BmmLinks {
     contributors:     string;
     autoupdate_api:   string;
     apps_catalog:     string;
-    // Telemetry (opt-in). HTTPS PostHog-compatible capture endpoint + key.
-    // Empty endpoint = events stay buffered locally (no network).
+    // Telemetry (opt-in). HTTPS PostHog-compatible capture endpoint + PUBLIC key.
+    // `analytics_key` is a PUBLIC ingest key — it ships inside the app and only
+    // permits submitting telemetry. The PRIVATE admin key (deletion approvals,
+    // goal writes) lives ONLY on the telemetry server (ADMIN_KEY) and is never
+    // shipped here. Empty endpoint = events stay buffered locally (no network).
     analytics_endpoint: string;
-    analytics_key:      string;
+    analytics_key:      string;   // public ingest key (bmm_pk_…)
     // Community / social links (patched into HTML at runtime)
     github_repo:      string;
     discord:          string;
@@ -50,8 +53,8 @@ const DEFAULTS: BmmLinks = {
     // refuses plain HTTP), so during local testing expose the dashboard with an
     // HTTPS tunnel (ngrok/cloudflared) and paste the tunnel URL here + "/batch/".
     // e.g. 'https://abcd-1234.ngrok-free.app/batch/'. Empty = buffer locally only.
-    analytics_endpoint: 'https://unskilled-surreal-mutiny.ngrok-free.dev/batch/',   // ← put your ngrok/cloudflared HTTPS URL + /batch/ here
-    analytics_key:      'bmmtel_7995199678b11ad8f53e8ce47ac472d7e28e72f44ee21070',
+    analytics_endpoint: 'https://unskilled-surreal-mutiny.ngrok-free.dev/batch/',   // ← your ngrok/cloudflared HTTPS URL, MUST end with /batch/
+    analytics_key:      'bmm_pk_3aab75ffc7b964990178682c918f117767ba2657',   // PUBLIC ingest key — safe to ship
     github_repo:      'https://github.com/FreeProject089/BetterModsManager',
     discord:          'https://discord.com/invite/CTaaEF9R75',
     reddit:           'https://www.reddit.com/r/BetterModManager/',

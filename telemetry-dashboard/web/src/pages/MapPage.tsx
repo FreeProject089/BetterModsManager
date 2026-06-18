@@ -42,31 +42,26 @@ export default function MapPage() {
   const maxC = Math.max(1, ...countryData.map((c: any) => c.value));
   const total = users.length + repos.length;
 
-  // 2D: choropleth (users per country) + overlaid user/repo points.
+  // 2D: ONE geo component (so scatter points align with the basemap), with
+  // data-coloured country regions (choropleth) + overlaid user/repo points.
+  const colorFor = (c: number) => {
+    const a = Math.max(0.15, Math.min(1, c / maxC));
+    return `rgba(91,140,255,${a})`;
+  };
+  const regions = countryData.map((d: any) => ({ name: d.name, itemStyle: { areaColor: colorFor(d.value) } }));
   const map2d: any = {
-    tooltip: { trigger: "item", formatter: (p: any) => (p.seriesType === "map" ? `${p.name}: ${p.value || 0}` : p.name) },
-    visualMap: {
-      min: 0,
-      max: maxC,
-      left: 12,
-      bottom: 12,
-      calculable: true,
-      inRange: { color: ["#161b22", "#1e3a5f", "#2f5fae", "#5b8cff"] },
-      textStyle: { color: "#9aa3ad" },
+    tooltip: { trigger: "item", formatter: (p: any) => p.name },
+    geo: {
+      map: "world",
+      roam: true,
+      itemStyle: { areaColor: "#161b22", borderColor: "#2a313b", borderWidth: 0.5 },
+      emphasis: { itemStyle: { areaColor: "#22304a" }, label: { show: false } },
+      regions,
+      scaleLimit: { min: 1, max: 8 },
     },
-    geo: { map: "world", roam: true, silent: true, show: false, itemStyle: { areaColor: "#161b22", borderColor: "#2a313b" } },
     series: [
-      {
-        type: "map",
-        map: "world",
-        roam: true,
-        data: countryData,
-        itemStyle: { areaColor: "#161b22", borderColor: "#2a313b", borderWidth: 0.5 },
-        emphasis: { itemStyle: { areaColor: "#22304a" }, label: { show: false } },
-        select: { itemStyle: { areaColor: "#2f5fae" } },
-      },
-      { name: "Users", type: "effectScatter", coordinateSystem: "geo", geoIndex: 0, data: userData, symbolSize: (v: any) => 6 + Math.min(20, v[2] * 3), itemStyle: { color: "#37d399" }, rippleEffect: { scale: 2.5 }, zlevel: 2 },
-      { name: "Repos", type: "scatter", coordinateSystem: "geo", geoIndex: 0, data: repoData, symbolSize: (v: any) => 5 + Math.min(16, v[2] * 2), itemStyle: { color: "#a78bfa" }, zlevel: 3 },
+      { name: "Users", type: "effectScatter", coordinateSystem: "geo", data: userData, symbolSize: (v: any) => 6 + Math.min(20, v[2] * 3), itemStyle: { color: "#37d399" }, rippleEffect: { scale: 2.5 }, zlevel: 2 },
+      { name: "Repos", type: "scatter", coordinateSystem: "geo", data: repoData, symbolSize: (v: any) => 5 + Math.min(16, v[2] * 2), itemStyle: { color: "#a78bfa" }, zlevel: 3 },
     ],
   };
 
@@ -110,14 +105,15 @@ export default function MapPage() {
 
       {failed ? (
         <Empty>Map assets failed to load.</Empty>
-      ) : total === 0 ? (
-        <Empty>No located users yet. Locations resolve from IP once users opt in and connect.</Empty>
       ) : mode === "2d" ? (
         ready ? <Chart option={map2d} height={560} /> : <Empty>Loading world map…</Empty>
       ) : glReady ? (
         <Chart option={globe} height={560} />
       ) : (
         <Empty>Loading 3D globe…</Empty>
+      )}
+      {total === 0 && !failed && (
+        <div className="text-center text-xs text-sub mt-2">No located users yet — locations resolve server-side from each client's IP once users opt in and connect.</div>
       )}
     </Card>
   );

@@ -27,19 +27,27 @@ export const dur = (sec?: number) => {
 };
 export const nf = (n?: number) => (n == null ? "—" : new Intl.NumberFormat().format(n));
 
-// web-vitals thresholds → color class
+// web-vitals thresholds (LCP/FCP/INP/TTFB in milliseconds, CLS unitless) → color
+const VITAL_TH: Record<string, [number, number]> = {
+  lcp: [2500, 4000],
+  fcp: [1800, 3000],
+  inp: [200, 500],
+  cls: [0.1, 0.25],
+  ttfb: [800, 1800],
+};
 export const vitalClass = (metric: string, v?: number) => {
   if (v == null) return "text-sub";
-  const t: Record<string, [number, number]> = {
-    lcp: [2.5, 4],
-    fcp: [1.8, 3],
-    inp: [200, 500],
-    cls: [0.1, 0.25],
-    ttfb: [800, 1800],
-  };
-  const th = t[metric];
+  const th = VITAL_TH[metric];
   if (!th) return "text-ink";
   if (v <= th[0]) return "text-good";
   if (v <= th[1]) return "text-warn";
   return "text-bad";
 };
+// Format a vital value with its unit: LCP/FCP in seconds, INP/TTFB in ms, CLS raw.
+export const fmtVital = (metric: string, v?: number) => {
+  if (v == null) return "—";
+  if (metric === "cls") return String(v);
+  if (metric === "lcp" || metric === "fcp") return `${(v / 1000).toFixed(2)} s`;
+  return `${Math.round(v)} ms`;
+};
+export const vitalThresholds = VITAL_TH;

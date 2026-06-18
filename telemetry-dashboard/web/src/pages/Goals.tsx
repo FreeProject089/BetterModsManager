@@ -12,13 +12,14 @@ export default function Goals() {
   const [name, setName] = useState("");
   const [type, setType] = useState<GoalType>("page");
   const [target, setTarget] = useState("");
+  const [count, setCount] = useState("1");
   const [err, setErr] = useState("");
 
   const options = useMemo(() => {
     switch (type) {
       case "page": return s.pages.map((p) => p.view);
       case "event": return s.events.map((e) => e.event);
-      case "modal": return (s.modals || []).map((m: any) => m.k);
+      case "modal": return (s as any).modals_all || (s.modals || []).map((m: any) => m.k);
       case "feature": return (s.features || []).map((f: any) => f.k);
     }
   }, [type, s]);
@@ -27,10 +28,10 @@ export default function Goals() {
     setErr("");
     if (!adminKey) return setErr("Set the admin key (top-right) to create goals.");
     if (!name.trim() || !target.trim()) return setErr("Name and target are required.");
-    const r = await apiPost("/api/goals", { name: name.trim(), type, target: target.trim() }, adminKey);
+    const target_count = Math.max(1, parseInt(count, 10) || 1);
+    const r = await apiPost("/api/goals", { name: name.trim(), type, target: target.trim(), target_count }, adminKey);
     if (r.error) return setErr(r.error);
-    setName("");
-    setTarget("");
+    setName(""); setTarget(""); setCount("1");
   };
   const remove = async (id: number) => {
     if (!adminKey) return;
@@ -41,8 +42,8 @@ export default function Goals() {
     <div className="space-y-4">
       <Card title="Define a goal">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Goal name" className="md:col-span-4 bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand" />
-          <select value={type} onChange={(e) => { setType(e.target.value as GoalType); setTarget(""); }} className="md:col-span-3 bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Goal name" className="md:col-span-3 bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand" />
+          <select value={type} onChange={(e) => { setType(e.target.value as GoalType); setTarget(""); }} className="md:col-span-2 bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand">
             {(Object.keys(TYPE_LABEL) as GoalType[]).map((k) => (
               <option key={k} value={k}>{TYPE_LABEL[k]}</option>
             ))}
@@ -53,6 +54,11 @@ export default function Goals() {
               <option key={o} value={o}>{o}</option>
             ))}
           </select>
+          <div className="md:col-span-2 flex items-center gap-2">
+            <span className="text-xs text-sub whitespace-nowrap">reach</span>
+            <input value={count} onChange={(e) => setCount(e.target.value.replace(/[^0-9]/g, ""))} type="number" min={1} className="w-full bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand" />
+            <span className="text-xs text-sub">users</span>
+          </div>
           <button onClick={add} className="md:col-span-2 bg-brand text-white rounded-lg px-4 py-2 text-sm font-medium">Add goal</button>
         </div>
         {err && <div className="text-bad text-xs mt-2">{err}</div>}
@@ -61,19 +67,24 @@ export default function Goals() {
 
       {s.goals.length ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {s.goals.map((g: any) => (
-            <Card key={g.id} title={g.name} right={adminKey ? <button onClick={() => remove(g.id)} className="text-sub hover:text-bad text-xs">Delete</button> : null}>
-              <div className="text-xs text-sub mb-2">
-                <span className="pill bg-panel2 mr-1">{TYPE_LABEL[(g.type as GoalType)] || g.type}</span>
-                <span className="font-mono">{g.target}</span>
-              </div>
-              <div className="flex items-end justify-between mb-1">
-                <div className="text-3xl font-semibold">{g.rate}%</div>
-                <div className="text-sm text-sub">{nf(g.conversions)} of {nf(s.totals.users)} users</div>
-              </div>
-              <Bar pct={g.rate} color="bg-good" />
-            </Card>
-          ))}
+          {s.goals.map((g: any) => {
+            const tc = g.target_count || 1;
+            const progress = g.progress != null ? g.progress : Math.min(100, (g.conversions / tc) * 100);
+            return (
+              <Card key={g.id} title={g.name} right={adminKey ? <button onClick={() => remove(g.id)} className="text-sub hover:text-bad text-xs">Delete</button> : null}>
+                <div className="text-xs text-sub mb-2">
+                  <span className="pill bg-panel2 mr-1">{TYPE_LABEL[(g.type as GoalType)] || g.type}</span>
+                  <span className="font-mono">{g.target}</span>
+                </div>
+                <div className="flex items-end justify-between mb-1">
+                  <div className="text-3xl font-semibold">{nf(g.conversions)}<span className="text-sub text-base"> / {nf(tc)}</span></div>
+                  <div className={`text-sm ${g.reached ? "text-good" : "text-sub"}`}>{g.reached ? "Reached" : `${progress}%`}</div>
+                </div>
+                <Bar pct={progress} color={g.reached ? "bg-good" : "bg-brand"} />
+                <div className="text-[11px] text-sub mt-1">{g.rate}% of all {nf(s.totals.users)} users</div>
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <Empty>No goals yet. Define one above to track conversion.</Empty>

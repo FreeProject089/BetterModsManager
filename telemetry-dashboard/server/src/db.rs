@@ -186,6 +186,148 @@ pub async fn sweep_crashes(pool: &PgPool, crash_after_ms: i64) {
     .await;
 }
 
+// ── Server-side IP capture + geo ────────────────────────────────────────────
+pub async fn record_user_ip(st: &AppState, did: &str, ip: &str) {
+    if did.is_empty() || ip.is_empty() || is_private_host(ip) {
+        return;
+    }
+    let _ = sqlx::query(
+        "INSERT INTO user_ips(distinct_id,ip,at) VALUES($1,$2,$3)
+         ON CONFLICT(distinct_id) DO UPDATE SET ip=$2, at=$3",
+    )
+    .bind(did)
+    .bind(ip)
+    .bind(now_ms())
+    .execute(&st.pool)
+    .await;
+    resolve_geo(st.pool.clone(), st.geo_inflight.clone(), ip);
+}
+pub async fn load_user_ips(pool: &PgPool) -> std::collections::HashMap<String, String> {
+    let mut m = std::collections::HashMap::new();
+    if let Ok(rows) = sqlx::query_as::<_, (String, Option<String>)>("SELECT distinct_id, ip FROM user_ips").fetch_all(pool).await {
+        for (d, ip) in rows {
+            if let Some(ip) = ip {
+                m.insert(d, ip);
+            }
+        }
+    }
+    m
+}
+
+// ── Generic time-series bucketing (overview granularity) ────────────────────
+pub async fn timeseries(pool: &PgPool, bucket_ms: i64, count: i64) -> Vec<Value> {
+    let now = now_ms();
+    let since = now - bucket_ms * count;
+    let now_b = now / bucket_ms;
+    let ev: Vec<(Option<i64>, i64, i64, i64)> = sqlx::query_as(
+        "SELECT (ts_ms/$1) b, COUNT(*), COUNT(*) FILTER (WHERE event='page_enter'), COUNT(*) FILTER (WHERE event='session_start')
+         FROM events WHERE ts_ms>=$2 GROUP BY b",
+    )
+    .bind(bucket_ms)
+    .bind(since)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+    let us: Vec<(Option<i64>, i64)> = sqlx::query_as(
+        "SELECT (ts_ms/$1) b, COUNT(DISTINCT distinct_id) FROM events WHERE ts_ms>=$2 GROUP BY b",
+    )
+    .bind(bucket_ms)
+    .bind(since)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+    let mut emap: std::collections::HashMap<i64, (i64, i64, i64)> = std::collections::HashMap::new();
+    for (b, e, pv, ss) in ev {
+        if let Some(b) = b {
+            emap.insert(b, (e, pv, ss));
+        }
+    }
+    let mut umap: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
+    for (b, u) in us {
+        if let Some(b) = b {
+            umap.insert(b, u);
+        }
+    }
+    let day = bucket_ms >= 86_400_000;
+    (0..count)
+        .map(|i| {
+            let b = now_b - (count - 1 - i);
+            let (e, pv, ss) = emap.get(&b).copied().unwrap_or((0, 0, 0));
+            let users = umap.get(&b).copied().unwrap_or(0);
+            let ms = b * bucket_ms;
+            let label = chrono::DateTime::from_timestamp_millis(ms)
+                .map(|d| d.format(if day { "%m-%d" } else { "%H:%M" }).to_string())
+                .unwrap_or_default();
+            json!({ "t": label, "events": e, "pageviews": pv, "sessions": ss, "users": users })
+        })
+        .collect()
+}
+
+// ── Multi-step journeys (layered Sankey) ────────────────────────────────────
+pub async fn journeys(pool: &PgPool, steps: usize, limit: usize, filters: &[String]) -> Value {
+    let steps = steps.clamp(2, 6);
+    let rows: Vec<(Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT props->>'session_id' sid, props->>'view' v FROM events
+         WHERE event='page_enter' AND props->>'session_id' IS NOT NULL ORDER BY ts_ms ASC",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+    let mut by_sid: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    for (sid, v) in rows {
+        if let (Some(sid), Some(v)) = (sid, v) {
+            let seq = by_sid.entry(sid).or_default();
+            // collapse immediate repeats so a refresh isn't a "step"
+            if seq.last().map(|l| l != &v).unwrap_or(true) {
+                seq.push(v);
+            }
+        }
+    }
+    let matches = |view: &str, pat: &str| pat.is_empty() || pat == "*" || pat == view || view.contains(pat);
+    // count paths of length `steps`
+    let mut paths: std::collections::HashMap<Vec<String>, i64> = std::collections::HashMap::new();
+    for seq in by_sid.values() {
+        if seq.len() < 2 {
+            continue;
+        }
+        let path: Vec<String> = seq.iter().take(steps).cloned().collect();
+        // apply per-step filters
+        let ok = filters.iter().enumerate().all(|(i, f)| f.is_empty() || path.get(i).map(|v| matches(v, f)).unwrap_or(false));
+        if !ok {
+            continue;
+        }
+        *paths.entry(path).or_insert(0) += 1;
+    }
+    let mut sorted: Vec<(Vec<String>, i64)> = paths.into_iter().collect();
+    sorted.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted.truncate(limit.clamp(5, 200));
+
+    // build layered nodes/links: node name = "s{i}\u{1f}{view}", depth = i
+    let mut node_set: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut links: std::collections::HashMap<(String, String), i64> = std::collections::HashMap::new();
+    for (path, count) in &sorted {
+        for i in 0..path.len() {
+            node_set.insert(format!("s{}\u{1f}{}", i, path[i]));
+            if i + 1 < path.len() {
+                let a = format!("s{}\u{1f}{}", i, path[i]);
+                let b = format!("s{}\u{1f}{}", i + 1, path[i + 1]);
+                *links.entry((a, b)).or_insert(0) += count;
+            }
+        }
+    }
+    let nodes: Vec<Value> = node_set
+        .iter()
+        .map(|n| {
+            let mut it = n.splitn(2, '\u{1f}');
+            let depth: i64 = it.next().unwrap_or("s0").trim_start_matches('s').parse().unwrap_or(0);
+            let view = it.next().unwrap_or("");
+            json!({ "name": n, "depth": depth, "label": view })
+        })
+        .collect();
+    let link_arr: Vec<Value> = links.iter().map(|((a, b), v)| json!({ "source": a, "target": b, "value": v })).collect();
+    json!({ "nodes": nodes, "links": link_arr, "paths": sorted.len() })
+}
+
 // ── Retention + per-packet erasure ──────────────────────────────────────────
 pub async fn purge_retention(pool: &PgPool, days: i64) -> u64 {
     let cut = now_ms() - days * 86_400_000;
@@ -422,6 +564,24 @@ fn summarize_props(event: &str, p: &Value) -> String {
             }
         }
         "session_end" => format!("{}s · {} views", n("duration_sec"), n("views_visited")),
+        // autocapture events
+        "click" => {
+            let t = s("text");
+            if t.is_empty() { "button".into() } else { format!("button “{}”", t) }
+        }
+        "copy" => "copied".into(),
+        "form_submit" => {
+            let id = s("id");
+            if id.is_empty() { "form submitted".into() } else { format!("form “{}” submitted", id) }
+        }
+        "input_change" => format!("field “{}” changed", s("field")),
+        "outbound" => format!("→ {}", s("url")),
+        "error" => format!("error: {}", s("message")),
+        "modal_open" => {
+            let title = s("title");
+            if title.is_empty() { s("name") } else { format!("{} · {}", s("name"), title) }
+        }
+        "feature" => s("name"),
         _ => String::new(),
     }
 }
@@ -531,8 +691,8 @@ pub async fn funnel(pool: &PgPool, steps: &[String]) -> Value {
 
 // ── Goals ───────────────────────────────────────────────────────────────────
 pub async fn list_goals(pool: &PgPool) -> Vec<Value> {
-    let rows: Vec<(i64, Option<String>, Option<String>, Option<String>, Option<i64>)> = sqlx::query_as(
-        "SELECT id,name,type,target,created_at FROM goals ORDER BY created_at DESC",
+    let rows: Vec<(i64, Option<String>, Option<String>, Option<String>, Option<i64>, i64)> = sqlx::query_as(
+        "SELECT id,name,type,target,created_at,target_count FROM goals ORDER BY created_at DESC",
     )
     .fetch_all(pool)
     .await
@@ -544,7 +704,7 @@ pub async fn list_goals(pool: &PgPool) -> Vec<Value> {
         .unwrap_or(0)
         .max(1);
     let mut out = Vec::new();
-    for (id, name, typ, target, created_at) in rows {
+    for (id, name, typ, target, created_at, target_count) in rows {
         let target = target.clone().unwrap_or_default();
         // How many distinct users satisfied this goal, by goal type.
         let sql = match typ.as_deref() {
@@ -559,19 +719,24 @@ pub async fn list_goals(pool: &PgPool) -> Vec<Value> {
             .await
             .map(|r| r.0)
             .unwrap_or(0);
+        let tc = target_count.max(1);
         out.push(json!({
             "id": id, "name": name, "type": typ, "target": target, "created_at": created_at,
             "conversions": conv, "rate": (conv as f64 / users as f64 * 1000.0).round() / 10.0,
+            // objective: reach `target_count` conversions
+            "target_count": tc, "reached": conv >= tc,
+            "progress": ((conv as f64 / tc as f64 * 1000.0).round() / 10.0).min(100.0),
         }));
     }
     out
 }
-pub async fn add_goal(pool: &PgPool, name: &str, typ: &str, target: &str) {
-    let _ = sqlx::query("INSERT INTO goals(name,type,target,created_at) VALUES($1,$2,$3,$4)")
+pub async fn add_goal(pool: &PgPool, name: &str, typ: &str, target: &str, target_count: i64) {
+    let _ = sqlx::query("INSERT INTO goals(name,type,target,created_at,target_count) VALUES($1,$2,$3,$4,$5)")
         .bind(name)
         .bind(typ)
         .bind(target)
         .bind(now_ms())
+        .bind(target_count.max(1))
         .execute(pool)
         .await;
 }
@@ -582,14 +747,21 @@ pub async fn del_goal(pool: &PgPool, id: i64) {
         .await;
 }
 
-// ── Weekly cohort retention ─────────────────────────────────────────────────
+// ── Cohort retention (weekly or daily) ──────────────────────────────────────
 pub async fn retention_cohorts(pool: &PgPool, weeks: i64) -> Vec<Value> {
-    const WK: i64 = 604_800_000;
-    let since = now_ms() - weeks * WK;
+    retention_cohorts_period(pool, weeks, 604_800_000).await
+}
+pub async fn retention_cohorts_daily(pool: &PgPool, days: i64) -> Vec<Value> {
+    retention_cohorts_period(pool, days, 86_400_000).await
+}
+async fn retention_cohorts_period(pool: &PgPool, periods: i64, period_ms: i64) -> Vec<Value> {
+    let wk = period_ms;
+    let since = now_ms() - periods * wk;
     let rows: Vec<(Option<String>, Option<i64>)> = sqlx::query_as(
-        "SELECT distinct_id, (ts_ms/604800000) wk FROM events WHERE ts_ms>=$1 GROUP BY distinct_id, wk",
+        "SELECT distinct_id, (ts_ms/$2) wk FROM events WHERE ts_ms>=$1 GROUP BY distinct_id, wk",
     )
     .bind(since)
+    .bind(wk)
     .fetch_all(pool)
     .await
     .unwrap_or_default();
@@ -600,7 +772,7 @@ pub async fn retention_cohorts(pool: &PgPool, weeks: i64) -> Vec<Value> {
             user_weeks.entry(did).or_default().insert(wk);
         }
     }
-    let now_wk = now_ms() / WK;
+    let now_wk = now_ms() / wk;
     let mut cohorts: std::collections::HashMap<i64, Vec<std::collections::HashSet<i64>>> =
         std::collections::HashMap::new();
     for set in user_weeks.into_values() {
@@ -616,7 +788,7 @@ pub async fn retention_cohorts(pool: &PgPool, weeks: i64) -> Vec<Value> {
         let size = members.len();
         let span = now_wk - cw;
         let mut cells = Vec::new();
-        let max_k = span.min(weeks - 1);
+        let max_k = span.min(periods - 1);
         for k in 0..=max_k {
             let retained = members.iter().filter(|set| set.contains(&(cw + k))).count();
             cells.push(json!({
@@ -625,7 +797,7 @@ pub async fn retention_cohorts(pool: &PgPool, weeks: i64) -> Vec<Value> {
                 "count": retained,
             }));
         }
-        let date = chrono::DateTime::from_timestamp_millis(cw * WK)
+        let date = chrono::DateTime::from_timestamp_millis(cw * wk)
             .map(|d| d.format("%Y-%m-%d").to_string())
             .unwrap_or_default();
         result.push(json!({ "cohort_start": date, "size": size, "cells": cells }));

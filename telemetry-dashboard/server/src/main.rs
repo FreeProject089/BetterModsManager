@@ -1,5 +1,6 @@
 //! BMM Telemetry Dashboard — Axum + Postgres collector & API.
 //! Data persists in Postgres, so a server restart keeps every past event.
+#![recursion_limit = "512"]
 
 mod config;
 mod db;
@@ -8,13 +9,14 @@ mod state;
 mod stats;
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{ConnectInfo, DefaultBodyLimit, Path, Query, State},
     http::{header, HeaderMap, StatusCode, Uri},
     response::sse::{Event, KeepAlive, Sse},
     response::{Html, IntoResponse},
     routing::{delete, get, post},
     Json, Router,
 };
+use std::net::SocketAddr;
 use config::Config;
 use futures::stream::{self, Stream, StreamExt};
 use serde_json::{json, Value};
@@ -62,6 +64,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/stream", get(stream_handler))
         .route("/api/sessions", get(get_sessions))
         .route("/api/funnel", post(post_funnel))
+        .route("/api/journeys", post(post_journeys))
         .route("/api/goals", get(get_goals).post(post_goal))
         .route("/api/goals/:id", delete(del_goal))
         .route("/api/packet-status", get(packet_status))
@@ -72,11 +75,13 @@ async fn main() -> anyhow::Result<()> {
         // Static assets + SPA fallback (index.html with HTTP 200) so a hard
         // refresh on /users/:id etc. never 404s.
         .fallback(static_or_spa)
+        .layer(DefaultBodyLimit::max(8 * 1024 * 1024))
         .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())
         .with_state(st.clone());
 
     let addr = format!("0.0.0.0:{}", cfg.port);
+    let app = app.into_make_service_with_connect_info::<SocketAddr>();
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     println!("\n  BMM Telemetry Dashboard (Axum + Postgres)");
     println!("  ──────────────────────────────────────────");
@@ -171,9 +176,21 @@ fn is_admin(cfg: &Config, headers: &HeaderMap, q: &HashMap<String, String>, body
 }
 
 // ── handlers ────────────────────────────────────────────────────────────────
-async fn ingest_handler(State(st): State<Shared>, Json(doc): Json<Value>) -> (StatusCode, Json<Value>) {
+async fn ingest_handler(
+    State(st): State<Shared>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Json(doc): Json<Value>,
+) -> (StatusCode, Json<Value>) {
     if !ok_key(&st.cfg, doc.get("api_key").and_then(Value::as_str)) {
         return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "bad key" })));
+    }
+    let ip = client_ip(&headers, addr);
+    // Per-IP rate limit so a single client can't spam / exhaust resources.
+    if let Some(ip) = &ip {
+        if !st.allow(ip, st.cfg.rate_per_min) {
+            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({ "error": "rate limited", "retry_after_s": 1 })));
+        }
     }
     let pid = doc.get("packet_id").and_then(Value::as_str).unwrap_or("").to_string();
     let batch: Vec<Value> = if let Some(arr) = doc.get("batch").and_then(Value::as_array) {
@@ -183,12 +200,58 @@ async fn ingest_handler(State(st): State<Shared>, Json(doc): Json<Value>) -> (St
     } else {
         vec![]
     };
+    // Reject oversized batches (cheap protection against memory abuse).
+    if batch.len() > st.cfg.max_batch {
+        return (StatusCode::PAYLOAD_TOO_LARGE, Json(json!({ "error": "batch too large", "max": st.cfg.max_batch })));
+    }
     let n = batch.len();
     for ev in &batch {
         db::ingest(&st, ev, &pid, true).await;
     }
+    // Capture the request IP server-side and resolve geo from it (no reliance on
+    // the client self-reporting its IP).
+    if let Some(ip) = ip {
+        let mut seen = std::collections::HashSet::new();
+        for ev in &batch {
+            if let Some(d) = ev.get("distinct_id").and_then(Value::as_str) {
+                if seen.insert(d.to_string()) {
+                    db::record_user_ip(&st, d, &ip).await;
+                }
+            }
+        }
+    }
     st.dirty.store(true, Ordering::Relaxed);
     (StatusCode::OK, Json(json!({ "status": 1, "received": n, "packet_id": pid })))
+}
+
+// Best source IP for the request: first X-Forwarded-For hop (ngrok/proxy), then
+// X-Real-IP, then the socket peer.
+fn client_ip(headers: &HeaderMap, addr: SocketAddr) -> Option<String> {
+    if let Some(xff) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
+        if let Some(first) = xff.split(',').next() {
+            let ip = first.trim();
+            if !ip.is_empty() {
+                return Some(ip.to_string());
+            }
+        }
+    }
+    if let Some(xr) = headers.get("x-real-ip").and_then(|v| v.to_str().ok()) {
+        if !xr.trim().is_empty() {
+            return Some(xr.trim().to_string());
+        }
+    }
+    Some(addr.ip().to_string())
+}
+
+async fn post_journeys(State(st): State<Shared>, Json(body): Json<Value>) -> Json<Value> {
+    let steps = body.get("steps").and_then(Value::as_u64).unwrap_or(4) as usize;
+    let limit = body.get("limit").and_then(Value::as_u64).unwrap_or(50) as usize;
+    let filters: Vec<String> = body
+        .get("filters")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().map(|v| v.as_str().unwrap_or("").to_string()).collect())
+        .unwrap_or_default();
+    Json(db::journeys(&st.pool, steps, limit, &filters).await)
 }
 
 async fn delete_request(State(st): State<Shared>, Json(body): Json<Value>) -> (StatusCode, Json<Value>) {
@@ -292,7 +355,8 @@ async fn post_goal(State(st): State<Shared>, headers: HeaderMap, Json(body): Jso
         Some("feature") => "feature",
         _ => "event",
     };
-    db::add_goal(&st.pool, name, typ, target).await;
+    let target_count = body.get("target_count").and_then(Value::as_i64).unwrap_or(1).max(1);
+    db::add_goal(&st.pool, name, typ, target, target_count).await;
     refresh(&st).await;
     (StatusCode::OK, Json(json!({ "status": 1 })))
 }

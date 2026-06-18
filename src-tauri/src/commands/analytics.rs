@@ -292,9 +292,17 @@ pub async fn analytics_flush(
     if resp.status().is_success() {
         let n = batch.len();
         write_queue(&app_handle, &[]); // clear only after a confirmed send
-        // Record the sent packet locally (id + time + count only — NOT the content).
+        // Record the sent packet locally: id + time + count + a privacy-safe
+        // breakdown of WHICH event types it held (names + counts only — never the
+        // property values / content).
+        let mut summary: std::collections::BTreeMap<String, i64> = std::collections::BTreeMap::new();
+        for ev in &batch {
+            if let Some(e) = ev.get("event").and_then(|v| v.as_str()) {
+                *summary.entry(e.to_string()).or_insert(0) += 1;
+            }
+        }
         let mut log = read_sent(&app_handle);
-        log.push(json!({ "id": packet_id, "ts": now_iso(), "count": n, "deletion_requested": false }));
+        log.push(json!({ "id": packet_id, "ts": now_iso(), "count": n, "deletion_requested": false, "events": summary }));
         if log.len() > 500 { let d = log.len() - 500; log.drain(0..d); }
         write_sent(&app_handle, &log);
         log_line(format!("[ANALYTICS] flushed {} events (packet {})", n, packet_id));

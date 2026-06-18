@@ -9,6 +9,10 @@ pub struct Config {
     pub delete_delay_h: i64,
     pub database_url: String,
     pub static_dir: String,
+    /// Max ingest requests per minute per client IP (token bucket).
+    pub rate_per_min: i64,
+    /// Max events accepted in a single batch (oversized batches are rejected).
+    pub max_batch: usize,
 }
 
 fn env_or(key: &str, default: &str) -> String {
@@ -28,6 +32,8 @@ impl Config {
                 "postgres://bmm:bmm@localhost:5432/telemetry",
             ),
             static_dir: env_or("STATIC_DIR", "public"),
+            rate_per_min: env_or("RATE_PER_MIN", "240").parse().unwrap_or(240),
+            max_batch: env_or("MAX_BATCH", "1000").parse().unwrap_or(1000),
         }
     }
 }

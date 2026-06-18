@@ -29,6 +29,8 @@ services:
       ADMIN_KEY: ${ADMIN_KEY:-change-me-admin}
       RETENTION_DAYS: ${RETENTION_DAYS:-180}
       DELETE_DELAY_H: ${DELETE_DELAY_H:-72}
+      RATE_PER_MIN: ${RATE_PER_MIN:-240}
+      MAX_BATCH: ${MAX_BATCH:-1000}
       STATIC_DIR: /app/public
     ports:
       - "8900:8900"

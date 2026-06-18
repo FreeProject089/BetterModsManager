@@ -155,6 +155,11 @@ async function startCollection(): Promise<void> {
         track('session_start', { ts: new Date().toISOString(), first_seen: firstSeen() });
         (window as any).bmmTrack = (event: string, props?: Record<string, any>) => track(event, props || {});
         initModalTracking();
+        initAutocapture();
+        registerCloseHandler();
+        // Catalog every modal the app exposes (once the DOM has settled), so the
+        // dashboard can target modals that were never opened yet.
+        setTimeout(sendModalCatalog, 4000);
     } catch {}
     // Periodic flush; also flush before the window closes.
     if (_flushTimer === null) _flushTimer = window.setInterval(() => flush(), 90000);
@@ -211,8 +216,14 @@ async function bmmProfileExtras(): Promise<Record<string, any>> {
             tooltips: ls('bmm_tasky_tooltip'),
         },
         counts: await bmmContentCounts(),
-        fs_security_mode: localStorage.getItem('bmm_fs_security_mode') || undefined,
+        fs_security_mode: await fsSecurityMode(),
     };
+}
+
+// How BMM accesses the filesystem (the "Security Access Mode" the user picked at
+// first launch — e.g. standard / strict). Read from the settings, not localStorage.
+async function fsSecurityMode(): Promise<string | undefined> {
+    try { const st: any = await invoke('get_settings'); return st?.fs_security_mode || undefined; } catch { return undefined; }
 }
 
 // Best-effort BMM content inventory (counts only, never contents): how many
@@ -250,18 +261,148 @@ function initModalTracking(): void {
         for (const m of muts) {
             const el = m.target as HTMLElement;
             if (!el.classList) continue;
-            const isModal = el.classList.contains('modal-overlay') || el.classList.contains('modal-generic-overlay') || el.classList.contains('modal-card');
+            const cls = el.className && typeof el.className === 'string' ? el.className : '';
+            const isModal = /modal|dialog|overlay|popup/i.test(cls) || /modal|dialog|popup/i.test(el.id || '');
             if (!isModal) continue;
-            if (el.classList.contains('open')) {
+            const shown = el.classList.contains('open') || el.classList.contains('active') || el.classList.contains('show') || el.classList.contains('visible');
+            if (shown) {
                 if (open.has(el)) continue;
                 open.add(el);
-                const name = el.id || el.querySelector('.modal-title, .modal-header h2, h3')?.textContent?.trim().slice(0, 40) || 'modal';
+                const name = modalName(el);
                 _currentModal = name;            // attribute perf samples to this modal
-                track('modal_open', { name });
+                // title gives context (which contributor / diagram / app, etc.)
+                track('modal_open', { name, title: modalTitle(el) });
             } else { open.delete(el); _currentModal = null; }
         }
     });
     _modalObs.observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+}
+
+function modalName(el: Element): string {
+    return (el.id
+        || el.getAttribute('data-modal')
+        || el.querySelector('.modal-title, .modal-header h2, h2, h3')?.textContent?.trim()
+        || 'modal').slice(0, 48);
+}
+function modalTitle(el: Element): string | undefined {
+    const tx = el.querySelector('.modal-title, .modal-header h2, h2, h3')?.textContent?.trim();
+    return tx ? tx.slice(0, 80) : undefined;
+}
+
+// Canonical list of every modal type BMM exposes (real element ids where they
+// exist in index.html, + descriptive keys for the dynamically-built ones). Sent
+// with the catalog so funnels/goals list ALL modals even before one is opened.
+const KNOWN_MODALS = [
+    // profiles
+    'modal-new-profile', 'modal-edit-profile', 'modal-delete-profile',
+    // mods
+    'modal-add-mod', 'modal-mod-tags', 'modal-delete-mod', 'modal-integrity', 'modal-chk-sha-lazy',
+    // conflicts
+    'modal-conflict-warning', 'modal-conflict-tree', 'modal-conflict-file-selector',
+    'modal-global-conflicts', 'modal-activation-warning', 'modal-duplicate-folder-warning',
+    // storage / launchpacks / apps
+    'modal-storage', 'modal-launchpack', 'modal-launchpack-delete', 'modal-app-picker',
+    'apps-detail-modal', 'apps-install-modal', 'cr-app-modal',
+    // credits / docs
+    'modal-contributor-detail', 'modal-docs-diagram',
+    // server repo
+    'modal-repo-update', 'modal-repo-hub', 'modal-repo-browser', 'modal-repo-sync-summary',
+    'modal-repo-history', 'modal-repo-verify-detail', 'modal-monitoring', 'modal-whitelist', 'modal-bans',
+    // i18n / feedback / crash
+    'modal-i18n-sandbox', 'modal-crash-report', 'modal-betahub-bugreport', 'modal-betahub-feedback',
+    // history / legal / misc
+    'modal-history', 'modal-history-detail', 'modal-license', 'modal-tos', 'modal-privacy',
+    'modal-mapper-input', 'modal-mapper-confirm', 'modal-archive-explorer', 'modal-stack',
+    // scheduling / updates / perf / language / security
+    'modal-scheduler', 'modal-update-notes', 'modal-advanced-perf-overlay', 'modal-lang-select',
+    'modal-security-choice', 'update-available-modal', 'ptb-welcome-modal', 'modal-confirm-generic',
+    'export-progress-overlay',
+    // dynamically-built (descriptive keys; real id/title captured on open)
+    'theme-catalogue', 'theme-editor', 'benchmark', 'interactive-tutorial',
+];
+
+// Enumerate every modal-like element in the DOM and report the catalog once, so
+// the dashboard can offer ALL modals (not just ones already opened) for funnels
+// and goals. Only ids/names are sent — never content.
+function sendModalCatalog(): void {
+    if (_consent !== true) return;
+    try {
+        const els = document.querySelectorAll('[class*="modal" i], [class*="dialog" i], [id*="modal" i], [id*="dialog" i], [role="dialog"]');
+        const names = new Set<string>(KNOWN_MODALS);
+        els.forEach(el => { const n = modalName(el); if (n && n !== 'modal') names.add(n); });
+        track('modal_catalog', { names: [...names].slice(0, 400) });
+    } catch {}
+}
+
+// Reliable session_end on a real app close → lets the dashboard tell a clean
+// exit (offline) from a crash (no session_end). Best-effort across Tauri APIs.
+function registerCloseHandler(): void {
+    try {
+        const w = (window as any).__TAURI__;
+        const onClose = () => { trackSessionEnd(); flush(); };
+        w?.event?.listen?.('tauri://close-requested', onClose);
+        w?.event?.listen?.('tauri://destroyed', onClose);
+        w?.window?.getCurrent?.()?.onCloseRequested?.(onClose);
+    } catch {}
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') flush();   // flush buffer, don't end the session
+    });
+}
+
+// ── Lightweight autocapture (privacy-safe: labels/field-names only, no values) ──
+let _acStarted = false;
+let _acWindow = Date.now();
+let _acCount = 0;
+function acAllowed(): boolean {
+    const now = Date.now();
+    if (now - _acWindow > 10000) { _acWindow = now; _acCount = 0; }
+    if (_acCount >= 60) return false;     // flood guard
+    _acCount++;
+    return true;
+}
+function initAutocapture(): void {
+    if (_acStarted) return;
+    _acStarted = true;
+
+    document.addEventListener('click', (e) => {
+        if (_consent !== true) return;
+        const el = (e.target as HTMLElement)?.closest('button, a, [role="button"], .btn, input[type="button"], input[type="submit"]') as HTMLElement | null;
+        if (!el || !acAllowed()) return;
+        const tag = el.tagName.toLowerCase();
+        const text = (el.textContent || (el as HTMLInputElement).value || el.getAttribute('aria-label') || el.title || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+        // outbound vs in-app button
+        const href = (el as HTMLAnchorElement).href;
+        if (tag === 'a' && href && /^https?:/i.test(href) && !href.startsWith(location.origin)) {
+            track('outbound', { url: href.slice(0, 200) });
+        } else {
+            track('click', { text, tag, id: el.id || undefined });
+        }
+    }, true);
+
+    document.addEventListener('copy', () => { if (_consent === true && acAllowed()) track('copy', {}); }, true);
+
+    document.addEventListener('submit', (e) => {
+        if (_consent !== true || !acAllowed()) return;
+        const f = e.target as HTMLFormElement;
+        track('form_submit', { id: f?.id || f?.getAttribute('name') || undefined });
+    }, true);
+
+    document.addEventListener('change', (e) => {
+        if (_consent !== true || !acAllowed()) return;
+        const el = e.target as HTMLElement;
+        if (!/^(input|select|textarea)$/i.test(el.tagName)) return;
+        const field = el.getAttribute('name') || el.id || (el as HTMLInputElement).type || 'field';
+        track('input_change', { field: String(field).slice(0, 40) });   // name only, never the value
+    }, true);
+
+    window.addEventListener('error', (e) => {
+        if (_consent !== true) return;
+        track('error', { message: String(e.message || 'error').slice(0, 160) });
+    });
+    window.addEventListener('unhandledrejection', (e: any) => {
+        if (_consent !== true) return;
+        track('error', { message: String(e?.reason?.message || e?.reason || 'rejection').slice(0, 160) });
+    });
 }
 
 // ── Client performance metrics: FPS / frametime / JS heap ──────────────────────
@@ -329,12 +470,39 @@ function stopCollection(): void {
     if (_flushTimer !== null) { clearInterval(_flushTimer); _flushTimer = null; }
 }
 
+let _sessionEnded = false;
 function trackSessionEnd(): void {
-    track('session_end', {
+    if (_sessionEnded) return;
+    _sessionEnded = true;
+    const props = {
         duration_sec: Math.round((Date.now() - _sessionStart) / 1000),
         views_visited: _journey.length,
         journey: _journey.slice(-40),
-    });
+    };
+    track('session_end', props);
+    // Also deliver it RIGHT NOW via sendBeacon — the queued flush often doesn't
+    // complete before the process exits, which would make a clean close look
+    // like a crash. sendBeacon is built for unload and is reliable.
+    beaconSessionEnd(props);
+}
+
+// Direct, fire-and-forget delivery of one batch on app close (bypasses the
+// Rust queue so the clean-exit signal actually arrives).
+function beaconSessionEnd(props: Record<string, any>): void {
+    try {
+        if (_consent !== true) return;
+        const links = getLinks();
+        const endpoint = (links.analytics_endpoint || '').trim();
+        if (!endpoint || !navigator.sendBeacon) return;
+        const ev = {
+            event: 'session_end',
+            distinct_id: _distinctId,
+            timestamp: new Date().toISOString(),
+            properties: { ...baseProps(), ...props },
+        };
+        const body = JSON.stringify({ api_key: links.analytics_key || '', packet_id: `beacon-${_sessionId}`, batch: [ev] });
+        navigator.sendBeacon(endpoint, new Blob([body], { type: 'application/json' }));
+    } catch {}
 }
 
 function flush(): void {
@@ -423,29 +591,45 @@ async function renderSentPackets(): Promise<void> {
         } catch {}
     }
     const clearRow = `<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><button class="btn btn-xs btn-ghost" id="apv-clear-hist">${t('analytics.clearHistory') || 'Clear history'}</button></div>`;
+    const delBtn = (id: string) => `<button class="btn btn-xs btn-ghost apv-del" data-id="${escHtml(id)}" style="color:var(--danger)">${t('analytics.requestDelete') || 'Request deletion'}</button>`;
     host.innerHTML = clearRow + packets.slice(0, 80).map(p => {
         const requested = !!p.deletion_requested;
         const when = (p.ts || '').slice(0, 16).replace('T', ' ');
         const srv = statuses[p.id];
-        let status = '', done = false;
-        if (srv && (srv.status === 'done' || srv.status === 'rejected')) {
-            done = srv.status === 'done';
-            status = done
-                ? `${t('analytics.deleted2') || 'Deleted'}${srv.decided_at ? ' · ' + new Date(srv.decided_at).toLocaleDateString() : ''}`
-                : (t('analytics.deleteRejected') || 'Request rejected');
-        } else if (requested) {
+        const isDone = !!srv && srv.status === 'done';
+        const isRejected = !!srv && srv.status === 'rejected';
+        const isPending = requested && !isDone && !isRejected;
+
+        // right-hand control: green "Deleted" when done, pending text while waiting,
+        // otherwise the request button (incl. when a previous request was rejected).
+        let control: string;
+        if (isDone) {
+            const txt = `${t('analytics.deleted2') || 'Deleted'}${srv.decided_at ? ' · ' + new Date(srv.decided_at).toLocaleDateString() : ''}`;
+            control = `<span class="apv-pkt-status" style="background:rgba(52,211,153,.15);color:#34d399">${escHtml(txt)}</span>`;
+        } else if (isPending) {
             const sched = p.deletion_scheduled_at ? new Date(p.deletion_scheduled_at).toLocaleString() : '';
-            status = sched
-                ? `${t('analytics.deleteBy') || 'Erased by'} ${sched}`
-                : (t('analytics.deleteRequested') || 'Deletion requested (≤72h)');
+            const txt = sched ? `${t('analytics.deleteBy') || 'Erased by'} ${sched}` : (t('analytics.deleteRequested') || 'Deletion requested (≤72h)');
+            control = `<span class="apv-pkt-status">${escHtml(txt)}</span>`;
+        } else {
+            // not requested, or rejected → offer the request button again
+            const note = isRejected ? `<span class="apv-pkt-rejected" style="color:var(--warning,#f4b740);font-size:11px;margin-right:6px">${t('analytics.deleteRejected') || 'Request rejected'}</span>` : '';
+            control = note + delBtn(p.id);
         }
-        return `<div class="apv-pkt">
-            <span class="apv-pkt-id" title="${escHtml(p.id)}">${escHtml(String(p.id).slice(0, 8))}…</span>
-            <span class="apv-pkt-meta">${escHtml(when)} · ${p.count} ${t('analytics.packetEvents') || 'events'}</span>
-            <span class="apv-pkt-spacer"></span>
-            ${status
-                ? `<span class="apv-pkt-status" style="${done ? 'background:rgba(52,211,153,.15);color:#34d399' : ''}">${escHtml(status)}</span>`
-                : `<button class="btn btn-xs btn-ghost apv-del" data-id="${escHtml(p.id)}" style="color:var(--danger)">${t('analytics.requestDelete') || 'Request deletion'}</button>`}
+
+        // privacy-safe content summary: event NAMES + counts only, no values.
+        const ev = p.events && typeof p.events === 'object' ? Object.entries(p.events) : [];
+        const evBrief = ev.length
+            ? ev.map(([k, v]) => `${escHtml(k)} ×${v}`).join(' · ')
+            : `${p.count} ${t('analytics.packetEvents') || 'events'}`;
+
+        return `<div class="apv-pkt" style="flex-direction:column;align-items:stretch;gap:4px">
+            <div style="display:flex;align-items:center;gap:8px">
+                <span class="apv-pkt-id" title="${escHtml(p.id)}">${escHtml(String(p.id).slice(0, 8))}…</span>
+                <span class="apv-pkt-meta">${escHtml(when)} · ${p.count} ${t('analytics.packetEvents') || 'events'}</span>
+                <span class="apv-pkt-spacer" style="flex:1"></span>
+                ${control}
+            </div>
+            <div class="apv-pkt-events" style="font-size:11px;color:var(--text-muted,#9aa3ad);line-height:1.5">${evBrief}</div>
         </div>`;
     }).join('');
     host.querySelector('#apv-clear-hist')?.addEventListener('click', async () => {

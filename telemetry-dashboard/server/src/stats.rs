@@ -208,6 +208,18 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
         }
     }
 
+    // Fill any missing IP from the server-side capture (request IP), then geo.
+    let user_ips = db::load_user_ips(pool).await;
+    for (did, u) in users.iter_mut() {
+        if u.ip.is_none() {
+            if let Some(ip) = user_ips.get(did) {
+                u.ip = Some(ip.clone());
+                if !u.ips.iter().any(|x| x == ip) {
+                    u.ips.push(ip.clone());
+                }
+            }
+        }
+    }
     for u in users.values_mut() {
         u.geo = geo_of(&u.ip);
     }
@@ -301,17 +313,19 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
     .fetch_one(pool)
     .await
     .unwrap_or((None, None, None, None));
-    let mut by_view: Vec<Value> = sqlx::query_as::<_, (Option<String>, Option<f64>, Option<f64>, i64)>(
-        "SELECT props->>'view', AVG((props->>'fps_avg')::float), AVG((props->>'frametime_avg_ms')::float), COUNT(*)
+    let mut by_view: Vec<Value> = sqlx::query_as::<_, (Option<String>, Option<f64>, Option<f64>, Option<f64>, Option<f64>, i64)>(
+        "SELECT props->>'view', AVG((props->>'fps_avg')::float), AVG((props->>'frametime_avg_ms')::float),
+                MAX((props->>'frametime_worst_ms')::float), AVG((props->>'js_heap_mb')::float), COUNT(*)
          FROM events WHERE event='perf' GROUP BY props->>'view'",
     )
     .fetch_all(pool)
     .await
     .unwrap_or_default()
     .into_iter()
-    .filter_map(|(v, fps, ft, n)| {
+    .filter_map(|(v, fps, ft, worst, heap, n)| {
         let v = v?;
-        Some(json!({ "view": v, "fps": r1(fps.unwrap_or(0.0)), "ft": r2(ft.unwrap_or(0.0)), "n": n }))
+        Some(json!({ "view": v, "fps": r1(fps.unwrap_or(0.0)), "ft": r2(ft.unwrap_or(0.0)),
+                     "worst": r2(worst.unwrap_or(0.0)), "heap": r1(heap.unwrap_or(0.0)), "n": n }))
     })
     .collect();
     by_view.sort_by(|a, b| a["fps"].as_f64().partial_cmp(&b["fps"].as_f64()).unwrap());
@@ -359,14 +373,27 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
     let gpu = tally(uarr.iter().map(|u| gpu_vendor(s_str(&u.config, "gpu")).to_string()));
     let vm_count = uarr.iter().filter(|u| u.config.get("is_vm").and_then(Value::as_bool).unwrap_or(false)).count();
 
-    // benchmarks recent + per-op
-    let benchmarks_recent: Vec<Value> = brows
-        .iter()
-        .take(60)
-        .map(|(did, ts, total_ms, _db, source, ops)| {
-            json!({ "creator_id": did, "ts": ts, "total_ms": total_ms, "source": source, "ops": ops })
-        })
-        .collect();
+    // benchmarks recent + per-op. Keep at most 2 per creator (newest first) so
+    // each creator's last two runs are visible side-by-side for comparison,
+    // with exact values: total time, throughput (MB/s), and every op.
+    let mut per_creator: HashMap<String, i64> = HashMap::new();
+    let mut benchmarks_recent: Vec<Value> = Vec::new();
+    for (did, ts, total_ms, dbytes, source, ops) in &brows {
+        let id = did.clone().unwrap_or_default();
+        let c = per_creator.entry(id.clone()).or_insert(0);
+        if *c >= 2 {
+            continue;
+        }
+        *c += 1;
+        let mbps = match (dbytes, total_ms) {
+            (Some(b), Some(t)) if *t > 0.0 => Some(r2((*b as f64 / 1_048_576.0) / (*t / 1000.0))),
+            _ => None,
+        };
+        benchmarks_recent.push(json!({
+            "creator_id": id, "ts": ts, "total_ms": total_ms, "dataset_bytes": dbytes,
+            "throughput_mbps": mbps, "source": source, "ops": ops,
+        }));
+    }
     let mut op_sum: HashMap<String, f64> = HashMap::new();
     let mut op_n: HashMap<String, i64> = HashMap::new();
     for (_, _, _, _, _, ops) in &brows {
@@ -387,6 +414,17 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
         })
         .collect();
     benchmarks_ops.sort_by(|a, b| b["avg_ms"].as_f64().partial_cmp(&a["avg_ms"].as_f64()).unwrap());
+    // average benchmark throughput (MB/s) across all runs that reported a dataset size
+    let (mut mbps_sum, mut mbps_n) = (0.0f64, 0i64);
+    for (_, _, total_ms, dbytes, _, _) in &brows {
+        if let (Some(t), Some(b)) = (total_ms, dbytes) {
+            if *t > 0.0 {
+                mbps_sum += (*b as f64 / 1_048_576.0) / (*t / 1000.0);
+                mbps_n += 1;
+            }
+        }
+    }
+    let bench_mbps_avg = if mbps_n > 0 { r2(mbps_sum / mbps_n as f64) } else { 0.0 };
 
     // ── Live instances (persisted, with status + crash) ─────────────────────
     let live_rows: Vec<(String, Option<i64>, Option<i64>, Option<String>, bool, bool, Value)> = sqlx::query_as(
@@ -641,8 +679,38 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
 
     let wv_pct = webvitals_percentiles(pool).await;
 
+    // All modals the app exposes — union of opened modals + the client's modal
+    // catalog (so funnels/goals can target modals that were never opened yet).
+    let mut modal_names: std::collections::HashSet<String> = modals
+        .iter()
+        .filter_map(|m| m["k"].as_str().map(String::from))
+        .collect();
+    let cat: Vec<(Option<Value>,)> = sqlx::query_as("SELECT props->'names' FROM events WHERE event='modal_catalog'")
+        .fetch_all(pool)
+        .await
+        .unwrap_or_default();
+    for (names,) in cat {
+        if let Some(arr) = names.and_then(|v| v.as_array().cloned()) {
+            for n in arr {
+                if let Some(s) = n.as_str() {
+                    modal_names.insert(s.to_string());
+                }
+            }
+        }
+    }
+    let mut modals_all: Vec<String> = modal_names.into_iter().collect();
+    modals_all.sort();
+
     let goals = db::list_goals(pool).await;
     let retention = db::retention_cohorts(pool, 8).await;
+    let retention_daily = db::retention_cohorts_daily(pool, 30).await;
+    // Bucketed activity for the overview granularity selector.
+    let buckets = json!({
+        "15m": db::timeseries(pool, 900_000, 96).await,
+        "30m": db::timeseries(pool, 1_800_000, 48).await,
+        "1h": db::timeseries(pool, 3_600_000, 24).await,
+        "1d": db::timeseries(pool, 86_400_000, 30).await,
+    });
     let pending = db::pending_deletion_count(pool).await;
 
     let users_out: Vec<Value> = {
@@ -674,17 +742,19 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
             "benchmarks": bench_total,
             "live": live_count,
         },
-        "series": series, "events": events, "pages": pages, "funnels": funnels,
+        "series": series, "buckets": buckets, "events": events, "pages": pages, "funnels": funnels,
         "perf": { "fps_avg": r1(pf.0.unwrap_or(0.0)), "frametime_avg_ms": r2(pf.1.unwrap_or(0.0)),
-                  "frametime_worst_ms": r2(pf.2.unwrap_or(0.0)), "heap_avg_mb": r1(pf.3.unwrap_or(0.0)), "byView": by_view },
+                  "frametime_worst_ms": r2(pf.2.unwrap_or(0.0)), "heap_avg_mb": r1(pf.3.unwrap_or(0.0)),
+                  "bench_mbps_avg": bench_mbps_avg, "byView": by_view },
         "geo": country_tally.iter().map(|x| json!({ "country": x["k"], "count": x["v"] })).collect::<Vec<_>>(),
         "country_cc": country_cc, "regions": regions,
         "os": os, "gpu": gpu, "vm_count": vm_count,
         "repos": repos, "map": { "users": map_users, "repos": map_repos }, "activity_min": min_map,
-        "retention": retention,
+        "retention": retention, "retention_daily": retention_daily,
         "themes": themes, "theme_kind": theme_kind, "languages": languages, "tasky": tasky,
         "content": content, "access": access,
-        "modals": modals, "modals_detail": modals_detail, "features": features, "tutorial": tutorial,
+        "modals": modals, "modals_detail": modals_detail, "modals_all": modals_all,
+        "features": features, "tutorial": tutorial,
         "webvitals": webvitals, "webvitals_pct": wv_pct, "webvitals_series": wv_series, "pages_vitals": pv_detail,
         "goals": goals,
         "live": live, "live_count": live_count,

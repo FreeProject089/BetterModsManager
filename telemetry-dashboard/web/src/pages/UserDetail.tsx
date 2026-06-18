@@ -4,6 +4,7 @@ import { useStats, apiGet } from "../lib/store";
 import { Card, Kpi, Empty } from "../components/ui";
 import { Chart } from "../components/Chart";
 import { ProfileAvatar, Flag } from "../components/visuals";
+import { EventTimeline } from "../components/events";
 import { fmtDate, fmtDateTime, dur, nf } from "../lib/format";
 
 export default function UserDetail() {
@@ -152,16 +153,7 @@ export default function UserDetail() {
                     {fmtDateTime(sess.start)} · {dur((new Date(sess.end).getTime() - new Date(sess.start).getTime()) / 1000)} · {sess.events?.length || 0} events
                   </span>
                 </div>
-                <ol className="relative border-l border-line ml-2 space-y-1">
-                  {(sess.events || []).slice(0, 40).map((e: any, i: number) => (
-                    <li key={i} className="ml-3 text-sm">
-                      <span className="absolute -left-[5px] w-2 h-2 rounded-full bg-brand mt-1.5" />
-                      <span className="text-sub text-xs mr-2">{(e.ts || "").slice(11, 19)}</span>
-                      <span className="font-medium">{e.event}</span>
-                      {e.detail && <span className="text-sub"> · {e.detail}</span>}
-                    </li>
-                  ))}
-                </ol>
+                <EventTimeline events={sess.events || []} />
               </div>
             ))}
           </div>

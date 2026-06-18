@@ -28,27 +28,33 @@ function KpiSpark({ label, value, data, color }: { label: string; value: React.R
   );
 }
 
+const GRAN: { key: string; label: string }[] = [
+  { key: "15m", label: "15 min" },
+  { key: "30m", label: "30 min" },
+  { key: "1h", label: "1 h" },
+  { key: "1d", label: "24 h" },
+];
+
 export default function Overview() {
   const s = useStats()!;
   const t = s.totals;
-  const [gran, setGran] = useState<"hour" | "minute">("hour");
+  const [gran, setGran] = useState("1h");
 
   const sUsers = s.series.map((r: any) => r.users);
   const sSessions = s.series.map((r: any) => r.sessions);
   const sPv = s.series.map((r: any) => r.pageviews);
   const sEvents = s.series.map((r: any) => r.events);
 
-  const isMin = gran === "minute";
-  const src = isMin ? s.activity_min : s.series;
-  const labels = isMin ? src.map((m: any) => m.t) : src.map((r: any) => (r.hour || "").slice(11) + "h");
+  const src: any[] = (s as any).buckets?.[gran] || s.series.map((r: any) => ({ ...r, t: (r.hour || "").slice(11) + "h" }));
+  const interval = gran === "15m" ? 7 : gran === "30m" ? 3 : 0;
   const mainOpt = {
     grid: { left: 40, right: 16, top: 24, bottom: 24 },
     legend: { data: ["Users", "Pageviews"], textStyle: { color: "#9aa3ad" }, right: 10, top: 0 },
-    xAxis: { ...axisX(labels), axisLabel: { color: "#9aa3ad", fontSize: 10, interval: isMin ? 9 : 0 } },
+    xAxis: { ...axisX(src.map((r) => r.t)), axisLabel: { color: "#9aa3ad", fontSize: 10, interval } },
     yAxis: axisY(),
     series: [
-      { name: "Users", type: "line", smooth: true, showSymbol: false, data: src.map((r: any) => r.users), areaStyle: { color: "rgba(91,140,255,0.18)" }, lineStyle: { color: "#5b8cff", width: 2 } },
-      { name: "Pageviews", type: "line", smooth: true, showSymbol: false, data: src.map((r: any) => r.pageviews), lineStyle: { color: "#37d399", width: 1.5 } },
+      { name: "Users", type: "line", smooth: true, showSymbol: false, data: src.map((r) => r.users), areaStyle: { color: "rgba(91,140,255,0.18)" }, lineStyle: { color: "#5b8cff", width: 2 } },
+      { name: "Pageviews", type: "line", smooth: true, showSymbol: false, data: src.map((r) => r.pageviews), lineStyle: { color: "#37d399", width: 1.5 } },
     ],
   };
 
@@ -77,8 +83,9 @@ export default function Overview() {
         title="Users & pageviews"
         right={
           <div className="flex gap-1">
-            <button onClick={() => setGran("hour")} className={`pill ${gran === "hour" ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>24h · hour</button>
-            <button onClick={() => setGran("minute")} className={`pill ${gran === "minute" ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>60m · minute</button>
+            {GRAN.map((g) => (
+              <button key={g.key} onClick={() => setGran(g.key)} className={`pill ${gran === g.key ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>{g.label}</button>
+            ))}
           </div>
         }
       >

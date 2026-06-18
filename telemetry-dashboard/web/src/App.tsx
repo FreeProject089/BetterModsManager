@@ -8,6 +8,7 @@ import Sessions from "./pages/Sessions";
 import Pages from "./pages/Pages";
 import MapPage from "./pages/MapPage";
 import Funnels from "./pages/Funnels";
+import Journeys from "./pages/Journeys";
 import Retention from "./pages/Retention";
 import Goals from "./pages/Goals";
 import Users from "./pages/Users";
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="pages" element={<Gate><Pages /></Gate>} />
           <Route path="map" element={<Gate><MapPage /></Gate>} />
           <Route path="funnels" element={<Gate><Funnels /></Gate>} />
+          <Route path="journeys" element={<Gate><Journeys /></Gate>} />
           <Route path="retention" element={<Gate><Retention /></Gate>} />
           <Route path="goals" element={<Gate><Goals /></Gate>} />
           <Route path="users" element={<Gate><Users /></Gate>} />

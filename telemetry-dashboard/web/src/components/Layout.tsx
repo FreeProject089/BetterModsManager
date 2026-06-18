@@ -9,6 +9,7 @@ const NAV: { to: string; label: string; icon: string }[] = [
   { to: "/pages", label: "Pages & perf", icon: "M4 4h16v4H4Zm0 6h16v10H4Z" },
   { to: "/map", label: "Map", icon: "M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3Z" },
   { to: "/funnels", label: "Funnels", icon: "M3 4h18l-7 8v6l-4 2v-8L3 4Z" },
+  { to: "/journeys", label: "Journeys", icon: "M4 19V5m0 14 4-3 4 3 4-3 4 3M4 5l4-3 4 3 4-3 4 3" },
   { to: "/retention", label: "Retention", icon: "M3 3v18h18M7 14l4-4 3 3 5-6" },
   { to: "/goals", label: "Goals", icon: "M12 2v20M2 12h20M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Z" },
   { to: "/users", label: "Users", icon: "M16 21v-2a4 4 0 0 0-8 0v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" },
