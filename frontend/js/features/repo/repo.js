@@ -1848,6 +1848,31 @@ export function initRepo() {
         }
     };
     initCreatorId();
+    // Copy-my-creator-id button (was unwired → copied nothing).
+    const btnCopyCreator = document.getElementById('btn-copy-my-creator-id');
+    if (btnCopyCreator && !btnCopyCreator.dataset.wired) {
+        btnCopyCreator.dataset.wired = '1';
+        btnCopyCreator.addEventListener('click', async () => {
+            let id = elements.repoCreatorIdValue?.textContent?.trim() || '';
+            if (!id || id === '…') {
+                try {
+                    id = await invoke('get_creator_id');
+                }
+                catch { }
+            }
+            if (!id) {
+                toast(t('repo.errNoCreatorId') || 'Creator ID not ready', 'warning');
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(id);
+                toast(t('repo.creatorIdCopied') || 'Creator ID copied', 'success');
+            }
+            catch {
+                toast(t('common.error') || 'Copy failed', 'error');
+            }
+        });
+    }
     // --- Export process ---
     if (elements.btnStartExport) {
         elements.btnStartExport.addEventListener('click', async () => {
@@ -1860,7 +1885,14 @@ export function initRepo() {
                 elements.inputExportAuthor?.focus();
                 return;
             }
-            localStorage.setItem('bmm_last_author', authorName);
+            const safeAuthor = authorName.slice(0, 25); // creator name capped at 25 chars
+            localStorage.setItem('bmm_last_author', safeAuthor);
+            // Telemetry (opt-in): the team tracks every creator name a user hosts under.
+            try {
+                const { track } = await import('../../core/analytics.js');
+                track('repo_host', { creator_name: safeAuthor });
+            }
+            catch { }
             const cbs = document.querySelectorAll('.repo-profile-cb:checked');
             const profileIds = Array.from(cbs).map(c => c.value);
             if (profileIds.length === 0)

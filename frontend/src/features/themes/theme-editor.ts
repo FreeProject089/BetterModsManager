@@ -8,6 +8,7 @@
 
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
+import { invoke } from '../../core/api.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import {
     applyTheme, previewTheme, resetTheme, getActiveTheme,
@@ -425,6 +426,11 @@ const TARGET_GROUPS: { cat: string; items: { label: string; sel: string }[] }[] 
         { label: 'Update / release',   sel: '#upd-card' },
         { label: 'Update notes',       sel: '#modal-update-notes .ptb-modal-card' },
         { label: 'Update sources',     sel: '#mod-update-config-overlay .modal' },
+        { label: 'Scheduler card',     sel: '#settings-scheduler-section' },
+        { label: 'Scheduler modal',    sel: '#modal-scheduler .modal' },
+        { label: 'Scheduler steps',    sel: '.sched-step' },
+        { label: 'Scheduler chips',    sel: '.sched-chip' },
+        { label: 'Card-order bar',     sel: '.cardorder-bar' },
         { label: 'Docs browser',       sel: '.ptb-modal-card' },
         { label: 'Theme catalog',      sel: '.tc-modal-card' },
         { label: 'TOS / Privacy',      sel: '#modal-tos .modal, #modal-privacy .modal' },
@@ -1282,7 +1288,9 @@ function buildInstalledTab(): string {
                     <div class="bte-installed-actions">
                         <button class="btn btn-xs${isActive?' btn-accent':' btn-ghost'} bte-activate" data-id="${th.id}">${isActive?`✓ ${t('themes.active')||'Active'}`:(t('themes.apply')||'Apply')}</button>
                         ${!isBuiltin?`<button class="btn btn-xs btn-ghost bte-export-theme" data-id="${th.id}">${t('themes.export')||'Export'}</button>`:''}
-                        ${!isBuiltin?`<button class="btn btn-xs btn-danger bte-delete-theme" data-id="${th.id}">✕</button>`:''}
+                        ${!isBuiltin
+                            ? `<button class="btn btn-xs btn-danger bte-delete-theme" data-id="${th.id}">✕</button>`
+                            : `<button class="btn btn-xs btn-ghost bte-hide-builtin" data-id="${th.id}" title="${escAttr(t('themes.uninstall')||'Uninstall')}">${t('themes.uninstall')||'Uninstall'}</button>`}
                     </div>
                 </div>`;
             }).join('')}
@@ -1309,6 +1317,21 @@ function wireInstalled(): void {
         btn.addEventListener('click', async () => {
             if (!await bteConfirm(t('themes.confirmDelete')||'Remove this theme?', { danger: true, okLabel: t('common.delete')||'Delete' })) return;
             await deleteTheme((btn as HTMLElement).dataset.id!);
+            renderTab('installed');
+        });
+    });
+    // Built-in presets are HIDDEN, not deleted — re-enable them anytime from the
+    // Theme Catalogue ("Reinstall"). This keeps the presets recoverable.
+    _panel?.querySelectorAll('.bte-hide-builtin').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id = (btn as HTMLElement).dataset.id!;
+            if (!await bteConfirm(t('themes.confirmHideBuiltin')||'Hide this default theme? You can reinstall it from the Theme Catalogue.', { okLabel: t('themes.uninstall')||'Uninstall' })) return;
+            try {
+                await invoke('set_builtin_hidden', { themeId: id, hidden: true });
+                const { loadBuiltinThemes } = await import('./theme-engine.js');
+                await loadBuiltinThemes();
+                toast(t('themes.uninstalled')||'Theme hidden', 'success');
+            } catch (e) { toast(String(e), 'error'); }
             renderTab('installed');
         });
     });

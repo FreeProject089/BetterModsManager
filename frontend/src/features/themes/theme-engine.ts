@@ -745,6 +745,7 @@ export async function activateTheme(id: string): Promise<void> {
     if (!theme) { toast(t('themes.notFound') || 'Theme not found', 'error'); return; }
     applyTheme(theme);
     await invoke('set_active_theme', { themeId: id }).catch(() => {});
+    try { (window as any).bmmTrack?.('feature', { name: 'theme.apply' }); } catch {}
 }
 
 export async function exportTheme(id: string): Promise<void> {

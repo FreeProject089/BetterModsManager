@@ -1488,6 +1488,10 @@ export async function initSettings() {
         initCardReorder();
     }
     catch (e) { }
+    try {
+        (await import('../../core/analytics.js')).initPrivacySettings();
+    }
+    catch (e) { }
     initSecurityInfoCard().catch(() => { });
     // Tags Settings
     const btnCreateTag = document.getElementById('btn-create-tag');

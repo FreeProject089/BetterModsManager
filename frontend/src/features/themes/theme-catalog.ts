@@ -210,9 +210,27 @@ function renderCatalog(): void {
             </div>`;
     }).join('');
 
+    const anyHidden = _builtins.some(b => b._hidden);
+    const defaultHead = `<div class="btc-section-head" style="grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;margin:6px 0 2px;">
+        <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--bmm-text-muted)">${escHtml(t('themes.defaultThemes') || 'Default themes')}</span>
+        ${anyHidden ? `<button class="btn btn-xs btn-ghost" id="btc-restore-all">${escHtml(t('themes.restoreAll') || 'Restore all defaults')}</button>` : ''}
+    </div>`;
     listEl.innerHTML =
-        (builtinsFiltered.length ? sectionHead(t('themes.defaultThemes') || 'Default themes') + builtinsHtml : '') +
+        (builtinsFiltered.length || anyHidden ? defaultHead + builtinsHtml : '') +
         (filtered.length ? sectionHead(t('themes.catalogThemes') || 'Catalogue') + catalogHtml : '');
+
+    listEl.querySelector('#btc-restore-all')?.addEventListener('click', async () => {
+        try {
+            const hidden: string[] = JSON.parse(await invoke('list_builtin_themes_all') as string || '[]')
+                .filter((b: any) => b._hidden).map((b: any) => b.id);
+            for (const id of hidden) await invoke('set_builtin_hidden', { themeId: id, hidden: false });
+            const { loadBuiltinThemes } = await import('./theme-engine.js');
+            await loadBuiltinThemes();
+            _builtins = JSON.parse(await invoke('list_builtin_themes_all') as string || '[]');
+            toast(t('themes.restoredAll') || 'All default themes restored', 'success');
+            renderCatalog();
+        } catch (e) { toast(String(e), 'error'); }
+    });
 
     // ── Built-in uninstall / reinstall ────────────────────────────────────────
     const refreshBuiltins = async () => {
@@ -259,11 +277,46 @@ function renderCatalog(): void {
 
 // ── Community sources ─────────────────────────────────────────────────────────
 function addCommunitySource(): void {
-    const url = prompt(t('themes.communityUrlPrompt') || 'Enter the URL of the community themes catalog.json:');
-    if (!url?.trim()) return;
-    _communitySources.push(url.trim());
-    localStorage.setItem(COMMUNITY_SRC_KEY, JSON.stringify(_communitySources));
-    fetchCatalog(true).then(renderCatalog);
+    // Small in-app modal (no native prompt()).
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay open tc-src-modal';
+    ov.style.cssText = 'position:absolute;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px)';
+    ov.innerHTML = `
+        <div class="modal glass" style="width:480px;max-width:94vw">
+            <div class="modal-header">
+                <h2 class="modal-title" style="margin:0;font-size:1.1rem">${escHtml(t('themes.communityAddTitle') || 'Add a community theme catalogue')}</h2>
+                <button class="modal-close" id="tc-src-close">&times;</button>
+            </div>
+            <div class="modal-body" style="padding:18px 22px;display:flex;flex-direction:column;gap:10px">
+                <p style="font-size:12px;color:var(--bmm-text-muted);margin:0">${escHtml(t('themes.communityAddDesc') || 'Paste the HTTPS/HTTP link to a themes catalog.json. The catalogue\'s themes appear in the gallery to install.')}</p>
+                <input type="text" class="input" id="tc-src-input" placeholder="https://raw.githubusercontent.com/.../catalog.json" style="width:100%">
+            </div>
+            <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid var(--border)">
+                <button class="btn btn-ghost" id="tc-src-cancel">${escHtml(t('common.cancel') || 'Cancel')}</button>
+                <button class="btn btn-accent" id="tc-src-add">${escHtml(t('common.add') || 'Add')}</button>
+            </div>
+        </div>`;
+    (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+    const close = () => ov.remove();
+    const input = ov.querySelector('#tc-src-input') as HTMLInputElement;
+    const submit = () => {
+        const url = input.value.trim();
+        if (!url) return;
+        if (!/^https?:\/\//i.test(url)) { toast(t('themes.communityInvalid') || 'Enter a valid http(s) URL', 'warning'); return; }
+        if (!_communitySources.includes(url)) {
+            _communitySources.push(url);
+            localStorage.setItem(COMMUNITY_SRC_KEY, JSON.stringify(_communitySources));
+            fetchCatalog(true).then(renderCatalog);
+            toast(t('themes.communityAdded') || 'Catalogue added', 'success');
+        }
+        close();
+    };
+    ov.addEventListener('click', e => { if (e.target === ov) close(); });
+    ov.querySelector('#tc-src-close')?.addEventListener('click', close);
+    ov.querySelector('#tc-src-cancel')?.addEventListener('click', close);
+    ov.querySelector('#tc-src-add')?.addEventListener('click', submit);
+    input.addEventListener('keydown', e => { if ((e as KeyboardEvent).key === 'Enter') submit(); });
+    setTimeout(() => input.focus(), 50);
 }
 
 async function importFromFile(): Promise<void> {

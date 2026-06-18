@@ -1,0 +1,129 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { useStats } from "../lib/store";
+import { Card, StatusDot, Empty } from "../components/ui";
+import { Chart, axisX, axisY } from "../components/Chart";
+import { ProfileAvatar, Flag, ArrowIcon } from "../components/visuals";
+import { nf, ago } from "../lib/format";
+
+function Spark({ data, color = "#5b8cff" }: { data: number[]; color?: string }) {
+  if (!data.length) return <div className="h-8" />;
+  const w = 120, h = 32;
+  const max = Math.max(1, ...data), min = Math.min(...data), rng = max - min || 1;
+  const pts = data.map((v, i) => `${(i / (data.length - 1 || 1)) * w},${h - ((v - min) / rng) * (h - 4) - 2}`).join(" ");
+  return (
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="mt-1">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+function KpiSpark({ label, value, data, color }: { label: string; value: React.ReactNode; data: number[]; color?: string }) {
+  return (
+    <div className="kpi">
+      <div className="text-[11px] uppercase tracking-wide text-sub">{label}</div>
+      <div className="text-2xl font-semibold mt-0.5">{value}</div>
+      <Spark data={data} color={color} />
+    </div>
+  );
+}
+
+export default function Overview() {
+  const s = useStats()!;
+  const t = s.totals;
+  const [gran, setGran] = useState<"hour" | "minute">("hour");
+
+  const sUsers = s.series.map((r: any) => r.users);
+  const sSessions = s.series.map((r: any) => r.sessions);
+  const sPv = s.series.map((r: any) => r.pageviews);
+  const sEvents = s.series.map((r: any) => r.events);
+
+  const isMin = gran === "minute";
+  const src = isMin ? s.activity_min : s.series;
+  const labels = isMin ? src.map((m: any) => m.t) : src.map((r: any) => (r.hour || "").slice(11) + "h");
+  const mainOpt = {
+    grid: { left: 40, right: 16, top: 24, bottom: 24 },
+    legend: { data: ["Users", "Pageviews"], textStyle: { color: "#9aa3ad" }, right: 10, top: 0 },
+    xAxis: { ...axisX(labels), axisLabel: { color: "#9aa3ad", fontSize: 10, interval: isMin ? 9 : 0 } },
+    yAxis: axisY(),
+    series: [
+      { name: "Users", type: "line", smooth: true, showSymbol: false, data: src.map((r: any) => r.users), areaStyle: { color: "rgba(91,140,255,0.18)" }, lineStyle: { color: "#5b8cff", width: 2 } },
+      { name: "Pageviews", type: "line", smooth: true, showSymbol: false, data: src.map((r: any) => r.pageviews), lineStyle: { color: "#37d399", width: 1.5 } },
+    ],
+  };
+
+  const paths = (s.funnels || []).slice(0, 8);
+  const pathOpt = {
+    grid: { left: 150, right: 24, top: 6, bottom: 6 },
+    xAxis: axisY({ axisLabel: { show: false }, splitLine: { show: false } }),
+    yAxis: { ...axisX(paths.map((p: any) => p.path).reverse()), axisLabel: { color: "#e8eaed", fontSize: 11 } },
+    series: [{ type: "bar", data: paths.map((p: any) => p.count).reverse(), itemStyle: { color: "#5b8cff", borderRadius: [0, 4, 4, 0] }, barWidth: 14 }],
+    tooltip: { trigger: "item" },
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+        <KpiSpark label="Users" value={nf(t.users)} data={sUsers} />
+        <KpiSpark label="Live now" value={nf(t.live)} data={sUsers} color="#37d399" />
+        <KpiSpark label="Sessions" value={nf(t.sessions)} data={sSessions} color="#a78bfa" />
+        <KpiSpark label="Pageviews" value={nf(t.pageviews)} data={sPv} color="#37d399" />
+        <KpiSpark label="Events" value={nf(t.events)} data={sEvents} color="#f4b740" />
+        <KpiSpark label="Pages / session" value={t.pages_per_session} data={sPv} />
+        <KpiSpark label="Avg session" value={`${t.avg_session_min}m`} data={sSessions} color="#a78bfa" />
+      </div>
+
+      <Card
+        title="Users & pageviews"
+        right={
+          <div className="flex gap-1">
+            <button onClick={() => setGran("hour")} className={`pill ${gran === "hour" ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>24h · hour</button>
+            <button onClick={() => setGran("minute")} className={`pill ${gran === "minute" ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>60m · minute</button>
+          </div>
+        }
+      >
+        <Chart option={mainOpt} height={300} />
+      </Card>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Card title="Live instances" right={<Link to="/live" className="text-xs text-brand">View all</Link>}>
+          {s.live.length ? (
+            <div className="space-y-1">
+              {s.live.slice(0, 6).map((l) => (
+                <Link to="/live" key={l.creator_id} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-panel2 text-sm">
+                  <StatusDot status={l.status} />
+                  <ProfileAvatar name={l.creator_id} size={22} />
+                  <Flag cc={l.cc} />
+                  <span className="font-mono text-xs truncate flex-1">{l.creator_id}</span>
+                  <span className="text-sub">{l.view || "—"}</span>
+                  <span className="text-sub text-xs">{ago(l.ago_s)}</span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <Empty>No live instances</Empty>
+          )}
+        </Card>
+        <Card title="Top paths" right={<Link to="/funnels" className="text-xs text-brand">Funnels</Link>}>
+          {paths.length ? <Chart option={pathOpt} height={220} /> : <Empty>No navigation paths yet</Empty>}
+        </Card>
+      </div>
+
+      <Card title="Top pages" right={<Link to="/pages" className="text-xs text-brand">Details</Link>}>
+        <table className="w-full">
+          <tbody>
+            {s.pages.slice(0, 10).map((p) => (
+              <tr key={p.view} className="hover:bg-panel2">
+                <td className="td border-0 py-1.5 flex items-center gap-2">
+                  <ArrowIcon className="text-sub" /> {p.view}
+                </td>
+                <td className="td border-0 py-1.5 text-right text-sub">{Math.round((p.avg_dwell_ms || 0) / 1000)}s dwell</td>
+                <td className="td border-0 py-1.5 text-right font-medium">{nf(p.enters)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}

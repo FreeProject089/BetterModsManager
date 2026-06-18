@@ -1473,6 +1473,7 @@ export async function initSettings() {
     await initLaunchPackSettings();
     initScheduler().catch(() => {});
     try { initCardReorder(); } catch (e) {}
+    try { (await import('../../core/analytics.js')).initPrivacySettings(); } catch (e) {}
     initSecurityInfoCard().catch(() => {});
     
     // Tags Settings

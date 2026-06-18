@@ -252,6 +252,7 @@ export async function confirmAddMod() {
     }
 }
 export async function toggleAllMods(forcedEnable = null) {
+    window.bmmTrack?.('feature', { name: 'mods.toggleAll' });
     const enabledCount = S.allMods.filter(m => m.enabled).length;
     const enable = (forcedEnable === null) ? (enabledCount < S.allMods.length && S.allMods.length > 0) : forcedEnable;
     const targetMods = enable ? S.allMods.filter(m => !m.enabled) : S.allMods.filter(m => m.enabled);
@@ -477,6 +478,7 @@ export async function setupDependencyInput(inputId, listId, suggestionsId, initi
 }
 export async function scanModsFolder() {
     try {
+        window.bmmTrack?.('feature', { name: 'mods.scan' });
         const result = await invoke('scan_mods_folder');
         if (result.added === 0 && result.removed === 0) {
             toast(t('mod.scanNone'), 'info');

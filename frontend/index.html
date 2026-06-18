@@ -1504,7 +1504,7 @@
                                         <label class="form-label" style="margin-bottom:4px;"
                                             data-i18n="repo.authorName">...</label>
                                         <input type="text" class="form-input" id="repo-export-author-name"
-                                            data-i18n-placeholder="repo.authorPlaceholder" />
+                                            maxlength="25" data-i18n-placeholder="repo.authorPlaceholder" />
                                     </div>
 
                                     <div class="form-group" style="margin-bottom:12px;">
@@ -3413,6 +3413,14 @@
                                             style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
                                             <span style="font-size: 11px;" data-i18n="docs.gallery.btn.modUpdates">Mod Update System</span>
                                         </button>
+                                        <button class="btn btn-ghost btn-sm" onclick="openDiagram('update-system')"
+                                            style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                            <span style="font-size: 11px;" data-i18n="docs.gallery.btn.updateSystem">Update System</span>
+                                        </button>
+                                        <button class="btn btn-ghost btn-sm" onclick="openDiagram('scheduler')"
+                                            style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                                            <span style="font-size: 11px;" data-i18n="docs.gallery.btn.scheduler">Scheduling &amp; Automation</span>
+                                        </button>
                                         <button class="btn btn-ghost btn-sm" onclick="openDiagram('backup-system')"
                                             style="justify-content: flex-start; padding: 10px; border: 1px solid rgba(255,255,255,0.05);">
                                             <span style="font-size: 11px;"
@@ -4751,18 +4759,21 @@
                             <!-- ═══════════════════════════════════════════════════ -->
                             <!-- GENERATED FILES DOCUMENTATION -->
                             <!-- ═══════════════════════════════════════════════════ -->
-                            <div id="docker-doc-card" class="glass-card" style="border-left: 3px solid #06b6d4;">
-                                <h3 class="card-title">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22d3ee"
-                                        stroke-width="2" style="flex-shrink:0">
-                                        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                                        <polyline points="13 2 13 9 20 9" />
-                                        <line x1="9" y1="13" x2="15" y2="13" />
-                                        <line x1="9" y1="17" x2="13" y2="17" />
-                                    </svg>
-                                    <span style="color:#22d3ee" data-i18n="docs.genFiles.title">Fichiers Générés —
-                                        Déployer votre Serveur</span>
-                                </h3>
+                            <details id="docker-doc-card" class="glass-card" style="border-left: 3px solid #06b6d4; padding:0;">
+                                <summary style="padding: 22px 24px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; list-style:none;">
+                                    <span style="display:flex; align-items:center; gap:12px;">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22d3ee"
+                                            stroke-width="2" style="flex-shrink:0">
+                                            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                                            <polyline points="13 2 13 9 20 9" />
+                                            <line x1="9" y1="13" x2="15" y2="13" />
+                                            <line x1="9" y1="17" x2="13" y2="17" />
+                                        </svg>
+                                        <span style="color:#22d3ee; letter-spacing:0.05em; font-weight:600;" data-i18n="docs.genFiles.title">Generated Files — Deploy your Server</span>
+                                    </span>
+                                    <svg class="docs-details-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2" style="transition:transform 0.2s;flex-shrink:0"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div style="padding: 4px 24px 24px; border-top:1px solid rgba(255,255,255,0.05);">
 
                                 <!-- Info banner -->
                                 <div
@@ -4901,7 +4912,7 @@
                                                         <rect x="2" y="3" width="20" height="14" rx="2" />
                                                         <path d="M8 21h8M12 17v4" />
                                                     </svg>
-                                                    start_server.bat
+                                                    BMM-Standalone-Server.bat
                                                     <span
                                                         style="color:rgba(255,255,255,0.3);font-weight:400;text-transform:none;font-size:10px;letter-spacing:normal">Windows</span>
                                                 </span>
@@ -4919,22 +4930,16 @@
                                             <div
                                                 style="background:#0d1117;border:1px solid rgba(74,222,128,0.13);border-radius:10px;padding:11px 12px;font-family:var(--font-mono);font-size:10.5px;line-height:1.8;color:#e6edf3">
                                                 <span style="color:#8b949e">@echo off</span><br>
-                                                <span style="color:#8b949e">:: BMM Standalone Server —
-                                                    Windows</span><br>
-                                                <span style="color:#f78166">set</span> <span
-                                                    style="color:#e6edf3">PORT=</span><span
-                                                    style="color:#a5d6ff">8080</span><br>
-                                                <span style="color:#f78166">set</span> <span
-                                                    style="color:#e6edf3">ADMIN_PASSWORD=</span><span
-                                                    style="color:#a5d6ff">admin</span><br>
-                                                <span style="color:#f78166">set</span> <span
-                                                    style="color:#e6edf3">REPO_PATH=</span><span
-                                                    style="color:#a5d6ff">%~dp0repo.json</span><br>
-                                                <span style="color:#e6edf3">BMM-Standalone-Server.exe</span><br>
-                                                <span style="color:#e6edf3">&nbsp;&nbsp;--port %PORT%</span><br>
-                                                <span style="color:#e6edf3">&nbsp;&nbsp;--repo "%REPO_PATH%"</span><br>
-                                                <span style="color:#e6edf3">&nbsp;&nbsp;--password
-                                                    "%ADMIN_PASSWORD%"</span><br>
+                                                <span style="color:#8b949e">title BMM Server (Node.js)</span><br>
+                                                <span style="color:#8b949e">echo Installing dependencies...</span><br>
+                                                <span style="color:#f78166">call</span> <span style="color:#e6edf3">npm install</span><br>
+                                                <span style="color:#ff7b72">if</span> <span style="color:#e6edf3">%errorlevel% neq 0 (</span><br>
+                                                <span style="color:#e6edf3">&nbsp;&nbsp;echo [ERROR] Node.js / NPM required.</span><br>
+                                                <span style="color:#8b949e">&nbsp;&nbsp;pause</span><br>
+                                                <span style="color:#e6edf3">&nbsp;&nbsp;exit /b</span><br>
+                                                <span style="color:#e6edf3">)</span><br>
+                                                <span style="color:#8b949e">echo Starting server...</span><br>
+                                                <span style="color:#f78166">call</span> <span style="color:#e6edf3">npm start</span><br>
                                                 <span style="color:#8b949e">pause</span>
                                             </div>
                                         </div>
@@ -4950,7 +4955,7 @@
                                                         <polyline points="4 17 10 11 4 5" />
                                                         <line x1="12" y1="19" x2="20" y2="19" />
                                                     </svg>
-                                                    start_server.sh
+                                                    BMM-Standalone-Server.sh
                                                     <span
                                                         style="color:rgba(255,255,255,0.3);font-weight:400;text-transform:none;font-size:10px;letter-spacing:normal">Linux
                                                         / Docker</span>
@@ -4969,23 +4974,14 @@
                                             <div
                                                 style="background:#0d1117;border:1px solid rgba(251,146,60,0.13);border-radius:10px;padding:11px 12px;font-family:var(--font-mono);font-size:10.5px;line-height:1.8;color:#e6edf3">
                                                 <span style="color:#f78166">#!/bin/bash</span><br>
-                                                <span style="color:#8b949e"># BMM Standalone Server — Linux</span><br>
-                                                <span style="color:#e6edf3">PORT=</span><span
-                                                    style="color:#a5d6ff">8080</span><br>
-                                                <span style="color:#e6edf3">ADMIN_PASSWORD=</span><span
-                                                    style="color:#a5d6ff">"admin"</span><br>
-                                                <span style="color:#e6edf3">SCRIPT_DIR=</span><span
-                                                    style="color:#a5d6ff">"$(cd "$(dirname "$0")" &amp;&amp;
-                                                    pwd)"</span><br>
-                                                <span style="color:#e6edf3">chmod +x
-                                                    "$SCRIPT_DIR/BMM-Standalone-Server"</span><br>
-                                                <span style="color:#e6edf3">"$SCRIPT_DIR/BMM-Standalone-Server"
-                                                    \</span><br>
-                                                <span style="color:#e6edf3">&nbsp;&nbsp;--port $PORT \</span><br>
-                                                <span style="color:#e6edf3">&nbsp;&nbsp;--repo "$SCRIPT_DIR/repo.json"
-                                                    \</span><br>
-                                                <span style="color:#e6edf3">&nbsp;&nbsp;--password
-                                                    "$ADMIN_PASSWORD"</span>
+                                                <span style="color:#8b949e">echo "Installing dependencies..."</span><br>
+                                                <span style="color:#e6edf3">npm install</span><br>
+                                                <span style="color:#ff7b72">if</span> <span style="color:#e6edf3">[ $? -ne 0 ]; then</span><br>
+                                                <span style="color:#e6edf3">&nbsp;&nbsp;echo "[ERROR] Node.js / NPM required."</span><br>
+                                                <span style="color:#e6edf3">&nbsp;&nbsp;exit 1</span><br>
+                                                <span style="color:#e6edf3">fi</span><br>
+                                                <span style="color:#8b949e">echo "Starting server..."</span><br>
+                                                <span style="color:#e6edf3">npm start</span>
                                             </div>
                                         </div>
                                     </div>
@@ -5091,7 +5087,8 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                                </div>
+                            </details>
 
                         </div> <!-- End of settings-sections -->
                     </div> <!-- End of docs-tab-advanced -->
@@ -8238,6 +8235,75 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                         <line x1="5" y1="12" x2="19" y2="12" />
                                     </svg>
                                     <span data-i18n="sched.create">Nouvelle tâche planifiée</span>
+                                </button>
+                            </div>
+                        </div>
+
+
+                        <!-- ── Privacy & Telemetry ── -->
+                        <div class="glass-card" id="settings-privacy-section" style="margin-bottom: 24px;">
+                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+                                    stroke-width="2.2">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                    <path d="M9 12l2 2 4-4" />
+                                </svg>
+                                <span data-i18n="analytics.settingsTitle">Confidentialité &amp; télémétrie</span>
+                            </h3>
+                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6"
+                                data-i18n="analytics.settingsDesc">
+                                Aidez l'équipe BMM avec des données d'usage anonymes (opt-in). En acceptant, vous
+                                autorisez l'utilisation de ces données pour améliorer BMM et les autres outils de
+                                Better Community. Aucune donnée personnelle ; conservées un temps limité ; exportables
+                                et supprimables à tout moment.
+                            </p>
+
+                            <!-- Status banner + master toggle -->
+                            <div class="apv-hero" id="analytics-hero">
+                                <div class="apv-hero-icon" id="analytics-hero-icon">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+                                </div>
+                                <div class="apv-hero-text">
+                                    <strong id="analytics-hero-title" data-i18n="analytics.toggleLabel">Partager des données d'usage anonymes</strong>
+                                    <span id="analytics-hero-sub" class="apv-hero-sub" data-i18n="analytics.statusOff">Désactivé — rien n'est collecté.</span>
+                                </div>
+                                <label class="plug-toggle" style="margin-left:auto">
+                                    <input type="checkbox" id="analytics-toggle">
+                                    <span class="plug-toggle-slider"></span>
+                                </label>
+                            </div>
+
+                            <div class="apv-detail" id="analytics-detail">
+                                <div class="setting-row" id="analytics-bench-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0">
+                                    <span style="font-size:12px;color:var(--text-muted)" data-i18n="analytics.benchToggle">Lancer un benchmark automatique tous les 7 jours (anonyme)</span>
+                                    <label class="plug-toggle">
+                                        <input type="checkbox" id="analytics-bench-toggle">
+                                        <span class="plug-toggle-slider"></span>
+                                    </label>
+                                </div>
+
+                                <!-- Sent telemetry packets -->
+                                <div class="apv-packets">
+                                    <div class="apv-packets-head apv-fold" id="analytics-packets-toggle" style="cursor:pointer">
+                                        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                                            <span data-i18n="analytics.packetsTitle">Paquets de télémétrie envoyés</span>
+                                            <svg id="analytics-packets-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;flex-shrink:0;color:var(--text-muted)"><polyline points="6 9 12 15 18 9"/></svg>
+                                        </div>
+                                        <span class="apv-packets-hint" data-i18n="analytics.packetsHint">Vous ne voyez pas le contenu — seulement les paquets et leur ID. Demandez la suppression d'un paquet : il sera effacé sous 72h (vérification admin).</span>
+                                    </div>
+                                    <div id="analytics-packets-list" class="apv-packets-list" style="display:none"></div>
+                                </div>
+                            </div>
+
+                            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+                                <button class="btn btn-ghost btn-sm" id="analytics-view-what">
+                                    <span data-i18n="analytics.whatBtn">Ce qui est collecté</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" id="analytics-export">
+                                    <span data-i18n="analytics.exportBtn">Exporter mes données</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" id="analytics-delete" style="color:var(--danger)">
+                                    <span data-i18n="analytics.deleteBtn">Supprimer mes données</span>
                                 </button>
                             </div>
                         </div>
@@ -11596,6 +11662,9 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
     <script>
         (function () {
             var _blocks = {
+                'start-bat': '@echo off\r\ntitle BMM Server (Node.js)\r\necho Installing dependencies...\r\ncall npm install\r\nif %errorlevel% neq 0 (\r\n    echo [ERROR] Failed to install dependencies. Make sure Node.js and NPM are installed.\r\n    pause\r\n    exit /b\r\n)\r\necho Starting server...\r\ncall npm start\r\npause',
+                'start-sh': '#!/bin/bash\necho "Installing dependencies..."\nnpm install\nif [ $? -ne 0 ]; then\n    echo "[ERROR] Failed to install dependencies. Make sure Node.js and NPM are installed."\n    exit 1\nfi\necho "Starting server..."\nnpm start',
+                'repo-json': '{\n  "port": 8080,\n  "upload_limit_kb": 0,\n  "password_hash": "$argon2id$v=19$...",\n  "whitelist": [],\n  "banned": [],\n  "creator_id": "<hardware-derived, auto-generated>",\n  "mods": [\n    {\n      "name": "ExampleMod",\n      "version": "1.0.0",\n      "file": "mods/ExampleMod-1.0.0.zip",\n      "sha256": "abc123def456...",\n      "size": 1048576,\n      "required": true\n    }\n  ]\n}',
                 'docker-compose': 'services:\n  bmm-server:\n    image: ghcr.io/freeproject089/bettermods-server:latest\n    ports:\n      - "8080:8080"\n    volumes:\n      - ./data:/app/data\n    environment:\n      - BMM_PORT=8080\n      - BMM_SEED=your_secret_seed\n    restart: unless-stopped',
                 'docker-up': 'docker compose up -d',
                 'ngrok': 'ngrok http 8080',

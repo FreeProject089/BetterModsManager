@@ -762,6 +762,75 @@ const OTHER: TutorialDef = {
                 },
             ],
         },
+        // ── Part : Update sources ──────────────────────────────────
+        {
+            id: 'updates',
+            title_key: 'tut.other.updates.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.updates.s1.title',
+                    text_key:  'tut.other.updates.s1.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'library',
+                    icon: ICON.repo,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.updates.s2.title',
+                    text_key:  'tut.other.updates.s2.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'library',
+                    icon: ICON.share,
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.updates.s3.title',
+                    text_key:  'tut.other.updates.s3.text',
+                    img: 'assets/Tasky_Happy.png',
+                    nav: 'repo',
+                },
+            ],
+        },
+        // ── Part : Scheduling & Automation ─────────────────────────
+        {
+            id: 'automation',
+            title_key: 'tut.other.automation.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.automation.s1.title',
+                    text_key:  'tut.other.automation.s1.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'settings',
+                    icon: ICON.activate,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.automation.s2.title',
+                    text_key:  'tut.other.automation.s2.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'settings',
+                    selector: 'btn-create-schedule',
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.automation.s3.title',
+                    text_key:  'tut.other.automation.s3.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'settings',
+                    icon: ICON.modpack,
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.other.automation.s4.title',
+                    text_key:  'tut.other.automation.s4.text',
+                    img: 'assets/Tasky_Happy.png',
+                    nav: 'settings',
+                    icon: ICON.share,
+                },
+            ],
+        },
     ],
 };
 

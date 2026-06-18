@@ -1,0 +1,33 @@
+//! Runtime configuration, loaded from environment / .env.
+
+#[derive(Clone)]
+pub struct Config {
+    pub port: u16,
+    pub api_key: String,
+    pub admin_key: String,
+    pub retention_days: i64,
+    pub delete_delay_h: i64,
+    pub database_url: String,
+    pub static_dir: String,
+}
+
+fn env_or(key: &str, default: &str) -> String {
+    std::env::var(key).unwrap_or_else(|_| default.to_string())
+}
+
+impl Config {
+    pub fn from_env() -> Self {
+        Config {
+            port: env_or("PORT", "8900").parse().unwrap_or(8900),
+            api_key: env_or("API_KEY", ""),
+            admin_key: env_or("ADMIN_KEY", ""),
+            retention_days: env_or("RETENTION_DAYS", "180").parse().unwrap_or(180),
+            delete_delay_h: env_or("DELETE_DELAY_H", "72").parse().unwrap_or(72),
+            database_url: env_or(
+                "DATABASE_URL",
+                "postgres://bmm:bmm@localhost:5432/telemetry",
+            ),
+            static_dir: env_or("STATIC_DIR", "public"),
+        }
+    }
+}

@@ -14,6 +14,7 @@ import { appState } from '../core/state.js';
 import { initInteractiveDocs, openDiagram } from '../docs/interactive-docs.js';
 import { initDocsUI } from '../docs/docs-ui.js';
 import { initDeepLinks } from '../core/deep_link_manager.js';
+import { initAnalytics, trackView } from '../core/analytics.js';
 import { initApiActivity } from '../core/api_activity.js';
 import { initTitlebar } from './titlebar.js';
 import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
@@ -157,6 +158,8 @@ function initNavigation() {
         item.addEventListener('click', () => {
             const viewId = item.dataset.view;
             invoke('log_frontend_line', { line: `Navigated to view: ${viewId}` });
+            if (viewId)
+                trackView(viewId);
             navItems.forEach(n => n.classList.remove('active'));
             item.classList.add('active');
             // Trigger mascot loading safely
@@ -745,6 +748,7 @@ async function main() {
     initDocsUI();
     initDeepLinks();
     initApiActivity();
+    initAnalytics().catch(() => { });
     const modpackContainer = document.getElementById('modpack-container');
     if (modpackContainer) {
         initModpackCreator(modpackContainer);

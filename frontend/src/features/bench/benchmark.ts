@@ -751,6 +751,19 @@ export async function openAdvancedPerfModal() {
             }
             if (myGen !== benchRunGen) return; // a newer run/cancel happened
             lastBenchReport = report;
+            // Telemetry (opt-in): report benchmark medians per operation so the team
+            // can track performance across versions and hardware.
+            try {
+                const { track } = await import('../../core/analytics.js');
+                const ops: Record<string, number> = {};
+                (report?.results || []).forEach((o: any) => { if (o?.id) ops[o.id] = o.ms; });
+                track('benchmark', {
+                    mode: benchMode,
+                    dataset_bytes: report?.env?.dataset_bytes,
+                    total_ms: report?.total_ms,
+                    ops,
+                });
+            } catch {}
             // Keep each finished run for side-by-side comparison.
             const stamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             const sizeMb = report?.env?.dataset_bytes ? ` · ${(report.env.dataset_bytes / 1048576).toFixed(0)}MB` : '';

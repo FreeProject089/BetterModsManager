@@ -57,6 +57,7 @@ let _profiles: any[] = [];
 let _mods: any[] = [];
 let _modpacks: any[] = [];
 let _themes: any[] = [];
+let _apps: any[] = [];
 
 // ── Persistence ──────────────────────────────────────────────────────────────
 async function loadTasks(): Promise<void> {
@@ -97,8 +98,13 @@ export async function initScheduler(): Promise<void> {
             row.appendChild(imp);
         }
     }
+    if (!_langWired) {
+        _langWired = true;
+        document.addEventListener('langChanged', () => renderScheduleList());
+    }
     startEngine();
 }
+let _langWired = false;
 
 function startEngine(): void {
     if (_timer !== null) return;
@@ -439,17 +445,23 @@ let _editing: Task | null = null;
 let _draft: Task;
 
 async function loadPickers(): Promise<void> {
-    const [profiles, mods, modpacks, builtin, installed] = await Promise.all([
+    const [profiles, mods, modpacks, builtin, installed, appsState] = await Promise.all([
         invoke('get_profiles').catch(() => []),
         invoke('get_all_mods').catch(() => []),
         invoke('load_modpacks').catch(() => []),
-        invoke('list_builtin_themes').catch(() => []),
-        invoke('list_installed_themes').catch(() => []),
+        invoke('list_builtin_themes').catch(() => '[]'),
+        invoke('list_installed_themes').catch(() => '[]'),
+        invoke('get_apps_state').catch(() => ({ installed: {} })),
     ]);
     _profiles = profiles as any[];
     _mods = mods as any[];
     _modpacks = modpacks as any[];
-    _themes = ([...(builtin as any[]), ...(installed as any[])]).map((th: any) => ({ id: th.id, name: th.name || th.id }));
+    // The theme commands return a JSON *string* — parse before merging.
+    const parse = (v: any): any[] => { try { return Array.isArray(v) ? v : JSON.parse(v || '[]'); } catch { return []; } };
+    _themes = [...parse(builtin), ...parse(installed)].map((th: any) => ({ id: th.id, name: th.name || th.id }));
+    // Installed apps for the "Launch app" picker.
+    const inst = (appsState as any)?.installed || {};
+    _apps = Object.entries(inst).map(([id, info]: any) => ({ id, name: info?.title || id, exe: info?.exe_path || '' }));
 }
 
 async function openTaskModal(task: Task | null): Promise<void> {
@@ -718,27 +730,53 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     else if (needs === 'mod') host.innerHTML = `<select class="input sched-p" style="max-width:240px">${pickerOptions(_mods, params.id)}</select>`;
     else if (needs === 'modpack') host.innerHTML = `<select class="input sched-p" style="max-width:200px">${pickerOptions(_modpacks, params.id)}</select>`;
     else if (needs === 'theme') host.innerHTML = `<select class="input sched-p" style="max-width:200px">${pickerOptions(_themes, params.id)}</select>`;
-    else if (needs === 'app') host.innerHTML = `<input class="input sched-p" placeholder="app id" value="${escAttr(params.id || '')}" style="max-width:200px">`;
+    else if (needs === 'app') host.innerHTML = _apps.length
+        ? `<select class="input sched-p" style="max-width:220px">${pickerOptions(_apps, params.id)}</select>`
+        : `<input class="input sched-p" placeholder="${escAttr(t('sched.appIdPh') || 'app id (install an app first)')}" value="${escAttr(params.id || '')}" style="max-width:220px">`;
     else if (needs === 'message') host.innerHTML = `<input class="input sched-p" placeholder="${escAttr(t('sched.message') || 'message')}" value="${escAttr(params.message || '')}">`;
     else if (needs === 'url') host.innerHTML = `<input class="input sched-p" placeholder="bmm://mod/enable?id=…" value="${escAttr(params.url || '')}">`;
     else if (needs === 'command') host.innerHTML = `
-        <input class="input sched-p-prog" placeholder="${escAttr(t('sched.program') || 'program (e.g. notepad.exe)')}" value="${escAttr(params.program || '')}" style="margin-bottom:4px">
-        <input class="input sched-p-args" placeholder="${escAttr(t('sched.args') || 'arguments (space-separated)')}" value="${escAttr(params.args || '')}">`;
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.cmdProgram') || '1. Program to run'}</label>
+            <div class="sched-cmd-row">
+                <input class="input sched-p-prog" placeholder="${escAttr(t('sched.programPh') || 'e.g. notepad.exe')}" value="${escAttr(params.program || '')}">
+                <button type="button" class="btn btn-sm btn-secondary sched-browse-prog">${t('sched.choose') || 'Choose…'}</button>
+            </div>
+            <label class="sched-cmd-label">${t('sched.cmdArgs') || '2. Arguments'} <span class="sched-cmd-opt">${t('common.optional') || '(optional)'}</span></label>
+            <input class="input sched-p-args" placeholder="${escAttr(t('sched.argsPh2') || 'e.g.  --profile DCS   (leave empty if none)')}" value="${escAttr(params.args || '')}">
+            <details class="sched-cmd-adv">
+                <summary>${t('sched.cmdAdvanced') || 'Advanced — working folder'}</summary>
+                <div class="sched-cmd-row" style="margin-top:6px">
+                    <input class="input sched-p-wd" placeholder="${escAttr(t('sched.workdirPh') || 'folder to run from (optional)')}" value="${escAttr(params.workingDir || '')}">
+                    <button type="button" class="btn btn-sm btn-secondary sched-browse-wd">${t('sched.choose') || 'Choose…'}</button>
+                </div>
+            </details>
+            <span class="sched-cmd-hint">${t('sched.cmdHint') || 'Tip: tick “Allow custom commands” at the bottom of this task, or it won’t run.'}</span>
+        </div>`;
 
     const sel = host.querySelector('.sched-p') as HTMLInputElement | HTMLSelectElement;
-    if (sel) sel.addEventListener('change', () => {
-        if (needs === 'message') params.message = (sel as HTMLInputElement).value;
-        else if (needs === 'url') params.url = (sel as HTMLInputElement).value;
-        else params.id = (sel as HTMLInputElement).value;
-    });
-    if (sel && (needs === 'message' || needs === 'url' || needs === 'app'))
-        sel.addEventListener('input', () => {
+    if (sel) {
+        const set = () => {
             if (needs === 'message') params.message = (sel as HTMLInputElement).value;
             else if (needs === 'url') params.url = (sel as HTMLInputElement).value;
             else params.id = (sel as HTMLInputElement).value;
-        });
+        };
+        sel.addEventListener('change', set);
+        sel.addEventListener('input', set);
+    }
     host.querySelector('.sched-p-prog')?.addEventListener('input', (e) => { params.program = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-p-args')?.addEventListener('input', (e) => { params.args = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-wd')?.addEventListener('input', (e) => { params.workingDir = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-browse-prog')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const f = await pickFile({ filters: [{ name: 'Programs', extensions: ['exe', 'bat', 'cmd', 'ps1', 'com'] }, { name: 'All files', extensions: ['*'] }] }).catch(() => null);
+        if (f) { params.program = f; (host.querySelector('.sched-p-prog') as HTMLInputElement).value = f; }
+    });
+    host.querySelector('.sched-browse-wd')?.addEventListener('click', async () => {
+        const { pickFolder } = await import('../../core/api.js');
+        const d = await pickFolder().catch(() => null);
+        if (d) { params.workingDir = d; (host.querySelector('.sched-p-wd') as HTMLInputElement).value = d; }
+    });
 }
 
 const COND_TYPES = ['always', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'online', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];

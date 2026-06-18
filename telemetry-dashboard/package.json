@@ -1,0 +1,14 @@
+{
+  "name": "bmm-telemetry-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted collector + dashboard for Better Mods Manager opt-in telemetry.",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "express": "^5.2.1"
+  }
+}

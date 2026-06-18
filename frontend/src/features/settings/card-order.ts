@@ -204,6 +204,11 @@ export function initCardReorder(): void {
             const saved = JSON.parse(localStorage.getItem(ORDER_KEY) || 'null');
             if (Array.isArray(saved)) applyOrder(saved);
         } catch {}
+        // Re-translate the toolbar live when the language changes (no refresh).
+        document.addEventListener('langChanged', () => {
+            const bar = document.getElementById('cardorder-bar');
+            if (bar) { bar.remove(); renderToolbar(); setEditMode(_editMode); }
+        });
     }
     // A pending layout from a bmm:// deeplink (set by the scheme handler).
     const pending = sessionStorage.getItem('bmm_pending_layout');

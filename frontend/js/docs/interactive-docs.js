@@ -42,6 +42,8 @@ import { themeSystem } from './diagrams/theme-system.js';
 import { appCatalog } from './diagrams/app-catalog.js';
 import { modUpdates } from './diagrams/mod-updates.js';
 import { blake3Hashing } from './diagrams/blake3-hashing.js';
+import { scheduler } from './diagrams/scheduler.js';
+import { updateSystem } from './diagrams/update-system.js';
 // Diagram Registry
 export const diagrams = {
     'resumable-downloads': resumableDownloads,
@@ -86,6 +88,8 @@ export const diagrams = {
     'app-catalog': appCatalog,
     'mod-updates': modUpdates,
     'blake3-hashing': blake3Hashing,
+    'scheduler': scheduler,
+    'update-system': updateSystem,
 };
 // State
 let currentDiagramID = null;

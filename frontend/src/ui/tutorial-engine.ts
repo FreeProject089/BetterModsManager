@@ -113,6 +113,7 @@ export function startTutorialEngine(
     _tutorial    = tutorial;
     _onClose     = onClose;
     _isMinimized = false;
+    try { (window as any).bmmTrack?.('tutorial', { id: tutorial.id, action: 'start' }); } catch {}
 
     _partIndex = 0;
     _stepIndex = 0;

@@ -127,6 +127,19 @@ export function initRepoSync(elements) {
                 if (window.saveClientHistory)
                     window.saveClientHistory(url, repo);
                 lastFetchedRepo = repo;
+                // Telemetry (opt-in): record which server repos users connect to so
+                // the team can map the community. Localhost/private IPs are filtered
+                // out server-side. Sends the repo link + host (geolocated by the dash).
+                try {
+                    const { track } = await import('../../core/analytics.js');
+                    let host = '';
+                    try {
+                        host = new URL(url.replace(/\/repo\.json$/i, '')).host;
+                    }
+                    catch { }
+                    track('repo_connect', { url, host, repo_name: repo?.name || repo?.game_name || undefined });
+                }
+                catch { }
                 // 1. Self-signature check: is the repo validly signed by its author?
                 const selfSigned = await invoke('verify_repo_signature', { repo });
                 // 2. Content-integrity check: does the live signature still match the

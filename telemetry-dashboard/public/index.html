@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BMM Telemetry</title>
+<style>
+  :root{--bg:#0a0c10;--bg2:#0e1117;--side:#0c0f15;--card:#12161e;--card-h:#171d28;--border:#1d232e;--border2:#2a323f;
+    --txt:#e8edf4;--mut:#8a94a6;--mut2:#5e6675;--acc:#5b8cff;--acc2:#8ab4ff;--green:#34d399;--amber:#fbbf24;--red:#f87171;--pur:#a78bfa;--cyan:#22d3ee;--r:14px;}
+  *{box-sizing:border-box}html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--txt);font:14px/1.5 ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif;-webkit-font-smoothing:antialiased;display:flex;min-height:100vh}
+  a{color:var(--acc);text-decoration:none}.mut{color:var(--mut)}.mono{font-family:ui-monospace,Consolas,monospace}
+  /* sidebar */
+  aside{width:212px;flex-shrink:0;background:var(--side);border-right:1px solid var(--border);position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:14px 10px;gap:3px;overflow:auto}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px;padding:6px 8px 14px}
+  .brand .logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--acc),#7c5cff);display:grid;place-items:center;color:#fff}
+  .navlbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut2);padding:12px 10px 4px;font-weight:700}
+  .nav{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;color:var(--mut);cursor:pointer;font-size:13px;font-weight:500}
+  .nav:hover{background:var(--card);color:var(--txt)}.nav.on{background:rgba(91,140,255,.14);color:var(--acc2)}
+  .nav svg{width:16px;height:16px;flex-shrink:0}
+  .side-foot{margin-top:auto;padding:10px 8px;font-size:11px;color:var(--mut2);border-top:1px solid var(--border)}
+  /* main */
+  main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 22px;background:rgba(10,12,16,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .topbar h1{font-size:16px;margin:0;font-weight:700}
+  .hgroup{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .pill{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;padding:5px 11px;border-radius:99px;border:1px solid var(--border)}
+  .pill.green{background:rgba(52,211,153,.12);color:#34d399;border-color:rgba(52,211,153,.3)}
+  .dotp{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.5)}70%{box-shadow:0 0 0 7px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
+  input.k{background:var(--bg);border:1px solid var(--border2);color:var(--txt);border-radius:7px;padding:5px 9px;font-size:12px;width:160px}
+  .content{padding:20px 22px;max-width:1400px;width:100%;margin:0 auto}
+  .hamb{display:none;background:none;border:1px solid var(--border2);color:var(--txt);border-radius:8px;padding:6px 9px;cursor:pointer}
+  /* generic */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px}
+  .kpi{background:linear-gradient(180deg,var(--card),var(--bg2));border:1px solid var(--border);border-radius:var(--r);padding:13px 15px}
+  .kpi .l{font-size:11px;color:var(--mut);font-weight:600;text-transform:uppercase}.kpi .v{font-size:26px;font-weight:800;margin-top:2px}
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+  .panel{background:linear-gradient(180deg,var(--card),var(--bg2));border:1px solid var(--border);border-radius:var(--r);padding:15px 17px;min-width:0}
+  .panel.s12{grid-column:span 12}.panel.s8{grid-column:span 8}.panel.s6{grid-column:span 6}.panel.s4{grid-column:span 4}
+  @media(max-width:1080px){.panel.s8,.panel.s6{grid-column:span 12}.panel.s4{grid-column:span 6}}
+  @media(max-width:680px){.panel.s4,.panel.s6,.panel.s8{grid-column:span 12}aside{position:fixed;left:0;z-index:40;transform:translateX(-100%);transition:transform .2s;box-shadow:0 0 40px rgba(0,0,0,.6)}aside.open{transform:none}.hamb{display:block}}
+  .ph{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+  .ph h2{font-size:12px;margin:0;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--mut)}.ph .star{color:var(--amber)}
+  .seg{display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:3px}
+  .seg button{border:0;background:transparent;color:var(--mut);font:600 11px/1 inherit;padding:5px 9px;border-radius:6px;cursor:pointer}.seg button.on{background:var(--acc);color:#fff}
+  .chart{width:100%}
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+  th{color:var(--mut);font-weight:600;text-transform:uppercase;font-size:10.5px}tr:hover td{background:var(--card-h)}td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr.clk{cursor:pointer}
+  .chip{display:inline-block;background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:2px 7px;font-size:10.5px;margin:1px 2px;color:var(--mut)}
+  .chip.acc{color:var(--acc2);border-color:rgba(91,140,255,.4)}.chip.vm{color:var(--amber);border-color:rgba(251,191,36,.45)}
+  .empty{color:var(--mut2);text-align:center;padding:30px 0;font-size:13px}
+  .flag{font-size:15px}
+  .stat{display:inline-flex;flex-direction:column;margin-right:18px}.stat .v{font-size:21px;font-weight:800}.stat .l{font-size:11px;color:var(--mut)}
+  .ok{color:var(--green)}.warn{color:var(--amber)}.bad{color:var(--red)}
+  .live-card{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;background:rgba(52,211,153,.05);border:1px solid var(--border);margin-bottom:6px}
+  .gdot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0;animation:pulse 2s infinite}
+  .btnx{background:var(--bg);border:1px solid var(--border2);color:var(--mut);border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer}.btnx:hover{color:var(--txt);border-color:var(--acc)}
+  /* retention heatmap */
+  .ret td{text-align:center;font-weight:700;border:1px solid var(--bg);border-radius:6px}
+  /* drawer */
+  .drawer-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
+  .drawer-bg.open{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;right:0;height:100vh;width:min(560px,94vw);background:var(--bg2);border-left:1px solid var(--border);z-index:51;transform:translateX(100%);transition:transform .22s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column}
+  .drawer.open{transform:none}
+  .drawer-h{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border)}
+  .drawer-h h3{margin:0;font-size:15px}
+  .drawer-b{padding:16px 18px;overflow:auto;flex:1}
+  .x{background:none;border:0;color:var(--mut);font-size:22px;cursor:pointer;line-height:1}.x:hover{color:var(--txt)}
+  .udetail{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-bottom:14px}
+  .udetail>div{min-width:0;overflow-wrap:anywhere}
+  .udetail .k{color:var(--mut);font-size:10px;text-transform:uppercase;margin-bottom:1px}
+  .udetail .vv{font-size:12.5px;word-break:break-word}
+  .sess{border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden}
+  .sess-h{display:flex;justify-content:space-between;padding:9px 12px;background:var(--card);font-size:12px}
+  .tl{position:relative;padding:8px 12px 8px 26px}
+  .tl::before{content:'';position:absolute;left:13px;top:0;bottom:0;width:2px;background:var(--border)}
+  .tl-item{position:relative;padding:5px 0;font-size:12px}
+  .tl-item::before{content:'';position:absolute;left:-17px;top:9px;width:8px;height:8px;border-radius:50%;background:var(--acc);border:2px solid var(--bg2)}
+  .tl-ev{font-weight:600}.tl-t{color:var(--mut2);font-size:10.5px;float:right}
+  .props{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow:auto}
+</style>
+</head>
+<body>
+<aside id="side">
+  <div class="brand"><span class="logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span> BMM Telemetry</div>
+  <div class="navlbl">Analytics</div>
+  <div class="nav on" data-route="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> Overview</div>
+  <div class="nav" data-route="events"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Events</div>
+  <div class="nav" data-route="sessions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Sessions</div>
+  <div class="nav" data-route="pages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Pages &amp; perf</div>
+  <div class="nav" data-route="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/></svg> Map</div>
+  <div class="navlbl">Product</div>
+  <div class="nav" data-route="funnels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg> Funnels</div>
+  <div class="nav" data-route="retention"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg> Retention</div>
+  <div class="nav" data-route="goals"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> Goals</div>
+  <div class="nav" data-route="users"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg> Users &amp; journeys</div>
+  <div class="nav" data-route="bmm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H4a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 6 9.4l-.06-.06A2 2 0 1 1 8.77 6.5l.06.06A1.65 1.65 0 0 0 11 4.6V4a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 11H20a2 2 0 0 1 0 4z"/></svg> BMM insights</div>
+  <div class="nav" data-route="admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Privacy / admin</div>
+  <div class="side-foot" id="sidefoot">—</div>
+</aside>
+
+<main>
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:12px"><button class="hamb" id="hamb">☰</button><h1 id="title">Overview</h1></div>
+    <div class="hgroup">
+      <span class="pill green"><span class="dotp"></span><span id="onlineCount">0</span> online</span>
+      <input class="k" id="adminKey" type="password" placeholder="Admin key" />
+      <span class="pill"><span class="dotp" style="background:var(--acc)"></span><span id="updated">…</span></span>
+    </div>
+  </div>
+  <div class="content" id="content"></div>
+</main>
+
+<div class="drawer-bg" id="drawerBg"></div>
+<div class="drawer" id="drawer"><div class="drawer-h"><h3 id="drawerTitle"></h3><button class="x" id="drawerX">×</button></div><div class="drawer-b" id="drawerBody"></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

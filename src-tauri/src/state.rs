@@ -85,6 +85,11 @@ pub struct AppSettings {
     /// Changing this requires an API restart.
     #[serde(default)]
     pub api_cors_origins: Vec<String>,
+    /// Telemetry consent (GDPR opt-in). `None` = never asked yet (show the prompt),
+    /// `Some(true)` = opted in, `Some(false)` = declined. Nothing is collected
+    /// unless this is explicitly `Some(true)`.
+    #[serde(default)]
+    pub analytics_consent: Option<bool>,
 }
 
 impl Default for AppSettings {
@@ -118,6 +123,7 @@ impl Default for AppSettings {
             connected_server_repos: Vec::new(),
             plugin_tokens: std::collections::HashMap::new(),
             api_cors_origins: Vec::new(),
+            analytics_consent: None,
         }
     }
 }
