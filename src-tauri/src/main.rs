@@ -288,6 +288,7 @@ fn main() {
             commands::history::clear_activity_history,
             commands::settings::export_app_data,
             commands::settings::import_app_data,
+            commands::settings::factory_reset,
             commands::settings::reset_app_data,
             commands::settings::get_settings,
             commands::settings::update_settings,

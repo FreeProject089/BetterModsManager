@@ -59,6 +59,27 @@ export function initDebugMenu() {
         });
     }
 
+    // Factory reset — like the full reset, but the backend keeps a timestamped
+    // backup (data.before-reset-*.json) first, so it's recoverable.
+    const factoryBtn = document.getElementById('btn-factory-reset');
+    if (factoryBtn) {
+        factoryBtn.addEventListener('click', async () => {
+            const confirmed = confirm(
+                (window.t ? window.t('settings.factoryResetConfirm') : '') ||
+                'Reset BMM to a fresh install? Profiles, mods and settings are cleared. A backup of your current data is saved first. Continue?'
+            );
+            if (!confirmed) return;
+            try {
+                await invoke('factory_reset');
+                localStorage.clear();
+                toast((window.t ? window.t('common.success') : 'BMM reset — restarting'), 'warning');
+                setTimeout(() => window.location.reload(), 1500);
+            } catch (err) {
+                toast((window.t ? window.t('common.error') : 'Failed') + ': ' + err, 'error');
+            }
+        });
+    }
+
     const openDebugBtn = document.getElementById('btn-open-debug') || document.getElementById('dbg-open-menu');
     if (openDebugBtn) {
         openDebugBtn.addEventListener('click', () => {

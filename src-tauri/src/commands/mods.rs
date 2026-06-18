@@ -2981,7 +2981,7 @@ pub fn start_sha_calculation_background(app_handle: tauri::AppHandle) {
                         (*data_lock).clone()
                     };
                     if let Ok(json) = serde_json::to_string_pretty(&data_to_save) {
-                        let _ = std::fs::write(&*data_path, json);
+                        let _ = crate::state::atomic_write_bytes(&*data_path, json.as_bytes());
                         log_line("[SHA-CALC] Lazy disabled, saved final changes outside lock");
                     }
                     processed_since_save = 0;
@@ -3027,7 +3027,7 @@ pub fn start_sha_calculation_background(app_handle: tauri::AppHandle) {
                             (*data_lock).clone()
                         };
                         if let Ok(json) = serde_json::to_string_pretty(&data_to_save) {
-                            let _ = std::fs::write(&*data_path, json);
+                            let _ = crate::state::atomic_write_bytes(&*data_path, json.as_bytes());
                         }
                         processed_since_save = 0;
                     }
@@ -3051,7 +3051,7 @@ pub fn start_sha_calculation_background(app_handle: tauri::AppHandle) {
                         (*data_lock).clone()
                     };
                     if let Ok(json) = serde_json::to_string_pretty(&data_to_save) {
-                        let _ = std::fs::write(&*data_path, json);
+                        let _ = crate::state::atomic_write_bytes(&*data_path, json.as_bytes());
                         log_line(format!("[SHA-CALC] Queue empty, saved pending {} mods outside lock", processed_since_save));
                     }
                     processed_since_save = 0;
@@ -3166,7 +3166,7 @@ fn process_single_mod_hashing(
             // Perform the slow serialization and I/O outside the lock!
             if let Some(data) = data_to_save {
                 if let Ok(json) = serde_json::to_string_pretty(&data) {
-                    let _ = std::fs::write(data_path, json);
+                    let _ = crate::state::atomic_write_bytes(data_path, json.as_bytes());
                     log_line(format!("[SHA-CALC] Saved manual hash for mod {}", id));
                 }
             }
@@ -3277,7 +3277,7 @@ pub fn start_content_id_background(app_handle: tauri::AppHandle) {
                     {
                         let data = data_shared.lock().unwrap_or_else(|p| p.into_inner());
                         if let Ok(json) = serde_json::to_string_pretty(&*data) {
-                            let _ = std::fs::write(&*data_path, json);
+                            let _ = crate::state::atomic_write_bytes(&*data_path, json.as_bytes());
                         }
                     }
 

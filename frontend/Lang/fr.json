@@ -236,6 +236,8 @@
   "settings.debugGenCrash": "Générer un Crash Log Manuel",
   "settings.debugReset": "Réinitialisation Totale (Stockage & Cache)",
   "settings.debugResetConfirm": "DANGER : Voulez-vous vraiment TOUT supprimer ? (Profils, Mods, Paramètres). Cette action est irréversible.",
+  "settings.factoryReset": "Réinitialiser BMM (usine)",
+  "settings.factoryResetConfirm": "Réinitialiser BMM à un état d'usine ? Les profils, mods et paramètres sont effacés. Une sauvegarde de vos données actuelles est créée d'abord (data.before-reset-*.json), donc récupérable. Continuer ?",
   "settings.debugTitle": "Debug & Dépannage",
   "settings.debugWarn": "Attention : La réinitialisation supprimera tous vos profils, mods et réglages.",
   "settings.devToolsDesc": "Accédez aux outils de débogage avancés et aux journaux système pour le diagnostic technique.",

@@ -373,12 +373,11 @@ fn api_exec_reply(handle: &tauri::AppHandle, action: &str, params: serde_json::V
 
 fn save_data(data: &Arc<std::sync::Mutex<AppData>>, path: &PathBuf) {
     let d = data.lock().unwrap_or_else(|p| p.into_inner());
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
+    // keep a rolling backup, then crash-safe atomic write (temp + fsync + rename)
+    if path.exists() {
+        let _ = std::fs::copy(path, path.with_extension("json.bak"));
     }
-    if let Ok(json) = serde_json::to_string_pretty(&*d) {
-        let _ = std::fs::write(path, json);
-    }
+    let _ = crate::state::atomic_write_json(path, &*d);
 }
 
 /// Constant-time byte comparison (CWE-208): avoids the early-exit timing leak of

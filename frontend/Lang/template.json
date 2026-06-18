@@ -238,6 +238,8 @@
   "settings.debugGenCrash": "Generate Manual Crash Log",
   "settings.debugReset": "Full Reset (Storage & Cache)",
   "settings.debugResetConfirm": "DANGER: Are you sure you want to delete EVERYTHING? (Profiles, Mods, Settings). This cannot be undone.",
+  "settings.factoryReset": "Reset BMM (factory)",
+  "settings.factoryResetConfirm": "Reset BMM to a fresh install? Profiles, mods and settings are cleared. A backup of your current data is saved first (data.before-reset-*.json), so it can be recovered. Continue?",
   "settings.debugTitle": "Debug & Troubleshooting",
   "settings.debugWarn": "Caution: Resetting the application will delete all your profiles and mod configurations.",
   "settings.devToolsDesc": "Access advanced debugging tools and system logs for technical diagnostics.",

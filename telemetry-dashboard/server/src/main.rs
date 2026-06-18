@@ -11,8 +11,9 @@ mod stats;
 use axum::{
     extract::{ConnectInfo, DefaultBodyLimit, Path, Query, State},
     http::{header, HeaderMap, StatusCode, Uri},
+    middleware::Next,
     response::sse::{Event, KeepAlive, Sse},
-    response::{Html, IntoResponse},
+    response::{Html, IntoResponse, Response},
     routing::{delete, get, post},
     Json, Router,
 };
@@ -55,11 +56,9 @@ async fn main() -> anyhow::Result<()> {
     // background loops
     spawn_loops(st.clone());
 
-    let app = Router::new()
-        .route("/batch", post(ingest_handler))
-        .route("/batch/", post(ingest_handler))
-        .route("/capture/", post(ingest_handler))
-        .route("/delete-request", post(delete_request))
+    // Viewer routes expose collected data → gated behind the PRIVATE admin key
+    // (header X-Admin-Key or ?key=). Without it, nothing can be read.
+    let viewer = Router::new()
         .route("/api/stats", get(get_stats))
         .route("/api/stream", get(stream_handler))
         .route("/api/sessions", get(get_sessions))
@@ -67,14 +66,24 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/journeys", post(post_journeys))
         .route("/api/goals", get(get_goals).post(post_goal))
         .route("/api/goals/:id", delete(del_goal))
-        .route("/api/packet-status", get(packet_status))
         .route("/api/event", get(get_event))
         .route("/api/user", get(get_user))
         .route("/api/admin/deletions", get(admin_deletions))
         .route("/api/admin/decide", post(admin_decide))
-        // Static assets + SPA fallback (index.html with HTTP 200) so a hard
-        // refresh on /users/:id etc. never 404s.
-        .fallback(static_or_spa)
+        .route_layer(axum::middleware::from_fn_with_state(st.clone(), require_viewer));
+
+    // Public routes: ingest (public api_key) + client-facing helpers + the SPA
+    // shell. These expose no collected data.
+    let public = Router::new()
+        .route("/batch", post(ingest_handler))
+        .route("/batch/", post(ingest_handler))
+        .route("/capture/", post(ingest_handler))
+        .route("/delete-request", post(delete_request))
+        .route("/api/packet-status", get(packet_status))
+        .fallback(static_or_spa);
+
+    let app = viewer
+        .merge(public)
         .layer(DefaultBodyLimit::max(8 * 1024 * 1024))
         .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())
@@ -159,6 +168,27 @@ fn spawn_loops(st: Shared) {
         db::run_due_deletions(&st.pool).await;
         db::purge_retention(&st.pool, st.cfg.retention_days).await;
     });
+}
+
+// Gate for data-viewing routes: requires the private admin key (X-Admin-Key
+// header or ?key=/?admin_key= query). If ADMIN_KEY is unset, the dashboard runs
+// open (dev only) — set it in production to make the dashboard fully private.
+async fn require_viewer(State(st): State<Shared>, req: axum::extract::Request, next: Next) -> Response {
+    if st.cfg.admin_key.is_empty() {
+        return next.run(req).await;
+    }
+    let header_ok = req.headers().get("X-Admin-Key").and_then(|v| v.to_str().ok()) == Some(st.cfg.admin_key.as_str());
+    let query_ok = req.uri().query().map(|q| {
+        q.split('&').any(|kv| {
+            let mut it = kv.splitn(2, '=');
+            matches!((it.next(), it.next()), (Some("key") | Some("admin_key"), Some(v)) if v == st.cfg.admin_key)
+        })
+    }).unwrap_or(false);
+    if header_ok || query_ok {
+        next.run(req).await
+    } else {
+        (StatusCode::UNAUTHORIZED, Json(json!({ "error": "unauthorized" }))).into_response()
+    }
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────

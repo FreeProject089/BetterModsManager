@@ -20,6 +20,31 @@ pub struct ExportOptions {
     #[serde(default)] pub apps: bool,
 }
 
+/// Factory reset — wipe BMM back to a fresh install. The current data.json is
+/// preserved as `data.before-reset-<ts>.json` (and the rolling .bak), so this is
+/// recoverable. The caller should prompt the user to restart afterwards.
+#[tauri::command]
+pub fn factory_reset(state: State<AppState>, app: tauri::AppHandle) -> Result<(), String> {
+    let dir = app.path_resolver().app_data_dir().unwrap_or_default();
+    let data_path = dir.join("data.json");
+    if data_path.exists() {
+        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let _ = std::fs::copy(&data_path, dir.join(format!("data.before-reset-{}.json", ts)));
+    }
+    // Reset the live state to factory defaults and persist atomically.
+    {
+        let mut d = state.data.lock().map_err(|e| e.to_string())?;
+        *d = crate::state::AppData::default();
+    }
+    state.save().map_err(|e| e.to_string())?;
+    // Best-effort removal of sidecar config files (harmless if absent).
+    for f in ["bans.json", "whitelist.json", "analytics_sent.json", "analytics_queue.json", "active_theme.txt", "discord_rpc.json"] {
+        let _ = std::fs::remove_file(dir.join(f));
+    }
+    crate::commands::crash::log_line("[RESET] Factory reset performed — previous data backed up (data.before-reset-*.json).".to_string());
+    Ok(())
+}
+
 // ── Helpers for the file-based data dirs ──────────────────────────────────────
 fn data_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
     app.path_resolver().app_data_dir().unwrap_or_default()

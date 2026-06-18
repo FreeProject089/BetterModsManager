@@ -186,28 +186,88 @@ pub struct AppState {
     pub api_shutdown_tx: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
 }
 
+/// Parse an AppData file, returning None on any read/parse error.
+fn parse_appdata(path: &std::path::Path) -> Option<AppData> {
+    let f = std::fs::File::open(path).ok()?;
+    serde_json::from_reader(std::io::BufReader::new(f)).ok()
+}
+
+/// Load data.json, recovering from the rolling `.bak` if the main file is
+/// corrupt or missing — and NEVER silently resetting when a good backup exists.
+/// A corrupt main file is preserved as `data.corrupt-<ts>.json` for forensics.
+fn load_with_recovery(path: &std::path::Path) -> AppData {
+    let bak = path.with_extension("json.bak");
+    let log = |m: String| crate::commands::crash::log_line(m);
+
+    if path.exists() {
+        if let Some(d) = parse_appdata(path) {
+            return d;
+        }
+        log("[STATE] data.json is unreadable/corrupt — attempting recovery from backup.".into());
+        // keep the bad file for manual inspection
+        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let _ = std::fs::copy(path, path.with_file_name(format!("data.corrupt-{}.json", ts)));
+        if bak.exists() {
+            if let Some(d) = parse_appdata(&bak) {
+                log("[STATE] Recovered data.json from backup (data.json.bak).".into());
+                let _ = std::fs::copy(&bak, path); // restore so later saves don't clobber the good backup
+                return d;
+            }
+        }
+        log("[STATE] No valid backup found — starting fresh (corrupt file preserved).".into());
+        return AppData::default();
+    }
+
+    // main file missing entirely → try the backup before defaulting
+    if bak.exists() {
+        if let Some(d) = parse_appdata(&bak) {
+            log("[STATE] data.json missing — recovered from data.json.bak.".into());
+            let _ = std::fs::copy(&bak, path);
+            return d;
+        }
+    }
+    AppData::default()
+}
+
+/// Crash-safe write: write to a temp file, fsync, then atomically rename over
+/// the target. An interrupted write can never leave a half-written file.
+pub fn atomic_write_bytes(path: impl AsRef<std::path::Path>, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let path = path.as_ref();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.flush()?;
+        f.sync_all()?; // ensure bytes hit disk before the rename
+    }
+    std::fs::rename(&tmp, path)
+}
+
+/// Crash-safe write of a serializable value (streams to temp, fsync, rename).
+pub fn atomic_write_json<T: serde::Serialize>(path: impl AsRef<std::path::Path>, value: &T) -> std::io::Result<()> {
+    use std::io::Write;
+    let path = path.as_ref();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    {
+        let file = std::fs::File::create(&tmp)?;
+        let mut writer = std::io::BufWriter::new(file);
+        serde_json::to_writer_pretty(&mut writer, value).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        writer.flush()?;
+        writer.get_ref().sync_all()?;
+    }
+    std::fs::rename(&tmp, path)
+}
+
 impl AppState {
     pub fn load(data_path: PathBuf) -> Self {
-        let data = if data_path.exists() {
-            // Stream-parse from a BufReader — avoids slurping the whole file
-            // into a single String before serde sees it.  Halves peak memory
-            // on big libraries.
-            match std::fs::File::open(&data_path) {
-                Ok(f) => {
-                    let reader = std::io::BufReader::new(f);
-                    serde_json::from_reader(reader).unwrap_or_else(|e| {
-                        crate::commands::crash::log_line(format!("[STATE] Error parsing data.json: {}. Using default.", e));
-                        AppData::default()
-                    })
-                }
-                Err(e) => {
-                    crate::commands::crash::log_line(format!("[STATE] Error reading data.json: {}. Using default.", e));
-                    AppData::default()
-                }
-            }
-        } else {
-            AppData::default()
-        };
+        let data = load_with_recovery(&data_path);
         Self {
             data: std::sync::Arc::new(Mutex::new(data)),
             data_path: std::sync::Arc::new(data_path),
@@ -231,17 +291,14 @@ impl AppState {
 
     pub fn save(&self) -> anyhow::Result<()> {
         let data = self.data.lock().unwrap();
-        if let Some(parent) = (*self.data_path).parent() {
-            std::fs::create_dir_all(parent)?;
+        let path = &*self.data_path;
+        // Roll the current good file to .bak BEFORE replacing it. Because the
+        // write below is atomic (temp + rename), the live data.json is always a
+        // complete file, so the backup is always a complete prior version.
+        if path.exists() {
+            let _ = std::fs::copy(path, path.with_extension("json.bak"));
         }
-        // Stream JSON directly to a BufWriter — avoids allocating the full
-        // serialized payload (potentially many MB for large libraries) as
-        // a single String in memory before writing.
-        let file = std::fs::File::create(&*self.data_path)?;
-        let mut writer = std::io::BufWriter::new(file);
-        serde_json::to_writer_pretty(&mut writer, &*data)?;
-        use std::io::Write;
-        writer.flush()?;
+        atomic_write_json(path, &*data)?;
         Ok(())
     }
 }
