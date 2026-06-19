@@ -156,7 +156,7 @@ export default function UserDetail() {
               const open = !folded.has(sess.session_id);
               return (
               <div key={sess.session_id} className="card p-3">
-                <div className="flex items-center justify-between text-xs text-sub mb-2">
+                <div className="flex flex-col md:flex-row md:items-center justify-between text-xs text-sub mb-2 gap-2">
                   <button
                     onClick={() => setFolded((f) => { const n = new Set(f); n.has(sess.session_id) ? n.delete(sess.session_id) : n.add(sess.session_id); return n; })}
                     className="flex items-center gap-2 font-mono hover:text-ink"

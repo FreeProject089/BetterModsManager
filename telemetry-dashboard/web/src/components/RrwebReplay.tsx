@@ -47,6 +47,9 @@ function Player({ events, markers }: { events: any[]; markers: any[] }) {
   const [total, setTotal] = useState(0);
   const [startTime, setStartTime] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const mediaRecorderRef = useRef<any>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
   // recorded viewport (Meta event) → used to scale the player to fit the panel
   const [recW, recH] = useMemo(() => {
@@ -145,6 +148,44 @@ function Player({ events, markers }: { events: any[]; markers: any[] }) {
       if (cur >= total) { rep.play(0); } else { rep.play(rep.getCurrentTime()); }
       setPlaying(true);
     }
+  };
+
+  const toggleRecording = async () => {
+    if (recording) {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: "browser" }, audio: false });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+      chunksRef.current = [];
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `replay-export.webm`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        setRecording(false);
+        stream.getTracks().forEach(track => track.stop());
+      };
+      mediaRecorder.start();
+      setRecording(true);
+      mediaRecorderRef.current = mediaRecorder;
+      // Auto play if not playing
+      if (!playing) toggle();
+      // Stop when user ends sharing
+      stream.getVideoTracks()[0].onended = () => {
+        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      };
+    } catch (err) { console.error("Screen recording failed", err); }
   };
   const changeSpeed = (s: number) => { setSpeed(s); try { repRef.current?.setConfig?.({ speed: s }); } catch {} };
   const seek = (ms: number) => {
@@ -247,6 +288,13 @@ function Player({ events, markers }: { events: any[]; markers: any[] }) {
           {[1, 2, 4, 8].map((s) => (
             <button key={s} onClick={() => changeSpeed(s)} className={`pill text-xs ${speed === s ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>{s}×</button>
           ))}
+          <button onClick={toggleRecording} className={`pill text-xs ml-2 hover:opacity-80 transition-opacity ${recording ? "bg-[#f06363] text-white" : "bg-panel2 text-sub hover:text-ink"}`} title={recording ? "Arrêter l'enregistrement" : "Exporter en WebM (Vidéo)"}>
+            {recording ? (
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-white animate-pulse" /> Recording...</span>
+            ) : (
+              <span className="flex items-center gap-1.5"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8" /></svg> Record</span>
+            )}
+          </button>
           <button onClick={toggleFullscreen} className="pill text-xs bg-panel2 text-sub hover:text-ink ml-2" title="Fullscreen">
             {isFullscreen ? (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>

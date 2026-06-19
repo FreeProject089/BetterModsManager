@@ -5626,6 +5626,7 @@
   "analytics.packetEvents": "events",
   "analytics.requestDelete": "Request deletion",
   "analytics.deleteRequested": "Deletion requested (≤72h)",
+  "analytics.deletePending": "Pending review (≤72h)",
   "analytics.deleteQueued": "Deletion requested — applied within 72h",
   "analytics.noPackets": "No packets sent yet.",
   "analytics.clearHistory": "Clear history",

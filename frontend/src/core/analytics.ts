@@ -750,7 +750,9 @@ async function renderSentPackets(): Promise<void> {
         try {
             const base = (getLinks().analytics_endpoint || '').trim().replace(/\/+$/, '').replace(/\/batch$/, '');
             if (base.startsWith('https://')) {
-                const r = await fetch(`${base}/api/packet-status?ids=${encodeURIComponent(reqIds.join(','))}`);
+                const r = await fetch(`${base}/api/packet-status?ids=${encodeURIComponent(reqIds.join(','))}`, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                });
                 if (r.ok) statuses = (await r.json()).statuses || {};
             }
         } catch {}

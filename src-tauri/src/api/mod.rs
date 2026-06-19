@@ -2485,6 +2485,7 @@ pub async fn start_api_server(
                 "https://tauri.localhost".into(),
                 "tauri://localhost".into(),
                 "http://tauri.localhost".into(),
+                "https://bettercommunity.ch".into(),
             ];
             origins.extend(user_cors_origins.iter().filter(|o| *o != "*").cloned());
             #[cfg(debug_assertions)]
