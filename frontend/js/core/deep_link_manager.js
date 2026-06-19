@@ -517,17 +517,26 @@ async function handleDeepLink(urlStr) {
             }
             return;
         }
-        // ── Benchmark: bmm://benchmark/run?dataset=sandbox&size=M[&mb=512] ──────
-        if (action === 'benchmark/run') {
+        // ── Benchmark: bmm://benchmark/run?dataset=sandbox&size=M[&mb=512]
+        //    [&mode=manual|auto][&sources=path1;path2] ───────────────────────────
+        //    mode=auto (default for the deep link) opens the benchmark and starts
+        //    it; mode=manual opens it pre-filled and lets the user click Run.
+        if (action === 'benchmark/run' || action === 'benchmark/open') {
             const dataset = parsedUrl.searchParams.get('dataset') === 'real' ? 'real' : 'sandbox';
             const size = (parsedUrl.searchParams.get('size') || 'M').toUpperCase();
-            const scaleMap = { S: 'small', M: 'medium', L: 'large', XL: 'xlarge' };
-            const mb = parseInt(parsedUrl.searchParams.get('mb') || '', 10);
-            const scale = size === 'CUSTOM' ? `custom:${Math.max(1, mb || 256)}` : (scaleMap[size] || 'medium');
-            toast(t('bench.deeplinkStart') || `Benchmark (${dataset} ${size}) started…`, 'info');
-            invoke('run_app_benchmark', { mode: dataset, realSources: [], scale })
-                .then((r) => toast(`${t('bench.done') || 'Benchmark done'}: ${Math.round(Number(r?.total_ms) || 0)} ms`, 'success'))
-                .catch((e) => toast(`${t('common.error') || 'Error'}: ${e}`, 'error'));
+            const mb = parseInt(parsedUrl.searchParams.get('mb') || '', 10) || undefined;
+            const mode = (parsedUrl.searchParams.get('mode') || '').toLowerCase();
+            const autoRun = action === 'benchmark/open' ? mode === 'auto' : mode !== 'manual';
+            const sources = (parsedUrl.searchParams.get('sources') || '')
+                .split(/[;|]/).map(s => s.trim()).filter(Boolean);
+            toast(t('bench.deeplinkStart') || `Benchmark (${dataset} ${size})…`, 'info');
+            try {
+                const { openBenchmarkWithConfig } = await import('../features/bench/benchmark.js');
+                await openBenchmarkWithConfig({ dataset, size, mb, sources, autoRun });
+            }
+            catch (e) {
+                toast(`${t('common.error') || 'Error'}: ${e}`, 'error');
+            }
             return;
         }
         if (action === 'import' || action === 'install' || action === 'download') {

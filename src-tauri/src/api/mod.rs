@@ -313,6 +313,13 @@ struct BenchmarkApiBody {
     /// Dataset size in MB when size == CUSTOM.
     #[serde(default)]
     mb: Option<u64>,
+    /// Mod folder paths to benchmark when dataset == "real".
+    #[serde(default)]
+    sources: Option<Vec<String>>,
+    /// "manual" (default) — open the benchmark in the UI, the user starts it; or
+    /// "auto" — run it now in the background and return the results in the response.
+    #[serde(default)]
+    mode: Option<String>,
 }
 
 /// POST /api/repo/host — start a static HTTP file server serving a generated repo
@@ -1301,8 +1308,11 @@ pub async fn start_api_server(
             )
         });
 
-    // POST /api/benchmark  (auth) — launch a benchmark (UI-driven, so it runs with
-    // the window context). Body: { dataset?: "sandbox"|"real", size?: S|M|L|XL|CUSTOM, mb?: number }.
+    // POST /api/benchmark  (auth) — launch a benchmark. Body:
+    //   { dataset?: "sandbox"|"real", size?: S|M|L|XL|CUSTOM, mb?: number,
+    //     sources?: string[] (mod folders for "real"), mode?: "manual"|"auto" }.
+    // manual → open the benchmark in the UI pre-filled, the user starts it (202).
+    // auto   → run it now in the background and return the report in the response.
     let tok_bench = token.clone();
     let handle_bench = app_handle.clone();
     let benchmark = warp::path!("api" / "benchmark")
@@ -1310,19 +1320,54 @@ pub async fn start_api_server(
         .and(require_token(tok_bench))
         .and(warp::body::json::<BenchmarkApiBody>())
         .and(with_app_handle(handle_bench))
-        .map(|body: BenchmarkApiBody, handle: tauri::AppHandle| {
+        .and_then(|body: BenchmarkApiBody, handle: tauri::AppHandle| async move {
             let dataset = if body.dataset.as_deref() == Some("real") { "real" } else { "sandbox" };
             let size = body.size.unwrap_or_else(|| "M".into()).to_uppercase();
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
-                "action": "benchmark/run",
-                "params": { "dataset": dataset, "size": size, "mb": body.mb }
-            }));
-            warp::reply::with_status(
-                warp::reply::json(&serde_json::json!({
-                    "ok": true, "driven_by": "bmm-ui", "action": "benchmark/run", "dataset": dataset, "size": size
-                })),
-                StatusCode::ACCEPTED,
-            )
+            let scale = match size.as_str() {
+                "S" => "small".to_string(),
+                "L" => "large".to_string(),
+                "XL" => "xlarge".to_string(),
+                "CUSTOM" => format!("custom:{}", body.mb.unwrap_or(256).max(1)),
+                _ => "medium".to_string(),
+            };
+            let sources: Vec<String> = body.sources.clone().unwrap_or_default();
+            let is_auto = body.mode.as_deref() == Some("auto");
+
+            if is_auto {
+                // Run headless in the backend and return the results synchronously.
+                let window = match handle.get_window("main") {
+                    Some(w) => w,
+                    None => return Ok::<_, warp::Rejection>(warp::reply::with_status(
+                        warp::reply::json(&serde_json::json!({ "ok": false, "error": "main window not available" })),
+                        StatusCode::SERVICE_UNAVAILABLE,
+                    )),
+                };
+                let real_sources = if dataset == "real" { Some(sources) } else { None };
+                match crate::commands::benchmark::run_app_benchmark(window, dataset.to_string(), real_sources, Some(scale)).await {
+                    Ok(report) => Ok(warp::reply::with_status(
+                        warp::reply::json(&serde_json::json!({
+                            "ok": true, "mode": "auto", "dataset": dataset, "size": size, "report": report
+                        })),
+                        StatusCode::OK,
+                    )),
+                    Err(e) => Ok(warp::reply::with_status(
+                        warp::reply::json(&serde_json::json!({ "ok": false, "mode": "auto", "error": e })),
+                        StatusCode::CONFLICT,
+                    )),
+                }
+            } else {
+                // Manual: open the benchmark UI pre-filled; the user clicks Run.
+                let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                    "action": "benchmark/open",
+                    "params": { "dataset": dataset, "size": size, "mb": body.mb, "sources": sources, "autoRun": false }
+                }));
+                Ok(warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({
+                        "ok": true, "mode": "manual", "driven_by": "bmm-ui", "action": "benchmark/open", "dataset": dataset, "size": size
+                    })),
+                    StatusCode::ACCEPTED,
+                ))
+            }
         });
 
     // GET /api/check-update  (public, no token required)

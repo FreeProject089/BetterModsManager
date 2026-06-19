@@ -278,13 +278,18 @@ export async function initApiActivity(): Promise<void> {
                     catch (e) { console.warn('[api-exec] mod/update', e); }
                 }
                 break;
-            case 'benchmark/run': {
+            case 'benchmark/run':
+            case 'benchmark/open': {
+                // Open the benchmark UI pre-filled. `autoRun` (manual=false / auto=true)
+                // decides whether the run starts immediately or waits for the user.
                 const dataset = params.dataset === 'real' ? 'real' : 'sandbox';
                 const size = String(params.size || 'M').toUpperCase();
-                const scaleMap: Record<string, string> = { S: 'small', M: 'medium', L: 'large', XL: 'xlarge' };
-                const scale = size === 'CUSTOM' ? `custom:${Math.max(1, parseInt(params.mb, 10) || 256)}` : (scaleMap[size] || 'medium');
-                toast(t('bench.deeplinkStart') || `Benchmark (${dataset} ${size}) started…`, 'info');
-                run('run_app_benchmark', { mode: dataset, realSources: [], scale }, t('bench.done') || 'Benchmark done');
+                const sources = Array.isArray(params.sources) ? params.sources : [];
+                const autoRun = action === 'benchmark/run' || params.autoRun === true;
+                try {
+                    const { openBenchmarkWithConfig } = await import('../features/bench/benchmark.js');
+                    await openBenchmarkWithConfig({ dataset, size, mb: params.mb, sources, autoRun });
+                } catch (e) { console.warn('[api-exec] benchmark/open', e); }
                 break;
             }
             case 'repo/host-stop':

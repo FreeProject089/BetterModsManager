@@ -36,6 +36,24 @@ let benchLastLabel = '';
 let benchRunGen = 0;
 // Loaded/run benchmark reports kept for side-by-side comparison (capped).
 let benchCompare: Array<{ label: string; report: any }> = [];
+// Set by openBenchmarkWithConfig() so a programmatic open (API / deep link) can
+// pre-fill the dataset/size/sources and optionally auto-start the run. Consumed
+// once when the modal finishes building.
+let pendingBenchConfig: { dataset?: string; size?: string; mb?: number; sources?: string[]; autoRun?: boolean } | null = null;
+
+/**
+ * Open the benchmark modal pre-configured — used by the public API and the
+ * `bmm://benchmark/run` deep link. `autoRun: true` starts the run immediately
+ * (auto mode); otherwise everything is set up and the user clicks Run (manual mode).
+ */
+export async function openBenchmarkWithConfig(
+    cfg: { dataset?: string; size?: string; mb?: number; sources?: string[]; autoRun?: boolean },
+): Promise<void> {
+    pendingBenchConfig = cfg || {};
+    // Rebuild from scratch so the config is applied even if the modal was already open.
+    document.getElementById('modal-advanced-perf-overlay')?.remove();
+    await openAdvancedPerfModal();
+}
 
 /** Add a report to the comparison set (most-recent first, max 6). */
 function addBenchToCompare(label: string, report: any): void {
@@ -896,6 +914,43 @@ export async function openAdvancedPerfModal() {
             toast((t('bench.imported') || 'Session imported') + ` (${pts.length} pts)`, 'success');
         } catch (e) { toast((t('bench.importFailed') || 'Import failed') + ': ' + e, 'error'); }
     };
+
+    // ── Programmatic open (public API / deep link): pre-fill the config and, in
+    //    auto mode, start the run. In manual mode everything is set up and the
+    //    user clicks Run themselves. ───────────────────────────────────────────
+    if (pendingBenchConfig) {
+        const cfg = pendingBenchConfig;
+        pendingBenchConfig = null;
+        switchPerfMode('bench');
+        // Dataset (sandbox | real)
+        benchMode = cfg.dataset === 'real' ? 'real' : 'sandbox';
+        setSeg('bench-mode-seg', 'mode', benchMode);
+        const isReal = benchMode === 'real';
+        const realNote = content.querySelector('#bench-realnote') as HTMLElement | null;
+        if (realNote) realNote.style.display = isReal ? 'block' : 'none';
+        if (sourcesPanel) sourcesPanel.style.display = isReal ? 'flex' : 'none';
+        // Size / scale
+        const scaleMap: Record<string, string> = { S: 'small', M: 'medium', L: 'large', XL: 'xlarge', CUSTOM: 'custom' };
+        const sz = String(cfg.size || 'M').toUpperCase();
+        benchScale = scaleMap[sz]
+            || (['small', 'medium', 'large', 'xlarge', 'custom'].includes(String(cfg.size)) ? String(cfg.size) : 'medium');
+        setSeg('bench-scale-seg', 'scale', benchScale);
+        if (customWrap) customWrap.style.display = benchScale === 'custom' ? 'inline-flex' : 'none';
+        if (benchScale === 'custom' && cfg.mb) {
+            const mbEl = content.querySelector('#bench-custom-mb') as HTMLInputElement | null;
+            if (mbEl) mbEl.value = String(Math.min(8192, Math.max(1, Math.round(cfg.mb))));
+        }
+        // Real sources: add the supplied mod folders as custom sources.
+        if (isReal) {
+            await loadProfiles();
+            if (Array.isArray(cfg.sources)) {
+                for (const s of cfg.sources) { if (s && !benchCustom.includes(s)) benchCustom.push(s); }
+            }
+            renderSrcChips();
+        }
+        // Auto mode starts the run now; manual mode leaves it to the user.
+        if (cfg.autoRun && runBtn) runBtn.click();
+    }
 
     // Live Monitoring
     benchmarkUnlisten = await listen('benchmark-point', (event) => {
