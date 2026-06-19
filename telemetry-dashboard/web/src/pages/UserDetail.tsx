@@ -5,6 +5,7 @@ import { Card, Kpi, Empty } from "../components/ui";
 import { Chart } from "../components/Chart";
 import { ProfileAvatar, Flag } from "../components/visuals";
 import { EventTimeline } from "../components/events";
+import { RrwebReplay } from "../components/RrwebReplay";
 import { fmtDate, fmtDateTime, dur, nf } from "../lib/format";
 
 export default function UserDetail() {
@@ -12,6 +13,7 @@ export default function UserDetail() {
   const s = useStats()!;
   const u = s.users.find((x) => x.creator_id === id);
   const [journey, setJourney] = useState<any[] | null>(null);
+  const [replayId, setReplayId] = useState<string | null>(null);
 
   useEffect(() => {
     let on = true;
@@ -153,11 +155,17 @@ export default function UserDetail() {
               <div key={sess.session_id} className="card p-3">
                 <div className="flex items-center justify-between text-xs text-sub mb-2">
                   <span className="font-mono">{sess.session_id}</span>
-                  <span>
+                  <span className="flex items-center gap-2">
                     {fmtDateTime(sess.start)} · {dur((new Date(sess.end).getTime() - new Date(sess.start).getTime()) / 1000)} · {sess.events?.length || 0} events
+                    <button
+                      onClick={() => setReplayId((id) => (id === sess.session_id ? null : sess.session_id))}
+                      className={`pill ${replayId === sess.session_id ? "bg-brand text-white" : "bg-panel2 text-sub"}`}
+                    >
+                      {replayId === sess.session_id ? "Chronologie" : "Replay"}
+                    </button>
                   </span>
                 </div>
-                <EventTimeline events={sess.events || []} />
+                {replayId === sess.session_id ? <RrwebReplay sessionId={sess.session_id} fallbackEvents={sess.events || []} /> : <EventTimeline events={sess.events || []} />}
               </div>
             ))}
           </div>

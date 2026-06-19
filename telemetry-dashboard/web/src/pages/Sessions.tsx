@@ -4,6 +4,7 @@ import { useStore, apiGet } from "../lib/store";
 import { Card, Empty, Drawer } from "../components/ui";
 import { ProfileAvatar, Flag, ArrowIcon } from "../components/visuals";
 import { classify, EventTimeline, TypeChips, type TypeKey } from "../components/events";
+import { RrwebReplay } from "../components/RrwebReplay";
 import { fmtDateTime, dur, nf } from "../lib/format";
 
 export default function Sessions() {
@@ -11,7 +12,7 @@ export default function Sessions() {
   const [rows, setRows] = useState<any[]>([]);
   const [sel, setSel] = useState<any | null>(null);
   const [journey, setJourney] = useState<any[] | null>(null);
-  const [tab, setTab] = useState<"timeline" | "info">("timeline");
+  const [tab, setTab] = useState<"timeline" | "replay" | "info">("timeline");
   const [hidden, setHidden] = useState<Set<TypeKey>>(new Set());
 
   const userOf = (id: string) => stats?.users.find((u) => u.creator_id === id);
@@ -107,11 +108,14 @@ export default function Sessions() {
             {/* tabs */}
             <div className="flex gap-1">
               <button onClick={() => setTab("timeline")} className={`pill ${tab === "timeline" ? "bg-panel2 text-ink" : "text-sub"}`}>Chronologie</button>
+              <button onClick={() => setTab("replay")} className={`pill ${tab === "replay" ? "bg-panel2 text-ink" : "text-sub"}`}>Replay</button>
               <button onClick={() => setTab("info")} className={`pill ${tab === "info" ? "bg-panel2 text-ink" : "text-sub"}`}>Info session</button>
             </div>
 
             {journey == null ? (
               <Empty>Loading…</Empty>
+            ) : tab === "replay" ? (
+              <RrwebReplay sessionId={sel.session_id} fallbackEvents={journey} />
             ) : tab === "info" ? (
               <div className="card divide-y divide-line/60">
                 <Info k="Session id" v={<span className="font-mono text-xs">{sel.session_id}</span>} />

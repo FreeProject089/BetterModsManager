@@ -19,6 +19,7 @@ const Users = lazy(() => import("./pages/Users"));
 const UserDetail = lazy(() => import("./pages/UserDetail"));
 const Bmm = lazy(() => import("./pages/Bmm"));
 const Admin = lazy(() => import("./pages/Admin"));
+const Storage = lazy(() => import("./pages/Storage"));
 
 function Spinner({ label }: { label: string }) {
   return (
@@ -94,6 +95,7 @@ function Shell() {
           <Route path="users/:id" element={<Gate><UserDetail /></Gate>} />
           <Route path="bmm" element={<Gate><Bmm /></Gate>} />
           <Route path="admin" element={<Gate><Admin /></Gate>} />
+          <Route path="storage" element={<Gate><Storage /></Gate>} />
         </Route>
       </Routes>
   );

@@ -344,6 +344,7 @@ fn main() {
             commands::analytics::analytics_sent_packets,
             commands::analytics::analytics_request_deletion,
             commands::analytics::analytics_clear_sent_log,
+            commands::analytics::replay_asset_data_url,
             commands::mods::get_conflict_file_tree,
             commands::mods::list_mod_files_recursive,
             commands::mods::path_join,

@@ -15,6 +15,17 @@ fn parse_ts_ms(ts: &str) -> i64 {
         .unwrap_or_else(|_| now_ms())
 }
 
+/// Decode a base64'd gzip blob back into JSON (used for compressed rrweb chunks).
+fn decode_gzip_json(b64: &str) -> Option<Value> {
+    use base64::Engine;
+    use std::io::Read;
+    let raw = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
+    let mut gz = flate2::read::GzDecoder::new(&raw[..]);
+    let mut out = Vec::new();
+    gz.read_to_end(&mut out).ok()?;
+    serde_json::from_slice(&out).ok()
+}
+
 // ── Ingest ──────────────────────────────────────────────────────────────────
 pub async fn ingest(st: &AppState, ev: &Value, packet_id: &str, realtime: bool) {
     let event = match ev.get("event").and_then(Value::as_str) {
@@ -38,6 +49,33 @@ pub async fn ingest(st: &AppState, ev: &Value, packet_id: &str, realtime: bool) 
     } else {
         packet_id
     };
+
+    // Session replay (rrweb) chunks go to their own table, never to `events`, so
+    // they stay out of every aggregation. Each chunk's `props.d` is the rrweb
+    // event array; session_id/seq let the viewer reassemble + order the stream.
+    if event == "$replay" {
+        let sid = props.get("session_id").and_then(Value::as_str).unwrap_or("");
+        let seq = props.get("seq").and_then(Value::as_i64).unwrap_or(0);
+        // Chunks arrive gzip+base64 (`dz`) to keep payloads small; older/fallback
+        // clients may send the raw array (`d`).
+        let data = if let Some(dz) = props.get("dz").and_then(Value::as_str) {
+            decode_gzip_json(dz).unwrap_or_else(|| json!([]))
+        } else {
+            props.get("d").cloned().unwrap_or_else(|| json!([]))
+        };
+        let _ = sqlx::query(
+            "INSERT INTO replay_chunks(packet_id,distinct_id,session_id,seq,ts_ms,data) VALUES($1,$2,$3,$4,$5,$6)",
+        )
+        .bind(pid)
+        .bind(&id)
+        .bind(sid)
+        .bind(seq)
+        .bind(ts_ms)
+        .bind(&data)
+        .execute(&st.pool)
+        .await;
+        return;
+    }
 
     let _ = sqlx::query(
         "INSERT INTO events(packet_id,distinct_id,event,ts,ts_ms,props) VALUES($1,$2,$3,$4,$5,$6)",
@@ -343,7 +381,13 @@ pub async fn purge_retention(pool: &PgPool, days: i64) -> u64 {
         .await
         .map(|r| r.rows_affected())
         .unwrap_or(0);
-    a + b
+    let c = sqlx::query("DELETE FROM replay_chunks WHERE ts_ms < $1")
+        .bind(cut)
+        .execute(pool)
+        .await
+        .map(|r| r.rows_affected())
+        .unwrap_or(0);
+    a + b + c
 }
 pub async fn erase_packet(pool: &PgPool, pid: &str) -> u64 {
     let a = sqlx::query("DELETE FROM events WHERE packet_id=$1")
@@ -358,7 +402,151 @@ pub async fn erase_packet(pool: &PgPool, pid: &str) -> u64 {
         .await
         .map(|r| r.rows_affected())
         .unwrap_or(0);
-    a + b
+    let c = sqlx::query("DELETE FROM replay_chunks WHERE packet_id=$1")
+        .bind(pid)
+        .execute(pool)
+        .await
+        .map(|r| r.rows_affected())
+        .unwrap_or(0);
+    a + b + c
+}
+
+// ── Admin audit trail ─────────────────────────────────────────────────────────
+pub async fn audit(pool: &PgPool, action: &str, target: &str, ip: &str, fp: &str, detail: Value) {
+    let _ = sqlx::query("INSERT INTO audit_log(at,action,target,admin_ip,admin_fp,detail) VALUES($1,$2,$3,$4,$5,$6)")
+        .bind(now_ms())
+        .bind(action)
+        .bind(target)
+        .bind(ip)
+        .bind(fp)
+        .bind(&detail)
+        .execute(pool)
+        .await;
+}
+
+pub async fn list_audit(pool: &PgPool, limit: i64) -> Vec<Value> {
+    let rows: Vec<(i64, i64, String, String, String, String, Value)> = sqlx::query_as(
+        "SELECT id,at,action,target,COALESCE(admin_ip,''),COALESCE(admin_fp,''),detail FROM audit_log ORDER BY at DESC LIMIT $1",
+    )
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+    rows.into_iter()
+        .map(|(id, at, action, target, ip, fp, detail)| json!({
+            "id": id, "at": at, "action": action, "target": target, "ip": ip, "fp": fp, "detail": detail
+        }))
+        .collect()
+}
+
+// ── Storage management ────────────────────────────────────────────────────────
+async fn table_size(pool: &PgPool, table: &str) -> (i64, i64) {
+    let rows: Option<(i64,)> = sqlx::query_as(&format!("SELECT COUNT(*) FROM {table}"))
+        .fetch_optional(pool).await.ok().flatten();
+    let bytes: Option<(Option<i64>,)> = sqlx::query_as("SELECT pg_total_relation_size($1)")
+        .bind(table).fetch_optional(pool).await.ok().flatten();
+    (rows.map(|r| r.0).unwrap_or(0), bytes.and_then(|b| b.0).unwrap_or(0))
+}
+
+/// Storage overview: per-table counts + on-disk size, plus the biggest replay
+/// sessions and packets so an admin can manage / prune them.
+pub async fn storage_overview(pool: &PgPool) -> Value {
+    let tables = ["events", "replay_chunks", "benchmarks", "deletions", "goals", "geo", "user_ips", "live_instances", "audit_log"];
+    let mut tinfo = Vec::new();
+    for t in tables {
+        let (rows, bytes) = table_size(pool, t).await;
+        tinfo.push(json!({ "table": t, "rows": rows, "bytes": bytes }));
+    }
+
+    let replays: Vec<(String, String, i64, Option<i64>, Option<i64>)> = sqlx::query_as(
+        "SELECT session_id, COALESCE(MAX(distinct_id),''), COUNT(*), SUM(pg_column_size(data)), MAX(ts_ms)
+         FROM replay_chunks GROUP BY session_id ORDER BY MAX(ts_ms) DESC LIMIT 200",
+    ).fetch_all(pool).await.unwrap_or_default();
+    let replays: Vec<Value> = replays.into_iter().map(|(sid, did, chunks, bytes, ts)| json!({
+        "session_id": sid, "distinct_id": did, "chunks": chunks, "bytes": bytes.unwrap_or(0), "last_ms": ts.unwrap_or(0)
+    })).collect();
+
+    let packets: Vec<(String, i64, Option<i64>, Option<i64>)> = sqlx::query_as(
+        "SELECT packet_id, COUNT(*), SUM(pg_column_size(props)), MAX(ts_ms)
+         FROM events WHERE packet_id IS NOT NULL AND packet_id<>'' GROUP BY packet_id ORDER BY MAX(ts_ms) DESC LIMIT 200",
+    ).fetch_all(pool).await.unwrap_or_default();
+    let packets: Vec<Value> = packets.into_iter().map(|(pid, n, bytes, ts)| json!({
+        "packet_id": pid, "events": n, "bytes": bytes.unwrap_or(0), "last_ms": ts.unwrap_or(0)
+    })).collect();
+
+    json!({ "tables": tinfo, "replays": replays, "packets": packets })
+}
+
+pub async fn delete_replay_session(pool: &PgPool, sid: &str) -> u64 {
+    sqlx::query("DELETE FROM replay_chunks WHERE session_id=$1")
+        .bind(sid).execute(pool).await.map(|r| r.rows_affected()).unwrap_or(0)
+}
+
+// ── Full JSON backup (export / import) ────────────────────────────────────────
+const BACKUP_TABLES: [&str; 9] = ["events", "replay_chunks", "benchmarks", "geo", "deletions", "goals", "live_instances", "user_ips", "audit_log"];
+
+/// Dump every table to a single JSON document (rows as JSON objects per table).
+pub async fn export_backup(pool: &PgPool) -> Value {
+    let mut out = Map::new();
+    for t in BACKUP_TABLES {
+        let row: Option<(Option<Value>,)> = sqlx::query_as(&format!("SELECT to_jsonb(array_agg(x)) FROM {t} x"))
+            .fetch_optional(pool).await.ok().flatten();
+        let arr = row.and_then(|r| r.0).unwrap_or_else(|| json!([]));
+        out.insert(t.to_string(), arr);
+    }
+    json!({ "version": 1, "exported_at": now_ms(), "tables": Value::Object(out) })
+}
+
+/// Restore a backup produced by `export_backup` (additive — existing PKs are kept
+/// via ON CONFLICT DO NOTHING). Returns rows inserted per table.
+pub async fn import_backup(pool: &PgPool, doc: &Value) -> Value {
+    let tables = doc.get("tables").cloned().unwrap_or_else(|| json!({}));
+    let mut result = Map::new();
+    for t in BACKUP_TABLES {
+        let arr = tables.get(t).cloned().unwrap_or_else(|| json!([]));
+        if !arr.as_array().map(|a| !a.is_empty()).unwrap_or(false) {
+            result.insert(t.to_string(), json!(0));
+            continue;
+        }
+        // jsonb_populate_recordset expands the JSON array into typed table rows.
+        let n = sqlx::query(&format!(
+            "INSERT INTO {t} SELECT * FROM jsonb_populate_recordset(NULL::{t}, $1) ON CONFLICT DO NOTHING"
+        ))
+        .bind(&arr)
+        .execute(pool)
+        .await
+        .map(|r| r.rows_affected())
+        .unwrap_or(0);
+        result.insert(t.to_string(), json!(n));
+    }
+    // Imported rows carry their original ids, so advance each BIGSERIAL sequence
+    // past the max id — otherwise the next ingest would collide on the PK.
+    for t in ["events", "replay_chunks", "benchmarks", "goals", "audit_log"] {
+        let _ = sqlx::query(&format!(
+            "SELECT setval(pg_get_serial_sequence('{t}','id'), GREATEST((SELECT COALESCE(MAX(id),0) FROM {t}), 1))"
+        ))
+        .execute(pool)
+        .await;
+    }
+    json!({ "imported": Value::Object(result) })
+}
+
+/// Reassemble a session's rrweb event stream from its stored chunks (ordered).
+pub async fn replay_events(pool: &PgPool, session_id: &str) -> Value {
+    let rows: Vec<(Value,)> = sqlx::query_as(
+        "SELECT data FROM replay_chunks WHERE session_id=$1 ORDER BY ts_ms ASC, seq ASC",
+    )
+    .bind(session_id)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+    let mut out: Vec<Value> = Vec::new();
+    for (data,) in rows {
+        if let Some(arr) = data.as_array() {
+            out.extend(arr.iter().cloned());
+        }
+    }
+    json!({ "session_id": session_id, "events": out })
 }
 
 // ── Deletion request lifecycle ──────────────────────────────────────────────
@@ -518,8 +706,19 @@ pub async fn user_journey(pool: &PgPool, id: &str) -> Vec<Value> {
         let ev = json!({
             "event": event,
             "ts": ts,
+            "seq": p.get("seq"),
             "view": p.get("view"),
             "from": p.get("from"),
+            // Where the action happened + what it targeted, so the dashboard can
+            // answer "which button, and on which page / in which modal".
+            "modal": p.get("modal"),
+            "text": p.get("text"),
+            "id": p.get("id"),
+            "field": p.get("field"),
+            "name": p.get("name"),
+            "title": p.get("title"),
+            "url": p.get("url"),
+            "message": p.get("message"),
             "dwell_ms": p.get("dwell_ms"),
             "fps_avg": p.get("fps_avg"),
             "detail": summarize_props(&event, &p),

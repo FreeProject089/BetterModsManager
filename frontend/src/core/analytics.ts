@@ -198,7 +198,20 @@ async function startCollection(): Promise<void> {
     startPerfSampling();
     collectWebVitals();
     maybePeriodicBenchmark();   // weekly telemetry benchmark (if allowed)
+    startSessionReplay();       // rrweb visual replay (privacy-masked by default)
     flush();
+}
+
+// Visual session replay: stream rrweb chunks through the normal telemetry
+// transport as `$replay` events (the server routes them to a dedicated table).
+// Off unless replay capture is enabled (default on; user can disable it).
+function startSessionReplay(): void {
+    try {
+        if (localStorage.getItem('bmm_replay_enabled') === '0') return;
+    } catch {}
+    import('./replay-recorder.js')
+        .then((m) => m.startReplayRecording((payload) => track('$replay', payload)))
+        .catch(() => { /* rrweb unavailable — silently skip */ });
 }
 
 // Core Web Vitals of the BMM WebView (Chromium APIs), sent once per launch.
@@ -234,8 +247,15 @@ async function bmmProfileExtras(): Promise<Record<string, any>> {
     const theme = localStorage.getItem('bmm_active_theme') || 'bmm-default';
     let theme_kind = 'predef';
     try {
-        const { BUILTIN_THEMES } = await import('../features/themes/theme-engine.js');
-        if (!BUILTIN_THEMES.some((b: any) => b.id === theme)) theme_kind = 'custom';
+        // BUILTIN_THEMES is loaded from disk asynchronously and REASSIGNED, so we must
+        // read the live module binding (a destructured `const { BUILTIN_THEMES }` would
+        // capture the initial empty array → every theme wrongly classified as "custom").
+        // Make sure it's actually populated before deciding.
+        const themeEngine = await import('../features/themes/theme-engine.js');
+        if (!themeEngine.BUILTIN_THEMES.length) {
+            try { await themeEngine.loadBuiltinThemes(); } catch {}
+        }
+        if (!themeEngine.BUILTIN_THEMES.some((b: any) => b.id === theme)) theme_kind = 'custom';
     } catch {}
     let language = '';
     try { const { getLang } = await import('./i18n.js'); language = getLang(); } catch {}
@@ -285,6 +305,11 @@ async function bmmContentCounts(): Promise<Record<string, number>> {
 // Auto-track modal opens (any overlay gaining `.open`) so the team sees which
 // modals users actually open — without editing every modal call-site.
 let _modalObs: MutationObserver | null = null;
+// Anti-spam: don't re-emit modal_open if the same modal is reopened within this
+// window (rapid open/close/open of the same dialog is noise, not signal).
+const _modalLastOpen: Record<string, number> = {};
+const MODAL_DEDUPE_MS = 2500;
+
 function initModalTracking(): void {
     if (_modalObs) return;
     const open = new WeakSet<Element>();
@@ -301,6 +326,10 @@ function initModalTracking(): void {
                 open.add(el);
                 const name = modalName(el);
                 _currentModal = name;            // attribute perf samples to this modal
+                // Coalesce rapid reopens of the same modal into one event.
+                const now = Date.now();
+                if (now - (_modalLastOpen[name] || 0) < MODAL_DEDUPE_MS) continue;
+                _modalLastOpen[name] = now;
                 // title gives context (which contributor / diagram / app, etc.)
                 track('modal_open', { name, title: modalTitle(el) });
             } else { open.delete(el); _currentModal = null; }
@@ -473,6 +502,12 @@ const BENCH_LAST_KEY  = 'bmm_telemetry_bench_last';
 export function telemetryBenchAllowed(): boolean { return localStorage.getItem(BENCH_ALLOW_KEY) !== '0'; }
 export function setTelemetryBenchAllowed(on: boolean): void { localStorage.setItem(BENCH_ALLOW_KEY, on ? '1' : '0'); }
 
+// ── Session replay (rrweb) preferences ────────────────────────────────────────
+const REPLAY_KEY      = 'bmm_replay_enabled';   // '1'/absent = on (default), '0' off
+const REPLAY_FULL_KEY = 'bmm_replay_full';      // '1' = full/unmasked, else masked
+export function replayEnabled(): boolean { return localStorage.getItem(REPLAY_KEY) !== '0'; }
+export function replayFull(): boolean { return localStorage.getItem(REPLAY_FULL_KEY) === '1'; }
+
 /** Run a quick sandbox benchmark and send its result (kept to last 3 server-side). */
 export async function runTelemetryBenchmark(force = false): Promise<void> {
     if (_consent !== true) return;
@@ -499,6 +534,7 @@ function maybePeriodicBenchmark(): void {
 
 function stopCollection(): void {
     if (_flushTimer !== null) { clearInterval(_flushTimer); _flushTimer = null; }
+    import('./replay-recorder.js').then((m) => m.stopReplayRecording()).catch(() => {});
 }
 
 let _sessionEnded = false;
@@ -555,6 +591,35 @@ export function initPrivacySettings(): void {
     if (benchToggle) {
         benchToggle.checked = telemetryBenchAllowed();
         benchToggle.addEventListener('change', () => setTelemetryBenchAllowed(benchToggle.checked));
+    }
+
+    // Session replay toggles. Enabling/disabling starts/stops recording live;
+    // changing the masking mode re-arms rrweb so the new setting takes effect now.
+    const replayToggle = document.getElementById('analytics-replay-toggle') as HTMLInputElement | null;
+    const replayFullToggle = document.getElementById('analytics-replay-full-toggle') as HTMLInputElement | null;
+    const restartReplay = () => {
+        import('./replay-recorder.js').then(async (m) => {
+            m.stopReplayRecording();
+            if (_consent === true && replayEnabled()) {
+                await m.startReplayRecording((payload) => track('$replay', payload));
+            }
+        }).catch(() => {});
+    };
+    if (replayToggle) {
+        replayToggle.checked = replayEnabled();
+        replayToggle.addEventListener('change', () => {
+            localStorage.setItem(REPLAY_KEY, replayToggle.checked ? '1' : '0');
+            if (replayFullToggle) replayFullToggle.disabled = !replayToggle.checked;
+            restartReplay();
+        });
+    }
+    if (replayFullToggle) {
+        replayFullToggle.checked = replayFull();
+        replayFullToggle.disabled = !replayEnabled();
+        replayFullToggle.addEventListener('change', () => {
+            localStorage.setItem(REPLAY_FULL_KEY, replayFullToggle.checked ? '1' : '0');
+            restartReplay();   // re-arm rrweb with the new masking
+        });
     }
 
     // Fold / unfold the sent-packets list. While open, poll the dashboard so an

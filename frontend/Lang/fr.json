@@ -5589,6 +5589,8 @@
   "analytics.deleted": "Données de télémétrie supprimées",
   "analytics.collect.network": "Infos réseau (IP & région approximative, détection de VM) — anti-abus & statistiques régionales",
   "analytics.benchToggle": "Lancer un benchmark automatique tous les 7 jours (anonyme)",
+  "analytics.replayToggle": "Enregistrer un replay visuel des sessions (curseur, navigation, clics)",
+  "analytics.replayFullToggle": "Replay complet : inclure les noms de mods / profils / chemins (masqués par défaut)",
   "analytics.benchNote": "Si vous acceptez, BMM lance un petit benchmark de performance maintenant puis une fois tous les 7 jours (anonyme). Désactivable dans Paramètres → Confidentialité.",
   "analytics.consentAuth": "En acceptant, vous autorisez l'utilisation de ces données anonymes afin d'améliorer BMM et les autres outils de Better Community. Les données ne sont conservées qu'un temps limité et vous pouvez demander l'effacement de n'importe quel paquet envoyé à tout moment.",
   "analytics.statusOn": "Actif — merci d'aider à améliorer BMM.",

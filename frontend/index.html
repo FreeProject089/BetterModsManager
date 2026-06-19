@@ -8291,6 +8291,21 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                     </label>
                                 </div>
 
+                                <div class="setting-row" id="analytics-replay-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0">
+                                    <span style="font-size:12px;color:var(--text-muted)" data-i18n="analytics.replayToggle">Enregistrer un replay visuel des sessions (curseur, navigation, clics)</span>
+                                    <label class="plug-toggle">
+                                        <input type="checkbox" id="analytics-replay-toggle">
+                                        <span class="plug-toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <div class="setting-row" id="analytics-replay-full-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0">
+                                    <span style="font-size:12px;color:var(--text-muted)" data-i18n="analytics.replayFullToggle">Replay complet : inclure les noms de mods / profils / chemins (par défaut masqués)</span>
+                                    <label class="plug-toggle">
+                                        <input type="checkbox" id="analytics-replay-full-toggle">
+                                        <span class="plug-toggle-slider"></span>
+                                    </label>
+                                </div>
+
                                 <!-- Sent telemetry packets -->
                                 <div class="apv-packets">
                                     <div class="apv-packets-head apv-fold" id="analytics-packets-toggle" style="cursor:pointer">

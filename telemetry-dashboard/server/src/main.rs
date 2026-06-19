@@ -68,8 +68,16 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/goals/:id", delete(del_goal))
         .route("/api/event", get(get_event))
         .route("/api/user", get(get_user))
+        .route("/api/replay", get(get_replay))
         .route("/api/admin/deletions", get(admin_deletions))
         .route("/api/admin/decide", post(admin_decide))
+        .route("/api/admin/storage", get(admin_storage))
+        .route("/api/admin/audit", get(admin_audit))
+        .route("/api/admin/replay/download", get(admin_replay_download))
+        .route("/api/admin/replay", delete(admin_replay_delete))
+        .route("/api/admin/packet/delete", post(admin_packet_delete))
+        .route("/api/admin/backup", get(admin_backup))
+        .route("/api/admin/import", post(admin_import))
         .route_layer(axum::middleware::from_fn_with_state(st.clone(), require_viewer));
 
     // Public routes: ingest (public api_key) + client-facing helpers + the SPA
@@ -84,7 +92,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = viewer
         .merge(public)
-        .layer(DefaultBodyLimit::max(8 * 1024 * 1024))
+        .layer(DefaultBodyLimit::max(32 * 1024 * 1024)) // rrweb full snapshots can be large
         .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())
         .with_state(st.clone());
@@ -356,6 +364,92 @@ async fn stream_handler(State(st): State<Shared>) -> Sse<impl Stream<Item = Resu
 
 async fn get_sessions(State(st): State<Shared>) -> Json<Value> {
     Json(json!({ "sessions": db::sessions_list(&st.pool, 80).await }))
+}
+
+async fn get_replay(State(st): State<Shared>, Query(q): Query<HashMap<String, String>>) -> (StatusCode, Json<Value>) {
+    let sid = q.get("session_id").cloned().unwrap_or_default();
+    if sid.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "session_id required" })));
+    }
+    (StatusCode::OK, Json(db::replay_events(&st.pool, &sid).await))
+}
+
+// Admin identity for the audit trail: request IP (server-observed) + the
+// dashboard-supplied browser fingerprint header.
+fn admin_identity(headers: &HeaderMap, addr: SocketAddr) -> (String, String) {
+    let ip = client_ip(headers, addr).unwrap_or_default();
+    let fp = headers.get("x-admin-fp").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+    (ip, fp)
+}
+
+async fn admin_storage(State(st): State<Shared>) -> Json<Value> {
+    Json(db::storage_overview(&st.pool).await)
+}
+
+async fn admin_audit(State(st): State<Shared>) -> Json<Value> {
+    Json(json!({ "audit": db::list_audit(&st.pool, 500).await }))
+}
+
+async fn admin_replay_download(
+    State(st): State<Shared>, headers: HeaderMap, ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Query(q): Query<HashMap<String, String>>,
+) -> (StatusCode, Json<Value>) {
+    let sid = q.get("session_id").cloned().unwrap_or_default();
+    if sid.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "session_id required" })));
+    }
+    let (ip, fp) = admin_identity(&headers, addr);
+    db::audit(&st.pool, "replay_download", &sid, &ip, &fp, json!({})).await;
+    (StatusCode::OK, Json(db::replay_events(&st.pool, &sid).await))
+}
+
+async fn admin_replay_delete(
+    State(st): State<Shared>, headers: HeaderMap, ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Query(q): Query<HashMap<String, String>>,
+) -> (StatusCode, Json<Value>) {
+    let sid = q.get("session_id").cloned().unwrap_or_default();
+    if sid.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "session_id required" })));
+    }
+    let n = db::delete_replay_session(&st.pool, &sid).await;
+    let (ip, fp) = admin_identity(&headers, addr);
+    db::audit(&st.pool, "replay_delete", &sid, &ip, &fp, json!({ "chunks": n })).await;
+    st.dirty.store(true, Ordering::Relaxed);
+    (StatusCode::OK, Json(json!({ "ok": true, "deleted_chunks": n })))
+}
+
+async fn admin_packet_delete(
+    State(st): State<Shared>, headers: HeaderMap, ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Json(body): Json<Value>,
+) -> (StatusCode, Json<Value>) {
+    let pid = body.get("packet_id").and_then(Value::as_str).unwrap_or("").to_string();
+    if pid.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "packet_id required" })));
+    }
+    let n = db::erase_packet(&st.pool, &pid).await;
+    let (ip, fp) = admin_identity(&headers, addr);
+    db::audit(&st.pool, "packet_delete", &pid, &ip, &fp, json!({ "rows": n })).await;
+    st.dirty.store(true, Ordering::Relaxed);
+    (StatusCode::OK, Json(json!({ "ok": true, "erased": n })))
+}
+
+async fn admin_backup(
+    State(st): State<Shared>, headers: HeaderMap, ConnectInfo(addr): ConnectInfo<SocketAddr>,
+) -> Json<Value> {
+    let (ip, fp) = admin_identity(&headers, addr);
+    db::audit(&st.pool, "backup_export", "database", &ip, &fp, json!({})).await;
+    Json(db::export_backup(&st.pool).await)
+}
+
+async fn admin_import(
+    State(st): State<Shared>, headers: HeaderMap, ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Json(body): Json<Value>,
+) -> (StatusCode, Json<Value>) {
+    let res = db::import_backup(&st.pool, &body).await;
+    let (ip, fp) = admin_identity(&headers, addr);
+    db::audit(&st.pool, "backup_import", "database", &ip, &fp, res.clone()).await;
+    st.dirty.store(true, Ordering::Relaxed);
+    (StatusCode::OK, Json(res))
 }
 
 async fn post_funnel(State(st): State<Shared>, Json(body): Json<Value>) -> Json<Value> {

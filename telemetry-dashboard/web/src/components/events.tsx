@@ -38,6 +38,37 @@ export function eventLabel(e: any): string {
   if (e.detail) return e.detail;
   return EVENT_LABELS[e.event] || e.event || "Événement";
 }
+
+// Turn a modal element id ("modal-conflict-warning", "apps-detail-modal") into a
+// readable name. A captured title (from a modal_open event) always wins.
+export function humanizeModal(id?: string | null, titles?: Record<string, string>): string {
+  if (!id) return "";
+  if (titles && titles[id]) return titles[id];
+  return id
+    .replace(/^modal-/, "").replace(/-(modal|overlay)$/g, "").replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+}
+
+// Build a modal-id → human title map from the modal_open events in a session, so
+// every later event that happened "in" that modal can show its real title.
+export function buildModalTitles(events: any[]): Record<string, string> {
+  const m: Record<string, string> = {};
+  for (const e of events) {
+    if (e.event === "modal_open" && e.name) {
+      const title = (e.title || "").trim();
+      if (title) m[e.name] = title;
+    }
+  }
+  return m;
+}
+
+// "Where" an event happened: page › Modal. Returns "" for plain page views.
+export function eventLocation(e: any, titles?: Record<string, string>): string {
+  const view = e.view || "";
+  const modal = humanizeModal(e.modal, titles);
+  if (view && modal) return `${view} › ${modal}`;
+  return modal || view;
+}
 export function classify(e: any): TypeKey {
   switch (e.event) {
     case "page_enter": return "page";
@@ -59,20 +90,33 @@ export function EvIcon({ type, size = 15 }: { type: TypeKey; size?: number }) {
   );
 }
 
-// numbered, icon-prefixed event list (internal page_leave/perf filtered out)
+// numbered, icon-prefixed event list (internal page_leave/perf filtered out).
+// Each non-page action shows WHERE it happened (page › modal) underneath.
 export function EventTimeline({ events, hidden }: { events: any[]; hidden?: Set<TypeKey> }) {
+  const titles = buildModalTitles(events);
   const shown = events.filter((e) => e.event !== "page_leave" && e.event !== "perf" && (!hidden || !hidden.has(classify(e))));
   return (
     <ol className="space-y-1">
       {shown.map((e: any, i: number) => {
         const k = classify(e);
+        const loc = k === "page" ? "" : eventLocation(e, titles);
         return (
           <li key={i} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-panel2">
             <span className="w-6 h-6 rounded-full bg-panel2 text-[11px] flex items-center justify-center shrink-0">{i + 1}</span>
             <EvIcon type={k} />
-            <span className="text-sm flex-1 truncate">
-              {k === "page" ? <span className="font-medium">{e.view}</span> : <span>{eventLabel(e)}</span>}
-              {k === "page" && e.dwell_ms ? <span className="text-sub text-xs"> · {Math.round(e.dwell_ms / 1000)}s</span> : null}
+            <span className="text-sm flex-1 min-w-0">
+              <span className="block truncate">
+                {k === "page" ? <span className="font-medium">{e.view}</span> : <span>{eventLabel(e)}</span>}
+                {k === "page" && e.dwell_ms ? <span className="text-sub text-xs"> · {Math.round(e.dwell_ms / 1000)}s</span> : null}
+              </span>
+              {loc ? (
+                <span className="flex items-center gap-1 text-[11px] text-sub truncate">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                    <path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11Z" /><circle cx="12" cy="10" r="2.5" />
+                  </svg>
+                  {loc}
+                </span>
+              ) : null}
             </span>
             <span className="text-sub text-[11px] shrink-0">{(e.ts || "").slice(11, 19)}</span>
           </li>

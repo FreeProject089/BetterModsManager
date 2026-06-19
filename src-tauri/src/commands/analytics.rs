@@ -413,3 +413,41 @@ pub fn analytics_clear_sent_log(app_handle: AppHandle) -> Result<(), String> {
     let _ = std::fs::remove_file(sent_path(&app_handle));
     Ok(())
 }
+
+/// Read a Tauri asset image (asset://localhost/… or https://asset.localhost/…)
+/// from disk and return it as a data: URL. Used by the session-replay recorder
+/// (full mode only) so the remote dashboard can show local images it cannot
+/// fetch. Capped at 3 MB; returns "" on any failure.
+#[tauri::command]
+pub fn replay_asset_data_url(url: String) -> String {
+    use base64::Engine;
+    // Strip scheme + host → percent-encoded absolute file path.
+    let after_host = if let Some(i) = url.find("asset.localhost/") {
+        &url[i + "asset.localhost/".len()..]
+    } else if let Some(rest) = url.strip_prefix("asset://localhost/") {
+        rest
+    } else if let Some(rest) = url.strip_prefix("asset://") {
+        rest
+    } else {
+        return String::new();
+    };
+    let enc = after_host.split(|c| c == '?' || c == '#').next().unwrap_or("");
+    let path_str = percent_encoding::percent_decode_str(enc).decode_utf8_lossy().to_string();
+    let path = std::path::PathBuf::from(path_str);
+    let meta = match std::fs::metadata(&path) { Ok(m) => m, Err(_) => return String::new() };
+    if !meta.is_file() || meta.len() > 3 * 1024 * 1024 { return String::new(); }
+    let bytes = match std::fs::read(&path) { Ok(b) => b, Err(_) => return String::new() };
+    let mime = match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("svg") => "image/svg+xml",
+        Some("bmp") => "image/bmp",
+        Some("ico") => "image/x-icon",
+        Some("avif") => "image/avif",
+        _ => "application/octet-stream",
+    };
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    format!("data:{mime};base64,{b64}")
+}

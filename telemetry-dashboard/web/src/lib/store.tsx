@@ -15,7 +15,24 @@ export const useStats = () => useContext(Ctx).stats;
 
 // The viewer key is the private admin key; it gates every data endpoint.
 const key = () => localStorage.getItem("bmm_admin_key") || "";
-const authHeaders = (): Record<string, string> => (key() ? { "X-Admin-Key": key() } : {});
+
+// A stable per-browser fingerprint (classic UA + locale + screen + tz + a
+// persistent salt) sent on every request so the server can attribute admin
+// actions (downloads / deletes / backups) in the audit log.
+function fingerprint(): string {
+  try {
+    let fp = localStorage.getItem("bmm_admin_fp");
+    if (!fp) {
+      const seed = [navigator.userAgent, navigator.language, `${screen.width}x${screen.height}x${screen.colorDepth}`, Intl.DateTimeFormat().resolvedOptions().timeZone, Math.random().toString(36).slice(2)].join("|");
+      let h = 5381;
+      for (let i = 0; i < seed.length; i++) h = ((h << 5) + h + seed.charCodeAt(i)) >>> 0;
+      fp = h.toString(16) + Date.now().toString(36);
+      localStorage.setItem("bmm_admin_fp", fp);
+    }
+    return fp;
+  } catch { return "unknown"; }
+}
+const authHeaders = (): Record<string, string> => ({ ...(key() ? { "X-Admin-Key": key() } : {}), "X-Admin-Fp": fingerprint() });
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [stats, setStats] = useState<Stats | null>(null);
