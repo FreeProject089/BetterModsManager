@@ -757,6 +757,8 @@ async function main() {
     initDeepLinks();
     initApiActivity();
     initAnalytics().catch(() => {});
+    // Local session recorder (user-controlled, separate from telemetry).
+    import('../features/settings/replay-watcher.js').then((m) => { m.initWatcherUI(); m.syncWatcher(); }).catch(() => {});
 
     const modpackContainer = document.getElementById('modpack-container');
     if (modpackContainer) {

@@ -15,15 +15,26 @@ fn parse_ts_ms(ts: &str) -> i64 {
         .unwrap_or_else(|_| now_ms())
 }
 
-/// Decode a base64'd gzip blob back into JSON (used for compressed rrweb chunks).
-fn decode_gzip_json(b64: &str) -> Option<Value> {
+/// Decode a base64'd gzip blob into raw gzip bytes (kept compressed at rest).
+fn decode_b64(b64: &str) -> Option<Vec<u8>> {
     use base64::Engine;
+    base64::engine::general_purpose::STANDARD.decode(b64).ok()
+}
+/// Gunzip raw bytes into JSON (used when serving a replay).
+fn gunzip_json(raw: &[u8]) -> Option<Value> {
     use std::io::Read;
-    let raw = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
-    let mut gz = flate2::read::GzDecoder::new(&raw[..]);
+    let mut gz = flate2::read::GzDecoder::new(raw);
     let mut out = Vec::new();
     gz.read_to_end(&mut out).ok()?;
     serde_json::from_slice(&out).ok()
+}
+/// Gzip a JSON value into raw bytes (used to compress uncompressed `d` chunks).
+fn gzip_json(v: &Value) -> Vec<u8> {
+    use std::io::Write;
+    let bytes = serde_json::to_vec(v).unwrap_or_default();
+    let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    let _ = enc.write_all(&bytes);
+    enc.finish().unwrap_or_default()
 }
 
 // ── Ingest ──────────────────────────────────────────────────────────────────
@@ -56,22 +67,23 @@ pub async fn ingest(st: &AppState, ev: &Value, packet_id: &str, realtime: bool) 
     if event == "$replay" {
         let sid = props.get("session_id").and_then(Value::as_str).unwrap_or("");
         let seq = props.get("seq").and_then(Value::as_i64).unwrap_or(0);
-        // Chunks arrive gzip+base64 (`dz`) to keep payloads small; older/fallback
-        // clients may send the raw array (`d`).
-        let data = if let Some(dz) = props.get("dz").and_then(Value::as_str) {
-            decode_gzip_json(dz).unwrap_or_else(|| json!([]))
+        // Store COMPRESSED at rest. Chunks already arrive gzip+base64 (`dz`) — keep
+        // those bytes as-is; older/fallback clients send a raw array (`d`) which we
+        // gzip ourselves.
+        let gz: Vec<u8> = if let Some(dz) = props.get("dz").and_then(Value::as_str) {
+            decode_b64(dz).unwrap_or_default()
         } else {
-            props.get("d").cloned().unwrap_or_else(|| json!([]))
+            gzip_json(&props.get("d").cloned().unwrap_or_else(|| json!([])))
         };
         let _ = sqlx::query(
-            "INSERT INTO replay_chunks(packet_id,distinct_id,session_id,seq,ts_ms,data) VALUES($1,$2,$3,$4,$5,$6)",
+            "INSERT INTO replay_chunks(packet_id,distinct_id,session_id,seq,ts_ms,gz) VALUES($1,$2,$3,$4,$5,$6)",
         )
         .bind(pid)
         .bind(&id)
         .bind(sid)
         .bind(seq)
         .bind(ts_ms)
-        .bind(&data)
+        .bind(&gz)
         .execute(&st.pool)
         .await;
         return;
@@ -459,7 +471,8 @@ pub async fn storage_overview(pool: &PgPool) -> Value {
     }
 
     let replays: Vec<(String, String, i64, Option<i64>, Option<i64>)> = sqlx::query_as(
-        "SELECT session_id, COALESCE(MAX(distinct_id),''), COUNT(*), SUM(pg_column_size(data)), MAX(ts_ms)
+        "SELECT session_id, COALESCE(MAX(distinct_id),''), COUNT(*),
+                SUM(COALESCE(pg_column_size(gz),0)+COALESCE(pg_column_size(data),0)), MAX(ts_ms)
          FROM replay_chunks GROUP BY session_id ORDER BY MAX(ts_ms) DESC LIMIT 200",
     ).fetch_all(pool).await.unwrap_or_default();
     let replays: Vec<Value> = replays.into_iter().map(|(sid, did, chunks, bytes, ts)| json!({
@@ -480,6 +493,42 @@ pub async fn storage_overview(pool: &PgPool) -> Value {
 pub async fn delete_replay_session(pool: &PgPool, sid: &str) -> u64 {
     sqlx::query("DELETE FROM replay_chunks WHERE session_id=$1")
         .bind(sid).execute(pool).await.map(|r| r.rows_affected()).unwrap_or(0)
+}
+
+/// Compact CLOSED replay sessions (idle ≥10 min): merge a session's chunks that
+/// share a packet into ONE gzip blob. Re-gzipping the whole stream beats
+/// per-chunk ratios and slashes row count. Grouping by packet keeps per-packet
+/// GDPR erasure exact. Returns the number of (session,packet) groups compacted.
+pub async fn compact_replays(pool: &PgPool) -> u64 {
+    let cutoff = now_ms() - 10 * 60_000;
+    let groups: Vec<(String, String)> = sqlx::query_as(
+        "SELECT session_id, COALESCE(packet_id,'') FROM replay_chunks
+         GROUP BY session_id, COALESCE(packet_id,'') HAVING COUNT(*) > 1 AND MAX(ts_ms) < $1 LIMIT 50",
+    ).bind(cutoff).fetch_all(pool).await.unwrap_or_default();
+
+    let mut compacted = 0u64;
+    for (sid, pid) in groups {
+        let rows: Vec<(Option<Vec<u8>>, Option<Value>, String, i64)> = sqlx::query_as(
+            "SELECT gz, data, COALESCE(distinct_id,''), ts_ms FROM replay_chunks
+             WHERE session_id=$1 AND COALESCE(packet_id,'')=$2 ORDER BY ts_ms ASC, seq ASC",
+        ).bind(&sid).bind(&pid).fetch_all(pool).await.unwrap_or_default();
+        if rows.len() < 2 { continue; }
+        let did = rows.iter().map(|r| r.2.clone()).find(|d| !d.is_empty()).unwrap_or_default();
+        let min_ts = rows.iter().map(|r| r.3).min().unwrap_or_else(now_ms);
+        let mut all: Vec<Value> = Vec::new();
+        for (gz, data, _, _) in &rows {
+            let arr = match gz { Some(b) if !b.is_empty() => gunzip_json(b), _ => data.clone() };
+            if let Some(a) = arr.as_ref().and_then(|v| v.as_array()) { all.extend(a.iter().cloned()); }
+        }
+        let blob = gzip_json(&Value::Array(all));
+        let mut tx = match pool.begin().await { Ok(t) => t, Err(_) => continue };
+        if sqlx::query("DELETE FROM replay_chunks WHERE session_id=$1 AND COALESCE(packet_id,'')=$2")
+            .bind(&sid).bind(&pid).execute(&mut *tx).await.is_err() { let _ = tx.rollback().await; continue; }
+        if sqlx::query("INSERT INTO replay_chunks(packet_id,distinct_id,session_id,seq,ts_ms,gz) VALUES($1,$2,$3,0,$4,$5)")
+            .bind(&pid).bind(&did).bind(&sid).bind(min_ts).bind(&blob).execute(&mut *tx).await.is_err() { let _ = tx.rollback().await; continue; }
+        if tx.commit().await.is_ok() { compacted += 1; }
+    }
+    compacted
 }
 
 // ── Full JSON backup (export / import) ────────────────────────────────────────
@@ -532,18 +581,23 @@ pub async fn import_backup(pool: &PgPool, doc: &Value) -> Value {
 }
 
 /// Reassemble a session's rrweb event stream from its stored chunks (ordered).
+/// Chunks are gzip'd at rest (`gz`); legacy rows may still carry JSON in `data`.
 pub async fn replay_events(pool: &PgPool, session_id: &str) -> Value {
-    let rows: Vec<(Value,)> = sqlx::query_as(
-        "SELECT data FROM replay_chunks WHERE session_id=$1 ORDER BY ts_ms ASC, seq ASC",
+    let rows: Vec<(Option<Vec<u8>>, Option<Value>)> = sqlx::query_as(
+        "SELECT gz, data FROM replay_chunks WHERE session_id=$1 ORDER BY ts_ms ASC, seq ASC",
     )
     .bind(session_id)
     .fetch_all(pool)
     .await
     .unwrap_or_default();
     let mut out: Vec<Value> = Vec::new();
-    for (data,) in rows {
-        if let Some(arr) = data.as_array() {
-            out.extend(arr.iter().cloned());
+    for (gz, data) in rows {
+        let arr = match gz {
+            Some(bytes) if !bytes.is_empty() => gunzip_json(&bytes),
+            _ => data,
+        };
+        if let Some(a) = arr.as_ref().and_then(|v| v.as_array()) {
+            out.extend(a.iter().cloned());
         }
     }
     json!({ "session_id": session_id, "events": out })

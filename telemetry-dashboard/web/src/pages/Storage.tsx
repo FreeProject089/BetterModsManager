@@ -39,7 +39,12 @@ export default function Storage() {
     apiGet("/api/admin/storage").then(setData).catch(() => setData({ tables: [], replays: [], packets: [] }));
     apiGet("/api/admin/audit").then((r) => setAudit(r.audit || [])).catch(() => setAudit([]));
   }, []);
-  useEffect(() => { load(); }, [load]);
+  // Live: poll so size / counts / audit changes appear without a manual refresh.
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [load]);
 
   const exportBackup = async () => {
     setBusy("export");

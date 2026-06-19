@@ -157,6 +157,7 @@ fn spawn_loops(st: Shared) {
                 db::run_due_deletions(&st.pool).await;
                 db::purge_retention(&st.pool, st.cfg.retention_days).await;
                 db::sweep_crashes(&st.pool, 180_000).await;
+                db::compact_replays(&st.pool).await; // merge closed sessions' chunks
             }
         });
     }

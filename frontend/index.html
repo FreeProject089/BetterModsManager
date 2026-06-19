@@ -8332,6 +8332,39 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                             </div>
                         </div>
 
+                        <!-- ── Local session recorder (replay watcher) ── -->
+                        <div class="glass-card" id="settings-watcher-section" style="margin-bottom: 24px;">
+                            <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+                                    <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" fill="var(--accent)" stroke="none" />
+                                </svg>
+                                <span data-i18n="watcher.title">Enregistreur de session (local)</span>
+                            </h3>
+                            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6" data-i18n="watcher.desc">
+                                Enregistre tes sessions en local (actions à l'écran + logs JS &amp; Rust) pour les rejouer et les analyser. Rien n'est envoyé : tu exportes / importes les fichiers toi-même.
+                            </p>
+                            <div class="setting-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0">
+                                <span style="font-size:12px;color:var(--text-muted)" data-i18n="watcher.enable">Enregistrer mes sessions en local</span>
+                                <label class="plug-toggle"><input type="checkbox" id="watcher-toggle"><span class="plug-toggle-slider"></span></label>
+                            </div>
+                            <div class="setting-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0">
+                                <span style="font-size:12px;color:var(--text-muted)" data-i18n="watcher.fullMode">Mode complet (sans masquer noms de mods / profils / chemins)</span>
+                                <label class="plug-toggle"><input type="checkbox" id="watcher-full-toggle"><span class="plug-toggle-slider"></span></label>
+                            </div>
+                            <div class="setting-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0">
+                                <span style="font-size:12px;color:var(--text-muted)" data-i18n="watcher.rustLog">Inclure les logs Rust (backend)</span>
+                                <label class="plug-toggle"><input type="checkbox" id="watcher-rust-toggle"><span class="plug-toggle-slider"></span></label>
+                            </div>
+                            <div class="setting-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0">
+                                <span style="font-size:12px;color:var(--text-muted)" data-i18n="watcher.jsLog">Inclure les logs JS (console)</span>
+                                <label class="plug-toggle"><input type="checkbox" id="watcher-js-toggle"><span class="plug-toggle-slider"></span></label>
+                            </div>
+                            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+                                <button class="btn btn-ghost btn-sm" id="watcher-export"><span data-i18n="watcher.export">Exporter la session</span></button>
+                                <button class="btn btn-ghost btn-sm" id="watcher-import"><span data-i18n="watcher.import">Importer &amp; rejouer</span></button>
+                            </div>
+                        </div>
+
 
                         <!-- ── Security Mode ── -->
                         <div class="glass-card" id="settings-security-section" style="margin-bottom: 24px;">

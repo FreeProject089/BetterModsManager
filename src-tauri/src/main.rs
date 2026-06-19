@@ -376,6 +376,7 @@ fn main() {
             commands::crash::get_crash_reports,
             commands::crash::trigger_manual_crash_report,
             commands::crash::log_frontend_line,
+            commands::crash::read_session_log_tail,
             commands::crash::append_api_log,
             commands::crash::read_api_log,
             commands::crash::clear_api_log,

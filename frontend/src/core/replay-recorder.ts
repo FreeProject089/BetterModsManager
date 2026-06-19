@@ -69,7 +69,7 @@ async function inlineAssets(ev: any): Promise<void> {
 }
 
 // DOM that renders user-owned names/paths. Masked unless full mode is enabled.
-const SENSITIVE_SELECTOR = [
+export const SENSITIVE_SELECTOR = [
   '.mod-name', '.mp-mod-name', '.mod-path-hint',
   '.footer-profile-name', '.profile-card-paths',
   '.game-path-display', '.storage-disk-path',
@@ -93,7 +93,7 @@ export function isFullReplay(): boolean {
   try { return localStorage.getItem('bmm_replay_full') === '1'; } catch { return false; }
 }
 
-function loadRrweb(): Promise<any> {
+export function loadRrweb(): Promise<any> {
   const w = window as any;
   if (w.rrweb?.record) return Promise.resolve(w.rrweb);
   if (w.__rrwebLoading) return w.__rrwebLoading;

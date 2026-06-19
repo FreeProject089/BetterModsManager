@@ -14,6 +14,7 @@ export default function UserDetail() {
   const u = s.users.find((x) => x.creator_id === id);
   const [journey, setJourney] = useState<any[] | null>(null);
   const [replayId, setReplayId] = useState<string | null>(null);
+  const [folded, setFolded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let on = true;
@@ -151,23 +152,37 @@ export default function UserDetail() {
           <Empty>Loading…</Empty>
         ) : journey.length ? (
           <div className="space-y-3">
-            {journey.map((sess) => (
+            {journey.map((sess) => {
+              const open = !folded.has(sess.session_id);
+              return (
               <div key={sess.session_id} className="card p-3">
                 <div className="flex items-center justify-between text-xs text-sub mb-2">
-                  <span className="font-mono">{sess.session_id}</span>
+                  <button
+                    onClick={() => setFolded((f) => { const n = new Set(f); n.has(sess.session_id) ? n.delete(sess.session_id) : n.add(sess.session_id); return n; })}
+                    className="flex items-center gap-2 font-mono hover:text-ink"
+                    title={open ? "Plier" : "Déplier"}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: open ? "" : "rotate(-90deg)", transition: "transform .15s" }}>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                    {sess.session_id}
+                  </button>
                   <span className="flex items-center gap-2">
                     {fmtDateTime(sess.start)} · {dur((new Date(sess.end).getTime() - new Date(sess.start).getTime()) / 1000)} · {sess.events?.length || 0} events
-                    <button
-                      onClick={() => setReplayId((id) => (id === sess.session_id ? null : sess.session_id))}
-                      className={`pill ${replayId === sess.session_id ? "bg-brand text-white" : "bg-panel2 text-sub"}`}
-                    >
-                      {replayId === sess.session_id ? "Chronologie" : "Replay"}
-                    </button>
+                    {open && (
+                      <button
+                        onClick={() => setReplayId((id) => (id === sess.session_id ? null : sess.session_id))}
+                        className={`pill ${replayId === sess.session_id ? "bg-brand text-white" : "bg-panel2 text-sub"}`}
+                      >
+                        {replayId === sess.session_id ? "Chronologie" : "Replay"}
+                      </button>
+                    )}
                   </span>
                 </div>
-                {replayId === sess.session_id ? <RrwebReplay sessionId={sess.session_id} fallbackEvents={sess.events || []} /> : <EventTimeline events={sess.events || []} />}
+                {open && (replayId === sess.session_id ? <RrwebReplay sessionId={sess.session_id} fallbackEvents={sess.events || []} /> : <EventTimeline events={sess.events || []} />)}
               </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <Empty>No sessions recorded.</Empty>

@@ -69,6 +69,20 @@ fn get_realtime_log_path() -> PathBuf {
     get_crash_dir(None).join(format!("session_{}.log", std::process::id()))
 }
 
+/// Read the tail of the current session's realtime Rust log — used by the local
+/// replay watcher to bundle backend logs alongside the rrweb recording.
+#[tauri::command]
+pub fn read_session_log_tail(max_bytes: Option<usize>) -> String {
+    let cap = max_bytes.unwrap_or(256 * 1024);
+    match std::fs::read(get_realtime_log_path()) {
+        Ok(bytes) => {
+            let start = bytes.len().saturating_sub(cap);
+            String::from_utf8_lossy(&bytes[start..]).to_string()
+        }
+        Err(_) => String::new(),
+    }
+}
+
 pub fn get_crash_dir(app_handle: Option<&tauri::AppHandle>) -> PathBuf {
     if let Some(handle) = app_handle {
         handle.path_resolver()
