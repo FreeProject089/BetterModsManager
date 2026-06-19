@@ -19,6 +19,14 @@ use serde_json::{json, Value};
 use crate::state::AppState;
 use crate::commands::crash::log_line;
 
+/// Gzip a byte slice (best-effort) for compressed telemetry uploads.
+fn gzip_bytes(data: &[u8]) -> Option<Vec<u8>> {
+    use std::io::Write;
+    let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    enc.write_all(data).ok()?;
+    enc.finish().ok()
+}
+
 fn queue_path(app: &AppHandle) -> PathBuf {
     app.path_resolver().app_data_dir().unwrap_or_default().join("analytics_queue.json")
 }
@@ -307,7 +315,18 @@ pub async fn analytics_flush(
         .user_agent("BetterModsManager")
         .timeout(std::time::Duration::from_secs(15))
         .build().map_err(|e| e.to_string())?;
-    let resp = client.post(&endpoint).json(&body).send().await
+    // Gzip the payload (telemetry batches — especially rrweb replay chunks —
+    // compress heavily) to cut upload size & bandwidth. The server transparently
+    // decompresses Content-Encoding: gzip request bodies.
+    let raw = serde_json::to_vec(&body).map_err(|e| e.to_string())?;
+    let req = match gzip_bytes(&raw) {
+        Some(gz) => client.post(&endpoint)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .header(reqwest::header::CONTENT_ENCODING, "gzip")
+            .body(gz),
+        None => client.post(&endpoint).json(&body),
+    };
+    let resp = req.send().await
         .map_err(|e| format!("flush failed: {}", e))?;
     if resp.status().is_success() {
         let n = batch.len();

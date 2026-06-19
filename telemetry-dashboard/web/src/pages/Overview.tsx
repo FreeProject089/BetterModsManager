@@ -97,6 +97,15 @@ export default function Overview() {
     })),
   };
 
+  const hod: any[] = (s as any).hour_of_day || [];
+  const hodOpt = {
+    grid: { left: 40, right: 16, top: 16, bottom: 24 },
+    tooltip: { trigger: "axis", formatter: (p: any) => `${p[0].axisValue}<br/>${nf(p[0].data)} sessions` },
+    xAxis: { ...axisX(hod.map((h) => String(h.hour).padStart(2, "0") + "h")), axisLabel: { color: "#9aa3ad", fontSize: 10, interval: 1 } },
+    yAxis: axisY(),
+    series: [{ type: "bar", data: hod.map((h) => h.sessions), itemStyle: { color: "#5b8cff", borderRadius: [3, 3, 0, 0] }, barWidth: "62%" }],
+  };
+
   const paths = (s.funnels || []).slice(0, 8);
   const pathOpt = {
     grid: { left: 150, right: 24, top: 6, bottom: 6 },
@@ -116,6 +125,8 @@ export default function Overview() {
         <KpiSpark label="Events" value={nf(t.events)} data={sEvents} color="#f4b740" />
         <KpiSpark label="Pages / session" value={t.pages_per_session} data={sPv} />
         <KpiSpark label="Avg session" value={`${t.avg_session_min}m`} data={sSessions} color="#a78bfa" />
+        <KpiSpark label="Events / session" value={(t as any).avg_events_per_session ?? "—"} data={sEvents} color="#f4b740" />
+        <KpiSpark label="Sessions / user" value={(t as any).avg_sessions_per_user ?? "—"} data={sSessions} color="#a78bfa" />
       </div>
 
       <Card
@@ -137,6 +148,13 @@ export default function Overview() {
         }
       >
         <Chart option={mainOpt} height={300} />
+      </Card>
+
+      <Card
+        title="Quand les utilisateurs utilisent BMM"
+        right={<span className="text-xs text-sub">Heure de pointe : <span className="text-brand font-medium">{String((s as any).peak_hour ?? 0).padStart(2, "0")}h UTC</span></span>}
+      >
+        <Chart option={hodOpt} height={220} />
       </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

@@ -147,7 +147,7 @@ pub fn read_file_text(path: String) -> Result<String, String> {
     if path.contains("..") {
         return Err("Refused: path traversal".to_string());
     }
-    const OK_EXT: &[&str] = &["csv", "json", "txt", "md", "log", "ini", "cfg", "xml", "yml", "yaml", "html", "bmmpa"];
+    const OK_EXT: &[&str] = &["csv", "json", "txt", "md", "log", "ini", "cfg", "xml", "yml", "yaml", "html", "bmmpa", "bmmreplay"];
     let ext = std::path::Path::new(&path)
         .extension()
         .and_then(|e| e.to_str())
@@ -169,8 +169,8 @@ pub fn read_file_text(path: String) -> Result<String, String> {
     }
     // Bound the read so a free-path read can't slurp a huge file into the WebView.
     if let Ok(meta) = std::fs::metadata(&path) {
-        if meta.len() > 25 * 1024 * 1024 {
-            return Err("Refused: file too large (max 25 MB)".to_string());
+        if meta.len() > 96 * 1024 * 1024 {
+            return Err("Refused: file too large (max 96 MB)".to_string());
         }
     }
     std::fs::read_to_string(path).map_err(|e| e.to_string())

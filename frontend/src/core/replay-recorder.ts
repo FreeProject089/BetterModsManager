@@ -14,69 +14,97 @@ import { invoke } from './api.js';
 
 const RRWEB_SRC = 'assets/vendor/rrweb.min.js';
 
-// ── asset:// inlining ──────────────────────────────────────────────────────────
-// BMM <img> assets use Tauri's asset protocol (asset://localhost/… or
-// https://asset.localhost/…) — those files live on the user's disk and can't be
-// fetched by the remote dashboard. We read them in Rust and embed a data URL so
-// the replay shows the real images. Cached per URL; capped server-side.
+// ── image inlining ─────────────────────────────────────────────────────────────
+// The remote dashboard can't fetch BMM's images, so we embed them as data URLs:
+//   • asset:// (asset.localhost)  → user files (mod thumbnails, screenshots) on
+//     disk → read in Rust. PRIVATE → only inlined in full mode.
+//   • same-origin bundled assets  → app chrome (Tasky, credits images, logos,
+//     icons) → fetched in the webview. NOT private → inlined in any mode.
+//   • external https://           → left as-is (loads on the dashboard directly).
 const _assetCache = new Map<string, string>();
 
 function isAssetUrl(u: string): boolean {
-  return /^asset:\/\//i.test(u) || /^https?:\/\/asset\.localhost\//i.test(u) || /^https?:\/\/[^/]*\.?asset\.localhost\//i.test(u);
+  return /^asset:\/\//i.test(u) || /^https?:\/\/[^/]*asset\.localhost\//i.test(u);
+}
+function isAppAsset(u: string): boolean {
+  if (!u || u.startsWith('data:') || isAssetUrl(u)) return false;
+  try { return new URL(u, location.href).origin === location.origin; } catch { return false; }
 }
 
-async function resolveAsset(url: string): Promise<string> {
-  if (_assetCache.has(url)) return _assetCache.get(url)!;
-  let dataUrl = '';
-  try { dataUrl = (await invoke('replay_asset_data_url', { url })) as string || ''; } catch { /* ignore */ }
-  _assetCache.set(url, dataUrl);
-  return dataUrl;
+async function fetchDataUrl(url: string): Promise<string> {
+  try {
+    const res = await fetch(new URL(url, location.href).href);
+    const blob = await res.blob();
+    if (blob.size > 3 * 1024 * 1024) return '';
+    return await new Promise<string>((resolve) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(typeof fr.result === 'string' ? fr.result : '');
+      fr.onerror = () => resolve('');
+      fr.readAsDataURL(blob);
+    });
+  } catch { return ''; }
 }
 
-// Walk an rrweb serialized node tree and collect <img> nodes with an asset src.
+// Resolve one image src to an inline data URL (cached). Honours the privacy rule.
+async function resolveImg(src: string): Promise<string> {
+  if (_assetCache.has(src)) return _assetCache.get(src)!;
+  let d = '';
+  if (isAssetUrl(src)) { if (_full) { try { d = (await invoke('replay_asset_data_url', { url: src })) as string || ''; } catch { /* ignore */ } } }
+  else if (isAppAsset(src)) d = await fetchDataUrl(src);
+  _assetCache.set(src, d);
+  return d;
+}
+
+// Walk an rrweb serialized node tree, collecting <img> nodes worth inlining.
 function collectImgNodes(node: any, out: any[]): void {
   if (!node || typeof node !== 'object') return;
   if (node.type === 2 && node.tagName === 'img' && node.attributes) {
     const src = node.attributes.src || node.attributes.rr_dataURL;
-    if (typeof src === 'string' && isAssetUrl(src) && !node.attributes.rr_dataURL?.startsWith?.('data:')) out.push(node);
+    if (typeof src === 'string' && (isAssetUrl(src) || isAppAsset(src)) && !String(node.attributes.rr_dataURL || '').startsWith('data:')) out.push(node);
   }
   if (Array.isArray(node.childNodes)) for (const c of node.childNodes) collectImgNodes(c, out);
 }
 
-// Replace asset:// <img> srcs with inline data URLs inside one rrweb event.
+// Replace inlinable <img> srcs with data URLs inside one rrweb event.
 async function inlineAssets(ev: any): Promise<void> {
   const imgs: any[] = [];
   try {
     if (ev.type === 2) {
-      // FullSnapshot — the whole document node tree.
       collectImgNodes(ev.data?.node, imgs);
     } else if (ev.type === 3 && ev.data?.source === 0) {
-      // Mutation — newly added node trees + src attribute changes.
       for (const add of ev.data.adds || []) collectImgNodes(add.node, imgs);
       for (const at of ev.data.attributes || []) {
         const a = at.attributes;
-        if (a && typeof a.src === 'string' && isAssetUrl(a.src)) {
-          const d = await resolveAsset(a.src);
-          if (d) a.rr_dataURL = d;
-        }
+        if (a && typeof a.src === 'string') { const d = await resolveImg(a.src); if (d) a.rr_dataURL = d; }
       }
     }
   } catch { /* ignore */ }
   for (const n of imgs) {
-    const d = await resolveAsset(n.attributes.src || n.attributes.rr_dataURL);
+    const d = await resolveImg(n.attributes.src || n.attributes.rr_dataURL);
     if (d) n.attributes.rr_dataURL = d;
   }
 }
 
-// DOM that renders user-owned names/paths. Masked unless full mode is enabled.
+// DOM that renders user-owned content (names / paths / file trees). All of it is
+// masked unless full mode is on. Container selectors mask every descendant text,
+// so the whole conflict / mapper / archive panels are covered, not just labels.
 export const SENSITIVE_SELECTOR = [
-  '.mod-name', '.mp-mod-name', '.mod-path-hint',
-  '.footer-profile-name', '.profile-card-paths',
-  '.game-path-display', '.storage-disk-path',
-  '.path', '.path-cell', '.path-text', '.path-picker',
-  '.apps-installed-path', '.apps-install-path-hint',
-  '.plug-path', '.plug-qt-path-label', '.plug-uqt-path',
-  '.tut-assets-path', '[data-bmm-mask]',
+  // mod names + metadata
+  '.mod-name', '.mp-mod-name', '.mod-item', '.mod-meta', '.mod-version', '.mod-desc',
+  '.mod-author-name', '.mod-author-container',
+  // profiles
+  '.profile-name', '.profile-id', '.footer-profile-name', '.profile-card-paths',
+  '.profile-card-header', '.profile-disk-usage', '.profile-badge', '.profile-select',
+  // custom select / dropdowns (reveal the user's current profile / mod choices)
+  '.bmm-csel-trigger', '.bmm-csel-opt', '.bmm-csel-menu', '.dropdown-item', '.dropdown-content',
+  // file paths
+  '.path', '.path-cell', '.path-text', '.path-picker', '.mod-path-hint',
+  '.game-path-display', '.storage-disk-path', '.apps-installed-path',
+  '.apps-install-path-hint', '.plug-path', '.plug-qt-path-label', '.plug-uqt-path', '.tut-assets-path',
+  // file trees: conflict resolver, mod mapper, archive explorer
+  '.tree-node-label', '.tree-item-label', '.tree-folder-header', '.file-name',
+  '.conflict-group-card', '.mapper-preview-container', '.mapper-panel', '.explorer-tabs',
+  '[data-bmm-mask]',
 ].join(', ');
 
 let _stop: (() => void) | null = null;
@@ -160,7 +188,7 @@ export async function startReplayRecording(emit: (payload: Record<string, any>) 
       // Serialise through a promise chain so asset inlining (async) finishes IN
       // ORDER before the event is buffered/flushed.
       _queue = _queue.then(async () => {
-        if (_full) await inlineAssets(ev);
+        await inlineAssets(ev);   // app images always; asset:// only in full mode
         _buf.push(ev);
         // Flush a fresh full snapshot (the player needs a checkpoint to start a
         // seek from), and cap chunk size so single payloads stay reasonable.

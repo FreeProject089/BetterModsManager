@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGet } from "../lib/store";
 import { SessionReplay } from "./replay";
+import { classify, eventLabel, eventLocation, buildModalTitles, EvIcon, TYPES } from "./events";
 import "rrweb/dist/style.css";
 
 const mmss = (ms: number) => {
@@ -32,10 +33,10 @@ export function RrwebReplay({ sessionId, fallbackEvents }: { sessionId: string; 
       </div>
     );
   }
-  return <Player events={evts} />;
+  return <Player events={evts} markers={fallbackEvents} />;
 }
 
-function Player({ events }: { events: any[] }) {
+function Player({ events, markers }: { events: any[]; markers: any[] }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const repRef = useRef<any>(null);
@@ -43,6 +44,7 @@ function Player({ events }: { events: any[] }) {
   const [speed, setSpeed] = useState(1);
   const [cur, setCur] = useState(0);
   const [total, setTotal] = useState(0);
+  const [startTime, setStartTime] = useState(0);
 
   // recorded viewport (Meta event) → used to scale the player to fit the panel
   const [recW, recH] = useMemo(() => {
@@ -70,14 +72,23 @@ function Player({ events }: { events: any[] }) {
       repRef.current = rep;
       const meta = rep.getMetaData();
       setTotal(meta.totalTime);
+      setStartTime(meta.startTime);
 
       const fit = () => {
         const box = boxRef.current;
         const wrapper = (rep as any).wrapper as HTMLElement | undefined;
         if (!box || !wrapper) return;
-        const scale = Math.min(1, box.clientWidth / recW);
-        wrapper.style.transform = `scale(${scale})`;
+        const boxW = box.clientWidth;
+        const maxH = Math.min(window.innerHeight * 0.6, 560);
+        // Fill the panel width (DOM upscales crisply), but cap the height; center
+        // horizontally if the height cap kicks in — so there's no dead space.
+        let scale = boxW / recW;
+        if (recH * scale > maxH) scale = maxH / recH;
+        wrapper.style.position = "absolute";
         wrapper.style.transformOrigin = "top left";
+        wrapper.style.transform = `scale(${scale})`;
+        wrapper.style.left = `${Math.max(0, (boxW - recW * scale) / 2)}px`;
+        wrapper.style.top = "0px";
         box.style.height = `${recH * scale}px`;
       };
       fit();
@@ -122,10 +133,26 @@ function Player({ events }: { events: any[] }) {
     setCur(ms);
   };
 
+  // Telemetry events overlaid as markers on the timeline (what happened + when).
+  const titles = useMemo(() => buildModalTitles(markers || []), [markers]);
+  const markPts = useMemo(() => {
+    if (!startTime || !total) return [] as any[];
+    return (markers || [])
+      .filter((e: any) => e.event !== "page_leave" && e.event !== "perf" && e.event !== "$replay")
+      .map((e: any) => ({ off: new Date(e.ts).getTime() - startTime, type: classify(e), label: eventLabel(e), loc: eventLocation(e, titles) }))
+      .filter((m: any) => m.off >= 0 && m.off <= total);
+  }, [markers, startTime, total, titles]);
+  const curEvent = useMemo(() => { let last: any = null; for (const m of markPts) { if (m.off <= cur) last = m; else break; } return last; }, [markPts, cur]);
+
   return (
     <div className="space-y-3">
       <div ref={boxRef} className="relative w-full overflow-hidden rounded-xl border border-line bg-black" style={{ height: 320 }}>
         <div ref={hostRef} className="absolute inset-0" />
+      </div>
+
+      {/* current action (synced with playback) */}
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-panel2 border border-line min-h-[34px]">
+        {curEvent ? <><EvIcon type={curEvent.type} size={14} /><span className="text-sm truncate">{curEvent.label}</span>{curEvent.loc ? <span className="text-[11px] text-sub truncate">· {curEvent.loc}</span> : null}</> : <span className="text-[11px] text-sub">—</span>}
       </div>
 
       <div className="flex items-center gap-3">
@@ -137,11 +164,21 @@ function Player({ events }: { events: any[] }) {
           )}
         </button>
 
-        <input
-          type="range" min={0} max={total || 1} value={cur}
-          onChange={(e) => seek(+e.target.value)}
-          className="flex-1 accent-brand"
-        />
+        <div className="relative flex-1">
+          {/* event markers above the scrubber */}
+          <div className="relative h-3 mb-0.5">
+            {markPts.map((m, i) => (
+              <button
+                key={i}
+                onClick={() => seek(m.off)}
+                title={`${mmss(m.off)} · ${m.label}${m.loc ? " — " + m.loc : ""}`}
+                className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full hover:scale-150 transition-transform"
+                style={{ left: `${(m.off / total) * 100}%`, background: (TYPES as any)[m.type].color }}
+              />
+            ))}
+          </div>
+          <input type="range" min={0} max={total || 1} value={cur} onChange={(e) => seek(+e.target.value)} className="w-full accent-brand" />
+        </div>
         <span className="text-[11px] text-sub font-mono shrink-0">{mmss(cur)} / {mmss(total)}</span>
 
         <div className="flex gap-1 shrink-0">

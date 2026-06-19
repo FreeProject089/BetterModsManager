@@ -93,6 +93,7 @@ async fn main() -> anyhow::Result<()> {
     let app = viewer
         .merge(public)
         .layer(DefaultBodyLimit::max(32 * 1024 * 1024)) // rrweb full snapshots can be large
+        .layer(tower_http::decompression::RequestDecompressionLayer::new()) // accept gzip'd uploads
         .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())
         .with_state(st.clone());

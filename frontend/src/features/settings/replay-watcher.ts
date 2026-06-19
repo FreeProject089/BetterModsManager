@@ -66,6 +66,7 @@ export function initWatcherUI(): void {
     js?.addEventListener('change', () => localStorage.setItem(JS, js.checked ? '1' : '0'));
     document.getElementById('watcher-export')?.addEventListener('click', () => exportSession());
     document.getElementById('watcher-import')?.addEventListener('click', () => importAndPlay());
+    document.getElementById('watcher-list')?.addEventListener('click', () => openReplayList());
   }
 }
 
@@ -124,15 +125,63 @@ export async function exportSession(): Promise<void> {
   } catch (e) { toast((t('watcher.exportFail') || 'Export échoué') + ': ' + e, 'error'); }
 }
 
+// Recently imported bundles (path + name), so the list modal can re-open them.
+const RECENTS = 'bmm_watcher_imports';
+type Recent = { path: string; name: string; at: number };
+function getRecents(): Recent[] { try { return JSON.parse(localStorage.getItem(RECENTS) || '[]'); } catch { return []; } }
+function addRecent(path: string): void {
+  const name = (path.split(/[\\/]/).pop() || path);
+  const list = getRecents().filter((r) => r.path !== path);
+  list.unshift({ path, name, at: Date.now() });
+  localStorage.setItem(RECENTS, JSON.stringify(list.slice(0, 30)));
+}
+
+async function loadAndPlay(path: string): Promise<void> {
+  let bundle: any;
+  try { bundle = JSON.parse(await invoke('read_file_text', { path }) as string); }
+  catch { toast(t('watcher.badFile') || 'Fichier illisible', 'error'); return; }
+  if (!Array.isArray(bundle?.events) || bundle.events.length < 2) { toast(t('watcher.empty') || 'Enregistrement vide', 'error'); return; }
+  addRecent(path);
+  await playBundle(bundle);
+}
+
 /** Pick a .bmmreplay file and replay it in an in-app viewer. */
 export async function importAndPlay(): Promise<void> {
   const src = await pickFile({ filters: [{ name: 'BMM Replay', extensions: ['bmmreplay', 'json'] }] }).catch(() => null);
   if (!src) return;
-  let bundle: any;
-  try { bundle = JSON.parse(await invoke('read_file_text', { path: src }) as string); }
-  catch { toast(t('watcher.badFile') || 'Fichier illisible', 'error'); return; }
-  if (!Array.isArray(bundle?.events) || bundle.events.length < 2) { toast(t('watcher.empty') || 'Enregistrement vide', 'error'); return; }
-  await playBundle(bundle);
+  await loadAndPlay(src);
+}
+
+/** Modal listing recently imported replays — click one to watch it. */
+export function openReplayList(): void {
+  const recents = getRecents();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99998;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55)';
+  const rows = recents.length
+    ? recents.map((r, i) => `<button class="rw-pick" data-i="${i}" style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;padding:10px 12px;border:1px solid var(--border,#2a2d34);border-radius:9px;background:rgba(255,255,255,.02);cursor:pointer">
+        <span style="font-size:12.5px;font-weight:600">${r.name}</span>
+        <span style="font-size:10.5px;color:var(--text-muted,#8a8f98)">${new Date(r.at).toLocaleString()}</span>
+      </button>`).join('')
+    : `<div style="font-size:12px;color:var(--text-muted,#8a8f98);padding:8px 2px">${t('watcher.noImports') || "Aucun replay importé pour l'instant."}</div>`;
+  overlay.innerHTML = `
+    <div style="width:min(520px,92vw);max-height:80vh;background:var(--bg-secondary,#15171c);border:1px solid var(--border,#2a2d34);border-radius:14px;display:flex;flex-direction:column;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border,#2a2d34)">
+        <strong style="font-size:13px">${t('watcher.listTitle') || 'Replays importés'}</strong><span style="flex:1"></span>
+        <button id="rw-list-pick" class="btn btn-sm">${t('watcher.import') || 'Importer'}</button>
+        <button id="rw-list-close" class="btn btn-sm btn-ghost">${t('common.close') || 'Fermer'}</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;padding:12px;overflow:auto">${rows}</div>
+    </div>`;
+  (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  (overlay.querySelector('#rw-list-close') as HTMLElement).onclick = () => overlay.remove();
+  (overlay.querySelector('#rw-list-pick') as HTMLElement).onclick = () => { overlay.remove(); importAndPlay(); };
+  overlay.querySelectorAll('.rw-pick').forEach((b) => ((b as HTMLElement).onclick = () => {
+    const r = recents[Number((b as HTMLElement).dataset.i)];
+    overlay.remove();
+    if (r) loadAndPlay(r.path);
+  }));
 }
 
 // ── In-app replay viewer (rrweb Replayer in a modal) ───────────────────────────
@@ -152,44 +201,109 @@ async function playBundle(bundle: any): Promise<void> {
   overlay.className = 'modal-overlay open';
   overlay.setAttribute('data-prevent-close', 'true');
   overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6)';
-  const meta = `${bundle.masked ? (t('watcher.masked') || 'masqué') : 'full'} · ${Math.round((bundle.durationMs || 0) / 1000)}s · ${(bundle.console || []).length} logs JS`;
+  const meta = `${bundle.masked ? (t('watcher.masked') || 'masqué') : 'full'} · ${Math.round((bundle.durationMs || 0) / 1000)}s`;
   overlay.innerHTML = `
-    <div style="width:min(1100px,94vw);height:min(86vh,820px);background:var(--bg-secondary,#15171c);border:1px solid var(--border,#2a2d34);border-radius:14px;display:flex;flex-direction:column;overflow:hidden">
+    <div style="width:min(1120px,95vw);height:min(88vh,840px);background:var(--bg-secondary,#15171c);border:1px solid var(--border,#2a2d34);border-radius:14px;display:flex;flex-direction:column;overflow:hidden">
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border,#2a2d34)">
         <strong style="font-size:13px">${t('watcher.viewerTitle') || 'Lecture de session'}</strong>
         <span style="font-size:11px;color:var(--text-muted,#8a8f98)">${meta}</span>
         <span style="flex:1"></span>
-        <button id="rw-play" class="btn btn-sm">⏸</button>
         <button id="rw-close" class="btn btn-sm btn-ghost">${t('common.close') || 'Fermer'}</button>
       </div>
       <div style="flex:1;display:flex;min-height:0">
         <div id="rw-host" style="flex:1;overflow:hidden;background:#000;position:relative"></div>
-        <div id="rw-logs" style="width:300px;border-left:1px solid var(--border,#2a2d34);overflow:auto;font-family:var(--font-mono,monospace);font-size:10.5px;padding:8px;white-space:pre-wrap;color:var(--text-secondary,#c9ccd1)"></div>
+        <div id="rw-logs" style="width:320px;border-left:1px solid var(--border,#2a2d34);overflow:auto;font-family:var(--font-mono,monospace);font-size:10.5px;padding:8px;color:var(--text-secondary,#c9ccd1)"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid var(--border,#2a2d34)">
+        <button id="rw-play" class="btn btn-sm" style="width:34px">⏸</button>
+        <div style="position:relative;flex:1">
+          <div id="rw-marks" style="position:relative;height:10px;margin-bottom:2px"></div>
+          <input id="rw-seek" type="range" min="0" max="1000" value="0" style="width:100%;accent-color:var(--accent,#5b8cff)" />
+        </div>
+        <span id="rw-time" style="font-size:11px;color:var(--text-muted,#8a8f98);font-family:var(--font-mono,monospace);white-space:nowrap">0:00 / 0:00</span>
       </div>
     </div>`;
   (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
 
   const host = overlay.querySelector('#rw-host') as HTMLElement;
   const rep = new rrweb.Replayer(bundle.events, { root: host, speed: 1, skipInactive: true, showWarning: false, mouseTail: { strokeStyle: '#5b8cff' } });
-  // scale to fit the host width
   const fit = () => {
     const wrap = (rep as any).wrapper as HTMLElement | undefined;
     const m4 = bundle.events.find((e: any) => e.type === 4);
     const recW = m4?.data?.width || 1280;
-    if (wrap) { const s = Math.min(1, host.clientWidth / recW); wrap.style.transform = `scale(${s})`; wrap.style.transformOrigin = 'top left'; }
+    const recH = m4?.data?.height || 800;
+    const w = host.clientWidth, h = host.clientHeight;
+    if (!wrap || !w || !h) return;
+    // Contain inside the host (fit both axes), centered — no dead space on a side.
+    const s = Math.min(w / recW, h / recH);
+    wrap.style.position = 'absolute';
+    wrap.style.transformOrigin = 'top left';
+    wrap.style.transform = `scale(${s})`;
+    wrap.style.left = `${Math.max(0, (w - recW * s) / 2)}px`;
+    wrap.style.top = `${Math.max(0, (h - recH * s) / 2)}px`;
   };
+  const md = rep.getMetaData();
+  const startAbs = md.startTime;
+  const total = md.totalTime || 1;
   rep.play();
   setTimeout(fit, 60);
   window.addEventListener('resize', fit);
 
-  // logs panel: JS console + a Rust-log toggle
-  const logs = overlay.querySelector('#rw-logs') as HTMLElement;
-  const jsTxt = (bundle.console || []).map((l: any) => `[${new Date(l.t).toLocaleTimeString()}] ${l.level.toUpperCase()}  ${l.msg}`).join('\n');
-  logs.textContent = (jsTxt || '(no JS logs)') + (bundle.rustLog ? `\n\n──── RUST LOG ────\n${bundle.rustLog}` : '');
+  const mmss = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+  // Event markers above the scrubber: clicks + navigation derived from rrweb.
+  const marks = overlay.querySelector('#rw-marks') as HTMLElement;
+  for (const ev of bundle.events as any[]) {
+    let kind = ''; let color = '#5b8cff';
+    if (ev.type === 3 && ev.data?.source === 2 && [2, 4, 6].includes(ev.data?.type)) { kind = 'click'; color = '#37d399'; }
+    else if (ev.type === 4) { kind = 'nav'; color = '#a78bfa'; }
+    if (!kind) continue;
+    const off = ev.timestamp - startAbs;
+    if (off < 0 || off > total) continue;
+    const dot = document.createElement('button');
+    dot.title = `${mmss(off)} · ${kind}`;
+    dot.style.cssText = `position:absolute;top:50%;transform:translate(-50%,-50%);width:6px;height:6px;border-radius:50%;border:0;cursor:pointer;background:${color};left:${(off / total) * 100}%`;
+    dot.onclick = () => { rep.play(off); };
+    marks.appendChild(dot);
+  }
+
+  // Logs panel (JS console + Rust), highlighted live as the replay plays.
+  const logsEl = overlay.querySelector('#rw-logs') as HTMLElement;
+  const jsLogs: { t: number; level: string; msg: string }[] = bundle.console || [];
+  const jsHtml = jsLogs.length
+    ? jsLogs.map((l, i) => `<div class="rw-log" data-i="${i}" style="padding:2px 4px;border-radius:4px;white-space:pre-wrap">[${new Date(l.t).toLocaleTimeString()}] <b>${(l.level || '').toUpperCase()}</b> ${escapeHtml(l.msg)}</div>`).join('')
+    : '<div style="color:var(--text-muted,#8a8f98)">(no JS logs)</div>';
+  logsEl.innerHTML = `<div id="rw-js">${jsHtml}</div>${bundle.rustLog ? `<div style="margin-top:10px;color:var(--text-muted,#8a8f98)">──── RUST LOG ────</div><pre style="white-space:pre-wrap;margin:4px 0 0">${escapeHtml(bundle.rustLog)}</pre>` : ''}`;
+  const logEls = Array.from(logsEl.querySelectorAll('.rw-log')) as HTMLElement[];
+
+  const seek = overlay.querySelector('#rw-seek') as HTMLInputElement;
+  const timeEl = overlay.querySelector('#rw-time') as HTMLElement;
+  let raf = 0; let lastHi = -1;
+  const tick = () => {
+    const cur = Math.min(rep.getCurrentTime(), total);
+    seek.value = String(Math.round((cur / total) * 1000));
+    timeEl.textContent = `${mmss(cur)} / ${mmss(total)}`;
+    // highlight the latest JS log at/before the current absolute time
+    const absNow = startAbs + cur;
+    let hi = -1;
+    for (let i = 0; i < jsLogs.length; i++) { if (jsLogs[i].t <= absNow) hi = i; else break; }
+    if (hi !== lastHi) {
+      if (logEls[lastHi]) logEls[lastHi].style.background = '';
+      if (logEls[hi]) { logEls[hi].style.background = 'rgba(91,140,255,.18)'; logEls[hi].scrollIntoView({ block: 'nearest' }); }
+      lastHi = hi;
+    }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+  seek.oninput = () => { rep.play((Number(seek.value) / 1000) * total); };
 
   let playing = true;
   const playBtn = overlay.querySelector('#rw-play') as HTMLButtonElement;
   playBtn.onclick = () => { playing = !playing; if (playing) { rep.play(rep.getCurrentTime()); playBtn.textContent = '⏸'; } else { rep.pause(); playBtn.textContent = '▶'; } };
-  const close = () => { try { window.removeEventListener('resize', fit); rep.pause(); (rep as any).destroy?.(); } catch { /* ignore */ } overlay.remove(); };
+  const close = () => { try { cancelAnimationFrame(raf); window.removeEventListener('resize', fit); rep.pause(); (rep as any).destroy?.(); } catch { /* ignore */ } overlay.remove(); };
   (overlay.querySelector('#rw-close') as HTMLElement).onclick = close;
+}
+
+function escapeHtml(s: string): string {
+  return String(s).replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
 }

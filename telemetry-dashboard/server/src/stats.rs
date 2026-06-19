@@ -759,16 +759,36 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
         v
     };
 
+    // When do people use BMM? Activity by hour-of-day (UTC) + per-user/session averages.
+    let hod_rows: Vec<(Option<String>, i64, i64)> = sqlx::query_as(
+        "SELECT substr(ts,12,2), COUNT(*) FILTER (WHERE event='session_start'), COUNT(*)
+         FROM events GROUP BY substr(ts,12,2)",
+    ).fetch_all(pool).await.unwrap_or_default();
+    let mut hod: Vec<Value> = (0..24).map(|h| json!({ "hour": h, "sessions": 0, "events": 0 })).collect();
+    for (h, ss, ev) in hod_rows {
+        if let Some(h) = h.and_then(|s| s.trim().parse::<usize>().ok()) {
+            if h < 24 { hod[h] = json!({ "hour": h, "sessions": ss, "events": ev }); }
+        }
+    }
+    let peak_hour = hod.iter().max_by_key(|x| x["sessions"].as_i64().unwrap_or(0))
+        .and_then(|x| x["hour"].as_i64()).unwrap_or(0);
+    let avg_events_per_session = if tot_sessions > 0 { r1(ev_total as f64 / tot_sessions as f64) } else { 0.0 };
+    let avg_sessions_per_user = if !uarr.is_empty() { r1(tot_sessions as f64 / uarr.len() as f64) } else { 0.0 };
+
     json!({
         "totals": {
             "users": uarr.len(), "events": ev_total, "sessions": tot_sessions, "pageviews": pageviews,
             "avg_session_min": if tot_sessions > 0 { r1(tot_sess_ms as f64 / tot_sessions as f64 / 60000.0) } else { 0.0 },
             "pages_per_session": if tot_sessions > 0 { r1(pageviews as f64 / tot_sessions as f64) } else { 0.0 },
+            "avg_events_per_session": avg_events_per_session,
+            "avg_sessions_per_user": avg_sessions_per_user,
+            "peak_hour": peak_hour,
             "valid_repos": repos.len(),
             "repo_connections": repos.iter().map(|r| r["count"].as_i64().unwrap_or(0)).sum::<i64>(),
             "benchmarks": bench_total,
             "live": live_count,
         },
+        "hour_of_day": hod, "peak_hour": peak_hour,
         "series": series, "buckets": buckets, "events": events, "pages": pages, "funnels": funnels,
         "perf": { "fps_avg": r1(pf.0.unwrap_or(0.0)), "frametime_avg_ms": r2(pf.1.unwrap_or(0.0)),
                   "frametime_worst_ms": r2(pf.2.unwrap_or(0.0)), "heap_avg_mb": r1(pf.3.unwrap_or(0.0)),

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useStore } from "../lib/store";
 
@@ -31,16 +32,20 @@ function Logo() {
 export default function Layout() {
   const { stats, connected, adminKey, setAdminKey } = useStore();
   const liveN = stats?.totals?.live ?? 0;
+  const [navOpen, setNavOpen] = useState(false);
   return (
     <div className="flex h-full">
-      <aside className="w-56 shrink-0 border-r border-line bg-panel flex flex-col">
+      {/* mobile backdrop */}
+      {navOpen && <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setNavOpen(false)} />}
+
+      <aside className={`fixed md:static z-40 h-full w-56 shrink-0 border-r border-line bg-panel flex flex-col transition-transform duration-200 ${navOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}>
         <div className="px-4 h-14 flex items-center gap-2 border-b border-line">
           <Logo />
           <div className="font-semibold tracking-tight">BMM Telemetry</div>
         </div>
         <nav className="p-2 flex-1 overflow-y-auto">
           {NAV.map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.to === "/"} className={({ isActive }) => `navlink ${isActive ? "navlink-active" : ""}`}>
+            <NavLink key={n.to} to={n.to} end={n.to === "/"} onClick={() => setNavOpen(false)} className={({ isActive }) => `navlink ${isActive ? "navlink-active" : ""}`}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                 <path d={n.icon} />
               </svg>
@@ -54,25 +59,28 @@ export default function Layout() {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 shrink-0 border-b border-line bg-panel/60 backdrop-blur flex items-center justify-between px-5">
-          <div className="flex items-center gap-2 text-sm">
-            <span className={`inline-block w-2 h-2 rounded-full ${connected ? "bg-good animate-pulse" : "bg-warn"}`} />
-            <span className="text-sub">{connected ? "Live" : "Reconnecting…"}</span>
-            <span className="text-sub mx-2">·</span>
+        <header className="h-14 shrink-0 border-b border-line bg-panel/60 backdrop-blur flex items-center justify-between px-3 md:px-5 gap-2">
+          <div className="flex items-center gap-2 text-sm min-w-0">
+            <button onClick={() => setNavOpen((o) => !o)} className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-panel2 shrink-0" aria-label="Menu">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 12h18M3 6h18M3 18h18" /></svg>
+            </button>
+            <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${connected ? "bg-good animate-pulse" : "bg-warn"}`} />
+            <span className="text-sub hidden sm:inline">{connected ? "Live" : "Reconnecting…"}</span>
+            <span className="text-sub mx-1 sm:mx-2 hidden sm:inline">·</span>
             <span className="font-medium">{liveN}</span>
             <span className="text-sub">online</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <input
               value={adminKey}
               onChange={(e) => setAdminKey(e.target.value)}
               placeholder="Admin key"
               type="password"
-              className="bg-panel2 border border-line rounded-lg px-3 py-1.5 text-sm w-40 focus:outline-none focus:border-brand"
+              className="bg-panel2 border border-line rounded-lg px-3 py-1.5 text-sm w-28 sm:w-40 focus:outline-none focus:border-brand"
             />
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-5">
+        <main className="flex-1 overflow-y-auto p-3 md:p-5">
           <Outlet />
         </main>
       </div>
