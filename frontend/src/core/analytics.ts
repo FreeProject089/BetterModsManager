@@ -199,8 +199,12 @@ async function startCollection(): Promise<void> {
     collectWebVitals();
     maybePeriodicBenchmark();   // weekly telemetry benchmark (if allowed)
     startSessionReplay();       // rrweb visual replay (privacy-masked by default)
+    hookConsoleTelemetry();
+    startRustLogPolling();
     flush();
 }
+
+let _telemetryReplay: any = null;
 
 // Visual session replay: stream rrweb chunks through the normal telemetry
 // transport as `$replay` events (the server routes them to a dedicated table).
@@ -210,7 +214,10 @@ function startSessionReplay(): void {
         if (localStorage.getItem('bmm_replay_enabled') === '0') return;
     } catch {}
     import('./replay-recorder.js')
-        .then((m) => m.startReplayRecording((payload) => track('$replay', payload)))
+        .then((m) => {
+            if (!_telemetryReplay) _telemetryReplay = new m.TelemetryReplay((payload: any) => track('$replay', payload));
+            _telemetryReplay.start();
+        })
         .catch(() => { /* rrweb unavailable — silently skip */ });
 }
 
@@ -239,6 +246,54 @@ function collectWebVitals(): void {
     } catch {}
     // Give the observers a few seconds, then send whatever we captured.
     setTimeout(() => { if (_consent === true && Object.keys(v).length) track('webvitals', v); }, 6000);
+}
+
+// Hook JS console to send warn/error logs via telemetry
+function hookConsoleTelemetry(): void {
+    const _orig: any = { warn: null, error: null };
+    const LEVELS = ['warn', 'error'];
+    for (const level of LEVELS) {
+        _orig[level] = (console as any)[level].bind(console);
+        (console as any)[level] = (...args: any[]) => {
+            try {
+                if (_consent === true) {
+                    const msg = args.map((a) => { try { return typeof a === 'string' ? a : JSON.stringify(a); } catch { return String(a); } }).join(' ').slice(0, 2000);
+                    track('$log_js', { level, msg });
+                }
+            } catch {}
+            if (_orig[level]) _orig[level](...args);
+        };
+    }
+}
+
+let _lastRustLogLength = 0;
+let _rustLogTimer: number | null = null;
+
+// Periodically poll the Rust log file for new lines containing warnings or errors
+function startRustLogPolling(): void {
+    if (_rustLogTimer !== null) return;
+    _rustLogTimer = window.setInterval(async () => {
+        if (_consent !== true) return;
+        try {
+            const logStr = await invoke('read_session_log_tail', { maxBytes: 1048576 }) as string;
+            if (!logStr) return;
+            const newLen = logStr.length;
+            if (newLen > _lastRustLogLength) {
+                let diff = '';
+                if (_lastRustLogLength === 0 || newLen < _lastRustLogLength) diff = logStr;
+                else diff = logStr.slice(_lastRustLogLength);
+                _lastRustLogLength = newLen;
+
+                const lines = diff.split('\n').filter(line => {
+                    const l = line.toLowerCase();
+                    return l.includes('warn') || l.includes('error');
+                });
+                if (lines.length > 0) {
+                    track('$log_rust', { log: lines.join('\n').slice(0, 5000) });
+                }
+            }
+        } catch {}
+    }, 15000);
 }
 
 // BMM-specific profile bits: active theme (+ custom/predef), language, Tasky settings.
@@ -534,7 +589,7 @@ function maybePeriodicBenchmark(): void {
 
 function stopCollection(): void {
     if (_flushTimer !== null) { clearInterval(_flushTimer); _flushTimer = null; }
-    import('./replay-recorder.js').then((m) => m.stopReplayRecording()).catch(() => {});
+    if (_telemetryReplay) _telemetryReplay.stop();
 }
 
 let _sessionEnded = false;
@@ -598,10 +653,12 @@ export function initPrivacySettings(): void {
     const replayToggle = document.getElementById('analytics-replay-toggle') as HTMLInputElement | null;
     const replayFullToggle = document.getElementById('analytics-replay-full-toggle') as HTMLInputElement | null;
     const restartReplay = () => {
-        import('./replay-recorder.js').then(async (m) => {
-            m.stopReplayRecording();
+        import('./replay-recorder.js').then((m) => {
+            if (_telemetryReplay) _telemetryReplay.stop();
             if (_consent === true && replayEnabled()) {
-                await m.startReplayRecording((payload) => track('$replay', payload));
+                if (!_telemetryReplay) _telemetryReplay = new m.TelemetryReplay((payload: any) => track('$replay', payload));
+                _telemetryReplay.listener.requiresMasking = !replayFull();
+                _telemetryReplay.start();
             }
         }).catch(() => {});
     };
@@ -713,14 +770,13 @@ async function renderSentPackets(): Promise<void> {
         let control: string;
         if (isDone) {
             const txt = `${t('analytics.deleted2') || 'Deleted'}${srv.decided_at ? ' · ' + new Date(srv.decided_at).toLocaleDateString() : ''}`;
-            control = `<span class="apv-pkt-status" style="background:rgba(52,211,153,.15);color:#34d399">${escHtml(txt)}</span>`;
+            control = `<span class="apv-pkt-status" style="background:rgba(52,211,153,.15);color:#34d399;padding:3px 8px;border-radius:12px;font-weight:600;font-size:10.5px">${escHtml(txt)}</span>`;
         } else if (isPending) {
-            const sched = p.deletion_scheduled_at ? new Date(p.deletion_scheduled_at).toLocaleString() : '';
-            const txt = sched ? `${t('analytics.deleteBy') || 'Erased by'} ${sched}` : (t('analytics.deleteRequested') || 'Deletion requested (≤72h)');
-            control = `<span class="apv-pkt-status">${escHtml(txt)}</span>`;
+            const txt = t('analytics.deletePending') || 'Pending review (≤72h)';
+            control = `<span class="apv-pkt-status" style="background:rgba(245,158,11,.15);color:#f59e0b;padding:3px 8px;border-radius:12px;font-weight:600;font-size:10.5px">${escHtml(txt)}</span>`;
         } else {
             // not requested, or rejected → offer the request button again
-            const note = isRejected ? `<span class="apv-pkt-rejected" style="color:var(--warning,#f4b740);font-size:11px;margin-right:6px">${t('analytics.deleteRejected') || 'Request rejected'}</span>` : '';
+            const note = isRejected ? `<span class="apv-pkt-rejected" style="color:var(--danger,#ef4444);font-size:11px;margin-right:6px;font-weight:600">${t('analytics.deleteRejected') || 'Request rejected'}</span>` : '';
             control = note + delBtn(p.id);
         }
 
@@ -787,14 +843,39 @@ export function showConsentModal(): Promise<void> {
                     <li>${t('analytics.collect.usage') || 'Feature usage & in-app navigation — most/least used features'}</li>
                     <li>${t('analytics.collect.network') || 'Network info (IP & approximate region, VM detection) — for abuse prevention & regional stats'}</li>
                     <li>${t('analytics.collect.id') || 'Your anonymous Creator ID — never your name or email'}</li>
+                    <li>${t('analytics.collect.replay') || 'Visual session replay (masked by default) — to see where users get stuck'}</li>
                 </ul>
             </div>
+            
+            <details style="margin-bottom:12px; font-size:12px; color:var(--text-secondary);">
+                <summary style="cursor:pointer; font-weight:600; outline:none; user-select:none;">${t('analytics.customize') || 'Customize data collection...'}</summary>
+                <div style="padding: 12px; margin-top: 8px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px;">
+                    <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+                        <span>${t('analytics.benchToggle') || 'Automatic Benchmark (every 7 days)'}</span>
+                        <div class="plug-toggle">
+                            <input type="checkbox" id="modal-bench-toggle" checked>
+                            <span class="plug-toggle-slider"></span>
+                        </div>
+                    </label>
+                    <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+                        <span>${t('analytics.replayToggle') || 'Visual Session Replay (masked)'}</span>
+                        <div class="plug-toggle">
+                            <input type="checkbox" id="modal-replay-toggle" checked>
+                            <span class="plug-toggle-slider"></span>
+                        </div>
+                    </label>
+                    <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" id="modal-replay-full-container">
+                        <span>${t('analytics.replayFullToggle') || 'Unmask Replay (capture text & images)'}</span>
+                        <div class="plug-toggle">
+                            <input type="checkbox" id="modal-replay-full-toggle">
+                            <span class="plug-toggle-slider"></span>
+                        </div>
+                    </label>
+                </div>
+            </details>
+
             <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px">
                 ${t('analytics.consentFoot') || 'No personal data, no mod contents, no file paths. GDPR-friendly: opt-in, exportable and erasable from Settings → Privacy.'}
-            </p>
-            <p style="font-size:11px;color:#f59e0b;margin:0;display:flex;gap:6px;align-items:flex-start">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                ${t('analytics.benchNote') || 'If you accept, BMM runs a quick performance benchmark now and once every 7 days (anonymous). You can turn this off in Settings → Privacy.'}
             </p>
         </div>
         <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid var(--border)">
@@ -809,7 +890,24 @@ export function showConsentModal(): Promise<void> {
 
     return new Promise<void>((resolve) => {
         const close = () => { overlay.remove(); resolve(); };
-        overlay.querySelector('#analytics-accept')?.addEventListener('click', async () => { await setConsent(true); close(); });
+        
+        const benchToggle = overlay.querySelector('#modal-bench-toggle') as HTMLInputElement | null;
+        const replayToggle = overlay.querySelector('#modal-replay-toggle') as HTMLInputElement | null;
+        const replayFullToggle = overlay.querySelector('#modal-replay-full-toggle') as HTMLInputElement | null;
+        
+        if (replayToggle && replayFullToggle) {
+            replayToggle.addEventListener('change', () => {
+                replayFullToggle.disabled = !replayToggle.checked;
+            });
+        }
+
+        overlay.querySelector('#analytics-accept')?.addEventListener('click', async () => {
+            if (benchToggle) localStorage.setItem(BENCH_ALLOW_KEY, benchToggle.checked ? '1' : '0');
+            if (replayToggle) localStorage.setItem(REPLAY_KEY, replayToggle.checked ? '1' : '0');
+            if (replayFullToggle) localStorage.setItem(REPLAY_FULL_KEY, replayFullToggle.checked ? '1' : '0');
+            await setConsent(true);
+            close();
+        });
         overlay.querySelector('#analytics-decline')?.addEventListener('click', async () => { await setConsent(false); close(); });
     });
 }

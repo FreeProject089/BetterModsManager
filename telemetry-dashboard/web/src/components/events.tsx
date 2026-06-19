@@ -94,7 +94,7 @@ export function EvIcon({ type, size = 15 }: { type: TypeKey; size?: number }) {
 // Each non-page action shows WHERE it happened (page › modal) underneath.
 export function EventTimeline({ events, hidden }: { events: any[]; hidden?: Set<TypeKey> }) {
   const titles = buildModalTitles(events);
-  const shown = events.filter((e) => e.event !== "page_leave" && e.event !== "perf" && (!hidden || !hidden.has(classify(e))));
+  const shown = events.filter((e) => e.event !== "page_leave" && e.event !== "perf" && !e.event?.startsWith("$log_") && (!hidden || !hidden.has(classify(e))));
   return (
     <ol className="space-y-1">
       {shown.map((e: any, i: number) => {

@@ -136,10 +136,29 @@ export function loadRrweb(): Promise<any> {
   return w.__rrwebLoading;
 }
 
+export interface ReplaySubscriber {
+  (ev: any, isCheckout: boolean): void;
+  requiresMasking: boolean;
+}
+
+const _listeners = new Set<ReplaySubscriber>();
+
+/** Add a listener. The shared rrweb instance starts automatically. If masking requirements change, it restarts. */
+export async function subscribeReplay(cb: ReplaySubscriber): Promise<void> {
+  _listeners.add(cb);
+  await syncSharedRecorder();
+}
+
+/** Remove a listener. If none are left, the shared recorder stops. */
+export async function unsubscribeReplay(cb: ReplaySubscriber): Promise<void> {
+  _listeners.delete(cb);
+  await syncSharedRecorder();
+}
+
 // Gzip a value to a base64 string using the browser's native CompressionStream.
 // rrweb chunks (especially full snapshots) compress ~8-12x, so this is the single
 // biggest size win. Returns null when unsupported, so we can fall back to raw.
-async function gzipToBase64(value: any): Promise<string | null> {
+export async function gzipToBase64(value: any): Promise<string | null> {
   try {
     const CS = (window as any).CompressionStream;
     if (typeof CS === 'undefined') return null;
@@ -153,49 +172,33 @@ async function gzipToBase64(value: any): Promise<string | null> {
   } catch { return null; }
 }
 
-function flushChunk(): void {
-  if (!_buf.length || !_emit) return;
-  const chunk = _buf;
-  _buf = [];
-  // Capture seq + emit synchronously-ordered even though compression is async.
-  const seq = _seq++;
-  const emit = _emit;
-  const full = _full;
-  gzipToBase64(chunk).then((dz) => {
-    if (dz) emit({ dz, n: chunk.length, seq, full });   // gzipped (base64) payload
-    else emit({ d: chunk, seq, full });                  // uncompressed fallback
-  });
-}
+async function syncSharedRecorder() {
+  if (_listeners.size === 0) {
+    if (_stop) { try { _stop(); } catch {} _stop = null; }
+    return;
+  }
+  const wantsMask = Array.from(_listeners).some(l => l.requiresMasking);
+  const newFull = !wantsMask;
+  if (_stop && _full === newFull) return; // already running with correct masking
 
-/**
- * Start recording. `emit` receives each chunk `{ d: rrwebEvent[], seq, full }`;
- * the caller forwards it through the normal telemetry transport (which gives us
- * offline buffering + per-packet GDPR erasure for free).
- */
-export async function startReplayRecording(emit: (payload: Record<string, any>) => void): Promise<void> {
-  if (_stop) return;
+  if (_stop) { try { _stop(); } catch {} _stop = null; }
+
   let rrweb: any;
   try { rrweb = await loadRrweb(); } catch { return; }
   if (!rrweb?.record) return;
 
-  _emit = emit;
-  _full = isFullReplay();
-  _buf = [];
-  _seq = 0;
+  _full = newFull;
 
   _stop = rrweb.record({
-    emit: (ev: any) => {
+    emit: (ev: any, isCheckout?: boolean) => {
       // Serialise through a promise chain so asset inlining (async) finishes IN
-      // ORDER before the event is buffered/flushed.
+      // ORDER before the event is dispatched to listeners.
       _queue = _queue.then(async () => {
         await inlineAssets(ev);   // app images always; asset:// only in full mode
-        _buf.push(ev);
-        // Flush a fresh full snapshot (the player needs a checkpoint to start a
-        // seek from), and cap chunk size so single payloads stay reasonable.
-        if (ev.type === 2 /* FullSnapshot */ || _buf.length >= 80) flushChunk();
+        for (const l of _listeners) l(ev, !!isCheckout);
       }).catch(() => {});
     },
-    // Privacy defaults — only relaxed when the user explicitly opts into full mode.
+    // Privacy defaults — only relaxed when ALL consumers opt into full mode.
     maskAllInputs: !_full,
     maskTextSelector: _full ? undefined : SENSITIVE_SELECTOR,
     blockClass: 'bmm-no-record',
@@ -211,24 +214,54 @@ export async function startReplayRecording(emit: (payload: Record<string, any>) 
     },
     recordCanvas: false,
     collectFonts: false,
-    // NOTE: rrweb's own inlineImages uses canvas.toDataURL, which taints (and
-    // fails) on BMM's cross-origin asset:// images. We instead resolve asset://
-    // URLs to data URLs ourselves from disk (see inlineAssets below) — reliable,
-    // and only in full mode since those images are user content. External https
-    // images keep their URL and load directly on the dashboard.
     slimDOMOptions: { comment: true, headFavicon: true, headMetaDescKeywords: true, headMetaSocial: true, headMetaRobots: true, headMetaHttpEquiv: true, headMetaVerification: true },
     // A fresh full snapshot every 2 min keeps seeking cheap and bounds the cost
     // of a single missing chunk.
     checkoutEveryNms: 2 * 60 * 1000,
   }) || null;
-
-  if (_flushTimer === null) _flushTimer = window.setInterval(flushChunk, 10000);
 }
 
-/** Stop recording and flush whatever is buffered. */
-export function stopReplayRecording(): void {
-  if (_flushTimer !== null) { clearInterval(_flushTimer); _flushTimer = null; }
-  if (_stop) { try { _stop(); } catch { /* ignore */ } _stop = null; }
-  flushChunk();
-  _emit = null;
+// ── Telemetry specific wrapper ──
+export class TelemetryReplay {
+  private _emit: (payload: Record<string, any>) => void;
+  private _buf: any[] = [];
+  private _seq = 0;
+  private _flushTimer: number | null = null;
+  public listener: ReplaySubscriber;
+
+  constructor(emit: (payload: Record<string, any>) => void) {
+    this._emit = emit;
+    this.listener = ((ev: any, isCheckout: boolean) => {
+      this._buf.push(ev);
+      if (ev.type === 2 /* FullSnapshot */ || this._buf.length >= 80) this.flushChunk();
+    }) as ReplaySubscriber;
+    // Telemetry masking preference (from global settings)
+    this.listener.requiresMasking = !isFullReplay();
+  }
+
+  start() {
+    this._buf = [];
+    this._seq = 0;
+    subscribeReplay(this.listener);
+    if (this._flushTimer === null) this._flushTimer = window.setInterval(() => this.flushChunk(), 10000);
+  }
+
+  stop() {
+    if (this._flushTimer !== null) { clearInterval(this._flushTimer); this._flushTimer = null; }
+    this.flushChunk();
+    unsubscribeReplay(this.listener);
+  }
+
+  private flushChunk() {
+    if (!this._buf.length) return;
+    const chunk = this._buf;
+    this._buf = [];
+    const seq = this._seq++;
+    const emit = this._emit;
+    const full = !this.listener.requiresMasking;
+    gzipToBase64(chunk).then((dz) => {
+      if (dz) emit({ dz, n: chunk.length, seq, full });   // gzipped (base64) payload
+      else emit({ d: chunk, seq, full });                  // uncompressed fallback
+    });
+  }
 }

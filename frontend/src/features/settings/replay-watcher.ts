@@ -6,7 +6,7 @@
 // Nothing leaves the machine unless the user exports a file themselves.
 
 import { invoke, saveFile, pickFile } from '../../core/api.js';
-import { loadRrweb, SENSITIVE_SELECTOR } from '../../core/replay-recorder.js';
+import { subscribeReplay, unsubscribeReplay, ReplaySubscriber, loadRrweb } from '../../core/replay-recorder.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 
@@ -20,7 +20,8 @@ export const watcherFull = () => { try { return localStorage.getItem(FULL) === '
 const watcherRust = () => { try { return localStorage.getItem(RUST) !== '0'; } catch { return true; } };
 const watcherJs = () => { try { return localStorage.getItem(JS) !== '0'; } catch { return true; } };
 
-let _stop: (() => void) | null = null;
+let _recording = false;
+let _listener: ReplaySubscriber | null = null;
 let _chunks: any[][] = [];
 let _console: { t: number; level: string; msg: string }[] = [];
 let _startedAt = 0;
@@ -34,7 +35,7 @@ function hookConsole(): void {
     _orig[level] = (console as any)[level].bind(console);
     (console as any)[level] = (...args: any[]) => {
       try {
-        if (_stop && watcherJs()) {
+        if (_recording && watcherJs()) {
           const msg = args.map((a) => { try { return typeof a === 'string' ? a : JSON.stringify(a); } catch { return String(a); } }).join(' ').slice(0, 2000);
           _console.push({ t: Date.now(), level, msg });
           if (_console.length > 5000) _console.shift();
@@ -60,7 +61,7 @@ export function initWatcherUI(): void {
     on.addEventListener('change', () => { localStorage.setItem(ON, on.checked ? '1' : '0'); syncWatcher(); });
     full?.addEventListener('change', async () => {
       localStorage.setItem(FULL, full.checked ? '1' : '0');
-      if (_stop) { stopWatcher(); await startWatcher(); }   // re-arm with new masking
+      if (_recording) { stopWatcher(); await startWatcher(); }   // re-arm with new masking
     });
     rust?.addEventListener('change', () => localStorage.setItem(RUST, rust.checked ? '1' : '0'));
     js?.addEventListener('change', () => localStorage.setItem(JS, js.checked ? '1' : '0'));
@@ -72,31 +73,23 @@ export function initWatcherUI(): void {
 
 /** Start local recording (idempotent). */
 export async function startWatcher(): Promise<void> {
-  if (_stop) return;
-  const rrweb = await loadRrweb().catch(() => null);
-  if (!rrweb?.record) { toast(t('watcher.rrwebFail') || 'Enregistreur indisponible', 'error'); return; }
+  if (_recording) return;
+  _recording = true;
   hookConsole();
   _chunks = [[]];
   _console = [];
   _startedAt = Date.now();
-  const full = watcherFull();
-  _stop = rrweb.record({
-    emit: (ev: any, isCheckout?: boolean) => {
-      if (isCheckout && _chunks[_chunks.length - 1].length > 0) {
-        _chunks.push([]);
-      }
-      _chunks[_chunks.length - 1].push(ev);
-      if (_chunks.length > 3) _chunks.shift(); // keep max ~6 minutes
-    },
-    checkoutEveryNms: 2 * 60 * 1000,
-    maskAllInputs: !full,
-    maskTextSelector: full ? undefined : SENSITIVE_SELECTOR,
-    blockClass: 'bmm-no-record',
-    ignoreClass: 'bmm-no-record',
-    sampling: { mousemove: false, mouseInteraction: true, scroll: 250, input: 'last' },
-    recordCanvas: false,
-    collectFonts: false,
-  }) || null;
+  
+  _listener = ((ev: any, isCheckout: boolean) => {
+    if (isCheckout && _chunks[_chunks.length - 1].length > 0) {
+      _chunks.push([]);
+    }
+    _chunks[_chunks.length - 1].push(ev);
+    if (_chunks.length > 3) _chunks.shift(); // keep max ~6 minutes
+  }) as ReplaySubscriber;
+  _listener.requiresMasking = !watcherFull();
+
+  await subscribeReplay(_listener);
   registerCloseListeners();
 }
 
@@ -113,7 +106,7 @@ function registerCloseListeners(): void {
 
 /** Automatically save the current session without prompting (e.g. on close). */
 export async function autoSaveSession(): Promise<void> {
-  if (!_stop) return; // Not recording
+  if (!_recording) return; // Not recording
   const events = _chunks.flat();
   if (events.length < 2) return;
   try {
@@ -137,7 +130,11 @@ export async function autoSaveSession(): Promise<void> {
 
 /** Stop local recording (keeps the buffer for export). */
 export function stopWatcher(): void {
-  if (_stop) { try { _stop(); } catch { /* ignore */ } _stop = null; }
+  if (_recording) {
+    _recording = false;
+    if (_listener) unsubscribeReplay(_listener);
+    _listener = null;
+  }
 }
 
 /** Apply the on/off setting: start or stop accordingly. */

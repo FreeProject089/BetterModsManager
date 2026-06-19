@@ -37,6 +37,7 @@ export function RrwebReplay({ sessionId, fallbackEvents }: { sessionId: string; 
 }
 
 function Player({ events, markers }: { events: any[]; markers: any[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const repRef = useRef<any>(null);
@@ -45,6 +46,7 @@ function Player({ events, markers }: { events: any[]; markers: any[] }) {
   const [cur, setCur] = useState(0);
   const [total, setTotal] = useState(0);
   const [startTime, setStartTime] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // recorded viewport (Meta event) → used to scale the player to fit the panel
   const [recW, recH] = useMemo(() => {
@@ -79,17 +81,17 @@ function Player({ events, markers }: { events: any[]; markers: any[] }) {
         const wrapper = (rep as any).wrapper as HTMLElement | undefined;
         if (!box || !wrapper) return;
         const boxW = box.clientWidth;
-        const maxH = Math.min(window.innerHeight * 0.6, 560);
-        // Fill the panel width (DOM upscales crisply), but cap the height; center
-        // horizontally if the height cap kicks in — so there's no dead space.
+        const isFS = !!document.fullscreenElement;
+        const maxH = isFS ? box.clientHeight : Math.min(window.innerHeight * 0.6, 560);
+        
         let scale = boxW / recW;
         if (recH * scale > maxH) scale = maxH / recH;
         wrapper.style.position = "absolute";
         wrapper.style.transformOrigin = "top left";
         wrapper.style.transform = `scale(${scale})`;
         wrapper.style.left = `${Math.max(0, (boxW - recW * scale) / 2)}px`;
-        wrapper.style.top = "0px";
-        box.style.height = `${recH * scale}px`;
+        wrapper.style.top = `${Math.max(0, (maxH - recH * scale) / 2)}px`;
+        if (!isFS) box.style.height = `${recH * scale}px`;
       };
       fit();
       window.addEventListener("resize", fit);
@@ -115,6 +117,26 @@ function Player({ events, markers }: { events: any[]; markers: any[] }) {
     };
   }, [events, recW, recH]);
 
+  useEffect(() => {
+    const onFs = () => {
+      const isFS = !!document.fullscreenElement;
+      setIsFullscreen(isFS);
+      if (repRef.current && repRef.current.__fit) {
+        setTimeout(repRef.current.__fit, 50); // slight delay to allow layout recalculation
+      }
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
+
   const toggle = () => {
     const rep = repRef.current;
     if (!rep) return;
@@ -138,16 +160,56 @@ function Player({ events, markers }: { events: any[]; markers: any[] }) {
   const markPts = useMemo(() => {
     if (!startTime || !total) return [] as any[];
     return (markers || [])
-      .filter((e: any) => e.event !== "page_leave" && e.event !== "perf" && e.event !== "$replay")
+      .filter((e: any) => e.event !== "page_leave" && e.event !== "perf" && e.event !== "$replay" && !e.event?.startsWith("$log_"))
       .map((e: any) => ({ off: new Date(e.ts).getTime() - startTime, type: classify(e), label: eventLabel(e), loc: eventLocation(e, titles) }))
       .filter((m: any) => m.off >= 0 && m.off <= total);
   }, [markers, startTime, total, titles]);
   const curEvent = useMemo(() => { let last: any = null; for (const m of markPts) { if (m.off <= cur) last = m; else break; } return last; }, [markPts, cur]);
 
+  const logs = useMemo(() => {
+    if (!startTime) return [];
+    const list: any[] = [];
+    for (const e of markers) {
+      if (e.event === '$log_js') {
+        list.push({ off: new Date(e.ts).getTime() - startTime, type: 'JS', level: e.level || 'info', msg: e.msg || '' });
+      } else if (e.event === '$log_rust') {
+        const lines = (e.log || '').split('\n').filter(Boolean);
+        for (const line of lines) {
+          list.push({ off: new Date(e.ts).getTime() - startTime, type: 'Rust', level: line.toLowerCase().includes('error') ? 'error' : 'warn', msg: line });
+        }
+      }
+    }
+    return list.sort((a, b) => a.off - b.off);
+  }, [markers, startTime]);
+
   return (
-    <div className="space-y-3">
-      <div ref={boxRef} className="relative w-full overflow-hidden rounded-xl border border-line bg-black" style={{ height: 320 }}>
-        <div ref={hostRef} className="absolute inset-0" />
+    <div ref={containerRef} className={isFullscreen ? 'bg-[#0f1115] p-6 h-full w-full flex flex-col gap-3 overflow-hidden text-ink' : 'space-y-3'}>
+      <div className={`flex gap-3 ${isFullscreen ? 'flex-1 min-h-0' : 'flex-col'}`}>
+        <div ref={boxRef} className={`relative w-full overflow-hidden rounded-xl border border-line bg-black ${isFullscreen ? 'flex-1' : ''}`} style={isFullscreen ? {} : { height: 320 }}>
+          <div ref={hostRef} className="absolute inset-0" />
+        </div>
+
+        {logs.length > 0 && (
+          <div className={`bg-panel2 rounded-xl border border-line flex flex-col ${isFullscreen ? 'w-[400px] shrink-0' : 'h-48'}`}>
+            <div className="px-3 py-2 border-b border-line text-[11px] font-semibold text-sub tracking-wide uppercase flex justify-between shrink-0">
+              <span>Live Logs</span>
+              <span>{logs.length} entries</span>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 font-mono text-[10px] space-y-1">
+              {logs.map((log, i) => {
+                const past = log.off <= cur;
+                const color = log.level === 'error' ? 'text-[var(--danger)]' : 'text-[var(--warning)]';
+                return (
+                  <div key={i} className={`flex gap-2 ${past ? color : 'text-sub opacity-30'} ${Math.abs(log.off - cur) < 1500 ? 'bg-[var(--line)]/30' : ''}`}>
+                    <span className="shrink-0">{mmss(log.off)}</span>
+                    <span className="shrink-0 w-8">[{log.type}]</span>
+                    <span className="break-all whitespace-pre-wrap">{log.msg}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* current action (synced with playback) */}
@@ -185,6 +247,13 @@ function Player({ events, markers }: { events: any[]; markers: any[] }) {
           {[1, 2, 4, 8].map((s) => (
             <button key={s} onClick={() => changeSpeed(s)} className={`pill text-xs ${speed === s ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>{s}×</button>
           ))}
+          <button onClick={toggleFullscreen} className="pill text-xs bg-panel2 text-sub hover:text-ink ml-2" title="Fullscreen">
+            {isFullscreen ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+            )}
+          </button>
         </div>
       </div>
     </div>
