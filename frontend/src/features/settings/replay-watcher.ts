@@ -21,7 +21,7 @@ const watcherRust = () => { try { return localStorage.getItem(RUST) !== '0'; } c
 const watcherJs = () => { try { return localStorage.getItem(JS) !== '0'; } catch { return true; } };
 
 let _stop: (() => void) | null = null;
-let _events: any[] = [];
+let _chunks: any[][] = [];
 let _console: { t: number; level: string; msg: string }[] = [];
 let _startedAt = 0;
 let _consoleHooked = false;
@@ -76,12 +76,19 @@ export async function startWatcher(): Promise<void> {
   const rrweb = await loadRrweb().catch(() => null);
   if (!rrweb?.record) { toast(t('watcher.rrwebFail') || 'Enregistreur indisponible', 'error'); return; }
   hookConsole();
-  _events = [];
+  _chunks = [[]];
   _console = [];
   _startedAt = Date.now();
   const full = watcherFull();
   _stop = rrweb.record({
-    emit: (ev: any) => { _events.push(ev); if (_events.length > 20000) _events.shift(); },
+    emit: (ev: any, isCheckout?: boolean) => {
+      if (isCheckout && _chunks[_chunks.length - 1].length > 0) {
+        _chunks.push([]);
+      }
+      _chunks[_chunks.length - 1].push(ev);
+      if (_chunks.length > 3) _chunks.shift(); // keep max ~6 minutes
+    },
+    checkoutEveryNms: 2 * 60 * 1000,
     maskAllInputs: !full,
     maskTextSelector: full ? undefined : SENSITIVE_SELECTOR,
     blockClass: 'bmm-no-record',
@@ -90,6 +97,42 @@ export async function startWatcher(): Promise<void> {
     recordCanvas: false,
     collectFonts: false,
   }) || null;
+  registerCloseListeners();
+}
+
+let _closeListenersRegistered = false;
+function registerCloseListeners(): void {
+  if (_closeListenersRegistered) return;
+  _closeListenersRegistered = true;
+  window.addEventListener('bmm-closing', () => { autoSaveSession(); });
+  try {
+    const w = (window as any).__TAURI__;
+    w?.event?.listen?.('tauri://close-requested', () => { autoSaveSession(); });
+  } catch {}
+}
+
+/** Automatically save the current session without prompting (e.g. on close). */
+export async function autoSaveSession(): Promise<void> {
+  if (!_stop) return; // Not recording
+  const events = _chunks.flat();
+  if (events.length < 2) return;
+  try {
+    const rustLog = watcherRust() ? (await invoke('read_session_log_tail', { maxBytes: 262144 }).catch(() => '') as string) : '';
+    const bundle = {
+      bmmReplay: 1,
+      app: 'BetterModsManager',
+      createdAt: new Date().toISOString(),
+      masked: !watcherFull(),
+      durationMs: Date.now() - _startedAt,
+      events,
+      console: watcherJs() ? _console : [],
+      rustLog,
+    };
+    const path = await invoke('save_local_replay', { content: JSON.stringify(bundle) }) as string;
+    addRecent(path);
+  } catch (e) {
+    console.error('Auto-save replay failed:', e);
+  }
 }
 
 /** Stop local recording (keeps the buffer for export). */
@@ -105,7 +148,8 @@ export async function syncWatcher(): Promise<void> {
 
 /** Export the current recording (rrweb + console + Rust log) to a .bmmreplay file. */
 export async function exportSession(): Promise<void> {
-  if (_events.length < 2) { toast(t('watcher.nothing') || 'Rien à exporter pour le moment', 'info'); return; }
+  const events = _chunks.flat();
+  if (events.length < 2) { toast(t('watcher.nothing') || 'Rien à exporter pour le moment', 'info'); return; }
   const rustLog = watcherRust() ? (await invoke('read_session_log_tail', { maxBytes: 262144 }).catch(() => '') as string) : '';
   const bundle = {
     bmmReplay: 1,
@@ -113,7 +157,7 @@ export async function exportSession(): Promise<void> {
     createdAt: new Date().toISOString(),
     masked: !watcherFull(),
     durationMs: Date.now() - _startedAt,
-    events: _events,
+    events,
     console: watcherJs() ? _console : [],
     rustLog,
   };
@@ -159,28 +203,45 @@ export function openReplayList(): void {
   overlay.className = 'modal-overlay open';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:99998;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55)';
   const rows = recents.length
-    ? recents.map((r, i) => `<button class="rw-pick" data-i="${i}" style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;padding:10px 12px;border:1px solid var(--border,#2a2d34);border-radius:9px;background:rgba(255,255,255,.02);cursor:pointer">
-        <span style="font-size:12.5px;font-weight:600">${r.name}</span>
-        <span style="font-size:10.5px;color:var(--text-muted,#8a8f98)">${new Date(r.at).toLocaleString()}</span>
-      </button>`).join('')
-    : `<div style="font-size:12px;color:var(--text-muted,#8a8f98);padding:8px 2px">${t('watcher.noImports') || "Aucun replay importé pour l'instant."}</div>`;
+    ? recents.map((r, i) => `<div style="display:flex;gap:12px;align-items:center;width:100%;padding:14px 18px;border:1px solid var(--border,#2a2d34);border-radius:12px;background:rgba(255,255,255,.015);transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background='rgba(255,255,255,.015)'">
+        <button class="rw-pick" data-i="${i}" style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;background:none;border:none;cursor:pointer;padding:0">
+          <span style="font-size:14px;font-weight:600;color:var(--text-primary,#e2e8f0)">${r.name}</span>
+          <span style="font-size:12px;color:var(--text-muted,#8a8f98)">${new Date(r.at).toLocaleString()}</span>
+        </button>
+        <button class="rw-del" data-i="${i}" style="color:var(--danger,#ef4444);font-size:16px;background:none;border:none;cursor:pointer;padding:4px;opacity:0.8;transition:opacity 0.2s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'" title="${t('common.delete') || 'Supprimer'}">✖</button>
+      </div>`).join('')
+    : `<div style="font-size:13px;color:var(--text-muted,#8a8f98);padding:16px;text-align:center">${t('watcher.noImports') || "Aucun replay récent pour l'instant."}</div>`;
   overlay.innerHTML = `
-    <div style="width:min(520px,92vw);max-height:80vh;background:var(--bg-secondary,#15171c);border:1px solid var(--border,#2a2d34);border-radius:14px;display:flex;flex-direction:column;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border,#2a2d34)">
-        <strong style="font-size:13px">${t('watcher.listTitle') || 'Replays importés'}</strong><span style="flex:1"></span>
-        <button id="rw-list-pick" class="btn btn-sm">${t('watcher.import') || 'Importer'}</button>
-        <button id="rw-list-close" class="btn btn-sm btn-ghost">${t('common.close') || 'Fermer'}</button>
+    <div style="width:min(580px,92vw);max-height:80vh;background:#13151a;border:1px solid var(--border,#2a2d34);border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,0.4);display:flex;flex-direction:column;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:16px;padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <strong style="font-size:16px;font-weight:700;color:#fff">${t('watcher.listTitle') || 'Imported replays'}</strong><span style="flex:1"></span>
+        <button id="rw-list-pick" style="background:#e2e8f0;color:#0f1115;border:none;border-radius:20px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:transform 0.1s" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='none'">${t('watcher.import') || 'Import & replay'}</button>
+        <button id="rw-list-close" style="background:none;border:none;color:var(--text-muted,#8a8f98);font-size:14px;font-weight:600;cursor:pointer;padding:6px 8px;transition:color 0.2s" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted,#8a8f98)'">${t('common.close') || 'Close'}</button>
       </div>
-      <div style="display:flex;flex-direction:column;gap:8px;padding:12px;overflow:auto">${rows}</div>
+      <div style="display:flex;flex-direction:column;gap:10px;padding:20px 24px;overflow-y:auto">${rows}</div>
     </div>`;
   (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   (overlay.querySelector('#rw-list-close') as HTMLElement).onclick = () => overlay.remove();
   (overlay.querySelector('#rw-list-pick') as HTMLElement).onclick = () => { overlay.remove(); importAndPlay(); };
+  
   overlay.querySelectorAll('.rw-pick').forEach((b) => ((b as HTMLElement).onclick = () => {
     const r = recents[Number((b as HTMLElement).dataset.i)];
     overlay.remove();
     if (r) loadAndPlay(r.path);
+  }));
+
+  overlay.querySelectorAll('.rw-del').forEach((b) => ((b as HTMLElement).onclick = async (e) => {
+    e.stopPropagation();
+    const idx = Number((b as HTMLElement).dataset.i);
+    const r = recents[idx];
+    if (r) {
+      try { await invoke('delete_local_replay', { path: r.path }); } catch (err) { console.warn(err); }
+      const newList = recents.filter((_, i) => i !== idx);
+      localStorage.setItem(RECENTS, JSON.stringify(newList));
+    }
+    overlay.remove();
+    openReplayList();
   }));
 }
 
@@ -302,6 +363,7 @@ async function playBundle(bundle: any): Promise<void> {
   playBtn.onclick = () => { playing = !playing; if (playing) { rep.play(rep.getCurrentTime()); playBtn.textContent = '⏸'; } else { rep.pause(); playBtn.textContent = '▶'; } };
   const close = () => { try { cancelAnimationFrame(raf); window.removeEventListener('resize', fit); rep.pause(); (rep as any).destroy?.(); } catch { /* ignore */ } overlay.remove(); };
   (overlay.querySelector('#rw-close') as HTMLElement).onclick = close;
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 }
 
 function escapeHtml(s: string): string {

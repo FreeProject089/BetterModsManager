@@ -46,6 +46,7 @@ export async function initTitlebar(): Promise<void> {
         }
         document.getElementById('tb-close')?.addEventListener('click', async () => {
             playCloseSound(); // fire immediately before animation starts
+            window.dispatchEvent(new Event('bmm-closing'));
             await playVhsCloseAnimation();
             if (tauriWindow) {
                 invoke('finalize_and_close_app').catch(() => tauriWindow.close());

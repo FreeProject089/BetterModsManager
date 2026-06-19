@@ -347,6 +347,13 @@ pub async fn analytics_flush(
         log_line(format!("[ANALYTICS] flushed {} events (packet {})", n, packet_id));
         Ok(n)
     } else {
+        if resp.status() == reqwest::StatusCode::PAYLOAD_TOO_LARGE {
+            // Unrecoverable, drop the queue so it doesn't loop forever causing lag
+            log_line("[ANALYTICS] 413 Payload Too Large — dropping telemetry queue to recover.".to_string());
+            let _ = std::fs::remove_file(queue_path(&app_handle));
+            // Return Ok(0) to avoid spamming the frontend console with red RPC errors
+            return Ok(0);
+        }
         Err(format!("flush HTTP {}", resp.status()))
     }
 }
@@ -418,6 +425,38 @@ pub fn analytics_export(app_handle: AppHandle) -> Result<String, String> {
     let q = read_queue(&app_handle);
     serde_json::to_string_pretty(&q).map_err(|e| e.to_string())
 }
+
+/// Auto-saves a local replay bundle to the `Replays` folder without prompting.
+#[tauri::command]
+pub fn save_local_replay(app_handle: AppHandle, content: String) -> Result<String, String> {
+    let dir = app_handle.path_resolver().app_data_dir().unwrap_or_default().join("Replays");
+    let _ = std::fs::create_dir_all(&dir);
+    let name = format!("bmm-session-{}.bmmreplay", chrono::Utc::now().timestamp_millis());
+    let path = dir.join(&name);
+    std::fs::write(&path, content).map_err(|e| e.to_string())?;
+    log_line(format!("[ANALYTICS] Auto-saved local replay to {:?}", path));
+
+    // Limit to 20 local replays
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        let mut files: Vec<PathBuf> = entries.filter_map(Result::ok).map(|e| e.path())
+            .filter(|p| p.is_file() && p.extension().and_then(|s| s.to_str()) == Some("bmmreplay")).collect();
+        files.sort_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH));
+        if files.len() > 20 {
+            for p in files.iter().take(files.len() - 20) {
+                let _ = std::fs::remove_file(p);
+            }
+        }
+    }
+
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Delete a specific replay file.
+#[tauri::command]
+pub fn delete_local_replay(path: String) -> Result<(), String> {
+    std::fs::remove_file(&path).map_err(|e| e.to_string())
+}
+
 
 /// Right to erasure: wipe all locally buffered telemetry.
 #[tauri::command]
