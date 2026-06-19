@@ -472,21 +472,43 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
     }
     let live_count = live.iter().filter(|l| l["status"] == "online" || l["status"] == "away").count();
 
-    // map (approximate only)
-    let mut cells: HashMap<String, (f64, f64, String, i64)> = HashMap::new();
+    // Map — APPROXIMATE only, ONE point per user, with a deterministic
+    // sunflower-spiral spread so two users near the same place NEVER share the
+    // exact same coordinate (0 collision) and the layout is stable across
+    // refreshes. The base is rounded to ~0.25° (privacy), the offset is synthetic.
+    let mut by_cell: HashMap<String, Vec<&User>> = HashMap::new();
     for u in &uarr {
         if let Some(g) = &u.geo {
             if let (Some(lat), Some(lon)) = (g.get("lat").and_then(Value::as_f64), g.get("lon").and_then(Value::as_f64)) {
-                let key = format!("{},{}", (lat * 2.0).round() / 2.0, (lon * 2.0).round() / 2.0);
-                let e = cells.entry(key).or_insert((lat, lon, g.get("country").and_then(Value::as_str).unwrap_or("").into(), 0));
-                e.3 += 1;
+                let key = format!("{:.2},{:.2}", (lat * 4.0).round() / 4.0, (lon * 4.0).round() / 4.0);
+                by_cell.entry(key).or_default().push(u);
             }
         }
     }
-    let map_users: Vec<Value> = cells
-        .values()
-        .map(|(lat, lon, country, count)| json!({ "lat": approx(*lat), "lon": approx(*lon), "country": country, "count": count, "kind": "user" }))
-        .collect();
+    let golden = std::f64::consts::PI * (3.0 - 5.0_f64.sqrt()); // ~2.39996 rad
+    let mut map_users: Vec<Value> = Vec::new();
+    for users in by_cell.values() {
+        for (i, u) in users.iter().enumerate() {
+            let g = u.geo.as_ref().unwrap();
+            let base_lat = (g.get("lat").and_then(Value::as_f64).unwrap_or(0.0) * 4.0).round() / 4.0;
+            let base_lon = (g.get("lon").and_then(Value::as_f64).unwrap_or(0.0) * 4.0).round() / 4.0;
+            // first user sits at the cell centre; the rest spread on a sunflower
+            let (lat, lon) = if i == 0 {
+                (base_lat, base_lon)
+            } else {
+                let r = 0.11 * (i as f64).sqrt(); // degrees — grows slowly
+                let a = i as f64 * golden;
+                let lon_scale = base_lat.to_radians().cos().abs().max(0.2); // keep dx visually even
+                (base_lat + r * a.sin(), base_lon + (r * a.cos()) / lon_scale)
+            };
+            map_users.push(json!({
+                "creator_id": u.creator_id, "lat": lat, "lon": lon,
+                "country": g.get("country"), "count": 1, "kind": "user",
+            }));
+            if map_users.len() >= 800 { break; }
+        }
+        if map_users.len() >= 800 { break; }
+    }
     let map_repos: Vec<Value> = repos
         .iter()
         .filter_map(|r| {

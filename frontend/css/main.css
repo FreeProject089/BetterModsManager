@@ -10813,12 +10813,23 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .sched-cmd-hint { font-size:11px; color:#f59e0b; opacity:.95; margin-top:4px; }
 
 /* ── Privacy & telemetry card ──────────────────────────────────────────────── */
-.apv-hero { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px;
-    background:rgba(91,140,255,0.06); border:1px solid var(--border); transition:all .2s; }
-.apv-hero.on { background:rgba(52,211,153,0.08); border-color:rgba(52,211,153,0.35); }
-.apv-hero-icon { width:38px; height:38px; border-radius:10px; display:grid; place-items:center; flex-shrink:0;
-    background:rgba(255,255,255,0.05); color:var(--text-muted); }
-.apv-hero.on .apv-hero-icon { background:rgba(52,211,153,0.15); color:#34d399; }
+.apv-hero { display:flex; align-items:center; gap:13px; padding:14px 16px; border-radius:14px;
+    background:linear-gradient(135deg, rgba(91,140,255,0.10), rgba(91,140,255,0.02));
+    border:1px solid rgba(91,140,255,0.22); transition:all .25s ease; }
+.apv-hero.on { background:linear-gradient(135deg, rgba(52,211,153,0.14), rgba(52,211,153,0.03));
+    border-color:rgba(52,211,153,0.40); box-shadow:0 6px 20px rgba(52,211,153,0.12); }
+.apv-hero-icon { width:42px; height:42px; border-radius:12px; display:grid; place-items:center; flex-shrink:0;
+    background:linear-gradient(135deg, rgba(91,140,255,0.22), rgba(91,140,255,0.10));
+    border:1px solid rgba(91,140,255,0.30); color:var(--accent,#5b8cff); transition:all .25s ease; }
+.apv-hero.on .apv-hero-icon { background:linear-gradient(135deg, rgba(52,211,153,0.25), rgba(52,211,153,0.10));
+    border-color:rgba(52,211,153,0.40); color:#34d399; box-shadow:0 4px 12px rgba(52,211,153,0.18); }
+.apv-hero-text strong { letter-spacing:-0.01em; }
+/* Collected-categories chips — at-a-glance summary of what telemetry covers */
+.apv-cats { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 2px; }
+.apv-cat { display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:600;
+    padding:4px 9px; border-radius:999px; background:rgba(255,255,255,0.04);
+    border:1px solid var(--border); color:var(--text-secondary); }
+.apv-cat svg { width:12px; height:12px; opacity:.8; }
 .apv-hero-text { display:flex; flex-direction:column; gap:1px; min-width:0; }
 .apv-hero-text strong { font-size:13px; }
 .apv-hero-sub { font-size:11px; color:var(--text-muted); }
@@ -10828,13 +10839,21 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .apv-packets-head { display:flex; flex-direction:column; gap:3px; margin-bottom:9px; }
 .apv-packets-head > span:first-child { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-secondary); }
 .apv-packets-hint { font-size:10.5px; color:var(--text-muted); line-height:1.5; }
-.apv-packets-list { display:flex; flex-direction:column; gap:5px; max-height:230px; overflow-y:auto; }
-.apv-pkt { display:flex; align-items:center; gap:10px; padding:6px 9px; border-radius:7px;
-    background:rgba(255,255,255,0.025); border:1px solid var(--border); font-size:12px; }
-.apv-pkt-id { font-family:var(--font-mono); font-size:10.5px; color:var(--text-secondary); }
+.apv-packets-list { display:flex; flex-direction:column; gap:7px; max-height:260px; overflow-y:auto; padding-right:2px; }
+.apv-pkt { display:flex; flex-direction:column; align-items:stretch; gap:7px; padding:9px 11px; border-radius:10px;
+    background:rgba(255,255,255,0.02); border:1px solid var(--border); font-size:12px; transition:border-color .15s ease; }
+.apv-pkt:hover { border-color:rgba(255,255,255,0.14); }
+.apv-pkt-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.apv-pkt-id { font-family:var(--font-mono); font-size:10.5px; color:var(--text-secondary); background:rgba(255,255,255,0.04); padding:1px 6px; border-radius:5px; }
 .apv-pkt-meta { color:var(--text-muted); font-size:10.5px; }
 .apv-pkt-spacer { flex:1; }
-.apv-pkt-status { font-size:10px; padding:1px 7px; border-radius:5px; background:rgba(245,158,11,0.15); color:#f59e0b; white-space:nowrap; }
+.apv-pkt-events { display:flex; flex-wrap:wrap; gap:5px; }
+.apv-evchip { font-size:10px; padding:2px 7px; border-radius:999px; background:rgba(91,140,255,0.08);
+    border:1px solid rgba(91,140,255,0.18); color:var(--text-secondary); white-space:nowrap; }
+.apv-evchip b { color:var(--text-bright,#fff); font-weight:700; margin-left:3px; }
+.apv-pkt-status { font-size:10px; padding:2px 8px; border-radius:6px; background:rgba(245,158,11,0.15); color:#f59e0b;
+    white-space:nowrap; line-height:1.3; }
+.apv-pkt-rejected { white-space:nowrap; }
 .apv-pkt .btn-xs { flex-shrink:0; }
 .apv-packets-empty { font-size:11px; color:var(--text-muted); opacity:.7; padding:6px 2px; }
 

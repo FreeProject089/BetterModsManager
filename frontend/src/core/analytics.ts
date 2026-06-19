@@ -14,6 +14,7 @@ import { escHtml } from './utils.js';
 let _consent: boolean | null = null;          // null = not asked yet
 let _distinctId = '';
 let _flushTimer: number | null = null;
+let _packetsPoll: number | null = null;   // re-polls packet deletion status while the list is open
 let _sessionStart = Date.now();
 let _journey: string[] = [];                   // ordered view path this session
 let _seq = 0;                                  // event sequence within the session
@@ -75,13 +76,21 @@ function baseProps(): Record<string, any> {
 export async function initAnalytics(): Promise<void> {
     try { _consent = (await invoke('get_analytics_consent')) as boolean | null; }
     catch { _consent = null; }
-
-    if (_consent === null) {
-        // Ask after a short delay so it doesn't collide with onboarding.
-        setTimeout(() => showConsentModal(), 1200);
-        return;
-    }
+    // NOTE: we no longer pop the consent modal on a timer here — the startup
+    // sequence (app.ts) calls maybeShowConsentModal() AFTER the TOS + Privacy
+    // modals so it appears last and in order.
     if (_consent === true) await startCollection();
+}
+
+/** Show the telemetry consent modal only if the user hasn't decided yet.
+ *  Resolves once they decide (or immediately if already decided). Called by the
+ *  first-run startup sequence so it appears after every other modal. */
+export async function maybeShowConsentModal(): Promise<void> {
+    let consent: boolean | null = _consent;
+    try { consent = (await invoke('get_analytics_consent')) as boolean | null; } catch {}
+    _consent = consent;
+    if (consent !== null) return;
+    await showConsentModal();
 }
 
 /** Track an event (no-op unless the user opted in). */
@@ -548,7 +557,8 @@ export function initPrivacySettings(): void {
         benchToggle.addEventListener('change', () => setTelemetryBenchAllowed(benchToggle.checked));
     }
 
-    // Fold / unfold the sent-packets list.
+    // Fold / unfold the sent-packets list. While open, poll the dashboard so an
+    // admin's approve/reject of a deletion shows up here automatically.
     document.getElementById('analytics-packets-toggle')?.addEventListener('click', () => {
         const list = document.getElementById('analytics-packets-list') as HTMLElement;
         const chev = document.getElementById('analytics-packets-chev') as HTMLElement;
@@ -556,7 +566,18 @@ export function initPrivacySettings(): void {
         const open = list.style.display === 'none';
         list.style.display = open ? 'flex' : 'none';
         if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
-        if (open) renderSentPackets();
+        if (_packetsPoll !== null) { clearInterval(_packetsPoll); _packetsPoll = null; }
+        if (open) {
+            renderSentPackets();
+            _packetsPoll = window.setInterval(() => {
+                // stop if the list got hidden (e.g. left settings)
+                if ((document.getElementById('analytics-packets-list') as HTMLElement)?.style.display === 'none') {
+                    if (_packetsPoll !== null) { clearInterval(_packetsPoll); _packetsPoll = null; }
+                    return;
+                }
+                renderSentPackets();
+            }, 30000);
+        }
     });
 
     document.getElementById('analytics-view-what')?.addEventListener('click', () => showConsentModal());
@@ -638,20 +659,20 @@ async function renderSentPackets(): Promise<void> {
             control = note + delBtn(p.id);
         }
 
-        // privacy-safe content summary: event NAMES + counts only, no values.
+        // privacy-safe content summary: event NAMES + counts only, no values → pills.
         const ev = p.events && typeof p.events === 'object' ? Object.entries(p.events) : [];
-        const evBrief = ev.length
-            ? ev.map(([k, v]) => `${escHtml(k)} ×${v}`).join(' · ')
-            : `${p.count} ${t('analytics.packetEvents') || 'events'}`;
+        const evChips = ev.length
+            ? ev.map(([k, v]) => `<span class="apv-evchip">${escHtml(k)}<b>×${v}</b></span>`).join('')
+            : `<span class="apv-evchip">${p.count} ${t('analytics.packetEvents') || 'events'}</span>`;
 
-        return `<div class="apv-pkt" style="flex-direction:column;align-items:stretch;gap:4px">
-            <div style="display:flex;align-items:center;gap:8px">
+        return `<div class="apv-pkt">
+            <div class="apv-pkt-row">
                 <span class="apv-pkt-id" title="${escHtml(p.id)}">${escHtml(String(p.id).slice(0, 8))}…</span>
-                <span class="apv-pkt-meta">${escHtml(when)} · ${p.count} ${t('analytics.packetEvents') || 'events'}</span>
-                <span class="apv-pkt-spacer" style="flex:1"></span>
+                <span class="apv-pkt-meta">${escHtml(when)}</span>
+                <span class="apv-pkt-spacer"></span>
                 ${control}
             </div>
-            <div class="apv-pkt-events" style="font-size:11px;color:var(--text-muted,#9aa3ad);line-height:1.5">${evBrief}</div>
+            <div class="apv-pkt-events">${evChips}</div>
         </div>`;
     }).join('');
     host.querySelector('#apv-clear-hist')?.addEventListener('click', async () => {
@@ -671,11 +692,12 @@ async function renderSentPackets(): Promise<void> {
 }
 
 // ── Consent modal ──────────────────────────────────────────────────────────────
-export function showConsentModal(): void {
-    if (document.getElementById('analytics-consent-overlay')) return;
+export function showConsentModal(): Promise<void> {
+    if (document.getElementById('analytics-consent-overlay')) return Promise.resolve();
     const overlay = document.createElement('div');
     overlay.id = 'analytics-consent-overlay';
     overlay.className = 'modal-overlay open';
+    overlay.setAttribute('data-prevent-close', 'true');   // cannot be dismissed by clicking the backdrop
     overlay.style.zIndex = '2100000';
     overlay.innerHTML = `
       <div class="modal glass" style="max-width:560px;width:94%">
@@ -717,7 +739,12 @@ export function showConsentModal(): void {
       </div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
 
-    const close = () => overlay.remove();
-    overlay.querySelector('#analytics-accept')?.addEventListener('click', async () => { await setConsent(true); close(); });
-    overlay.querySelector('#analytics-decline')?.addEventListener('click', async () => { await setConsent(false); close(); });
+    // Block backdrop clicks from closing it (belt-and-suspenders alongside data-prevent-close).
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) e.stopPropagation(); }, true);
+
+    return new Promise<void>((resolve) => {
+        const close = () => { overlay.remove(); resolve(); };
+        overlay.querySelector('#analytics-accept')?.addEventListener('click', async () => { await setConsent(true); close(); });
+        overlay.querySelector('#analytics-decline')?.addEventListener('click', async () => { await setConsent(false); close(); });
+    });
 }

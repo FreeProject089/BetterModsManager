@@ -21,7 +21,7 @@ import { initApiActivity } from '../core/api_activity.js';
 import { initTitlebar } from './titlebar.js';
 import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
 import { initModals } from './modals.js';
-import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode, checkAutoEula, checkShowReleaseNotes, checkLangSelect } from './update-notes.js';
+import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode, checkAutoEula, checkAutoPrivacy, checkShowReleaseNotes, checkLangSelect } from './update-notes.js';
 
 // New Modularized Imports
 import { initModlist } from '../features/mods/modlist.js';
@@ -856,8 +856,14 @@ async function main() {
     await waitForModalClosed('modal-lang-select');
 
     // 1. Auto TOS (Terms of Service) on first start (if enabled in app.cfg)
-    await checkAutoEula();
+    const tosShown = await checkAutoEula();
     await waitForModalClosed('modal-tos');
+
+    // 1.5. Privacy Policy right after the TOS (first start only)
+    if (tosShown) {
+        await checkAutoPrivacy();
+        await waitForModalClosed('modal-privacy');
+    }
 
     // 2. Crash report UI wiring and check
     initCrashReportUI();
@@ -874,6 +880,12 @@ async function main() {
     // 4.5. FS Security Mode Choice (Persistent)
     await checkSecurityMode();
     await waitForModalClosed('modal-security-choice');
+
+    // 4.9. Telemetry consent — LAST modal, after TOS + Privacy + all the rest.
+    try {
+        const { maybeShowConsentModal } = await import('../core/analytics.js');
+        await maybeShowConsentModal();
+    } catch (e) { console.warn('[BMM] consent modal failed', e); }
 
     // 5. Show onboarding on first launch (language is step 0 inside onboarding)
     if (await shouldShowOnboarding()) {

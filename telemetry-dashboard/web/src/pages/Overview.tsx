@@ -53,10 +53,25 @@ const GRAN: { key: string; label: string }[] = [
   { key: "1d", label: "24 h" },
 ];
 
+// Series the overview chart can plot (each maps to a bucket field).
+const METRICS: { key: string; label: string; color: string }[] = [
+  { key: "users", label: "Users", color: "#5b8cff" },
+  { key: "pageviews", label: "Pageviews", color: "#37d399" },
+  { key: "sessions", label: "Sessions", color: "#a78bfa" },
+  { key: "events", label: "Events", color: "#f4b740" },
+];
+
 export default function Overview() {
   const s = useStats()!;
   const t = s.totals;
   const [gran, setGran] = useState("1h");
+  const [active, setActive] = useState<Set<string>>(new Set(["users", "pageviews"]));
+  const toggle = (k: string) => setActive((a) => {
+    const n = new Set(a);
+    n.has(k) ? n.delete(k) : n.add(k);
+    if (n.size === 0) n.add(k); // never empty
+    return n;
+  });
 
   const sUsers = s.series.map((r: any) => r.users);
   const sSessions = s.series.map((r: any) => r.sessions);
@@ -65,15 +80,21 @@ export default function Overview() {
 
   const src: any[] = (s as any).buckets?.[gran] || s.series.map((r: any) => ({ ...r, t: (r.hour || "").slice(11) + "h" }));
   const interval = gran === "15m" ? 7 : gran === "30m" ? 3 : 0;
+  const shown = METRICS.filter((m) => active.has(m.key));
   const mainOpt = {
     grid: { left: 40, right: 16, top: 24, bottom: 24 },
-    legend: { data: ["Users", "Pageviews"], textStyle: { color: "#9aa3ad" }, right: 10, top: 0 },
+    legend: { data: shown.map((m) => m.label), textStyle: { color: "#9aa3ad" }, right: 10, top: 0 },
     xAxis: { ...axisX(src.map((r) => r.t)), axisLabel: { color: "#9aa3ad", fontSize: 10, interval } },
     yAxis: axisY(),
-    series: [
-      { name: "Users", type: "line", smooth: true, showSymbol: false, data: src.map((r) => r.users), areaStyle: { color: "rgba(91,140,255,0.18)" }, lineStyle: { color: "#5b8cff", width: 2 } },
-      { name: "Pageviews", type: "line", smooth: true, showSymbol: false, data: src.map((r) => r.pageviews), lineStyle: { color: "#37d399", width: 1.5 } },
-    ],
+    series: shown.map((m, i) => ({
+      name: m.label,
+      type: "line",
+      smooth: true,
+      showSymbol: false,
+      data: src.map((r) => r[m.key] ?? 0),
+      lineStyle: { color: m.color, width: 2 },
+      ...(i === 0 ? { areaStyle: { color: m.color + "2e" } } : {}),
+    })),
   };
 
   const paths = (s.funnels || []).slice(0, 8);
@@ -98,12 +119,20 @@ export default function Overview() {
       </div>
 
       <Card
-        title="Users & pageviews"
+        title="Activity"
         right={
-          <div className="flex gap-1">
-            {GRAN.map((g) => (
-              <button key={g.key} onClick={() => setGran(g.key)} className={`pill ${gran === g.key ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>{g.label}</button>
-            ))}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex gap-1">
+              {METRICS.map((m) => (
+                <button key={m.key} onClick={() => toggle(m.key)} className="pill border border-line" style={active.has(m.key) ? { background: m.color, color: "#0b0d10" } : { color: "#9aa3ad" }}>{m.label}</button>
+              ))}
+            </div>
+            <span className="w-px h-4 bg-line" />
+            <div className="flex gap-1">
+              {GRAN.map((g) => (
+                <button key={g.key} onClick={() => setGran(g.key)} className={`pill ${gran === g.key ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>{g.label}</button>
+              ))}
+            </div>
           </div>
         }
       >

@@ -47,6 +47,7 @@ function Donut({ title, rows }: { title: string; rows: { k: string; v: number }[
 export default function Bmm() {
   const s = useStats()!;
   const [bench, setBench] = useState<any | null>(null);
+  const [cmp, setCmp] = useState<any[] | null>(null);   // [previous, latest] for the compare drawer
 
   // group the (≤2 per creator) recent benchmarks by creator for comparison
   const benchByCreator = useMemo(() => {
@@ -148,7 +149,12 @@ export default function Bmm() {
               <div key={cid} className="card p-3">
                 <div className="flex items-center justify-between mb-2">
                   <Link to={`/users/${encodeURIComponent(cid)}`} className="font-mono text-xs text-brand">{cid}</Link>
-                  {runs.length === 2 && <DeltaBadge a={runs[1]} b={runs[0]} />}
+                  <div className="flex items-center gap-2">
+                    {runs.length === 2 && <DeltaBadge a={runs[1]} b={runs[0]} />}
+                    {runs.length === 2 && (
+                      <button onClick={() => setCmp([runs[1], runs[0]])} className="pill bg-brand text-white">Compare</button>
+                    )}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {runs.map((b: any, i: number) => (
@@ -219,6 +225,47 @@ export default function Bmm() {
           </div>
         )}
       </Drawer>
+
+      <Drawer open={!!cmp} onClose={() => setCmp(null)} title="Benchmark — compare" width={640}>
+        {cmp && <Compare prev={cmp[0]} latest={cmp[1]} />}
+      </Drawer>
+    </div>
+  );
+}
+
+// Side-by-side comparison of two benchmark runs (previous vs latest) with per-op deltas.
+function Compare({ prev, latest }: { prev: any; latest: any }) {
+  const fmt = (v: any, suffix = "") => (v == null ? "—" : `${typeof v === "number" ? Math.round(v * 100) / 100 : v}${suffix}`);
+  const delta = (a?: number, b?: number) => {
+    if (a == null || b == null || a === 0) return null;
+    const pct = Math.round(((b - a) / a) * 1000) / 10;
+    const faster = b < a;
+    return <span className={faster ? "text-good" : b > a ? "text-bad" : "text-sub"}>{faster ? "" : b > a ? "+" : ""}{pct}% {faster ? "faster" : b > a ? "slower" : ""}</span>;
+  };
+  const ops = Array.from(new Set([...opEntries(prev.ops).map((e) => e[0]), ...opEntries(latest.ops).map((e) => e[0])])).sort();
+  const opMap = (b: any): Record<string, number> => Object.fromEntries(opEntries(b.ops));
+  const pM = opMap(prev), lM = opMap(latest);
+  return (
+    <div className="space-y-4">
+      <Link to={`/users/${encodeURIComponent(latest.creator_id)}`} className="font-mono text-xs text-brand">{latest.creator_id}</Link>
+      <div className="grid grid-cols-3 gap-2 text-sm">
+        <div className="text-sub text-[11px] uppercase">Metric</div>
+        <div className="text-[11px] uppercase text-sub">Previous</div>
+        <div className="text-[11px] uppercase text-sub">Latest</div>
+        <div className="text-sub">Total</div><div>{fmt(prev.total_ms, " ms")}</div><div>{fmt(latest.total_ms, " ms")} <span className="text-xs">{delta(prev.total_ms, latest.total_ms)}</span></div>
+        <div className="text-sub">Throughput</div><div>{fmt(prev.throughput_mbps, " MB/s")}</div><div>{fmt(latest.throughput_mbps, " MB/s")}</div>
+        <div className="text-sub">When</div><div className="text-xs">{fmtDateTime(prev.ts)}</div><div className="text-xs">{fmtDateTime(latest.ts)}</div>
+      </div>
+      <div className="text-[11px] uppercase tracking-wide text-sub">Per-operation (ms)</div>
+      <div className="card divide-y divide-line/60">
+        {ops.map((op) => (
+          <div key={op} className="grid grid-cols-3 gap-2 px-3 py-2 text-sm items-center">
+            <span className="text-sub font-mono text-xs truncate">{op}</span>
+            <span>{fmt(pM[op])}</span>
+            <span>{fmt(lM[op])} <span className="text-xs">{delta(pM[op], lM[op])}</span></span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

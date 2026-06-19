@@ -1189,17 +1189,31 @@ window.checkPtbMode = checkPtbMode;
 // ── Auto EULA on First Start ────────────────────────────────
 const EULA_ACCEPTED_KEY = 'bmm_eula_accepted';
 
-export async function checkAutoEula() {
+export async function checkAutoEula(): Promise<boolean> {
     try {
         const isEnabled = await invoke('is_auto_eula_enabled');
         const isAccepted = localStorage.getItem(EULA_ACCEPTED_KEY) === 'true';
-        
+
         if (isEnabled && !isAccepted) {
             // Show EULA modal with mandatory buttons
             await openEulaModal(true);
+            return true; // it was shown → genuine first start
         }
     } catch (e) {
         console.warn('[BMM] Auto EULA check failed:', e);
+    }
+    return false;
+}
+
+// Show the Privacy Policy once, right after the TOS on first start.
+const PRIVACY_SEEN_KEY = 'bmm_privacy_seen';
+export async function checkAutoPrivacy(): Promise<void> {
+    try {
+        if (localStorage.getItem(PRIVACY_SEEN_KEY) === 'true') return;
+        await openPrivacyModal();
+        localStorage.setItem(PRIVACY_SEEN_KEY, 'true');
+    } catch (e) {
+        console.warn('[BMM] Auto privacy check failed:', e);
     }
 }
 

@@ -1147,10 +1147,25 @@ export async function checkAutoEula() {
         if (isEnabled && !isAccepted) {
             // Show EULA modal with mandatory buttons
             await openEulaModal(true);
+            return true; // it was shown → genuine first start
         }
     }
     catch (e) {
         console.warn('[BMM] Auto EULA check failed:', e);
+    }
+    return false;
+}
+// Show the Privacy Policy once, right after the TOS on first start.
+const PRIVACY_SEEN_KEY = 'bmm_privacy_seen';
+export async function checkAutoPrivacy() {
+    try {
+        if (localStorage.getItem(PRIVACY_SEEN_KEY) === 'true')
+            return;
+        await openPrivacyModal();
+        localStorage.setItem(PRIVACY_SEEN_KEY, 'true');
+    }
+    catch (e) {
+        console.warn('[BMM] Auto privacy check failed:', e);
     }
 }
 // ── Auto Show Release Notes on Startup ─────────────────────
