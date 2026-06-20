@@ -47,9 +47,6 @@ function Player({ events, markers }: { events: any[]; markers: any[] }) {
   const [total, setTotal] = useState(0);
   const [startTime, setStartTime] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const mediaRecorderRef = useRef<any>(null);
-  const chunksRef = useRef<Blob[]>([]);
 
   // recorded viewport (Meta event) → used to scale the player to fit the panel
   const [recW, recH] = useMemo(() => {
@@ -150,42 +147,18 @@ function Player({ events, markers }: { events: any[]; markers: any[] }) {
     }
   };
 
-  const toggleRecording = async () => {
-    if (recording) {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: "browser" }, audio: false });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-      chunksRef.current = [];
-      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = `replay-export.webm`;
-        document.body.appendChild(a);
-        a.click();
-        URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        setRecording(false);
-        stream.getTracks().forEach(track => track.stop());
-      };
-      mediaRecorder.start();
-      setRecording(true);
-      mediaRecorderRef.current = mediaRecorder;
-      // Auto play if not playing
-      if (!playing) toggle();
-      // Stop when user ends sharing
-      stream.getVideoTracks()[0].onended = () => {
-        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-      };
-    } catch (err) { console.error("Screen recording failed", err); }
+  const exportBmmReplay = () => {
+    const json = JSON.stringify(events);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = `bmm-replay-${Date.now()}.bmmreplay`;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   };
   const changeSpeed = (s: number) => { setSpeed(s); try { repRef.current?.setConfig?.({ speed: s }); } catch {} };
   const seek = (ms: number) => {
@@ -225,13 +198,13 @@ function Player({ events, markers }: { events: any[]; markers: any[] }) {
 
   return (
     <div ref={containerRef} className={isFullscreen ? 'bg-[#0f1115] p-6 h-full w-full flex flex-col gap-3 overflow-hidden text-ink' : 'space-y-3'}>
-      <div className={`flex gap-3 ${isFullscreen ? 'flex-1 min-h-0' : 'flex-col'}`}>
+      <div className={`flex gap-3 ${isFullscreen ? 'flex-1 min-h-0 flex-col md:flex-row' : 'flex-col'}`}>
         <div ref={boxRef} className={`relative w-full overflow-hidden rounded-xl border border-line bg-black ${isFullscreen ? 'flex-1' : ''}`} style={isFullscreen ? {} : { height: 320 }}>
           <div ref={hostRef} className="absolute inset-0" />
         </div>
 
         {logs.length > 0 && (
-          <div className={`bg-panel2 rounded-xl border border-line flex flex-col ${isFullscreen ? 'w-[400px] shrink-0' : 'h-48'}`}>
+          <div className={`bg-panel2 rounded-xl border border-line flex flex-col ${isFullscreen ? 'md:w-[400px] md:h-full h-48 shrink-0' : 'h-48'}`}>
             <div className="px-3 py-2 border-b border-line text-[11px] font-semibold text-sub tracking-wide uppercase flex justify-between shrink-0">
               <span>Live Logs</span>
               <span>{logs.length} entries</span>
@@ -288,12 +261,11 @@ function Player({ events, markers }: { events: any[]; markers: any[] }) {
           {[1, 2, 4, 8].map((s) => (
             <button key={s} onClick={() => changeSpeed(s)} className={`pill text-xs ${speed === s ? "bg-brand text-white" : "bg-panel2 text-sub"}`}>{s}×</button>
           ))}
-          <button onClick={toggleRecording} className={`pill text-xs ml-2 hover:opacity-80 transition-opacity ${recording ? "bg-[#f06363] text-white" : "bg-panel2 text-sub hover:text-ink"}`} title={recording ? "Arrêter l'enregistrement" : "Exporter en WebM (Vidéo)"}>
-            {recording ? (
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-white animate-pulse" /> Recording...</span>
-            ) : (
-              <span className="flex items-center gap-1.5"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8" /></svg> Record</span>
-            )}
+          <button onClick={exportBmmReplay} className="pill text-xs ml-2 bg-panel2 text-sub hover:text-ink transition-opacity" title="Exporter en .bmmreplay">
+            <span className="flex items-center gap-1.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export
+            </span>
           </button>
           <button onClick={toggleFullscreen} className="pill text-xs bg-panel2 text-sub hover:text-ink ml-2" title="Fullscreen">
             {isFullscreen ? (

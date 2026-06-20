@@ -50,6 +50,8 @@ export default function Funnels() {
     series: [
       {
         type: "sankey",
+        left: "5%",
+        right: "15%",
         data: nodeNames.map((n) => ({ name: n })),
         links,
         emphasis: { focus: "adjacency" },
@@ -68,20 +70,13 @@ export default function Funnels() {
           {steps.map((v, i) => (
             <div key={i} className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-panel2 text-xs flex items-center justify-center shrink-0">{i + 1}</span>
-              <select value={v} onChange={(e) => setStep(i, e.target.value)} className="flex-1 bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand">
-                <option value="">— choose a step —</option>
-                <option value="*">Any (wildcard)</option>
-                <optgroup label="Pages">
-                  {views.map((x) => (
-                    <option key={`v-${x}`} value={x}>{x}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Modals">
-                  {modals.map((x: string) => (
-                    <option key={`m-${x}`} value={x}>{x}</option>
-                  ))}
-                </optgroup>
-              </select>
+              <input
+                list="funnel-options"
+                value={v}
+                onChange={(e) => setStep(i, e.target.value)}
+                placeholder="— choose or type a step —"
+                className="flex-1 bg-panel2 border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand"
+              />
               <button onClick={() => removeStep(i)} className="text-sub hover:text-bad px-2" title="Remove step">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
               </button>
@@ -120,6 +115,12 @@ export default function Funnels() {
       <Card title="Parcours — most common page-to-page flow">
         {links.length ? <Chart option={sankeyOpt} height={Math.max(280, nodeNames.length * 24)} /> : <Empty>Not enough navigation data yet.</Empty>}
       </Card>
+
+      <datalist id="funnel-options">
+        <option value="*">Any (wildcard)</option>
+        {views.map((x) => <option key={`v-${x}`} value={x} />)}
+        {modals.map((x: string) => <option key={`m-${x}`} value={x} />)}
+      </datalist>
     </div>
   );
 }

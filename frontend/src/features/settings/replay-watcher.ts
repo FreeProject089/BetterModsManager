@@ -179,7 +179,11 @@ function addRecent(path: string): void {
 
 async function loadAndPlay(path: string): Promise<void> {
   let bundle: any;
-  try { bundle = JSON.parse(await invoke('read_file_text', { path }) as string); }
+  try { 
+    const url = (window as any).__TAURI__.tauri.convertFileSrc(path);
+    const res = await fetch(url);
+    bundle = await res.json();
+  }
   catch { toast(t('watcher.badFile') || 'Fichier illisible', 'error'); return; }
   if (!Array.isArray(bundle?.events) || bundle.events.length < 2) { toast(t('watcher.empty') || 'Enregistrement vide', 'error'); return; }
   addRecent(path);

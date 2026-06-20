@@ -28,19 +28,17 @@ fn gzip_bytes(data: &[u8]) -> Option<Vec<u8>> {
 }
 
 fn queue_path(app: &AppHandle) -> PathBuf {
-    app.path_resolver().app_data_dir().unwrap_or_default().join("analytics_queue.json")
+    app.path_resolver().app_data_dir().unwrap_or_default().join("analytics_queue.jsonl")
 }
 
 fn read_queue(app: &AppHandle) -> Vec<Value> {
     std::fs::read_to_string(queue_path(app)).ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
+        .map(|s| s.lines().filter_map(|l| serde_json::from_str(l).ok()).collect())
         .unwrap_or_default()
 }
 
-fn write_queue(app: &AppHandle, q: &[Value]) {
-    let p = queue_path(app);
-    if let Some(parent) = p.parent() { let _ = std::fs::create_dir_all(parent); }
-    if let Ok(s) = serde_json::to_string(q) { let _ = std::fs::write(p, s); }
+fn clear_queue(app: &AppHandle) {
+    let _ = std::fs::remove_file(queue_path(app));
 }
 
 fn consent_granted(state: &State<AppState>) -> bool {
@@ -277,16 +275,24 @@ pub fn analytics_track(
     distinct_id: Option<String>,
 ) -> Result<(), String> {
     if !consent_granted(&state) { return Ok(()); } // hard gate
-    let mut q = read_queue(&app_handle);
-    q.push(json!({
+    let p = queue_path(&app_handle);
+    // Hard limit: 10MB file size to avoid unbounded growth if offline
+    if let Ok(meta) = std::fs::metadata(&p) {
+        if meta.len() > 10_485_760 { return Ok(()); }
+    }
+    let ev = json!({
         "event": event,
         "properties": properties.unwrap_or_else(|| json!({})),
         "distinct_id": distinct_id.unwrap_or_default(),
         "timestamp": now_iso(),
-    }));
-    // Cap the local buffer so it can never grow unbounded if the endpoint is down.
-    if q.len() > 5000 { let drop = q.len() - 5000; q.drain(0..drop); }
-    write_queue(&app_handle, &q);
+    });
+    if let Some(parent) = p.parent() { let _ = std::fs::create_dir_all(parent); }
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(p) {
+        use std::io::Write;
+        if let Ok(s) = serde_json::to_string(&ev) {
+            let _ = writeln!(file, "{}", s);
+        }
+    }
     Ok(())
 }
 
@@ -326,11 +332,13 @@ pub async fn analytics_flush(
             .body(gz),
         None => client.post(&endpoint).json(&body),
     };
-    let resp = req.send().await
-        .map_err(|e| format!("flush failed: {}", e))?;
+    let resp = match req.send().await {
+        Ok(r) => r,
+        Err(_) => return Ok(0), // Silently fail on network error to prevent console spam
+    };
     if resp.status().is_success() {
         let n = batch.len();
-        write_queue(&app_handle, &[]); // clear only after a confirmed send
+        clear_queue(&app_handle); // clear only after a confirmed send
         // Record the sent packet locally: id + time + count + a privacy-safe
         // breakdown of WHICH event types it held (names + counts only — never the
         // property values / content).
@@ -344,17 +352,14 @@ pub async fn analytics_flush(
         log.push(json!({ "id": packet_id, "ts": now_iso(), "count": n, "deletion_requested": false, "events": summary }));
         if log.len() > 500 { let d = log.len() - 500; log.drain(0..d); }
         write_sent(&app_handle, &log);
-        log_line(format!("[ANALYTICS] flushed {} events (packet {})", n, packet_id));
         Ok(n)
     } else {
         if resp.status() == reqwest::StatusCode::PAYLOAD_TOO_LARGE {
             // Unrecoverable, drop the queue so it doesn't loop forever causing lag
-            log_line("[ANALYTICS] 413 Payload Too Large — dropping telemetry queue to recover.".to_string());
             let _ = std::fs::remove_file(queue_path(&app_handle));
-            // Return Ok(0) to avoid spamming the frontend console with red RPC errors
             return Ok(0);
         }
-        Err(format!("flush HTTP {}", resp.status()))
+        Ok(0) // Silently fail on other HTTP errors to prevent console spam
     }
 }
 

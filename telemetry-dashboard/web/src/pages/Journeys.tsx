@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { apiPost } from "../lib/store";
+import { apiPost, useStats } from "../lib/store";
 import { Card, Empty } from "../components/ui";
 import { Chart } from "../components/Chart";
 
 export default function Journeys() {
+  const s = useStats()!;
+  const views = useMemo(() => s?.pages?.map((p) => p.view) || [], [s?.pages]);
+  const modals = useMemo(() => s ? ((s as any).modals_all || (s.modals || []).map((m: any) => m.k)) : [], [s]);
   const [steps, setSteps] = useState(4);
   const [limit, setLimit] = useState(50);
   const [filters, setFilters] = useState<string[]>(["", "", "", "", "", ""]);
@@ -28,6 +31,8 @@ export default function Journeys() {
     series: [
       {
         type: "sankey",
+        left: "5%",
+        right: "15%",
         data: res.nodes.map((n: any) => ({ name: n.name, depth: n.depth })),
         links: res.links,
         emphasis: { focus: "adjacency" },
@@ -56,8 +61,9 @@ export default function Journeys() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
           {Array.from({ length: Math.min(steps, 4) }, (_, i) => (
-            <input
+              <input
               key={i}
+              list="journey-options"
               value={filters[i]}
               onChange={(e) => setFilters((f) => f.map((x, j) => (j === i ? e.target.value : x)))}
               placeholder={`Étape ${i + 1} — filtre de chemin`}
@@ -71,6 +77,12 @@ export default function Journeys() {
       <Card title={res ? `Flux · ${res.paths} parcours distincts` : "Flux"}>
         {opt ? <Chart option={opt} height={560} /> : <Empty>Pas encore assez de navigation pour tracer un parcours.</Empty>}
       </Card>
+
+      <datalist id="journey-options">
+        <option value="*">Any (wildcard)</option>
+        {views.map((x: string) => <option key={`v-${x}`} value={x} />)}
+        {modals.map((x: string) => <option key={`m-${x}`} value={x} />)}
+      </datalist>
     </div>
   );
 }

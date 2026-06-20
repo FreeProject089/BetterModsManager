@@ -359,38 +359,29 @@ async function bmmContentCounts(): Promise<Record<string, number>> {
 
 // Auto-track modal opens (any overlay gaining `.open`) so the team sees which
 // modals users actually open — without editing every modal call-site.
-let _modalObs: MutationObserver | null = null;
-// Anti-spam: don't re-emit modal_open if the same modal is reopened within this
-// window (rapid open/close/open of the same dialog is noise, not signal).
+let _modalPoll: number | null = null;
 const _modalLastOpen: Record<string, number> = {};
 const MODAL_DEDUPE_MS = 2500;
 
 function initModalTracking(): void {
-    if (_modalObs) return;
+    if (_modalPoll) return;
     const open = new WeakSet<Element>();
-    _modalObs = new MutationObserver(muts => {
-        for (const m of muts) {
-            const el = m.target as HTMLElement;
-            if (!el.classList) continue;
-            const cls = el.className && typeof el.className === 'string' ? el.className : '';
-            const isModal = /modal|dialog|overlay|popup/i.test(cls) || /modal|dialog|popup/i.test(el.id || '');
-            if (!isModal) continue;
-            const shown = el.classList.contains('open') || el.classList.contains('active') || el.classList.contains('show') || el.classList.contains('visible');
-            if (shown) {
-                if (open.has(el)) continue;
+    _modalPoll = window.setInterval(() => {
+        if (_consent !== true) return;
+        const els = document.querySelectorAll('[class*="modal" i].open, [class*="dialog" i].open, [id*="modal" i].open, [id*="dialog" i].open, [role="dialog"].open, .active.modal, .show.modal, .visible.modal');
+        els.forEach(el => {
+            if (!open.has(el)) {
                 open.add(el);
                 const name = modalName(el);
-                _currentModal = name;            // attribute perf samples to this modal
-                // Coalesce rapid reopens of the same modal into one event.
+                _currentModal = name;
                 const now = Date.now();
-                if (now - (_modalLastOpen[name] || 0) < MODAL_DEDUPE_MS) continue;
-                _modalLastOpen[name] = now;
-                // title gives context (which contributor / diagram / app, etc.)
-                track('modal_open', { name, title: modalTitle(el) });
-            } else { open.delete(el); _currentModal = null; }
-        }
-    });
-    _modalObs.observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+                if (now - (_modalLastOpen[name] || 0) >= MODAL_DEDUPE_MS) {
+                    _modalLastOpen[name] = now;
+                    track('modal_open', { name, title: modalTitle(el) });
+                }
+            }
+        });
+    }, 500);
 }
 
 function modalName(el: Element): string {
@@ -479,12 +470,23 @@ function initAutocapture(): void {
     if (_acStarted) return;
     _acStarted = true;
 
+    let lastClickTag = '';
+    let lastClickTime = 0;
+    
     document.addEventListener('click', (e) => {
         if (_consent !== true) return;
         const el = (e.target as HTMLElement)?.closest('button, a, [role="button"], .btn, input[type="button"], input[type="submit"]') as HTMLElement | null;
         if (!el || !acAllowed()) return;
         const tag = el.tagName.toLowerCase();
         const text = (el.textContent || (el as HTMLInputElement).value || el.getAttribute('aria-label') || el.title || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+        
+        // Anti-spam: ignore rapid clicks on the exact same button/link
+        const now = Date.now();
+        const sig = tag + text;
+        if (now - lastClickTime < 1500 && lastClickTag === sig) return;
+        lastClickTime = now;
+        lastClickTag = sig;
+
         // outbound vs in-app button
         const href = (el as HTMLAnchorElement).href;
         if (tag === 'a' && href && /^https?:/i.test(href) && !href.startsWith(location.origin)) {
@@ -908,8 +910,9 @@ export function showConsentModal(): Promise<void> {
             if (replayToggle) localStorage.setItem(REPLAY_KEY, replayToggle.checked ? '1' : '0');
             if (replayFullToggle) localStorage.setItem(REPLAY_FULL_KEY, replayFullToggle.checked ? '1' : '0');
             await setConsent(true);
+            refreshPrivacyUI();
             close();
         });
-        overlay.querySelector('#analytics-decline')?.addEventListener('click', async () => { await setConsent(false); close(); });
+        overlay.querySelector('#analytics-decline')?.addEventListener('click', async () => { await setConsent(false); refreshPrivacyUI(); close(); });
     });
 }
