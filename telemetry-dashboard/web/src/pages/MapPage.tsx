@@ -84,6 +84,7 @@ export default function MapPage() {
   // create the map once
   useEffect(() => {
     if (!boxRef.current || mapRef.current) return;
+    let mounted = true;
     const map = new maplibregl.Map({
       container: boxRef.current,
       style: STYLE,
@@ -91,31 +92,39 @@ export default function MapPage() {
       zoom: 1.4,
       attributionControl: false,
       maxPitch: 0,
+      trackResize: true,
     });
     mapRef.current = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+    // Silence WebGL worker errors that fire after unmount
+    map.on("error", () => { });
     map.on("load", () => {
-      map.setProjection({ type: mode === "globe" ? "globe" : "mercator" } as any);
+      if (!mounted) return;
+      try { map.setProjection({ type: mode === "globe" ? "globe" : "mercator" } as any); } catch { }
       // country choropleth source (local, offline-safe)
       fetch("/world.json").then((r) => r.json()).then((geo) => {
-        if (!map.getSource("countries")) {
-          map.addSource("countries", { type: "geojson", data: geo });
-          map.addLayer({
-            id: "country-fill",
-            type: "fill",
-            source: "countries",
-            layout: { visibility: "none" },
-            paint: { "fill-color": "rgba(91,140,255,0.05)", "fill-outline-color": "rgba(255,255,255,0.15)" },
-          });
-        }
-        applyChoropleth();
-      }).catch(() => {});
-      rebuildMarkers();
+        if (!mounted) return;
+        try {
+          if (!map.getSource("countries")) {
+            map.addSource("countries", { type: "geojson", data: geo });
+            map.addLayer({
+              id: "country-fill",
+              type: "fill",
+              source: "countries",
+              layout: { visibility: "none" },
+              paint: { "fill-color": "rgba(91,140,255,0.05)", "fill-outline-color": "rgba(255,255,255,0.15)" },
+            });
+          }
+          applyChoropleth();
+        } catch { }
+      }).catch(() => { });
+      try { rebuildMarkers(); } catch { }
     });
     return () => {
-      markersRef.current.forEach((x) => { try { x.root.unmount(); } catch {} x.m.remove(); });
+      mounted = false;
+      markersRef.current.forEach((x) => { try { x.root.unmount(); } catch { } try { x.m.remove(); } catch { } });
       markersRef.current = [];
-      map.remove();
+      try { map.remove(); } catch { }
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -125,7 +134,7 @@ export default function MapPage() {
   useEffect(() => {
     const map = mapRef.current;
     if (map && map.isStyleLoaded()) {
-      try { map.setProjection({ type: mode === "globe" ? "globe" : "mercator" } as any); } catch {}
+      try { map.setProjection({ type: mode === "globe" ? "globe" : "mercator" } as any); } catch { }
     }
   }, [mode]);
 
@@ -134,8 +143,8 @@ export default function MapPage() {
   // so scrubbing can light up who was connected when.
   const rebuildMarkers = () => {
     const map = mapRef.current;
-    if (!map) return;
-    markersRef.current.forEach((x) => { try { x.root.unmount(); } catch {} x.m.remove(); });
+    if (!map || !map.isStyleLoaded()) return;
+    markersRef.current.forEach((x) => { try { x.root.unmount(); } catch { } try { x.m.remove(); } catch { } });
     markersRef.current = [];
     const userPts =
       tab === "chrono"
@@ -144,35 +153,37 @@ export default function MapPage() {
     const pts = [...userPts, ...repos.map((r: any) => ({ ...r, kind: "repo" }))];
     for (const p of pts) {
       if (p.lon == null || p.lat == null) continue;
-      const el = document.createElement("div");
-      el.style.cursor = "pointer";
-      el.title = p.kind === "repo"
-        ? `${p.host || ""} · ${p.count} connection(s) — click for details`
-        : `${p.creator_id || ""}${p.country ? " · " + p.country : ""} — click to open profile`;
-      const root = createRoot(el);
-      root.render(
-        p.kind === "user" ? (
-          // SAME avatar seed (creator_id) as everywhere else → matches the user's pfp
-          <div className="rounded-full ring-2 ring-white/40 shadow" style={{ width: 30, height: 30, overflow: "hidden" }}>
-            <ProfileAvatar name={p.creator_id || p.country || "anon"} size={30} />
-          </div>
-        ) : (
-          <div className="rounded-full ring-2 ring-white/50 shadow flex items-center justify-center" style={{ width: 28, height: 28, background: "#a78bfa", color: "#0b0d10" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3Z" /></svg>
-          </div>
-        )
-      );
-      el.addEventListener("click", () => {
-        if (p.kind === "user" && p.creator_id) {
-          navigate(`/users/${encodeURIComponent(p.creator_id)}`);
-        } else if (p.kind === "repo") {
-          // open the matching repo.json entry (full host details)
-          const full = (s.repos || []).find((r: any) => r.host === p.host) || p;
-          setRepoSel(full);
-        }
-      });
-      const m = new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map);
-      markersRef.current.push({ m, root, start: p.start, end: p.end });
+      try {
+        const el = document.createElement("div");
+        el.style.cursor = "pointer";
+        el.title = p.kind === "repo"
+          ? `${p.host || ""} · ${p.count} connection(s) — click for details`
+          : `${p.creator_id || ""}${p.country ? " · " + p.country : ""} — click to open profile`;
+        const root = createRoot(el);
+        root.render(
+          p.kind === "user" ? (
+            // SAME avatar seed (creator_id) as everywhere else → matches the user's pfp
+            <div className="rounded-full ring-2 ring-white/40 shadow" style={{ width: 30, height: 30, overflow: "hidden" }}>
+              <ProfileAvatar name={p.creator_id || p.country || "anon"} size={30} />
+            </div>
+          ) : (
+            <div className="rounded-full ring-2 ring-white/50 shadow flex items-center justify-center" style={{ width: 28, height: 28, background: "#a78bfa", color: "#0b0d10" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3Z" /></svg>
+            </div>
+          )
+        );
+        el.addEventListener("click", () => {
+          if (p.kind === "user" && p.creator_id) {
+            navigate(`/users/${encodeURIComponent(p.creator_id)}`);
+          } else if (p.kind === "repo") {
+            // open the matching repo.json entry (full host details)
+            const full = (s.repos || []).find((r: any) => r.host === p.host) || p;
+            setRepoSel(full);
+          }
+        });
+        const m = new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map);
+        markersRef.current.push({ m, root, start: p.start, end: p.end });
+      } catch { /* skip bad coords silently */ }
     }
     if (tab === "chrono") applyTimelineVis();
   };
@@ -194,13 +205,18 @@ export default function MapPage() {
     const map = mapRef.current;
     if (!map || !map.getLayer("country-fill")) return;
     if (tab === "pays") {
-      const expr: any[] = ["match", ["get", "name"]];
-      for (const g of s.geo || []) {
-        const a = Math.max(0.15, Math.min(0.85, g.count / maxC));
-        expr.push(g.country, `rgba(55,211,153,${a})`);
+      const geos = s.geo || [];
+      if (geos.length === 0) {
+        map.setPaintProperty("country-fill", "fill-color", "rgba(255,255,255,0.02)");
+      } else {
+        const expr: any[] = ["match", ["get", "name"]];
+        for (const g of geos) {
+          const a = Math.max(0.15, Math.min(0.85, g.count / maxC));
+          expr.push(g.country, `rgba(55,211,153,${a})`);
+        }
+        expr.push("rgba(255,255,255,0.02)");
+        map.setPaintProperty("country-fill", "fill-color", expr as any);
       }
-      expr.push("rgba(255,255,255,0.02)");
-      map.setPaintProperty("country-fill", "fill-color", expr as any);
       map.setLayoutProperty("country-fill", "visibility", "visible");
     } else {
       map.setLayoutProperty("country-fill", "visibility", "none");
@@ -211,8 +227,8 @@ export default function MapPage() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
-    rebuildMarkers();
-    applyChoropleth();
+    try { rebuildMarkers(); } catch { }
+    try { applyChoropleth(); } catch { }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, s.updated, sessions]);
 
@@ -261,7 +277,7 @@ export default function MapPage() {
         </div>
       </div>
 
-      <div className="relative card overflow-hidden" style={{ height: 620 }}>
+      <div className="relative card overflow-hidden h-[60vh] md:h-[620px]">
         <div ref={boxRef} style={{ position: "absolute", inset: 0 }} />
         {total === 0 && (
           <div className="absolute inset-x-0 bottom-3 text-center text-xs text-sub pointer-events-none">

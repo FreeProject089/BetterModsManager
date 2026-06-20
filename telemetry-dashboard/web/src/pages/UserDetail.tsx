@@ -62,7 +62,7 @@ export default function UserDetail() {
     calendar: {
       range: [calStart, now.toISOString().slice(0, 10)],
       cellSize: [14, 14],
-      top: 10,
+      top: 25,
       left: 30,
       right: 10,
       splitLine: { show: false },

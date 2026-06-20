@@ -148,7 +148,13 @@ function Player({ events, markers }: { events: any[]; markers: any[] }) {
   };
 
   const exportBmmReplay = () => {
-    const json = JSON.stringify(events);
+    const json = JSON.stringify({
+      bmmReplay: 1,
+      app: "BetterModsManager",
+      createdAt: new Date().toISOString(),
+      masked: false,
+      events
+    });
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

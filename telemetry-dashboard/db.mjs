@@ -43,7 +43,18 @@ CREATE TABLE IF NOT EXISTS deletions (
 CREATE TABLE IF NOT EXISTS goals (
   id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, type TEXT, target TEXT, created_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY, value TEXT
+);
 `);
+
+// ── Settings (persistent key/value store) ──────────────────────────────────
+const settingGet = db.prepare(`SELECT value FROM settings WHERE key=?`);
+const settingSet = db.prepare(`INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`);
+export function getSetting(key, fallback = null) {
+  try { const r = settingGet.get(key); return r ? JSON.parse(r.value) : fallback; } catch { return fallback; }
+}
+export function setSetting(key, value) { settingSet.run(key, JSON.stringify(value)); }
 
 const ins = {
   event: db.prepare(`INSERT INTO events(packet_id,distinct_id,event,ts,ts_ms,props) VALUES(?,?,?,?,?,?)`),
@@ -155,7 +166,70 @@ export function pendingDeletionCount() {
   return db.prepare(`SELECT COUNT(*) n FROM deletions WHERE status='pending'`).get().n;
 }
 
-// ── Drill-down queries (event detail + user journey) ───────────────────────────
+// ── Storage size helpers ────────────────────────────────────────────────────────
+/** Return the SQLite page_count * page_size in bytes (fast, no FS stat needed). */
+export function storageBytes() {
+  const sz = db.prepare(`SELECT page_count * page_size bytes FROM pragma_page_count(), pragma_page_size()`).get();
+  return sz ? sz.bytes : 0;
+}
+const CONFIG_FILE = path.join(__dirname, 'config.json');
+
+export function getStorageLimitMb() {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      const c = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      if (c.storage_limit_mb) return Number(c.storage_limit_mb);
+    }
+  } catch {}
+  return process.env.STORAGE_LIMIT_MB ? Number(process.env.STORAGE_LIMIT_MB) : 5120;
+}
+
+export function setStorageLimitMb(mb) {
+  const limit = Math.max(128, Number(mb) || 5120);
+  let c = {};
+  try { if (fs.existsSync(CONFIG_FILE)) c = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch {}
+  c.storage_limit_mb = limit;
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(c, null, 2), 'utf8');
+}
+
+/**
+ * If the DB exceeds the configured limit, delete the oldest events in batches
+ * until under 95% of the limit (gives headroom before the next ingest).
+ * Returns how many rows were deleted.
+ */
+export function enforceStorageLimit() {
+  const limitBytes = getStorageLimitMb() * 1024 * 1024;
+  if (storageBytes() <= limitBytes) return 0;
+  let deleted = 0;
+  const target = limitBytes * 0.85;
+  const purgedPackets = new Set();
+  while (storageBytes() > target) {
+    // Delete the 1 000 oldest events at a time
+    const batch = db.prepare(`SELECT id, packet_id FROM events ORDER BY ts_ms ASC LIMIT 1000`).all();
+    if (!batch.length) break;
+    // Collect which packet_ids we're about to erase (so we can mark them deleted for BMM)
+    for (const r of batch) if (r.packet_id) purgedPackets.add(r.packet_id);
+    const ids = batch.map(r => r.id);
+    db.prepare(`DELETE FROM events WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids);
+    db.pragma('wal_checkpoint(PASSIVE)'); // flush WAL so page count shrinks
+    deleted += ids.length;
+    if (deleted > 500000) break; // safety cap
+  }
+  // Mark each affected packet as auto-purged in the deletions table so BMM shows them as deleted
+  if (purgedPackets.size > 0) {
+    const now = Date.now();
+    const markDone = db.prepare(`INSERT INTO deletions(packet_id,requested_at,scheduled_at,status,decided_at,decided_by)
+      VALUES(?,?,?,?,?,?)
+      ON CONFLICT(packet_id) DO UPDATE SET status='done', decided_at=excluded.decided_at, decided_by=excluded.decided_by`);
+    const tx = db.transaction(() => {
+      for (const pid of purgedPackets) markDone.run(pid, now, now, 'done', now, 'auto_purge');
+    });
+    tx();
+  }
+  return deleted;
+}
+
+
 const parse = (s) => { try { return JSON.parse(s); } catch { return {}; } };
 
 /** Recent occurrences of one event: who (distinct_id) + when + properties. */

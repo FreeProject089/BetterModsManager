@@ -18,38 +18,40 @@ export default function Live() {
     <div className="space-y-4">
       <Card title={`Live instances · ${s.live.length}`} right={<span className="text-xs text-sub">click a row for session + device details</span>}>
         {s.live.length ? (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className="th">Status</th>
-                <th className="th">Creator</th>
-                <th className="th">Location</th>
-                <th className="th">View</th>
-                <th className="th">Version</th>
-                <th className="th text-right">FPS</th>
-                <th className="th text-right">Last seen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {s.live.map((l) => (
-                <tr key={l.creator_id} onClick={() => setSel(l)} className="cursor-pointer hover:bg-panel2">
-                  <td className="td">
-                    <span className="pill bg-panel2">
-                      <StatusDot status={l.status} /> {STATUS_LABEL[l.status]}
-                    </span>
-                  </td>
-                  <td className="td font-mono text-xs">
-                    <span className="flex items-center gap-2"><ProfileAvatar name={l.creator_id} size={20} /> {l.creator_id}</span>
-                  </td>
-                  <td className="td"><Flag cc={l.cc} /> {l.country || "—"}</td>
-                  <td className="td">{l.view || "—"}</td>
-                  <td className="td text-sub">{l.version || "—"}</td>
-                  <td className="td text-right">{l.fps ?? "—"}</td>
-                  <td className="td text-right text-sub">{ago(l.ago_s)}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className="th">Status</th>
+                  <th className="th">Creator</th>
+                  <th className="th">Location</th>
+                  <th className="th">View</th>
+                  <th className="th">Version</th>
+                  <th className="th text-right">FPS</th>
+                  <th className="th text-right">Last seen</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {s.live.map((l) => (
+                  <tr key={l.creator_id} onClick={() => setSel(l)} className="cursor-pointer hover:bg-panel2">
+                    <td className="td">
+                      <span className="pill bg-panel2 whitespace-nowrap">
+                        <StatusDot status={l.status} /> {STATUS_LABEL[l.status]}
+                      </span>
+                    </td>
+                    <td className="td font-mono text-xs whitespace-nowrap">
+                      <span className="flex items-center gap-2"><ProfileAvatar name={l.creator_id} size={20} /> {l.creator_id}</span>
+                    </td>
+                    <td className="td whitespace-nowrap"><Flag cc={l.cc} /> {l.country || "—"}</td>
+                    <td className="td whitespace-nowrap">{l.view || "—"}</td>
+                    <td className="td text-sub whitespace-nowrap">{l.version || "—"}</td>
+                    <td className="td text-right whitespace-nowrap">{l.fps ?? "—"}</td>
+                    <td className="td text-right text-sub whitespace-nowrap">{ago(l.ago_s)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <Empty>No instances have reported in the last few minutes.</Empty>
         )}

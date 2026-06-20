@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useStore, apiPost, apiDelete } from "../lib/store";
+import { ALL_PAGES, ALL_MODALS, ALL_DIAGRAMS } from "../lib/constants";
 import { Card, Empty, Bar } from "../components/ui";
 import { nf } from "../lib/format";
 
@@ -17,9 +18,9 @@ export default function Goals() {
 
   const options = useMemo(() => {
     switch (type) {
-      case "page": return s.pages.map((p) => p.view);
+      case "page": return Array.from(new Set([...s.pages.map((p) => p.view), ...ALL_PAGES])).sort();
       case "event": return s.events.map((e) => e.event);
-      case "modal": return (s as any).modals_all || (s.modals || []).map((m: any) => m.k);
+      case "modal": return Array.from(new Set([...((s as any).modals_all || (s.modals || []).map((m: any) => m.k)), ...ALL_MODALS, ...ALL_DIAGRAMS])).sort();
       case "feature": return (s.features || []).map((f: any) => f.k);
     }
   }, [type, s]);

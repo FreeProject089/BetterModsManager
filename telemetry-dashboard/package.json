@@ -8,6 +8,7 @@
     "start": "node server.mjs"
   },
   "dependencies": {
+    "adm-zip": "^0.5.17",
     "better-sqlite3": "^12.11.1",
     "express": "^5.2.1"
   }
