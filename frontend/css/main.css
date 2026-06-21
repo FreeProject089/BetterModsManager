@@ -2081,39 +2081,40 @@ body.is-maximized .titlebar-spacer {
 }
 
 /* ── Action buttons tab: right-aligned, sits above filter bar (creates notch shape) ── */
-/* ── Unified library toolbar — ONE connected block ─────────────────────────
-   The action row and the filter bar share a single rounded, bordered, blurred
-   surface (no separate floating pill / notch). The action row is the top half
-   (rounded top corners, no bottom border); the filter shell is the bottom half
-   (rounded bottom corners, no top border). They join seamlessly and stay one
-   block whether pinned or not, and the flex rows wrap responsively. */
+/* ── Library toolbar — floating action pill above the filter shell ─────────
+   The action row (.lib-actions-tab) is TRANSPARENT; only the pill (.view-actions)
+   carries a surface, right-aligned and only as wide as its buttons (it "stops at
+   the end of the top elements"). The filter shell is its own rounded surface; the
+   pill docks onto its top-right corner (the notch). Stays this way pinned too. */
 .lib-actions-tab {
     display: flex;
     justify-content: flex-end;
     flex-wrap: wrap;
+    margin-bottom: -1px;
     position: relative;
     z-index: 2;
-    background: var(--bmm-s02);
-    border: 1px solid var(--bmm-s06);
-    border-bottom: none;
-    border-radius: 14px 14px 0 0;
-    backdrop-filter: blur(10px);
-    margin-bottom: 0;
 }
 .lib-actions-tab .view-actions {
-    background: transparent;
-    border: none;
-    border-radius: 0;
+    background: var(--bmm-s02);
+    border: 1px solid var(--bmm-s06);
+    border-bottom: 1px solid var(--bmm-s02);
+    border-radius: 10px 10px 0 0;
     padding: 6px 12px;
-    backdrop-filter: none;
+    backdrop-filter: blur(10px);
+    /* Render above the shell so the 1px overlap (from .lib-actions-tab's negative
+       margin) shows the pill on top, and hide the pill's own bottom border so the
+       two surfaces read as one seam (no double line). No own margin here — the row
+       owns the overlap, so the measured pill height stays exact. */
+    position: relative;
+    z-index: 2;
+    border-bottom-color: transparent;
 }
 
-/* Bottom half of the unified block */
+/* ── Unified library filter bar shell ── */
 .lib-header-shell {
     background: var(--bmm-s02);
     border: 1px solid var(--bmm-s06);
-    border-top: none;
-    border-radius: 0 0 14px 14px;
+    border-radius: 14px 0 14px 14px;
     backdrop-filter: blur(10px);
     margin-top: 0;
     margin-bottom: 16px;
@@ -2123,7 +2124,7 @@ body.is-maximized .titlebar-spacer {
 .lib-header-shell .filter-bar {
     margin-bottom: 0;
     border: none;
-    border-radius: 0 0 14px 14px;
+    border-radius: 14px 0 14px 14px;
     background: transparent;
     backdrop-filter: none;
 }
@@ -2131,7 +2132,7 @@ body.is-maximized .titlebar-spacer {
 /* ── Action-bar transparency toggle (Tasky & BMM Settings → Transparent action
    bar). Default = translucent + blur (the floating glass look). When OFF, the
    pill + filter shell become a solid opaque surface (page elevated colour). */
-body.bmm-toolbar-opaque .lib-actions-tab,
+body.bmm-toolbar-opaque .lib-actions-tab .view-actions,
 body.bmm-toolbar-opaque .lib-header-shell {
     background-color: var(--bmm-bg-elevated) !important;
     background-image: none !important;
@@ -13723,13 +13724,18 @@ body.bmm-toolbar-stacked-labels .profile-select-icon-wrap select { width: 100% !
     position: sticky;
     top: 0;
     z-index: 15;
-    /* Keep the unified block's own background here — NO override — and no extra
-       padding, so pinned is pixel-identical to un-pinned (just docked). */
+    /* Transparent row so the action pill floats exactly like when un-pinned
+       (it stops at the end of its buttons; the list scrolls behind the rest).
+       No extra padding → pinned is pixel-identical to un-pinned, just docked. */
+    background: transparent;
 }
 #view-library.lib-sticky-header .lib-header-shell {
     position: sticky;
-    /* Sit flush under the action row (slight overlap kills any sub-pixel sliver). */
-    top: 40px;
+    /* Dock at EXACTLY the action pill's measured height (--lib-actions-h, set in
+       JS), minus the 1px overlap the un-pinned flow already uses (margin-bottom:
+       -1px). This keeps the pill↔shell seam pixel-identical pinned, un-pinned, and
+       while scrolling — no drift from a hardcoded magic number. */
+    top: calc(var(--lib-actions-h, 40px) - 1px);
     margin-top: 0 !important;
     z-index: 14;
 }
@@ -13737,6 +13743,7 @@ body.bmm-toolbar-stacked-labels .profile-select-icon-wrap select { width: 100% !
 #view-library:not(.lib-sticky-header) .lib-actions-tab,
 #view-library:not(.lib-sticky-header) .lib-header-shell {
     position: relative;
+    background: transparent;
 }
 
 /* Pinned looks EXACTLY like un-pinned: the pill (.view-actions) and the filter

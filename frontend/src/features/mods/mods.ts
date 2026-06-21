@@ -703,6 +703,24 @@ function _initStickyToggle() {
     localStorage.setItem(STORAGE_KEY, isSticky ? '1' : '0');
     _applyStickyState(view, btn, isSticky);
   });
+
+  // Pixel-perfect docking: the filter shell must stick at EXACTLY the action
+  // pill's height (the `top: 40px` magic number drifted once the pill's real
+  // height changed with the toolbar density / window width). Measure it and feed
+  // the value into a CSS var, kept live via a ResizeObserver + window resize.
+  _syncStickyOffset(view);
+  const tab = view.querySelector('.lib-actions-tab') as HTMLElement | null;
+  if (tab && 'ResizeObserver' in window) {
+    new ResizeObserver(() => _syncStickyOffset(view)).observe(tab);
+  }
+  window.addEventListener('resize', () => _syncStickyOffset(view));
+}
+
+function _syncStickyOffset(view: HTMLElement) {
+  const tab = view.querySelector('.lib-actions-tab') as HTMLElement | null;
+  if (!tab) return;
+  const h = Math.round(tab.getBoundingClientRect().height);
+  if (h > 0) view.style.setProperty('--lib-actions-h', h + 'px');
 }
 
 function _applyStickyState(view: HTMLElement, btn: HTMLButtonElement, isSticky: boolean) {
