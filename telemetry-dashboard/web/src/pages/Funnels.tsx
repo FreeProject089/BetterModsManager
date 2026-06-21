@@ -1,14 +1,13 @@
 import { useMemo, useState } from "react";
 import { useStats, apiPost } from "../lib/store";
-import { ALL_PAGES, ALL_MODALS, ALL_DIAGRAMS } from "../lib/constants";
+import { buildCatalog } from "../lib/constants";
 import { Card, Empty, Bar } from "../components/ui";
 import { Chart, axisX, axisY } from "../components/Chart";
 
 export default function Funnels() {
   const s = useStats()!;
-  const views = useMemo(() => Array.from(new Set([...s.pages.map((p) => p.view), ...ALL_PAGES])).sort(), [s.pages]);
-  const modals = useMemo(() => Array.from(new Set([...((s as any).modals_all || (s.modals || []).map((m: any) => m.k)), ...ALL_MODALS])).sort(), [s]);
-  const diagrams = useMemo(() => Array.from(new Set(ALL_DIAGRAMS)).sort(), []);
+  const cat = useMemo(() => buildCatalog(s), [s]);
+  const { pages: views, modals, diagrams, tabs, guides } = cat;
   const [steps, setSteps] = useState<string[]>(["", "", ""]);
   const [res, setRes] = useState<any | null>(null);
 
@@ -85,11 +84,25 @@ export default function Funnels() {
                     <option key={`m-${x}`} value={x}>{x}</option>
                   ))}
                 </optgroup>
+                {tabs.length > 0 && (
+                  <optgroup label="Tabs">
+                    {tabs.map((x: string) => (
+                      <option key={`t-${x}`} value={x}>{x}</option>
+                    ))}
+                  </optgroup>
+                )}
                 <optgroup label="Diagrams">
                   {diagrams.map((x: string) => (
                     <option key={`d-${x}`} value={x}>{x}</option>
                   ))}
                 </optgroup>
+                {guides.length > 0 && (
+                  <optgroup label="Guides">
+                    {guides.map((x: string) => (
+                      <option key={`g-${x}`} value={x}>{x}</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
               <button onClick={() => removeStep(i)} className="text-sub hover:text-bad px-2" title="Remove step">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>

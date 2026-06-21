@@ -17,6 +17,7 @@ const NAV: { to: string; label: string; icon: string }[] = [
   { to: "/bmm", label: "BMM insights", icon: "M21 16V8l-9-5-9 5v8l9 5 9-5ZM3 8l9 5 9-5" },
   { to: "/admin", label: "Admin", icon: "M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6l-8-4Z" },
   { to: "/storage", label: "Stockage", icon: "M4 6a8 3 0 0 0 16 0 8 3 0 0 0-16 0Zm0 0v12a8 3 0 0 0 16 0V6M4 12a8 3 0 0 0 16 0" },
+  { to: "/docs", label: "Documentation", icon: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15Z" },
 ];
 
 function Logo() {

@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiPost, useStats } from "../lib/store";
-import { ALL_PAGES, ALL_MODALS, ALL_DIAGRAMS } from "../lib/constants";
+import { buildCatalog } from "../lib/constants";
 import { Card, Empty } from "../components/ui";
 import { Chart } from "../components/Chart";
 
 export default function Journeys() {
   const s = useStats()!;
-  const views = useMemo(() => Array.from(new Set([...(s?.pages?.map((p) => p.view) || []), ...ALL_PAGES])).sort(), [s?.pages]);
-  const modals = useMemo(() => s ? Array.from(new Set([...((s as any).modals_all || (s.modals || []).map((m: any) => m.k)), ...ALL_MODALS])).sort() : [], [s]);
-  const diagrams = useMemo(() => Array.from(new Set(ALL_DIAGRAMS)).sort(), []);
+  const { pages: views, modals, diagrams, tabs, guides } = useMemo(() => buildCatalog(s), [s]);
   const [steps, setSteps] = useState(4);
   const [limit, setLimit] = useState(50);
   const [filters, setFilters] = useState<string[]>(["", "", "", "", "", ""]);
@@ -74,12 +72,22 @@ export default function Journeys() {
               <optgroup label="Pages">
                 {views.map((x: string) => <option key={`v-${x}`} value={x}>{x}</option>)}
               </optgroup>
+              {tabs.length > 0 && (
+                <optgroup label="Tabs">
+                  {tabs.map((x: string) => <option key={`t-${x}`} value={x}>{x}</option>)}
+                </optgroup>
+              )}
               <optgroup label="Modals">
                 {modals.map((x: string) => <option key={`m-${x}`} value={x}>{x}</option>)}
               </optgroup>
               <optgroup label="Diagrams">
                 {diagrams.map((x: string) => <option key={`d-${x}`} value={x}>{x}</option>)}
               </optgroup>
+              {guides.length > 0 && (
+                <optgroup label="Guides">
+                  {guides.map((x: string) => <option key={`g-${x}`} value={x}>{x}</option>)}
+                </optgroup>
+              )}
             </select>
           ))}
         </div>

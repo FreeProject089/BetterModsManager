@@ -107,6 +107,15 @@ export const SENSITIVE_SELECTOR = [
   '[data-bmm-mask]',
 ].join(', ');
 
+// Perpetually-animating subtrees blocked from recording (placeholder in replay).
+// These mutate every frame and were the main source of recorder-induced lag.
+export const BLOCK_SELECTOR = [
+  '.tasky-mascot-anim', '.tasky-mascot-wrapper', '.tasky-bubble-container', '.tasky-speech-bubble',
+  '#tasky-mascot-img', '#vhs-tasky-wrap', '#vhs-tasky-img',
+  '#bmm-mini-monitor', '.bmm-mini-monitor', '#perf-chart-main', '#perf-chart-io',
+  'video', 'canvas', '[data-bmm-no-record]',
+].join(', ');
+
 let _stop: (() => void) | null = null;
 let _buf: any[] = [];
 let _flushTimer: number | null = null;
@@ -203,12 +212,16 @@ async function syncSharedRecorder() {
     maskTextSelector: _full ? undefined : SENSITIVE_SELECTOR,
     blockClass: 'bmm-no-record',
     ignoreClass: 'bmm-no-record',
+    // PERF: stop recording perpetually-animating subtrees (the Tasky mascot, the
+    // live mini-monitor, videos/canvases). Their constant DOM mutations were the
+    // main cause of scroll jank + memory growth — they replay as a placeholder.
+    blockSelector: BLOCK_SELECTOR,
     // Size optimisation: NO mouse-move tracking (the biggest source of bloat),
     // keep clicks/scroll/inputs. Coarse scroll sampling, last-value inputs only.
     sampling: {
       mousemove: false,              // drop pointer-move positions entirely
       mouseInteraction: true,        // but keep clicks / taps
-      scroll: 250,
+      scroll: 300,
       media: 1000,
       input: 'last',
     },

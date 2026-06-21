@@ -728,8 +728,18 @@ async function main() {
     initDeepLinks();
     initApiActivity();
     initAnalytics().catch(() => { });
-    // Local session recorder (user-controlled, separate from telemetry).
-    import('../features/settings/replay-watcher.js').then((m) => { m.initWatcherUI(); m.syncWatcher(); }).catch(() => { });
+    // Local session recorder (user-controlled, separate from telemetry). Wire the
+    // settings card now, but defer starting the (heavy) recorder until idle so it
+    // doesn't fight the startup animation.
+    import('../features/settings/replay-watcher.js').then((m) => {
+        m.initWatcherUI();
+        const begin = () => m.syncWatcher();
+        const ric = window.requestIdleCallback;
+        if (ric)
+            ric(begin, { timeout: 7000 });
+        else
+            setTimeout(begin, 4500);
+    }).catch(() => { });
     const modpackContainer = document.getElementById('modpack-container');
     if (modpackContainer) {
         initModpackCreator(modpackContainer);

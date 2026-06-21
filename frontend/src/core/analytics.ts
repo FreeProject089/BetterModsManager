@@ -187,7 +187,7 @@ async function startCollection(): Promise<void> {
         registerCloseHandler();
         // Catalog every modal the app exposes (once the DOM has settled), so the
         // dashboard can target modals that were never opened yet.
-        setTimeout(sendModalCatalog, 4000);
+        setTimeout(sendAppCatalog, 4000);
     } catch {}
     // Periodic flush; also flush before the window closes.
     if (_flushTimer === null) _flushTimer = window.setInterval(() => flush(), 90000);
@@ -213,12 +213,18 @@ function startSessionReplay(): void {
     try {
         if (localStorage.getItem('bmm_replay_enabled') === '0') return;
     } catch {}
-    import('./replay-recorder.js')
-        .then((m) => {
-            if (!_telemetryReplay) _telemetryReplay = new m.TelemetryReplay((payload: any) => track('$replay', payload));
-            _telemetryReplay.start();
-        })
-        .catch(() => { /* rrweb unavailable — silently skip */ });
+    // Defer the (heavy) first rrweb DOM snapshot until the main thread is idle —
+    // running it during the startup gsap animation caused visible launch jank.
+    const begin = () => {
+        import('./replay-recorder.js')
+            .then((m) => {
+                if (!_telemetryReplay) _telemetryReplay = new m.TelemetryReplay((payload: any) => track('$replay', payload));
+                _telemetryReplay.start();
+            })
+            .catch(() => { /* rrweb unavailable — silently skip */ });
+    };
+    const ric = (window as any).requestIdleCallback;
+    if (ric) ric(begin, { timeout: 7000 }); else setTimeout(begin, 4500);
 }
 
 // Core Web Vitals of the BMM WebView (Chromium APIs), sent once per launch.
@@ -427,16 +433,64 @@ const KNOWN_MODALS = [
     'theme-catalogue', 'theme-editor', 'benchmark', 'interactive-tutorial',
 ];
 
-// Enumerate every modal-like element in the DOM and report the catalog once, so
-// the dashboard can offer ALL modals (not just ones already opened) for funnels
-// and goals. Only ids/names are sent — never content.
-function sendModalCatalog(): void {
+// Report a FULL catalog of the app's destinations once per session — pages, tabs,
+// modals, docs diagrams and update-note guides — all AUTO-ENUMERATED from the DOM
+// + registries (never a hand-maintained list). This lets the dashboard populate
+// funnel/journey/goal dropdowns with everything, even destinations never visited.
+// Only ids/names are sent — never any content.
+async function sendAppCatalog(): Promise<void> {
     if (_consent !== true) return;
     try {
-        const els = document.querySelectorAll('[class*="modal" i], [class*="dialog" i], [id*="modal" i], [id*="dialog" i], [role="dialog"]');
-        const names = new Set<string>(KNOWN_MODALS);
-        els.forEach(el => { const n = modalName(el); if (n && n !== 'modal') names.add(n); });
-        track('modal_catalog', { names: [...names].slice(0, 400) });
+        // Human label for an element: aria-label / title / its (short) visible text.
+        const labels: Record<string, string> = {};
+        const labelOf = (el: Element): string =>
+            (el.getAttribute('aria-label') || (el as HTMLElement).title || el.textContent || '')
+                .trim().replace(/\s+/g, ' ').slice(0, 70);
+        const setLabel = (id: string, lbl: string) => { if (id && lbl && !labels[id]) labels[id] = lbl; };
+
+        // Pages — the main views (data-view) + any tracked sub-views.
+        const pages = new Set<string>();
+        document.querySelectorAll('[data-view]').forEach(el => {
+            const v = el.getAttribute('data-view')?.trim(); if (!v) return;
+            pages.add(v); setLabel(v, labelOf(el));
+        });
+        // Tabs — EVERYTHING tab/sub-navigation-like, so the catalog is exhaustive:
+        // data-tab / data-mode / data-target / data-section / role=tab / .tab-ish.
+        const tabs = new Set<string>();
+        document.querySelectorAll('[data-tab], [data-mode], [data-target], [data-section], [role="tab"], .tab, .perf-tab, .nav-tab, .sidebar-tab, .seg-tab, .settings-tab, .docs-tab')
+            .forEach(el => {
+                const v = (el.getAttribute('data-tab') || el.getAttribute('data-mode') || el.getAttribute('data-target') || el.getAttribute('data-section') || el.id || '').trim();
+                if (!v || v.length > 48) return;
+                tabs.add(v); setLabel(v, labelOf(el));
+            });
+        // Modals — every modal-like element in the DOM + the known canonical set.
+        const modals = new Set<string>(KNOWN_MODALS);
+        document.querySelectorAll('[class*="modal" i], [class*="dialog" i], [id*="modal" i], [id*="dialog" i], [role="dialog"]')
+            .forEach(el => { const n = modalName(el); if (n && n !== 'modal') { modals.add(n); setLabel(n, modalTitle(el) || labelOf(el)); } });
+        // Diagrams — the interactive-docs registry (with titles) + DOM openDiagram().
+        const diagrams = new Set<string>();
+        try {
+            const m: any = await import('../docs/interactive-docs.js');
+            Object.entries(m.diagrams || {}).forEach(([k, v]: any) => { diagrams.add(k); setLabel(k, (v && (v.title || v.label)) || k); });
+        } catch {}
+        document.querySelectorAll('[onclick*="openDiagram("]').forEach(el => {
+            const mm = (el.getAttribute('onclick') || '').match(/openDiagram\(['"]([a-z0-9-]+)['"]/i);
+            if (mm) { diagrams.add(mm[1]); setLabel(mm[1], labelOf(el)); }
+        });
+        // Update-note / docs guides — the linked .md files (lang suffix stripped).
+        const guides = new Set<string>();
+        document.querySelectorAll('a[href$=".md" i]').forEach(el => {
+            const f = (el.getAttribute('href') || '').split(/[\\/]/).pop()?.replace(/(_en|_fr)\.md$/i, '').replace(/\.md$/i, '');
+            if (f) { guides.add(f); setLabel(f, labelOf(el)); }
+        });
+        track('app_catalog', {
+            pages: [...pages].slice(0, 200),
+            tabs: [...tabs].slice(0, 300),
+            modals: [...modals].slice(0, 400),
+            diagrams: [...diagrams].slice(0, 200),
+            guides: [...guides].slice(0, 200),
+            labels,
+        });
     } catch {}
 }
 

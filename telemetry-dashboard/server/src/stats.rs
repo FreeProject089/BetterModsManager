@@ -723,8 +723,50 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
             }
         }
     }
+
+    // Full auto-reported catalog (pages / tabs / modals / diagrams / guides) — the
+    // client enumerates these from its DOM + registries, so the dashboard never
+    // needs hand-maintained lists. Union across every app_catalog event.
+    let mut cat_pages = std::collections::HashSet::<String>::new();
+    let mut cat_tabs = std::collections::HashSet::<String>::new();
+    let mut cat_diagrams = std::collections::HashSet::<String>::new();
+    let mut cat_guides = std::collections::HashSet::<String>::new();
+    // pages already-observed seed the page list too.
+    for p in &pages { if let Some(v) = p["view"].as_str() { cat_pages.insert(v.to_string()); } }
+    let appcat: Vec<(Value,)> = sqlx::query_as("SELECT props FROM events WHERE event='app_catalog'")
+        .fetch_all(pool).await.unwrap_or_default();
+    let merge = |set: &mut std::collections::HashSet<String>, props: &Value, key: &str| {
+        if let Some(arr) = props.get(key).and_then(|v| v.as_array()) {
+            for n in arr { if let Some(s) = n.as_str() { if !s.is_empty() { set.insert(s.to_string()); } } }
+        }
+    };
+    // Human labels for every destination (id → label), so the dashboard can build
+    // a documentation page automatically. Last non-empty label wins.
+    let mut cat_labels = serde_json::Map::new();
+    for (props,) in &appcat {
+        merge(&mut cat_pages, props, "pages");
+        merge(&mut cat_tabs, props, "tabs");
+        merge(&mut modal_names, props, "modals");
+        merge(&mut cat_diagrams, props, "diagrams");
+        merge(&mut cat_guides, props, "guides");
+        if let Some(obj) = props.get("labels").and_then(|v| v.as_object()) {
+            for (k, v) in obj {
+                if let Some(s) = v.as_str() { if !s.is_empty() { cat_labels.insert(k.clone(), json!(s)); } }
+            }
+        }
+    }
+
     let mut modals_all: Vec<String> = modal_names.into_iter().collect();
     modals_all.sort();
+    let sorted = |s: std::collections::HashSet<String>| { let mut v: Vec<String> = s.into_iter().collect(); v.sort(); v };
+    let catalog = json!({
+        "pages": sorted(cat_pages),
+        "tabs": sorted(cat_tabs),
+        "modals": modals_all.clone(),
+        "diagrams": sorted(cat_diagrams),
+        "guides": sorted(cat_guides),
+        "labels": Value::Object(cat_labels),
+    });
 
     let goals = db::list_goals(pool).await;
     let retention = db::retention_cohorts(pool, 8).await;
@@ -800,7 +842,7 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
         "retention": retention, "retention_daily": retention_daily,
         "themes": themes, "theme_kind": theme_kind, "languages": languages, "tasky": tasky,
         "content": content, "access": access,
-        "modals": modals, "modals_detail": modals_detail, "modals_all": modals_all,
+        "modals": modals, "modals_detail": modals_detail, "modals_all": modals_all, "catalog": catalog,
         "features": features, "tutorial": tutorial,
         "webvitals": webvitals, "webvitals_pct": wv_pct, "webvitals_series": wv_series, "pages_vitals": pv_detail,
         "goals": goals,

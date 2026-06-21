@@ -5612,6 +5612,7 @@
   "watcher.list": "Mes replays",
   "watcher.listTitle": "Replays importés",
   "watcher.noImports": "Aucun replay importé pour l'instant.",
+  "watcher.loading": "Chargement du replay…",
   "analytics.benchNote": "Si vous acceptez, BMM lance un petit benchmark de performance maintenant puis une fois tous les 7 jours (anonyme). Désactivable dans Paramètres → Confidentialité.",
   "analytics.consentAuth": "En acceptant, vous autorisez l'utilisation de ces données anonymes afin d'améliorer BMM et les autres outils de Better Community. Les données ne sont conservées qu'un temps limité et vous pouvez demander l'effacement de n'importe quel paquet envoyé à tout moment.",
   "analytics.statusOn": "Actif — merci d'aider à améliorer BMM.",

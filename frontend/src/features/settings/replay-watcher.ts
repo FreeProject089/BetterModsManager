@@ -288,6 +288,12 @@ async function playBundle(bundle: any): Promise<void> {
   (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
 
   const host = overlay.querySelector('#rw-host') as HTMLElement;
+  // Building the Replayer over a big event stream is a heavy synchronous DOM
+  // rebuild that freezes the UI. Show a loading hint and let the modal paint
+  // (double rAF) BEFORE the build, so the user sees feedback instead of a freeze.
+  host.innerHTML = `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#8a8f98;font-size:13px;gap:10px"><span style="width:16px;height:16px;border:2px solid #5b8cff;border-top-color:transparent;border-radius:50%;display:inline-block;animation:rwspin .8s linear infinite"></span>${t('watcher.loading') || 'Chargement du replay…'}</div><style>@keyframes rwspin{to{transform:rotate(360deg)}}</style>`;
+  await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  host.innerHTML = '';
   const rep = new rrweb.Replayer(bundle.events, { root: host, speed: 1, skipInactive: true, showWarning: false, mouseTail: { strokeStyle: '#5b8cff' } });
   const fit = () => {
     const wrap = (rep as any).wrapper as HTMLElement | undefined;
