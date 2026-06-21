@@ -91,7 +91,7 @@ fn cim_system() -> CimInfo {
             $mk=(($_.ManufacturerName | Where-Object {$_ -gt 0} | ForEach-Object {[char]$_}) -join '');\
             $nm=(($_.UserFriendlyName | Where-Object {$_ -gt 0} | ForEach-Object {[char]$_}) -join '');\
             Write-Output \"MON=$mk|$nm|$($_.YearOfManufacture)\" }";
-    let out = std::process::Command::new("powershell")
+    let out = crate::commands::proc::hidden_command("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
         .output();
     let mut info = CimInfo { gpus: Vec::new(), os: String::new(), model: String::new(), manuf: String::new(), board: String::new(), monitors: Vec::new(), resolutions: Vec::new() };

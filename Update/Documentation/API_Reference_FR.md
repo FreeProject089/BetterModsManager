@@ -101,6 +101,29 @@ Ce document est la source de vérité unique pour tout ce qui est pilotable par 
 | `/api/language/import` | oui | `{ path? }` — chemin = import direct, sinon sélecteur ; le nom de fichier → code langue |
 | `/api/restart` | oui | `{}` — redémarrage propre |
 
+### Benchmark
+| Chemin | Auth | Corps |
+|---|---|---|
+| `/api/benchmark` | oui | `{ dataset?: "sandbox"\|"real", size?: "S"\|"M"\|"L"\|"XL"\|"CUSTOM", mb?, mode?: "manual"\|"auto", sources?: string[] (dossiers, absolus ou relatifs au dossier de travail de BMM), profiles?: string[] (ids/noms → leur dossier de mods) }`. **auto** lance en arrière-plan et renvoie le rapport ; **manual** ouvre l'UI pré-remplie. Toute `sources`/`profiles` ⇒ exécution « real ». |
+
+### Télémétrie & enregistreur local
+| Chemin | Auth | Corps |
+|---|---|---|
+| `/api/telemetry/consent` | oui | `{ enabled: bool }` — bascule « Partager des données d'usage anonymes » |
+| `/api/telemetry/settings` | oui | `{ replay?, full?, bench? }` — sous-options télémétrie (omis = inchangé) |
+| `/api/recorder` | oui | `{ on?, full?, rust?, js? }` — configure l'enregistreur de session local |
+| `/api/replay/export` | oui | `{}` — exporte la session locale courante en `.bmmreplay` |
+| `/api/replay/import` | oui | `{ path? , url? }` — importe + rejoue un `.bmmreplay` (chemin ou URL) |
+
+### Automatisation
+| Chemin | Auth | Corps |
+|---|---|---|
+| `/api/mod/check-updates` | oui | `{}` — vérifie les mises à jour de chaque mod lié |
+| `/api/discord/rpc` | oui | `{ enabled: bool }` — active/désactive Discord Rich Presence |
+| `/api/data/export-auto` | oui | `{ dir, name? (modèle : `{date}` `{time}` `{datetime}`), increment?: "paren"\|"underscore"\|"timestamp"\|"overwrite" }` — sauvegarde automatique, renvoie le chemin écrit |
+| `/api/launchpack/run` | oui | `{ id }` — lance un launch pack enregistré |
+| `/api/schedule/run` | oui | `{ id }` — déclenche une tâche Scheduling & automation |
+
 ---
 
 ## Endpoints PUT
@@ -153,6 +176,17 @@ Les deeplinks sont des URL cliquables (pages web, Discord, scripts) qui pilotent
 | `bmm://app/launch?id=<id>&exe=<exePath>` | `launch_app` |
 | `bmm://modpack/create?name=<name>&profile=<profile_id>` | `POST /api/modpacks/create` |
 | `bmm://language/import?path=<file>` | `import_language` (omettre `path` → sélecteur) |
+| `bmm://benchmark/run?dataset=<sandbox\|real>&size=<S\|M\|L\|XL\|CUSTOM>&mb=<mb>&mode=<manual\|auto>&profiles=<id1;id2>&sources=<path1;path2>` | `POST /api/benchmark` (chemins relatifs OK ; profiles → dossiers de mods) |
+| `bmm://mod/check-updates` | `POST /api/mod/check-updates` |
+| `bmm://telemetry/consent?enabled=<1\|0>` | `POST /api/telemetry/consent` |
+| `bmm://telemetry/set?replay=<1\|0>&full=<1\|0>&bench=<1\|0>` | `POST /api/telemetry/settings` |
+| `bmm://recorder/set?on=<1\|0>&full=<1\|0>&rust=<1\|0>&js=<1\|0>` | `POST /api/recorder` |
+| `bmm://replay/export` | `POST /api/replay/export` |
+| `bmm://replay/import?path=<file>` · `?url=<downloadUrl>` | `POST /api/replay/import` |
+| `bmm://discord/rpc?enabled=<1\|0>` | `POST /api/discord/rpc` |
+| `bmm://data/export-auto?dir=<dossier>&name=<modèle>&increment=<paren\|underscore\|timestamp\|overwrite>` | `POST /api/data/export-auto` |
+| `bmm://launchpack/run?id=<launchpack_id>` | `POST /api/launchpack/run` |
+| `bmm://schedule/run?id=<task_id>` | `POST /api/schedule/run` |
 | `bmm://restart` | redémarre BMM |
 | `bmm://install?url=<mod_url>` (alias : `import`, `download`) | installation de mod en 1 clic |
 | `bmm://api?method=<M>&path=<chemin_api>&<champ>=<valeur>…` | **passe-partout — atteint N'IMPORTE QUEL endpoint.** Les params deviennent le corps JSON (POST/PUT) ou la query string (GET/DELETE). Ex : `bmm://api?method=POST&path=/api/mods/enable&mod_id=abc` |

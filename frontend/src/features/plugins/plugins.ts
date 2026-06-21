@@ -47,6 +47,8 @@ const IC = {
 
 let _tab = 'installed';
 let _installedPlugins = [];
+let _allLaunchpacks: any[] = [];
+let _allTasks: any[] = [];
 let _catalog = null;
 let _allMods = [];
 let _allModsAll: any[] = [];   // flattened, deduped mods across ALL profiles (for the creator)
@@ -659,6 +661,9 @@ async function _refreshUqtData(): Promise<void> {
             invoke('get_profiles').catch(() => []),
             invoke('get_installed_plugins').catch(() => []),
         ]);
+        // Launch packs + scheduler tasks for the "Run launch pack / task" dropdowns.
+        _allLaunchpacks = await invoke('get_launch_packs').catch(() => []) as any[];
+        try { _allTasks = await (await import('../settings/scheduler.js')).getTasks(); } catch { _allTasks = []; }
         try {
             const liveTok = (document.getElementById('plug-token-display') as HTMLInputElement)?.value?.trim() || _apiToken;
             const mpRes = await fetch(apiBase() + '/api/modpacks', {
@@ -3270,7 +3275,16 @@ function renderScripts(container: HTMLElement) {
         { m: 'POST', p: '/api/modpacks/disable',        l: t('plugins.ep.disableMp')   || 'Disable Modpack',      icon: IC.folder,   body: '{"modpack_id":""}' },
         { m: 'POST', p: '/api/modpacks/create',         l: t('plugins.ep.createMp')    || 'Create Modpack',       icon: IC.plus,     body: '{"name":"","profile_id":""}' },
         { m: 'POST', p: '/api/restart',                 l: t('plugins.ep.restart')     || 'Restart BMM',          icon: IC.refresh,  body: '' },
-        { m: 'POST', p: '/api/benchmark',               l: t('plugins.ep.benchmark')   || 'Run Benchmark',        icon: IC.zap,      body: '{"dataset":"sandbox","size":"M","mode":"manual","sources":[]}' },
+        { m: 'POST', p: '/api/benchmark',               l: t('plugins.ep.benchmark')   || 'Run Benchmark',        icon: IC.zap,      body: '{"dataset":"sandbox","size":"M","mode":"manual","sources":[],"profiles":[]}' },
+        { m: 'POST', p: '/api/telemetry/consent',       l: t('plugins.ep.telConsent')  || 'Telemetry Consent',    icon: IC.shield,   body: '{"enabled":true}' },
+        { m: 'POST', p: '/api/telemetry/settings',      l: t('plugins.ep.telSettings') || 'Telemetry Settings',   icon: IC.shield,   body: '{"replay":true,"full":false,"bench":true}' },
+        { m: 'POST', p: '/api/recorder',                l: t('plugins.ep.recorder')    || 'Session Recorder',     icon: IC.zap,      body: '{"on":true,"full":false,"rust":true,"js":true}' },
+        { m: 'POST', p: '/api/replay/export',           l: t('plugins.ep.replayExport')|| 'Export Replay',        icon: IC.upload,   body: '' },
+        { m: 'POST', p: '/api/replay/import',           l: t('plugins.ep.replayImport')|| 'Import Replay',        icon: IC.download, body: '{"path":"","url":""}' },
+        { m: 'POST', p: '/api/launchpack/run',          l: t('plugins.ep.runLaunchpack')|| 'Run Launch Pack',     icon: IC.play,     body: '{"id":""}' },
+        { m: 'POST', p: '/api/schedule/run',            l: t('plugins.ep.runTask')     || 'Run Scheduled Task',   icon: IC.play,     body: '{"id":""}' },
+        { m: 'POST', p: '/api/discord/rpc',             l: t('plugins.ep.discordRpc')  || 'Discord RPC',          icon: IC.globe,    body: '{"enabled":true}' },
+        { m: 'POST', p: '/api/data/export-auto',        l: t('plugins.ep.exportAuto')  || 'Auto Backup',          icon: IC.upload,   body: '{"dir":"C:/BMM/Backups","name":"bmm-backup-{date}","increment":"paren"}' },
         { m: 'POST', p: '/api/repo/connect',            l: t('plugins.ep.repoConnect') || 'Connect Repo',         icon: IC.globe,    body: '{"url":"","name":""}' },
         { m: 'POST', p: '/api/repo/sync',               l: t('plugins.ep.repoSync')    || 'Sync Repo',            icon: IC.refresh,  body: '{}' },
         { m: 'POST', p: '/api/repo/gen',                l: t('plugins.ep.repoGen')     || 'Gen Repo',             icon: IC.upload,   body: '{}' },
@@ -3684,7 +3698,15 @@ function renderScripts(container: HTMLElement) {
         pathInp.value   = path;
         const bodyHints: Record<string, string> = {
             // POST / PUT
-            '/api/benchmark':        '{\n  "dataset": "sandbox",\n  "size": "M",\n  "mode": "manual",\n  "sources": []\n}',
+            '/api/benchmark':        '{\n  "dataset": "sandbox",\n  "size": "M",\n  "mode": "manual",\n  "sources": [],\n  "profiles": []\n}',
+            '/api/telemetry/consent':  '{\n  "enabled": true\n}',
+            '/api/telemetry/settings': '{\n  "replay": true,\n  "full": false,\n  "bench": true\n}',
+            '/api/recorder':           '{\n  "on": true,\n  "full": false,\n  "rust": true,\n  "js": true\n}',
+            '/api/replay/import':      '{\n  "path": "",\n  "url": ""\n}',
+            '/api/launchpack/run':     '{\n  "id": ""\n}',
+            '/api/schedule/run':       '{\n  "id": ""\n}',
+            '/api/discord/rpc':        '{\n  "enabled": true\n}',
+            '/api/data/export-auto':   '{\n  "dir": "C:/BMM/Backups",\n  "name": "bmm-backup-{date}",\n  "increment": "paren"\n}',
             '/api/mods/enable':      '{\n  "mod_id": ""\n}',
             '/api/mods/disable':     '{\n  "mod_id": ""\n}',
             '/api/mods/:id':         '{\n  "name": ""\n}',
@@ -4260,13 +4282,22 @@ function buildEndpointRow(ep: EndpointDef): string {
         'POST /api/repo/update':       'bmm://repo/update?dir=<repoDir>',
         'POST /api/mod/check-updates': 'bmm://mod/check-updates',
         'POST /api/mod/update':        'bmm://mod/update?url=<repo_url>',
-        'POST /api/benchmark':         'bmm://benchmark/run?dataset=<sandbox|real>&size=<S|M|L|XL|CUSTOM>&mb=<custom_mb>&mode=<manual|auto>&sources=<path1;path2>',
+        'POST /api/benchmark':         'bmm://benchmark/run?dataset=<sandbox|real>&size=<S|M|L|XL|CUSTOM>&mb=<mb>&mode=<manual|auto>&profiles=<id1;id2>&sources=<path1;path2>',
         'POST /api/repo/host':         'bmm://repo/host?dir=<serveDir>&port=<port>',
         'POST /api/apps/install':      'bmm://app/install?id=<id>&url=<url>&type=<fileType>&title=<title>',
         'POST /api/apps/launch':       'bmm://app/launch?id=<id>&exe=<exePath>',
         'POST /api/modpacks/create':   'bmm://modpack/create?name=<name>&profile=<profile_id>',
         'POST /api/language/import':   'bmm://language/import?path=<file>',
         'POST /api/restart':           'bmm://restart',
+        'POST /api/telemetry/consent':  'bmm://telemetry/consent?enabled=<1|0>',
+        'POST /api/telemetry/settings': 'bmm://telemetry/set?replay=<1|0>&full=<1|0>&bench=<1|0>',
+        'POST /api/recorder':           'bmm://recorder/set?on=<1|0>&full=<1|0>&rust=<1|0>&js=<1|0>',
+        'POST /api/replay/export':      'bmm://replay/export',
+        'POST /api/replay/import':      'bmm://replay/import?path=<file>&url=<downloadUrl>',
+        'POST /api/launchpack/run':     'bmm://launchpack/run?id=<launchpack_id>',
+        'POST /api/schedule/run':       'bmm://schedule/run?id=<task_id>',
+        'POST /api/discord/rpc':        'bmm://discord/rpc?enabled=<1|0>',
+        'POST /api/data/export-auto':   'bmm://data/export-auto?dir=<folder>&name=<template>&increment=<paren|underscore|timestamp|overwrite>',
         // Every other endpoint is reachable via the generic passthrough:
         //   bmm://api?method=<M>&path=<path>&<field>=<value>…
     };
@@ -5406,7 +5437,7 @@ function _showServerRepoAuthModal() {
 type _Field = {
     key: string;
     label: string;
-    type: 'text' | 'number' | 'select' | 'switch' | 'textarea';
+    type: 'text' | 'number' | 'select' | 'switch' | 'textarea' | 'folder' | 'file' | 'folderlist';
     placeholder?: string;
     default?: any;
     options?: Array<{ value: string; label: string }>;
@@ -5419,8 +5450,8 @@ type _ActionDef = {
     label: string;
     desc: string;
     iconSvg: string;
-    /** Pick from dropdown of mods / profiles / plugins. */
-    target?: 'mod' | 'profile' | 'plugin';
+    /** Pick from dropdown of mods / profiles / plugins / launch packs / tasks. */
+    target?: 'mod' | 'profile' | 'plugin' | 'launchpack' | 'task';
     fields?: _Field[];
 };
 
@@ -5480,6 +5511,17 @@ function _actionCatalog(): _ActionDef[] {
         { value: 'install_app',          label: d('actionInstallApp', 'Install app') },
         { value: 'launch_app',           label: d('actionLaunchApp', 'Launch app') },
         { value: 'list_installed_apps',  label: d('actionListInstalledApps', 'List installed apps') },
+        { value: 'telemetry_consent',    label: d('actionTelemetryConsent', 'Telemetry consent') },
+        { value: 'telemetry_settings',   label: d('actionTelemetrySettings', 'Telemetry options') },
+        { value: 'recorder_set',         label: d('actionRecorderSet', 'Session recorder') },
+        { value: 'replay_export',        label: d('actionReplayExport', 'Export replay') },
+        { value: 'replay_import',        label: d('actionReplayImport', 'Import replay') },
+        { value: 'check_mod_updates',    label: d('actionCheckModUpdates', 'Check mod updates') },
+        { value: 'run_launchpack',       label: d('actionRunLaunchpack', 'Run launch pack') },
+        { value: 'run_task',             label: d('actionRunTask', 'Run scheduled task') },
+        { value: 'run_benchmark',        label: d('actionRunBenchmark', 'Run benchmark') },
+        { value: 'discord_rpc',          label: d('actionDiscordRpc', 'Discord Rich Presence') },
+        { value: 'export_data',          label: d('actionExportData', 'Export data (backup)') },
     ];
     return [
         // ── BMM ─────────────────────────────────────────────────────────
@@ -5535,9 +5577,9 @@ function _actionCatalog(): _ActionDef[] {
           fields: [
             { key: 'name',        label: d('fldName', 'Name'),        type: 'text', placeholder: 'My profile' },
             { key: 'game_name',   label: d('fldGameName', 'Game name'),   type: 'text', placeholder: 'Skyrim', half: true },
-            { key: 'game_path',   label: d('fldGamePath', 'Game path'),   type: 'text', placeholder: 'C:/Games/Skyrim', half: true },
-            { key: 'mods_path',   label: d('fldModsPath', 'Mods path'),   type: 'text', placeholder: 'C:/Mods', half: true },
-            { key: 'backup_path', label: d('fldBackupPath', 'Backup path'), type: 'text', placeholder: 'C:/Backups', half: true },
+            { key: 'game_path',   label: d('fldGamePath', 'Game path'),   type: 'folder', placeholder: 'C:/Games/Skyrim', half: true },
+            { key: 'mods_path',   label: d('fldModsPath', 'Mods path'),   type: 'folder', placeholder: 'C:/Mods', half: true },
+            { key: 'backup_path', label: d('fldBackupPath', 'Backup path'), type: 'folder', placeholder: 'C:/Backups', half: true },
           ] },
         { id: 'update_profile',   cat: 'mods', label: d('actionUpdateProfile', 'Update profile'),
           desc: d('actionUpdateProfileDesc', 'Edits the selected profile. Empty fields are left unchanged.'),
@@ -5547,9 +5589,9 @@ function _actionCatalog(): _ActionDef[] {
             { key: 'game_name',   label: d('fldGameName', 'Game name'),   type: 'text', placeholder: d('phKeep', '(keep)'), half: true },
             { key: 'color',       label: d('fldColor', 'Color'),       type: 'text', placeholder: '#3b82f6', half: true },
             { key: 'icon',        label: d('fldIcon', 'Icon'),        type: 'text', placeholder: d('phKeep', '(keep)'), half: true },
-            { key: 'game_path',   label: d('fldGamePath', 'Game path'),   type: 'text', placeholder: d('phKeep', '(keep)'), half: true },
-            { key: 'mods_path',   label: d('fldModsPath', 'Mods path'),   type: 'text', placeholder: d('phKeep', '(keep)'), half: true },
-            { key: 'backup_path', label: d('fldBackupPath', 'Backup path'), type: 'text', placeholder: d('phKeep', '(keep)'), half: true },
+            { key: 'game_path',   label: d('fldGamePath', 'Game path'),   type: 'folder', placeholder: d('phKeep', '(keep)'), half: true },
+            { key: 'mods_path',   label: d('fldModsPath', 'Mods path'),   type: 'folder', placeholder: d('phKeep', '(keep)'), half: true },
+            { key: 'backup_path', label: d('fldBackupPath', 'Backup path'), type: 'folder', placeholder: d('phKeep', '(keep)'), half: true },
           ] },
         { id: 'delete_profile',   cat: 'mods', label: d('actionDeleteProfile', 'Delete profile'),
           desc: d('actionDeleteProfileDesc', 'Permanently removes the selected profile.'),
@@ -5595,7 +5637,7 @@ function _actionCatalog(): _ActionDef[] {
           iconSvg: sv('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/>'),
           fields: [
             { key: 'profile_id',   label: d('fldProfileUuid', 'Profile UUID'),   type: 'text',   placeholder: d('phActiveProfile', 'Leave empty = active profile') },
-            { key: 'output_dir',   label: d('fldOutputFolder', 'Output folder'),  type: 'text',   placeholder: 'C:/Export' },
+            { key: 'output_dir',   label: d('fldOutputFolder', 'Output folder'),  type: 'folder',   placeholder: 'C:/Export' },
             { key: 'author',       label: d('fldAuthorName', 'Author name'),    type: 'text',   placeholder: d('phYourName', 'Your name'), half: true },
             { key: 'port',         label: d('fldPortServer', 'Port (server)'),  type: 'number', placeholder: '8080', default: '8080', half: true },
             { key: 'admin_pass',   label: d('fldAdminPass', 'Admin password'), type: 'text',   placeholder: d('phOptional', '(optional)'), half: true },
@@ -5612,7 +5654,7 @@ function _actionCatalog(): _ActionDef[] {
           desc: d('actionHttpHostDesc', 'Starts the local repo HTTP server so others can sync from you.'),
           iconSvg: sv('<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>'),
           fields: [
-            { key: 'serve_dir',    label: d('fldFolderToHost', 'Folder to host'),  type: 'text',   placeholder: 'C:/Export' },
+            { key: 'serve_dir',    label: d('fldFolderToHost', 'Folder to host'),  type: 'folder',   placeholder: 'C:/Export' },
             { key: 'port',         label: d('fldPort', 'Port'),            type: 'number', placeholder: '8080', default: '8080', half: true },
             { key: 'upload_limit', label: d('fldUlLimit', 'UL limit (KB/s)'), type: 'number', placeholder: d('phUnlimited', '0 = unlimited'), default: '0', half: true },
           ] },
@@ -5648,7 +5690,7 @@ function _actionCatalog(): _ActionDef[] {
           iconSvg: sv('<polygon points="5 3 19 12 5 21 5 3"/>'),
           fields: [
             { key: 'appId',   label: d('fldAppId',  'App ID'),   type: 'text', placeholder: 'my-app' },
-            { key: 'exePath', label: d('fldExePath', 'Exe path'), type: 'text', placeholder: 'C:/Apps/my-app.exe' },
+            { key: 'exePath', label: d('fldExePath', 'Exe path'), type: 'file', placeholder: 'C:/Apps/my-app.exe' },
           ] },
         { id: 'list_installed_apps', cat: 'apps', label: d('actionListInstalledApps', 'List installed apps'),
           desc: d('actionListInstalledAppsDesc', 'Fetches all apps installed through the BMM App Catalog.'),
@@ -5725,6 +5767,80 @@ function _actionCatalog(): _ActionDef[] {
         { id: 'restart',       cat: 'system', label: d('actionRestart', 'Restart BMM'),
           desc: d('actionRestartDesc', 'Restarts the BetterModsManager app. No parameters.'),
           iconSvg: sv('<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>') },
+
+        { id: 'run_benchmark', cat: 'mods', label: d('actionRunBenchmark', 'Run benchmark'),
+          desc: d('actionRunBenchmarkDesc', 'Run a performance benchmark. "My mods" = pick profiles and/or add folders to benchmark.'),
+          iconSvg: sv('<path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/>'),
+          fields: [
+            { key: 'dataset', label: d('fldDataset', 'Dataset'), type: 'select', default: 'sandbox', half: true, options: [
+                { value: 'sandbox', label: d('optSandbox', 'Sandbox (synthetic)') },
+                { value: 'real', label: d('optMyMods', 'My mods (real)') },
+            ] },
+            { key: 'size', label: d('fldSize', 'Size'), type: 'select', default: 'M', half: true, options: [
+                { value: 'S', label: 'S' }, { value: 'M', label: 'M' }, { value: 'L', label: 'L' }, { value: 'XL', label: 'XL' },
+            ] },
+            { key: 'sources', label: d('fldBenchSources', 'Mods to benchmark (profiles / folders)'), type: 'folderlist' },
+          ] },
+        { id: 'run_launchpack', cat: 'system', label: d('actionRunLaunchpack', 'Run launch pack'),
+          desc: d('actionRunLaunchpackDesc', 'Runs a saved launch pack (apply its profile/modpack + launch).'),
+          iconSvg: sv('<path d="M5 3v18l14-9z"/>'), target: 'launchpack' },
+        { id: 'run_task', cat: 'control', label: d('actionRunTask', 'Run scheduled task'),
+          desc: d('actionRunTaskDesc', 'Triggers one of your saved Scheduling & automation tasks now.'),
+          iconSvg: sv('<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>'), target: 'task' },
+        { id: 'check_mod_updates', cat: 'mods', label: d('actionCheckModUpdates', 'Check mod updates'),
+          desc: d('actionCheckModUpdatesDesc', 'Checks every linked mod against its server repo for updates.'),
+          iconSvg: sv('<path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>') },
+
+        { id: 'discord_rpc', cat: 'system', label: d('actionDiscordRpc', 'Discord Rich Presence'),
+          desc: d('actionDiscordRpcDesc', 'Enable or disable Discord Rich Presence.'),
+          iconSvg: sv('<circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M7.5 7.2A14 14 0 0 1 12 6.5a14 14 0 0 1 4.5.7l1.8 4.2A9 9 0 0 1 12 13a9 9 0 0 1-6.3-1.6z"/>'),
+          fields: [ { key: 'enabled', label: d('fldEnabled', 'Enabled'), type: 'switch', default: true } ] },
+        { id: 'export_data', cat: 'system', label: d('actionExportData', 'Export data (backup)'),
+          desc: d('actionExportDataDesc', 'Unattended backup to a folder. Filename template: {date} {time} {datetime}.'),
+          iconSvg: sv('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'),
+          fields: [
+            { key: 'dir',  label: d('fldExportFolder', 'Backup folder'), type: 'folder', placeholder: 'C:/BMM/Backups' },
+            { key: 'name', label: d('fldFilenameTemplate', 'Filename template'), type: 'text', placeholder: 'bmm-backup-{date}', default: 'bmm-backup-{date}', half: true },
+            { key: 'increment', label: d('fldIfExists', 'If file exists'), type: 'select', default: 'paren', half: true, options: [
+                { value: 'paren', label: d('optParen', 'Add (1), (2)…') },
+                { value: 'underscore', label: d('optUnderscore', 'Add _1, _2…') },
+                { value: 'timestamp', label: d('optTimestamp', 'Append timestamp') },
+                { value: 'overwrite', label: d('optOverwrite', 'Overwrite') },
+            ] },
+          ] },
+
+        // ── Privacy & telemetry / local recorder / replay ──────────────────
+        { id: 'telemetry_consent', cat: 'system', label: d('actionTelemetryConsent', 'Telemetry consent'),
+          desc: d('actionTelemetryConsentDesc', 'Enable or disable "Share anonymous usage data".'),
+          iconSvg: sv('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+          fields: [ { key: 'enabled', label: d('fldEnabled', 'Enabled'), type: 'switch', default: true } ] },
+        { id: 'telemetry_settings', cat: 'system', label: d('actionTelemetrySettings', 'Telemetry options'),
+          desc: d('actionTelemetrySettingsDesc', 'Manage telemetry sub-options (visual replay, full mode, weekly benchmark).'),
+          iconSvg: sv('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9"/>'),
+          fields: [
+            { key: 'replay', label: d('fldReplay', 'Visual replay'), type: 'switch', default: true, half: true },
+            { key: 'full',   label: d('fldFullReplay', 'Full (unmasked)'), type: 'switch', default: false, half: true },
+            { key: 'bench',  label: d('fldWeeklyBench', 'Weekly benchmark'), type: 'switch', default: true, half: true },
+          ] },
+        { id: 'recorder_set', cat: 'system', label: d('actionRecorderSet', 'Session recorder'),
+          desc: d('actionRecorderSetDesc', 'Configure the local session recorder (on/off, full mode, Rust & JS logs).'),
+          iconSvg: sv('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>'),
+          fields: [
+            { key: 'on',   label: d('fldRecOn', 'Record'), type: 'switch', default: true, half: true },
+            { key: 'full', label: d('fldFullReplay', 'Full (unmasked)'), type: 'switch', default: false, half: true },
+            { key: 'rust', label: d('fldRustLog', 'Rust log'), type: 'switch', default: true, half: true },
+            { key: 'js',   label: d('fldJsLog', 'JS log'), type: 'switch', default: true, half: true },
+          ] },
+        { id: 'replay_export', cat: 'system', label: d('actionReplayExport', 'Export replay'),
+          desc: d('actionReplayExportDesc', 'Export the current local session recording to a .bmmreplay file.'),
+          iconSvg: sv('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>') },
+        { id: 'replay_import', cat: 'system', label: d('actionReplayImport', 'Import replay'),
+          desc: d('actionReplayImportDesc', 'Import + replay a .bmmreplay from a file path or a download URL.'),
+          iconSvg: sv('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'),
+          fields: [
+            { key: 'path', label: d('fldPath', 'File path'), type: 'file', placeholder: 'C:/…/session.bmmreplay' },
+            { key: 'url',  label: d('fldUrl', 'Download URL'), type: 'text', placeholder: 'https://…/session.bmmreplay' },
+          ] },
 
         // ── Control flow ────────────────────────────────────────────────
         { id: 'comment',        cat: 'control', label: d('actionComment', 'Comment'),
@@ -5816,6 +5932,46 @@ function _renderField(cardId: string, f: _Field): string {
                 placeholder="${escHtml(f.placeholder || '')}">${escHtml(String(f.default ?? ''))}</textarea>
         </div>`;
     }
+    // folderlist — a chip list of folders, fed by a folder browser AND a "+ Profile"
+    // dropdown (adds the profile's mods folder). Stored as a ';'-joined hidden value.
+    if (f.type === 'folderlist') {
+        const profOpts = _allProfiles
+            .filter(p => p.mods_path)
+            .map(p => `<option value="${escHtml(p.mods_path)}">${escHtml(p.name || p.id)}</option>`).join('');
+        return `<div class="plug-act-field full">
+            <label for="${id}">${escHtml(f.label)}</label>
+            <input type="hidden" id="${id}" data-field="${f.key}" value="${escHtml(String(f.default ?? ''))}">
+            <div class="plug-fl-chips" id="${id}-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+                <button type="button" class="btn btn-sm plug-fl-add-folder" data-for="${id}" style="display:flex;align-items:center;gap:5px">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                    <span>${escHtml(t('plugins.addFolder') || 'Add folder')}</span>
+                </button>
+                ${profOpts ? `<select class="select select-sm plug-fl-add-profile" data-for="${id}">
+                    <option value="">${escHtml(t('plugins.addProfile') || '+ Profile…')}</option>${profOpts}
+                </select>` : ''}
+            </div>
+        </div>`;
+    }
+    // folder / file — a path input with a native Browse button (no manual typing).
+    if (f.type === 'folder' || f.type === 'file') {
+        const val = f.default !== undefined ? escHtml(String(f.default)) : '';
+        const ic = f.type === 'folder'
+            ? '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
+            : '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>';
+        return `<div class="plug-act-field ${wcls}">
+            <label for="${id}">${escHtml(f.label)}</label>
+            <div style="display:flex;gap:6px;align-items:stretch">
+                <input id="${id}" type="text" class="input input-sm" data-field="${f.key}" style="flex:1;min-width:0"
+                    placeholder="${escHtml(f.placeholder || '')}" value="${val}">
+                <button type="button" class="btn btn-sm plug-act-browse" data-browse="${f.type}" data-for="${id}"
+                    title="${escHtml(t('plugins.browse') || 'Browse…')}" style="flex-shrink:0;display:flex;align-items:center;gap:5px">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ic}</svg>
+                    <span>${escHtml(t('plugins.browse') || 'Browse')}</span>
+                </button>
+            </div>
+        </div>`;
+    }
     // text or number
     const val = f.default !== undefined ? escHtml(String(f.default)) : '';
     return `<div class="plug-act-field ${wcls}">
@@ -5825,7 +5981,7 @@ function _renderField(cardId: string, f: _Field): string {
     </div>`;
 }
 
-function _renderTargetSelect(cardId: string, kind: 'mod' | 'profile' | 'plugin'): string {
+function _renderTargetSelect(cardId: string, kind: 'mod' | 'profile' | 'plugin' | 'launchpack' | 'task'): string {
     let opts = '';
     let emptyLabel = '';
     if (kind === 'mod') {
@@ -5834,12 +5990,20 @@ function _renderTargetSelect(cardId: string, kind: 'mod' | 'profile' | 'plugin')
     } else if (kind === 'profile') {
         opts = _allProfiles.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`).join('');
         emptyLabel = t('plugins.noProfiles') || 'No profiles available';
+    } else if (kind === 'launchpack') {
+        opts = _allLaunchpacks.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name || p.id)}</option>`).join('');
+        emptyLabel = t('plugins.noLaunchpacks') || 'No launch packs';
+    } else if (kind === 'task') {
+        opts = _allTasks.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name || p.id)}</option>`).join('');
+        emptyLabel = t('plugins.noTasks') || 'No scheduled tasks';
     } else {
         opts = _installedPlugins.map(p => `<option value="${escHtml(p.manifest.id)}">${escHtml(p.manifest.name)}</option>`).join('');
         emptyLabel = t('plugins.noPlugins') || 'No plugins installed';
     }
     if (!opts) opts = `<option value="">${escHtml(emptyLabel)}</option>`;
-    const labelTxt = kind === 'mod' ? 'Mod' : kind === 'profile' ? t('plugins.fldProfile') || 'Profile' : 'Plugin';
+    const labelTxt = kind === 'mod' ? 'Mod' : kind === 'profile' ? t('plugins.fldProfile') || 'Profile'
+        : kind === 'launchpack' ? (t('plugins.fldLaunchpack') || 'Launch pack')
+        : kind === 'task' ? (t('plugins.fldTask') || 'Task') : 'Plugin';
     // Profile selects include an icon display element; icon is wired after insertion.
     const inner = kind === 'profile'
         ? `<div class="profile-select-icon-wrap" style="display:flex;align-items:center;gap:5px;">
@@ -5910,6 +6074,43 @@ function _renderActionCard(def: _ActionDef): HTMLElement {
     // armed only from the grip so the form fields stay fully usable.
     const grip = card.querySelector('.plug-act-grip') as HTMLElement;
     grip?.addEventListener('pointerdown', (e) => _startCardDrag(card, e as PointerEvent));
+
+    // Folder-list widgets (benchmark sources): chips + Add folder + Add profile.
+    card.querySelectorAll('.plug-fl-chips').forEach((chipsEl) => {
+        const id = (chipsEl.id || '').replace(/-chips$/, '');
+        const hidden = card.querySelector(`#${id}`) as HTMLInputElement | null;
+        if (!hidden) return;
+        const get = () => hidden.value.split(';').map(s => s.trim()).filter(Boolean);
+        const set = (arr: string[]) => { hidden.value = Array.from(new Set(arr)).join(';'); hidden.dispatchEvent(new Event('input', { bubbles: true })); render(); };
+        const render = () => {
+            chipsEl.innerHTML = get().map((p, i) => `<span class="pill" style="display:inline-flex;align-items:center;gap:6px;background:var(--bg-tertiary,#1b2230);max-width:100%">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px" title="${escHtml(p)}">${escHtml((p.split(/[\\/]/).pop() || p))}</span>
+                <button type="button" class="plug-fl-rm" data-i="${i}" title="${escHtml(t('common.remove') || 'Remove')}" style="background:none;border:0;color:var(--text-muted,#8a8f98);cursor:pointer;padding:0;display:inline-flex"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </span>`).join('') || `<span style="font-size:11px;color:var(--text-muted,#8a8f98)">${escHtml(t('plugins.noSources') || 'No source — sandbox dataset will be used.')}</span>`;
+            chipsEl.querySelectorAll('.plug-fl-rm').forEach((rm) => rm.addEventListener('click', () => {
+                const arr = get(); arr.splice(Number((rm as HTMLElement).dataset.i), 1); set(arr);
+            }));
+        };
+        card.querySelector(`.plug-fl-add-folder[data-for="${id}"]`)?.addEventListener('click', async () => {
+            try { const f = await pickFolder(); if (f) set([...get(), String(f)]); } catch { /* cancelled */ }
+        });
+        const profSel = card.querySelector(`.plug-fl-add-profile[data-for="${id}"]`) as HTMLSelectElement | null;
+        profSel?.addEventListener('change', () => { if (profSel.value) { set([...get(), profSel.value]); profSel.value = ''; } });
+        render();
+    });
+
+    // "Browse…" buttons → native folder / file picker, so paths are never typed.
+    card.querySelectorAll('.plug-act-browse').forEach((b) => b.addEventListener('click', async () => {
+        const btn = b as HTMLElement;
+        const inp = card.querySelector(`#${btn.dataset.for}`) as HTMLInputElement | null;
+        if (!inp) return;
+        try {
+            const picked = btn.dataset.browse === 'folder'
+                ? await pickFolder()
+                : await pickFile({});
+            if (picked) { inp.value = String(picked); inp.dispatchEvent(new Event('input', { bubbles: true })); }
+        } catch { /* user cancelled */ }
+    }));
 
     // Wire custom icon display for profile target selects (async, non-blocking).
     if (def.target === 'profile') {
@@ -6799,6 +7000,24 @@ function _apiBodyFor(a: any): { method: string; path: string; body: Record<strin
             appId: s('appId') || 'my-app', exePath: s('exePath') || 'C:/Apps/app.exe' } };
         case 'uninstall_app':    return { method: 'DELETE', path: `/api/apps/${s('appId') || 'APP_ID'}`, body: {} };
         case 'list_installed_apps': return { method: 'GET', path: '/api/apps', body: {} };
+
+        case 'check_mod_updates':  return { method: 'POST', path: '/api/mod/check-updates',  body: {} };
+        case 'run_launchpack':     return { method: 'POST', path: '/api/launchpack/run',      body: { id: a.target_id } };
+        case 'run_task':           return { method: 'POST', path: '/api/schedule/run',        body: { id: a.target_id } };
+        case 'run_benchmark': {
+            const sources = s('sources').split(';').map(x => x.trim()).filter(Boolean);
+            const dataset = (s('dataset') === 'real' || sources.length) ? 'real' : 'sandbox';
+            return { method: 'POST', path: '/api/benchmark', body: { dataset, size: s('size') || 'M', mode: 'auto', sources } };
+        }
+        case 'discord_rpc':        return { method: 'POST', path: '/api/discord/rpc',          body: { enabled: bool('enabled') } };
+        case 'export_data':        return { method: 'POST', path: '/api/data/export-auto',     body: _prune({ dir: s('dir'), name: s('name'), increment: s('increment') || 'paren' }) };
+
+        // ── Privacy & telemetry / Session recorder / replay ───────────────
+        case 'telemetry_consent':  return { method: 'POST', path: '/api/telemetry/consent',  body: { enabled: bool('enabled') } };
+        case 'telemetry_settings': return { method: 'POST', path: '/api/telemetry/settings', body: { replay: bool('replay'), full: bool('full'), bench: bool('bench') } };
+        case 'recorder_set':       return { method: 'POST', path: '/api/recorder',           body: { on: bool('on'), full: bool('full'), rust: bool('rust'), js: bool('js') } };
+        case 'replay_export':      return { method: 'POST', path: '/api/replay/export',      body: {} };
+        case 'replay_import':      return { method: 'POST', path: '/api/replay/import',      body: _prune({ path: s('path'), url: s('url') }) };
         default: return null;
     }
 }
@@ -6816,6 +7035,9 @@ function _prune(o: Record<string, any>): Record<string, any> {
 const _DEEPLINKABLE = new Set([
     'enable_mod', 'disable_mod', 'activate_profile',
     'apply_plugin', 'compare_plugin', 'enable_modpack', 'disable_modpack',
+    'telemetry_consent', 'telemetry_settings', 'recorder_set', 'replay_export', 'replay_import',
+    'check_mod_updates', 'discord_rpc', 'export_data', 'run_benchmark',
+    'run_launchpack', 'run_task',
 ]);
 
 // Returns true if any action will issue an authenticated HTTP call given the
@@ -6831,6 +7053,8 @@ function _actionsNeedApi(actions: Array<{ action_type: string }>, useDeeplink: b
 
 // Generic action renderer for simpler languages (Ruby, PHP, Go, Java, C#, Rust)
 function _genericAction(a: any, lang: string, token: string | null, useDeeplink: boolean, base: string): string[] {
+    const _ex = a.extra || {};
+    const _xb = (k: string) => (_ex[k] === true || _ex[k] === 'true') ? '1' : '0';
     const dlMap: Record<string, string> = {
         enable_mod:       `bmm://mod/enable?id=${a.target_id}`,
         disable_mod:      `bmm://mod/disable?id=${a.target_id}`,
@@ -6839,6 +7063,17 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
         compare_plugin:   `bmm://plugin/compare?id=${a.target_id}`,
         enable_modpack:   `bmm://modpack/enable?id=${a.target_id}`,
         disable_modpack:  `bmm://modpack/disable?id=${a.target_id}`,
+        telemetry_consent:  `bmm://telemetry/consent?enabled=${_xb('enabled')}`,
+        telemetry_settings: `bmm://telemetry/set?replay=${_xb('replay')}&full=${_xb('full')}&bench=${_xb('bench')}`,
+        recorder_set:       `bmm://recorder/set?on=${_xb('on')}&full=${_xb('full')}&rust=${_xb('rust')}&js=${_xb('js')}`,
+        replay_export:      `bmm://replay/export`,
+        replay_import:      `bmm://replay/import?path=${encodeURIComponent(_ex.path || '')}&url=${encodeURIComponent(_ex.url || '')}`,
+        check_mod_updates:  `bmm://mod/check-updates`,
+        run_launchpack:     `bmm://launchpack/run?id=${a.target_id}`,
+        run_task:           `bmm://schedule/run?id=${a.target_id}`,
+        run_benchmark:      `bmm://benchmark/run?dataset=${(_ex.dataset === 'real' || (_ex.sources || '')) ? 'real' : 'sandbox'}&size=${encodeURIComponent(_ex.size || 'M')}&mode=auto&sources=${encodeURIComponent(_ex.sources || '')}`,
+        discord_rpc:        `bmm://discord/rpc?enabled=${_xb('enabled')}`,
+        export_data:        `bmm://data/export-auto?dir=${encodeURIComponent(_ex.dir || '')}&name=${encodeURIComponent(_ex.name || '')}&increment=${encodeURIComponent(_ex.increment || 'paren')}`,
     };
 
     const comment = (t: string) => lang === 'php' ? `// ${t}` : lang === 'rs' ? `// ${t}` : `// ${t}`;

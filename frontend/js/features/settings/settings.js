@@ -148,6 +148,22 @@ async function initDiscordRpcSettings() {
         }
     });
 }
+/** Enable/disable Discord Rich Presence (used by the API + deep links). */
+export async function setDiscordRpc(enabled) {
+    const settings = await getSettings();
+    settings.discord_rpc_enabled = enabled;
+    await updateSettings(settings);
+    await invoke('init_discord_rpc');
+    if (enabled) {
+        try {
+            await updateDiscordStatus();
+        }
+        catch { /* ignore */ }
+    }
+    const chk = document.getElementById('chk-discord-rpc');
+    if (chk)
+        chk.checked = enabled;
+}
 // ── Sound / Animation Settings ───────────────────────────
 async function initSoundSettings() {
     const chkSound = document.getElementById('chk-sound-effects');

@@ -47,9 +47,21 @@ let pendingBenchConfig: { dataset?: string; size?: string; mb?: number; sources?
  * (auto mode); otherwise everything is set up and the user clicks Run (manual mode).
  */
 export async function openBenchmarkWithConfig(
-    cfg: { dataset?: string; size?: string; mb?: number; sources?: string[]; autoRun?: boolean },
+    cfg: { dataset?: string; size?: string; mb?: number; sources?: string[]; profiles?: string[]; autoRun?: boolean },
 ): Promise<void> {
-    pendingBenchConfig = cfg || {};
+    const sources = [...(cfg.sources || [])];
+    // Resolve profile ids/names → their mods folder, and merge with explicit folders.
+    if (Array.isArray(cfg.profiles) && cfg.profiles.length) {
+        try {
+            const profs = (await invoke('get_profiles') as any[]) || [];
+            for (const pid of cfg.profiles) {
+                const p = profs.find((x: any) => x.id === pid || x.name === pid);
+                if (p?.mods_path && !sources.includes(p.mods_path)) sources.push(p.mods_path);
+            }
+        } catch { /* ignore */ }
+    }
+    const dataset = (cfg.dataset === 'real' || sources.length) ? 'real' : (cfg.dataset || 'sandbox');
+    pendingBenchConfig = { dataset, size: cfg.size, mb: cfg.mb, sources, autoRun: cfg.autoRun };
     // Rebuild from scratch so the config is applied even if the modal was already open.
     document.getElementById('modal-advanced-perf-overlay')?.remove();
     await openAdvancedPerfModal();
@@ -483,12 +495,12 @@ export async function openAdvancedPerfModal() {
         if (isRecording) {
             await invoke('start_benchmark');
             recBtn.style.color = '#ef4444';
-            (recBtn.querySelector('#rec-text') as HTMLElement).textContent = 'Stop Recording';
+            (recBtn.querySelector('#rec-text') as HTMLElement).textContent = t('bench.stopRecording') || 'Stop Recording';
             (recBtn.querySelector('#rec-dot') as HTMLElement).style.display = 'block';
         } else {
             await invoke('stop_benchmark');
             recBtn.style.color = '#fff';
-            (recBtn.querySelector('#rec-text') as HTMLElement).textContent = 'Start Monitoring';
+            (recBtn.querySelector('#rec-text') as HTMLElement).textContent = t('bench.startMonitoring') || 'Start Monitoring';
             (recBtn.querySelector('#rec-dot') as HTMLElement).style.display = 'none';
         }
     };
@@ -1130,11 +1142,11 @@ function toggleMiniMonitor(active: boolean) {
         const startStopBtn = el.querySelector('#mini-startstop') as HTMLElement;
         const updateMiniBtnVisuals = () => {
             if (isRecording) {
-                startStopBtn.textContent = 'STOP';
+                startStopBtn.textContent = t('bench.stop') || 'STOP';
                 startStopBtn.style.color = '#ef4444';
                 startStopBtn.style.borderColor = 'rgba(239,68,68,0.3)';
             } else {
-                startStopBtn.textContent = 'START';
+                startStopBtn.textContent = t('bench.start') || 'START';
                 startStopBtn.style.color = '#10b981';
                 startStopBtn.style.borderColor = 'rgba(16,185,129,0.3)';
             }
@@ -1392,7 +1404,7 @@ function renderBenchResults(container: HTMLElement | null, report: any) {
     container.innerHTML = `
         <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:center; justify-content:space-between; padding:4px 2px;">
             <div style="display:flex; gap:18px; flex-wrap:wrap; font-size:12px; color:var(--text-muted);">
-                <span>${t('bench.colMode') || 'Mode'}: <b style="color:#fff; text-transform:capitalize;">${env.mode || ''}</b></span>
+                <span>${t('bench.colMode') || 'Mode'}: <b style="color:#fff;">${env.mode === 'real' ? (t('bench.real') || 'Real') : (t('bench.sandbox') || 'Sandbox')}</b></span>
                 <span>${t('bench.colDataset') || 'Dataset'}: <b style="color:#fff;">${env.dataset_files || 0} ${t('bench.files') || 'files'} · ${dsMb} MB</b></span>
                 <span>CPU: <b style="color:#fff;">${env.cores || '?'} ${t('bench.cores') || 'cores'}</b></span>
                 ${env.disk ? `<span>${t('bench.disk') || 'Disk'}: <b style="color:#fff;">${env.disk}</b></span>` : ''}

@@ -13,6 +13,10 @@ pub struct Config {
     pub rate_per_min: i64,
     /// Max events accepted in a single batch (oversized batches are rejected).
     pub max_batch: usize,
+    /// Default storage limit (MB) when none has been set in the `meta` table. The
+    /// fast guard loop trims back down to this whenever the DB grows ~20% past it
+    /// (immediately — no waiting for the hourly retention pass).
+    pub soft_db_mb: i64,
 }
 
 fn env_or(key: &str, default: &str) -> String {
@@ -34,6 +38,7 @@ impl Config {
             static_dir: env_or("STATIC_DIR", "public"),
             rate_per_min: env_or("RATE_PER_MIN", "240").parse().unwrap_or(240),
             max_batch: env_or("MAX_BATCH", "1000").parse().unwrap_or(1000),
+            soft_db_mb: env_or("SOFT_DB_MB", "5120").parse().unwrap_or(5120),
         }
     }
 }

@@ -73,7 +73,7 @@ pub fn run_scheduled_command(
 
     log_line(format!("[SCHED] Running custom command: {} {:?}", program, args));
 
-    let mut cmd = std::process::Command::new(program);
+    let mut cmd = crate::commands::proc::hidden_command(program);
     cmd.args(&args);
     if let Some(dir) = working_dir.as_ref().filter(|d| !d.trim().is_empty()) {
         cmd.current_dir(dir);
@@ -220,7 +220,7 @@ pub fn register_os_schedule(task_id: String, trigger: serde_json::Value) -> Resu
         exe = exe_str, id = safe_id, trig = trigger_expr, name = task_name
     );
 
-    let out = std::process::Command::new("powershell")
+    let out = crate::commands::proc::hidden_command("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .output()
         .map_err(|e| format!("PowerShell spawn failed: {}", e))?;
@@ -242,7 +242,7 @@ pub fn unregister_os_schedule(task_id: String) -> Result<(), String> {
         "try {{ Unregister-ScheduledTask -TaskName '{}' -Confirm:$false }} catch {{}}",
         task_name
     );
-    let _ = std::process::Command::new("powershell")
+    let _ = crate::commands::proc::hidden_command("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .output();
     log_line(format!("[SCHED] Unregistered OS task {}", task_name));

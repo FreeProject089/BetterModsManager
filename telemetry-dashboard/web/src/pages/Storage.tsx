@@ -20,6 +20,57 @@ function downloadJson(obj: any, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+// Collapsible card with an optional search box (used for every data zone).
+function Section({ title, count, open, onToggle, search, onSearch, searchPh, children }: {
+  title: string; count: number; open: boolean; onToggle: () => void;
+  search?: string; onSearch?: (v: string) => void; searchPh?: string; children: React.ReactNode;
+}) {
+  return (
+    <Card title={`${title} · ${count}`} right={
+      <div className="flex items-center gap-2">
+        {open && onSearch !== undefined && (
+          <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder={searchPh || "Rechercher…"}
+            className="bg-panel2 border border-line rounded-lg px-2.5 py-1 text-xs w-44 focus:outline-none focus:border-brand" />
+        )}
+        <button onClick={onToggle} className="text-sub hover:text-ink p-1" title={open ? "Réduire" : "Déplier"}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+            style={{ transform: open ? "" : "rotate(-90deg)", transition: "transform .15s" }}><polyline points="6 9 12 15 18 9" /></svg>
+        </button>
+      </div>
+    }>
+      {open && children}
+    </Card>
+  );
+}
+
+// Lightweight recap viewer (the "Analyser" button).
+function RecapView({ recap, onClose }: { recap: any; onClose: () => void }) {
+  const t = recap?.totals || {};
+  const list = (arr: any[]) => (arr || []).slice(0, 12).map((x: any) => (
+    <div key={x.k} className="flex justify-between gap-3 text-sm py-0.5"><span className="truncate">{x.k || "—"}</span><span className="text-sub">{nf(x.v)}</span></div>
+  ));
+  return (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/55 p-4" onClick={onClose}>
+      <div className="w-[min(820px,95vw)] max-h-[88vh] overflow-auto bg-panel border border-line rounded-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div className="font-semibold">Recap · {recap?.month || "?"} {recap?.anonymized ? "· anonymisé" : ""}</div>
+          <button onClick={onClose} className="pill bg-panel2">Fermer</button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+          {[["Events", t.events], ["Sessions", t.sessions], ["Pages vues", t.pageviews], ["Users", t.users], ["Min/session", t.avg_session_min], ["Pages/session", t.pages_per_session]].map(([k, v]) => (
+            <div key={k as string} className="card px-3 py-2"><div className="text-[11px] uppercase tracking-wide text-sub">{k}</div><div className="text-lg font-semibold">{nf(Number(v) || 0)}</div></div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card title="Top events">{recap?.top_events?.length ? list(recap.top_events) : <Empty>—</Empty>}</Card>
+          <Card title="Top pages">{recap?.top_pages?.length ? list(recap.top_pages) : <Empty>—</Empty>}</Card>
+        </div>
+        {recap?.os?.length ? <Card title="OS">{list(recap.os)}</Card> : null}
+      </div>
+    </div>
+  );
+}
+
 const ACTION_LABEL: Record<string, string> = {
   replay_download: "Téléchargement replay",
   replay_delete: "Suppression replay",
@@ -27,6 +78,10 @@ const ACTION_LABEL: Record<string, string> = {
   backup_export: "Export backup",
   backup_import: "Import backup",
   deletion_decide: "Décision suppression",
+  storage_limit: "Limite de stockage",
+  recap_export: "Export / génération recap",
+  recap_import: "Import recap",
+  recap_delete: "Suppression recap",
 };
 
 function StorageLimitWidget({ usedBytes, limitMb, limitBytes, usedPct, barColor, onLoad }: {
@@ -89,11 +144,50 @@ export default function Storage() {
   const [audit, setAudit] = useState<any[]>([]);
   const [busy, setBusy] = useState<string>("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const recapFileRef = useRef<HTMLInputElement>(null);
+  const [recaps, setRecaps] = useState<any[]>([]);
+  const [recapMonth, setRecapMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [recapAnon, setRecapAnon] = useState(false);
 
   const load = useCallback(() => {
     apiGet("/api/admin/storage").then(setData).catch(() => setData({ tables: [], replays: [], packets: [] }));
     apiGet("/api/admin/audit").then((r) => setAudit(r.audit || [])).catch(() => setAudit([]));
+    apiGet("/api/admin/recaps").then((r) => setRecaps(r.recaps || [])).catch(() => setRecaps([]));
   }, []);
+
+  const generateRecap = async () => {
+    setBusy("recap");
+    try {
+      const r = await apiGet(`/api/admin/recap?month=${encodeURIComponent(recapMonth)}&anon=${recapAnon ? 1 : 0}`);
+      if (r?.recap) downloadJson(r.recap, `bmm-recap-${recapMonth}${recapAnon ? "-anon" : ""}.json`);
+    } finally { setBusy(""); load(); }
+  };
+  const importRecap = async (file: File) => {
+    setBusy("recap-import");
+    try { await apiPost("/api/admin/recap/import", JSON.parse(await file.text())); }
+    catch (e) { alert("Import échoué : " + e); }
+    finally { setBusy(""); load(); }
+  };
+  const downloadRecap = async (id: number, month: string) => {
+    const r = await apiGet(`/api/admin/recap/get?id=${id}`);
+    downloadJson(r, `bmm-recap-${month || id}.json`);
+  };
+  const deleteRecap = async (id: number) => {
+    if (!confirm("Supprimer ce recap ?")) return;
+    await apiDelete(`/api/admin/recap?id=${id}`); load();
+  };
+  const analyzeRecap = async (id: number) => {
+    try { setRecapView(await apiGet(`/api/admin/recap/get?id=${id}`)); } catch { /* ignore */ }
+  };
+
+  // Collapse + per-section search state.
+  const [open, setOpen] = useState<Record<string, boolean>>({ replays: true, packets: true, audit: true, recaps: true });
+  const [q, setQ] = useState<Record<string, string>>({});
+  const [recapView, setRecapView] = useState<any | null>(null);
+  const tog = (k: string) => setOpen((o) => ({ ...o, [k]: !(o[k] ?? true) }));
+  const qv = (k: string) => q[k] || "";
+  const sq = (k: string, v: string) => setQ((s) => ({ ...s, [k]: v }));
+  const has = (hay: any, needle: string) => String(hay ?? "").toLowerCase().includes(needle.toLowerCase());
   // Live: poll so size / counts / audit changes appear without a manual refresh.
   useEffect(() => {
     load();
@@ -182,8 +276,9 @@ export default function Storage() {
       </Card>
 
       {/* ── Replays ──────────────────────────────────────────────────────── */}
-      <Card title={`Replays enregistrés · ${data.replays?.length || 0}`}>
-        {data.replays?.length ? (
+      <Section title="Replays enregistrés" count={data.replays?.length || 0} open={open.replays !== false}
+        onToggle={() => tog("replays")} search={qv("replays")} onSearch={(v) => sq("replays", v)} searchPh="session / user…">
+        {(() => { const rows = (data.replays || []).filter((r: any) => !qv("replays") || has(r.session_id, qv("replays")) || has(r.distinct_id, qv("replays"))); return rows.length ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr>
@@ -192,7 +287,7 @@ export default function Storage() {
                 <th className="th text-right">Dernier</th><th className="th text-right">Actions</th>
               </tr></thead>
               <tbody>
-                {data.replays.map((r: any) => (
+                {rows.map((r: any) => (
                   <tr key={r.session_id} className="hover:bg-panel2">
                     <td className="td font-mono text-xs">{r.session_id}</td>
                     <td className="td font-mono text-xs text-sub">{r.distinct_id || "—"}</td>
@@ -208,12 +303,13 @@ export default function Storage() {
               </tbody>
             </table>
           </div>
-        ) : <Empty>Aucun replay enregistré.</Empty>}
-      </Card>
+        ) : <Empty>Aucun replay.</Empty>; })()}
+      </Section>
 
       {/* ── Packets ──────────────────────────────────────────────────────── */}
-      <Card title={`Paquets de télémétrie · ${data.packets?.length || 0}`}>
-        {data.packets?.length ? (
+      <Section title="Paquets de télémétrie" count={data.packets?.length || 0} open={open.packets !== false}
+        onToggle={() => tog("packets")} search={qv("packets")} onSearch={(v) => sq("packets", v)} searchPh="id de paquet…">
+        {(() => { const rows = (data.packets || []).filter((p: any) => !qv("packets") || has(p.packet_id, qv("packets"))); return rows.length ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr>
@@ -221,7 +317,7 @@ export default function Storage() {
                 <th className="th text-right">Taille</th><th className="th text-right">Dernier</th><th className="th text-right">Actions</th>
               </tr></thead>
               <tbody>
-                {data.packets.map((p: any) => (
+                {rows.map((p: any) => (
                   <tr key={p.packet_id} className="hover:bg-panel2">
                     <td className="td font-mono text-xs">{p.packet_id}</td>
                     <td className="td text-right">{nf(p.events)}</td>
@@ -235,12 +331,56 @@ export default function Storage() {
               </tbody>
             </table>
           </div>
-        ) : <Empty>Aucun paquet.</Empty>}
-      </Card>
+        ) : <Empty>Aucun paquet.</Empty>; })()}
+      </Section>
+
+      {/* ── Monthly recaps ───────────────────────────────────────────────── */}
+      <Section title="Recaps mensuels" count={recaps.length} open={open.recaps !== false}
+        onToggle={() => tog("recaps")} search={qv("recaps")} onSearch={(v) => sq("recaps", v)} searchPh="mois / source…">
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <input type="month" value={recapMonth} onChange={(e) => setRecapMonth(e.target.value)}
+            className="bg-panel2 border border-line rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-brand" />
+          <label className="flex items-center gap-1.5 text-xs text-sub cursor-pointer">
+            <input type="checkbox" checked={recapAnon} onChange={(e) => setRecapAnon(e.target.checked)} /> Anonymiser
+          </label>
+          <button onClick={generateRecap} disabled={busy === "recap"} className="pill bg-brand text-white">
+            {busy === "recap" ? "Génération…" : "Générer & télécharger"}
+          </button>
+          <button onClick={() => recapFileRef.current?.click()} disabled={busy === "recap-import"} className="pill bg-panel2">
+            {busy === "recap-import" ? "Import…" : "Importer un recap"}
+          </button>
+          <input ref={recapFileRef} type="file" accept="application/json" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) importRecap(f); e.target.value = ""; }} />
+          <span className="text-[11px] text-sub">Léger, à la demande. Non-anonyme par défaut. Chaque export / import est journalisé.</span>
+        </div>
+        {(() => { const rows = recaps.filter((r: any) => !qv("recaps") || has(r.month, qv("recaps")) || has(r.source, qv("recaps"))); return rows.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr><th className="th">Mois</th><th className="th">Source</th><th className="th">Anon</th><th className="th">Créé</th><th className="th text-right">Actions</th></tr></thead>
+              <tbody>
+                {rows.map((r: any) => (
+                  <tr key={r.id} className="hover:bg-panel2">
+                    <td className="td font-mono text-xs">{r.month || "—"}</td>
+                    <td className="td text-sub">{r.source}</td>
+                    <td className="td">{r.anon ? "oui" : "non"}</td>
+                    <td className="td text-sub">{fmtDateTime(r.created_at)}</td>
+                    <td className="td text-right whitespace-nowrap">
+                      <button onClick={() => analyzeRecap(r.id)} className="pill bg-brand text-white mr-1">Analyser</button>
+                      <button onClick={() => downloadRecap(r.id, r.month)} className="pill bg-panel2 mr-1">Télécharger</button>
+                      <button onClick={() => deleteRecap(r.id)} className="pill bg-bad/20 text-bad">Suppr.</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <Empty>Aucun recap. Génère-en un ci-dessus.</Empty>; })()}
+      </Section>
 
       {/* ── Audit log ────────────────────────────────────────────────────── */}
-      <Card title="Journal d'audit (qui a fait quoi)">
-        {audit.length ? (
+      <Section title="Journal d'audit (qui a fait quoi)" count={audit.length} open={open.audit !== false}
+        onToggle={() => tog("audit")} search={qv("audit")} onSearch={(v) => sq("audit", v)} searchPh="action / cible / IP…">
+        {(() => { const rows = audit.filter((a: any) => !qv("audit") || has(a.action, qv("audit")) || has(a.target, qv("audit")) || has(a.ip, qv("audit")) || has(a.fp, qv("audit"))); return rows.length ? (
           <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
             <table className="w-full text-sm">
               <thead><tr>
@@ -248,7 +388,7 @@ export default function Storage() {
                 <th className="th">IP</th><th className="th">Empreinte</th>
               </tr></thead>
               <tbody>
-                {audit.map((a: any) => (
+                {rows.map((a: any) => (
                   <tr key={a.id} className="hover:bg-panel2">
                     <td className="td text-sub whitespace-nowrap">{fmtDateTime(a.at)}</td>
                     <td className="td">{ACTION_LABEL[a.action] || a.action}</td>
@@ -260,8 +400,10 @@ export default function Storage() {
               </tbody>
             </table>
           </div>
-        ) : <Empty>Aucune action enregistrée.</Empty>}
-      </Card>
+        ) : <Empty>Aucune action enregistrée.</Empty>; })()}
+      </Section>
+
+      {recapView && <RecapView recap={recapView} onClose={() => setRecapView(null)} />}
     </div>
   );
 }

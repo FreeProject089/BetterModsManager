@@ -175,6 +175,13 @@ async function tick(): Promise<void> {
     }
 }
 
+/** The saved scheduler tasks (loaded if needed) — used to populate the script
+ *  generator's "Run scheduled task" dropdown. */
+export async function getTasks(): Promise<Task[]> {
+    if (!_tasks.length) await loadTasks();
+    return _tasks;
+}
+
 /** Runs one task by id — used by the bmm://schedule/run deeplink (Windows Task Scheduler). */
 export async function runTaskById(id: string): Promise<void> {
     if (!_tasks.length) await loadTasks();
@@ -847,7 +854,10 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             </details>
             <span class="sched-cmd-hint">${t('sched.cmdHint') || 'Tip: tick “Allow custom commands” at the bottom of this task, or it won’t run.'}</span>
         </div>`;
-    else if (needs === 'benchmark') host.innerHTML = `
+    else if (needs === 'benchmark') {
+        const profOpts = _profiles.filter((p: any) => p.mods_path)
+            .map((p: any) => `<option value="${escAttr(p.mods_path)}">${escHtml(p.name || p.id)}</option>`).join('');
+        host.innerHTML = `
         <select class="input sched-b-dataset" style="max-width:120px">
             <option value="sandbox"${params.dataset !== 'real' ? ' selected' : ''}>${t('bench.sandbox') || 'Sandbox'}</option>
             <option value="real"${params.dataset === 'real' ? ' selected' : ''}>${t('bench.real') || 'Real'}</option>
@@ -855,7 +865,32 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         <select class="input sched-b-size" style="max-width:100px">
             ${['S', 'M', 'L', 'XL', 'CUSTOM'].map(s => `<option value="${s}"${(params.size || 'M') === s ? ' selected' : ''}>${s}</option>`).join('')}
         </select>
-        <input class="input sched-b-mb" type="number" min="1" placeholder="MB" value="${escAttr(params.customMb || '')}" style="max-width:90px;display:${(params.size || 'M') === 'CUSTOM' ? 'inline-block' : 'none'}">`;
+        <input class="input sched-b-mb" type="number" min="1" placeholder="MB" value="${escAttr(params.customMb || '')}" style="max-width:90px;display:${(params.size || 'M') === 'CUSTOM' ? 'inline-block' : 'none'}">
+        <div class="sched-b-sources" style="display:${params.dataset === 'real' ? 'block' : 'none'};width:100%;margin-top:8px">
+            <div class="sched-b-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>
+            <button type="button" class="btn btn-sm sched-b-add-folder">${t('bench.addFolder') || '+ Folder'}</button>
+            ${profOpts ? `<select class="input sched-b-add-profile" style="max-width:200px;margin-left:6px"><option value="">${t('bench.addProfile') || '+ Profile…'}</option>${profOpts}</select>` : ''}
+        </div>`;
+        // Sources picker (real mode): chips fed by a folder browser + profile dropdown.
+        if (!Array.isArray(params.sources)) params.sources = params.sources ? [params.sources] : [];
+        const chips = host.querySelector('.sched-b-chips') as HTMLElement;
+        const renderChips = () => {
+            const arr: string[] = params.sources;
+            chips.innerHTML = arr.length ? arr.map((p, i) => `<span class="pill" style="display:inline-flex;align-items:center;gap:6px;max-width:100%">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px" title="${escAttr(p)}">${escHtml((p.split(/[\\/]/).pop() || p))}</span>
+                <button type="button" class="sched-b-rm" data-i="${i}" style="background:none;border:0;color:var(--text-muted);cursor:pointer;display:inline-flex"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </span>`).join('') : `<span style="font-size:11px;color:var(--text-muted)">${t('bench.noProfile') || 'Pick profiles / folders (else sandbox is used)'}</span>`;
+            chips.querySelectorAll('.sched-b-rm').forEach(b => b.addEventListener('click', () => { params.sources.splice(Number((b as HTMLElement).dataset.i), 1); renderChips(); }));
+        };
+        renderChips();
+        host.querySelector('.sched-b-add-folder')?.addEventListener('click', async () => {
+            const { pickFolder } = await import('../../core/api.js');
+            const f = await pickFolder().catch(() => null);
+            if (f && !params.sources.includes(f)) { params.sources.push(f); renderChips(); }
+        });
+        const ap = host.querySelector('.sched-b-add-profile') as HTMLSelectElement | null;
+        ap?.addEventListener('change', () => { if (ap.value && !params.sources.includes(ap.value)) { params.sources.push(ap.value); renderChips(); } ap.value = ''; });
+    }
     else if (needs === 'toggle') host.innerHTML = `<label style="font-size:12px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> ${t('sched.enableOn') || 'Enable (uncheck = disable)'}</label>`;
     else if (needs === 'flag') host.innerHTML = `<input class="input sched-f-key" placeholder="${escAttr(t('sched.settingKey') || 'setting key (e.g. dcp)')}" value="${escAttr(params.key || '')}" style="max-width:180px"><label style="font-size:12px;margin-left:8px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> on</label>`;
     else if (needs === 'disk') host.innerHTML = `<select class="input sched-disk" style="max-width:240px">${diskOptions(params.mountPoint)}</select>`;
@@ -886,7 +921,11 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         if (d) { params.workingDir = d; (host.querySelector('.sched-p-wd') as HTMLInputElement).value = d; }
     });
     // benchmark / storage / var editors
-    host.querySelector('.sched-b-dataset')?.addEventListener('change', (e) => { params.dataset = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-b-dataset')?.addEventListener('change', (e) => {
+        params.dataset = (e.target as HTMLSelectElement).value;
+        const src = host.querySelector('.sched-b-sources') as HTMLElement | null;
+        if (src) src.style.display = params.dataset === 'real' ? 'block' : 'none';
+    });
     host.querySelector('.sched-b-size')?.addEventListener('change', (e) => {
         params.size = (e.target as HTMLSelectElement).value;
         const mb = host.querySelector('.sched-b-mb') as HTMLElement | null;

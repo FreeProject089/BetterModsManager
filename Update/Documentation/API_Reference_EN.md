@@ -101,6 +101,29 @@ This document is the single source of truth for everything that can be driven pr
 | `/api/language/import` | yes | `{ path? }` — path imports directly, else file picker; filename → language code |
 | `/api/restart` | yes | `{}` — graceful restart |
 
+### Benchmark
+| Path | Auth | Body |
+|---|---|---|
+| `/api/benchmark` | yes | `{ dataset?: "sandbox"\|"real", size?: "S"\|"M"\|"L"\|"XL"\|"CUSTOM", mb?, mode?: "manual"\|"auto", sources?: string[] (folders, absolute or relative to BMM's working dir), profiles?: string[] (ids/names → their mods folder) }`. **auto** runs headless and returns the report; **manual** opens the benchmark UI pre-filled. Any `sources`/`profiles` ⇒ a "real" run. |
+
+### Telemetry & local recorder
+| Path | Auth | Body |
+|---|---|---|
+| `/api/telemetry/consent` | yes | `{ enabled: bool }` — toggle "Share anonymous usage data" |
+| `/api/telemetry/settings` | yes | `{ replay?, full?, bench? }` — manage telemetry sub-options (omitted = unchanged) |
+| `/api/recorder` | yes | `{ on?, full?, rust?, js? }` — configure the local Session recorder |
+| `/api/replay/export` | yes | `{}` — export the current local session as a `.bmmreplay` file |
+| `/api/replay/import` | yes | `{ path? , url? }` — import + replay a `.bmmreplay` (file path or download URL) |
+
+### Automation
+| Path | Auth | Body |
+|---|---|---|
+| `/api/mod/check-updates` | yes | `{}` — check every linked mod against its repo |
+| `/api/discord/rpc` | yes | `{ enabled: bool }` — enable/disable Discord Rich Presence |
+| `/api/data/export-auto` | yes | `{ dir, name? (template: `{date}` `{time}` `{datetime}`), increment?: "paren"\|"underscore"\|"timestamp"\|"overwrite" }` — unattended backup, returns the path written |
+| `/api/launchpack/run` | yes | `{ id }` — run a saved launch pack |
+| `/api/schedule/run` | yes | `{ id }` — trigger a saved Scheduling & automation task |
+
 ---
 
 ## PUT endpoints
@@ -153,6 +176,17 @@ Deeplinks are clickable URLs (web pages, Discord, scripts) that drive BMM when i
 | `bmm://app/launch?id=<id>&exe=<exePath>` | `launch_app` |
 | `bmm://modpack/create?name=<name>&profile=<profile_id>` | `POST /api/modpacks/create` |
 | `bmm://language/import?path=<file>` | `import_language` (omit `path` → file picker) |
+| `bmm://benchmark/run?dataset=<sandbox\|real>&size=<S\|M\|L\|XL\|CUSTOM>&mb=<mb>&mode=<manual\|auto>&profiles=<id1;id2>&sources=<path1;path2>` | `POST /api/benchmark` (sources may be relative; profiles → mods folders) |
+| `bmm://mod/check-updates` | `POST /api/mod/check-updates` |
+| `bmm://telemetry/consent?enabled=<1\|0>` | `POST /api/telemetry/consent` |
+| `bmm://telemetry/set?replay=<1\|0>&full=<1\|0>&bench=<1\|0>` | `POST /api/telemetry/settings` |
+| `bmm://recorder/set?on=<1\|0>&full=<1\|0>&rust=<1\|0>&js=<1\|0>` | `POST /api/recorder` |
+| `bmm://replay/export` | `POST /api/replay/export` |
+| `bmm://replay/import?path=<file>` · `?url=<downloadUrl>` | `POST /api/replay/import` |
+| `bmm://discord/rpc?enabled=<1\|0>` | `POST /api/discord/rpc` |
+| `bmm://data/export-auto?dir=<folder>&name=<template>&increment=<paren\|underscore\|timestamp\|overwrite>` | `POST /api/data/export-auto` |
+| `bmm://launchpack/run?id=<launchpack_id>` | `POST /api/launchpack/run` |
+| `bmm://schedule/run?id=<task_id>` | `POST /api/schedule/run` |
 | `bmm://restart` | restart BMM |
 | `bmm://install?url=<mod_url>` (aliases: `import`, `download`) | one-click mod install |
 | `bmm://api?method=<M>&path=<api_path>&<field>=<value>…` | **generic passthrough — hits ANY endpoint.** Extra params become the JSON body (POST/PUT) or query string (GET/DELETE). Ex: `bmm://api?method=POST&path=/api/mods/enable&mod_id=abc` |

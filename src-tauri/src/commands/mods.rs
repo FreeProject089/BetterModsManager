@@ -99,7 +99,7 @@ fn run_mod_io_worker_with_mode(
     cancellable: bool,
     op_label: &str,
 ) -> Result<crate::fs_utils::WorkerOutput, String> {
-    use std::process::{Command, Stdio};
+    use std::process::Stdio;
     use std::sync::atomic::Ordering;
     use std::time::Instant;
 
@@ -113,7 +113,7 @@ fn run_mod_io_worker_with_mode(
     let input_json = serde_json::to_string(&input).map_err(|e| e.to_string())?;
     std::fs::write(&in_path, input_json).map_err(|e| e.to_string())?;
 
-    let mut cmd = Command::new(&exe);
+    let mut cmd = crate::commands::proc::hidden_command(&exe);
     cmd.arg("--mod-worker")
         .arg(&in_path)
         .arg(&out_path)
@@ -289,9 +289,8 @@ pub fn cancel_mod_ops() {
         log_line(format!("[MOD] killing worker PID {}", pid));
         #[cfg(target_os = "windows")]
         {
-            use std::process::Command;
             // /F = force, /T = kill the whole tree (rayon threads etc.)
-            let _ = Command::new("taskkill")
+            let _ = crate::commands::proc::hidden_command("taskkill")
                 .args(["/F", "/T", "/PID", &pid.to_string()])
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
@@ -300,8 +299,7 @@ pub fn cancel_mod_ops() {
         }
         #[cfg(not(target_os = "windows"))]
         {
-            use std::process::Command;
-            let _ = Command::new("kill")
+            let _ = crate::commands::proc::hidden_command("kill")
                 .args(["-9", &pid.to_string()])
                 .spawn();
         }
@@ -328,8 +326,7 @@ pub fn kill_current_mod_op() {
         MOD_OP_KILLED.store(true, Ordering::SeqCst);
         #[cfg(target_os = "windows")]
         {
-            use std::process::Command;
-            let _ = Command::new("taskkill")
+            let _ = crate::commands::proc::hidden_command("taskkill")
                 .args(["/F", "/T", "/PID", &pid.to_string()])
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
@@ -338,8 +335,7 @@ pub fn kill_current_mod_op() {
         }
         #[cfg(not(target_os = "windows"))]
         {
-            use std::process::Command;
-            let _ = Command::new("kill")
+            let _ = crate::commands::proc::hidden_command("kill")
                 .args(["-9", &pid.to_string()])
                 .spawn();
         }
@@ -1355,24 +1351,21 @@ pub fn path_join(base: std::path::PathBuf, relative: String) -> Result<String, S
 pub fn open_folder(path: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
-        Command::new("explorer")
+        crate::commands::proc::hidden_command("explorer")
             .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "macos")]
     {
-        use std::process::Command;
-        Command::new("open")
+        crate::commands::proc::hidden_command("open")
             .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
-        use std::process::Command;
-        Command::new("xdg-open")
+        crate::commands::proc::hidden_command("xdg-open")
             .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
@@ -1384,24 +1377,21 @@ pub fn open_folder(path: String) -> Result<(), String> {
 pub fn open_file(path: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
-        Command::new("cmd")
+        crate::commands::proc::hidden_command("cmd")
             .args(["/c", "start", "", &path])
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "macos")]
     {
-        use std::process::Command;
-        Command::new("open")
+        crate::commands::proc::hidden_command("open")
             .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
-        use std::process::Command;
-        Command::new("xdg-open")
+        crate::commands::proc::hidden_command("xdg-open")
             .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;

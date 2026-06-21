@@ -506,9 +506,9 @@ async fn run_installer_and_detect(
 
     log_line(format!("[APPS] Running installer: {}", installer_path.display()));
     let child = if is_msi {
-        std::process::Command::new("msiexec").arg("/i").arg(installer_path).spawn()
+        crate::commands::proc::hidden_command("msiexec").arg("/i").arg(installer_path).spawn()
     } else {
-        std::process::Command::new(installer_path).spawn()
+        crate::commands::proc::hidden_command(installer_path).spawn()
     };
     let mut child = match child {
         Ok(c) => c,
@@ -842,19 +842,19 @@ pub fn launch_app(
     let script_ext = path.extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase());
     let mut cmd = match script_ext.as_deref() {
         Some("ps1") => {
-            let mut c = std::process::Command::new("powershell");
+            let mut c = crate::commands::proc::hidden_command("powershell");
             c.args(["-ExecutionPolicy", "Bypass", "-File", &exe_path]);
             c
         }
         Some("bat") | Some("cmd") => {
-            let mut c = std::process::Command::new("cmd");
+            let mut c = crate::commands::proc::hidden_command("cmd");
             c.args(["/C", &exe_path]);
             c
         }
-        Some("py") => { let mut c = std::process::Command::new("python"); c.arg(&exe_path); c }
-        Some("vbs") => { let mut c = std::process::Command::new("wscript"); c.arg(&exe_path); c }
-        Some("sh")  => { let mut c = std::process::Command::new("bash"); c.arg(&exe_path); c }
-        _ => std::process::Command::new(&exe_path), // exe / msi / portable
+        Some("py") => { let mut c = crate::commands::proc::hidden_command("python"); c.arg(&exe_path); c }
+        Some("vbs") => { let mut c = crate::commands::proc::hidden_command("wscript"); c.arg(&exe_path); c }
+        Some("sh")  => { let mut c = crate::commands::proc::hidden_command("bash"); c.arg(&exe_path); c }
+        _ => crate::commands::proc::hidden_command(&exe_path), // exe / msi / portable
     };
 
     let _child = cmd
@@ -1035,7 +1035,7 @@ pub fn uninstall_app(
         let (program, args) = parse_command(&cmd);
         log_line(format!("[APPS] Running uninstaller: program='{}' args={:?}", program, args));
 
-        std::process::Command::new(&program)
+        crate::commands::proc::hidden_command(&program)
             .args(&args)
             .spawn()
             .map_err(|e| format!("Could not start uninstaller '{}': {}", program, e))?;
@@ -1109,7 +1109,7 @@ pub fn open_app_folder(install_path: String) -> Result<(), String> {
         return Err(format!("Folder not found: {}", install_path));
     }
     #[cfg(target_os = "windows")]
-    std::process::Command::new("explorer").arg(&install_path).spawn()
+    crate::commands::proc::hidden_command("explorer").arg(&install_path).spawn()
         .map_err(|e| format!("Explorer failed: {}", e))?;
     Ok(())
 }

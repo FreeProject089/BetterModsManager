@@ -1045,6 +1045,36 @@ fn action_to_deeplink(action: &ScriptAction) -> String {
         "compare_plugin"   => format!("bmm://plugin/compare?id={}", action.target_id),
         "enable_modpack"   => format!("bmm://modpack/enable?id={}", action.target_id),
         "disable_modpack"  => format!("bmm://modpack/disable?id={}", action.target_id),
+        "telemetry_consent"  => format!("bmm://telemetry/consent?enabled={}", if extra_bool(&action.extra, "enabled") { "1" } else { "0" }),
+        "telemetry_settings" => format!("bmm://telemetry/set?replay={}&full={}&bench={}",
+            if extra_bool(&action.extra, "replay") { "1" } else { "0" },
+            if extra_bool(&action.extra, "full") { "1" } else { "0" },
+            if extra_bool(&action.extra, "bench") { "1" } else { "0" }),
+        "recorder_set"       => format!("bmm://recorder/set?on={}&full={}&rust={}&js={}",
+            if extra_bool(&action.extra, "on") { "1" } else { "0" },
+            if extra_bool(&action.extra, "full") { "1" } else { "0" },
+            if extra_bool(&action.extra, "rust") { "1" } else { "0" },
+            if extra_bool(&action.extra, "js") { "1" } else { "0" }),
+        "check_mod_updates"  => "bmm://mod/check-updates".to_string(),
+        "run_launchpack"     => format!("bmm://launchpack/run?id={}", action.target_id),
+        "run_task"           => format!("bmm://schedule/run?id={}", action.target_id),
+        "run_benchmark"      => {
+            let sources = extra_str(&action.extra, "sources");
+            let dataset = if extra_str(&action.extra, "dataset") == "real" || !sources.is_empty() { "real" } else { "sandbox" };
+            let size = { let s = extra_str(&action.extra, "size"); if s.is_empty() { "M" } else { s } };
+            format!("bmm://benchmark/run?dataset={}&size={}&mode=auto&sources={}",
+                dataset, size,
+                percent_encoding::utf8_percent_encode(sources, percent_encoding::NON_ALPHANUMERIC))
+        }
+        "discord_rpc"        => format!("bmm://discord/rpc?enabled={}", if extra_bool(&action.extra, "enabled") { "1" } else { "0" }),
+        "export_data"        => format!("bmm://data/export-auto?dir={}&name={}&increment={}",
+            percent_encoding::utf8_percent_encode(extra_str(&action.extra, "dir"), percent_encoding::NON_ALPHANUMERIC),
+            percent_encoding::utf8_percent_encode(extra_str(&action.extra, "name"), percent_encoding::NON_ALPHANUMERIC),
+            percent_encoding::utf8_percent_encode(extra_str(&action.extra, "increment"), percent_encoding::NON_ALPHANUMERIC)),
+        "replay_export"      => "bmm://replay/export".to_string(),
+        "replay_import"      => format!("bmm://replay/import?path={}&url={}",
+            percent_encoding::utf8_percent_encode(extra_str(&action.extra, "path"), percent_encoding::NON_ALPHANUMERIC),
+            percent_encoding::utf8_percent_encode(extra_str(&action.extra, "url"), percent_encoding::NON_ALPHANUMERIC)),
         _                  => format!("bmm://unknown?id={}", action.target_id),
     }
 }
@@ -1203,6 +1233,24 @@ fn action_to_api_call(action: &ScriptAction) -> Option<(String, String, String)>
         "delete_modpack" => Some(("DELETE".into(), format!("/api/modpacks/{}", opt_str("modpack_id", "MODPACK_ID")), String::new())),
         "repo_connect"   => Some(("POST".into(),   "/api/repo/connect".into(), serde_json::json!({ "url": opt_str("url", "REPO_URL") }).to_string())),
         "repo_remove"    => Some(("DELETE".into(), "/api/repo".into(),          serde_json::json!({ "url": opt_str("url", "REPO_URL") }).to_string())),
+        "check_mod_updates"  => Some(("POST".into(), "/api/mod/check-updates".into(),   serde_json::json!({}).to_string())),
+        "run_launchpack"     => Some(("POST".into(), "/api/launchpack/run".into(),       serde_json::json!({ "id": id }).to_string())),
+        "run_task"           => Some(("POST".into(), "/api/schedule/run".into(),         serde_json::json!({ "id": id }).to_string())),
+        "run_benchmark"      => {
+            let sources: Vec<&str> = extra_str(ex, "sources").split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+            let dataset = if extra_str(ex, "dataset") == "real" || !sources.is_empty() { "real" } else { "sandbox" };
+            let size = { let s = extra_str(ex, "size"); if s.is_empty() { "M" } else { s } };
+            Some(("POST".into(), "/api/benchmark".into(),
+                serde_json::json!({ "dataset": dataset, "size": size, "mode": "auto", "sources": sources }).to_string()))
+        }
+        "discord_rpc"        => Some(("POST".into(), "/api/discord/rpc".into(),          serde_json::json!({ "enabled": extra_bool(ex, "enabled") }).to_string())),
+        "export_data"        => Some(("POST".into(), "/api/data/export-auto".into(),     prune(&[("dir", extra_str(ex, "dir")), ("name", extra_str(ex, "name")), ("increment", extra_str(ex, "increment"))]))),
+        // ── Privacy & telemetry / local recorder / replay ──────────────────
+        "telemetry_consent"  => Some(("POST".into(), "/api/telemetry/consent".into(),  serde_json::json!({ "enabled": extra_bool(ex, "enabled") }).to_string())),
+        "telemetry_settings" => Some(("POST".into(), "/api/telemetry/settings".into(), serde_json::json!({ "replay": extra_bool(ex, "replay"), "full": extra_bool(ex, "full"), "bench": extra_bool(ex, "bench") }).to_string())),
+        "recorder_set"       => Some(("POST".into(), "/api/recorder".into(),           serde_json::json!({ "on": extra_bool(ex, "on"), "full": extra_bool(ex, "full"), "rust": extra_bool(ex, "rust"), "js": extra_bool(ex, "js") }).to_string())),
+        "replay_export"      => Some(("POST".into(), "/api/replay/export".into(),       serde_json::json!({}).to_string())),
+        "replay_import"      => Some(("POST".into(), "/api/replay/import".into(),       prune(&[("path", extra_str(ex, "path")), ("url", extra_str(ex, "url"))]))),
         _ => None,
     }
 }
@@ -1509,13 +1557,13 @@ pub fn run_plugin_scripts(
 
         #[cfg(target_os = "windows")]
         let spawn = match ext.as_str() {
-            "ps1" => std::process::Command::new("powershell")
+            "ps1" => crate::commands::proc::hidden_command("powershell")
                 .args(["-ExecutionPolicy", "Bypass", "-File", &p_str]).spawn(),
-            "vbs" => std::process::Command::new("wscript").arg(&p_str).spawn(),
-            _      => std::process::Command::new("cmd").args(["/C", "start", "", &p_str]).spawn(),
+            "vbs" => crate::commands::proc::hidden_command("wscript").arg(&p_str).spawn(),
+            _      => crate::commands::proc::hidden_command("cmd").args(["/C", "start", "", &p_str]).spawn(),
         };
         #[cfg(not(target_os = "windows"))]
-        let spawn = std::process::Command::new("sh").arg(&p_str).spawn();
+        let spawn = crate::commands::proc::hidden_command("sh").arg(&p_str).spawn();
 
         match spawn {
             Ok(_) => { launched.push(rel.clone()); log_line(format!("[PLUGINS] Ran script '{}' for plugin '{}'", rel, plugin_id)); }

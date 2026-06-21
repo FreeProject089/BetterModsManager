@@ -484,12 +484,88 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             const mb = parseInt(parsedUrl.searchParams.get('mb') || '', 10) || undefined;
             const mode = (parsedUrl.searchParams.get('mode') || '').toLowerCase();
             const autoRun = action === 'benchmark/open' ? mode === 'auto' : mode !== 'manual';
-            const sources = (parsedUrl.searchParams.get('sources') || '')
-                .split(/[;|]/).map(s => s.trim()).filter(Boolean);
+            const splitList = (v: string | null) => (v || '').split(/[;|]/).map(s => s.trim()).filter(Boolean);
+            const sources = [...splitList(parsedUrl.searchParams.get('sources')), ...splitList(parsedUrl.searchParams.get('folders'))];
+            const profiles = splitList(parsedUrl.searchParams.get('profiles'));
             toast(t('bench.deeplinkStart') || `Benchmark (${dataset} ${size})…`, 'info');
             try {
                 const { openBenchmarkWithConfig } = await import('../features/bench/benchmark.js');
-                await openBenchmarkWithConfig({ dataset, size, mb, sources, autoRun });
+                await openBenchmarkWithConfig({ dataset, size, mb, sources, profiles, autoRun });
+            } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+            return;
+        }
+
+        // ── Privacy & telemetry: bmm://telemetry/consent?enabled=1
+        //    bmm://telemetry/set?replay=1&full=0&bench=1 ──────────────────────────
+        if (action === 'telemetry/consent' || action === 'telemetry/set') {
+            const q = parsedUrl.searchParams;
+            const b = (k: string) => q.has(k) ? (q.get(k) === '1' || q.get(k) === 'true') : undefined;
+            try {
+                const { applyTelemetrySettings } = await import('./analytics.js');
+                await applyTelemetrySettings({
+                    consent: q.has('enabled') ? b('enabled') : b('consent'),
+                    replay: b('replay'), replayFull: b('full') ?? b('replayFull'), bench: b('bench'),
+                });
+                toast(t('analytics.settingsTitle') || 'Telemetry updated', 'success');
+            } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+            return;
+        }
+
+        // ── Local Session recorder: bmm://recorder/set?on=1&full=0&rust=1&js=1 ─────
+        if (action === 'recorder/set') {
+            const q = parsedUrl.searchParams;
+            const b = (k: string) => q.has(k) ? (q.get(k) === '1' || q.get(k) === 'true') : undefined;
+            try {
+                const { setWatcherOptions } = await import('../features/settings/replay-watcher.js');
+                await setWatcherOptions({ on: b('on'), full: b('full'), rust: b('rust'), js: b('js') });
+                toast(t('watcher.title') || 'Recorder updated', 'success');
+            } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+            return;
+        }
+
+        // ── Session replay export / import:
+        //    bmm://replay/export  ·  bmm://replay/import?path=…  |  ?url=… ──────────
+        if (action === 'replay/export') {
+            try { (await import('../features/settings/replay-watcher.js')).exportSession(); }
+            catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+            return;
+        }
+
+        // ── Launch pack: bmm://launchpack/run?id=… ────────────────────────────────
+        if (action === 'launchpack/run') {
+            const id = parsedUrl.searchParams.get('id') || '';
+            try { await invoke('run_launch_pack', { id }); toast(t('settings.lpRunning') || 'Launch pack started', 'success'); }
+            catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+            return;
+        }
+
+        // ── Discord RPC: bmm://discord/rpc?enabled=1 ──────────────────────────────
+        if (action === 'discord/rpc') {
+            const enabled = parsedUrl.searchParams.get('enabled') === '1' || parsedUrl.searchParams.get('enabled') === 'true';
+            try { await (await import('../features/settings/settings.js')).setDiscordRpc(enabled); toast('Discord RPC ' + (enabled ? 'on' : 'off'), 'success'); }
+            catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+            return;
+        }
+
+        // ── Automated data export: bmm://data/export-auto?dir=…&name=…&increment=… ─
+        if (action === 'data/export-auto') {
+            const dir = parsedUrl.searchParams.get('dir') || '';
+            const name = parsedUrl.searchParams.get('name') || null;
+            const increment = parsedUrl.searchParams.get('increment') || null;
+            try {
+                const dest = await invoke('export_app_data_auto', { dir, name, increment });
+                toast((t('settings.exportSuccess') || 'Data exported') + ': ' + dest, 'success');
+            } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+            return;
+        }
+        if (action === 'replay/import') {
+            const path = parsedUrl.searchParams.get('path');
+            const url = parsedUrl.searchParams.get('url');
+            try {
+                const m = await import('../features/settings/replay-watcher.js');
+                if (url) await m.importReplayFromUrl(url);
+                else if (path) await m.importReplayFromPath(path);
+                else await m.importAndPlay();
             } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
             return;
         }

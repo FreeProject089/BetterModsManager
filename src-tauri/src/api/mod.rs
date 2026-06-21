@@ -303,6 +303,37 @@ struct ModUpdateApiBody {
 }
 
 #[derive(serde::Deserialize)]
+struct TelemetryConsentBody { #[serde(default)] enabled: bool }
+#[derive(serde::Deserialize)]
+struct TelemetrySettingsBody {
+    #[serde(default)] replay: Option<bool>,
+    #[serde(default)] full: Option<bool>,
+    #[serde(default)] bench: Option<bool>,
+}
+#[derive(serde::Deserialize)]
+struct RecorderBody {
+    #[serde(default)] on: Option<bool>,
+    #[serde(default)] full: Option<bool>,
+    #[serde(default)] rust: Option<bool>,
+    #[serde(default)] js: Option<bool>,
+}
+#[derive(serde::Deserialize)]
+struct ReplayImportBody {
+    #[serde(default)] path: Option<String>,
+    #[serde(default)] url: Option<String>,
+}
+#[derive(serde::Deserialize)]
+struct DiscordRpcBody { #[serde(default)] enabled: bool }
+#[derive(serde::Deserialize)]
+struct IdBody { #[serde(default)] id: String }
+#[derive(serde::Deserialize)]
+struct DataExportAutoBody {
+    #[serde(default)] dir: String,
+    #[serde(default)] name: Option<String>,
+    #[serde(default)] increment: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
 struct BenchmarkApiBody {
     /// "sandbox" (default) or "real".
     #[serde(default)]
@@ -313,9 +344,13 @@ struct BenchmarkApiBody {
     /// Dataset size in MB when size == CUSTOM.
     #[serde(default)]
     mb: Option<u64>,
-    /// Mod folder paths to benchmark when dataset == "real".
+    /// Mod folder paths to benchmark when dataset == "real" (absolute or relative
+    /// to BMM's working dir).
     #[serde(default)]
     sources: Option<Vec<String>>,
+    /// Profile ids/names — resolved to their mods folder and added to `sources`.
+    #[serde(default)]
+    profiles: Option<Vec<String>>,
     /// "manual" (default) — open the benchmark in the UI, the user starts it; or
     /// "auto" — run it now in the background and return the results in the response.
     #[serde(default)]
@@ -1308,6 +1343,165 @@ pub async fn start_api_server(
             )
         });
 
+    // POST /api/telemetry/consent  (auth) — enable/disable "Share anonymous usage
+    // data". Body: { enabled: bool }.
+    let tok_tc = token.clone();
+    let handle_tc = app_handle.clone();
+    let telemetry_consent = warp::path!("api" / "telemetry" / "consent")
+        .and(warp::post())
+        .and(require_token(tok_tc))
+        .and(warp::body::json::<TelemetryConsentBody>())
+        .and(with_app_handle(handle_tc))
+        .map(|body: TelemetryConsentBody, handle: tauri::AppHandle| {
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "telemetry/consent", "params": { "enabled": body.enabled }
+            }));
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({
+                "ok": true, "driven_by": "bmm-ui", "action": "telemetry/consent", "enabled": body.enabled
+            })), StatusCode::ACCEPTED)
+        });
+
+    // POST /api/telemetry/settings  (auth) — manage sub-options of Privacy & telemetry.
+    // Body: { replay?: bool, full?: bool, bench?: bool } (omitted = unchanged).
+    let tok_ts = token.clone();
+    let handle_ts = app_handle.clone();
+    let telemetry_settings = warp::path!("api" / "telemetry" / "settings")
+        .and(warp::post())
+        .and(require_token(tok_ts))
+        .and(warp::body::json::<TelemetrySettingsBody>())
+        .and(with_app_handle(handle_ts))
+        .map(|body: TelemetrySettingsBody, handle: tauri::AppHandle| {
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "telemetry/set",
+                "params": { "replay": body.replay, "full": body.full, "bench": body.bench }
+            }));
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({
+                "ok": true, "driven_by": "bmm-ui", "action": "telemetry/set"
+            })), StatusCode::ACCEPTED)
+        });
+
+    // POST /api/recorder  (auth) — configure the local Session recorder.
+    // Body: { on?: bool, full?: bool, rust?: bool, js?: bool }.
+    let tok_rec = token.clone();
+    let handle_rec = app_handle.clone();
+    let recorder = warp::path!("api" / "recorder")
+        .and(warp::post())
+        .and(require_token(tok_rec))
+        .and(warp::body::json::<RecorderBody>())
+        .and(with_app_handle(handle_rec))
+        .map(|body: RecorderBody, handle: tauri::AppHandle| {
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "recorder/set",
+                "params": { "on": body.on, "full": body.full, "rust": body.rust, "js": body.js }
+            }));
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({
+                "ok": true, "driven_by": "bmm-ui", "action": "recorder/set"
+            })), StatusCode::ACCEPTED)
+        });
+
+    // POST /api/replay/export  (auth) — export the current local session recording.
+    let tok_rex = token.clone();
+    let handle_rex = app_handle.clone();
+    let replay_export = warp::path!("api" / "replay" / "export")
+        .and(warp::post())
+        .and(require_token(tok_rex))
+        .and(with_app_handle(handle_rex))
+        .map(|handle: tauri::AppHandle| {
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({ "action": "replay/export", "params": {} }));
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({
+                "ok": true, "driven_by": "bmm-ui", "action": "replay/export"
+            })), StatusCode::ACCEPTED)
+        });
+
+    // POST /api/replay/import  (auth) — import + play a .bmmreplay. Body:
+    // { path?: string (absolute file path), url?: string (download link) }.
+    let tok_rim = token.clone();
+    let handle_rim = app_handle.clone();
+    let replay_import = warp::path!("api" / "replay" / "import")
+        .and(warp::post())
+        .and(require_token(tok_rim))
+        .and(warp::body::json::<ReplayImportBody>())
+        .and(with_app_handle(handle_rim))
+        .map(|body: ReplayImportBody, handle: tauri::AppHandle| {
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "replay/import", "params": { "path": body.path, "url": body.url }
+            }));
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({
+                "ok": true, "driven_by": "bmm-ui", "action": "replay/import"
+            })), StatusCode::ACCEPTED)
+        });
+
+    // POST /api/launchpack/run  (auth) — run a saved launch pack. Body: { id }.
+    let tok_lp = token.clone();
+    let handle_lp = app_handle.clone();
+    let launchpack_run = warp::path!("api" / "launchpack" / "run")
+        .and(warp::post())
+        .and(require_token(tok_lp))
+        .and(warp::body::json::<IdBody>())
+        .and(with_app_handle(handle_lp))
+        .map(|body: IdBody, handle: tauri::AppHandle| {
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "launchpack/run", "params": { "id": body.id }
+            }));
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({
+                "ok": true, "driven_by": "bmm-ui", "action": "launchpack/run"
+            })), StatusCode::ACCEPTED)
+        });
+
+    // POST /api/schedule/run  (auth) — trigger a saved scheduler task. Body: { id }.
+    let tok_sr = token.clone();
+    let handle_sr = app_handle.clone();
+    let schedule_run = warp::path!("api" / "schedule" / "run")
+        .and(warp::post())
+        .and(require_token(tok_sr))
+        .and(warp::body::json::<IdBody>())
+        .and(with_app_handle(handle_sr))
+        .map(|body: IdBody, handle: tauri::AppHandle| {
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "schedule/run", "params": { "id": body.id }
+            }));
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({
+                "ok": true, "driven_by": "bmm-ui", "action": "schedule/run"
+            })), StatusCode::ACCEPTED)
+        });
+
+    // POST /api/discord/rpc  (auth) — enable/disable Discord Rich Presence.
+    let tok_dr = token.clone();
+    let handle_dr = app_handle.clone();
+    let discord_rpc = warp::path!("api" / "discord" / "rpc")
+        .and(warp::post())
+        .and(require_token(tok_dr))
+        .and(warp::body::json::<DiscordRpcBody>())
+        .and(with_app_handle(handle_dr))
+        .map(|body: DiscordRpcBody, handle: tauri::AppHandle| {
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "discord/rpc", "params": { "enabled": body.enabled }
+            }));
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({
+                "ok": true, "driven_by": "bmm-ui", "action": "discord/rpc", "enabled": body.enabled
+            })), StatusCode::ACCEPTED)
+        });
+
+    // POST /api/data/export-auto  (auth) — unattended data backup. Body:
+    // { dir: string, name?: string (template: {date}{time}{datetime}), increment?:
+    //   "paren"|"underscore"|"timestamp"|"overwrite" }.
+    let tok_dea = token.clone();
+    let handle_dea = app_handle.clone();
+    let data_export_auto = warp::path!("api" / "data" / "export-auto")
+        .and(warp::post())
+        .and(require_token(tok_dea))
+        .and(warp::body::json::<DataExportAutoBody>())
+        .and(with_app_handle(handle_dea))
+        .map(|body: DataExportAutoBody, handle: tauri::AppHandle| {
+            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                "action": "data/export-auto",
+                "params": { "dir": body.dir, "name": body.name, "increment": body.increment }
+            }));
+            warp::reply::with_status(warp::reply::json(&serde_json::json!({
+                "ok": true, "driven_by": "bmm-ui", "action": "data/export-auto"
+            })), StatusCode::ACCEPTED)
+        });
+
     // POST /api/benchmark  (auth) — launch a benchmark. Body:
     //   { dataset?: "sandbox"|"real", size?: S|M|L|XL|CUSTOM, mb?: number,
     //     sources?: string[] (mod folders for "real"), mode?: "manual"|"auto" }.
@@ -1330,7 +1524,22 @@ pub async fn start_api_server(
                 "CUSTOM" => format!("custom:{}", body.mb.unwrap_or(256).max(1)),
                 _ => "medium".to_string(),
             };
-            let sources: Vec<String> = body.sources.clone().unwrap_or_default();
+            // Folders (absolute or relative) + profile ids/names resolved to their
+            // mods folder. Any source ⇒ a "real" run.
+            let mut sources: Vec<String> = body.sources.clone().unwrap_or_default();
+            if let Some(profs) = &body.profiles {
+                if !profs.is_empty() {
+                    if let Ok(data) = handle.state::<crate::state::AppState>().data.lock() {
+                        for pid in profs {
+                            if let Some(p) = data.profiles.iter().find(|x| &x.id == pid || &x.name == pid) {
+                                let mp = p.mods_path.to_string_lossy().to_string();
+                                if !mp.is_empty() && !sources.contains(&mp) { sources.push(mp); }
+                            }
+                        }
+                    }
+                }
+            }
+            let dataset = if body.dataset.as_deref() == Some("real") || !sources.is_empty() { "real" } else { dataset };
             let is_auto = body.mode.as_deref() == Some("auto");
 
             if is_auto {
@@ -1425,7 +1634,7 @@ pub async fn start_api_server(
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_millis(300));
                 if let Some(exe_path) = exe {
-                    let _ = std::process::Command::new(exe_path).spawn();
+                    let _ = crate::commands::proc::hidden_command(exe_path).spawn();
                 }
                 std::process::exit(0);
             });
@@ -2549,11 +2758,24 @@ pub async fn start_api_server(
         .or(delete_modpack)
         .boxed();
 
+    // Telemetry / recorder / replay control (Privacy & telemetry + Session recorder).
+    let group_tel = telemetry_consent
+        .or(telemetry_settings)
+        .or(recorder)
+        .or(replay_export)
+        .or(replay_import)
+        .or(discord_rpc)
+        .or(data_export_auto)
+        .or(launchpack_run)
+        .or(schedule_run)
+        .boxed();
+
     let routes = group_a
         .or(group_b)
         .or(group_c)
         .or(group_d)
         .or(group_e)
+        .or(group_tel)
         .or(group_io)
         .or(group_catalog)
         .or(group_apps)

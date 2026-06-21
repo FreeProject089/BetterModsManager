@@ -286,12 +286,11 @@ pub async fn open_item_in_explorer(
 
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
         if path.is_dir() {
-            Command::new("explorer").arg(&path).spawn().map_err(|e| e.to_string())?;
+            crate::commands::proc::hidden_command("explorer").arg(&path).spawn().map_err(|e| e.to_string())?;
         } else {
             // Select the file in explorer
-            Command::new("explorer").arg("/select,").arg(&path).spawn().map_err(|e| e.to_string())?;
+            crate::commands::proc::hidden_command("explorer").arg("/select,").arg(&path).spawn().map_err(|e| e.to_string())?;
         }
     }
     
@@ -322,11 +321,10 @@ pub async fn open_game_item_in_explorer(
 
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
         if path.is_dir() {
-            Command::new("explorer").arg(&path).spawn().map_err(|e| e.to_string())?;
+            crate::commands::proc::hidden_command("explorer").arg(&path).spawn().map_err(|e| e.to_string())?;
         } else {
-            Command::new("explorer").arg("/select,").arg(&path).spawn().map_err(|e| e.to_string())?;
+            crate::commands::proc::hidden_command("explorer").arg("/select,").arg(&path).spawn().map_err(|e| e.to_string())?;
         }
     }
     

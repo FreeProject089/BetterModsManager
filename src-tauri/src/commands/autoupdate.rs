@@ -214,21 +214,21 @@ pub async fn download_and_install_update(url: String, filename: String) -> Resul
     // Execute installer depending on the OS
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("cmd")
+        crate::commands::proc::hidden_command("cmd")
             .args(["/C", "start", "", &file_path.to_string_lossy()])
             .spawn()
             .map_err(|e| format!("Failed to start installer: {}", e))?;
     }
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("open")
+        crate::commands::proc::hidden_command("open")
             .arg(&file_path.to_string_lossy())
             .spawn()
             .map_err(|e| format!("Failed to start installer: {}", e))?;
     }
     #[cfg(target_os = "linux")]
     {
-        std::process::Command::new("xdg-open")
+        crate::commands::proc::hidden_command("xdg-open")
             .arg(&file_path.to_string_lossy())
             .spawn()
             .map_err(|e| format!("Failed to start installer: {}", e))?;

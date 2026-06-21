@@ -24,6 +24,13 @@ function sectionOf(id: string): string {
   return "Other";
 }
 
+// Page labels can carry a trailing badge count ("Library 9") — strip it.
+function stripCounts(labels: Record<string, string>, ids: string[]): Record<string, string> {
+  const out: Record<string, string> = { ...labels };
+  for (const id of ids) if (out[id]) out[id] = out[id].replace(/\s*\d+$/, "").trim();
+  return out;
+}
+
 function humanize(id: string): string {
   return id.replace(/^modal-/, "").replace(/-(modal|overlay)$/g, "").replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
 }
@@ -92,7 +99,7 @@ export default function Docs() {
         <div className="text-[11px] text-sub mt-2">{total} destinations cataloguées</div>
       </Card>
 
-      <Group title="Pages" items={cat.pages || []} labels={labels} q={q} />
+      <Group title="Pages" items={cat.pages || []} labels={stripCounts(labels, cat.pages || [])} q={q} />
       <Group title="Onglets & sous-navigation" items={cat.tabs || []} labels={labels} q={q} withSection />
       <Group title="Modals & dialogues" items={cat.modals || []} labels={labels} q={q} withSection />
       <Group title="Diagrammes (docs)" items={cat.diagrams || []} labels={labels} q={q} />

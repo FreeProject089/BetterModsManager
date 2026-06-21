@@ -343,7 +343,7 @@ pub fn clone_repository(url: &str, folder_name: Option<&str>) -> Result<String, 
     
     let target_dir = mods_path.join(&name);
     
-    let output = std::process::Command::new("git")
+    let output = crate::commands::proc::hidden_command("git")
         .arg("clone")
         .arg(url)
         .arg(&target_dir)
@@ -442,7 +442,7 @@ pub fn start_repo_server(path: &str, port: u16) -> Result<String, String> {
         let target_url = format!("http://127.0.0.1:{}", port);
         
         // Spawn cloudflared
-        let mut child = Command::new(cf_path)
+        let mut child = crate::commands::proc::hidden_tokio_command(cf_path)
             .args(["tunnel", "--no-autoupdate", "--protocol", "http2", "--url", &target_url])
             .stderr(Stdio::piped())
             .stdout(Stdio::null())

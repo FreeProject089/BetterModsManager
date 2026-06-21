@@ -305,7 +305,7 @@ fn generate_report_internal(
     #[cfg(target_os = "windows")]
     if is_crash {
         let tmp_file = std::env::temp_dir().join("bmm_dxdiag_tmp.txt");
-        let _ = std::process::Command::new("dxdiag")
+        let _ = crate::commands::proc::hidden_command("dxdiag")
             .args(["/t", &tmp_file.to_string_lossy().to_string()])
             .spawn();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
@@ -352,11 +352,11 @@ pub fn open_crash_folder(app_handle: tauri::AppHandle) -> Result<(), String> {
     
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("explorer").arg(dir.to_string_lossy().as_ref()).spawn().map_err(|e| e.to_string())?;
+        crate::commands::proc::hidden_command("explorer").arg(dir.to_string_lossy().as_ref()).spawn().map_err(|e| e.to_string())?;
     }
     #[cfg(not(target_os = "windows"))]
     {
-        std::process::Command::new("xdg-open").arg(dir.to_string_lossy().as_ref()).spawn().map_err(|e| e.to_string())?;
+        crate::commands::proc::hidden_command("xdg-open").arg(dir.to_string_lossy().as_ref()).spawn().map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -368,7 +368,7 @@ pub fn open_crash_zip(path: String) -> Result<(), String> {
     
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("explorer")
+        crate::commands::proc::hidden_command("explorer")
             .args(["/select,", p.to_string_lossy().as_ref()])
             .spawn()
             .map_err(|e| e.to_string())?;
@@ -376,7 +376,7 @@ pub fn open_crash_zip(path: String) -> Result<(), String> {
     #[cfg(not(target_os = "windows"))]
     {
         if let Some(parent) = p.parent() {
-            std::process::Command::new("xdg-open").arg(parent.to_string_lossy().as_ref()).spawn().map_err(|e| e.to_string())?;
+            crate::commands::proc::hidden_command("xdg-open").arg(parent.to_string_lossy().as_ref()).spawn().map_err(|e| e.to_string())?;
         }
     }
     Ok(())
@@ -531,7 +531,7 @@ pub async fn get_dxdiag_report() -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {
         let tmp_file = std::env::temp_dir().join(format!("bmm_dxdiag_req_{}.txt", std::process::id()));
-        let _ = std::process::Command::new("dxdiag")
+        let _ = crate::commands::proc::hidden_command("dxdiag")
             .args(["/t", &tmp_file.to_string_lossy().to_string()])
             .spawn()
             .map_err(|e| format!("Failed to spawn dxdiag: {}", e))?;

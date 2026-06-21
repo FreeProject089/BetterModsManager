@@ -197,6 +197,31 @@ export async function importAndPlay(): Promise<void> {
   await loadAndPlay(src);
 }
 
+/** Programmatically set the local recorder options (used by the API + deep links). */
+export async function setWatcherOptions(opts: { on?: boolean; full?: boolean; rust?: boolean; js?: boolean }): Promise<void> {
+  if (opts.on !== undefined) localStorage.setItem(ON, opts.on ? '1' : '0');
+  if (opts.full !== undefined) localStorage.setItem(FULL, opts.full ? '1' : '0');
+  if (opts.rust !== undefined) localStorage.setItem(RUST, opts.rust ? '1' : '0');
+  if (opts.js !== undefined) localStorage.setItem(JS, opts.js ? '1' : '0');
+  // reflect into the settings card toggles if they're mounted
+  const set = (id: string, v?: boolean) => { const el = document.getElementById(id) as HTMLInputElement | null; if (el && v !== undefined) el.checked = v; };
+  set('watcher-toggle', opts.on); set('watcher-full-toggle', opts.full); set('watcher-rust-toggle', opts.rust); set('watcher-js-toggle', opts.js);
+  stopWatcher();
+  await syncWatcher();   // re-arm with the new settings (or stop if turned off)
+}
+
+/** Import + replay a .bmmreplay from an absolute file path (API / deep link). */
+export async function importReplayFromPath(path: string): Promise<void> { await loadAndPlay(path); }
+
+/** Import + replay a .bmmreplay from a download URL (API / deep link). */
+export async function importReplayFromUrl(url: string): Promise<void> {
+  let bundle: any;
+  try { const res = await fetch(url); bundle = await res.json(); }
+  catch { toast(t('watcher.badFile') || 'Fichier illisible', 'error'); return; }
+  if (!Array.isArray(bundle?.events) || bundle.events.length < 2) { toast(t('watcher.empty') || 'Enregistrement vide', 'error'); return; }
+  await playBundle(bundle);
+}
+
 /** Modal listing recently imported replays — click one to watch it. */
 export function openReplayList(): void {
   const recents = getRecents();

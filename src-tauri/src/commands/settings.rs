@@ -130,6 +130,54 @@ pub fn export_app_data(state: State<AppState>, app_handle: tauri::AppHandle, des
     Ok(())
 }
 
+/// Automated data export — picks the destination path itself from a target folder,
+/// a filename template ({date} {time} {datetime}) and an increment policy if the
+/// file already exists. Used by the scheduler / API so a backup can run unattended
+/// (no save dialog). Returns the path it wrote to.
+#[tauri::command]
+pub fn export_app_data_auto(
+    state: State<AppState>, app_handle: tauri::AppHandle,
+    dir: String, name: Option<String>, increment: Option<String>,
+) -> Result<String, String> {
+    let folder = std::path::Path::new(&dir);
+    if !folder.is_dir() {
+        return Err(format!("Not a folder: {}", dir));
+    }
+    let now = chrono::Local::now();
+    let tmpl = name.unwrap_or_default();
+    let tmpl = if tmpl.trim().is_empty() { "bmm-backup-{date}".to_string() } else { tmpl };
+    let raw = tmpl
+        .replace("{datetime}", &now.format("%Y-%m-%d_%H%M%S").to_string())
+        .replace("{date}", &now.format("%Y-%m-%d").to_string())
+        .replace("{time}", &now.format("%H%M%S").to_string());
+    // Strip a trailing .json and any illegal filename characters.
+    let base: String = raw.trim_end_matches(".json")
+        .chars().map(|c| if "<>:\"/\\|?*".contains(c) { '_' } else { c }).collect();
+    let base = base.trim().to_string();
+
+    let policy = increment.unwrap_or_else(|| "paren".into());
+    let mut candidate = folder.join(format!("{base}.json"));
+    if candidate.exists() {
+        match policy.as_str() {
+            "overwrite" => {}
+            "timestamp" => { candidate = folder.join(format!("{base}_{}.json", now.timestamp())); }
+            "underscore" => {
+                let mut i = 1;
+                while folder.join(format!("{base}_{i}.json")).exists() && i < 9999 { i += 1; }
+                candidate = folder.join(format!("{base}_{i}.json"));
+            }
+            _ => { // "paren" (default): name (1).json, name (2).json …
+                let mut i = 1;
+                while folder.join(format!("{base} ({i}).json")).exists() && i < 9999 { i += 1; }
+                candidate = folder.join(format!("{base} ({i}).json"));
+            }
+        }
+    }
+    let dest = candidate.to_string_lossy().to_string();
+    export_app_data(state, app_handle, dest.clone(), None, None).map_err(|e| e.to_string())?;
+    Ok(dest)
+}
+
 /// Import a backup. Returns the `extras` object (frontend localStorage data) so the
 /// caller can restore it before reloading. Supports both the v2 wrapper format and
 /// the legacy flat AppData file.

@@ -21,7 +21,7 @@ pub fn run_launch_pack(id: &str) -> Result<String> {
         return Err(anyhow::anyhow!("VBS launcher missing at {:?}", vbs_path));
     }
 
-    Command::new("wscript")
+    crate::commands::proc::hidden_command("wscript")
         .arg(&vbs_path)
         .spawn()
         .map_err(|e| anyhow::anyhow!("Failed to run pack: {}", e))?;
@@ -107,7 +107,7 @@ pub fn create_launch_pack(
         icon_path.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| String::new()).replace("'", "''")
     );
 
-    let _ = Command::new("powershell")
+    let _ = crate::commands::proc::hidden_command("powershell")
         .args(&["-NoProfile", "-Command", &powershell_script])
         .output();
 
@@ -137,7 +137,7 @@ pub fn open_launch_pack_folder(id: &str) -> Result<String> {
     if pack_dir.exists() {
         #[cfg(target_os = "windows")]
         {
-            Command::new("explorer")
+            crate::commands::proc::hidden_command("explorer")
                 .arg(pack_dir)
                 .spawn()
                 .map_err(|e| anyhow::anyhow!("Failed to open folder: {}", e))?;

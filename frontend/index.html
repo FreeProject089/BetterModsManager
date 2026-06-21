@@ -6644,6 +6644,16 @@
                                     <li><code>bmm://language/import?path=fr.json</code>        &nbsp;— Import a translation</li>
                                     <li><code>bmm://restart</code>                            &nbsp;— Restart BMM</li>
                                     <li><code>bmm://install?url=...&amp;name=ModName</code>     &nbsp;— One-click mod install</li>
+                                    <li><code>bmm://telemetry/consent?enabled=1</code>       &nbsp;— Enable/disable "Share anonymous usage data"</li>
+                                    <li><code>bmm://telemetry/set?replay=1&amp;full=0&amp;bench=1</code> &nbsp;— Manage telemetry sub-options</li>
+                                    <li><code>bmm://recorder/set?on=1&amp;full=0&amp;rust=1&amp;js=1</code> &nbsp;— Configure the local Session recorder</li>
+                                    <li><code>bmm://replay/export</code>                      &nbsp;— Export the current session as a .bmmreplay</li>
+                                    <li><code>bmm://replay/import?path=...</code> · <code>?url=...</code> &nbsp;— Import &amp; replay a .bmmreplay (file or download)</li>
+                                    <li><code>bmm://discord/rpc?enabled=1</code>             &nbsp;— Enable/disable Discord Rich Presence</li>
+                                    <li><code>bmm://data/export-auto?dir=...&amp;name=bmm-backup-{date}&amp;increment=paren</code> &nbsp;— Unattended data backup (folder + filename template + increment)</li>
+                                    <li><code>bmm://mod/check-updates</code>                 &nbsp;— Check every linked mod for updates</li>
+                                    <li><code>bmm://launchpack/run?id=...</code>            &nbsp;— Run a saved launch pack</li>
+                                    <li><code>bmm://schedule/run?id=...</code>             &nbsp;— Trigger a saved Scheduling task now</li>
                                 </ul>
 
                                 <div class="plug-doc-tip" style="margin-top:8px;">
@@ -6934,6 +6944,17 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                         <tr><td><code>Cancel gen</code></td><td>—</td><td><code>DELETE /api/repo/gen</code></td></tr>
                                         <tr><td><code>Start HTTP host</code></td><td>Folder to host, Port</td><td><code>POST /api/repo/host</code></td></tr>
                                         <tr><td><code>Stop HTTP host</code></td><td>—</td><td><code>DELETE /api/repo/host</code></td></tr>
+                                        <tr><td><code>Telemetry consent</code></td><td>Enabled (switch)</td><td><code>bmm://telemetry/consent?enabled=…</code> / <code>POST /api/telemetry/consent</code></td></tr>
+                                        <tr><td><code>Telemetry options</code></td><td>Visual replay, Full, Weekly benchmark (switches)</td><td><code>bmm://telemetry/set?…</code> / <code>POST /api/telemetry/settings</code></td></tr>
+                                        <tr><td><code>Session recorder</code></td><td>Record, Full, Rust log, JS log (switches)</td><td><code>bmm://recorder/set?…</code> / <code>POST /api/recorder</code></td></tr>
+                                        <tr><td><code>Export replay</code></td><td>—</td><td><code>bmm://replay/export</code> / <code>POST /api/replay/export</code></td></tr>
+                                        <tr><td><code>Import replay</code></td><td>File path or Download URL</td><td><code>bmm://replay/import?path=…|url=…</code> / <code>POST /api/replay/import</code></td></tr>
+                                        <tr><td><code>Run launch pack</code></td><td>Launch pack (dropdown)</td><td><code>bmm://launchpack/run?id=…</code> / <code>POST /api/launchpack/run</code></td></tr>
+                                        <tr><td><code>Run scheduled task</code></td><td>Task (dropdown)</td><td><code>bmm://schedule/run?id=…</code> / <code>POST /api/schedule/run</code></td></tr>
+                                        <tr><td><code>Run benchmark</code></td><td>Dataset, Size, Sources (profiles + folders, browse)</td><td><code>bmm://benchmark/run?…&amp;sources=a;b</code> / <code>POST /api/benchmark</code></td></tr>
+                                        <tr><td><code>Check mod updates</code></td><td>—</td><td><code>bmm://mod/check-updates</code> / <code>POST /api/mod/check-updates</code></td></tr>
+                                        <tr><td><code>Discord Rich Presence</code></td><td>Enabled (switch)</td><td><code>bmm://discord/rpc?enabled=…</code> / <code>POST /api/discord/rpc</code></td></tr>
+                                        <tr><td><code>Export data (backup)</code></td><td>Backup folder (browse), Filename template, If file exists (select)</td><td><code>bmm://data/export-auto?…</code> / <code>POST /api/data/export-auto</code></td></tr>
                                         <tr><td><code>Wait</code></td><td>Seconds</td><td>Language-native sleep call</td></tr>
                                         <tr><td><code>Kill process</code></td><td>Process name (e.g. <code>notepad.exe</code>)</td><td><code>taskkill</code> / <code>Stop-Process</code></td></tr>
                                         <tr><td><code>Open URL</code></td><td>URL</td><td>Default browser open</td></tr>

@@ -136,7 +136,7 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
             "disks": s.get("disks"), "locale": s.get("locale").or_else(|| s.get("language")),
             "motherboard": s.get("motherboard"),
             "profiles": s.get("profiles_summary"), "private_ip": s.get("private_ip"),
-            "theme": s.get("theme"), "theme_kind": s.get("theme_kind"), "tasky": s.get("tasky"),
+            "theme": s.get("theme"), "theme_kind": s.get("theme_kind"), "theme_name": s.get("theme_name"), "tasky": s.get("tasky"),
             // BMM content counts + how the app accesses the filesystem
             "counts": s.get("counts"), "access": s.get("fs_security_mode").or_else(|| s.get("access")),
             // displays / peripherals (EDID identity + active resolution)
@@ -562,7 +562,12 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
     }
 
     // BMM-specific aggregations
-    let themes = tally(uarr.iter().filter_map(|u| u.config.get("theme").and_then(Value::as_str).map(String::from)));
+    // Prefer the human theme name (falls back to the id) so custom themes show a
+    // readable label in "Top themes" instead of an opaque id.
+    let themes = tally(uarr.iter().filter_map(|u|
+        u.config.get("theme_name").and_then(Value::as_str)
+            .or_else(|| u.config.get("theme").and_then(Value::as_str))
+            .map(String::from)));
     let theme_kind = tally(uarr.iter().filter_map(|u| u.config.get("theme_kind").and_then(Value::as_str).map(String::from)));
     let languages = tally(uarr.iter().filter_map(|u| u.config.get("locale").and_then(Value::as_str).map(String::from)));
     let tasky = json!({

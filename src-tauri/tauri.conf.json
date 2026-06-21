@@ -77,7 +77,8 @@
                 "../frontend/Lang",
                 "../frontend/assets/tutorial-assets",
                 "../frontend/assets/links.json",
-                "../frontend/assets/builtin-themes"
+                "../frontend/assets/builtin-themes",
+                "../Update"
             ],
             "externalBin": [
                 "binaries/bmm-mcp-server"

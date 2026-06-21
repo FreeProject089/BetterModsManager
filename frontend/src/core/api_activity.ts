@@ -284,14 +284,77 @@ export async function initApiActivity(): Promise<void> {
                 // decides whether the run starts immediately or waits for the user.
                 const dataset = params.dataset === 'real' ? 'real' : 'sandbox';
                 const size = String(params.size || 'M').toUpperCase();
-                const sources = Array.isArray(params.sources) ? params.sources : [];
+                const asArr = (v: any) => Array.isArray(v) ? v : (typeof v === 'string' && v ? v.split(/[;|]/).map((s: string) => s.trim()).filter(Boolean) : []);
+                const sources = [...asArr(params.sources), ...asArr(params.folders)];
+                const profiles = asArr(params.profiles);
                 const autoRun = action === 'benchmark/run' || params.autoRun === true;
                 try {
                     const { openBenchmarkWithConfig } = await import('../features/bench/benchmark.js');
-                    await openBenchmarkWithConfig({ dataset, size, mb: params.mb, sources, autoRun });
+                    await openBenchmarkWithConfig({ dataset, size, mb: params.mb, sources, profiles, autoRun });
                 } catch (e) { console.warn('[api-exec] benchmark/open', e); }
                 break;
             }
+            case 'telemetry/consent':
+            case 'telemetry/set': {
+                // Enable/disable "Share anonymous usage data" + its sub-options.
+                const b = (v: any) => v === undefined || v === null ? undefined : (v === '1' || v === true || v === 'true');
+                try {
+                    const { applyTelemetrySettings } = await import('./analytics.js');
+                    await applyTelemetrySettings({
+                        consent: b(params.enabled ?? params.consent),
+                        replay: b(params.replay),
+                        replayFull: b(params.full ?? params.replayFull),
+                        bench: b(params.bench),
+                    });
+                } catch (e) { console.warn('[api-exec] telemetry', e); }
+                break;
+            }
+            case 'recorder/set': {
+                // Configure the local Session recorder (separate from telemetry).
+                const b = (v: any) => v === undefined || v === null ? undefined : (v === '1' || v === true || v === 'true');
+                try {
+                    const { setWatcherOptions } = await import('../features/settings/replay-watcher.js');
+                    await setWatcherOptions({ on: b(params.on), full: b(params.full), rust: b(params.rust), js: b(params.js) });
+                } catch (e) { console.warn('[api-exec] recorder/set', e); }
+                break;
+            }
+            case 'replay/export':
+                try { (await import('../features/settings/replay-watcher.js')).exportSession(); }
+                catch (e) { console.warn('[api-exec] replay/export', e); }
+                break;
+            case 'launchpack/run':
+                try { await invoke('run_launch_pack', { id: String(params.id || '') }); toast(t('settings.lpRunning') || 'Launch pack started', 'success'); }
+                catch (e) { toast((t('common.error') || 'Error') + ': ' + e, 'error'); }
+                break;
+            case 'schedule/run':
+                try { await (await import('../features/settings/scheduler.js')).runTaskById(String(params.id || '')); }
+                catch (e) { console.warn('[api-exec] schedule/run', e); }
+                break;
+            case 'discord/rpc': {
+                const enabled = params.enabled === '1' || params.enabled === true || params.enabled === 'true';
+                try { await (await import('../features/settings/settings.js')).setDiscordRpc(enabled); }
+                catch (e) { console.warn('[api-exec] discord/rpc', e); }
+                break;
+            }
+            case 'data/export-auto': {
+                try {
+                    const dest = await invoke('export_app_data_auto', {
+                        dir: String(params.dir || ''),
+                        name: params.name ? String(params.name) : null,
+                        increment: params.increment ? String(params.increment) : null,
+                    });
+                    toast((t('settings.exportSuccess') || 'Data exported') + ': ' + dest, 'success');
+                } catch (e) { toast((t('common.error') || 'Error') + ': ' + e, 'error'); }
+                break;
+            }
+            case 'replay/import':
+                try {
+                    const m = await import('../features/settings/replay-watcher.js');
+                    if (params.url) await m.importReplayFromUrl(String(params.url));
+                    else if (params.path) await m.importReplayFromPath(String(params.path));
+                    else await m.importAndPlay();
+                } catch (e) { console.warn('[api-exec] replay/import', e); }
+                break;
             case 'repo/host-stop':
                 gotoRepoPage();
                 setTimeout(async () => {

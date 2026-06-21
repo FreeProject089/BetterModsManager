@@ -13485,8 +13485,9 @@ body.bmm-toolbar-stacked-labels .profile-select-icon-wrap select { width: 100% !
 }
 #view-library.lib-sticky-header .lib-header-shell {
     position: sticky;
-    /* ~42px = 6px padding + ~30px button + 6px padding on .view-actions */
-    top: 42px;
+    /* Sit flush under the action row (slight overlap kills any sub-pixel sliver). */
+    top: 40px;
+    margin-top: 0 !important;
     z-index: 14;
 }
 /* When sticky is OFF, reset to normal flow */
@@ -13507,6 +13508,13 @@ body.bmm-toolbar-stacked-labels .profile-select-icon-wrap select { width: 100% !
     backdrop-filter: none !important;
     background-color: var(--bmm-bg-base, #0a0e17) !important;
     background-image: linear-gradient(var(--bmm-s02), var(--bmm-s02)) !important;
+}
+/* Fill the whole pinned action row (not just the pill) with the page colour, so
+   the strip between the action bar and the filter bar no longer shows the
+   scrolling list through it — that transparent sliver was the visible "gap". */
+#view-library.lib-sticky-header .lib-actions-tab {
+    background-color: var(--bmm-bg-base, #0a0e17) !important;
+    padding-bottom: 0 !important;
 }
 
 /* ── Security modal — responsive ─────────────────────────────────────────── */

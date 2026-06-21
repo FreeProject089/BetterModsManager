@@ -379,6 +379,131 @@ pub async fn journeys(pool: &PgPool, steps: usize, limit: usize, filters: &[Stri
 }
 
 // ── Retention + per-packet erasure ──────────────────────────────────────────
+// ── Runtime settings (meta key/value) ─────────────────────────────────────────
+pub async fn get_meta_i64(pool: &PgPool, key: &str, default: i64) -> i64 {
+    sqlx::query_as::<_, (String,)>("SELECT value FROM meta WHERE key=$1")
+        .bind(key).fetch_optional(pool).await.ok().flatten()
+        .and_then(|r| r.0.parse::<i64>().ok()).unwrap_or(default)
+}
+pub async fn set_meta(pool: &PgPool, key: &str, value: &str) {
+    let _ = sqlx::query("INSERT INTO meta(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=$2")
+        .bind(key).bind(value).execute(pool).await;
+}
+
+/// Total on-disk size of the database (bytes).
+pub async fn db_size_bytes(pool: &PgPool) -> i64 {
+    sqlx::query_as::<_, (Option<i64>,)>("SELECT pg_database_size(current_database())")
+        .fetch_optional(pool).await.ok().flatten().and_then(|r| r.0).unwrap_or(0)
+}
+
+/// Hard storage cap: if the DB exceeds `hard_mb`, IMMEDIATELY delete the oldest
+/// data (replay chunks first — biggest per row — then events) in batches until
+/// it's back under `soft_mb`. Returns rows removed. Runs on a fast loop so the
+/// cap is enforced within minutes, not at the next hourly retention pass.
+pub async fn enforce_size_cap(pool: &PgPool, soft_mb: i64, hard_mb: i64) -> u64 {
+    let hard = hard_mb.max(1) * 1024 * 1024;
+    let soft = soft_mb.max(1) * 1024 * 1024;
+    if db_size_bytes(pool).await <= hard { return 0; }
+    let mut removed = 0u64;
+    // Bounded loop so a runaway can't spin forever; VACUUM-free size estimate
+    // updates between batches.
+    for _ in 0..200 {
+        if db_size_bytes(pool).await <= soft { break; }
+        // Oldest replay chunks are the heaviest — trim those first.
+        let r = sqlx::query(
+            "DELETE FROM replay_chunks WHERE id IN (SELECT id FROM replay_chunks ORDER BY ts_ms ASC LIMIT 2000)",
+        ).execute(pool).await.map(|x| x.rows_affected()).unwrap_or(0);
+        let e = sqlx::query(
+            "DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY ts_ms ASC LIMIT 5000)",
+        ).execute(pool).await.map(|x| x.rows_affected()).unwrap_or(0);
+        removed += r + e;
+        if r == 0 && e == 0 { break; } // nothing left to trim
+    }
+    if removed > 0 {
+        let _ = sqlx::query("VACUUM").execute(pool).await; // reclaim space so size reflects the purge
+    }
+    removed
+}
+
+// ── Monthly recaps ────────────────────────────────────────────────────────────
+/// Build a lightweight aggregate recap for a month ("YYYY-MM"). All figures are
+/// aggregates (no per-user rows). `anon` drops the coarse device/geo breakdowns and
+/// rounds the user count to a bucket, for a fully non-identifying summary.
+pub async fn generate_recap(pool: &PgPool, month: &str, anon: bool) -> Value {
+    let like = format!("{}%", month);
+    let one = |sql: &'static str| {
+        let p = pool.clone(); let lk = like.clone();
+        async move { sqlx::query_as::<_, (i64,)>(sql).bind(lk).fetch_optional(&p).await.ok().flatten().map(|r| r.0).unwrap_or(0) }
+    };
+    let events = one("SELECT COUNT(*) FROM events WHERE ts LIKE $1").await;
+    let sessions = one("SELECT COUNT(*) FROM events WHERE event='session_start' AND ts LIKE $1").await;
+    let pageviews = one("SELECT COUNT(*) FROM events WHERE event='page_enter' AND ts LIKE $1").await;
+    let users = one("SELECT COUNT(DISTINCT distinct_id) FROM events WHERE ts LIKE $1").await;
+
+    let kv = |sql: &'static str| {
+        let p = pool.clone(); let lk = like.clone();
+        async move {
+            let rows: Vec<(Option<String>, i64)> = sqlx::query_as(sql).bind(lk).fetch_all(&p).await.unwrap_or_default();
+            rows.into_iter().map(|(k, v)| json!({ "k": k.unwrap_or_default(), "v": v })).collect::<Vec<_>>()
+        }
+    };
+    let top_events = kv("SELECT event, COUNT(*) FROM events WHERE ts LIKE $1 GROUP BY event ORDER BY COUNT(*) DESC LIMIT 20").await;
+    let top_pages = kv("SELECT props->>'view', COUNT(*) FROM events WHERE event='page_enter' AND ts LIKE $1 GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 20").await;
+    let avg_session_min: Option<f64> = sqlx::query_as::<_, (Option<f64>,)>(
+        "SELECT AVG((props->>'duration_sec')::float)/60.0 FROM events WHERE event='session_end' AND ts LIKE $1",
+    ).bind(&like).fetch_optional(pool).await.ok().flatten().and_then(|r| r.0);
+
+    let mut out = serde_json::Map::new();
+    out.insert("version".into(), json!(1));
+    out.insert("month".into(), json!(month));
+    out.insert("generated_at".into(), json!(now_ms()));
+    out.insert("anonymized".into(), json!(anon));
+    out.insert("totals".into(), json!({
+        "events": events, "sessions": sessions, "pageviews": pageviews,
+        // anon → bucket the user count to the nearest 10 so it can't identify a tiny cohort
+        "users": if anon { (users / 10) * 10 } else { users },
+        "avg_session_min": avg_session_min.map(|v| (v * 10.0).round() / 10.0).unwrap_or(0.0),
+        "pages_per_session": if sessions > 0 { (pageviews as f64 / sessions as f64 * 10.0).round() / 10.0 } else { 0.0 },
+    }));
+    out.insert("top_events".into(), json!(top_events));
+    out.insert("top_pages".into(), json!(top_pages));
+    if !anon {
+        let os = kv("SELECT props->'$set'->>'os_caption', COUNT(DISTINCT distinct_id) FROM events WHERE event='$identify' GROUP BY 1 ORDER BY 2 DESC LIMIT 12").await;
+        out.insert("os".into(), json!(os));
+    }
+    Value::Object(out)
+}
+
+pub async fn save_recap(pool: &PgPool, recap: &Value, source: &str) -> i64 {
+    let month = recap.get("month").and_then(Value::as_str).unwrap_or("");
+    let anon = recap.get("anonymized").and_then(Value::as_bool).unwrap_or(false);
+    sqlx::query_as::<_, (i64,)>(
+        "INSERT INTO recaps(month,created_at,anon,source,data) VALUES($1,$2,$3,$4,$5) RETURNING id",
+    )
+    .bind(month).bind(now_ms()).bind(anon).bind(source).bind(recap)
+    .fetch_one(pool).await.map(|r| r.0).unwrap_or(0)
+}
+
+pub async fn list_recaps(pool: &PgPool) -> Vec<Value> {
+    let rows: Vec<(i64, String, i64, bool, String)> = sqlx::query_as(
+        "SELECT id, COALESCE(month,''), created_at, anon, COALESCE(source,'') FROM recaps ORDER BY created_at DESC LIMIT 200",
+    ).fetch_all(pool).await.unwrap_or_default();
+    rows.into_iter().map(|(id, month, at, anon, source)| json!({
+        "id": id, "month": month, "created_at": at, "anon": anon, "source": source
+    })).collect()
+}
+
+pub async fn get_recap(pool: &PgPool, id: i64) -> Option<Value> {
+    sqlx::query_as::<_, (Value,)>("SELECT data FROM recaps WHERE id=$1")
+        .bind(id).fetch_optional(pool).await.ok().flatten().map(|r| r.0)
+}
+
+pub async fn import_recap(pool: &PgPool, doc: &Value) -> i64 { save_recap(pool, doc, "imported").await }
+
+pub async fn delete_recap(pool: &PgPool, id: i64) -> u64 {
+    sqlx::query("DELETE FROM recaps WHERE id=$1").bind(id).execute(pool).await.map(|r| r.rows_affected()).unwrap_or(0)
+}
+
 pub async fn purge_retention(pool: &PgPool, days: i64) -> u64 {
     let cut = now_ms() - days * 86_400_000;
     let a = sqlx::query("DELETE FROM events WHERE ts_ms < $1")
@@ -487,7 +612,10 @@ pub async fn storage_overview(pool: &PgPool) -> Value {
         "packet_id": pid, "events": n, "bytes": bytes.unwrap_or(0), "last_ms": ts.unwrap_or(0)
     })).collect();
 
-    json!({ "tables": tinfo, "replays": replays, "packets": packets })
+    let storage_bytes = db_size_bytes(pool).await;
+    let storage_limit_mb = get_meta_i64(pool, "storage_limit_mb", 5120).await;
+    json!({ "tables": tinfo, "replays": replays, "packets": packets,
+            "storage_bytes": storage_bytes, "storage_limit_mb": storage_limit_mb })
 }
 
 pub async fn delete_replay_session(pool: &PgPool, sid: &str) -> u64 {

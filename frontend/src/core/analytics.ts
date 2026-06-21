@@ -189,8 +189,10 @@ async function startCollection(): Promise<void> {
         // dashboard can target modals that were never opened yet.
         setTimeout(sendAppCatalog, 4000);
     } catch {}
-    // Periodic flush; also flush before the window closes.
-    if (_flushTimer === null) _flushTimer = window.setInterval(() => flush(), 90000);
+    // Periodic flush; also flush before the window closes. Skip while the window
+    // is hidden/out of focus — idle, off-screen sessions send nothing (the buffer
+    // persists and goes out when focus returns or on close).
+    if (_flushTimer === null) _flushTimer = window.setInterval(() => { if (!document.hidden) flush(); }, 90000);
     // On unload we DON'T end the session — a reload (Ctrl+F5) also fires this and
     // must keep the session alive. We just persist state + flush; the real
     // session_end is sent by the Tauri close handler (registerCloseHandler).
@@ -225,6 +227,23 @@ function startSessionReplay(): void {
     };
     const ric = (window as any).requestIdleCallback;
     if (ric) ric(begin, { timeout: 7000 }); else setTimeout(begin, 4500);
+}
+
+/** Enable/disable telemetry consent + its sub-options programmatically (API / deep
+ *  links). Reflects into the Privacy & telemetry card toggles and re-arms the
+ *  replay recorder so changes take effect immediately. */
+export async function applyTelemetrySettings(opts: { consent?: boolean; replay?: boolean; replayFull?: boolean; bench?: boolean }): Promise<void> {
+    const reflect = (id: string, v?: boolean) => { if (v === undefined) return; const el = document.getElementById(id) as HTMLInputElement | null; if (el) el.checked = v; };
+    if (opts.consent !== undefined) await setConsent(opts.consent);
+    let restartReplay = false;
+    if (opts.replay !== undefined) { try { localStorage.setItem('bmm_replay_enabled', opts.replay ? '1' : '0'); } catch {} reflect('analytics-replay-toggle', opts.replay); restartReplay = true; }
+    if (opts.replayFull !== undefined) { try { localStorage.setItem('bmm_replay_full', opts.replayFull ? '1' : '0'); } catch {} reflect('analytics-replay-full-toggle', opts.replayFull); restartReplay = true; }
+    if (opts.bench !== undefined) { setTelemetryBenchAllowed(opts.bench); reflect('analytics-bench-toggle', opts.bench); }
+    if (restartReplay && _consent === true) {
+        try { _telemetryReplay?.stop?.(); } catch {}
+        _telemetryReplay = null;
+        startSessionReplay();   // respects bmm_replay_enabled + the new masking
+    }
 }
 
 // Core Web Vitals of the BMM WebView (Chromium APIs), sent once per launch.
@@ -306,22 +325,31 @@ function startRustLogPolling(): void {
 async function bmmProfileExtras(): Promise<Record<string, any>> {
     const ls = (k: string, dflt = true) => localStorage.getItem(k) !== 'false' ? dflt : false;
     const theme = localStorage.getItem('bmm_active_theme') || 'bmm-default';
-    let theme_kind = 'predef';
+    // theme_kind: 'builtin' (shipped preset) | 'catalog' (installed from a theme
+    // catalogue) | 'imported' (a custom .bmmtheme the user imported). theme_name is
+    // the human label so the dashboard can show it instead of an opaque id.
+    let theme_kind = 'builtin';
+    let theme_name = theme;
     try {
-        // BUILTIN_THEMES is loaded from disk asynchronously and REASSIGNED, so we must
-        // read the live module binding (a destructured `const { BUILTIN_THEMES }` would
-        // capture the initial empty array → every theme wrongly classified as "custom").
-        // Make sure it's actually populated before deciding.
-        const themeEngine = await import('../features/themes/theme-engine.js');
-        if (!themeEngine.BUILTIN_THEMES.length) {
-            try { await themeEngine.loadBuiltinThemes(); } catch {}
+        // BUILTIN_THEMES loads async + is REASSIGNED → read the live module binding,
+        // and make sure it's populated before classifying.
+        const te = await import('../features/themes/theme-engine.js');
+        if (!te.BUILTIN_THEMES.length) { try { await te.loadBuiltinThemes(); } catch {} }
+        const builtin = te.BUILTIN_THEMES.find((b: any) => b.id === theme);
+        if (builtin) {
+            theme_kind = 'builtin'; theme_name = builtin.name || theme;
+        } else {
+            // Custom theme: catalogue-installed themes carry a `catalog_url`.
+            let obj: any = null;
+            try { obj = te.getActiveTheme?.(); if (!obj || obj.id !== theme) obj = te.getInstalledThemes?.().find((x: any) => x.id === theme) || null; } catch {}
+            theme_kind = obj && obj.catalog_url ? 'catalog' : 'imported';
+            theme_name = (obj && obj.name) || theme;
         }
-        if (!themeEngine.BUILTIN_THEMES.some((b: any) => b.id === theme)) theme_kind = 'custom';
     } catch {}
     let language = '';
     try { const { getLang } = await import('./i18n.js'); language = getLang(); } catch {}
     return {
-        theme, theme_kind, language,
+        theme, theme_kind, theme_name, language,
         tasky: {
             visible: ls('bmm_tasky_visible'),
             animations: ls('bmm_tasky_animated'),
@@ -452,7 +480,9 @@ async function sendAppCatalog(): Promise<void> {
         const pages = new Set<string>();
         document.querySelectorAll('[data-view]').forEach(el => {
             const v = el.getAttribute('data-view')?.trim(); if (!v) return;
-            pages.add(v); setLabel(v, labelOf(el));
+            // Nav text carries a badge count (e.g. "Library 9") — strip the trailing
+            // number so the catalog/doc shows just the page name.
+            pages.add(v); setLabel(v, labelOf(el).replace(/\s*\d+$/, '').trim());
         });
         // Tabs — EVERYTHING tab/sub-navigation-like, so the catalog is exhaustive:
         // data-tab / data-mode / data-target / data-section / role=tab / .tab-ish.
@@ -591,6 +621,9 @@ function startPerfSampling(): void {
     // Emit an aggregated perf sample every 30s (one event, not per-frame).
     window.setInterval(() => {
         if (_consent !== true) return;
+        // Idle / off-screen: don't sample or send a perf event (and reset the window
+        // so the next visible sample isn't skewed by the hidden period).
+        if (document.hidden) { frames = 0; lastT = performance.now(); worstFrame = 0; sumFrame = 0; frameSamples = 0; return; }
         const now = performance.now();
         const secs = (now - lastT) / 1000;
         const fps = secs > 0 ? frames / secs : 0;

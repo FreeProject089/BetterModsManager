@@ -1,13 +1,10 @@
-#[cfg(windows)]
-use windows::Win32::System::Threading::CREATE_NO_WINDOW;
-
 use std::sync::Mutex;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::oneshot;
 use local_ip_address::local_ip;
 use std::path::PathBuf;
 use igd::{search_gateway, PortMappingProtocol};
-use tokio::process::{Command, Child};
+use tokio::process::Child;
 use std::process::Stdio;
 use tokio::io::{BufReader, AsyncBufReadExt};
 use tokio_util::io::ReaderStream;
@@ -694,11 +691,10 @@ pub async fn start_repo_server(
             let target_url = format!("http://{}:{}", my_local_ip, port);
             println!("[Tunnel] Target URL: {}", target_url);
 
-            let mut child = Command::new(cf_path)
+            let mut child = crate::commands::proc::hidden_tokio_command(cf_path)
                 .args(["tunnel", "--no-autoupdate", "--protocol", "http2", "--url", &target_url])
                 .stderr(Stdio::piped())
                 .stdout(Stdio::null())
-                .creation_flags(CREATE_NO_WINDOW.0)
                 .spawn()
                 .map_err(|e| format!("Tunnel launch error: {}", e))?;
 

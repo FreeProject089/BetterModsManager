@@ -3,7 +3,6 @@ use crate::error::AppError;
 use crate::models::launch_pack::LaunchPack;
 use tauri::State;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use uuid::Uuid;
 use chrono::Local;
 use serde::{Deserialize, Serialize};
@@ -109,7 +108,7 @@ pub fn create_launch_pack(
         icon_path.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| String::new()).replace("'", "''")
     );
 
-    let output = Command::new("powershell")
+    let output = crate::commands::proc::hidden_command("powershell")
         .args(&["-NoProfile", "-Command", &powershell_script])
         .output();
 
@@ -217,7 +216,7 @@ pub fn update_launch_pack(
         pack_dir.to_string_lossy().replace("'", "''"),
         icon_path.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(String::new).replace("'", "''")
     );
-    let _ = Command::new("powershell")
+    let _ = crate::commands::proc::hidden_command("powershell")
         .args(&["-NoProfile", "-Command", &powershell_script])
         .output();
 
@@ -251,7 +250,7 @@ pub fn run_launch_pack(state: State<AppState>, id: String) -> Result<(), AppErro
     }
 
     // Execute the VBS file (invisible)
-    Command::new("wscript")
+    crate::commands::proc::hidden_command("wscript")
         .arg(vbs_path)
         .spawn()
         .map_err(|e| AppError::Internal(format!("Failed to run pack: {}", e)))?;
@@ -412,7 +411,7 @@ fn _scan_lnk_recursive(dir: &Path, apps: &mut Vec<InstalledApp>) {
     }).collect();
     let script = script_parts.join(";");
 
-    let out = Command::new("powershell")
+    let out = crate::commands::proc::hidden_command("powershell")
         .args(&["-NoProfile", "-NonInteractive", "-Command", &script])
         .output();
 
@@ -469,7 +468,7 @@ pub async fn extract_exe_icon(exe_path: String) -> Result<String, AppError> {
              }}",
             exe_path.replace('\'', "''")
         );
-        let out = tokio::process::Command::new("powershell")
+        let out = crate::commands::proc::hidden_tokio_command("powershell")
             .args(["-NoProfile", "-NonInteractive", "-Command", &script])
             .output()
             .await
@@ -524,7 +523,7 @@ pub fn open_launch_pack_folder(state: State<AppState>, id: String) -> Result<(),
     if pack_dir.exists() {
         #[cfg(target_os = "windows")]
         {
-            Command::new("explorer")
+            crate::commands::proc::hidden_command("explorer")
                 .arg(pack_dir)
                 .spawn()
                 .map_err(|e| AppError::Internal(format!("Failed to open folder: {}", e)))?;

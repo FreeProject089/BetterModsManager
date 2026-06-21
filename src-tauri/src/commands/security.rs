@@ -10,8 +10,7 @@ use sha2::{Sha256, Digest};
 // ─────────────────────────────────────────────────────────────────────────────
 #[cfg(target_os = "windows")]
 fn get_wmic_value(target: &str, field: &str) -> String {
-    use std::process::Command;
-    if let Ok(output) = Command::new("wmic")
+    if let Ok(output) = crate::commands::proc::hidden_command("wmic")
         .args([target, "get", field])
         .output()
     {
@@ -82,7 +81,7 @@ fn get_hwid_v3() -> String {
 
     // C: volume serial (filesystem-level, survives disk format changes less
     //   likely than MAC spoofing, still a useful extra signal)
-    if let Ok(out) = std::process::Command::new("wmic")
+    if let Ok(out) = crate::commands::proc::hidden_command("wmic")
         .args(["logicaldisk", "where", "DeviceID='C:'", "get", "VolumeSerialNumber"])
         .output()
     {
@@ -120,7 +119,6 @@ fn get_hwid_v3() -> String { "non_windows_v3_identity".to_string() }
 // ─────────────────────────────────────────────────────────────────────────────
 #[cfg(target_os = "windows")]
 fn get_cim_hwid_fields() -> std::collections::BTreeMap<&'static str, String> {
-    use std::process::Command;
     use std::collections::BTreeMap;
     let mut out: BTreeMap<&'static str, String> = BTreeMap::new();
     // One PowerShell call collects everything as KEY=VALUE lines.
@@ -139,7 +137,7 @@ Write-Output \"CpuId=$($cpu.ProcessorId)\";\
 Write-Output \"DiskSn=$($disk.SerialNumber)\";\
 Write-Output \"DiskModel=$($disk.Model)\";\
 Write-Output \"VolumeSn=$($vol.VolumeSerialNumber)\"";
-    if let Ok(o) = Command::new("powershell")
+    if let Ok(o) = crate::commands::proc::hidden_command("powershell")
         .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
         .output()
     {

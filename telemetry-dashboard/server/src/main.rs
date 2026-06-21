@@ -72,12 +72,17 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/admin/deletions", get(admin_deletions))
         .route("/api/admin/decide", post(admin_decide))
         .route("/api/admin/storage", get(admin_storage))
+        .route("/api/admin/storage-limit", post(admin_storage_limit))
         .route("/api/admin/audit", get(admin_audit))
         .route("/api/admin/replay/download", get(admin_replay_download))
         .route("/api/admin/replay", delete(admin_replay_delete))
         .route("/api/admin/packet/delete", post(admin_packet_delete))
         .route("/api/admin/backup", get(admin_backup))
         .route("/api/admin/import", post(admin_import))
+        .route("/api/admin/recap", get(admin_recap_gen).delete(admin_recap_delete))
+        .route("/api/admin/recaps", get(admin_recaps_list))
+        .route("/api/admin/recap/get", get(admin_recap_get))
+        .route("/api/admin/recap/import", post(admin_recap_import))
         .route_layer(axum::middleware::from_fn_with_state(st.clone(), require_viewer));
 
     // Public routes: ingest (public api_key) + client-facing helpers + the SPA
@@ -124,14 +129,18 @@ async fn refresh(st: &Shared) {
 }
 
 fn spawn_loops(st: Shared) {
-    // slow heartbeat recompute
+    // slow heartbeat recompute — only refreshes the time-relative fields (live
+    // status, "x ago") for connected viewers. Skipped when nobody is watching the
+    // SSE stream: new ingested data still refreshes via the 1.2s `dirty` loop, so
+    // pollers get fresh data, and an idle server stops rebuilding the big payload
+    // every 15s (saves CPU + transient allocations / RAM).
     {
         let st = st.clone();
         tokio::spawn(async move {
             let mut iv = tokio::time::interval(Duration::from_secs(15));
             loop {
                 iv.tick().await;
-                refresh(&st).await;
+                if st.tx.receiver_count() > 0 { refresh(&st).await; }
             }
         });
     }
@@ -170,6 +179,24 @@ fn spawn_loops(st: Shared) {
             loop {
                 iv.tick().await;
                 db::sweep_crashes(&st.pool, 180_000).await;
+            }
+        });
+    }
+    // storage hard-cap guard: enforce the size limit every 5 min (not hourly), so
+    // a burst can't blow past the cap and sit there until the next retention pass.
+    {
+        let st = st.clone();
+        tokio::spawn(async move {
+            let mut iv = tokio::time::interval(Duration::from_secs(300));
+            loop {
+                iv.tick().await;
+                // Soft = the admin-set limit (persisted); hard = soft +20% trigger,
+                // so a burst is purged back to the limit within minutes — not at the
+                // next hourly retention pass.
+                let soft = db::get_meta_i64(&st.pool, "storage_limit_mb", st.cfg.soft_db_mb).await;
+                let hard = soft + soft / 5;
+                let n = db::enforce_size_cap(&st.pool, soft, hard).await;
+                if n > 0 { st.dirty.store(true, Ordering::Relaxed); }
             }
         });
     }
@@ -388,6 +415,20 @@ async fn admin_storage(State(st): State<Shared>) -> Json<Value> {
     Json(db::storage_overview(&st.pool).await)
 }
 
+async fn admin_storage_limit(
+    State(st): State<Shared>, headers: HeaderMap, ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    let mb = body.get("limit_mb").and_then(Value::as_i64).unwrap_or(0).max(128);
+    db::set_meta(&st.pool, "storage_limit_mb", &mb.to_string()).await;
+    // Apply NOW: purge straight down to the new limit (no waiting for a loop).
+    let deleted = db::enforce_size_cap(&st.pool, mb, mb).await;
+    let (ip, fp) = admin_identity(&headers, addr);
+    db::audit(&st.pool, "storage_limit", &format!("{mb} MB"), &ip, &fp, json!({ "deleted_rows": deleted })).await;
+    st.dirty.store(true, Ordering::Relaxed);
+    Json(json!({ "status": 1, "limit_mb": mb, "deleted_rows": deleted }))
+}
+
 async fn admin_audit(State(st): State<Shared>) -> Json<Value> {
     Json(json!({ "audit": db::list_audit(&st.pool, 500).await }))
 }
@@ -452,6 +493,67 @@ async fn admin_import(
     db::audit(&st.pool, "backup_import", "database", &ip, &fp, res.clone()).await;
     st.dirty.store(true, Ordering::Relaxed);
     (StatusCode::OK, Json(res))
+}
+
+// ── Monthly recaps ─────────────────────────────────────────────────────────────
+async fn admin_recap_gen(
+    State(st): State<Shared>, headers: HeaderMap, ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Query(q): Query<HashMap<String, String>>,
+) -> Json<Value> {
+    let month = q.get("month").cloned().filter(|m| !m.is_empty())
+        .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m").to_string());
+    let anon = matches!(q.get("anon").map(String::as_str), Some("1") | Some("true"));
+    let recap = db::generate_recap(&st.pool, &month, anon).await;
+    // Persist unless save=0; record who generated it.
+    let saved_id = if q.get("save").map(String::as_str) != Some("0") {
+        db::save_recap(&st.pool, &recap, "generated").await
+    } else { 0 };
+    let (ip, fp) = admin_identity(&headers, addr);
+    db::audit(&st.pool, "recap_export", &month, &ip, &fp, json!({ "anon": anon, "saved_id": saved_id })).await;
+    Json(json!({ "ok": true, "id": saved_id, "recap": recap }))
+}
+
+async fn admin_recaps_list(State(st): State<Shared>) -> Json<Value> {
+    Json(json!({ "recaps": db::list_recaps(&st.pool).await }))
+}
+
+async fn admin_recap_get(
+    State(st): State<Shared>, headers: HeaderMap, ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Query(q): Query<HashMap<String, String>>,
+) -> (StatusCode, Json<Value>) {
+    let id: i64 = q.get("id").and_then(|s| s.parse().ok()).unwrap_or(0);
+    match db::get_recap(&st.pool, id).await {
+        Some(data) => {
+            let (ip, fp) = admin_identity(&headers, addr);
+            db::audit(&st.pool, "recap_export", &format!("recap#{id}"), &ip, &fp, json!({})).await;
+            (StatusCode::OK, Json(data))
+        }
+        None => (StatusCode::NOT_FOUND, Json(json!({ "error": "not found" }))),
+    }
+}
+
+async fn admin_recap_import(
+    State(st): State<Shared>, headers: HeaderMap, ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Json(body): Json<Value>,
+) -> (StatusCode, Json<Value>) {
+    if body.get("month").is_none() && body.get("totals").is_none() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "not a recap document" })));
+    }
+    let id = db::import_recap(&st.pool, &body).await;
+    let (ip, fp) = admin_identity(&headers, addr);
+    db::audit(&st.pool, "recap_import", &body.get("month").and_then(Value::as_str).unwrap_or("?").to_string(), &ip, &fp, json!({ "id": id })).await;
+    (StatusCode::OK, Json(json!({ "ok": true, "id": id })))
+}
+
+async fn admin_recap_delete(
+    State(st): State<Shared>, headers: HeaderMap, ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Query(q): Query<HashMap<String, String>>,
+) -> (StatusCode, Json<Value>) {
+    let id: i64 = q.get("id").and_then(|s| s.parse().ok()).unwrap_or(0);
+    let n = db::delete_recap(&st.pool, id).await;
+    let (ip, fp) = admin_identity(&headers, addr);
+    db::audit(&st.pool, "recap_delete", &format!("recap#{id}"), &ip, &fp, json!({})).await;
+    (StatusCode::OK, Json(json!({ "ok": true, "deleted": n })))
 }
 
 async fn post_funnel(State(st): State<Shared>, Json(body): Json<Value>) -> Json<Value> {
