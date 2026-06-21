@@ -212,8 +212,14 @@ async function runTask(task: Task): Promise<void> {
         task.lastResult = 'ok';
         toast(`${t('sched.ran') || 'Ran'}: ${task.name}`, 'success');
     } catch (e) {
-        task.lastResult = `error: ${e}`;
-        toast(`${task.name} — ${e}`, 'error');
+        if (e instanceof _StopTask) {
+            // Guard clause / "Stop task" — a clean, intentional early exit.
+            task.lastResult = 'ok';
+            toast(`${task.name} — ${t('sched.stopped') || 'stopped'}${e.reason ? `: ${e.reason}` : ''}`, 'info');
+        } else {
+            task.lastResult = `error: ${e}`;
+            toast(`${task.name} — ${e}`, 'error');
+        }
     }
     task.lastRun = Date.now();
     await saveTasks();
@@ -373,6 +379,29 @@ async function runAction(action: Action, task: Task, ctx: Record<string, number>
         }
         case 'var.set':                            // store a literal value for later conditions
             ctx[String(p.name || 'var')] = Number(p.value) || 0; break;
+
+        // ── Logic & math ──────────────────────────────────────────────────────
+        case 'math.set': {                         // target = <expression over ctx>
+            const target = String(p.target || 'result');
+            try { ctx[target] = evalExpr(String(p.expr || '0'), ctx); }
+            catch (e) { throw new Error(`${t('sched.mathErr') || 'Math error'}: ${e}`); }
+            break;
+        }
+        case 'var.ternary': {                      // target = cond ? ifTrue : ifFalse
+            const ok = p.condition ? await evalCondition(p.condition, ctx) : false;
+            ctx[String(p.target || 'result')] = Number(ok ? p.ifTrue : p.ifFalse) || 0;
+            break;
+        }
+        case 'rule.table': {                       // first matching rule sets target
+            const src = Number(ctx[String(p.source || '')] ?? NaN);
+            const target = String(p.target || 'result');
+            for (const r of (Array.isArray(p.rows) ? p.rows : [])) {
+                if (cmpNum(src, r.op, Number(r.value))) { ctx[target] = Number(r.result) || 0; break; }
+            }
+            break;
+        }
+        case 'task.stop':                          // guard clause / early exit (clean)
+            throw new _StopTask(String(p.reason || ''));
 
         // ── New script-generator actions (executed via bmm:// deeplinks) ────────
         case 'modpack.create':   dl('modpack/create', { name: p.name, profile: p.profile }); break;
@@ -589,6 +618,49 @@ function cmpNum(left: number, op: string, right: number): boolean {
     }
 }
 
+// Sentinel thrown by the "Stop task" action — a guard-clause early exit. Caught by
+// runTask and treated as a clean stop (NOT an error).
+class _StopTask { constructor(public reason = '') {} }
+
+// ── Safe math expression evaluator (no eval) ─────────────────────────────────
+// Supports + - * / % ^, parentheses, ctx variables, and a few pure functions.
+// A tiny recursive-descent parser — never executes arbitrary code.
+const _MATH_FUNCS: Record<string, (...a: number[]) => number> = {
+    min: Math.min, max: Math.max, abs: Math.abs, round: Math.round, floor: Math.floor,
+    ceil: Math.ceil, sqrt: Math.sqrt, pow: Math.pow, sign: Math.sign,
+    clamp: (x, lo, hi) => Math.min(Math.max(x, lo), hi),
+};
+function evalExpr(expr: string, ctx: Record<string, number>): number {
+    const tokens = (String(expr).match(/\d+\.?\d*|[A-Za-z_][\w.]*|[-+*/%(),^]/g) || []);
+    let pos = 0;
+    const peek = () => tokens[pos];
+    const next = () => tokens[pos++];
+    const primary = (): number => {
+        const t = next();
+        if (t === '(') { const v = expr2(); if (next() !== ')') throw new Error(')'); return v; }
+        if (t === '-') return -primary();
+        if (t === '+') return primary();
+        if (/^\d/.test(t)) return parseFloat(t);
+        if (/^[A-Za-z_]/.test(t)) {
+            if (peek() === '(') {
+                next(); const args: number[] = [];
+                if (peek() !== ')') { args.push(expr2()); while (peek() === ',') { next(); args.push(expr2()); } }
+                if (next() !== ')') throw new Error(')');
+                const f = _MATH_FUNCS[t.toLowerCase()]; if (!f) throw new Error('fn ' + t);
+                return f(...args);
+            }
+            return Number(ctx[t] ?? 0);
+        }
+        throw new Error('tok ' + t);
+    };
+    const powf = (): number => { let v = primary(); while (peek() === '^') { next(); v = Math.pow(v, primary()); } return v; };
+    const term = (): number => { let v = powf(); while (peek() === '*' || peek() === '/' || peek() === '%') { const o = next(); const r = powf(); v = o === '*' ? v * r : o === '/' ? v / r : v % r; } return v; };
+    function expr2(): number { let v = term(); while (peek() === '+' || peek() === '-') { const o = next(); const r = term(); v = o === '+' ? v + r : v - r; } return v; }
+    const r = expr2();
+    if (pos < tokens.length) throw new Error('trailing');
+    return Number.isFinite(r) ? r : 0;
+}
+
 // ── List rendering (glass-card) ───────────────────────────────────────────────
 export function renderScheduleList(): void {
     const container = document.getElementById('scheduler-list-container');
@@ -658,6 +730,77 @@ function triggerLabel(tr: Trigger): string {
 let _editing: Task | null = null;
 let _draft: Task;
 
+// ── Undo / redo (Ctrl+Z / Ctrl+Y) — JSON snapshots of the whole draft ─────────
+let _undo: string[] = [];
+let _redo: string[] = [];
+let _histAttached = false;
+/** Capture the current draft BEFORE a structural change (add/delete/type switch). */
+function _snapshot(): void {
+    try { _undo.push(JSON.stringify(_draft)); } catch { return; }
+    if (_undo.length > 80) _undo.shift();
+    _redo = [];
+}
+function _rerenderModal(): void {
+    const modal = document.getElementById('modal-scheduler');
+    if (modal) {
+        const body = modal.querySelector('.sched-body') as HTMLElement | null;
+        const top = body ? body.scrollTop : 0;
+        renderModal(modal);
+        const nb = modal.querySelector('.sched-body') as HTMLElement | null;
+        if (nb) nb.scrollTop = top;
+    }
+}
+function _undoAction(): void {
+    if (!_undo.length) return;
+    try { _redo.push(JSON.stringify(_draft)); } catch {}
+    _draft = JSON.parse(_undo.pop()!);
+    _rerenderModal();
+    try { (window as any).toast?.(t('sched.undone') || 'Undone', 'info'); } catch {}
+}
+function _redoAction(): void {
+    if (!_redo.length) return;
+    try { _undo.push(JSON.stringify(_draft)); } catch {}
+    _draft = JSON.parse(_redo.pop()!);
+    _rerenderModal();
+    try { (window as any).toast?.(t('sched.redone') || 'Redone', 'info'); } catch {}
+}
+/** Attach Ctrl+Z / Ctrl+Y once; only acts while the scheduler modal is open and
+ *  the focus isn't in a text field (so native text undo still works there). */
+function _ensureHistoryKeys(): void {
+    if (_histAttached) return;
+    _histAttached = true;
+    document.addEventListener('keydown', (e) => {
+        const modal = document.getElementById('modal-scheduler');
+        if (!modal || !modal.classList.contains('open')) return;
+        if (!(e.ctrlKey || e.metaKey)) return;
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        const k = e.key.toLowerCase();
+        if (k === 'z' && !e.shiftKey) { e.preventDefault(); _undoAction(); }
+        else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); _redoAction(); }
+    }, true);
+}
+
+/** True when deleting the step would also discard inner steps (if/repeat). */
+function _stepHasContent(step: Step): boolean {
+    if (step.kind === 'if') return ((step.then?.length || 0) + (step.else?.length || 0)) > 0;
+    if (step.kind === 'repeat') return (step.steps?.length || 0) > 0;
+    return false;
+}
+/** Delete a step — confirms first if it contains inner steps, snapshots for undo. */
+async function _deleteStep(step: Step, steps: Step[], i: number, rerender: () => void): Promise<void> {
+    if (_stepHasContent(step)) {
+        const ok = await (window as any).confirmCustom?.(
+            t('sched.delTitle') || 'Delete this block?',
+            t('sched.delConfirm') || 'This block has steps inside it. Delete it and everything in it?',
+            'danger', { yesLabel: t('common.delete') || 'Delete', noLabel: t('common.cancel') || 'Cancel' });
+        if (!ok) return;
+    }
+    _snapshot();
+    steps.splice(i, 1);
+    rerender();
+}
+
 async function loadPickers(): Promise<void> {
     const [profiles, mods, modpacks, builtin, installed, appsState] = await Promise.all([
         invoke('get_profiles').catch(() => []),
@@ -686,6 +829,8 @@ async function openTaskModal(task: Task | null): Promise<void> {
         id: `sched-${Date.now()}`, name: '', enabled: true,
         trigger: { type: 'interval', everyMinutes: 60 }, steps: [], allowCustomCommands: false,
     };
+    _undo = []; _redo = [];          // fresh undo history per open
+    _ensureHistoryKeys();
     let modal = document.getElementById('modal-scheduler');
     if (!modal) {
         modal = document.createElement('div');
@@ -836,21 +981,22 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
     host.innerHTML = '';
     steps.forEach((step, i) => {
         const block = document.createElement('div');
-        block.className = 'sched-step sched-step-' + step.kind;
+        block.className = 'sched-step sched-step-' + step.kind + ((step as any).collapsed ? ' collapsed' : '');
         // Indentation is handled entirely by the branch containers' padding (one
         // clean guide line per level) — NOT a per-step margin, which used to stack
         // on top of the branch padding and squeezed deep blocks into a tiny column.
+        const rerenderHere = () => renderStepsEditor(host, steps, depth);
         if (step.kind === 'action') {
-            block.appendChild(actionEditor(step.action, () => { steps.splice(i, 1); renderStepsEditor(host, steps, depth); }));
+            block.appendChild(actionEditor(step.action, () => _deleteStep(step, steps, i, rerenderHere)));
         } else if (step.kind === 'delay') {
             block.innerHTML = `<div class="sched-step-head"><span class="sched-step-tag">${t('sched.delay') || 'Wait'}</span>
                 <input type="number" class="input" min="0" value="${step.seconds}" style="max-width:90px"> ${t('sched.unitSec') || 's'}
                 <button class="btn btn-xs btn-ghost sched-del" style="margin-left:auto;color:var(--danger)">${SCHED_X}</button></div>`;
             block.querySelector('input')?.addEventListener('input', (e) => { step.seconds = parseInt((e.target as HTMLInputElement).value) || 0; });
-            block.querySelector('.sched-del')?.addEventListener('click', () => { steps.splice(i, 1); renderStepsEditor(host, steps, depth); });
+            block.querySelector('.sched-del')?.addEventListener('click', () => _deleteStep(step, steps, i, rerenderHere));
         } else if (step.kind === 'waitFor') {
             const toMode = step.onTimeout || 'abort';
-            block.innerHTML = `<div class="sched-step-head"><span class="sched-step-tag sched-wait">${t('sched.waitUntil') || 'WAIT UNTIL'}</span>
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}<span class="sched-step-tag sched-wait">${t('sched.waitUntil') || 'WAIT UNTIL'}</span>
                 <span class="sched-cond-label">${t('sched.condition') || 'condition:'}</span>
                 <div class="sched-cond" style="flex:1"></div>
                 <button class="btn btn-xs btn-ghost sched-del" style="color:var(--danger)">${SCHED_X}</button></div>
@@ -869,24 +1015,26 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             block.querySelector('.sched-wait-to')?.addEventListener('input', (e) => { step.timeoutSec = parseInt((e.target as HTMLInputElement).value) || 60; });
             block.querySelector('.sched-wait-poll')?.addEventListener('input', (e) => { step.pollSec = parseInt((e.target as HTMLInputElement).value) || 2; });
             block.querySelector('.sched-wait-ot')?.addEventListener('change', (e) => { step.onTimeout = (e.target as HTMLSelectElement).value as any; });
-            block.querySelector('.sched-del')?.addEventListener('click', () => { steps.splice(i, 1); renderStepsEditor(host, steps, depth); });
+            block.querySelector('.sched-del')?.addEventListener('click', () => _deleteStep(step, steps, i, rerenderHere));
+            _wireFold(block, step);
         } else if (step.kind === 'if') {
-            block.innerHTML = `<div class="sched-step-head"><span class="sched-step-tag sched-if">${t('sched.if') || 'IF'}</span>
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}<span class="sched-step-tag sched-if">${t('sched.if') || 'IF'}</span>
                 <span class="sched-cond-label">${t('sched.condition') || 'condition:'}</span>
                 <div class="sched-cond" style="flex:1"></div>
                 <button class="btn btn-xs btn-ghost sched-del" style="color:var(--danger)">${SCHED_X}</button></div>
                 <div class="sched-branch"><div class="sched-branch-label">${t('sched.then') || 'THEN'}</div><div class="sched-then"></div><div class="sched-then-add"></div></div>
                 <div class="sched-branch"><div class="sched-branch-label">${t('sched.else') || 'ELSE'}</div><div class="sched-else"></div><div class="sched-else-add"></div></div>`;
             block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
-            block.querySelector('.sched-del')?.addEventListener('click', () => { steps.splice(i, 1); renderStepsEditor(host, steps, depth); });
+            block.querySelector('.sched-del')?.addEventListener('click', () => _deleteStep(step, steps, i, rerenderHere));
             renderStepsEditor(block.querySelector('.sched-then') as HTMLElement, step.then, depth + 1);
             renderStepsEditor(block.querySelector('.sched-else') as HTMLElement, step.else, depth + 1);
             renderAddRow(block.querySelector('.sched-then-add') as HTMLElement, step.then, depth + 1, host, steps, depth);
             renderAddRow(block.querySelector('.sched-else-add') as HTMLElement, step.else, depth + 1, host, steps, depth);
+            _wireFold(block, step);
         } else if (step.kind === 'repeat') {
             const modeSel = (['while', 'until', 'times'] as const).map(m =>
                 `<option value="${m}"${step.mode === m ? ' selected' : ''}>${escHtml(t('sched.loop.' + m) || m)}</option>`).join('');
-            block.innerHTML = `<div class="sched-step-head">
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}
                     <span class="sched-step-tag sched-repeat">${t('sched.repeat') || 'REPEAT'}</span>
                     <select class="input sched-rep-mode" style="max-width:130px">${modeSel}</select>
                     <span class="sched-rep-cond-wrap" style="display:${step.mode === 'times' ? 'none' : 'flex'};align-items:center;gap:6px;flex:1"><div class="sched-cond" style="flex:1"></div></span>
@@ -897,13 +1045,14 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
                 <div class="sched-branch"><div class="sched-branch-label">${t('sched.loopBody') || 'LOOP'}</div><div class="sched-loop"></div><div class="sched-loop-add"></div></div>`;
             if (!step.condition) step.condition = { type: 'always', params: {} };
             block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
-            block.querySelector('.sched-rep-mode')?.addEventListener('change', (e) => { step.mode = (e.target as HTMLSelectElement).value as any; renderStepsEditor(host, steps, depth); });
+            block.querySelector('.sched-rep-mode')?.addEventListener('change', (e) => { _snapshot(); step.mode = (e.target as HTMLSelectElement).value as any; renderStepsEditor(host, steps, depth); });
             block.querySelector('.sched-rep-times')?.addEventListener('input', (e) => { step.times = parseInt((e.target as HTMLInputElement).value) || 1; });
             block.querySelector('.sched-rep-max')?.addEventListener('input', (e) => { step.maxIters = parseInt((e.target as HTMLInputElement).value) || 100; });
             block.querySelector('.sched-rep-every')?.addEventListener('input', (e) => { step.everySec = parseFloat((e.target as HTMLInputElement).value) || 0; });
-            block.querySelector('.sched-del')?.addEventListener('click', () => { steps.splice(i, 1); renderStepsEditor(host, steps, depth); });
+            block.querySelector('.sched-del')?.addEventListener('click', () => _deleteStep(step, steps, i, rerenderHere));
             renderStepsEditor(block.querySelector('.sched-loop') as HTMLElement, step.steps, depth + 1);
             renderAddRow(block.querySelector('.sched-loop-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
+            _wireFold(block, step);
         }
         host.appendChild(block);
     });
@@ -933,11 +1082,11 @@ function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?
         else renderStepsEditor(host.previousElementSibling as HTMLElement || host.parentElement!.querySelector('.sched-steps') as HTMLElement, steps, depth);
         if (body) body.scrollTop = top;
     };
-    host.querySelector('[data-add="action"]')?.addEventListener('click', () => { steps.push({ kind: 'action', action: { type: 'profile.activate', params: {} } }); rerender(); });
-    host.querySelector('[data-add="if"]')?.addEventListener('click', () => { steps.push({ kind: 'if', condition: { type: 'always', params: {} }, then: [], else: [] }); rerender(); });
-    host.querySelector('[data-add="repeat"]')?.addEventListener('click', () => { steps.push({ kind: 'repeat', mode: 'while', condition: { type: 'always', params: {} }, maxIters: 100, everySec: 1, steps: [] }); rerender(); });
-    host.querySelector('[data-add="waitFor"]')?.addEventListener('click', () => { steps.push({ kind: 'waitFor', condition: { type: 'allModsActive', params: {} }, timeoutSec: 120 }); rerender(); });
-    host.querySelector('[data-add="delay"]')?.addEventListener('click', () => { steps.push({ kind: 'delay', seconds: 5 }); rerender(); });
+    host.querySelector('[data-add="action"]')?.addEventListener('click', () => { _snapshot(); steps.push({ kind: 'action', action: { type: 'profile.activate', params: {} } }); rerender(); });
+    host.querySelector('[data-add="if"]')?.addEventListener('click', () => { _snapshot(); steps.push({ kind: 'if', condition: { type: 'always', params: {} }, then: [], else: [] }); rerender(); });
+    host.querySelector('[data-add="repeat"]')?.addEventListener('click', () => { _snapshot(); steps.push({ kind: 'repeat', mode: 'while', condition: { type: 'always', params: {} }, maxIters: 100, everySec: 1, steps: [] }); rerender(); });
+    host.querySelector('[data-add="waitFor"]')?.addEventListener('click', () => { _snapshot(); steps.push({ kind: 'waitFor', condition: { type: 'allModsActive', params: {} }, timeoutSec: 120 }); rerender(); });
+    host.querySelector('[data-add="delay"]')?.addEventListener('click', () => { _snapshot(); steps.push({ kind: 'delay', seconds: 5 }); rerender(); });
 }
 
 // group → optgroup label (matches the script generator's categories).
@@ -948,6 +1097,7 @@ const ACTION_GROUPS: { g: string; label: string }[] = [
     { g: 'look',    label: 'Appearance' },
     { g: 'perf',    label: 'Benchmarks & storage' },
     { g: 'privacy', label: 'Privacy & recorder' },
+    { g: 'logic',   label: 'Logic & math' },
     { g: 'system',  label: 'System & flow' },
 ];
 
@@ -960,10 +1110,27 @@ const GROUP_ICON: Record<string, string> = {
     perf:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>',
     privacy: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
     system:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    logic:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h3l3 10h3M14 7h6M14 12h6M14 17h6"/><circle cx="6.5" cy="7" r="1.2"/></svg>',
 };
 
 // Clean inline X icon for delete buttons (replaces the raw ✕ glyph).
 const SCHED_X = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+// Fold chevron for collapsible control blocks (if / loop / wait until).
+const SCHED_CHEV = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>';
+// Fold button + a "N steps inside" summary shown only while collapsed.
+function _foldBtn(step: any): string {
+    const inner = step.kind === 'if' ? (step.then?.length || 0) + (step.else?.length || 0)
+        : step.kind === 'repeat' ? (step.steps?.length || 0) : 0;
+    const sum = step.kind === 'waitFor' ? '' : `<span class="sched-fold-sum">${inner} ${t('sched.stepsInside') || 'inside'}</span>`;
+    return `<button class="btn btn-xs btn-ghost sched-fold" title="${escAttr(t('sched.foldTip') || 'Collapse / expand')}" aria-label="fold">${SCHED_CHEV}</button>${sum}`;
+}
+function _wireFold(block: HTMLElement, step: any): void {
+    block.querySelector('.sched-fold')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        step.collapsed = !step.collapsed;
+        block.classList.toggle('collapsed', !!step.collapsed);
+    });
+}
 
 const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[] = [
     // ── Mods & profiles ──
@@ -1015,6 +1182,11 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'discord.rpc', label: 'Discord Rich Presence', needs: 'toggle', group: 'system' },
     { v: 'data.exportAuto', label: 'Export data (backup)', needs: 'exportAuto', group: 'system' },
     { v: 'var.set', label: 'Set a value (for conditions)', needs: 'var', group: 'system' },
+    // ── Logic & math ──
+    { v: 'math.set', label: 'Math: compute into a variable', needs: 'mathSet', group: 'logic' },
+    { v: 'var.ternary', label: 'Ternary: var = cond ? a : b', needs: 'ternary', group: 'logic' },
+    { v: 'rule.table', label: 'Rule table (decision table)', needs: 'ruleTable', group: 'logic' },
+    { v: 'task.stop', label: 'Stop the task (guard clause)', needs: 'stopReason', group: 'logic' },
     { v: 'task.run', label: 'Run another scheduled task', needs: 'taskId', group: 'system' },
     { v: 'restart', label: 'Restart BMM', group: 'system' },
     { v: 'open.url', label: 'Open a URL / link', needs: 'url', group: 'system' },
@@ -1046,7 +1218,7 @@ function actionEditor(action: Action, onDelete: () => void): HTMLElement {
             </div>
             <div class="sched-act-params"></div>`;
         el.querySelector('.sched-act-type')?.addEventListener('change', (e) => {
-            action.type = (e.target as HTMLSelectElement).value; action.params = {}; render();
+            _snapshot(); action.type = (e.target as HTMLSelectElement).value; action.params = {}; render();
         });
         el.querySelector('.sched-del')?.addEventListener('click', onDelete);
         const paramsHost = el.querySelector('.sched-act-params') as HTMLElement;
@@ -1134,6 +1306,48 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     else if (needs === 'disk') host.innerHTML = `<select class="input sched-disk" style="max-width:240px">${diskOptions(params.mountPoint)}</select>`;
     else if (needs === 'applyLimit') host.innerHTML = `<select class="input sched-disk" style="max-width:200px">${diskOptions(params.mountPoint)}</select><input class="input sched-limit" type="number" min="1" placeholder="${escAttr(t('sched.limitPh') || 'MB/s (empty = suggested)')}" value="${escAttr(params.limitMbS || '')}" style="max-width:200px;margin-left:6px">`;
     else if (needs === 'var') host.innerHTML = `<input class="input sched-v-name" placeholder="${escAttr(t('sched.phName') || 'name')}" value="${escAttr(params.name || '')}" style="max-width:140px"><input class="input sched-v-val" type="number" placeholder="${escAttr(t('sched.phValue') || 'value')}" value="${escAttr(params.value || '')}" style="max-width:120px;margin-left:6px">`;
+    // ── Logic & math param editors ────────────────────────────────────────────
+    else if (needs === 'mathSet') host.innerHTML = `
+        <div class="sched-field"><label class="sched-flabel">${t('sched.mathTarget') || 'Store into variable'}</label>
+            <input class="input sched-m-target" placeholder="result" value="${escAttr(params.target || '')}" style="max-width:160px"></div>
+        <div class="sched-field" style="flex:1;min-width:240px"><label class="sched-flabel">${t('sched.mathExpr') || 'Expression (uses your variables)'}</label>
+            <input class="input sched-m-expr" placeholder="(disk.read_mbps + disk.write_mbps) / 2" value="${escAttr(params.expr || '')}"></div>`;
+    else if (needs === 'ternary') {
+        if (!params.condition) params.condition = { type: 'always', params: {} };
+        host.innerHTML = `
+            <div class="sched-field"><label class="sched-flabel">${t('sched.mathTarget') || 'Store into variable'}</label>
+                <input class="input sched-tn-target" placeholder="result" value="${escAttr(params.target || '')}" style="max-width:150px"></div>
+            <div class="sched-field" style="flex:1;min-width:220px"><label class="sched-flabel">${t('sched.tnCond') || 'If this condition is true…'}</label>
+                <div class="sched-cond"></div></div>
+            <div class="sched-field"><label class="sched-flabel">${t('sched.tnTrue') || 'then ='}</label>
+                <input class="input sched-tn-true" type="number" value="${escAttr(params.ifTrue ?? 1)}" style="max-width:90px"></div>
+            <div class="sched-field"><label class="sched-flabel">${t('sched.tnFalse') || 'else ='}</label>
+                <input class="input sched-tn-false" type="number" value="${escAttr(params.ifFalse ?? 0)}" style="max-width:90px"></div>`;
+        host.querySelector('.sched-cond')?.appendChild(conditionEditor(params.condition));
+    }
+    else if (needs === 'stopReason') host.innerHTML = `<input class="input sched-stop-reason" placeholder="${escAttr(t('sched.stopReasonPh') || 'reason (optional) — put inside an IF for a guard clause')}" value="${escAttr(params.reason || '')}" style="min-width:300px">`;
+    else if (needs === 'ruleTable') {
+        if (!Array.isArray(params.rows)) params.rows = [];
+        const opSel = (v: string) => ['==', '!=', '>', '<', '>=', '<='].map(o => `<option value="${o}"${v === o ? ' selected' : ''}>${o}</option>`).join('');
+        const rowsHtml = params.rows.map((r: any, ri: number) => `
+            <div class="sched-rule-row" data-ri="${ri}">
+                <span class="sched-rule-when">${t('sched.ruleWhen') || 'when'}</span>
+                <select class="input sched-rl-op" style="max-width:64px">${opSel(r.op || '==')}</select>
+                <input class="input sched-rl-val" type="number" value="${escAttr(r.value ?? 0)}" style="max-width:90px" placeholder="${escAttr(t('sched.phValue') || 'value')}">
+                <span class="sched-rule-then">${t('sched.ruleThen') || '→ set ='}</span>
+                <input class="input sched-rl-res" type="number" value="${escAttr(r.result ?? 0)}" style="max-width:90px" placeholder="${escAttr(t('sched.ruleResult') || 'result')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-rl-del" style="color:var(--danger)">${SCHED_X}</button>
+            </div>`).join('');
+        host.innerHTML = `
+            <div class="sched-rule-head">
+                <div class="sched-field"><label class="sched-flabel">${t('sched.ruleSource') || 'Compare this variable'}</label>
+                    <input class="input sched-rl-src" placeholder="my_var" value="${escAttr(params.source || '')}" style="max-width:150px"></div>
+                <div class="sched-field"><label class="sched-flabel">${t('sched.ruleTarget') || 'Store the match into'}</label>
+                    <input class="input sched-rl-target" placeholder="result" value="${escAttr(params.target || '')}" style="max-width:150px"></div>
+            </div>
+            <div class="sched-rule-rows">${rowsHtml || `<span style="font-size:11px;color:var(--text-muted)">${t('sched.ruleEmpty') || 'No rules — add one. First matching row wins (top to bottom).'}</span>`}</div>
+            <button type="button" class="btn btn-xs sched-chip sched-rl-add">${t('sched.ruleAdd') || '+ Rule'}</button>`;
+    }
     // ── New script-generator actions ──────────────────────────────────────────
     else if (needs === 'pathFile') host.innerHTML = `<input class="input sched-path" placeholder="${escAttr(t('sched.filePathPh') || 'file or .exe to open/launch')}" value="${escAttr(params.path || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-file" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
     else if (needs === 'pathFolder') host.innerHTML = `<input class="input sched-path" placeholder="${escAttr(t('sched.folderPathPh') || 'folder to open')}" value="${escAttr(params.path || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-folder" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
@@ -1201,6 +1415,23 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-limit')?.addEventListener('input', (e) => { params.limitMbS = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-v-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-v-val')?.addEventListener('input', (e) => { params.value = (e.target as HTMLInputElement).value; });
+    // ── Logic & math listeners ──
+    host.querySelector('.sched-m-target')?.addEventListener('input', (e) => { params.target = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-m-expr')?.addEventListener('input', (e) => { params.expr = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-tn-target')?.addEventListener('input', (e) => { params.target = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-tn-true')?.addEventListener('input', (e) => { params.ifTrue = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-tn-false')?.addEventListener('input', (e) => { params.ifFalse = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-stop-reason')?.addEventListener('input', (e) => { params.reason = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-rl-src')?.addEventListener('input', (e) => { params.source = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-rl-target')?.addEventListener('input', (e) => { params.target = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-rl-add')?.addEventListener('click', () => { if (!Array.isArray(params.rows)) params.rows = []; params.rows.push({ op: '==', value: 0, result: 0 }); renderParams(host, needs, params); });
+    host.querySelectorAll('.sched-rule-row').forEach(rowEl => {
+        const ri = Number((rowEl as HTMLElement).dataset.ri);
+        rowEl.querySelector('.sched-rl-op')?.addEventListener('change', (e) => { params.rows[ri].op = (e.target as HTMLSelectElement).value; });
+        rowEl.querySelector('.sched-rl-val')?.addEventListener('input', (e) => { params.rows[ri].value = (e.target as HTMLInputElement).value; });
+        rowEl.querySelector('.sched-rl-res')?.addEventListener('input', (e) => { params.rows[ri].result = (e.target as HTMLInputElement).value; });
+        rowEl.querySelector('.sched-rl-del')?.addEventListener('click', () => { params.rows.splice(ri, 1); renderParams(host, needs, params); });
+    });
     // ── New action params ──
     host.querySelector('.sched-r-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-r-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
@@ -1263,7 +1494,7 @@ function conditionEditor(cond: Condition): HTMLElement {
             </select>
             <span class="sched-cond-params"></span>`;
         el.querySelector('.sched-neg')?.addEventListener('change', (e) => { cond.negate = (e.target as HTMLInputElement).checked; });
-        el.querySelector('.sched-cond-type')?.addEventListener('change', (e) => { cond.type = (e.target as HTMLSelectElement).value; cond.params = {}; render(); });
+        el.querySelector('.sched-cond-type')?.addEventListener('change', (e) => { _snapshot(); cond.type = (e.target as HTMLSelectElement).value; cond.params = {}; render(); });
         renderCondParams(el.querySelector('.sched-cond-params') as HTMLElement, cond);
     };
     render();

@@ -10796,7 +10796,9 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .sched-toggle { flex-shrink:0; }
 
 .sched-modal { width:860px; max-width:96vw; display:flex; flex-direction:column; max-height:90vh; }
-.sched-modal .modal-body.sched-body { flex:1; overflow-y:auto; padding:18px 22px; display:block; }
+/* overflow:auto (both axes): deeply-nested steps keep a usable min-width and the
+   body scrolls HORIZONTALLY instead of squishing the innermost block to a sliver. */
+.sched-modal .modal-body.sched-body { flex:1; overflow:auto; padding:18px 22px; display:block; }
 .sched-modal .modal-header, .sched-modal .sched-footer { flex-shrink:0; }
 .sched-footer { display:flex; justify-content:flex-end; gap:10px; padding:14px 22px; border-top:1px solid var(--border); }
 .sched-label { display:block; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
@@ -10893,12 +10895,28 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .sched-step { transition:border-color .14s ease, box-shadow .14s ease; }
 /* Action steps render their own .sched-act-card → strip the generic wrapper. */
 .sched-step-action { background:transparent; border:none; padding:0; border-radius:0; }
-/* Coloured left rail per control-flow type, matching the tag colours. */
+/* Scratch-style blocks: type identity is the left accent + a tinted HEADER BAND
+   (not a full-block background — that compounded into a solid orange wall when
+   IFs nested). The body stays neutral so nesting is readable at any depth. */
 .sched-step-if      { border-left:3px solid #f59e0b; }
 .sched-step-waitFor { border-left:3px solid #10b981; }
 .sched-step-delay   { border-left:3px solid #94a3b8; }
 .sched-step-repeat  { border-left:3px solid #a78bfa; }
 .sched-step-repeat:hover { border-left-color:#a78bfa; }
+/* Tinted header band per control type (single row → never compounds) */
+.sched-step-if      > .sched-step-head { background:rgba(245,158,11,0.10); }
+.sched-step-waitFor > .sched-step-head { background:rgba(16,185,129,0.10); }
+.sched-step-repeat  > .sched-step-head { background:rgba(167,139,250,0.10); }
+.sched-step > .sched-step-head { margin:-8px -10px 0; padding:7px 10px; border-radius:7px 7px 0 0; }
+.sched-step.collapsed > .sched-step-head { border-radius:7px; margin-bottom:-8px; }
+/* Fold chevron + "N inside" summary */
+.sched-fold { width:22px; height:22px; padding:0; flex-shrink:0; color:var(--text-muted); }
+.sched-fold svg { transition:transform .15s ease; }
+.sched-step.collapsed > .sched-step-head .sched-fold svg { transform:rotate(-90deg); }
+.sched-fold-sum { display:none; font-size:11px; font-weight:600; color:var(--text-muted); }
+.sched-step.collapsed > .sched-step-head .sched-fold-sum { display:inline-block; }
+/* Collapsed → hide everything but the header (the "zoom out" of a sub-tree) */
+.sched-step.collapsed > .sched-branch, .sched-step.collapsed > .sched-wait-opts { display:none; }
 .sched-repeat { background:rgba(167,139,250,0.16); color:#a78bfa; }
 .sched-add-loop { color:#a78bfa; }
 .sched-add-loop:hover { background:rgba(167,139,250,0.14); border-color:rgba(167,139,250,0.4); }
@@ -10935,26 +10953,39 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 /* THEN / ELSE / LOOP branches: ONE clean guide rail per level (rounded, soft),
    a modest indent, and a chip label. Nested steps inside inherit only this
    container's padding — no compounding margins — so depth stays readable. */
+/* No tall guide rail anymore — the parent C-block's tinted card already shows
+   containment, so the branch just needs a SMALL indent + a chip label. This kills
+   the "wall of vertical lines" at deep nesting and keeps the indent compact. */
 .sched-branch {
-    margin-top:8px; margin-left:4px;
-    padding:4px 0 4px 14px;
-    border-left:2px solid var(--bmm-s10, rgba(255,255,255,0.10));
-    border-radius:0 0 0 6px;
+    margin-top:6px;
+    padding-left:10px;
+    border-left:none;
 }
-.sched-branch > .sched-then, .sched-branch > .sched-else, .sched-branch > .sched-loop {
+.sched-branch > .sched-then, .sched-branch > .sched-else, .sched-branch > .sched-loop,
+.sched-steps {
     display:flex; flex-direction:column; gap:8px;
+    /* flex-start (not stretch): blocks size to their CONTENT, so they don't get
+       progressively narrower as nesting deepens — instead the deepest content sets
+       the width and the modal scrolls to the RIGHT. Actions keep their full size. */
+    align-items:flex-start;
 }
 .sched-branch-label {
     display:inline-block; font-size:9px; font-weight:800; letter-spacing:.08em;
     color:var(--text-secondary); margin:0 0 6px; padding:2px 9px; border-radius:999px;
     background:var(--bmm-s06, rgba(255,255,255,0.06)); text-transform:uppercase;
 }
-/* Tag-tint the guide rail to match the block type (if=amber, loop=violet). */
-.sched-step-if    > .sched-branch { border-left-color:rgba(245,158,11,0.35); }
-.sched-step-repeat> .sched-branch { border-left-color:rgba(167,139,250,0.35); }
-/* Keep nested action cards from collapsing to an unreadable sliver. */
-.sched-step .sched-act-card, .sched-step-head { min-width:0; }
-.sched-act-card .sched-act-type { min-width:120px; }
+/* Action cards keep a FIXED, generous width at every depth — they never shrink.
+   Control blocks have a comfortable floor too. Combined with align-items:flex-start
+   above + the body's overflow:auto, deep nesting extends to the right (scroll). */
+.sched-act-card { width:360px; flex-shrink:0; }
+.sched-step-if, .sched-step-repeat, .sched-step-waitFor, .sched-step-delay { min-width:380px; flex-shrink:0; }
+.sched-step-action { flex-shrink:0; }
+/* The top-level + branch lists are at least the modal width when shallow, but grow
+   past it (→ horizontal scroll) when deep — never compressing their children. */
+.sched-steps { min-width:100%; }
+.sched-act-card .sched-act-type { min-width:140px; }
+/* The action card head/params can wrap their controls instead of overflowing. */
+.sched-act-head, .sched-step-head { flex-wrap:wrap; row-gap:6px; }
 /* Benchmark "real" sources: clean chip row (no stray span/tab look) */
 .sched-b-sources { padding:8px 10px; border:1px dashed var(--border); border-radius:8px;
     background:var(--bmm-s02, rgba(255,255,255,0.02)); }
@@ -10967,6 +10998,14 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .sched-b-chips .pill .sched-b-rm { display:inline-flex; align-items:center; padding:2px; border-radius:50%;
     background:none; border:0; color:var(--text-muted); cursor:pointer; }
 .sched-b-chips .pill .sched-b-rm:hover { background:rgba(239,68,68,0.16); color:var(--bmm-danger); }
+/* Rule table (decision table) editor */
+.sched-rule-head { display:flex; gap:10px; flex-wrap:wrap; width:100%; }
+.sched-rule-rows { display:flex; flex-direction:column; gap:6px; width:100%; margin:8px 0; }
+.sched-rule-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    padding:6px 8px; border:1px solid var(--border); border-radius:8px; background:var(--bmm-s02, rgba(255,255,255,0.02)); }
+.sched-rule-when, .sched-rule-then { font-size:11px; font-weight:700; color:var(--text-muted); }
+.sched-rl-del { width:22px; height:22px; padding:0; margin-left:auto; }
+.sched-rl-add { align-self:flex-start; }
 /* Labelled param fields (create modpack, add mod, …) stack label + input */
 .sched-act-params .sched-field { display:flex; flex-direction:column; gap:3px; }
 .sched-flabel { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); }

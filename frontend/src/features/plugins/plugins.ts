@@ -6347,6 +6347,26 @@ function _actionCatalog(): _ActionDef[] {
             { key: 'timeout', label: d('fldTimeoutSec', 'Timeout (s)'),    type: 'text', placeholder: '120', half: true },
             { key: 'poll',    label: d('fldPollSec', 'Check every (s)'), type: 'text', placeholder: '2', half: true },
           ] },
+        { id: 'math_set',       cat: 'control', label: d('actionMathSet', 'Math (compute → variable)'),
+          desc: d('actionMathSetDesc', 'Computes an arithmetic expression and stores it in a variable. Use standard operators: + - * / % and parentheses.'),
+          iconSvg: sv('<path d="M4 7h16M4 12h16M4 17h10"/><circle cx="18" cy="17" r="2"/>'),
+          fields: [
+            { key: 'var_name', label: d('fldVariable', 'Variable'), type: 'text', placeholder: 'TOTAL', half: true },
+            { key: 'expr',     label: d('fldExpr', 'Expression'),   type: 'text', placeholder: '(A + B) / 2' },
+          ] },
+        { id: 'ternary',        cat: 'control', label: d('actionTernary', 'Ternary (var = cond ? a : b)'),
+          desc: d('actionTernaryDesc', 'Sets a variable to one value or another depending on a condition. Write the condition in the target language (e.g. A > 5).'),
+          iconSvg: sv('<path d="M6 3v6a3 3 0 0 0 3 3h6"/><path d="M9 21l3-3-3-3"/><circle cx="18" cy="12" r="2"/>'),
+          fields: [
+            { key: 'var_name', label: d('fldVariable', 'Variable'), type: 'text', placeholder: 'RESULT', half: true },
+            { key: 'cond',     label: d('fldCondExpr', 'Condition'), type: 'text', placeholder: 'A > 5' },
+            { key: 'val_true', label: d('fldThenVal', 'Then ='),  type: 'text', placeholder: '1', half: true },
+            { key: 'val_false', label: d('fldElseVal', 'Else ='), type: 'text', placeholder: '0', half: true },
+          ] },
+        { id: 'guard_stop',     cat: 'control', label: d('actionGuardStop', 'Guard clause (stop if…)'),
+          desc: d('actionGuardStopDesc', 'Exits the script immediately if a condition is true — a guard clause to bail out early. Write the condition in the target language.'),
+          iconSvg: sv('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/>'),
+          fields: [ { key: 'cond', label: d('fldCondExpr', 'Condition'), type: 'text', placeholder: 'A < 0' } ] },
     ];
 }
 
@@ -6950,6 +6970,13 @@ function _collectActions(): Array<{ action_type: string; target_id: string; extr
                 extra.path = raw.path || '';
                 extra.timeout = Math.max(1, parseInt(raw.timeout || '120', 10) || 120);
                 extra.poll = Math.max(1, parseInt(raw.poll || '2', 10) || 2); break;
+            case 'math_set':
+                extra.var_name = raw.var_name || 'RESULT'; extra.expr = raw.expr || '0'; break;
+            case 'ternary':
+                extra.var_name = raw.var_name || 'RESULT'; extra.cond = raw.cond || 'true';
+                extra.val_true = raw.val_true || '1'; extra.val_false = raw.val_false || '0'; break;
+            case 'guard_stop':
+                extra.cond = raw.cond || 'false'; break;
             // Repo / modpack actions — store individual typed keys so values
             // with spaces (paths, names) survive intact. Booleans as real
             // booleans, numbers as real numbers.
@@ -7798,6 +7825,30 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
                 rs: [`{ let _dl = std::time::Instant::now() + std::time::Duration::from_secs(${to}); while !std::path::Path::new(${JSON.stringify(p)}).exists() && std::time::Instant::now() < _dl { std::thread::sleep(std::time::Duration::from_secs(${pl})); } }`],
             })[lang] || [`// wait until file exists: ${p} (timeout ${to}s)`];
         }
+        case 'math_set': {
+            const v = a.extra.var_name || 'RESULT'; const ex = a.extra.expr || '0';
+            return ({
+                rb: [`${v} = (${ex})`], php: [`$${v} = (${ex});`], go: [`${v} := (${ex})`],
+                java: [`double ${v} = (${ex});`], cs: [`var ${v} = (${ex});`], rs: [`let ${v} = (${ex});`],
+            })[lang] || [`${v} = (${ex})`];
+        }
+        case 'ternary': {
+            const v = a.extra.var_name || 'RESULT'; const c = a.extra.cond || 'true';
+            const tt = a.extra.val_true || '1'; const ff = a.extra.val_false || '0';
+            return ({
+                rb: [`${v} = (${c}) ? ${tt} : ${ff}`], php: [`$${v} = (${c}) ? ${tt} : ${ff};`],
+                go: [`var ${v} interface{}; if ${c} { ${v} = ${tt} } else { ${v} = ${ff} }`],
+                java: [`var ${v} = (${c}) ? ${tt} : ${ff};`], cs: [`var ${v} = (${c}) ? ${tt} : ${ff};`],
+                rs: [`let ${v} = if ${c} { ${tt} } else { ${ff} };`],
+            })[lang] || [`${v} = (${c}) ? ${tt} : ${ff}`];
+        }
+        case 'guard_stop': {
+            const c = a.extra.cond || 'false';
+            return ({
+                rb: [`exit 0 if (${c})`], php: [`if (${c}) { exit(0); }`], go: [`if ${c} { os.Exit(0) }`],
+                java: [`if (${c}) System.exit(0);`], cs: [`if (${c}) Environment.Exit(0);`], rs: [`if ${c} { std::process::exit(0); }`],
+            })[lang] || [`if (${c}) /* stop */ ;`];
+        }
         case 'show_message':
             return [printFn(`[MSG] ${a.extra.message || ''}`)];
         case 'open_url': {
@@ -7925,6 +7976,12 @@ function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: str
             return [`import os as _os, time as _tm`, `_deadline = _tm.time() + ${to}`,
                     `while not _os.path.exists(${JSON.stringify(p)}) and _tm.time() < _deadline:`, `    _tm.sleep(${pl})`];
         }
+        case 'math_set':
+            return [`${a.extra.var_name || 'RESULT'} = (${a.extra.expr || '0'})`];
+        case 'ternary':
+            return [`${a.extra.var_name || 'RESULT'} = (${a.extra.val_true || '1'}) if (${a.extra.cond || 'True'}) else (${a.extra.val_false || '0'})`];
+        case 'guard_stop':
+            return [`if (${a.extra.cond || 'False'}):`, `    raise SystemExit(0)`];
         default: {
             const ep = _apiBodyFor(a);
             if (ep) {
@@ -8049,6 +8106,12 @@ function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: st
             return [`local _dl = os.time() + ${to}`,
                     `while os.time() < _dl do local _h = io.open(${JSON.stringify(p)}); if _h then _h:close(); break end; os.execute("ping -n ${pl + 1} 127.0.0.1 > nul") end`];
         }
+        case 'math_set':
+            return [`local ${a.extra.var_name || 'RESULT'} = (${a.extra.expr || '0'})`];
+        case 'ternary':
+            return [`local ${a.extra.var_name || 'RESULT'} = (${a.extra.cond || 'true'}) and (${a.extra.val_true || '1'}) or (${a.extra.val_false || '0'})`];
+        case 'guard_stop':
+            return [`if (${a.extra.cond || 'false'}) then os.exit(0) end`];
         default: {
             const ep = _apiBodyFor(a);
             if (ep) {
@@ -8162,6 +8225,12 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
             const p = a.extra.path || ''; const to = parseInt(a.extra.timeout, 10) || 120; const pl = parseInt(a.extra.poll, 10) || 2;
             return [`{ const _fs = require("fs"), _cp = require("child_process"); const _dl = Date.now() + ${to} * 1000; while (!_fs.existsSync(${JSON.stringify(p)}) && Date.now() < _dl) { _cp.execSync(process.platform === "win32" ? "timeout /t ${pl} /nobreak >nul" : "sleep ${pl}"); } }`];
         }
+        case 'math_set':
+            return [`let ${a.extra.var_name || 'RESULT'} = (${a.extra.expr || '0'});`];
+        case 'ternary':
+            return [`let ${a.extra.var_name || 'RESULT'} = (${a.extra.cond || 'true'}) ? (${a.extra.val_true || '1'}) : (${a.extra.val_false || '0'});`];
+        case 'guard_stop':
+            return [`if (${a.extra.cond || 'false'}) process.exit(0);`];
         default: {
             const ep = _apiBodyFor(a);
             if (ep) {

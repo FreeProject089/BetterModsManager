@@ -702,27 +702,31 @@ export async function restoreThemeAtBoot(): Promise<void> {
     // BUILTIN_THEMES lookup (here + the theme editor) resolves correctly.
     await loadBuiltinThemes();
     const activeId = localStorage.getItem(ACTIVE_KEY);
-    if (!activeId) return;
 
-    // Restore a built-in preset directly from the loaded set.
-    const builtin = BUILTIN_THEMES.find(b => b.id === activeId);
-    if (builtin) { applyTheme(builtin); return; }
-
-    // Quick restore from cache in localStorage to avoid IPC delay
-    const cached = localStorage.getItem(`bmm_theme_cache_${activeId}`);
-    if (cached) {
-        try { applyTheme(JSON.parse(cached)); } catch {}
+    // Apply the active theme fast (no flash): a built-in from the loaded set, or a
+    // cached custom theme from localStorage.
+    const builtin = activeId ? BUILTIN_THEMES.find(b => b.id === activeId) : null;
+    if (builtin) {
+        applyTheme(builtin);
+    } else if (activeId) {
+        const cached = localStorage.getItem(`bmm_theme_cache_${activeId}`);
+        if (cached) { try { applyTheme(JSON.parse(cached)); } catch {} }
     }
 
-    // Then do the authoritative load from disk
+    // ALWAYS pull the installed (imported / catalogue) themes from disk into the
+    // in-memory map — even when the active theme is a built-in or unset — so they
+    // survive a restart and show up in every selector (settings, catalogue, editor).
     try {
         const themes = await loadInstalledThemes();
-        const theme = themes.find(t => t.id === activeId);
-        if (theme) {
-            applyTheme(theme);
-            localStorage.setItem(`bmm_theme_cache_${activeId}`, JSON.stringify(theme));
-        } else if (!BUILTIN_THEMES.some(b => b.id === activeId)) {
-            resetTheme();
+        // If the active theme is a custom one, restore it authoritatively from disk.
+        if (activeId && !builtin) {
+            const theme = themes.find(t => t.id === activeId);
+            if (theme) {
+                applyTheme(theme);
+                localStorage.setItem(`bmm_theme_cache_${activeId}`, JSON.stringify(theme));
+            } else if (!BUILTIN_THEMES.some(b => b.id === activeId)) {
+                resetTheme();
+            }
         }
     } catch {}
 }

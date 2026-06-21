@@ -676,6 +676,18 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             // once the file exists, the inner `if not exist` is false so it stops sleeping.
             out.push(format!("for /L %%w in (1,1,{loops}) do (if not exist \"{p}\" timeout /t {pl} /nobreak >nul)"));
         }
+        "math_set" => {
+            let v = { let s = extra_str(&action.extra, "var_name"); if s.is_empty() { "RESULT" } else { s } };
+            out.push(format!("set /a \"{v}={}\"", extra_str(&action.extra, "expr")));
+        }
+        "ternary" => {
+            let v = { let s = extra_str(&action.extra, "var_name"); if s.is_empty() { "RESULT" } else { s } };
+            let (c, tt, ff) = (extra_str(&action.extra, "cond"), extra_str(&action.extra, "val_true"), extra_str(&action.extra, "val_false"));
+            out.push(format!("if {c} (set \"{v}={tt}\") else (set \"{v}={ff}\")"));
+        }
+        "guard_stop" => {
+            out.push(format!("if {} exit /b 0", extra_str(&action.extra, "cond")));
+        }
         _ if use_deeplink && action_to_deeplink(action).starts_with("bmm://") && !action_to_deeplink(action).contains("unknown") => {
             out.push(format!("start \"\" \"{}\"", action_to_deeplink(action)));
             out.push("timeout /t 1 /nobreak >nul".to_string());
@@ -859,6 +871,18 @@ fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             let to = extra_u64(&action.extra, "timeout").max(1);
             let pl = extra_u64(&action.extra, "poll").max(1);
             out.push(format!("$_end = (Get-Date).AddSeconds({to}); while (-not (Test-Path \"{p}\") -and (Get-Date) -lt $_end) {{ Start-Sleep -Seconds {pl} }}"));
+        }
+        "math_set" => {
+            let v = { let s = extra_str(&action.extra, "var_name"); if s.is_empty() { "RESULT" } else { s } };
+            out.push(format!("${v} = ({})", extra_str(&action.extra, "expr")));
+        }
+        "ternary" => {
+            let v = { let s = extra_str(&action.extra, "var_name"); if s.is_empty() { "RESULT" } else { s } };
+            let (c, tt, ff) = (extra_str(&action.extra, "cond"), extra_str(&action.extra, "val_true"), extra_str(&action.extra, "val_false"));
+            out.push(format!("${v} = if ({c}) {{ {tt} }} else {{ {ff} }}"));
+        }
+        "guard_stop" => {
+            out.push(format!("if ({}) {{ exit 0 }}", extra_str(&action.extra, "cond")));
         }
         _ if use_deeplink && action_to_deeplink(action).starts_with("bmm://") && !action_to_deeplink(action).contains("unknown") => {
             out.push(format!("Start-Process \"{}\"", action_to_deeplink(action)));
@@ -1060,6 +1084,18 @@ fn vbs_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             let pl = extra_u64(&action.extra, "poll").max(1);
             out.push("Set _fso = CreateObject(\"Scripting.FileSystemObject\")".to_string());
             out.push(format!("_waited = 0\nDo While (Not _fso.FileExists(\"{p}\")) And _waited < {to}\n  WScript.Sleep {}\n  _waited = _waited + {pl}\nLoop", pl * 1000));
+        }
+        "math_set" => {
+            let v = { let s = extra_str(&action.extra, "var_name"); if s.is_empty() { "RESULT" } else { s } };
+            out.push(format!("{v} = ({})", extra_str(&action.extra, "expr")));
+        }
+        "ternary" => {
+            let v = { let s = extra_str(&action.extra, "var_name"); if s.is_empty() { "RESULT" } else { s } };
+            let (c, tt, ff) = (extra_str(&action.extra, "cond"), extra_str(&action.extra, "val_true"), extra_str(&action.extra, "val_false"));
+            out.push(format!("If {c} Then\n  {v} = {tt}\nElse\n  {v} = {ff}\nEnd If"));
+        }
+        "guard_stop" => {
+            out.push(format!("If {} Then WScript.Quit 0", extra_str(&action.extra, "cond")));
         }
         _ => {
             let dl = action_to_deeplink(action);
