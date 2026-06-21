@@ -149,6 +149,75 @@ fn drive_of(p: &std::path::Path) -> String {
     else { s.split('\\').next().unwrap_or("").to_string() }
 }
 
+/// EXTRA precise hardware identity — only collected when the user opts into the
+/// weekly-benchmark / extra mode. Includes serials & identifiers (motherboard SN,
+/// machine UUID, BIOS version, disk serials, MAC, TPM/Secure-Boot/UEFI, OS build…)
+/// gathered in one PowerShell/WMI pass. Windows-only (empty object elsewhere).
+fn collect_extra_hardware() -> Value {
+    #[cfg(not(target_os = "windows"))]
+    { return json!({}); }
+    #[cfg(target_os = "windows")]
+    {
+        let script = "$ErrorActionPreference='SilentlyContinue';\
+            $bb=Get-CimInstance Win32_BaseBoard; Write-Output \"BOARD_SN=$($bb.SerialNumber)\"; Write-Output \"BOARD=$($bb.Manufacturer) $($bb.Product)\";\
+            $bios=Get-CimInstance Win32_BIOS; Write-Output \"BIOS_VER=$($bios.SMBIOSBIOSVersion)\"; Write-Output \"BIOS_DATE=$($bios.ReleaseDate)\"; Write-Output \"BIOS_MAN=$($bios.Manufacturer)\";\
+            $csp=Get-CimInstance Win32_ComputerSystemProduct; Write-Output \"UUID=$($csp.UUID)\";\
+            $os=Get-CimInstance Win32_OperatingSystem; Write-Output \"OS_VER=$($os.Version)\"; Write-Output \"OS_BUILD=$($os.BuildNumber)\";\
+            $cs=Get-CimInstance Win32_ComputerSystem; Write-Output \"LOGICAL=$($cs.NumberOfLogicalProcessors)\";\
+            $cpu=Get-CimInstance Win32_Processor | Select-Object -First 1; Write-Output \"CORES=$($cpu.NumberOfCores)\"; Write-Output \"THREADS=$($cpu.ThreadCount)\"; Write-Output \"L2=$($cpu.L2CacheSize)\"; Write-Output \"L3=$($cpu.L3CacheSize)\";\
+            $fw=$env:firmware_type; if(-not $fw){ try { $fw=(Get-ComputerInfo -Property BiosFirmwareType).BiosFirmwareType } catch {} }; Write-Output \"FIRMWARE=$fw\";\
+            try { Write-Output \"SECUREBOOT=$(Confirm-SecureBootUEFI)\" } catch { Write-Output \"SECUREBOOT=unknown\" };\
+            try { $tpm=Get-Tpm; Write-Output \"TPM=$($tpm.TpmPresent)/$($tpm.TpmReady)\" } catch { Write-Output \"TPM=unknown\" };\
+            Get-CimInstance Win32_DiskDrive | ForEach-Object { Write-Output \"DISK=$($_.Model)|$($_.SerialNumber)|$([math]::Round($_.Size/1GB))|$($_.InterfaceType)\" };\
+            Get-CimInstance Win32_NetworkAdapter -Filter \"PhysicalAdapter=true AND MACAddress IS NOT NULL\" | ForEach-Object { Write-Output \"MAC=$($_.MACAddress)\" }";
+        let out = crate::commands::proc::hidden_command("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .output();
+        let mut o = serde_json::Map::new();
+        let mut disks: Vec<Value> = Vec::new();
+        let mut macs: Vec<Value> = Vec::new();
+        if let Ok(out) = out {
+            for line in String::from_utf8_lossy(&out.stdout).lines() {
+                let (k, v) = match line.split_once('=') { Some(kv) => kv, None => continue };
+                let v = v.trim();
+                let put = |o: &mut serde_json::Map<String, Value>, key: &str| { o.insert(key.into(), json!(v)); };
+                match k {
+                    "BOARD_SN" => put(&mut o, "motherboard_serial"),
+                    "BOARD" => put(&mut o, "motherboard"),
+                    "BIOS_VER" => put(&mut o, "bios_version"),
+                    "BIOS_DATE" => put(&mut o, "bios_date"),
+                    "BIOS_MAN" => put(&mut o, "bios_manufacturer"),
+                    "UUID" => put(&mut o, "machine_uuid"),
+                    "OS_VER" => put(&mut o, "os_version"),
+                    "OS_BUILD" => put(&mut o, "os_build"),
+                    "LOGICAL" => { o.insert("logical_processors".into(), json!(v.parse::<i64>().unwrap_or(0))); }
+                    "CORES" => { o.insert("cpu_cores".into(), json!(v.parse::<i64>().unwrap_or(0))); }
+                    "THREADS" => { o.insert("cpu_threads".into(), json!(v.parse::<i64>().unwrap_or(0))); }
+                    "L2" => { o.insert("l2_cache_kb".into(), json!(v.parse::<i64>().unwrap_or(0))); }
+                    "L3" => { o.insert("l3_cache_kb".into(), json!(v.parse::<i64>().unwrap_or(0))); }
+                    "FIRMWARE" => put(&mut o, "firmware_type"),  // "1"=BIOS/legacy "2"=UEFI, or text
+                    "SECUREBOOT" => put(&mut o, "secure_boot"),
+                    "TPM" => put(&mut o, "tpm"),                 // "present/ready"
+                    "DISK" => {
+                        let p: Vec<&str> = v.split('|').collect();
+                        disks.push(json!({
+                            "model": p.first().copied().unwrap_or("").trim(),
+                            "serial": p.get(1).copied().unwrap_or("").trim(),
+                            "size_gb": p.get(2).and_then(|s| s.trim().parse::<i64>().ok()).unwrap_or(0),
+                            "interface": p.get(3).copied().unwrap_or("").trim(),
+                        }));
+                    }
+                    "MAC" => { if !v.is_empty() { macs.push(json!(v)); } }
+                    _ => {}
+                }
+            }
+        }
+        o.insert("disks".into(), json!(disks));
+        o.insert("mac_addresses".into(), json!(macs));
+        json!(o)
+    }
+}
+
 /// Per-disk hardware info (count, type, size) — no contents, just the drives.
 fn collect_disks() -> (Value, f64) {
     use sysinfo::Disks;
@@ -210,7 +279,7 @@ fn profile_layout(state: &State<AppState>) -> Value {
 /// Anonymous machine profile: real OS/CPU/RAM/GPU/disk specs, motherboard, VM flag,
 /// private + public IP, profile/folder topology, app version, locale, creator_id.
 #[tauri::command]
-pub async fn analytics_system_profile(state: State<'_, AppState>, app_handle: AppHandle) -> Result<Value, String> {
+pub async fn analytics_system_profile(state: State<'_, AppState>, app_handle: AppHandle, extra: Option<bool>) -> Result<Value, String> {
     use sysinfo::System;
     let mut sys = System::new();
     sys.refresh_memory();
@@ -233,9 +302,12 @@ pub async fn analytics_system_profile(state: State<'_, AppState>, app_handle: Ap
     let locale = state.data.lock().map(|d| d.settings.language.clone()).unwrap_or_default();
     let creator_id = crate::commands::security::get_creator_id(app_handle.clone()).unwrap_or_default();
     let app_version = app_handle.package_info().version.to_string();
+    // Precise hardware identity — ONLY when the user opted into extra mode (weekly bench).
+    let hw_extra = if extra == Some(true) { collect_extra_hardware() } else { Value::Null };
 
     Ok(json!({
         "distinct_id": creator_id,
+        "hw_extra": hw_extra,
         "os": std::env::consts::OS,
         "os_caption": cim.os,
         "arch": std::env::consts::ARCH,
@@ -421,6 +493,32 @@ pub async fn analytics_request_deletion(
     }
     write_sent(&app_handle, &log);
     log_line(format!("[ANALYTICS] deletion requested for packet {}", packet_id));
+    Ok(())
+}
+
+/// Right to access (GDPR): file a request for a copy of all data tied to this
+/// Creator ID. An admin reviews it on the dashboard and e-mails the export back
+/// manually (we never auto-send personal data to an unverified address).
+#[tauri::command]
+pub async fn analytics_request_data(
+    app_handle: AppHandle,
+    email: String,
+    endpoint: Option<String>,
+    api_key: Option<String>,
+) -> Result<(), String> {
+    let email = email.trim().to_string();
+    if !email.contains('@') || email.len() < 5 { return Err("invalid email".into()); }
+    let base = endpoint.unwrap_or_default();
+    let url = base.trim().trim_end_matches('/').trim_end_matches("/batch").to_string() + "/data-request";
+    if !url.starts_with("https://") { return Err("telemetry endpoint not configured".into()); }
+    let creator_id = crate::commands::security::get_creator_id(app_handle.clone()).unwrap_or_default();
+
+    let client = reqwest::Client::builder().user_agent("BetterModsManager")
+        .timeout(std::time::Duration::from_secs(15)).build().map_err(|e| e.to_string())?;
+    let body = json!({ "api_key": api_key.unwrap_or_default(), "creator_id": creator_id, "email": email });
+    let resp = client.post(&url).json(&body).send().await.map_err(|e| format!("request failed: {}", e))?;
+    if !resp.status().is_success() { return Err(format!("HTTP {}", resp.status())); }
+    log_line(format!("[ANALYTICS] data-access request filed for creator {}", creator_id));
     Ok(())
 }
 

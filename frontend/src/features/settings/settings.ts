@@ -1718,6 +1718,25 @@ export async function initSettings() {
         }
     }
 
+    // ── Library action-bar transparency (body class drives the CSS; default on) ──
+    {
+        const applyToolbarTransparency = (transparent: boolean) => {
+            // `bmm-toolbar-opaque` makes the floating pill + filter shell solid.
+            document.body.classList.toggle('bmm-toolbar-opaque', !transparent);
+        };
+        let transparent = true;
+        try { transparent = localStorage.getItem('bmm_toolbar_transparent') !== 'false'; } catch {}
+        applyToolbarTransparency(transparent);
+        const transpEl = document.getElementById('setting-toolbar-transparent') as HTMLInputElement | null;
+        if (transpEl) {
+            transpEl.checked = transparent;
+            transpEl.addEventListener('change', () => {
+                try { localStorage.setItem('bmm_toolbar_transparent', String(transpEl.checked)); } catch {}
+                applyToolbarTransparency(transpEl.checked);
+            });
+        }
+    }
+
     // ── Mod auto-scan interval (sec/min unit; stored as seconds in
     //    bmm_scan_interval_sec. 0 = use the default gap, handled in mods.ts) ──
     const scanValueEl = document.getElementById('scan-interval-value') as HTMLInputElement | null;

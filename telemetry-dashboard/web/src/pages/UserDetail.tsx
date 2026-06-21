@@ -115,6 +115,33 @@ export default function UserDetail() {
           </div>
         </Card>
 
+        {u.config?.hw_extra && typeof u.config.hw_extra === "object" && (() => {
+          const hw: any = u.config.hw_extra;
+          const fw = hw.firmware_type === "2" || /uefi/i.test(hw.firmware_type || "") ? "UEFI"
+            : hw.firmware_type === "1" || /legacy|bios/i.test(hw.firmware_type || "") ? "Legacy" : (hw.firmware_type || "?");
+          const rows: [string, any][] = [
+            ["Motherboard", `${hw.motherboard || ""}${hw.motherboard_serial ? ` · SN ${hw.motherboard_serial}` : ""}`],
+            ["BIOS", `${hw.bios_version || ""}${hw.bios_manufacturer ? ` (${hw.bios_manufacturer})` : ""}${hw.bios_date ? ` · ${hw.bios_date}` : ""}`],
+            ["Machine UUID", hw.machine_uuid],
+            ["OS build", `${hw.os_version || ""}${hw.os_build ? ` (build ${hw.os_build})` : ""}`],
+            ["CPU", `${hw.logical_processors || 0} logical · ${hw.cpu_cores || 0}c/${hw.cpu_threads || 0}t · L2 ${hw.l2_cache_kb || 0}KB / L3 ${hw.l3_cache_kb || 0}KB`],
+            ["Firmware", `${fw} · Secure Boot ${hw.secure_boot || "?"} · TPM ${hw.tpm || "?"}`],
+          ];
+          return (
+            <Card title="Hardware (extra · opt-in)" className="xl:col-span-1">
+              <div className="grid grid-cols-1 gap-1.5">
+                {rows.map(([k, v]) => <Info key={k} k={k} v={<span className="font-mono text-xs break-all">{v || "—"}</span>} />)}
+                {Array.isArray(hw.disks) && hw.disks.map((d: any, i: number) => (
+                  <Info key={"d" + i} k={`Disk ${i + 1}`} v={<span className="font-mono text-xs break-all">{d.model} · {d.size_gb}GB · {d.interface} · SN {d.serial || "—"}</span>} />
+                ))}
+                {Array.isArray(hw.mac_addresses) && hw.mac_addresses.length > 0 && (
+                  <Info k="MAC" v={<span className="font-mono text-xs">{hw.mac_addresses.join(", ")}</span>} />
+                )}
+              </div>
+            </Card>
+          );
+        })()}
+
         <Card title="Activity" className="xl:col-span-2">
           {byDay.length ? <Chart option={calOpt} height={180} /> : <Empty>No activity recorded.</Empty>}
           <div className="mt-3">

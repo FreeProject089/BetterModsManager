@@ -80,24 +80,55 @@ function enhance(sel: HTMLSelectElement): void {
 
     const labelEl = trigger.querySelector('.bmm-csel-label') as HTMLElement;
 
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const buildMenu = () => {
         menu.innerHTML = '';
-        Array.from(sel.options).forEach((opt, i) => {
+        let i = -1; // flat option index, matches sel.selectedIndex / sel.options order
+        const renderOpt = (opt) => {
+            i++;
+            const idx = i;
             const item = document.createElement('div');
             item.className = 'bmm-csel-opt'
                 + (opt.disabled ? ' disabled' : '')
-                + (i === sel.selectedIndex ? ' selected' : '');
-            item.textContent = opt.textContent || opt.value;
-            item.title = opt.textContent || opt.value;
+                + (idx === sel.selectedIndex ? ' selected' : '');
+            // Rich option: optional inline-SVG icon (data-icon) + sub description
+            // (data-desc) so menus can look like the script generator's catalogue.
+            const icon = opt.dataset ? opt.dataset.icon : '';
+            const desc = opt.dataset ? opt.dataset.desc : '';
+            const label = opt.textContent || opt.value;
+            if (icon || desc) {
+                item.classList.add('bmm-csel-opt-rich');
+                item.innerHTML =
+                    (icon ? `<span class="bmm-csel-opt-icon">${icon}</span>` : '')
+                    + `<span class="bmm-csel-opt-text"><span class="bmm-csel-opt-label">${esc(label)}</span>`
+                    + (desc ? `<span class="bmm-csel-opt-desc">${esc(desc)}</span>` : '')
+                    + `</span>`;
+            } else {
+                item.textContent = label;
+            }
+            item.title = desc ? `${label} — ${desc}` : label;
             if (!opt.disabled) item.addEventListener('click', e => {
                 e.stopPropagation();
-                sel.selectedIndex = i;
+                sel.selectedIndex = idx;
                 sel.dispatchEvent(new Event('input', { bubbles: true }));
                 sel.dispatchEvent(new Event('change', { bubbles: true }));
                 syncTrigger();
                 closeOpen();
             });
             menu.appendChild(item);
+        };
+        // Walk children so <optgroup> labels become section headers (the native
+        // select flattens them; here we keep the grouping the author intended).
+        Array.from(sel.children).forEach(ch => {
+            if (ch.tagName === 'OPTGROUP') {
+                const header = document.createElement('div');
+                header.className = 'bmm-csel-group';
+                header.textContent = ch.label || '';
+                menu.appendChild(header);
+                Array.from(ch.children).forEach(o => { if (o.tagName === 'OPTION') renderOpt(o); });
+            } else if (ch.tagName === 'OPTION') {
+                renderOpt(ch);
+            }
         });
     };
 

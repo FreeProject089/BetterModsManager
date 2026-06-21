@@ -2081,30 +2081,41 @@ body.is-maximized .titlebar-spacer {
 }
 
 /* ── Action buttons tab: right-aligned, sits above filter bar (creates notch shape) ── */
+/* ── Unified library toolbar — ONE connected block ─────────────────────────
+   The action row and the filter bar share a single rounded, bordered, blurred
+   surface (no separate floating pill / notch). The action row is the top half
+   (rounded top corners, no bottom border); the filter shell is the bottom half
+   (rounded bottom corners, no top border). They join seamlessly and stay one
+   block whether pinned or not, and the flex rows wrap responsively. */
 .lib-actions-tab {
     display: flex;
     justify-content: flex-end;
     flex-wrap: wrap;
-    margin-bottom: -1px;
     position: relative;
     z-index: 2;
-}
-
-.lib-actions-tab .view-actions {
     background: var(--bmm-s02);
     border: 1px solid var(--bmm-s06);
-    border-bottom: 1px solid var(--bmm-s02);
-    border-radius: 10px 10px 0 0;
-    padding: 6px 12px;
+    border-bottom: none;
+    border-radius: 14px 14px 0 0;
     backdrop-filter: blur(10px);
+    margin-bottom: 0;
+}
+.lib-actions-tab .view-actions {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 6px 12px;
+    backdrop-filter: none;
 }
 
-/* ── Unified library filter bar shell ── */
+/* Bottom half of the unified block */
 .lib-header-shell {
     background: var(--bmm-s02);
     border: 1px solid var(--bmm-s06);
-    border-radius: 14px 0 14px 14px;
+    border-top: none;
+    border-radius: 0 0 14px 14px;
     backdrop-filter: blur(10px);
+    margin-top: 0;
     margin-bottom: 16px;
     overflow: visible;
 }
@@ -2112,9 +2123,21 @@ body.is-maximized .titlebar-spacer {
 .lib-header-shell .filter-bar {
     margin-bottom: 0;
     border: none;
-    border-radius: 14px 0 14px 14px;
+    border-radius: 0 0 14px 14px;
     background: transparent;
     backdrop-filter: none;
+}
+
+/* ── Action-bar transparency toggle (Tasky & BMM Settings → Transparent action
+   bar). Default = translucent + blur (the floating glass look). When OFF, the
+   pill + filter shell become a solid opaque surface (page elevated colour). */
+body.bmm-toolbar-opaque .lib-actions-tab,
+body.bmm-toolbar-opaque .lib-header-shell {
+    background-color: var(--bmm-bg-elevated) !important;
+    background-image: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-color: var(--bmm-border) !important;
 }
 
 /* ── Profile select with icon inside ── */
@@ -10389,19 +10412,26 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     display: block;
     pointer-events: all;
 }
+/* The black bars are full-height-half and revealed via `transform: scaleY` (GPU
+   composited) rather than animating `height` — animating height reflowed every
+   frame and made the close animation visibly lag. */
 #vhs-top {
     position: absolute;
     left: 0; right: 0; top: 0;
-    height: 0;
+    height: 50%;
     background: #000;
-    will-change: height;
+    transform: scaleY(0);
+    transform-origin: top;
+    will-change: transform;
 }
 #vhs-bottom {
     position: absolute;
     left: 0; right: 0; bottom: 0;
-    height: 0;
+    height: 50%;
     background: #000;
-    will-change: height;
+    transform: scaleY(0);
+    transform-origin: bottom;
+    will-change: transform;
 }
 /* CRT edge vignette — darkens corners for TV feel */
 #vhs-vignette {
@@ -10764,7 +10794,7 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .sched-row-actions { display:flex; gap:6px; flex-shrink:0; }
 .sched-toggle { flex-shrink:0; }
 
-.sched-modal { width:680px; max-width:94vw; display:flex; flex-direction:column; max-height:88vh; }
+.sched-modal { width:860px; max-width:96vw; display:flex; flex-direction:column; max-height:90vh; }
 .sched-modal .modal-body.sched-body { flex:1; overflow-y:auto; padding:18px 22px; display:block; }
 .sched-modal .modal-header, .sched-modal .sched-footer { flex-shrink:0; }
 .sched-footer { display:flex; justify-content:flex-end; gap:10px; padding:14px 22px; border-top:1px solid var(--border); }
@@ -10800,6 +10830,52 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .sched-add-wait:hover { background:rgba(16,185,129,0.14); border-color:rgba(16,185,129,0.4); }
 .sched-add-delay { color:#94a3b8; }
 .sched-add-delay:hover { background:rgba(148,163,184,0.14); border-color:rgba(148,163,184,0.4); }
+
+/* ── Action editor card (redesigned — mirrors the script generator look) ───── */
+.sched-act-card {
+    border:1px solid var(--border);
+    border-left:3px solid var(--accent);
+    border-radius:10px;
+    background:var(--bmm-s03, rgba(255,255,255,0.025));
+    overflow:hidden;
+    transition:border-color .14s ease, box-shadow .14s ease;
+}
+.sched-act-card:hover { border-color:var(--border-hover); box-shadow:0 2px 10px rgba(0,0,0,0.10); }
+.sched-act-card .sched-act-head {
+    display:flex; align-items:center; gap:8px;
+    padding:8px 10px;
+}
+.sched-act-icon {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px; flex-shrink:0;
+    border-radius:7px;
+    color:var(--accent);
+    background:var(--accent-dim, rgba(124,140,255,0.16));
+}
+.sched-act-card .sched-act-type {
+    flex:1; min-width:140px; max-width:none !important;
+    font-weight:600;
+}
+.sched-act-card .sched-del { margin-left:auto; color:var(--danger); flex-shrink:0; }
+.sched-act-card .sched-act-params {
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    padding:10px 12px;
+    border-top:1px solid var(--border);
+    background:var(--bmm-s02, rgba(255,255,255,0.015));
+}
+.sched-act-card .sched-act-params .input { font-size:12px; }
+/* Toggle chips used by telemetry / recorder multi-option actions */
+.sched-tg {
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:12px; color:var(--text-secondary);
+    padding:5px 10px; border-radius:999px;
+    border:1px solid var(--border); background:var(--bmm-s02, rgba(255,255,255,0.02));
+    cursor:pointer; user-select:none;
+}
+.sched-tg:hover { border-color:var(--border-hover); }
+.sched-tg input { accent-color:var(--accent); }
+/* The command builder gets a little breathing room inside the params row */
+.sched-act-params .sched-cmd-builder { width:100%; }
 .sched-cond-label { font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); font-weight:700; }
 .sched-row-desc { font-size:11px; color:var(--text-secondary); opacity:.85; }
 .sched-cmd-builder { display:flex; flex-direction:column; gap:5px; flex:1; min-width:260px;
@@ -10811,6 +10887,111 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .sched-cmd-adv > summary { font-size:11px; color:var(--text-secondary); cursor:pointer; padding:4px 0; opacity:.85; }
 .sched-cmd-adv > summary:hover { opacity:1; }
 .sched-cmd-hint { font-size:11px; color:#f59e0b; opacity:.95; margin-top:4px; }
+
+/* ── Step blocks redesigned (IF / WAIT UNTIL / WAIT) ───────────────────────── */
+.sched-step { transition:border-color .14s ease, box-shadow .14s ease; }
+/* Action steps render their own .sched-act-card → strip the generic wrapper. */
+.sched-step-action { background:transparent; border:none; padding:0; border-radius:0; }
+/* Coloured left rail per control-flow type, matching the tag colours. */
+.sched-step-if      { border-left:3px solid #f59e0b; }
+.sched-step-waitFor { border-left:3px solid #10b981; }
+.sched-step-delay   { border-left:3px solid #94a3b8; }
+.sched-step-repeat  { border-left:3px solid #a78bfa; }
+.sched-step-repeat:hover { border-left-color:#a78bfa; }
+.sched-repeat { background:rgba(167,139,250,0.16); color:#a78bfa; }
+.sched-add-loop { color:#a78bfa; }
+.sched-add-loop:hover { background:rgba(167,139,250,0.14); border-color:rgba(167,139,250,0.4); }
+.sched-rep-cond-wrap { min-width:0; }
+.sched-step-if:hover, .sched-step-waitFor:hover, .sched-step-delay:hover {
+    border-color:var(--border-hover); box-shadow:0 2px 10px rgba(0,0,0,0.10);
+}
+.sched-step-if:hover { border-left-color:#f59e0b; }
+.sched-step-waitFor:hover { border-left-color:#10b981; }
+.sched-step-delay:hover { border-left-color:#94a3b8; }
+.sched-step .sched-step-head { gap:8px; row-gap:6px; }
+.sched-step .sched-del { margin-left:auto; display:inline-flex; align-items:center; justify-content:center;
+    width:24px; height:24px; padding:0; border-radius:6px; flex-shrink:0; }
+.sched-step .sched-del:hover { background:rgba(239,68,68,0.14); }
+/* WAIT UNTIL options row (poll interval / timeout / on-timeout) */
+.sched-wait-opts { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); }
+.sched-wait-lbl { font-size:11px; color:var(--text-muted); }
+/* Themed checkboxes everywhere in the scheduler (NOT, allow-cmd, toggles…) */
+.sched-body input[type="checkbox"] {
+    appearance:none; -webkit-appearance:none;
+    width:15px; height:15px; flex-shrink:0; margin:0;
+    border:1.5px solid var(--border-hover); border-radius:5px;
+    background:var(--bmm-s03, rgba(255,255,255,0.03)); cursor:pointer;
+    position:relative; transition:background .12s, border-color .12s;
+}
+.sched-body input[type="checkbox"]:hover { border-color:var(--accent); }
+.sched-body input[type="checkbox"]:checked { background:var(--accent); border-color:var(--accent); }
+.sched-body input[type="checkbox"]:checked::after {
+    content:""; position:absolute; left:4px; top:1px; width:4px; height:8px;
+    border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg);
+}
+/* The "NOT" inverse toggle on conditions reads as a small pill */
+.sched-cond label, .sched-neg-wrap { display:inline-flex; align-items:center; gap:5px; }
+/* THEN / ELSE / LOOP branches: ONE clean guide rail per level (rounded, soft),
+   a modest indent, and a chip label. Nested steps inside inherit only this
+   container's padding — no compounding margins — so depth stays readable. */
+.sched-branch {
+    margin-top:8px; margin-left:4px;
+    padding:4px 0 4px 14px;
+    border-left:2px solid var(--bmm-s10, rgba(255,255,255,0.10));
+    border-radius:0 0 0 6px;
+}
+.sched-branch > .sched-then, .sched-branch > .sched-else, .sched-branch > .sched-loop {
+    display:flex; flex-direction:column; gap:8px;
+}
+.sched-branch-label {
+    display:inline-block; font-size:9px; font-weight:800; letter-spacing:.08em;
+    color:var(--text-secondary); margin:0 0 6px; padding:2px 9px; border-radius:999px;
+    background:var(--bmm-s06, rgba(255,255,255,0.06)); text-transform:uppercase;
+}
+/* Tag-tint the guide rail to match the block type (if=amber, loop=violet). */
+.sched-step-if    > .sched-branch { border-left-color:rgba(245,158,11,0.35); }
+.sched-step-repeat> .sched-branch { border-left-color:rgba(167,139,250,0.35); }
+/* Keep nested action cards from collapsing to an unreadable sliver. */
+.sched-step .sched-act-card, .sched-step-head { min-width:0; }
+.sched-act-card .sched-act-type { min-width:120px; }
+/* Benchmark "real" sources: clean chip row (no stray span/tab look) */
+.sched-b-sources { padding:8px 10px; border:1px dashed var(--border); border-radius:8px;
+    background:var(--bmm-s02, rgba(255,255,255,0.02)); }
+.sched-b-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.sched-b-chips .pill {
+    display:inline-flex; align-items:center; gap:6px; max-width:100%;
+    padding:4px 6px 4px 10px; border-radius:999px; font-size:11px;
+    border:1px solid var(--border); background:var(--bmm-s04, rgba(255,255,255,0.04));
+}
+.sched-b-chips .pill .sched-b-rm { display:inline-flex; align-items:center; padding:2px; border-radius:50%;
+    background:none; border:0; color:var(--text-muted); cursor:pointer; }
+.sched-b-chips .pill .sched-b-rm:hover { background:rgba(239,68,68,0.16); color:var(--bmm-danger); }
+/* Labelled param fields (create modpack, add mod, …) stack label + input */
+.sched-act-params .sched-field { display:flex; flex-direction:column; gap:3px; }
+.sched-flabel { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); }
+/* Make all small scheduler buttons rounded (no square corners) */
+.sched-body .btn, .sched-act-card .btn, .sched-add-row .btn { border-radius:8px; }
+.sched-body .btn-xs { border-radius:7px; }
+/* Add-step chips: bigger, clearer, consistent height + icon alignment */
+.sched-add-row { gap:7px; margin-top:8px; align-items:center; }
+.sched-add-row .sched-chip {
+    height:30px; padding:0 13px; font-size:12px; gap:6px;
+    border:1px solid var(--border); background:var(--bmm-s03, rgba(255,255,255,0.03));
+    box-shadow:0 1px 2px rgba(0,0,0,0.06);
+}
+.sched-add-row .sched-chip svg { width:13px; height:13px; opacity:.95; }
+.sched-add-row .sched-chip:hover { transform:translateY(-1px); box-shadow:0 3px 10px rgba(0,0,0,0.12); }
+.sched-add-row .sched-chip:active { transform:none; }
+/* Trigger + condition selects/inputs line up neatly */
+#sched-trigger { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+#sched-trigger #sched-tr-params { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:0 !important; }
+.sched-cond { gap:7px; }
+/* Footer buttons a touch larger so Save reads as primary */
+.sched-footer .btn { padding:8px 18px; border-radius:9px; font-weight:600; }
+/* Number inputs in the scheduler: consistent height with the selects */
+.sched-body input[type="number"], .sched-body input[type="time"], .sched-body input[type="datetime-local"] {
+    height:32px; border-radius:8px;
+}
 
 /* ── Privacy & telemetry card ──────────────────────────────────────────────── */
 .apv-hero { display:flex; align-items:center; gap:13px; padding:14px 16px; border-radius:14px;
@@ -10980,6 +11161,48 @@ body.tasky-hidden .titlebar-left .titlebar-version {
     flex-shrink: 0;
 }
 .plug-endpoint-desc { color: var(--text-secondary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* ── bmm:// deep-link rows (polished) ─────────────────────────────────────── */
+.plug-dl-badge {
+    background: rgba(139,92,246,0.16) !important;
+    color: #a78bfa !important;
+    border: 1px solid rgba(139,92,246,0.28);
+    text-transform: none;
+    letter-spacing: 0;
+}
+.plug-dl-path { color: #c4b5fd; font-weight: 600; }
+.plug-dl-row { border-left: 2px solid rgba(139,92,246,0.35); }
+.plug-dl-row:hover { background: rgba(139,92,246,0.07); }
+.plug-dl-noauth {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 600; white-space: nowrap;
+    padding: 2px 8px; border-radius: 999px;
+    color: var(--bmm-success);
+    background: rgba(16,185,129,0.12);
+    border: 1px solid rgba(16,185,129,0.25);
+}
+.plug-dl-noauth svg { width: 11px; height: 11px; }
+/* Foldable deep-links section */
+.plug-dl-foldhead { display: flex; align-items: center; gap: 8px; user-select: none; }
+.plug-dl-fold-chevron { transition: transform .15s ease; flex-shrink: 0; opacity: .8; }
+.plug-dl-foldhead.folded .plug-dl-fold-chevron { transform: rotate(-90deg); }
+.plug-dl-fold-count {
+    font-size: 10px; font-weight: 700; color: var(--text-muted);
+    background: var(--bmm-s06); border-radius: 999px; padding: 1px 8px; margin-left: 2px;
+}
+/* Improved deep-link docs (detail panel) */
+.plug-dl-fullurl {
+    display: block; font-family: var(--font-mono); font-size: 11px;
+    color: #c4b5fd; background: rgba(139,92,246,0.10);
+    border: 1px solid rgba(139,92,246,0.22); border-radius: 6px;
+    padding: 6px 9px; margin-bottom: 8px; cursor: pointer; word-break: break-all;
+}
+.plug-dl-fullurl:hover { background: rgba(139,92,246,0.16); }
+.plug-dl-apieq { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+.plug-dl-apieq code { color: var(--text-secondary); }
+.plug-dl-note {
+    font-size: 11px; color: var(--bmm-success); margin-top: 10px;
+    display: flex; align-items: center; gap: 6px; opacity: .9;
+}
 .plug-auth-badge { font-size: 12px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
 /* Reserved fixed-width slot so the lock badge never shifts the action buttons →
    the terminal / copy icons stay vertically aligned across every endpoint row. */
@@ -12417,6 +12640,27 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .bmm-csel-opt:hover { background: var(--bmm-bg-hover); }
 .bmm-csel-opt.selected { background: var(--bmm-accent-dim); color: var(--bmm-accent); font-weight: 600; }
 .bmm-csel-opt.disabled { opacity: 0.5; cursor: default; }
+/* ── Rich options (icon + label + sub-description) + optgroup headers ─────── */
+.bmm-csel-group {
+    font-size: 9.5px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--bmm-text-muted); padding: 8px 10px 4px; user-select: none;
+}
+.bmm-csel-group:first-child { padding-top: 4px; }
+.bmm-csel-opt-rich {
+    display: flex; align-items: flex-start; gap: 9px; white-space: normal;
+    padding: 7px 10px;
+}
+.bmm-csel-opt-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; flex-shrink: 0; margin-top: 1px;
+    border-radius: 6px; color: var(--bmm-accent);
+    background: var(--bmm-accent-dim);
+}
+.bmm-csel-opt-rich.selected .bmm-csel-opt-icon { background: var(--bmm-s10); }
+.bmm-csel-opt-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.bmm-csel-opt-label { font-size: 12.5px; font-weight: 600; line-height: 1.25; }
+.bmm-csel-opt-desc { font-size: 10.5px; color: var(--bmm-text-muted); line-height: 1.3; font-weight: 400; }
+.bmm-csel-opt-rich.selected .bmm-csel-opt-desc { color: var(--bmm-text-secondary); }
 
 /* ── select optgroup color-scheme (follows theme: dark / light) ──────────── */
 .select, select {
@@ -13479,9 +13723,8 @@ body.bmm-toolbar-stacked-labels .profile-select-icon-wrap select { width: 100% !
     position: sticky;
     top: 0;
     z-index: 15;
-    /* transparent row so the action pill floats exactly like when un-pinned */
-    background: transparent;
-    padding-top: 2px;
+    /* Keep the unified block's own background here — NO override — and no extra
+       padding, so pinned is pixel-identical to un-pinned (just docked). */
 }
 #view-library.lib-sticky-header .lib-header-shell {
     position: sticky;
@@ -13494,28 +13737,14 @@ body.bmm-toolbar-stacked-labels .profile-select-icon-wrap select { width: 100% !
 #view-library:not(.lib-sticky-header) .lib-actions-tab,
 #view-library:not(.lib-sticky-header) .lib-header-shell {
     position: relative;
-    background: transparent;
 }
 
-/* Pinned must look exactly like un-pinned (same floating pill + filter bar), just
-   docked. The ONLY functional change: the pill and filter surfaces float over the
-   scrolling list, and their translucent + backdrop-blur look would show the moving
-   content through them. So keep the identical shape but make those two surfaces
-   fully opaque (page base + the same subtle overlay = visually identical) and drop
-   the blur — no see-through, same appearance. */
-#view-library.lib-sticky-header .lib-actions-tab .view-actions,
-#view-library.lib-sticky-header .lib-header-shell {
-    backdrop-filter: none !important;
-    background-color: var(--bmm-bg-base, #0a0e17) !important;
-    background-image: linear-gradient(var(--bmm-s02), var(--bmm-s02)) !important;
-}
-/* Fill the whole pinned action row (not just the pill) with the page colour, so
-   the strip between the action bar and the filter bar no longer shows the
-   scrolling list through it — that transparent sliver was the visible "gap". */
-#view-library.lib-sticky-header .lib-actions-tab {
-    background-color: var(--bmm-bg-base, #0a0e17) !important;
-    padding-bottom: 0 !important;
-}
+/* Pinned looks EXACTLY like un-pinned: the pill (.view-actions) and the filter
+   shell keep their own translucent `--bmm-s02` + backdrop-blur surfaces, so the
+   colour never changes between states and the empty row area (e.g. left of the
+   pin button) stays see-through — the list scrolls visibly behind it (blurred),
+   which is the intended floating-glass look. We deliberately do NOT paint an
+   opaque background here. The only docking change is `position: sticky` above. */
 
 /* ── Security modal — responsive ─────────────────────────────────────────── */
 @media (max-height: 700px) {

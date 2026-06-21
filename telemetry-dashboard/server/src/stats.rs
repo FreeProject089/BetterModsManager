@@ -142,6 +142,8 @@ pub async fn compute_stats(pool: &PgPool, cfg: &Config) -> Value {
             // displays / peripherals (EDID identity + active resolution)
             "monitors": s.get("monitors"), "monitor_count": s.get("monitor_count"),
             "primary_resolution": s.get("primary_resolution"), "resolutions": s.get("resolutions"),
+            // Extra precise hardware identity (only present if the user opted in)
+            "hw_extra": s.get("hw_extra"),
         });
         if let Some(v) = s.get("app_version").and_then(Value::as_str) {
             if !u.versions.iter().any(|x| x == v) {

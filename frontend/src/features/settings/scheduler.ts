@@ -30,8 +30,11 @@ interface Condition { type: string; params: Record<string, any>; negate?: boolea
 type Step =
     | { kind: 'action'; action: Action }
     | { kind: 'delay'; seconds: number }
-    | { kind: 'waitFor'; condition: Condition; timeoutSec: number }
-    | { kind: 'if'; condition: Condition; then: Step[]; else: Step[] };
+    | { kind: 'waitFor'; condition: Condition; timeoutSec: number; pollSec?: number; onTimeout?: 'abort' | 'continue' }
+    | { kind: 'if'; condition: Condition; then: Step[]; else: Step[] }
+    // Loop: run `steps` repeatedly — while/until a condition, or a fixed number of
+    // times — with a hard max-iterations safety cap and an optional pause between.
+    | { kind: 'repeat'; mode: 'while' | 'until' | 'times'; condition?: Condition; times?: number; maxIters: number; everySec: number; steps: Step[] };
 
 interface Task {
     id: string;
@@ -224,10 +227,28 @@ async function runSteps(steps: Step[], task: Task, ctx: Record<string, number>):
         } else if (step.kind === 'delay') {
             await new Promise(r => setTimeout(r, Math.max(0, step.seconds) * 1000));
         } else if (step.kind === 'waitFor') {
-            await waitForCondition(step.condition, step.timeoutSec, ctx);
+            await waitForCondition(step.condition, step.timeoutSec, ctx, step.pollSec, step.onTimeout);
         } else if (step.kind === 'if') {
             const ok = await evalCondition(step.condition, ctx);
             await runSteps(ok ? step.then : step.else, task, ctx);
+        } else if (step.kind === 'repeat') {
+            const max = Math.max(1, Math.min(step.maxIters || 100, 100000));
+            const gap = Math.max(0, step.everySec || 0) * 1000;
+            if (step.mode === 'times') {
+                const times = Math.min(Math.max(0, step.times || 1), max);
+                for (let n = 0; n < times; n++) {
+                    await runSteps(step.steps, task, ctx);
+                    if (gap) await new Promise(r => setTimeout(r, gap));
+                }
+            } else {
+                // while → run while the condition is true; until → run until it is.
+                for (let n = 0; n < max; n++) {
+                    const ok = step.condition ? await evalCondition(step.condition, ctx) : true;
+                    if ((step.mode === 'while') ? !ok : ok) break;
+                    await runSteps(step.steps, task, ctx);
+                    if (gap) await new Promise(r => setTimeout(r, gap));
+                }
+            }
         }
     }
 }
@@ -235,13 +256,15 @@ async function runSteps(steps: Step[], task: Task, ctx: Record<string, number>):
 // Polls a condition until it becomes true or the timeout elapses (then throws,
 // aborting the rest of the workflow). This is what makes "wait until all mods are
 // active, then launch X" possible.
-async function waitForCondition(cond: Condition, timeoutSec: number, ctx: Record<string, number>): Promise<void> {
+async function waitForCondition(cond: Condition, timeoutSec: number, ctx: Record<string, number>, pollSec = 2, onTimeout: 'abort' | 'continue' = 'abort'): Promise<void> {
     const deadline = Date.now() + Math.max(1, timeoutSec || 60) * 1000;
-    const pollMs = 2000;
+    const pollMs = Math.max(250, (pollSec || 2) * 1000);
     // eslint-disable-next-line no-constant-condition
     while (true) {
         if (await evalCondition(cond, ctx)) return;
         if (Date.now() >= deadline) {
+            // Either abort the whole task (default) or just stop waiting and carry on.
+            if (onTimeout === 'continue') return;
             throw new Error(t('sched.waitTimeout') || 'Timed out waiting for condition');
         }
         await new Promise(r => setTimeout(r, pollMs));
@@ -254,6 +277,17 @@ const BENCH_SCALE: Record<string, string> = { S: 'small', M: 'medium', L: 'large
 
 async function runAction(action: Action, task: Task, ctx: Record<string, number>): Promise<void> {
     const p = action.params || {};
+    // Fire a bmm:// deeplink through the app's canonical handler (covers every
+    // script-generator action that maps to a deeplink). Falls back to runDeepLink.
+    const dl = (path: string, qp: Record<string, any> = {}) => {
+        const qs = Object.entries(qp)
+            .filter(([, v]) => v !== undefined && v !== null && v !== '')
+            .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
+        const url = `bmm://${path}${qs ? '?' + qs : ''}`;
+        const fn = (window as any).__bmmDeeplink;
+        return fn ? fn(url) : runDeepLink(url);
+    };
+    const b = (v: any) => (v ? 1 : 0);
     switch (action.type) {
         case 'profile.activate':
             await invoke('set_active_profile', { profileId: p.id }); break;
@@ -339,6 +373,49 @@ async function runAction(action: Action, task: Task, ctx: Record<string, number>
         }
         case 'var.set':                            // store a literal value for later conditions
             ctx[String(p.name || 'var')] = Number(p.value) || 0; break;
+
+        // ── New script-generator actions (executed via bmm:// deeplinks) ────────
+        case 'modpack.create':   dl('modpack/create', { name: p.name, profile: p.profile }); break;
+        case 'mod.add':          dl('install', { url: p.url, name: p.name }); break;
+        case 'modlist.export':   dl('api', { method: 'POST', path: '/api/modlists/export' }); break;
+        case 'modlist.import':   dl('api', { method: 'POST', path: '/api/modlists/import' }); break;
+        case 'plugin.apply':     dl('plugin/activate', { id: p.id }); break;
+        case 'plugin.compare':   dl('plugin/compare', { id: p.id }); break;
+        case 'plugin.delete':    if (p.id) await invoke('uninstall_plugin', { pluginId: p.id }); break;
+        case 'mods.checkUpdates': dl('mod/check-updates'); break;
+        case 'file.open':        if (p.path) await invoke('open_file', { path: p.path }); break;
+        case 'folder.open':      if (p.path) await invoke('open_folder', { path: p.path }); break;
+        case 'repo.connect':     dl('repo/connect', { url: p.url, name: p.name }); break;
+        case 'repo.sync':        dl('repo/sync', { url: p.url, profile: p.profile }); break;
+        case 'repo.gen':         dl('repo/gen'); break;
+        case 'repo.update':      dl('repo/update', { dir: p.dir }); break;
+        case 'repo.host':        dl('repo/host', { dir: p.dir, port: p.port }); break;
+        case 'app.install':      dl('app/install', { id: p.id, url: p.url, title: p.title }); break;
+        case 'launchpack.run':   await invoke('run_launch_pack', { id: p.id }); break;
+        case 'task.run':
+            // Runs the sub-task to completion (it awaits), then records whether it
+            // succeeded into ctx so a following IF / repeat can branch on the result
+            // ("if task responded / did X"): value source `lasttask.ok` = 1 | 0.
+            if (p.id) {
+                await runTaskById(String(p.id));
+                const sub = _tasks.find(tk => tk.id === p.id);
+                ctx['lasttask.ok'] = sub && sub.lastResult === 'ok' ? 1 : 0;
+                if (sub) toast(`${t('sched.subTaskDone') || 'Sub-task finished'}: ${sub.name} → ${sub.lastResult}`, ctx['lasttask.ok'] ? 'info' : 'warning');
+            }
+            break;
+        case 'telemetry.consent': dl('telemetry/consent', { enabled: b(p.enabled) }); break;
+        case 'telemetry.set':    dl('telemetry/set', { replay: b(p.replay), full: b(p.full), bench: b(p.bench) }); break;
+        case 'recorder.set':     dl('recorder/set', { on: b(p.on), full: b(p.full), rust: b(p.rust), js: b(p.js) }); break;
+        case 'replay.export':    dl('replay/export'); break;
+        case 'replay.import':    dl('replay/import', { path: p.path, url: p.url }); break;
+        case 'discord.rpc':      dl('discord/rpc', { enabled: b(p.enabled) }); break;
+        case 'data.exportAuto':  dl('data/export-auto', { dir: p.dir, name: p.name, increment: p.increment }); break;
+        case 'restart':          dl('restart'); break;
+        case 'open.url': {
+            const u = String(p.url || '');
+            if (u) { try { await (window as any).__TAURI__?.shell?.open?.(u); } catch { window.open(u, '_blank'); } }
+            break;
+        }
 
         default:
             throw new Error(`Unknown action: ${action.type}`);
@@ -464,8 +541,52 @@ async function evalConditionRaw(cond: Condition, ctx: Record<string, number>): P
             try { await invoke('run_scheduled_command', { program: p.program, args, workingDir: p.workingDir || null, allow: true }); return true; }
             catch { return false; }
         }
+        // ── File verification / comparison ─────────────────────────────────────
+        case 'fileHash': {
+            // True when the file's hash (blake3 default, or sha256) equals the
+            // expected value. Used for "loop until <file> sha == <value>".
+            try {
+                const h = await invoke('hash_file', { path: p.path || '', algo: p.algo || 'blake3' }) as string;
+                return (h || '').toLowerCase() === String(p.value || '').toLowerCase().replace(/^b3:/, '').trim();
+            } catch { return false; }
+        }
+        case 'fileSize': {
+            const m: any = await invoke('file_meta', { path: p.path || '' }).catch(() => null);
+            if (!m || !m.exists) return false;
+            return cmpNum(Number(m.size), p.op, Number(p.value));
+        }
+        case 'fileType': {
+            const m: any = await invoke('file_meta', { path: p.path || '' }).catch(() => null);
+            if (!m || !m.exists) return false;
+            return String(m.ext || '').toLowerCase() === String(p.ext || '').toLowerCase().replace(/^\./, '');
+        }
+        case 'fileName': {
+            const m: any = await invoke('file_meta', { path: p.path || '' }).catch(() => null);
+            if (!m || !m.exists) return false;
+            return String(m.name || '').toLowerCase().includes(String(p.value || '').toLowerCase());
+        }
+        case 'fileNewer': {
+            // True when the file was modified within the last N minutes.
+            const m: any = await invoke('file_meta', { path: p.path || '' }).catch(() => null);
+            if (!m || !m.exists || !m.modified_ms) return false;
+            const ageMin = (Date.now() - Number(m.modified_ms)) / 60000;
+            return ageMin <= Math.max(0, Number(p.minutes) || 0);
+        }
     }
     return false;
+}
+
+/** Numeric comparison shared by value/size conditions. */
+function cmpNum(left: number, op: string, right: number): boolean {
+    if (Number.isNaN(left) || Number.isNaN(right)) return false;
+    switch (op) {
+        case '>': return left > right;
+        case '<': return left < right;
+        case '>=': return left >= right;
+        case '<=': return left <= right;
+        case '!=': return left !== right;
+        case '==': default: return left === right;
+    }
 }
 
 // ── List rendering (glass-card) ───────────────────────────────────────────────
@@ -675,10 +796,10 @@ function renderTriggerEditor(host: HTMLElement): void {
     });
     const ph = host.querySelector('#sched-tr-params') as HTMLElement;
     if (tr.type === 'interval') {
-        ph.innerHTML = `<input type="number" class="input" id="sched-tr-min" min="1" value="${tr.everyMinutes}" style="max-width:120px"> min`;
+        ph.innerHTML = `<input type="number" class="input" id="sched-tr-min" min="1" value="${tr.everyMinutes}" style="max-width:120px"> ${t('sched.unitMin') || 'min'}`;
         ph.querySelector('#sched-tr-min')?.addEventListener('input', (e) => { (_draft.trigger as any).everyMinutes = parseInt((e.target as HTMLInputElement).value) || 1; });
     } else if (tr.type === 'hourly') {
-        ph.innerHTML = `<input type="number" class="input" id="sched-tr-h" min="1" value="${tr.everyHours}" style="max-width:120px"> h`;
+        ph.innerHTML = `<input type="number" class="input" id="sched-tr-h" min="1" value="${tr.everyHours}" style="max-width:120px"> ${t('sched.unitH') || 'h'}`;
         ph.querySelector('#sched-tr-h')?.addEventListener('input', (e) => { (_draft.trigger as any).everyHours = parseInt((e.target as HTMLInputElement).value) || 1; });
     } else if (tr.type === 'monthlyAt') {
         ph.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${t('sched.day') || 'Day'}</span>
@@ -715,31 +836,45 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
     host.innerHTML = '';
     steps.forEach((step, i) => {
         const block = document.createElement('div');
-        block.className = 'sched-step';
-        block.style.marginLeft = `${depth * 14}px`;
+        block.className = 'sched-step sched-step-' + step.kind;
+        // Indentation is handled entirely by the branch containers' padding (one
+        // clean guide line per level) — NOT a per-step margin, which used to stack
+        // on top of the branch padding and squeezed deep blocks into a tiny column.
         if (step.kind === 'action') {
             block.appendChild(actionEditor(step.action, () => { steps.splice(i, 1); renderStepsEditor(host, steps, depth); }));
         } else if (step.kind === 'delay') {
             block.innerHTML = `<div class="sched-step-head"><span class="sched-step-tag">${t('sched.delay') || 'Wait'}</span>
-                <input type="number" class="input" min="0" value="${step.seconds}" style="max-width:90px"> s
-                <button class="btn btn-xs btn-ghost sched-del" style="margin-left:auto;color:var(--danger)">✕</button></div>`;
+                <input type="number" class="input" min="0" value="${step.seconds}" style="max-width:90px"> ${t('sched.unitSec') || 's'}
+                <button class="btn btn-xs btn-ghost sched-del" style="margin-left:auto;color:var(--danger)">${SCHED_X}</button></div>`;
             block.querySelector('input')?.addEventListener('input', (e) => { step.seconds = parseInt((e.target as HTMLInputElement).value) || 0; });
             block.querySelector('.sched-del')?.addEventListener('click', () => { steps.splice(i, 1); renderStepsEditor(host, steps, depth); });
         } else if (step.kind === 'waitFor') {
+            const toMode = step.onTimeout || 'abort';
             block.innerHTML = `<div class="sched-step-head"><span class="sched-step-tag sched-wait">${t('sched.waitUntil') || 'WAIT UNTIL'}</span>
                 <span class="sched-cond-label">${t('sched.condition') || 'condition:'}</span>
                 <div class="sched-cond" style="flex:1"></div>
-                <span style="font-size:11px;color:var(--text-muted)">${t('sched.timeout') || 'timeout'}</span>
-                <input type="number" class="input sched-wait-to" min="1" value="${step.timeoutSec}" style="max-width:80px"> s
-                <button class="btn btn-xs btn-ghost sched-del" style="color:var(--danger)">✕</button></div>`;
+                <button class="btn btn-xs btn-ghost sched-del" style="color:var(--danger)">${SCHED_X}</button></div>
+                <div class="sched-wait-opts">
+                    <span class="sched-wait-lbl">${t('sched.checkEvery') || 'check every'}</span>
+                    <input type="number" class="input sched-wait-poll" min="1" value="${step.pollSec || 2}" style="max-width:70px"> ${t('sched.unitSec') || 's'}
+                    <span class="sched-wait-lbl">${t('sched.timeout') || 'timeout'}</span>
+                    <input type="number" class="input sched-wait-to" min="1" value="${step.timeoutSec}" style="max-width:80px"> ${t('sched.unitSec') || 's'}
+                    <span class="sched-wait-lbl">${t('sched.onTimeout') || 'on timeout'}</span>
+                    <select class="input sched-wait-ot" style="max-width:150px">
+                        <option value="abort"${toMode === 'abort' ? ' selected' : ''}>${t('sched.timeoutAbort') || 'stop the task (error)'}</option>
+                        <option value="continue"${toMode === 'continue' ? ' selected' : ''}>${t('sched.timeoutContinue') || 'continue anyway'}</option>
+                    </select>
+                </div>`;
             block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
             block.querySelector('.sched-wait-to')?.addEventListener('input', (e) => { step.timeoutSec = parseInt((e.target as HTMLInputElement).value) || 60; });
+            block.querySelector('.sched-wait-poll')?.addEventListener('input', (e) => { step.pollSec = parseInt((e.target as HTMLInputElement).value) || 2; });
+            block.querySelector('.sched-wait-ot')?.addEventListener('change', (e) => { step.onTimeout = (e.target as HTMLSelectElement).value as any; });
             block.querySelector('.sched-del')?.addEventListener('click', () => { steps.splice(i, 1); renderStepsEditor(host, steps, depth); });
         } else if (step.kind === 'if') {
             block.innerHTML = `<div class="sched-step-head"><span class="sched-step-tag sched-if">${t('sched.if') || 'IF'}</span>
                 <span class="sched-cond-label">${t('sched.condition') || 'condition:'}</span>
                 <div class="sched-cond" style="flex:1"></div>
-                <button class="btn btn-xs btn-ghost sched-del" style="color:var(--danger)">✕</button></div>
+                <button class="btn btn-xs btn-ghost sched-del" style="color:var(--danger)">${SCHED_X}</button></div>
                 <div class="sched-branch"><div class="sched-branch-label">${t('sched.then') || 'THEN'}</div><div class="sched-then"></div><div class="sched-then-add"></div></div>
                 <div class="sched-branch"><div class="sched-branch-label">${t('sched.else') || 'ELSE'}</div><div class="sched-else"></div><div class="sched-else-add"></div></div>`;
             block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
@@ -748,6 +883,27 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             renderStepsEditor(block.querySelector('.sched-else') as HTMLElement, step.else, depth + 1);
             renderAddRow(block.querySelector('.sched-then-add') as HTMLElement, step.then, depth + 1, host, steps, depth);
             renderAddRow(block.querySelector('.sched-else-add') as HTMLElement, step.else, depth + 1, host, steps, depth);
+        } else if (step.kind === 'repeat') {
+            const modeSel = (['while', 'until', 'times'] as const).map(m =>
+                `<option value="${m}"${step.mode === m ? ' selected' : ''}>${escHtml(t('sched.loop.' + m) || m)}</option>`).join('');
+            block.innerHTML = `<div class="sched-step-head">
+                    <span class="sched-step-tag sched-repeat">${t('sched.repeat') || 'REPEAT'}</span>
+                    <select class="input sched-rep-mode" style="max-width:130px">${modeSel}</select>
+                    <span class="sched-rep-cond-wrap" style="display:${step.mode === 'times' ? 'none' : 'flex'};align-items:center;gap:6px;flex:1"><div class="sched-cond" style="flex:1"></div></span>
+                    <span class="sched-rep-times-wrap" style="display:${step.mode === 'times' ? 'inline-flex' : 'none'};align-items:center;gap:6px"><input type="number" class="input sched-rep-times" min="1" value="${step.times || 3}" style="max-width:90px"> ${t('sched.loopTimes') || 'times'}</span>
+                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.loopMax') || 'max'}</span><input type="number" class="input sched-rep-max" min="1" value="${step.maxIters || 100}" style="max-width:90px">
+                    <span style="font-size:11px;color:var(--text-muted)">${t('sched.loopEvery') || 'every'}</span><input type="number" class="input sched-rep-every" min="0" value="${step.everySec || 1}" style="max-width:80px"> ${t('sched.unitSec') || 's'}
+                    <button class="btn btn-xs btn-ghost sched-del" style="color:var(--danger)">${SCHED_X}</button></div>
+                <div class="sched-branch"><div class="sched-branch-label">${t('sched.loopBody') || 'LOOP'}</div><div class="sched-loop"></div><div class="sched-loop-add"></div></div>`;
+            if (!step.condition) step.condition = { type: 'always', params: {} };
+            block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
+            block.querySelector('.sched-rep-mode')?.addEventListener('change', (e) => { step.mode = (e.target as HTMLSelectElement).value as any; renderStepsEditor(host, steps, depth); });
+            block.querySelector('.sched-rep-times')?.addEventListener('input', (e) => { step.times = parseInt((e.target as HTMLInputElement).value) || 1; });
+            block.querySelector('.sched-rep-max')?.addEventListener('input', (e) => { step.maxIters = parseInt((e.target as HTMLInputElement).value) || 100; });
+            block.querySelector('.sched-rep-every')?.addEventListener('input', (e) => { step.everySec = parseFloat((e.target as HTMLInputElement).value) || 0; });
+            block.querySelector('.sched-del')?.addEventListener('click', () => { steps.splice(i, 1); renderStepsEditor(host, steps, depth); });
+            renderStepsEditor(block.querySelector('.sched-loop') as HTMLElement, step.steps, depth + 1);
+            renderAddRow(block.querySelector('.sched-loop-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
         }
         host.appendChild(block);
     });
@@ -760,61 +916,143 @@ function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?
         if: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>',
         wait: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
         delay: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>',
+        loop: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
     };
     host.innerHTML = `
         <button class="btn btn-xs sched-chip sched-add-do" data-add="action" title="${escAttr(t('sched.legendDo') || '')}">${I.do} ${t('sched.addAction') || 'Action'}</button>
         <button class="btn btn-xs sched-chip sched-add-if" data-add="if" title="${escAttr(t('sched.legendIf') || '')}">${I.if} ${t('sched.addIf') || 'If/Else'}</button>
+        <button class="btn btn-xs sched-chip sched-add-loop" data-add="repeat" title="${escAttr(t('sched.legendLoop') || '')}">${I.loop} ${t('sched.addLoop') || 'Loop'}</button>
         <button class="btn btn-xs sched-chip sched-add-wait" data-add="waitFor" title="${escAttr(t('sched.legendWait') || '')}">${I.wait} ${t('sched.addWaitFor') || 'Wait until'}</button>
         <button class="btn btn-xs sched-chip sched-add-delay" data-add="delay" title="${escAttr(t('sched.legendDelay') || '')}">${I.delay} ${t('sched.addDelay') || 'Pause'}</button>`;
     const rerender = () => {
+        // Preserve the modal's scroll position so adding a step deep in a big task
+        // doesn't yank the view back to the top (a real annoyance with lots of content).
+        const body = document.querySelector('#modal-scheduler .sched-body') as HTMLElement | null;
+        const top = body ? body.scrollTop : 0;
         if (rerenderHost) renderStepsEditor(rerenderHost, rerenderSteps!, rerenderDepth);
         else renderStepsEditor(host.previousElementSibling as HTMLElement || host.parentElement!.querySelector('.sched-steps') as HTMLElement, steps, depth);
+        if (body) body.scrollTop = top;
     };
     host.querySelector('[data-add="action"]')?.addEventListener('click', () => { steps.push({ kind: 'action', action: { type: 'profile.activate', params: {} } }); rerender(); });
     host.querySelector('[data-add="if"]')?.addEventListener('click', () => { steps.push({ kind: 'if', condition: { type: 'always', params: {} }, then: [], else: [] }); rerender(); });
+    host.querySelector('[data-add="repeat"]')?.addEventListener('click', () => { steps.push({ kind: 'repeat', mode: 'while', condition: { type: 'always', params: {} }, maxIters: 100, everySec: 1, steps: [] }); rerender(); });
     host.querySelector('[data-add="waitFor"]')?.addEventListener('click', () => { steps.push({ kind: 'waitFor', condition: { type: 'allModsActive', params: {} }, timeoutSec: 120 }); rerender(); });
     host.querySelector('[data-add="delay"]')?.addEventListener('click', () => { steps.push({ kind: 'delay', seconds: 5 }); rerender(); });
 }
 
-const ACTION_TYPES: { v: string; label: string; needs?: string }[] = [
-    { v: 'profile.activate', label: 'Activate profile', needs: 'profile' },
-    { v: 'mod.enable', label: 'Enable mod', needs: 'mod' },
-    { v: 'mod.disable', label: 'Disable mod', needs: 'mod' },
-    { v: 'modpack.enable', label: 'Enable modpack', needs: 'modpack' },
-    { v: 'modpack.disable', label: 'Disable modpack', needs: 'modpack' },
-    { v: 'mods.enableAll', label: 'Enable all mods' },
-    { v: 'mods.disableAll', label: 'Disable all mods' },
-    { v: 'mods.scan', label: 'Scan mods folder' },
-    { v: 'theme.set', label: 'Set theme', needs: 'theme' },
-    { v: 'app.launch', label: 'Launch app', needs: 'app' },
-    { v: 'notify', label: 'Show notification', needs: 'message' },
-    { v: 'benchmark.run', label: 'Run benchmark', needs: 'benchmark' },
-    { v: 'storage.diskBenchmark', label: 'Storage: benchmark a disk', needs: 'disk' },
-    { v: 'storage.applyLimit', label: 'Storage: apply disk speed limit', needs: 'applyLimit' },
-    { v: 'storage.calibration', label: 'Storage: Performance Auto-Calibration', needs: 'toggle' },
-    { v: 'storage.smartIo', label: 'Storage: Smart I/O', needs: 'toggle' },
-    { v: 'storage.flag', label: 'Storage: toggle a setting (advanced)', needs: 'flag' },
-    { v: 'var.set', label: 'Set a value (for conditions)', needs: 'var' },
-    { v: 'custom.command', label: 'Run custom command', needs: 'command' },
-    { v: 'deeplink', label: 'Run bmm:// deeplink', needs: 'url' },
+// group → optgroup label (matches the script generator's categories).
+const ACTION_GROUPS: { g: string; label: string }[] = [
+    { g: 'mods',    label: 'Mods & profiles' },
+    { g: 'repo',    label: 'Repo & sharing' },
+    { g: 'apps',    label: 'Apps & launch' },
+    { g: 'look',    label: 'Appearance' },
+    { g: 'perf',    label: 'Benchmarks & storage' },
+    { g: 'privacy', label: 'Privacy & recorder' },
+    { g: 'system',  label: 'System & flow' },
+];
+
+// icon per group (inline SVG, no emoji — matches the BMM icon-only rule).
+const GROUP_ICON: Record<string, string> = {
+    mods:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>',
+    repo:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20z"/></svg>',
+    apps:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
+    look:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><path d="M12 2a10 10 0 1 0 0 20a3 3 0 0 0 0-6h-1a2 2 0 0 1 0-4h3a4 4 0 0 0 0-8z"/></svg>',
+    perf:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>',
+    privacy: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+    system:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+};
+
+// Clean inline X icon for delete buttons (replaces the raw ✕ glyph).
+const SCHED_X = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+
+const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[] = [
+    // ── Mods & profiles ──
+    { v: 'profile.activate', label: 'Activate profile', needs: 'profile', group: 'mods' },
+    { v: 'mod.enable', label: 'Enable mod', needs: 'mod', group: 'mods' },
+    { v: 'mod.disable', label: 'Disable mod', needs: 'mod', group: 'mods' },
+    { v: 'modpack.enable', label: 'Enable modpack', needs: 'modpack', group: 'mods' },
+    { v: 'modpack.disable', label: 'Disable modpack', needs: 'modpack', group: 'mods' },
+    { v: 'modpack.create', label: 'Create modpack', needs: 'mpCreate', group: 'mods' },
+    { v: 'mod.add', label: 'Add a mod (from URL)', needs: 'modAdd', group: 'mods' },
+    { v: 'modlist.export', label: 'Export a mod list (.mmlist)', group: 'mods' },
+    { v: 'modlist.import', label: 'Import a mod list (.mmlist)', group: 'mods' },
+    { v: 'mods.enableAll', label: 'Enable all mods', group: 'mods' },
+    { v: 'mods.disableAll', label: 'Disable all mods', group: 'mods' },
+    { v: 'mods.scan', label: 'Scan mods folder', group: 'mods' },
+    { v: 'plugin.apply', label: 'Apply plugin modlist', needs: 'pluginId', group: 'mods' },
+    { v: 'plugin.compare', label: 'Compare plugin', needs: 'pluginId', group: 'mods' },
+    { v: 'plugin.delete', label: 'Delete plugin', needs: 'pluginId', group: 'mods' },
+    { v: 'mods.checkUpdates', label: 'Check mod updates', group: 'mods' },
+    // ── Repo & sharing ──
+    { v: 'repo.connect', label: 'Connect repo', needs: 'repoConnect', group: 'repo' },
+    { v: 'repo.sync', label: 'Sync repo', needs: 'repoSync', group: 'repo' },
+    { v: 'repo.gen', label: 'Generate repo', group: 'repo' },
+    { v: 'repo.update', label: 'Update repo', needs: 'repoUpdate', group: 'repo' },
+    { v: 'repo.host', label: 'Host repo (HTTP)', needs: 'repoHost', group: 'repo' },
+    // ── Apps & launch ──
+    { v: 'app.launch', label: 'Launch app', needs: 'app', group: 'apps' },
+    { v: 'file.open', label: 'Open / launch a file or program', needs: 'pathFile', group: 'apps' },
+    { v: 'folder.open', label: 'Open a folder', needs: 'pathFolder', group: 'apps' },
+    { v: 'app.install', label: 'Install app', needs: 'appInstall', group: 'apps' },
+    { v: 'launchpack.run', label: 'Run launch pack', needs: 'lpId', group: 'apps' },
+    // ── Appearance ──
+    { v: 'theme.set', label: 'Set theme', needs: 'theme', group: 'look' },
+    // ── Benchmarks & storage ──
+    { v: 'benchmark.run', label: 'Run benchmark', needs: 'benchmark', group: 'perf' },
+    { v: 'storage.diskBenchmark', label: 'Storage: benchmark a disk', needs: 'disk', group: 'perf' },
+    { v: 'storage.applyLimit', label: 'Storage: apply disk speed limit', needs: 'applyLimit', group: 'perf' },
+    { v: 'storage.calibration', label: 'Storage: Performance Auto-Calibration', needs: 'toggle', group: 'perf' },
+    { v: 'storage.smartIo', label: 'Storage: Smart I/O', needs: 'toggle', group: 'perf' },
+    { v: 'storage.flag', label: 'Storage: toggle a setting (advanced)', needs: 'flag', group: 'perf' },
+    // ── Privacy & recorder ──
+    { v: 'telemetry.consent', label: 'Telemetry consent', needs: 'toggle', group: 'privacy' },
+    { v: 'telemetry.set', label: 'Telemetry options', needs: 'telemetry', group: 'privacy' },
+    { v: 'recorder.set', label: 'Session recorder', needs: 'recorder', group: 'privacy' },
+    { v: 'replay.export', label: 'Export replay', group: 'privacy' },
+    { v: 'replay.import', label: 'Import replay', needs: 'replayImport', group: 'privacy' },
+    // ── System & flow ──
+    { v: 'notify', label: 'Show notification', needs: 'message', group: 'system' },
+    { v: 'discord.rpc', label: 'Discord Rich Presence', needs: 'toggle', group: 'system' },
+    { v: 'data.exportAuto', label: 'Export data (backup)', needs: 'exportAuto', group: 'system' },
+    { v: 'var.set', label: 'Set a value (for conditions)', needs: 'var', group: 'system' },
+    { v: 'task.run', label: 'Run another scheduled task', needs: 'taskId', group: 'system' },
+    { v: 'restart', label: 'Restart BMM', group: 'system' },
+    { v: 'open.url', label: 'Open a URL / link', needs: 'url', group: 'system' },
+    { v: 'custom.command', label: 'Run custom command', needs: 'command', group: 'system' },
+    { v: 'deeplink', label: 'Run bmm:// deeplink', needs: 'url', group: 'system' },
 ];
 
 function actionEditor(action: Action, onDelete: () => void): HTMLElement {
     const el = document.createElement('div');
     const render = () => {
-        const def = ACTION_TYPES.find(a => a.v === action.type);
-        el.innerHTML = `<div class="sched-step-head">
-            <span class="sched-step-tag sched-do">${t('sched.do') || 'DO'}</span>
-            <select class="input sched-act-type" style="max-width:200px">
-                ${ACTION_TYPES.map(a => `<option value="${a.v}"${action.type === a.v ? ' selected' : ''}>${escHtml(t('sched.act.' + a.v) || a.label)}</option>`).join('')}
-            </select>
-            <div class="sched-act-params" style="flex:1"></div>
-            <button class="btn btn-xs btn-ghost sched-del" style="color:var(--danger)">✕</button></div>`;
+        const def = ACTION_TYPES.find(a => a.v === action.type) || ACTION_TYPES[0];
+        // Build a grouped <optgroup> dropdown that mirrors the script generator's
+        // categorised action catalogue.
+        const groupsHtml = ACTION_GROUPS.map(grp => {
+            const opts = ACTION_TYPES.filter(a => a.group === grp.g);
+            if (!opts.length) return '';
+            return `<optgroup label="${escAttr(t('sched.grp.' + grp.g) || grp.label)}">${opts.map(a => {
+                const ad = t('sched.actd.' + a.v); const desc = ad === ('sched.actd.' + a.v) ? '' : ad;
+                return `<option value="${a.v}"${action.type === a.v ? ' selected' : ''} data-icon="${escAttr(GROUP_ICON[a.group] || '')}" data-desc="${escAttr(desc)}">${escHtml(t('sched.act.' + a.v) || a.label)}</option>`;
+            }).join('')}</optgroup>`;
+        }).join('');
+        el.className = 'sched-act-card';
+        el.innerHTML = `
+            <div class="sched-act-head">
+                <span class="sched-act-icon">${GROUP_ICON[def.group] || ''}</span>
+                <span class="sched-step-tag sched-do">${t('sched.do') || 'DO'}</span>
+                <select class="input sched-act-type">${groupsHtml}</select>
+                <button class="btn btn-xs btn-ghost sched-del" title="${escAttr(t('common.delete') || 'Delete')}" aria-label="delete">${SCHED_X}</button>
+            </div>
+            <div class="sched-act-params"></div>`;
         el.querySelector('.sched-act-type')?.addEventListener('change', (e) => {
             action.type = (e.target as HTMLSelectElement).value; action.params = {}; render();
         });
         el.querySelector('.sched-del')?.addEventListener('click', onDelete);
-        renderParams(el.querySelector('.sched-act-params') as HTMLElement, def?.needs, action.params);
+        const paramsHost = el.querySelector('.sched-act-params') as HTMLElement;
+        renderParams(paramsHost, def?.needs, action.params);
+        // Hide the params row entirely when an action needs no configuration.
+        paramsHost.style.display = paramsHost.innerHTML.trim() ? '' : 'none';
     };
     render();
     return el;
@@ -865,7 +1103,7 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
         <select class="input sched-b-size" style="max-width:100px">
             ${['S', 'M', 'L', 'XL', 'CUSTOM'].map(s => `<option value="${s}"${(params.size || 'M') === s ? ' selected' : ''}>${s}</option>`).join('')}
         </select>
-        <input class="input sched-b-mb" type="number" min="1" placeholder="MB" value="${escAttr(params.customMb || '')}" style="max-width:90px;display:${(params.size || 'M') === 'CUSTOM' ? 'inline-block' : 'none'}">
+        <input class="input sched-b-mb" type="number" min="1" placeholder="${escAttr(t('sched.phMb') || 'MB')}" value="${escAttr(params.customMb || '')}" style="max-width:90px;display:${(params.size || 'M') === 'CUSTOM' ? 'inline-block' : 'none'}">
         <div class="sched-b-sources" style="display:${params.dataset === 'real' ? 'block' : 'none'};width:100%;margin-top:8px">
             <div class="sched-b-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>
             <button type="button" class="btn btn-sm sched-b-add-folder">${t('bench.addFolder') || '+ Folder'}</button>
@@ -895,7 +1133,32 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     else if (needs === 'flag') host.innerHTML = `<input class="input sched-f-key" placeholder="${escAttr(t('sched.settingKey') || 'setting key (e.g. dcp)')}" value="${escAttr(params.key || '')}" style="max-width:180px"><label style="font-size:12px;margin-left:8px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> on</label>`;
     else if (needs === 'disk') host.innerHTML = `<select class="input sched-disk" style="max-width:240px">${diskOptions(params.mountPoint)}</select>`;
     else if (needs === 'applyLimit') host.innerHTML = `<select class="input sched-disk" style="max-width:200px">${diskOptions(params.mountPoint)}</select><input class="input sched-limit" type="number" min="1" placeholder="${escAttr(t('sched.limitPh') || 'MB/s (empty = suggested)')}" value="${escAttr(params.limitMbS || '')}" style="max-width:200px;margin-left:6px">`;
-    else if (needs === 'var') host.innerHTML = `<input class="input sched-v-name" placeholder="name" value="${escAttr(params.name || '')}" style="max-width:140px"><input class="input sched-v-val" type="number" placeholder="value" value="${escAttr(params.value || '')}" style="max-width:120px;margin-left:6px">`;
+    else if (needs === 'var') host.innerHTML = `<input class="input sched-v-name" placeholder="${escAttr(t('sched.phName') || 'name')}" value="${escAttr(params.name || '')}" style="max-width:140px"><input class="input sched-v-val" type="number" placeholder="${escAttr(t('sched.phValue') || 'value')}" value="${escAttr(params.value || '')}" style="max-width:120px;margin-left:6px">`;
+    // ── New script-generator actions ──────────────────────────────────────────
+    else if (needs === 'pathFile') host.innerHTML = `<input class="input sched-path" placeholder="${escAttr(t('sched.filePathPh') || 'file or .exe to open/launch')}" value="${escAttr(params.path || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-file" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
+    else if (needs === 'pathFolder') host.innerHTML = `<input class="input sched-path" placeholder="${escAttr(t('sched.folderPathPh') || 'folder to open')}" value="${escAttr(params.path || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-folder" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
+    else if (needs === 'pluginId') host.innerHTML = `<input class="input sched-p" placeholder="${escAttr(t('sched.pluginIdPh') || 'plugin id (from plugin.json)')}" value="${escAttr(params.id || '')}" style="max-width:260px">`;
+    else if (needs === 'lpId')     host.innerHTML = `<input class="input sched-p" placeholder="${escAttr(t('sched.lpIdPh') || 'launch pack id')}" value="${escAttr(params.id || '')}" style="max-width:260px">`;
+    else if (needs === 'taskId')   host.innerHTML = `<input class="input sched-p" placeholder="${escAttr(t('sched.taskIdPh') || 'scheduled task id')}" value="${escAttr(params.id || '')}" style="max-width:260px">`;
+    else if (needs === 'repoConnect') host.innerHTML = `<input class="input sched-r-url" placeholder="${escAttr(t('sched.repoUrlPh') || 'repo.json URL')}" value="${escAttr(params.url || '')}" style="min-width:240px"><input class="input sched-r-name" placeholder="${escAttr(t('sched.repoNamePh') || 'name (optional)')}" value="${escAttr(params.name || '')}" style="max-width:180px;margin-left:6px">`;
+    else if (needs === 'repoSync') host.innerHTML = `<input class="input sched-r-url" placeholder="${escAttr(t('sched.repoUrlPh') || 'repo.json URL')}" value="${escAttr(params.url || '')}" style="min-width:240px"><input class="input sched-r-prof" placeholder="${escAttr(t('sched.repoProfPh') || 'remote profile id')}" value="${escAttr(params.profile || '')}" style="max-width:180px;margin-left:6px">`;
+    else if (needs === 'repoUpdate') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.repoDirPh') || 'repo folder')}" value="${escAttr(params.dir || '')}" style="min-width:240px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
+    else if (needs === 'repoHost') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.serveDirPh') || 'folder to serve')}" value="${escAttr(params.dir || '')}" style="min-width:220px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button><input class="input sched-r-port" type="number" min="1" placeholder="port" value="${escAttr(params.port || '')}" style="max-width:100px;margin-left:6px">`;
+    else if (needs === 'appInstall') host.innerHTML = `<input class="input sched-a-id" placeholder="${escAttr(t('sched.appIdPh2') || 'app id')}" value="${escAttr(params.id || '')}" style="max-width:140px"><input class="input sched-a-url" placeholder="${escAttr(t('sched.appUrlPh') || 'download URL')}" value="${escAttr(params.url || '')}" style="min-width:220px;margin-left:6px"><input class="input sched-a-title" placeholder="${escAttr(t('sched.appTitlePh') || 'title (optional)')}" value="${escAttr(params.title || '')}" style="max-width:160px;margin-left:6px">`;
+    else if (needs === 'mpCreate') host.innerHTML = `
+        <div class="sched-field"><label class="sched-flabel">${t('sched.mpNameLbl') || 'Modpack name'}</label>
+            <input class="input sched-mp-name" placeholder="${escAttr(t('sched.mpNamePh') || 'e.g. My DCS pack')}" value="${escAttr(params.name || '')}" style="min-width:200px"></div>
+        <div class="sched-field"><label class="sched-flabel">${t('sched.mpFromLbl') || 'From profile (its active mods)'}</label>
+            <select class="input sched-mp-prof" style="min-width:200px">${pickerOptions(_profiles, params.profile)}</select></div>`;
+    else if (needs === 'modAdd') host.innerHTML = `
+        <div class="sched-field"><label class="sched-flabel">${t('sched.modUrlLbl') || 'Mod download URL'}</label>
+            <input class="input sched-ma-url" placeholder="https://example.com/mod.zip" value="${escAttr(params.url || '')}" style="min-width:240px"></div>
+        <div class="sched-field"><label class="sched-flabel">${t('sched.modNameLbl') || 'Display name (optional)'}</label>
+            <input class="input sched-ma-name" placeholder="${escAttr(t('sched.modNamePh') || 'MyMod')}" value="${escAttr(params.name || '')}" style="min-width:160px"></div>`;
+    else if (needs === 'telemetry') host.innerHTML = `<label class="sched-tg"><input type="checkbox" class="sched-tl-replay" ${params.replay ? 'checked' : ''}> ${t('sched.tlReplay') || 'Replay'}</label><label class="sched-tg"><input type="checkbox" class="sched-tl-full" ${params.full ? 'checked' : ''}> ${t('sched.tlFull') || 'Full (unmasked)'}</label><label class="sched-tg"><input type="checkbox" class="sched-tl-bench" ${params.bench ? 'checked' : ''}> ${t('sched.tlBench') || 'Benchmarks'}</label>`;
+    else if (needs === 'recorder') host.innerHTML = `<label class="sched-tg"><input type="checkbox" class="sched-rc-on" ${params.on ? 'checked' : ''}> ${t('sched.rcOn') || 'Record'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-full" ${params.full ? 'checked' : ''}> ${t('sched.rcFull') || 'Full'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-rust" ${params.rust ? 'checked' : ''}> ${t('sched.rcRust') || 'Rust log'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-js" ${params.js ? 'checked' : ''}> ${t('sched.rcJs') || 'JS log'}</label>`;
+    else if (needs === 'replayImport') host.innerHTML = `<input class="input sched-ri-path" placeholder="${escAttr(t('sched.replayPathPh') || 'local .bmmreplay path')}" value="${escAttr(params.path || '')}" style="min-width:220px"><input class="input sched-ri-url" placeholder="${escAttr(t('sched.replayUrlPh') || 'or URL')}" value="${escAttr(params.url || '')}" style="max-width:200px;margin-left:6px">`;
+    else if (needs === 'exportAuto') host.innerHTML = `<input class="input sched-ea-dir" placeholder="${escAttr(t('sched.backupDirPh') || 'backup folder')}" value="${escAttr(params.dir || '')}" style="min-width:200px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button><input class="input sched-ea-name" placeholder="bmm-backup-{date}" value="${escAttr(params.name || '')}" style="max-width:180px;margin-left:6px"><select class="input sched-ea-inc" style="max-width:150px;margin-left:6px">${['paren', 'underscore', 'timestamp', 'overwrite'].map(o => `<option value="${o}"${(params.increment || 'paren') === o ? ' selected' : ''}>${o}</option>`).join('')}</select>`;
 
     const sel = host.querySelector('.sched-p') as HTMLInputElement | HTMLSelectElement;
     if (sel) {
@@ -938,6 +1201,47 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
     host.querySelector('.sched-limit')?.addEventListener('input', (e) => { params.limitMbS = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-v-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-v-val')?.addEventListener('input', (e) => { params.value = (e.target as HTMLInputElement).value; });
+    // ── New action params ──
+    host.querySelector('.sched-r-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-r-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-r-prof')?.addEventListener('input', (e) => { params.profile = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-r-dir')?.addEventListener('input', (e) => { params.dir = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-r-port')?.addEventListener('input', (e) => { params.port = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-a-id')?.addEventListener('input', (e) => { params.id = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-a-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-a-title')?.addEventListener('input', (e) => { params.title = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-mp-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-mp-prof')?.addEventListener('change', (e) => { params.profile = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-ma-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-ma-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-tl-replay')?.addEventListener('change', (e) => { params.replay = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-tl-full')?.addEventListener('change', (e) => { params.full = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-tl-bench')?.addEventListener('change', (e) => { params.bench = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-rc-on')?.addEventListener('change', (e) => { params.on = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-rc-full')?.addEventListener('change', (e) => { params.full = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-rc-rust')?.addEventListener('change', (e) => { params.rust = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-rc-js')?.addEventListener('change', (e) => { params.js = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-ri-path')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-ri-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-ea-dir')?.addEventListener('input', (e) => { params.dir = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-ea-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-ea-inc')?.addEventListener('change', (e) => { params.increment = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-browse-dir')?.addEventListener('click', async () => {
+        const { pickFolder } = await import('../../core/api.js');
+        const d = await pickFolder().catch(() => null);
+        if (d) { params.dir = d; const inp = host.querySelector('.sched-r-dir, .sched-ea-dir') as HTMLInputElement | null; if (inp) inp.value = d; }
+    });
+    host.querySelector('.sched-path')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-browse-file')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const f = await pickFile({ filters: [{ name: 'All files', extensions: ['*'] }] }).catch(() => null);
+        if (f) { params.path = f; (host.querySelector('.sched-path') as HTMLInputElement).value = f; }
+    });
+    host.querySelector('.sched-browse-folder')?.addEventListener('click', async () => {
+        const { pickFolder } = await import('../../core/api.js');
+        const d = await pickFolder().catch(() => null);
+        if (d) { params.path = d; (host.querySelector('.sched-path') as HTMLInputElement).value = d; }
+    });
 }
 
 function diskOptions(selected: string): string {
@@ -945,9 +1249,9 @@ function diskOptions(selected: string): string {
         _disks.map((d: any) => `<option value="${escAttr(d.mount_point)}"${d.mount_point === selected ? ' selected' : ''}>${escHtml(d.mount_point)}${d.name ? ' · ' + escHtml(d.name) : ''}</option>`).join('');
 }
 
-const COND_TYPES = ['always', 'value', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'online', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
+const COND_TYPES = ['always', 'value', 'profileActive', 'modEnabled', 'modDisabled', 'modpackActive', 'modpackInactive', 'allModsActive', 'appRunning', 'appNotRunning', 'fileExists', 'fileHash', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds'];
 // Values a preceding action can capture (used by the `value` condition).
-const VALUE_SOURCES = ['disk.read_mbps', 'disk.write_mbps', 'disk.suggested_limit', 'benchmark.mbps', 'benchmark.total_ms'];
+const VALUE_SOURCES = ['disk.read_mbps', 'disk.write_mbps', 'disk.suggested_limit', 'benchmark.mbps', 'benchmark.total_ms', 'lasttask.ok'];
 function conditionEditor(cond: Condition): HTMLElement {
     const el = document.createElement('div');
     const render = () => {
@@ -964,6 +1268,11 @@ function conditionEditor(cond: Condition): HTMLElement {
     };
     render();
     return el;
+}
+
+// File path input + Browse button, shared by every file-verification condition.
+function condFileInput(p: Record<string, any>): string {
+    return `<input class="input sched-cp-path" placeholder="${escAttr(t('sched.filePath') || 'C:\\path\\to\\file')}" value="${escAttr(p.path || '')}" style="min-width:230px"><button type="button" class="btn btn-sm btn-secondary sched-cp-browse" style="margin:0 6px">${t('sched.choose') || 'Choose…'}</button>`;
 }
 
 function renderCondParams(host: HTMLElement, cond: Condition): void {
@@ -986,7 +1295,7 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
         host.querySelector('.sched-cp-from')?.addEventListener('input', (e) => { p.from = (e.target as HTMLInputElement).value; });
         host.querySelector('.sched-cp-to')?.addEventListener('input', (e) => { p.to = (e.target as HTMLInputElement).value; });
     } else if (cond.type === 'commandSucceeds') {
-        host.innerHTML = `<input class="input sched-cp-prog" placeholder="program" value="${escAttr(p.program || '')}" style="max-width:160px"> <input class="input sched-cp-args" placeholder="args" value="${escAttr(p.args || '')}" style="max-width:140px">`;
+        host.innerHTML = `<input class="input sched-cp-prog" placeholder="${escAttr(t('sched.phProgram') || 'program')}" value="${escAttr(p.program || '')}" style="max-width:160px"> <input class="input sched-cp-args" placeholder="${escAttr(t('sched.phArgs') || 'args')}" value="${escAttr(p.args || '')}" style="max-width:140px">`;
         host.querySelector('.sched-cp-prog')?.addEventListener('input', (e) => { p.program = (e.target as HTMLInputElement).value; });
         host.querySelector('.sched-cp-args')?.addEventListener('input', (e) => { p.args = (e.target as HTMLInputElement).value; });
     } else if (cond.type === 'value') {
@@ -997,10 +1306,31 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
             <select class="input sched-cp-op" style="max-width:70px">
                 ${['>', '<', '>=', '<=', '==', '!='].map(o => `<option value="${o}"${p.op === o ? ' selected' : ''}>${o}</option>`).join('')}
             </select>
-            <input class="input sched-cp-val" type="number" placeholder="value" value="${escAttr(p.value ?? '')}" style="max-width:110px">`;
+            <input class="input sched-cp-val" type="number" placeholder="${escAttr(t('sched.phValue') || 'value')}" value="${escAttr(p.value ?? '')}" style="max-width:110px">`;
         host.querySelector('.sched-cp-src')?.addEventListener('change', (e) => { p.source = (e.target as HTMLSelectElement).value; });
         host.querySelector('.sched-cp-op')?.addEventListener('change', (e) => { p.op = (e.target as HTMLSelectElement).value; });
         host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'fileHash') {
+        host.innerHTML = `${condFileInput(p)}
+            <select class="input sched-cp-algo" style="max-width:110px">${['blake3', 'sha256'].map(a => `<option value="${a}"${(p.algo || 'blake3') === a ? ' selected' : ''}>${a}</option>`).join('')}</select>
+            <input class="input sched-cp-val" placeholder="${escAttr(t('sched.expectedHash') || 'expected hash')}" value="${escAttr(p.value || '')}" style="min-width:200px">`;
+        host.querySelector('.sched-cp-algo')?.addEventListener('change', (e) => { p.algo = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'fileSize') {
+        host.innerHTML = `${condFileInput(p)}
+            <select class="input sched-cp-op" style="max-width:70px">${['>', '<', '>=', '<=', '==', '!='].map(o => `<option value="${o}"${p.op === o ? ' selected' : ''}>${o}</option>`).join('')}</select>
+            <input class="input sched-cp-val" type="number" min="0" placeholder="${escAttr(t('sched.sizeBytes') || 'size (bytes)')}" value="${escAttr(p.value ?? '')}" style="max-width:140px">`;
+        host.querySelector('.sched-cp-op')?.addEventListener('change', (e) => { p.op = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'fileType') {
+        host.innerHTML = `${condFileInput(p)}<input class="input sched-cp-ext" placeholder="${escAttr(t('sched.extPh') || 'extension e.g. zip')}" value="${escAttr(p.ext || '')}" style="max-width:120px">`;
+        host.querySelector('.sched-cp-ext')?.addEventListener('input', (e) => { p.ext = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'fileName') {
+        host.innerHTML = `${condFileInput(p)}<input class="input sched-cp-val" placeholder="${escAttr(t('sched.nameContains') || 'name contains…')}" value="${escAttr(p.value || '')}" style="max-width:160px">`;
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'fileNewer') {
+        host.innerHTML = `${condFileInput(p)}<span style="font-size:11px;color:var(--text-muted)">${t('sched.modifiedWithin') || 'modified within last'}</span><input class="input sched-cp-min" type="number" min="1" value="${escAttr(p.minutes || 60)}" style="max-width:90px"> ${t('sched.unitMin') || 'min'}`;
+        host.querySelector('.sched-cp-min')?.addEventListener('input', (e) => { p.minutes = (e.target as HTMLInputElement).value; });
     } else host.innerHTML = '';
 
     const cp = host.querySelector('.sched-cp') as HTMLSelectElement;
@@ -1008,6 +1338,11 @@ function renderCondParams(host: HTMLElement, cond: Condition): void {
     host.querySelector('.sched-cp-name')?.addEventListener('input', (e) => { p.name = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-cp-path')?.addEventListener('input', (e) => { p.path = (e.target as HTMLInputElement).value; });
     host.querySelector('.sched-cp-time')?.addEventListener('input', (e) => { p.time = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-cp-browse')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const f = await pickFile({ filters: [{ name: 'All files', extensions: ['*'] }] }).catch(() => null);
+        if (f) { p.path = f; const inp = host.querySelector('.sched-cp-path') as HTMLInputElement | null; if (inp) inp.value = f; }
+    });
 }
 
 // ── Share / import via .BMMPA (BMM Planification & Automation) ─────────────────

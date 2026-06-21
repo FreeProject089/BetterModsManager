@@ -83,6 +83,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/admin/recaps", get(admin_recaps_list))
         .route("/api/admin/recap/get", get(admin_recap_get))
         .route("/api/admin/recap/import", post(admin_recap_import))
+        .route("/api/admin/data-requests", get(admin_data_requests))
+        .route("/api/admin/data-request/decide", post(admin_data_request_decide))
         .route_layer(axum::middleware::from_fn_with_state(st.clone(), require_viewer));
 
     // Public routes: ingest (public api_key) + client-facing helpers + the SPA
@@ -92,6 +94,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/batch/", post(ingest_handler))
         .route("/capture/", post(ingest_handler))
         .route("/delete-request", post(delete_request))
+        .route("/data-request", post(data_request))
         .route("/api/packet-status", get(packet_status))
         .fallback(static_or_spa);
 
@@ -331,6 +334,33 @@ async fn delete_request(State(st): State<Shared>, Json(body): Json<Value>) -> (S
     };
     let row = db::request_deletion(&st.pool, &pid, st.cfg.delete_delay_h).await;
     (StatusCode::OK, Json(json!({ "status": 1, "scheduled_at": row["scheduled_at"], "delay_hours": st.cfg.delete_delay_h })))
+}
+
+// Public: a user files a GDPR data-access request (admin reviews + e-mails manually).
+async fn data_request(State(st): State<Shared>, Json(body): Json<Value>) -> (StatusCode, Json<Value>) {
+    if !ok_key(&st.cfg, body.get("api_key").and_then(Value::as_str)) {
+        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "bad key" })));
+    }
+    let creator = body.get("creator_id").and_then(Value::as_str).unwrap_or("").to_string();
+    let email = match body.get("email").and_then(Value::as_str) {
+        Some(e) if e.contains('@') && e.len() >= 5 => e.to_string(),
+        _ => return (StatusCode::BAD_REQUEST, Json(json!({ "error": "missing/invalid email" }))),
+    };
+    let row = db::insert_data_request(&st.pool, &creator, &email).await;
+    (StatusCode::OK, Json(json!({ "status": 1, "id": row["id"] })))
+}
+
+// Admin: list pending data-access requests.
+async fn admin_data_requests(State(st): State<Shared>) -> Json<Value> {
+    Json(db::list_data_requests(&st.pool).await)
+}
+// Admin: mark a data-access request done/rejected.
+async fn admin_data_request_decide(State(st): State<Shared>, Json(body): Json<Value>) -> (StatusCode, Json<Value>) {
+    let id = body.get("id").and_then(Value::as_i64).unwrap_or(0);
+    let status = body.get("status").and_then(Value::as_str).unwrap_or("done");
+    let status = if status == "rejected" { "rejected" } else { "done" };
+    let ok = db::decide_data_request(&st.pool, id, status).await;
+    (StatusCode::OK, Json(json!({ "ok": ok })))
 }
 
 async fn get_stats(State(st): State<Shared>) -> Json<Value> {

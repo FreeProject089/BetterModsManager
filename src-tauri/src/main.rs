@@ -249,6 +249,8 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            commands::verify::file_meta,
+            commands::verify::hash_file,
             commands::profile::get_profiles,
             commands::profile::get_active_profile_id,
             commands::profile::set_active_profile,
@@ -344,6 +346,7 @@ fn main() {
             commands::analytics::analytics_clear,
             commands::analytics::analytics_sent_packets,
             commands::analytics::analytics_request_deletion,
+            commands::analytics::analytics_request_data,
             commands::analytics::analytics_clear_sent_log,
             commands::analytics::replay_asset_data_url,
             commands::analytics::save_local_replay,

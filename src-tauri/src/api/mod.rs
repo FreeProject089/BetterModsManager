@@ -2281,6 +2281,46 @@ pub async fn start_api_server(
             }
         });
 
+    // DELETE /api/plugins/:id  (auth) — permanently uninstall a plugin (registry
+    // entry + stored permissions + its files on disk). Mirrors uninstall_plugin.
+    let data_plug_delete = data.clone();
+    let path_plug_delete = data_path.clone();
+    let tok_plug_delete  = token.clone();
+    let delete_plugin = warp::path!("api" / "plugins" / String)
+        .and(warp::delete())
+        .and(require_token(tok_plug_delete))
+        .and(with_data(data_plug_delete))
+        .and(with_path(path_plug_delete))
+        .map(|plugin_id: String, d: Arc<std::sync::Mutex<AppData>>, path: Arc<PathBuf>| {
+            let install_dir = {
+                let data = d.lock().unwrap_or_else(|p| p.into_inner());
+                data.installed_plugins.iter().find(|p| p.manifest.id == plugin_id).map(|p| p.install_dir.clone())
+            };
+            let deleted = {
+                let mut data = d.lock().unwrap_or_else(|p| p.into_inner());
+                let before = data.installed_plugins.len();
+                data.installed_plugins.retain(|p| p.manifest.id != plugin_id);
+                data.plugin_permissions.remove(&plugin_id);
+                data.installed_plugins.len() < before
+            };
+            if deleted {
+                if let Some(dir) = install_dir {
+                    let p = PathBuf::from(dir);
+                    if p.exists() { std::fs::remove_dir_all(&p).ok(); }
+                }
+                save_data(&d, &path);
+                warp::reply::with_status(
+                    warp::reply::json(&serde_json::json!({ "ok": true, "deleted_id": plugin_id })),
+                    StatusCode::OK,
+                )
+            } else {
+                warp::reply::with_status(
+                    warp::reply::json(&ApiError { error: format!("Plugin '{}' not found", plugin_id) }),
+                    StatusCode::NOT_FOUND,
+                )
+            }
+        });
+
     // ── Import / Export endpoints (UI-driven) ─────────────────────────────────
     // Each emits `bmm://api-exec` so the frontend performs the action through the
     // BMM interface (native importer/exporter + file dialog) — exactly as a human
@@ -2756,6 +2796,7 @@ pub async fn start_api_server(
 
     let group_e = update_modpack
         .or(delete_modpack)
+        .or(delete_plugin)
         .boxed();
 
     // Telemetry / recorder / replay control (Privacy & telemetry + Session recorder).

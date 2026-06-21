@@ -149,11 +149,17 @@ export default function Storage() {
   const [recapMonth, setRecapMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [recapAnon, setRecapAnon] = useState(false);
 
+  const [dataReqs, setDataReqs] = useState<any[]>([]);
   const load = useCallback(() => {
     apiGet("/api/admin/storage").then(setData).catch(() => setData({ tables: [], replays: [], packets: [] }));
     apiGet("/api/admin/audit").then((r) => setAudit(r.audit || [])).catch(() => setAudit([]));
     apiGet("/api/admin/recaps").then((r) => setRecaps(r.recaps || [])).catch(() => setRecaps([]));
+    apiGet("/api/admin/data-requests").then((r) => setDataReqs(Array.isArray(r) ? r : [])).catch(() => setDataReqs([]));
   }, []);
+  const decideDataReq = async (id: number, status: string) => {
+    try { await apiPost("/api/admin/data-request/decide", { id, status }); } catch { /* */ }
+    load();
+  };
 
   const generateRecap = async () => {
     setBusy("recap");
@@ -402,6 +408,40 @@ export default function Storage() {
           </div>
         ) : <Empty>Aucune action enregistrée.</Empty>; })()}
       </Section>
+
+      {/* ── GDPR data-access requests (review + e-mail the export manually) ── */}
+      <Card title={`Demandes d'accès aux données · ${dataReqs.filter((r) => r.status === "pending").length}`}>
+        {dataReqs.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr>
+                <th className="th">Créé</th><th className="th">E-mail</th><th className="th">Creator ID</th>
+                <th className="th">État</th><th className="th text-right">Actions</th>
+              </tr></thead>
+              <tbody>
+                {dataReqs.map((r: any) => (
+                  <tr key={r.id} className="hover:bg-panel2">
+                    <td className="td text-sub whitespace-nowrap">{fmtDateTime(r.created_ms)}</td>
+                    <td className="td font-mono text-xs">{r.email}</td>
+                    <td className="td font-mono text-xs text-sub" title={r.creator_id}>{(r.creator_id || "").slice(0, 16)}…</td>
+                    <td className="td">{r.status === "pending"
+                      ? <span className="pill bg-brand/20 text-brand">en attente</span>
+                      : r.status === "done"
+                        ? <span className="pill bg-good/20 text-good">traité</span>
+                        : <span className="pill bg-bad/20 text-bad">rejeté</span>}</td>
+                    <td className="td text-right whitespace-nowrap">
+                      {r.status === "pending" && <>
+                        <button onClick={() => decideDataReq(r.id, "done")} className="pill bg-good/20 text-good mr-1">Marquer envoyé</button>
+                        <button onClick={() => decideDataReq(r.id, "rejected")} className="pill bg-bad/20 text-bad">Rejeter</button>
+                      </>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <Empty>Aucune demande d'accès.</Empty>}
+      </Card>
 
       {recapView && <RecapView recap={recapView} onClose={() => setRecapView(null)} />}
     </div>

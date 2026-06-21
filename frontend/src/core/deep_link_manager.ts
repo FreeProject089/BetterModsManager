@@ -93,6 +93,18 @@ async function handleDeepLink(urlStr: string): Promise<void> {
             return;
         }
 
+        // ── Uninstall a plugin (registry + permissions + files) ───────────
+        if (action === 'plugin/delete') {
+            const pluginId = parsedUrl.searchParams.get('id');
+            if (!pluginId) { toast(t('plugins.deepLinkMissingId'), 'error'); return; }
+            try {
+                await invoke('uninstall_plugin', { pluginId });
+                toast(`${t('plugins.deleted') || 'Plugin deleted'}: ${pluginId}`, 'success');
+                window._refreshModsFn?.(true);
+            } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+            return;
+        }
+
         // ── Mod actions ───────────────────────────────────────────────────
         if (action === 'mod/enable' || action === 'mod/disable') {
             const modId = parsedUrl.searchParams.get('id');

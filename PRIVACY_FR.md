@@ -16,7 +16,9 @@ et exactement ce qui est envoyé.
   Rien n'est collecté ni envoyé tant que vous ne l'activez pas sur l'écran de consentement au premier
   lancement (ou plus tard dans Réglages → Confidentialité).
 - **Aucun compte requis.** Pas besoin de vous connecter pour utiliser BMM.
-- **Aucune revente de données.** Nous n'avons rien à vendre — la plupart des fonctions sont 100 % hors‑ligne.
+- **Nous ne vendons jamais vos données personnelles.** Vos données ne sont pas le produit et ne sont
+  jamais vendues ni partagées à des fins publicitaires. (Ceci concerne vos données — ce n'est pas une
+  déclaration sur les produits de BMM ni sur d'éventuels services payants, présents ou futurs.)
 - **Jamais le contenu de vos fichiers ou mods.** Nous ne lisons ni n'envoyons jamais le contenu de
   vos mods, fichiers, ou ce que vous saisissez dans les champs.
 
@@ -33,8 +35,17 @@ données sont mises en cache localement et envoyées par lots via **HTTPS** ; ch
 **identifiant de paquet** aléatoire pour pouvoir le faire effacer plus tard (voir §2.4).
 
 ### 2.1 Ce qui est collecté (si activé)
-- **Identité anonyme :** votre **Creator ID** (un identifiant public, de type clé — ni nom ni e‑mail),
-  ou un identifiant aléatoire par installation si vous n'en avez pas.
+- **Identité pseudonyme — votre Creator ID.** Ce **n'est pas un hash aléatoire.** Votre Creator ID est
+  la **moitié publique d'une paire de clés cryptographiques Ed25519** que BMM génère **une seule fois,
+  sur votre machine** (la **clé privée correspondante ne quitte jamais votre PC** — stockée dans votre
+  registre utilisateur et scellée à cette machine, donc la copier ailleurs est rejeté). Le Creator ID
+  s'affiche en chaîne hexadécimale de 64 caractères et sert à **signer cryptographiquement** les repos
+  que vous publiez, pour que d'autres vérifient l'authenticité et appliquent listes blanches/bans.
+  Deux conséquences : **(a)** il ne contient **ni** nom, ni e‑mail, ni détail personnel — c'est une clé
+  publique, pas une pièce d'identité ; mais **(b)** comme il est **stable** (il ne tourne pas), la
+  télémétrie envoyée sous le même Creator ID au fil du temps est **rattachable à la même installation**.
+  Si vous n'avez pas encore de clé, un identifiant aléatoire par installation est utilisé. Vous pouvez
+  voir votre Creator ID à tout moment dans BMM.
 - **Profil système (type DxDiag) :** OS, CPU, GPU(s), RAM, nombre/taille des disques, exécution en
   machine virtuelle, carte mère, langue. Informations matérielles/diagnostic uniquement.
 - **Usage de l'app :** quelles pages/vues vous ouvrez, quelles fonctions vous utilisez, quels
@@ -50,13 +61,36 @@ données sont mises en cache localement et envoyées par lots via **HTTPS** ; ch
 - **Capture d'interaction (respectueuse) :** **libellés** des boutons cliqués, soumissions de
   formulaire, **noms** des champs modifiés, copies, clics sortants, et erreurs — **jamais les valeurs
   que vous saisissez**.
+- **Relecture de session (rrweb, masquée par défaut) :** si la capture de relecture est activée, BMM
+  enregistre une reconstruction de l'**interface** pendant votre session — structure du DOM et
+  événements d'interface (clics, défilement, navigation) — pour que l'équipe voie *comment* un
+  problème est survenu. **Tous les champs de saisie sont masqués par défaut** : les caractères que
+  vous tapez sont remplacés par des points et ne sont jamais enregistrés. Une option distincte et
+  explicite **« complet (non masqué) »** existe pour votre propre débogage local ; elle reste
+  désactivée tant que vous ne l'activez pas. La relecture ne couvre que la fenêtre BMM — jamais les
+  autres applications ni votre écran.
 - **Localisation approximative :** déduite **côté serveur à partir de votre IP** (pays / région /
   ville). La localisation est **arrondie et jamais précise** — votre position exacte n'est jamais
   stockée ni affichée.
 
+### 2.1.b Rapport matériel étendu (opt‑in, lié au benchmark hebdomadaire)
+Si vous laissez l'option **« Benchmark automatique (tous les 7 jours) + rapport matériel étendu »**
+**activée** (écran de consentement, ou Réglages → Confidentialité), BMM envoie en plus un rapport
+**d'identité matérielle précise** pour corréler performances/benchmarks avec des configurations
+exactes. Il n'est envoyé **que** lorsque cette option est active, et l'écran de consentement en
+affiche la liste complète avant que vous acceptiez. Il inclut : **carte mère** (modèle + numéro de
+série), **BIOS** version/date/fabricant, **UUID machine**, **CPU** processeurs logiques + cœurs/threads
++ cache L2/L3, **disques** (modèle, série, taille, interface), **adresse(s) MAC réseau physique**,
+**version + build de l'OS / noyau**, et **UEFI vs Legacy**, état **Secure Boot** et **TPM** si
+disponibles. Ce sont des **identifiants matériels stables** — plus identifiants que le profil de base
+— d'où leur caractère **opt‑in et signalé séparément**. Désactivez l'option pour n'envoyer que le
+profil système de base (§2.1) et ignorer tout ceci. Toujours aucun contenu de fichier, aucune valeur
+saisie, aucune identité personnelle.
+
 ### 2.2 Ce qui n'est PAS collecté
-Le contenu des fichiers, les noms ou contenus de mods, le texte/les valeurs que vous saisissez, votre
-identité réelle, votre position GPS précise, et tout ce qui provient de fonctions non utilisées.
+Le contenu des fichiers, les noms ou contenus de mods, le texte/les valeurs que vous saisissez
+(également masquées dans la relecture de session), votre identité réelle, votre position GPS précise,
+et tout ce qui provient de fonctions non utilisées.
 
 ### 2.3 Consentement et contrôle
 - La télémétrie est **désactivée par défaut**. Vous choisissez au premier lancement et pouvez changer
@@ -103,7 +137,14 @@ sans validation.
 BMM vérifie GitHub pour les nouvelles versions et télécharge les plugins / apps du catalogue que vous
 demandez — requêtes HTTPS standard ; l'hôte distant voit votre IP.
 
-### 3.5 Intégrations optionnelles
+### 3.5 Vidéos tutorielles intégrées (YouTube)
+La **Documentation** intégrée peut afficher des vidéos tutorielles **YouTube**. Lorsque vous êtes en
+ligne et ouvrez une page avec une vidéo intégrée, votre moteur de navigation la charge directement
+depuis YouTube/Google, qui peut voir votre IP et déposer des cookies selon la politique de
+confidentialité de **Google** (nous utilisons l'intégration de type `youtube‑nocookie` quand c'est
+possible). Hors ligne, une vidéo locale est affichée à la place et rien n'est contacté.
+
+### 3.6 Intégrations optionnelles
 Toute fonction que vous configurez explicitement (webhook Discord, tunnel Cloudflare, …) envoie des
 données au service configuré, selon ses propres conditions.
 
@@ -128,7 +169,8 @@ données au service configuré, selon ses propres conditions.
 - La télémétrie est **opt‑in** ; laissez‑la désactivée (ou restez hors‑ligne) pour éviter tout le §2.
 - Désactivez la télémétrie quand vous voulez ; exportez ou effacez le cache local ; demandez
   l'effacement par paquet.
-- Le Creator ID est un identifiant public de type clé, pas votre nom ni e‑mail.
+- Le Creator ID est votre **clé publique de signature** (Ed25519), pas votre nom ni e‑mail ; la clé
+  privée reste sur votre PC. Il est stable, donc l'activité associée est rattachable dans le temps — voir §2.1.
 
 ## 6. Contact
 

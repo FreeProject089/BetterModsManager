@@ -6628,6 +6628,7 @@
                                     <li><code>bmm://profile/activate?id=prof-id</code>         &nbsp;— Activate a profile</li>
                                     <li><code>bmm://plugin/activate?id=my-server</code>        &nbsp;— Apply plugin modlist</li>
                                     <li><code>bmm://plugin/compare?id=my-server</code>         &nbsp;— Compare modlist</li>
+                                    <li><code>bmm://plugin/delete?id=my-server</code>          &nbsp;— Uninstall a plugin</li>
                                     <li><code>bmm://modpack/enable?id=uuid</code>              &nbsp;— Enable all mods in a modpack</li>
                                     <li><code>bmm://modpack/disable?id=uuid</code>             &nbsp;— Disable all mods in a modpack</li>
                                     <li><code>bmm://modpack/create?name=X&amp;profile=id</code>  &nbsp;— Create a modpack from a profile</li>
@@ -6741,6 +6742,13 @@ start "" "bmm://mod/enable?id=my-mod-folder"</pre>
                                             <li><code>POST /api/profiles/import/ovgme</code> · <code>/omm</code></li>
                                             <li><code>POST /api/language/import</code></li>
                                             <li><code>POST /api/restart</code></li>
+                                            <li><code>POST /api/benchmark</code> — run a benchmark</li>
+                                            <li><code>POST /api/telemetry/consent</code> · <code>/api/telemetry/settings</code></li>
+                                            <li><code>POST /api/recorder</code> — configure the Session recorder</li>
+                                            <li><code>POST /api/replay/export</code> · <code>/api/replay/import</code></li>
+                                            <li><code>POST /api/launchpack/run</code> · <code>/api/schedule/run</code></li>
+                                            <li><code>POST /api/discord/rpc</code> — Discord Rich Presence</li>
+                                            <li><code>POST /api/data/export-auto</code> — unattended backup</li>
                                         </ul>
                                     </div>
                                 </div>
@@ -6762,6 +6770,7 @@ start "" "bmm://mod/enable?id=my-mod-folder"</pre>
                                             <li><code>DELETE /api/profiles/:id</code></li>
                                             <li><code>DELETE /api/modpacks/:id</code></li>
                                             <li><code>DELETE /api/apps/:id</code></li>
+                                            <li><code>DELETE /api/plugins/:id</code> — uninstall a plugin</li>
                                             <li><code>DELETE /api/catalog/apps/:id</code></li>
                                             <li><code>DELETE /api/repo</code> · <code>/repo/sync/cancel</code> · <code>/repo/gen/cancel</code></li>
                                         </ul>
@@ -7783,6 +7792,17 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                         <option value="stacked-labels" data-i18n="settings.toolbarStackedLabels">Stacked (labels)</option>
                                     </select>
                                 </div>
+                                <!-- Toolbar transparency (Mod Library action bar background) -->
+                                <div style="display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
+                                    <div style="flex:1">
+                                        <div style="font-size:12px;font-weight:700;color:var(--text-primary)" data-i18n="settings.toolbarTransparent">Transparent action bar</div>
+                                        <div style="font-size:10px;color:var(--text-muted)" data-i18n="settings.toolbarTransparentDesc">Let the Mod Library action bar &amp; filter bar float with a translucent blur. Off = solid background.</div>
+                                    </div>
+                                    <label class="bmm-switch">
+                                        <input type="checkbox" id="setting-toolbar-transparent" checked>
+                                        <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                                    </label>
+                                </div>
                                 <!-- Volume slider -->
                                 <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border)">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-muted);flex-shrink:0;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
@@ -8346,6 +8366,9 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                 </button>
                                 <button class="btn btn-ghost btn-sm" id="analytics-export">
                                     <span data-i18n="analytics.exportBtn">Exporter mes données</span>
+                                </button>
+                                <button class="btn btn-ghost btn-sm" id="analytics-request">
+                                    <span data-i18n="analytics.requestBtn">Demander mes données</span>
                                 </button>
                                 <button class="btn btn-ghost btn-sm" id="analytics-delete" style="color:var(--danger)">
                                     <span data-i18n="analytics.deleteBtn">Supprimer mes données</span>

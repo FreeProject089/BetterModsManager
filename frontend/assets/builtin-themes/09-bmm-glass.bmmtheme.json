@@ -6,8 +6,8 @@
   "mode": "dark",
   "vars": {
     "--bmm-bg-base": "#0a0c12",
-    "--bmm-bg-elevated": "rgba(255,255,255,0.055)",
-    "--bmm-bg-overlay": "rgba(16,18,26,0.72)",
+    "--bmm-bg-elevated": "rgba(255,255,255,0.05)",
+    "--bmm-bg-overlay": "rgba(255,255,255,0.055)",
     "--bmm-bg-sidebar": "rgba(255,255,255,0.04)",
     "--bmm-bg-titlebar": "rgba(255,255,255,0.05)",
     "--bmm-titlebar-bg": "rgba(255,255,255,0.05)",
@@ -56,5 +56,5 @@
     "--bmm-accent-b": "255",
     "--bmm-accent-glow": "0 0 26px rgba(124,140,255,0.5)"
   },
-  "global_css": "body{background:radial-gradient(1200px 820px at 12% -12%, rgba(60,90,200,0.45) 0%, transparent 55%),radial-gradient(1000px 720px at 112% 8%, rgba(150,70,210,0.4) 0%, transparent 55%),radial-gradient(900px 700px at 90% 115%, rgba(40,160,170,0.3) 0%, transparent 55%),#0a0c12 !important;background-attachment:fixed}\n.glass-card,.modal,.modal>.modal,.bmm-csel-menu,.dropdown-content,.modpack-card,.profile-card{backdrop-filter:blur(22px) saturate(165%);-webkit-backdrop-filter:blur(22px) saturate(165%);background:rgba(255,255,255,0.06) !important;border:1px solid rgba(255,255,255,0.13) !important;box-shadow:0 10px 34px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.14) !important}\n.bmm-sidebar,.sidebar,#app-sidebar{backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%)}\n.btn-primary{box-shadow:0 6px 18px rgba(124,140,255,0.45) !important}"
+  "global_css": "body{background:radial-gradient(1200px 820px at 12% -12%, rgba(60,90,200,0.45) 0%, transparent 55%),radial-gradient(1000px 720px at 112% 8%, rgba(150,70,210,0.4) 0%, transparent 55%),radial-gradient(900px 700px at 90% 115%, rgba(40,160,170,0.3) 0%, transparent 55%),#0a0c12 !important;background-attachment:fixed}\n.glass-card,.modpack-card,.profile-card{backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);box-shadow:0 10px 34px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.12)}\n.bmm-sidebar,.sidebar,#app-sidebar,.titlebar{backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%)}\n.btn-primary{box-shadow:0 6px 18px rgba(124,140,255,0.45)}"
 }

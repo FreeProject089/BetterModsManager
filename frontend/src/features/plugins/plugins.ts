@@ -3447,6 +3447,29 @@ function renderScripts(container: HTMLElement) {
                         }).join('');
                     })()}
                 </div>
+
+                <h3 class="plug-section-title plug-dl-foldhead" id="plug-dl-foldhead" role="button" tabindex="0" style="margin-top:18px;cursor:pointer;">
+                    <svg class="plug-dl-fold-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    ${IC.zap} ${t('plugins.deepLinks') || 'bmm:// Deep Links'}
+                    <span class="plug-dl-fold-count">${getDeepLinkDefs().length}</span>
+                </h3>
+                <div id="plug-dl-fold-body">
+                    <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px;">${t('plugins.deepLinksHint') || 'Trigger BMM actions from any script, .bat or app by opening a bmm:// URL — no token needed. Click a row to expand.'}</p>
+                    <div class="plug-qt-search-row">
+                        <span class="plug-qt-search-ic">${IC.search || ''}</span>
+                        <input type="text" id="plug-dl-search" class="input input-sm plug-qt-search-input"
+                            placeholder="${t('plugins.deepLinkSearch') || 'Search deep links… (mod, theme, telemetry…)'}" spellcheck="false">
+                        <button class="btn btn-xs btn-ghost" id="plug-dl-search-clear" data-tooltip="${t('common.clear') || 'Clear'}" style="display:none;">${IC.x}</button>
+                        <span class="plug-qt-search-count" id="plug-dl-search-count"></span>
+                    </div>
+                    <div class="plug-ep-collapse-bar">
+                        <button class="btn btn-xs btn-ghost" id="plug-dl-expand-all">${t('plugins.epExpandAll') || 'Expand all'}</button>
+                        <button class="btn btn-xs btn-ghost" id="plug-dl-collapse-all">${t('plugins.epCollapseAll') || 'Collapse all'}</button>
+                    </div>
+                    <div class="plug-endpoint-list" id="plug-dl-list">
+                        ${getDeepLinkDefs().map(dl => buildDeepLinkRow(dl)).join('')}
+                    </div>
+                </div>
             </div>
 
             <!-- Script generator (full width) -->
@@ -3603,6 +3626,52 @@ function renderScripts(container: HTMLElement) {
     };
     epSearch?.addEventListener('input', applyEndpointFilter);
     epSearchClr?.addEventListener('click', () => { if (epSearch) { epSearch.value = ''; applyEndpointFilter(); epSearch.focus(); } });
+
+    // ── Deep-link search bar — filters the documented bmm:// rows ──────────────
+    const dlSearch    = container.querySelector('#plug-dl-search')       as HTMLInputElement | null;
+    const dlSearchClr = container.querySelector('#plug-dl-search-clear') as HTMLElement | null;
+    const dlCount     = container.querySelector('#plug-dl-search-count') as HTMLElement | null;
+    const dlList      = container.querySelector('#plug-dl-list')         as HTMLElement | null;
+    const applyDeepLinkFilter = () => {
+        if (!dlList) return;
+        const q = (dlSearch?.value || '').trim().toLowerCase();
+        const rows = Array.from(dlList.querySelectorAll<HTMLElement>('.plug-ep-wrap'));
+        let shown = 0;
+        rows.forEach(w => {
+            const path = (w.querySelector('.plug-path')?.textContent || '');
+            const desc = (w.querySelector('.plug-endpoint-desc')?.textContent || '');
+            const match = !q || `${path} ${desc}`.toLowerCase().includes(q);
+            w.style.display = match ? '' : 'none';
+            if (match) shown++;
+        });
+        if (dlSearchClr) dlSearchClr.style.display = q ? '' : 'none';
+        if (dlCount) dlCount.textContent = q ? `${shown}/${rows.length}` : '';
+    };
+    dlSearch?.addEventListener('input', applyDeepLinkFilter);
+    dlSearchClr?.addEventListener('click', () => { if (dlSearch) { dlSearch.value = ''; applyDeepLinkFilter(); dlSearch.focus(); } });
+
+    // ── Deep-link section fold (show all / none) + expand/collapse every row ───
+    const dlFoldHead = container.querySelector('#plug-dl-foldhead') as HTMLElement | null;
+    const dlFoldBody = container.querySelector('#plug-dl-fold-body') as HTMLElement | null;
+    const toggleDlFold = () => {
+        if (!dlFoldHead || !dlFoldBody) return;
+        const folded = dlFoldHead.classList.toggle('folded');
+        dlFoldBody.style.display = folded ? 'none' : '';
+    };
+    dlFoldHead?.addEventListener('click', toggleDlFold);
+    dlFoldHead?.addEventListener('keydown', (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDlFold(); } });
+    const setAllDlRows = (open: boolean) => {
+        dlList?.querySelectorAll<HTMLElement>('.plug-ep-wrap').forEach(w => {
+            const id = w.id.replace(/^epw-/, '');
+            const detail = document.getElementById(`epd-${id}`);
+            const chev = document.getElementById(`epchev-${id}`);
+            w.classList.toggle('expanded', open);
+            if (detail) detail.style.display = open ? 'grid' : 'none';
+            if (chev) chev.classList.toggle('rotated', open);
+        });
+    };
+    container.querySelector('#plug-dl-expand-all')?.addEventListener('click', () => setAllDlRows(true));
+    container.querySelector('#plug-dl-collapse-all')?.addEventListener('click', () => setAllDlRows(false));
 
     // ── Collapsible endpoint method groups ──────────────────────────────────
     container.querySelectorAll<HTMLElement>('#plug-ep-list .plug-ep-group-header').forEach(h => {
@@ -3763,6 +3832,14 @@ function renderScripts(container: HTMLElement) {
         if (prefillBtn) {
             e.stopPropagation();
             prefillTester(prefillBtn.dataset.method || 'GET', prefillBtn.dataset.path || '');
+            return;
+        }
+        // Open a bmm:// deeplink (run it now, to test)
+        const dlOpenBtn = tgt.closest('.plug-dl-open-btn') as HTMLElement | null;
+        if (dlOpenBtn) {
+            e.stopPropagation();
+            const url = dlOpenBtn.dataset.url || '';
+            if (url) { (window as any).__bmmDeeplink?.(url); toast(t('plugins.deepLinkOpened') || 'Deep link triggered', 'info'); }
             return;
         }
         // Copy URL button (handled by its own listener below)
@@ -4406,6 +4483,13 @@ function getDeepLinkDefs(): DeepLinkDef[] {
             example: 'bmm://plugin/compare?id=my-server-pack',
         },
         {
+            scheme: 'plugin/delete',
+            params: [{ name: 'id', required: true, desc: 'ID du plugin à désinstaller.' }],
+            desc: 'Supprimer un plugin',
+            about: 'Désinstalle définitivement un plugin (registre + permissions + fichiers). Équivalent à DELETE /api/plugins/:id.',
+            example: 'bmm://plugin/delete?id=my-server-pack',
+        },
+        {
             scheme: 'modpack/enable',
             params: [{ name: 'id', required: true, desc: 'ID du modpack (LocalModpack.id).' }],
             desc: 'Activer un modpack',
@@ -4454,18 +4538,250 @@ function getDeepLinkDefs(): DeepLinkDef[] {
             about: 'Déclenche le téléchargement et l\'intégration d\'un profil du repo distant dans BMM. Équivalent à POST /api/repo/sync. BMM ouvre l\'interface de synchronisation avec les paramètres pré-remplis. Utile depuis un launcher pour forcer la mise à jour des mods avant lancement.',
             example: 'bmm://repo/sync?url=https://monserveur.com/repo.json&profile=prof-uuid&mods_dir=C:/Mods',
         },
+        {
+            scheme: 'repo/gen',
+            params: [],
+            desc: 'Ouvrir la génération de repo',
+            about: 'Ouvre l\'onglet Repo sur la section Génération pour exporter votre repo.',
+            example: 'bmm://repo/gen',
+        },
+        {
+            scheme: 'repo/update',
+            params: [{ name: 'dir', required: false, desc: 'Chemin du dossier du repo à mettre à jour (pré-rempli).' }],
+            desc: 'Mettre à jour un repo',
+            about: 'Ouvre l\'onglet Repo sur la section Mise à jour, pré-rempli avec le dossier fourni.',
+            example: 'bmm://repo/update?dir=C:/BMM/MyRepo',
+        },
+        {
+            scheme: 'repo/host',
+            params: [
+                { name: 'dir',  required: false, desc: 'Dossier à servir en HTTP.' },
+                { name: 'port', required: false, desc: 'Port d\'écoute (ex : 8080).' },
+            ],
+            desc: 'Héberger un repo en HTTP',
+            about: 'Ouvre l\'onglet Repo sur la section Hébergement, pré-rempli avec le dossier et le port.',
+            example: 'bmm://repo/host?dir=C:/BMM/Export&port=8080',
+        },
+        // ── Mods : mises à jour ──────────────────────────────────────────────
+        {
+            scheme: 'mod/check-updates',
+            params: [],
+            desc: 'Vérifier les mises à jour de mods',
+            about: 'Ouvre l\'onglet Repo et lance la vérification des mises à jour disponibles pour vos mods.',
+            example: 'bmm://mod/check-updates',
+        },
+        {
+            scheme: 'mod/update',
+            params: [{ name: 'url', required: false, desc: 'URL du repo source à pré-remplir (sinon vérifie les mises à jour).' }],
+            desc: 'Mettre à jour des mods',
+            about: 'Ouvre l\'onglet Repo. Avec une url, pré-remplit la connexion ; sinon lance la vérification des mises à jour.',
+            example: 'bmm://mod/update?url=https://monserveur.com/repo.json',
+        },
+        // ── Modpacks ─────────────────────────────────────────────────────────
+        {
+            scheme: 'modpack/create',
+            params: [
+                { name: 'name',    required: true,  desc: 'Nom du nouveau modpack.' },
+                { name: 'profile', required: false, desc: 'UUID du profil source (mods actifs copiés dans le modpack).' },
+            ],
+            desc: 'Créer un modpack',
+            about: 'Crée un modpack via l\'API locale, optionnellement à partir des mods actifs d\'un profil.',
+            example: 'bmm://modpack/create?name=MyPack&profile=prof-uuid',
+        },
+        // ── App Catalog ──────────────────────────────────────────────────────
+        {
+            scheme: 'app/install',
+            params: [
+                { name: 'id',    required: true,  desc: 'Identifiant de l\'app.' },
+                { name: 'url',   required: true,  desc: 'URL de téléchargement.' },
+                { name: 'title', required: false, desc: 'Nom affiché.' },
+                { name: 'type',  required: false, desc: 'Type de fichier : exe (défaut), msi, zip…' },
+                { name: 'path',  required: false, desc: 'Dossier d\'installation.' },
+            ],
+            desc: 'Installer une app du catalogue',
+            about: 'Télécharge et installe une application depuis une URL via le catalogue d\'apps de BMM.',
+            example: 'bmm://app/install?id=my-app&url=https://example.com/app.exe&title=My+App',
+        },
+        {
+            scheme: 'app/launch',
+            params: [
+                { name: 'id',  required: true, desc: 'Identifiant de l\'app installée.' },
+                { name: 'exe', required: true, desc: 'Chemin de l\'exécutable à lancer.' },
+            ],
+            desc: 'Lancer une app',
+            about: 'Lance une application déjà installée via le catalogue.',
+            example: 'bmm://app/launch?id=my-app&exe=C:/Apps/MyApp/app.exe',
+        },
+        // ── Langue / interface ───────────────────────────────────────────────
+        {
+            scheme: 'language/import',
+            params: [{ name: 'path', required: false, desc: 'Chemin du fichier de langue (ouvre le sélecteur si omis).' }],
+            desc: 'Importer une langue',
+            about: 'Importe un fichier de traduction <code>.json</code> dans BMM.',
+            example: 'bmm://language/import?path=C:/BMM/de.json',
+        },
+        {
+            scheme: 'settings/layout',
+            params: [{ name: 'code', required: true, desc: 'Code de disposition des cartes (généré par le partage de layout).' }],
+            desc: 'Appliquer une disposition',
+            about: 'Ouvre les Réglages et applique une disposition de cartes partagée.',
+            example: 'bmm://settings/layout?code=AbC123',
+        },
+        {
+            scheme: 'restart',
+            params: [],
+            desc: 'Redémarrer BMM',
+            about: 'Redémarre proprement l\'application via l\'API locale. Équivalent à POST /api/restart.',
+            example: 'bmm://restart',
+        },
+        // ── Thèmes ───────────────────────────────────────────────────────────
+        {
+            scheme: 'theme/apply',
+            params: [{ name: 'id', required: true, desc: 'ID du thème installé à activer.' }],
+            desc: 'Appliquer un thème',
+            about: 'Active un thème déjà installé par son ID.',
+            example: 'bmm://theme/apply?id=bmm-glass',
+        },
+        {
+            scheme: 'theme/import',
+            params: [{ name: 'url', required: true, desc: 'URL d\'un fichier .bmmtheme.json à importer.' }],
+            desc: 'Importer un thème',
+            about: 'Télécharge et installe un thème depuis une URL.',
+            example: 'bmm://theme/import?url=https://example.com/cool.bmmtheme.json',
+        },
+        {
+            scheme: 'theme/editor',
+            params: [],
+            desc: 'Ouvrir l\'éditeur de thème',
+            about: 'Ouvre l\'éditeur de thème intégré.',
+            example: 'bmm://theme/editor',
+        },
+        // ── Automatisation / exécution ───────────────────────────────────────
+        {
+            scheme: 'schedule/run',
+            params: [{ name: 'id', required: true, desc: 'ID de la tâche planifiée à exécuter.' }],
+            desc: 'Exécuter une tâche planifiée',
+            about: 'Déclenche immédiatement une tâche du planificateur. Conçu pour le hook du Planificateur de tâches Windows. Équivalent à POST /api/schedule/run.',
+            example: 'bmm://schedule/run?id=task-uuid',
+        },
+        {
+            scheme: 'launchpack/run',
+            params: [{ name: 'id', required: true, desc: 'ID du launch pack.' }],
+            desc: 'Exécuter un launch pack',
+            about: 'Lance un Launch Pack enregistré. Équivalent à POST /api/launchpack/run.',
+            example: 'bmm://launchpack/run?id=lp-uuid',
+        },
+        {
+            scheme: 'benchmark/run',
+            params: [
+                { name: 'dataset',  required: false, desc: '"sandbox" (défaut) ou "real".' },
+                { name: 'size',     required: false, desc: 'S, M (défaut) ou L.' },
+                { name: 'mb',       required: false, desc: 'Taille en Mo (jeu sandbox).' },
+                { name: 'mode',     required: false, desc: '"manual" (ouvre, attend Run) ou "auto" (démarre).' },
+                { name: 'sources',  required: false, desc: 'Dossiers de mods séparés par ; (dataset="real").' },
+                { name: 'profiles', required: false, desc: 'IDs de profils séparés par ;.' },
+            ],
+            desc: 'Lancer un benchmark',
+            about: 'Ouvre le benchmark pré-configuré et le démarre (mode auto par défaut pour ce deeplink). Équivalent à POST /api/benchmark.',
+            example: 'bmm://benchmark/run?dataset=sandbox&size=M&mode=auto',
+        },
+        // ── Confidentialité / enregistreur ───────────────────────────────────
+        {
+            scheme: 'telemetry/consent',
+            params: [{ name: 'enabled', required: true, desc: '1/true pour activer, 0/false pour couper et purger.' }],
+            desc: 'Consentement télémétrie',
+            about: 'Active/désactive le consentement global à la télémétrie. Équivalent à POST /api/telemetry/consent.',
+            example: 'bmm://telemetry/consent?enabled=1',
+        },
+        {
+            scheme: 'telemetry/set',
+            params: [
+                { name: 'replay', required: false, desc: 'Capture rrweb (1/0).' },
+                { name: 'full',   required: false, desc: 'Replay non masqué (1/0).' },
+                { name: 'bench',  required: false, desc: 'Envoi des benchmarks (1/0).' },
+            ],
+            desc: 'Réglages télémétrie',
+            about: 'Règle les sous-options de télémétrie. Équivalent à POST /api/telemetry/settings.',
+            example: 'bmm://telemetry/set?replay=1&full=0&bench=1',
+        },
+        {
+            scheme: 'recorder/set',
+            params: [
+                { name: 'on',   required: false, desc: 'Active/désactive l\'enregistreur (1/0).' },
+                { name: 'full', required: false, desc: 'Capture non masquée (1/0).' },
+                { name: 'rust', required: false, desc: 'Inclure les logs Rust (1/0).' },
+                { name: 'js',   required: false, desc: 'Inclure les logs JS (1/0).' },
+            ],
+            desc: 'Configurer l\'enregistreur',
+            about: 'Configure l\'enregistreur de session local. Équivalent à POST /api/recorder.',
+            example: 'bmm://recorder/set?on=1&full=0&rust=1&js=1',
+        },
+        {
+            scheme: 'replay/export',
+            params: [],
+            desc: 'Exporter le replay',
+            about: 'Exporte la session en cours en .bmmreplay. Équivalent à POST /api/replay/export.',
+            example: 'bmm://replay/export',
+        },
+        {
+            scheme: 'replay/import',
+            params: [
+                { name: 'path', required: false, desc: 'Chemin local du .bmmreplay.' },
+                { name: 'url',  required: false, desc: 'URL distante du .bmmreplay.' },
+            ],
+            desc: 'Importer un replay',
+            about: 'Importe et lit un .bmmreplay (ouvre le sélecteur si aucun paramètre). Équivalent à POST /api/replay/import.',
+            example: 'bmm://replay/import?path=C:/BMM/session.bmmreplay',
+        },
+        {
+            scheme: 'discord/rpc',
+            params: [{ name: 'enabled', required: true, desc: '1/true pour activer la Rich Presence.' }],
+            desc: 'Discord Rich Presence',
+            about: 'Active/désactive la présence Discord. Équivalent à POST /api/discord/rpc.',
+            example: 'bmm://discord/rpc?enabled=1',
+        },
+        {
+            scheme: 'data/export-auto',
+            params: [
+                { name: 'dir',       required: true,  desc: 'Dossier de destination.' },
+                { name: 'name',      required: false, desc: 'Modèle de nom : {date}, {time}, {datetime}.' },
+                { name: 'increment', required: false, desc: 'paren · underscore · timestamp · overwrite.' },
+            ],
+            desc: 'Sauvegarde automatique des données',
+            about: 'Sauvegarde data.json sans surveillance. Équivalent à POST /api/data/export-auto.',
+            example: 'bmm://data/export-auto?dir=C:/BMM/Backups&name=bmm-backup-{date}&increment=paren',
+        },
+        // ── Passe-plat API générique ─────────────────────────────────────────
+        {
+            scheme: 'api',
+            params: [
+                { name: 'method', required: false, desc: 'GET (défaut), POST, PUT, DELETE.' },
+                { name: 'path',   required: true,  desc: 'Chemin de l\'API, doit commencer par /api/.' },
+                { name: '…',      required: false, desc: 'Tout autre paramètre devient query (GET/DELETE) ou corps JSON (POST/PUT).' },
+            ],
+            desc: 'Appeler n\'importe quelle API',
+            about: 'Passe-plat universel : appelle n\'importe quel endpoint de l\'API locale depuis un lien. Le token est ajouté automatiquement. Permet d\'atteindre tout endpoint sans deeplink dédié.',
+            example: 'bmm://api?method=POST&path=/api/mods/enable&mod_id=my-mod',
+        },
     ];
 }
 
 function buildDeepLinkRow(dl: DeepLinkDef): string {
+    // Mirror buildEndpointRow's wrapper structure (epw-/epd-/epchev- + data-ep-id)
+    // so the shared expand/collapse + search handlers work for deeplink rows too.
     const safeId = 'dl_' + dl.scheme.replace(/\//g, '_');
     const fullUrl = `bmm://${dl.scheme}`;
+    // i18n: prefer plugins.dl.<scheme>.{desc,about}; t() returns the key on miss, so
+    // detect that and fall back to the inline (French) text shipped in the def.
+    const trDl = (suffix: string, fb: string) => { const k = 'plugins.dl.' + dl.scheme + suffix; const v = t(k); return v === k ? fb : v; };
+    const desc = trDl('.desc', dl.desc);
+    const about = trDl('.about', dl.about);
     const paramsHtml = dl.params.length ? `
         <div class="plug-ep-fields" style="margin-top:10px;">
-            <div class="plug-ep-section-lbl">Paramètres URL (query string)</div>
+            <div class="plug-ep-section-lbl">${t('plugins.dlParams') || 'URL parameters (query string)'}</div>
             <table class="plug-ep-fields-table">
                 <colgroup><col class="col-field"><col class="col-type"><col class="col-req"><col class="col-desc"></colgroup>
-                <thead><tr><th>Paramètre</th><th>Type</th><th></th><th>Description</th></tr></thead>
+                <thead><tr><th>${t('plugins.epParam') || 'Parameter'}</th><th>Type</th><th></th><th>Description</th></tr></thead>
                 <tbody>
                     ${dl.params.map(p => `<tr>
                         <td style="white-space:nowrap;min-width:80px;"><code class="plug-ep-fname">${escHtml(p.name)}</code></td>
@@ -4477,33 +4793,38 @@ function buildDeepLinkRow(dl: DeepLinkDef): string {
             </table>
         </div>` : '';
 
-    const batExample = `REM ${dl.desc}\nstart "" "${dl.example}"`;
-    const ps1Example = `# ${dl.desc}\nStart-Process "${dl.example}"`;
+    const batExample = `REM ${desc}\nstart "" "${dl.example}"`;
+    const ps1Example = `# ${desc}\nStart-Process "${dl.example}"`;
+    // Pull the "Équivalent à <METHOD> /api/..." mention out of the about text so we
+    // can show it as a clean, dedicated line in the docs.
+    const apiEq = (about.match(/\b(GET|POST|PUT|DELETE)\s+\/api\/[^\s.,;]+/) || [])[0] || '';
 
     return `
-        <div class="plug-ep-wrap" id="${safeId}">
-            <div class="plug-endpoint-row" data-method="DL" data-path="${escHtml(fullUrl)}">
+        <div class="plug-ep-wrap plug-dl-wrap" id="epw-${safeId}">
+            <div class="plug-endpoint-row plug-dl-row" data-method="DL" data-path="${escHtml(fullUrl)}" data-ep-id="${safeId}">
                 <button class="plug-ep-chevron" id="epchev-${safeId}" aria-label="expand">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
-                <span class="plug-method" style="background:rgba(139,92,246,0.15);color:#a78bfa;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:700;white-space:nowrap;">bmm://</span>
-                <code class="plug-path">${escHtml(fullUrl)}</code>
-                <span class="plug-endpoint-desc">${escHtml(dl.desc)}</span>
+                <span class="plug-method plug-dl-badge">bmm://</span>
+                <code class="plug-path plug-dl-path">${escHtml(dl.scheme)}</code>
+                <span class="plug-endpoint-desc">${escHtml(desc)}</span>
                 <div class="plug-ep-row-actions">
-                    <button class="btn btn-xs btn-ghost plug-dl-open-btn" data-url="${escHtml(dl.example)}" data-tooltip="${t('plugins.openDeeplink') || 'Open this deeplink'}">${IC.play}</button>
                     <button class="btn btn-xs btn-ghost plug-ep-copy-btn" data-copy="${escHtml(dl.example)}" data-tooltip="${t('plugins.copyUrl') || 'Copy URL'}">${IC.copy}</button>
-                    <span class="plug-ep-noauth-note" style="font-size:10px;">${IC.checkCircle} Sans auth</span>
                 </div>
             </div>
-            <div class="plug-ep-detail" id="epd-${safeId}" style="display:none;padding:12px 16px 14px;gap:16px;display:none;flex-direction:row;">
-                <div style="flex:1;min-width:0;">
-                    <p class="plug-ep-about">${escHtml(dl.about)}</p>
+            <div class="plug-ep-detail plug-ep-swagger" id="epd-${safeId}" style="display:none;">
+                <div class="plug-ep-swagger-left">
+                    <p class="plug-ep-about">${escHtml(about)}</p>
+                    <div class="plug-ep-section-lbl">${t('plugins.dlFullUrl') || 'Full URL (click to copy)'}</div>
+                    <code class="plug-ep-copy-btn plug-dl-fullurl" data-copy="${escHtml(dl.example)}" tabindex="0">${escHtml(dl.example)}</code>
+                    ${apiEq ? `<div class="plug-dl-apieq">${t('plugins.dlApiEquiv') || 'API equivalent'}: <code>${escHtml(apiEq)}</code></div>` : ''}
                     ${paramsHtml}
+                    <p class="plug-dl-note">${t('plugins.dlNoAuthNote') || 'No token required — deep links are triggered through the running BMM window.'}</p>
                 </div>
-                <div style="flex:1;min-width:0;">
-                    <div class="plug-ep-section-lbl">Exemple .bat</div>
+                <div class="plug-ep-swagger-right">
+                    <div class="plug-ep-section-lbl">${t('plugins.exampleBat') || 'Example .bat'}</div>
                     <pre class="plug-ep-code-block" style="margin-bottom:8px;">${escHtml(batExample)}</pre>
-                    <div class="plug-ep-section-lbl">Exemple PowerShell</div>
+                    <div class="plug-ep-section-lbl">${t('plugins.examplePs1') || 'Example PowerShell'}</div>
                     <pre class="plug-ep-code-block">${escHtml(ps1Example)}</pre>
                 </div>
             </div>
@@ -5106,6 +5427,16 @@ function getEndpointDefs(): EndpointDef[] {
                 e401, e404,
             ],
         },
+        {
+            method: 'DELETE', path: '/api/plugins/:id', auth: true,
+            desc: t('plugins.ep.deletePlugin') || 'Delete plugin',
+            about: 'Désinstalle définitivement un plugin : retire son entrée du registre BMM, ses permissions stockées, et supprime ses fichiers sur le disque. Remplace <code>:id</code> par l\'id du plugin (champ "id" de plugin.json). Équivalent deeplink : <code>bmm://plugin/delete?id=&lt;ID&gt;</code>.',
+            fields: [],
+            responseStatuses: [
+                { code: 200, label: 'OK', body: '{ "ok": true, "deleted_id": "my-plugin" }' },
+                e401, e404,
+            ],
+        },
         // ── Apps (installed catalog) ─────────────────────────────────────────
         {
             method: 'GET', path: '/api/apps', auth: true,
@@ -5298,6 +5629,100 @@ function getEndpointDefs(): EndpointDef[] {
                 { code: 200, label: 'OK (rien à annuler)', body: '{ "ok": false, "message": "No gen is currently running" }' },
                 e401,
             ],
+        },
+        // ── Privacy / telemetry ───────────────────────────────────────────────
+        {
+            method: 'POST', path: '/api/telemetry/consent', auth: true,
+            desc: t('plugins.ep.telConsent') || 'Telemetry consent',
+            about: 'Active ou désactive le consentement global à la télémétrie (opt-in). Refuser efface immédiatement la file locale (droit à l\'effacement). Équivalent deeplink : <code>bmm://telemetry/consent?enabled=true</code>.',
+            fields: [{ name: 'enabled', type: 'boolean', required: true, desc: 'true pour activer la collecte, false pour la couper et purger.' }],
+            responseStatuses: [{ code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "telemetry/consent" }' }, e401],
+        },
+        {
+            method: 'POST', path: '/api/telemetry/settings', auth: true,
+            desc: t('plugins.ep.telSettings') || 'Telemetry settings',
+            about: 'Règle les sous-options de la télémétrie. Tout champ omis reste inchangé. Équivalent deeplink : <code>bmm://telemetry/settings?replay=true&full=false&bench=true</code>.',
+            fields: [
+                { name: 'replay', type: 'boolean', required: false, desc: 'Capture rrweb des sessions.' },
+                { name: 'full',   type: 'boolean', required: false, desc: 'Replay non masqué (capture le texte saisi).' },
+                { name: 'bench',  type: 'boolean', required: false, desc: 'Envoi des résultats de benchmark hebdomadaires.' },
+            ],
+            responseStatuses: [{ code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "telemetry/set" }' }, e401],
+        },
+        {
+            method: 'POST', path: '/api/recorder', auth: true,
+            desc: t('plugins.ep.recorder') || 'Session recorder',
+            about: 'Configure l\'enregistreur de session local (rrweb + logs). Équivalent deeplink : <code>bmm://recorder/set?on=true&full=false&rust=true&js=true</code>.',
+            fields: [
+                { name: 'on',   type: 'boolean', required: false, desc: 'Active/désactive l\'enregistrement.' },
+                { name: 'full', type: 'boolean', required: false, desc: 'Capture non masquée.' },
+                { name: 'rust', type: 'boolean', required: false, desc: 'Inclure les logs Rust backend.' },
+                { name: 'js',   type: 'boolean', required: false, desc: 'Inclure les logs console JS.' },
+            ],
+            responseStatuses: [{ code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "recorder/set" }' }, e401],
+        },
+        {
+            method: 'POST', path: '/api/replay/export', auth: true,
+            desc: t('plugins.ep.replayExport') || 'Export replay',
+            about: 'Exporte la session rrweb en cours dans un fichier <code>.bmmreplay</code> (ouvre le sélecteur de destination dans l\'UI). Équivalent deeplink : <code>bmm://replay/export</code>.',
+            fields: [],
+            responseStatuses: [{ code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "replay/export" }' }, e401],
+        },
+        {
+            method: 'POST', path: '/api/replay/import', auth: true,
+            desc: t('plugins.ep.replayImport') || 'Import replay',
+            about: 'Importe puis lit un fichier <code>.bmmreplay</code> depuis un chemin local ou une URL. Équivalent deeplink : <code>bmm://replay/import?path=&lt;...&gt;</code> ou <code>?url=&lt;...&gt;</code>.',
+            fields: [
+                { name: 'path', type: 'string', required: false, desc: 'Chemin local du .bmmreplay.' },
+                { name: 'url',  type: 'string', required: false, desc: 'URL distante du .bmmreplay (alternative à path).' },
+            ],
+            responseStatuses: [{ code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "replay/import" }' }, e401],
+        },
+        // ── Automation / run ──────────────────────────────────────────────────
+        {
+            method: 'POST', path: '/api/benchmark', auth: true,
+            desc: t('plugins.ep.benchmark') || 'Run benchmark',
+            about: 'Lance une exécution de benchmark. <code>mode:"manual"</code> ouvre le benchmark dans l\'UI ; <code>"auto"</code> le démarre directement. <code>dataset</code> : "sandbox" ou "real" (avec <code>sources</code>). Équivalent deeplink : <code>bmm://benchmark/run?dataset=sandbox&size=M</code>.',
+            fields: [
+                { name: 'dataset',  type: 'string', required: false, desc: '"sandbox" (généré) ou "real" (utilise sources).' },
+                { name: 'size',     type: 'string', required: false, desc: 'Taille du jeu sandbox : S, M, L.' },
+                { name: 'mode',     type: 'string', required: false, desc: '"manual" (ouvre l\'UI) ou "auto".' },
+                { name: 'sources',  type: 'array',  required: false, desc: 'Chemins de dossiers de mods (dataset="real").' },
+                { name: 'profiles', type: 'array',  required: false, desc: 'IDs de profils à benchmarker.' },
+            ],
+            responseStatuses: [{ code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "benchmark/run" }' }, e401],
+        },
+        {
+            method: 'POST', path: '/api/launchpack/run', auth: true,
+            desc: t('plugins.ep.runLaunchpack') || 'Run launch pack',
+            about: 'Exécute un Launch Pack enregistré par son ID. Équivalent deeplink : <code>bmm://launchpack/run?id=&lt;ID&gt;</code>.',
+            fields: [{ name: 'id', type: 'string', required: true, desc: 'ID du launch pack.' }],
+            responseStatuses: [{ code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "launchpack/run" }' }, e401],
+        },
+        {
+            method: 'POST', path: '/api/schedule/run', auth: true,
+            desc: t('plugins.ep.runTask') || 'Run scheduled task',
+            about: 'Déclenche immédiatement une tâche planifiée enregistrée par son ID. Équivalent deeplink : <code>bmm://schedule/run?id=&lt;ID&gt;</code>.',
+            fields: [{ name: 'id', type: 'string', required: true, desc: 'ID de la tâche planifiée.' }],
+            responseStatuses: [{ code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "schedule/run" }' }, e401],
+        },
+        {
+            method: 'POST', path: '/api/discord/rpc', auth: true,
+            desc: t('plugins.ep.discordRpc') || 'Discord Rich Presence',
+            about: 'Active ou désactive la Rich Presence Discord. Équivalent deeplink : <code>bmm://discord/rpc?enabled=true</code>.',
+            fields: [{ name: 'enabled', type: 'boolean', required: true, desc: 'true pour activer la présence Discord.' }],
+            responseStatuses: [{ code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "discord/rpc" }' }, e401],
+        },
+        {
+            method: 'POST', path: '/api/data/export-auto', auth: true,
+            desc: t('plugins.ep.exportAuto') || 'Auto backup',
+            about: 'Sauvegarde sans surveillance de <code>data.json</code> vers un dossier, avec un modèle de nom et une règle d\'incrément. Équivalent deeplink : <code>bmm://data/export-auto?dir=&lt;...&gt;&amp;name=bmm-backup-{date}&amp;increment=paren</code>.',
+            fields: [
+                { name: 'dir',       type: 'string', required: true,  desc: 'Dossier de destination.' },
+                { name: 'name',      type: 'string', required: false, desc: 'Modèle de nom de fichier : tokens {date}, {time}, {datetime}.' },
+                { name: 'increment', type: 'string', required: false, desc: '"paren" (1)(2) · "underscore" _1 _2 · "timestamp" · "overwrite".' },
+            ],
+            responseStatuses: [{ code: 202, label: 'Accepted', body: '{ "ok": true, "driven_by": "bmm-ui", "action": "data/export-auto" }' }, e401],
         },
     ];
 }
@@ -5900,6 +6325,28 @@ function _actionCatalog(): _ActionDef[] {
           desc: d('actionRawCodeDesc', 'Inserts native code in the target language verbatim.'),
           iconSvg: sv('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'),
           fields: [ { key: 'code', label: d('fldCode', 'Code'), type: 'textarea', placeholder: 'echo Custom code here' } ] },
+        { id: 'loop_start',     cat: 'control', label: d('actionLoopStart', 'Loop (repeat N times)'),
+          desc: d('actionLoopStartDesc', 'Repeats every action up to the matching “End loop” N times. Great for retrying until something works.'),
+          iconSvg: sv('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>'),
+          fields: [ { key: 'count', label: d('fldTimes', 'Times'), type: 'text', placeholder: '5' } ] },
+        { id: 'loop_end',       cat: 'control', label: d('actionLoopEnd', 'End loop'),
+          desc: d('actionLoopEndDesc', 'Closes the previous “Loop”. No parameters.'),
+          iconSvg: sv('<polyline points="20 6 9 17 4 12"/>') },
+        { id: 'verify_file',    cat: 'control', label: d('actionVerifyFile', 'Verify file (hash → variable)'),
+          desc: d('actionVerifyFileDesc', 'Computes a file SHA-256 hash into a variable, so you can compare it with “If variable ==” (e.g. loop until a download matches a known hash).'),
+          iconSvg: sv('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/>'),
+          fields: [
+            { key: 'path',     label: d('fldFile', 'File'),          type: 'text', placeholder: 'C:\\path\\to\\file' },
+            { key: 'var_name', label: d('fldIntoVar', 'Into variable'), type: 'text', placeholder: 'FILE_HASH', half: true },
+          ] },
+        { id: 'wait_until',     cat: 'control', label: d('actionWaitUntil', 'Wait until file exists'),
+          desc: d('actionWaitUntilDesc', 'Pauses the script until a file appears (e.g. a download or extraction finished), or the timeout elapses.'),
+          iconSvg: sv('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+          fields: [
+            { key: 'path',    label: d('fldFile', 'File'),              type: 'text', placeholder: 'C:\\path\\to\\file' },
+            { key: 'timeout', label: d('fldTimeoutSec', 'Timeout (s)'),    type: 'text', placeholder: '120', half: true },
+            { key: 'poll',    label: d('fldPollSec', 'Check every (s)'), type: 'text', placeholder: '2', half: true },
+          ] },
     ];
 }
 
@@ -6494,6 +6941,15 @@ function _collectActions(): Array<{ action_type: string; target_id: string; extr
                 extra.api_action = raw.api_action || ''; break;
             case 'raw_code':
                 extra.code = raw.code || ''; break;
+            case 'loop_start':
+                extra.count = Math.max(1, parseInt(raw.count || '1', 10) || 1); break;
+            case 'verify_file':
+                extra.path = raw.path || '';
+                extra.var_name = raw.var_name || 'FILE_HASH'; break;
+            case 'wait_until':
+                extra.path = raw.path || '';
+                extra.timeout = Math.max(1, parseInt(raw.timeout || '120', 10) || 120);
+                extra.poll = Math.max(1, parseInt(raw.poll || '2', 10) || 2); break;
             // Repo / modpack actions — store individual typed keys so values
             // with spaces (paths, names) survive intact. Booleans as real
             // booleans, numbers as real numbers.
@@ -7307,6 +7763,41 @@ function _genericAction(a: any, lang: string, token: string | null, useDeeplink:
             })[lang] || ['}'];
         case 'raw_code':
             return [a.extra.code || ''];
+        case 'loop_start': {
+            const n = Math.max(1, parseInt(a.extra.count, 10) || 1);
+            return ({
+                rb: [`${n}.times do`],
+                php: [`for ($i = 0; $i < ${n}; $i++) {`],
+                go: [`for i := 0; i < ${n}; i++ {`],
+                java: [`for (int i = 0; i < ${n}; i++) {`],
+                cs: [`for (int i = 0; i < ${n}; i++) {`],
+                rs: [`for _ in 0..${n} {`],
+            })[lang] || [`// loop ${n}x`];
+        }
+        case 'loop_end':
+            return ({ rb: ['end'], php: ['}'], go: ['}'], java: ['}'], cs: ['}'], rs: ['}'] })[lang] || ['}'];
+        case 'verify_file': {
+            const p = a.extra.path || ''; const vn = a.extra.var_name || 'FILE_HASH';
+            return ({
+                rb: [`require 'digest'`, `${vn} = Digest::SHA256.file(${JSON.stringify(p)}).hexdigest`],
+                php: [`$${vn} = hash_file('sha256', ${JSON.stringify(p)});`],
+                go: [`// verify_file needs crypto/sha256 + os; compute SHA-256 of ${p} into ${vn}`],
+                java: [`String ${vn} = javax.xml.bind.DatatypeConverter.printHexBinary(java.security.MessageDigest.getInstance("SHA-256").digest(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(${JSON.stringify(p)})))).toLowerCase();`],
+                cs: [`string ${vn} = BitConverter.ToString(System.Security.Cryptography.SHA256.Create().ComputeHash(File.ReadAllBytes(${JSON.stringify(p)}))).Replace("-","").ToLower();`],
+                rs: [`// verify_file: compute SHA-256 of ${p} into ${vn} (add the sha2 crate)`],
+            })[lang] || [`// verify ${p} → ${vn}`];
+        }
+        case 'wait_until': {
+            const p = a.extra.path || ''; const to = parseInt(a.extra.timeout, 10) || 120; const pl = parseInt(a.extra.poll, 10) || 2;
+            return ({
+                rb: [`require 'fileutils'`, `_dl = Time.now + ${to}`, `sleep ${pl} while !File.exist?(${JSON.stringify(p)}) && Time.now < _dl`],
+                php: [`$_dl = time() + ${to};`, `while (!file_exists(${JSON.stringify(p)}) && time() < $_dl) { sleep(${pl}); }`],
+                go: [`{ _dl := time.Now().Add(${to} * time.Second); for { if _, e := os.Stat(${JSON.stringify(p)}); e == nil || time.Now().After(_dl) { break }; time.Sleep(${pl} * time.Second) } }`],
+                java: [`{ long _dl = System.currentTimeMillis() + ${to}*1000L; while (!new java.io.File(${JSON.stringify(p)}).exists() && System.currentTimeMillis() < _dl) Thread.sleep(${pl}*1000L); }`],
+                cs: [`{ var _dl = DateTime.Now.AddSeconds(${to}); while (!File.Exists(${JSON.stringify(p)}) && DateTime.Now < _dl) System.Threading.Thread.Sleep(${pl}*1000); }`],
+                rs: [`{ let _dl = std::time::Instant::now() + std::time::Duration::from_secs(${to}); while !std::path::Path::new(${JSON.stringify(p)}).exists() && std::time::Instant::now() < _dl { std::thread::sleep(std::time::Duration::from_secs(${pl})); } }`],
+            })[lang] || [`// wait until file exists: ${p} (timeout ${to}s)`];
+        }
         case 'show_message':
             return [printFn(`[MSG] ${a.extra.message || ''}`)];
         case 'open_url': {
@@ -7421,6 +7912,19 @@ function _pyAction(a: any, token: string | null, useDeeplink: boolean, base: str
             return ['# end'];
         case 'raw_code':
             return [a.extra.code || ''];
+        case 'loop_start':
+            return [`for _i in range(${Math.max(1, parseInt(a.extra.count, 10) || 1)}):`];
+        case 'loop_end':
+            return ['# end loop'];
+        case 'verify_file': {
+            const p = a.extra.path || ''; const vn = a.extra.var_name || 'FILE_HASH';
+            return [`import hashlib as _hl`, `${vn} = _hl.sha256(open(${JSON.stringify(p)}, "rb").read()).hexdigest()`];
+        }
+        case 'wait_until': {
+            const p = a.extra.path || ''; const to = parseInt(a.extra.timeout, 10) || 120; const pl = parseInt(a.extra.poll, 10) || 2;
+            return [`import os as _os, time as _tm`, `_deadline = _tm.time() + ${to}`,
+                    `while not _os.path.exists(${JSON.stringify(p)}) and _tm.time() < _deadline:`, `    _tm.sleep(${pl})`];
+        }
         default: {
             const ep = _apiBodyFor(a);
             if (ep) {
@@ -7531,6 +8035,20 @@ function _luaAction(a: any, token: string | null, useDeeplink: boolean, base: st
             return ['end'];
         case 'raw_code':
             return [a.extra.code || ''];
+        case 'loop_start':
+            return [`for _i = 1, ${Math.max(1, parseInt(a.extra.count, 10) || 1)} do`];
+        case 'loop_end':
+            return ['end'];
+        case 'verify_file': {
+            const p = a.extra.path || ''; const vn = a.extra.var_name || 'FILE_HASH';
+            return [`-- verify_file: SHA-256 of ${p} → ${vn} (needs a Lua crypto lib, e.g. luaossl)`,
+                    `local _f = io.open(${JSON.stringify(p)}, "rb"); local ${vn} = _f and require("openssl.digest").new("sha256"):final(_f:read("*a")) or ""`];
+        }
+        case 'wait_until': {
+            const p = a.extra.path || ''; const to = parseInt(a.extra.timeout, 10) || 120; const pl = parseInt(a.extra.poll, 10) || 2;
+            return [`local _dl = os.time() + ${to}`,
+                    `while os.time() < _dl do local _h = io.open(${JSON.stringify(p)}); if _h then _h:close(); break end; os.execute("ping -n ${pl + 1} 127.0.0.1 > nul") end`];
+        }
         default: {
             const ep = _apiBodyFor(a);
             if (ep) {
@@ -7632,6 +8150,18 @@ function _jsAction(a: any, token: string | null, useDeeplink: boolean, base: str
             return ['}'];
         case 'raw_code':
             return [a.extra.code || ''];
+        case 'loop_start':
+            return [`for (let _i = 0; _i < ${Math.max(1, parseInt(a.extra.count, 10) || 1)}; _i++) {`];
+        case 'loop_end':
+            return ['}'];
+        case 'verify_file': {
+            const p = a.extra.path || ''; const vn = a.extra.var_name || 'FILE_HASH';
+            return [`const ${vn} = require("crypto").createHash("sha256").update(require("fs").readFileSync(${JSON.stringify(p)})).digest("hex");`];
+        }
+        case 'wait_until': {
+            const p = a.extra.path || ''; const to = parseInt(a.extra.timeout, 10) || 120; const pl = parseInt(a.extra.poll, 10) || 2;
+            return [`{ const _fs = require("fs"), _cp = require("child_process"); const _dl = Date.now() + ${to} * 1000; while (!_fs.existsSync(${JSON.stringify(p)}) && Date.now() < _dl) { _cp.execSync(process.platform === "win32" ? "timeout /t ${pl} /nobreak >nul" : "sleep ${pl}"); } }`];
+        }
         default: {
             const ep = _apiBodyFor(a);
             if (ep) {

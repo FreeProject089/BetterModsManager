@@ -654,6 +654,28 @@ fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
             let code = extra_str(&action.extra, "code");
             if !code.is_empty() { out.push(code.to_string()); }
         }
+        "loop_start" => {
+            let n = extra_str(&action.extra, "count").parse::<u32>().unwrap_or(1).max(1);
+            out.push(format!("for /L %%i in (1,1,{}) do (", n));
+        }
+        "loop_end" => {
+            out.push(")".to_string());
+        }
+        "verify_file" => {
+            let p = extra_str(&action.extra, "path");
+            let vn = { let v = extra_str(&action.extra, "var_name"); if v.is_empty() { "FILE_HASH" } else { v } };
+            // certutil prints the hash on the 2nd line; capture the first hash line.
+            out.push(format!("set \"{vn}=\" & for /f \"skip=1 tokens=* delims=\" %%H in ('certutil -hashfile \"{p}\" SHA256') do if not defined {vn} set \"{vn}=%%H\""));
+        }
+        "wait_until" => {
+            let p = extra_str(&action.extra, "path");
+            let to = extra_u64(&action.extra, "timeout").max(1);
+            let pl = extra_u64(&action.extra, "poll").max(1);
+            let loops = (to / pl).max(1);
+            // Bounded poll loop (label-free → safe to use several times in one file):
+            // once the file exists, the inner `if not exist` is false so it stops sleeping.
+            out.push(format!("for /L %%w in (1,1,{loops}) do (if not exist \"{p}\" timeout /t {pl} /nobreak >nul)"));
+        }
         _ if use_deeplink && action_to_deeplink(action).starts_with("bmm://") && !action_to_deeplink(action).contains("unknown") => {
             out.push(format!("start \"\" \"{}\"", action_to_deeplink(action)));
             out.push("timeout /t 1 /nobreak >nul".to_string());
@@ -819,6 +841,24 @@ fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
         "raw_code" => {
             let code = extra_str(&action.extra, "code");
             if !code.is_empty() { out.push(code.to_string()); }
+        }
+        "loop_start" => {
+            let n = extra_str(&action.extra, "count").parse::<u32>().unwrap_or(1).max(1);
+            out.push(format!("1..{} | ForEach-Object {{", n));
+        }
+        "loop_end" => {
+            out.push("}".to_string());
+        }
+        "verify_file" => {
+            let p = extra_str(&action.extra, "path");
+            let vn = { let v = extra_str(&action.extra, "var_name"); if v.is_empty() { "FILE_HASH" } else { v } };
+            out.push(format!("${vn} = (Get-FileHash -Path \"{p}\" -Algorithm SHA256).Hash.ToLower()"));
+        }
+        "wait_until" => {
+            let p = extra_str(&action.extra, "path");
+            let to = extra_u64(&action.extra, "timeout").max(1);
+            let pl = extra_u64(&action.extra, "poll").max(1);
+            out.push(format!("$_end = (Get-Date).AddSeconds({to}); while (-not (Test-Path \"{p}\") -and (Get-Date) -lt $_end) {{ Start-Sleep -Seconds {pl} }}"));
         }
         _ if use_deeplink && action_to_deeplink(action).starts_with("bmm://") && !action_to_deeplink(action).contains("unknown") => {
             out.push(format!("Start-Process \"{}\"", action_to_deeplink(action)));
@@ -1002,6 +1042,24 @@ fn vbs_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
         "raw_code" => {
             let code = extra_str(&action.extra, "code");
             if !code.is_empty() { out.push(code.to_string()); }
+        }
+        "loop_start" => {
+            let n = extra_str(&action.extra, "count").parse::<u32>().unwrap_or(1).max(1);
+            out.push(format!("For _i = 1 To {}", n));
+        }
+        "loop_end" => {
+            out.push("Next".to_string());
+        }
+        "verify_file" => {
+            let p = extra_str(&action.extra, "path");
+            out.push(format!("' verify_file: SHA-256 of {} — use the .ps1/.bat export for hashing (plain VBScript has no SHA-256)", p));
+        }
+        "wait_until" => {
+            let p = extra_str(&action.extra, "path");
+            let to = extra_u64(&action.extra, "timeout").max(1);
+            let pl = extra_u64(&action.extra, "poll").max(1);
+            out.push("Set _fso = CreateObject(\"Scripting.FileSystemObject\")".to_string());
+            out.push(format!("_waited = 0\nDo While (Not _fso.FileExists(\"{p}\")) And _waited < {to}\n  WScript.Sleep {}\n  _waited = _waited + {pl}\nLoop", pl * 1000));
         }
         _ => {
             let dl = action_to_deeplink(action);

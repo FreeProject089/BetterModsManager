@@ -73,9 +73,9 @@ export function playVhsCloseAnimation() {
         tl.to('#vhs-scanlines', { opacity: 0.8, duration: 0.04, ease: 'none' }, 0.08);
         // Phase 1b (0.04s): Tasky pops in — CRT horizontal stretch entrance
         tl.fromTo('#vhs-tasky-wrap', { opacity: 0, scaleX: 1.6, scaleY: 0.5 }, { opacity: 1, scaleX: 1, scaleY: 1, duration: 0.15, ease: 'back.out(2.5)' }, 0.04);
-        // Phase 2 (0.10s): Black bars slam in from top & bottom
-        tl.to('#vhs-top', { height: '50%', duration: 0.28, ease: 'power2.in' }, 0.10);
-        tl.to('#vhs-bottom', { height: '50%', duration: 0.28, ease: 'power2.in' }, 0.10);
+        // Phase 2 (0.10s): Black bars slam in from top & bottom (scaleY = GPU, no reflow)
+        tl.to('#vhs-top', { scaleY: 1, duration: 0.28, ease: 'power2.in' }, 0.10);
+        tl.to('#vhs-bottom', { scaleY: 1, duration: 0.28, ease: 'power2.in' }, 0.10);
         // Phase 2b (0.18s): Tasky squishes — CRT horizontal spread as vertical collapses
         tl.to('#vhs-tasky-wrap', {
             scaleX: 1.9, scaleY: 0.07, opacity: 0.85,

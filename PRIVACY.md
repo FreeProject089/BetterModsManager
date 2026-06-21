@@ -15,7 +15,9 @@ document explains the cases where data leaves your computer, and exactly what is
   collected or sent until you explicitly enable it on the first‑run consent screen (or later in
   Settings → Privacy).
 - **No account required.** You do not need to sign in to use BMM.
-- **No selling of data.** We have nothing to sell — most features are 100% offline.
+- **We never sell your personal data.** Your data is not the product and is never sold or shared
+  for advertising. (This is about your data — it is not a statement about BMM's products or any
+  paid services that may exist now or in the future.)
 - **No file or mod contents, ever.** We never read or send the contents of your mods, files, or
   what you type into inputs.
 
@@ -32,8 +34,16 @@ batches over **HTTPS**; each batch is tagged with a random **packet id** so you 
 erased (see §2.4).
 
 ### 2.1 What is collected (when enabled)
-- **Anonymous identity:** your **Creator ID** (a public, key‑like identifier — not your name or
-  email), or a random per‑install id if you have none.
+- **Pseudonymous identity — your Creator ID.** This is **not a random hash.** Your Creator ID is the
+  **public half of an Ed25519 cryptographic key pair** that BMM generates **once, on your machine**
+  (the matching **private key never leaves your PC** — it is stored in your user registry and sealed
+  to this machine, so copying it elsewhere is rejected). The Creator ID is shown as a 64‑character
+  hex string and is used to **cryptographically sign** the repos you publish, so others can verify
+  authorship and apply whitelists/bans. Two consequences for privacy: **(a)** it does **not** contain
+  your name, email, or any personal detail — it is a public key, not an identity document; but
+  **(b)** because it is **stable** (it does not rotate), telemetry sent under the same Creator ID over
+  time is **linkable to the same install**. If you have no key yet, a random per‑install id is used
+  instead. You can see your Creator ID anytime in BMM.
 - **System profile (DxDiag‑style):** OS, CPU, GPU(s), RAM, disk count/size, whether you run in a
   VM, motherboard, locale. Hardware/diagnostic info only.
 - **App usage:** which pages/views you open, which features you use, which **modals** you open,
@@ -49,12 +59,31 @@ erased (see §2.4).
 - **Interaction capture (privacy‑safe):** button **labels** clicked, form submissions, input
   field **names** that changed, copy actions, outbound link clicks, and errors — **never the
   values you type**.
+- **Session replay (rrweb, masked by default):** when replay capture is enabled, BMM records a
+  reconstruction of the **app interface** during your session — DOM structure and UI events
+  (clicks, scrolling, navigation) — so the team can see *how* an issue happened. **All text inputs
+  are masked by default**, so the characters you type are replaced by dots and never recorded. An
+  explicit, separate **"full (unmasked)"** option exists for your own local debugging; it stays off
+  unless you turn it on. Replays cover the BMM window only — never other apps or your screen.
 - **Approximate location:** derived **server‑side from your IP** (country / region / city). The
   location shown is **rounded and never precise** — your exact location is never stored or shown.
 
+### 2.1.b Extra hardware report (opt‑in, tied to the weekly benchmark)
+If you keep the **"Automatic Benchmark (every 7 days) + extra hardware report"** toggle **on** (in
+the consent screen, or Settings → Privacy), BMM additionally sends a **precise hardware identity**
+report so the team can correlate performance/benchmarks with exact configurations. This is **only**
+sent while that toggle is on, and the consent screen shows the full list before you agree. It
+includes: **motherboard** (model + serial number), **BIOS** version/date/vendor, **machine UUID**,
+**CPU** logical processors + cores/threads + L2/L3 cache, **disks** (model, serial, size, interface),
+**physical network MAC address(es)**, **OS version + build / kernel**, and **UEFI vs Legacy**,
+**Secure Boot** and **TPM** state when available. These are **stable hardware identifiers** — more
+identifying than the basic profile — which is why they are **opt‑in and separately disclosed**. Turn
+the toggle **off** to send only the basic system profile (§2.1) and skip this entirely. Still no file
+contents, no typed values, no personal identity.
+
 ### 2.2 What is NOT collected
-File contents, mod names or contents, the text/values you type, your real‑world identity, precise
-GPS/location, and anything from features you didn't use.
+File contents, mod names or contents, the text/values you type (masked in session replay too),
+your real‑world identity, precise GPS/location, and anything from features you didn't use.
 
 ### 2.3 Consent & control
 - Telemetry is **off by default**. You choose on first launch and can change it anytime in
@@ -99,7 +128,13 @@ any logs/screenshots you attach) is sent to the BetaHub service. Nothing is sent
 BMM checks GitHub for new releases and downloads plugins / catalog apps you request — standard
 HTTPS requests; the remote host sees your IP.
 
-### 3.5 Optional integrations
+### 3.5 Embedded tutorial videos (YouTube)
+The in‑app **Documentation** can embed **YouTube** tutorial videos. When you are online and open a
+page with an embed, your browser engine loads it directly from YouTube/Google, which can see your
+IP and may set cookies under **Google's** privacy policy (we use the `youtube‑nocookie` style embed
+where possible). When offline, a bundled local video is shown instead and nothing is contacted.
+
+### 3.6 Optional integrations
 Any feature you explicitly configure (Discord webhook, Cloudflare tunnel, …) sends data to the
 service you configured, under that service's own terms.
 
@@ -123,7 +158,8 @@ service you configured, under that service's own terms.
 
 - Telemetry is **opt‑in**; stay off (or fully offline) to avoid all of §2.
 - Disable telemetry anytime; export or clear the local buffer; request per‑packet erasure.
-- The Creator ID is a public key‑like identifier, not your name or email.
+- The Creator ID is your **public signing key** (Ed25519), not your name or email; the private key
+  stays on your PC. It is stable, so activity under it is linkable over time — see §2.1.
 
 ## 6. Contact
 

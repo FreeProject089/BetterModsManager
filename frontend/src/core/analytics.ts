@@ -163,7 +163,10 @@ export async function clearData(): Promise<void> {
 async function startCollection(): Promise<void> {
     loadSeenViews();
     try {
-        const profile: any = await invoke('analytics_system_profile');
+        // Extra precise hardware identity is only collected when the user opted into
+        // the weekly-benchmark / extra mode (same toggle).
+        const extra = (() => { try { return localStorage.getItem('bmm_telemetry_bench') !== '0'; } catch { return false; } })();
+        const profile: any = await invoke('analytics_system_profile', { extra });
         // Stable anonymous identity: Creator ID if available, else a persistent uuid.
         _distinctId = profile?.distinct_id || anonId();
         const extras = await bmmProfileExtras();
@@ -802,11 +805,70 @@ export function initPrivacySettings(): void {
     document.getElementById('analytics-delete')?.addEventListener('click', async () => {
         const ok = await (window as any).confirmCustom?.(
             t('analytics.deleteTitle') || 'Delete telemetry data',
-            t('analytics.deleteConfirm') || 'Permanently delete all telemetry buffered on this PC?',
+            t('analytics.deleteConfirm2') || 'This clears the local buffer AND files a deletion request for EVERY packet you have sent to the dashboard (applied within 72h). Continue?',
             'danger', { yesLabel: t('common.delete') || 'Delete', noLabel: t('common.cancel') || 'Cancel' });
         if (!ok) return;
+        // 1) Request server-side erasure of every packet we've sent (right to erasure).
+        const links = getLinks();
+        let requested = 0, failed = 0;
+        try {
+            const packets: any[] = await invoke('analytics_sent_packets');
+            for (const p of packets) {
+                if (p.deletion_requested) continue;
+                try {
+                    await invoke('analytics_request_deletion', { packetId: p.id, endpoint: links.analytics_endpoint || '', apiKey: links.analytics_key || '' });
+                    requested++;
+                } catch { failed++; }
+            }
+        } catch { /* no packets / offline */ }
+        // 2) Wipe the local buffer too.
         await clearData();
-        try { (window as any).toast?.(t('analytics.deleted') || 'Telemetry data deleted', 'success'); } catch {}
+        try { renderSentPackets(); } catch {}
+        const msg = requested
+            ? (t('analytics.deletedAll') || 'Local data cleared · {n} packet deletion(s) requested').replace('{n}', String(requested))
+            : (t('analytics.deleted') || 'Telemetry data deleted');
+        try { (window as any).toast?.(failed ? `${msg} (${failed} ${t('common.failed') || 'failed'})` : msg, failed ? 'warning' : 'success'); } catch {}
+    });
+
+    document.getElementById('analytics-request')?.addEventListener('click', async () => {
+        const email = await promptEmail(
+            t('analytics.requestTitle') || 'Request a copy of my data',
+            t('analytics.requestDesc') || 'Enter your e-mail. An admin will review the request and e-mail you the data tied to your Creator ID manually (we never auto-send personal data to an unverified address).');
+        if (!email) return;
+        if (!String(email).includes('@')) { (window as any).toast?.(t('analytics.requestBadEmail') || 'Please enter a valid e-mail', 'error'); return; }
+        const links = getLinks();
+        try {
+            await invoke('analytics_request_data', { email: String(email).trim(), endpoint: links.analytics_endpoint || '', apiKey: links.analytics_key || '' });
+            (window as any).toast?.(t('analytics.requestSent') || 'Request filed — you will be e-mailed after review', 'success');
+        } catch (e) { (window as any).toast?.(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+    });
+}
+
+// Minimal themed e-mail prompt (no native prompt — it doesn't block in the Tauri
+// webview). Resolves to the trimmed value, or null on cancel.
+function promptEmail(title: string, desc: string): Promise<string | null> {
+    return new Promise(resolve => {
+        const ov = document.createElement('div');
+        ov.className = 'modal-generic-overlay open';
+        ov.style.cssText = 'position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5)';
+        ov.innerHTML = `<div class="modal glass" style="width:min(440px,92vw);padding:0">
+            <div class="modal-header"><h2 class="modal-title" style="margin:0;font-size:1.05rem">${escHtml(title)}</h2></div>
+            <div class="modal-body" style="padding:16px 20px">
+                <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin:0 0 12px">${escHtml(desc)}</p>
+                <input type="email" class="input" id="pe-input" placeholder="you@example.com" style="width:100%" autocomplete="email">
+            </div>
+            <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px;padding:12px 20px;border-top:1px solid var(--border)">
+                <button class="btn btn-ghost" id="pe-cancel">${escHtml(t('common.cancel') || 'Cancel')}</button>
+                <button class="btn btn-primary" id="pe-ok">${escHtml(t('common.send') || 'Send')}</button>
+            </div></div>`;
+        (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+        const input = ov.querySelector('#pe-input') as HTMLInputElement;
+        const done = (v: string | null) => { ov.remove(); resolve(v); };
+        ov.querySelector('#pe-cancel')?.addEventListener('click', () => done(null));
+        ov.querySelector('#pe-ok')?.addEventListener('click', () => done(input.value.trim() || null));
+        ov.addEventListener('click', e => { if (e.target === ov) done(null); });
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') done(input.value.trim() || null); if (e.key === 'Escape') done(null); });
+        setTimeout(() => input.focus(), 30);
     });
 }
 
@@ -942,12 +1004,26 @@ export function showConsentModal(): Promise<void> {
                 <summary style="cursor:pointer; font-weight:600; outline:none; user-select:none;">${t('analytics.customize') || 'Customize data collection...'}</summary>
                 <div style="padding: 12px; margin-top: 8px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px;">
                     <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-                        <span>${t('analytics.benchToggle') || 'Automatic Benchmark (every 7 days)'}</span>
+                        <span>${t('analytics.benchToggle') || 'Automatic Benchmark (every 7 days) + extra hardware report'}</span>
                         <div class="plug-toggle">
                             <input type="checkbox" id="modal-bench-toggle" checked>
                             <span class="plug-toggle-slider"></span>
                         </div>
                     </label>
+                    <details style="margin:-2px 0 4px;font-size:11.5px;color:var(--text-muted)">
+                        <summary style="cursor:pointer;user-select:none">${t('analytics.extraWhat') || 'What the extra hardware report sends ▾'}</summary>
+                        <ul style="margin:6px 0 0;padding-left:18px;line-height:1.7">
+                            <li>${t('analytics.extra.board') || 'Motherboard (model + serial number)'}</li>
+                            <li>${t('analytics.extra.bios') || 'BIOS version, date & vendor'}</li>
+                            <li>${t('analytics.extra.uuid') || 'Machine UUID'}</li>
+                            <li>${t('analytics.extra.cpu') || 'Logical processors, cores/threads, L2/L3 cache'}</li>
+                            <li>${t('analytics.extra.disks') || 'Disks: model, serial, size, interface'}</li>
+                            <li>${t('analytics.extra.mac') || 'Physical network MAC address(es)'}</li>
+                            <li>${t('analytics.extra.os') || 'OS version + build, kernel'}</li>
+                            <li>${t('analytics.extra.boot') || 'UEFI/Legacy, Secure Boot & TPM state (if available)'}</li>
+                        </ul>
+                        <p style="margin:6px 0 0">${t('analytics.extraNote') || 'These are precise hardware identifiers. They are sent ONLY while this toggle is on, and only to the BMM dashboard. Turn it off to send the basic profile only.'}</p>
+                    </details>
                     <label style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
                         <span>${t('analytics.replayToggle') || 'Visual Session Replay (masked)'}</span>
                         <div class="plug-toggle">

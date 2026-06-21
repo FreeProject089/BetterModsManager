@@ -749,6 +749,27 @@ pub async fn request_deletion(pool: &PgPool, pid: &str, delay_h: i64) -> Value {
     .await;
     json!({ "packet_id": pid, "requested_at": requested, "scheduled_at": scheduled, "status": "pending" })
 }
+
+// ── GDPR data-access requests ─────────────────────────────────────────────────
+pub async fn insert_data_request(pool: &PgPool, creator_id: &str, email: &str) -> Value {
+    let row: Result<(i64,), _> = sqlx::query_as(
+        "INSERT INTO data_requests(creator_id,email) VALUES($1,$2) RETURNING id")
+        .bind(creator_id).bind(email).fetch_one(pool).await;
+    json!({ "id": row.map(|r| r.0).unwrap_or(0) })
+}
+pub async fn list_data_requests(pool: &PgPool) -> Value {
+    let rows: Vec<(i64, String, String, String, i64)> = sqlx::query_as(
+        "SELECT id, creator_id, email, status, (EXTRACT(EPOCH FROM created_at)*1000)::bigint \
+         FROM data_requests ORDER BY created_at DESC LIMIT 200")
+        .fetch_all(pool).await.unwrap_or_default();
+    json!(rows.iter().map(|r| json!({
+        "id": r.0, "creator_id": r.1, "email": r.2, "status": r.3, "created_ms": r.4
+    })).collect::<Vec<_>>())
+}
+pub async fn decide_data_request(pool: &PgPool, id: i64, status: &str) -> bool {
+    sqlx::query("UPDATE data_requests SET status=$2, decided_at=now() WHERE id=$1")
+        .bind(id).bind(status).execute(pool).await.map(|r| r.rows_affected() > 0).unwrap_or(false)
+}
 pub async fn decide_deletion(pool: &PgPool, pid: &str, action: &str, by: &str) -> Option<Value> {
     let exists: Option<(String,)> = sqlx::query_as("SELECT packet_id FROM deletions WHERE packet_id=$1")
         .bind(pid)
