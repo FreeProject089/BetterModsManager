@@ -11231,10 +11231,14 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 }
 /* Improved deep-link docs (detail panel) */
 .plug-dl-fullurl {
+    /* override .plug-ep-copy-btn's opacity:0 (hover-reveal icon button) — this is
+       the always-visible copyable URL/template, not a hover affordance */
+    opacity: 1 !important;
     display: block; font-family: var(--font-mono); font-size: 11px;
     color: #c4b5fd; background: rgba(139,92,246,0.10);
     border: 1px solid rgba(139,92,246,0.22); border-radius: 6px;
     padding: 6px 9px; margin-bottom: 8px; cursor: pointer; word-break: break-all;
+    width: 100%; box-sizing: border-box; text-align: left;
 }
 .plug-dl-fullurl:hover { background: rgba(139,92,246,0.16); }
 .plug-dl-apieq { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }

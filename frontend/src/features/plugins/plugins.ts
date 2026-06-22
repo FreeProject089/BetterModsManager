@@ -4793,6 +4793,14 @@ function buildDeepLinkRow(dl: DeepLinkDef): string {
             </table>
         </div>` : '';
 
+    // Structure/template of the deeplink: shows exactly which query params can be
+    // passed (placeholders), so users see "what to put" — not just one example.
+    const requiredParams = dl.params.filter(p => p.required).map(p => `${p.name}=<${p.name}>`);
+    const optionalParams = dl.params.filter(p => !p.required).map(p => `${p.name}=<${p.name}>`);
+    const template = dl.params.length
+        ? `${fullUrl}?${[...requiredParams, ...optionalParams].join('&')}`
+        : fullUrl;
+
     const batExample = `REM ${desc}\nstart "" "${dl.example}"`;
     const ps1Example = `# ${desc}\nStart-Process "${dl.example}"`;
     // Pull the "Équivalent à <METHOD> /api/..." mention out of the about text so we
@@ -4815,7 +4823,9 @@ function buildDeepLinkRow(dl: DeepLinkDef): string {
             <div class="plug-ep-detail plug-ep-swagger" id="epd-${safeId}" style="display:none;">
                 <div class="plug-ep-swagger-left">
                     <p class="plug-ep-about">${escHtml(about)}</p>
-                    <div class="plug-ep-section-lbl">${t('plugins.dlFullUrl') || 'Full URL (click to copy)'}</div>
+                    <div class="plug-ep-section-lbl">${t('plugins.dlTemplate') || 'URL template (click to copy)'}</div>
+                    <code class="plug-ep-copy-btn plug-dl-fullurl" data-copy="${escHtml(template)}" tabindex="0">${escHtml(template)}</code>
+                    <div class="plug-ep-section-lbl" style="margin-top:6px;">${t('plugins.dlFullUrl') || 'Example (click to copy)'}</div>
                     <code class="plug-ep-copy-btn plug-dl-fullurl" data-copy="${escHtml(dl.example)}" tabindex="0">${escHtml(dl.example)}</code>
                     ${apiEq ? `<div class="plug-dl-apieq">${t('plugins.dlApiEquiv') || 'API equivalent'}: <code>${escHtml(apiEq)}</code></div>` : ''}
                     ${paramsHtml}
