@@ -1820,7 +1820,7 @@ class DebugUI {
             return;
         container.innerHTML = `<div style="padding:10px; color:var(--text-muted)">Chargement...</div>`;
         try {
-            const { invoke } = window.__TAURI__.tauri;
+            const { invoke } = window.__TAURI__.core;
             const logs = await invoke('get_rust_logs');
             container.innerHTML = logs.map(line => {
                 // simple parsing for highlighting strings like "[HH:MM:SS.mmm] [LEVEL] message"

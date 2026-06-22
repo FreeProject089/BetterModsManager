@@ -1,3 +1,4 @@
+use tauri::Manager;
 use tauri::AppHandle;
 use std::fs;
 use std::path::PathBuf;
@@ -346,8 +347,8 @@ pub fn get_salted_creator_id(salt: String) -> Result<String, String> {
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn get_keys_path(handle: &AppHandle) -> Result<PathBuf, String> {
     let app_dir = handle
-        .path_resolver()
-        .app_data_dir()
+        .path()
+        .app_data_dir().ok()
         .ok_or("Impossible de trouver le dossier AppData")?;
     if !app_dir.exists() {
         fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
@@ -370,7 +371,7 @@ pub fn get_keys_path(handle: &AppHandle) -> Result<PathBuf, String> {
 pub fn load_or_generate_keys(handle: &AppHandle) -> Result<SigningKey, String> {
     let path = get_keys_path(handle)?;
 
-    let app_dir = handle.path_resolver().app_data_dir();
+    let app_dir = handle.path().app_data_dir().ok();
     let v3_path = app_dir.as_ref().map(|d| d.join("creator_v3.key"));
     let v2_path = app_dir.as_ref().map(|d| d.join("creator_v2.key"));
 

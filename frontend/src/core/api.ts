@@ -54,11 +54,26 @@ console.error = (...args: any[]) => {
 
 export async function loadTauri(): Promise<void> {
     if (window.__TAURI__) {
-        _invoke = window.__TAURI__.invoke;
-        _dialog = window.__TAURI__.dialog;
-        _notifModule = window.__TAURI__.notification;
-        _convertFileSrc = window.__TAURI__.tauri ? window.__TAURI__.tauri.convertFileSrc : (p:string) => `asset.localhost/${p}`;
-        console.log('[BMM] Using local Tauri bridge');
+        // Tauri v2: invoke / convertFileSrc live under the `core` global. The
+        // dialog plugin's JS is NOT injected by withGlobalTauri, so dialogs are
+        // routed through Rust commands (commands::dialog) instead of __TAURI__.dialog.
+        const core: any = (window.__TAURI__ as any).core || window.__TAURI__;
+        _invoke = core.invoke;
+        _convertFileSrc = typeof core.convertFileSrc === 'function'
+            ? core.convertFileSrc
+            : (p: string) => `asset.localhost/${p}`;
+        _dialog = {
+            open: async (opts: any = {}) =>
+                opts && opts.directory
+                    ? await _invoke!('dlg_pick_folder')
+                    : await _invoke!('dlg_pick_file', { filters: opts?.filters ?? null }),
+            save: async (opts: any = {}) =>
+                await _invoke!('dlg_save_file', { defaultPath: opts?.defaultPath ?? null, filters: opts?.filters ?? null }),
+            ask: async (message: string, opts: any = {}) =>
+                await _invoke!('dlg_confirm', { message, title: opts?.title ?? null }),
+        };
+        _notifModule = null;
+        console.log('[BMM] Using local Tauri v2 bridge');
         return;
     }
 

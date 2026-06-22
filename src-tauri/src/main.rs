@@ -15,6 +15,8 @@ mod models;
 mod state;
 mod api;
 
+use tauri::Emitter;
+use tauri_plugin_fs::FsExt;
 use state::AppState;
 use std::path::PathBuf;
 use winreg::enums::*;
@@ -36,20 +38,20 @@ fn get_pending_deep_link() -> Option<String> {
 /// Works in release too thanks to the tauri "devtools" feature — these used to
 /// be #[cfg(debug_assertions)]-gated, which made the button dead in production.
 #[tauri::command]
-fn open_devtools(window: tauri::Window) {
+fn open_devtools(window: tauri::WebviewWindow) {
     window.open_devtools();
 }
 
 /// Close the native WebView2 DevTools — frees the heavy DevTools process (the
 /// ~480 MB msedgewebview2 "DevTools" process) so it's only resident while open.
 #[tauri::command]
-fn close_devtools(window: tauri::Window) {
+fn close_devtools(window: tauri::WebviewWindow) {
     window.close_devtools();
 }
 
 /// Whether the native DevTools window is currently open.
 #[tauri::command]
-fn is_devtools_open(window: tauri::Window) -> bool {
+fn is_devtools_open(window: tauri::WebviewWindow) -> bool {
     window.is_devtools_open()
 }
 
@@ -163,17 +165,38 @@ fn main() {
     }
 
     tauri::Builder::default()
+        // Sub-frame guard: Tauri v2 defines window.__TAURI_INTERNALS__ for the
+        // MAIN frame only, but injects code into every frame (incl. cross-origin
+        // iframes like the YouTube tutorial embeds and about:blank) that reads
+        // `__TAURI_INTERNALS__.plugins`, throwing "reading 'plugins' of undefined"
+        // in those sub-frames. Defining a stub in all frames silences the noise.
+        // Harmless in the main frame (the real internals are defined first and
+        // are non-configurable, so the `if (!...)` guard is a no-op there).
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry>::new("bmm_subframe_guard")
+                .js_init_script_on_all_frames(
+                    "try{if(!window.__TAURI_INTERNALS__){window.__TAURI_INTERNALS__={plugins:{}}}else if(!window.__TAURI_INTERNALS__.plugins){window.__TAURI_INTERNALS__.plugins={}}}catch(e){}"
+                        .to_string(),
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(link) = args.iter().find(|arg| arg.starts_with("bmm://")).cloned() {
-                let _ = app.emit_all("deep-link-received", link);
+                let _ = app.emit("deep-link-received", link);
             }
-            if let Some(window) = app.get_window("main") {
+            if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
                 let _ = window.unminimize();
             }
         }))
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_cli::init())
         .setup(|app| {
-            let app_dir = app.path_resolver().app_data_dir().unwrap_or_else(|| PathBuf::from("."));
+            let app_dir = app.path().app_data_dir().ok().unwrap_or_else(|| PathBuf::from("."));
             let data_path = app_dir.join("data.json");
             let app_state = AppState::load(data_path);
             
@@ -191,13 +214,13 @@ fn main() {
             app.manage(crate::commands::repo_server::RepoServerState::default());
             
             let state_handle = app.state::<AppState>();
-            commands::mods::start_sha_calculation_background(app.handle());
+            commands::mods::start_sha_calculation_background(app.handle().clone());
             commands::mods::populate_sha_queue(state_handle);
-            commands::mods::start_content_id_background(app.handle());
+            commands::mods::start_content_id_background(app.handle().clone());
             
-            let _ = commands::ban_manager::load_bans(&app.handle());
-            let _ = commands::whitelist_manager::load_whitelist(&app.handle());
-            let _ = commands::discord::init_discord_rpc(app.state::<AppState>(), app.handle());
+            let _ = commands::ban_manager::load_bans(&app.handle().clone());
+            let _ = commands::whitelist_manager::load_whitelist(&app.handle().clone());
+            let _ = commands::discord::init_discord_rpc(app.state::<AppState>(), app.handle().clone());
 
             // Start local HTTP Plugin API on port 51274
             {
@@ -205,30 +228,30 @@ fn main() {
                 let data_arc = state_ref.data.clone();
                 let data_path = state_ref.data_path.clone();
                 let creator_id = std::sync::Arc::new(
-                    commands::security::get_creator_id(app.handle()).unwrap_or_default()
+                    commands::security::get_creator_id(app.handle().clone()).unwrap_or_default()
                 );
                 let (tx, rx) = tokio::sync::oneshot::channel::<()>();
                 {
                     *state_ref.api_shutdown_tx.lock().unwrap() = Some(tx);
                 }
-                let api_handle = app.handle();
+                let api_handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     crate::api::start_api_server(data_arc, data_path, creator_id, rx, api_handle).await;
                 });
             }
 
             if let Some(link) = PENDING_DEEP_LINK.lock().unwrap().clone() {
-                let _ = app.emit_all("deep-link-received", link);
+                let _ = app.emit("deep-link-received", link);
             }
-            
-            apply_fs_security_mode(app.handle());
+
+            apply_fs_security_mode(app.handle().clone());
             Ok(())
         })
-        .on_window_event(|event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event.event() {
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if commands::crash::is_shutting_down() { return; }
                 api.prevent_close();
-                let window = event.window().clone();
+                let window = window.clone();
                 let state = window.state::<AppState>();
                 
                 // Add this marker so the crash logger knows it was a clean exit even if the thread is killed
@@ -323,6 +346,7 @@ fn main() {
             commands::settings::export_tutorial_assets,
             commands::settings::exit_app,
             commands::mods::open_folder,
+            commands::mods::open_external,
             commands::mods::open_file,
             commands::mods::open_mod_folder_at,
             commands::mods::open_mod_file_at,
@@ -345,12 +369,17 @@ fn main() {
             commands::analytics::analytics_export,
             commands::analytics::analytics_clear,
             commands::analytics::analytics_sent_packets,
+            commands::analytics::analytics_packet_status,
             commands::analytics::analytics_request_deletion,
             commands::analytics::analytics_request_data,
             commands::analytics::analytics_clear_sent_log,
             commands::analytics::replay_asset_data_url,
             commands::analytics::save_local_replay,
             commands::analytics::delete_local_replay,
+            commands::dialog::dlg_pick_folder,
+            commands::dialog::dlg_pick_file,
+            commands::dialog::dlg_save_file,
+            commands::dialog::dlg_confirm,
             commands::mods::get_conflict_file_tree,
             commands::mods::list_mod_files_recursive,
             commands::mods::path_join,

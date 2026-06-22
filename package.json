@@ -5,7 +5,7 @@
     "type": "module",
     "scripts": {
         "tauri": "tauri",
-        "dev": "concurrently \"npm run watch\" \"npx tauri dev\"",
+        "dev": "concurrently \"npm run watch\" \"npx tauri dev --no-dev-server\"",
         "build": "node scripts/security-guard.mjs && tsc --project frontend && npx tauri build && node scripts/gen-update-manifest.mjs",
         "security-guard": "node scripts/security-guard.mjs",
         "gen-manifest": "node scripts/gen-update-manifest.mjs",
@@ -15,7 +15,7 @@
         "test:i18n": "python tests/i18n_parity.test.py"
     },
     "devDependencies": {
-        "@tauri-apps/cli": "^1",
+        "@tauri-apps/cli": "^2",
         "concurrently": "^9.2.1",
         "puppeteer-core": "^25.0.4",
         "rrweb": "^2.0.1",
@@ -23,7 +23,7 @@
     },
     "dependencies": {
         "@tanstack/query-core": "^5.91.2",
-        "@tauri-apps/api": "^1",
+        "@tauri-apps/api": "^2",
         "cheerio": "^1.2.0"
     }
 }

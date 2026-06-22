@@ -1,3 +1,4 @@
+use tauri::Manager;
 use crate::state::AppState;
 use crate::fs_utils::{resolve_path, get_lang_dir};
 use tauri::State;
@@ -25,7 +26,7 @@ pub struct ExportOptions {
 /// recoverable. The caller should prompt the user to restart afterwards.
 #[tauri::command]
 pub fn factory_reset(state: State<AppState>, app: tauri::AppHandle) -> Result<(), String> {
-    let dir = app.path_resolver().app_data_dir().unwrap_or_default();
+    let dir = app.path().app_data_dir().ok().unwrap_or_default();
     let data_path = dir.join("data.json");
     if data_path.exists() {
         let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
@@ -47,7 +48,7 @@ pub fn factory_reset(state: State<AppState>, app: tauri::AppHandle) -> Result<()
 
 // ── Helpers for the file-based data dirs ──────────────────────────────────────
 fn data_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
-    app.path_resolver().app_data_dir().unwrap_or_default()
+    app.path().app_data_dir().ok().unwrap_or_default()
 }
 /// Read every *.json in a dir into a { filename: parsed-json } map.
 fn read_json_dir(dir: &std::path::Path) -> serde_json::Map<String, serde_json::Value> {
@@ -780,7 +781,7 @@ pub fn get_all_languages_content(app_handle: tauri::AppHandle) -> Result<std::co
 }
 #[tauri::command]
 pub fn import_language(app_handle: tauri::AppHandle, path: Option<String>) -> Result<String, String> {
-    use tauri::api::dialog::blocking::FileDialogBuilder;
+    use tauri_plugin_dialog::DialogExt;
     use std::fs;
 
     // If a path is supplied (API caller), use it directly; otherwise open a dialog.
@@ -790,10 +791,11 @@ pub fn import_language(app_handle: tauri::AppHandle, path: Option<String>) -> Re
             if !pb.exists() { return Err(format!("File not found: {}", p)); }
             Some(pb)
         }
-        None => FileDialogBuilder::new()
+        None => app_handle.dialog().file()
             .add_filter("Language JSON", &["json"])
             .set_title("Select Language File")
-            .pick_file(),
+            .blocking_pick_file()
+            .and_then(|fp| fp.into_path().ok()),
     };
 
     if let Some(src_path) = file_path {
@@ -845,7 +847,7 @@ pub fn import_language_data(app_handle: tauri::AppHandle, code: String, content:
 #[tauri::command]
 pub fn get_resource_debug_info(app_handle: tauri::AppHandle) -> String {
     let mut debug = String::new();
-    debug.push_str(&format!("Resource Dir: {:?}\n", app_handle.path_resolver().resource_dir()));
+    debug.push_str(&format!("Resource Dir: {:?}\n", app_handle.path().resource_dir().ok()));
     
     let checks = [
         "app.cfg", 
@@ -858,11 +860,11 @@ pub fn get_resource_debug_info(app_handle: tauri::AppHandle) -> String {
         "_up_/frontend/Lang/en.json"
     ];
     for check in &checks {
-        let res = app_handle.path_resolver().resolve_resource(check);
+        let res = app_handle.path().resolve(check, tauri::path::BaseDirectory::Resource).ok();
         debug.push_str(&format!("Resolve '{}': {:?} (Exists: {})\n", check, res, res.as_ref().map(|p| p.exists()).unwrap_or(false)));
     }
 
-    if let Some(res_dir) = app_handle.path_resolver().resource_dir() {
+    if let Some(res_dir) = app_handle.path().resource_dir().ok() {
         if let Ok(entries) = std::fs::read_dir(&res_dir) {
             debug.push_str("\nResource Dir Listing:\n");
             for entry in entries.flatten() {

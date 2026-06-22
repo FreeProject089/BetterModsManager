@@ -1,3 +1,5 @@
+use tauri::Manager;
+use tauri::Emitter;
 use serde::{Serialize, Deserialize};
 use crate::commands::crash::log_line;
 
@@ -269,8 +271,8 @@ pub async fn apply_incremental_update(
 
     // Resolve the BMM install root: parent of the resource dir (where frontend/, Lang/, etc. live)
     let install_root = app_handle
-        .path_resolver()
-        .resource_dir()
+        .path()
+        .resource_dir().ok()
         .and_then(|mut p| { p.pop(); Some(p) })
         .ok_or_else(|| "Cannot resolve install directory".to_string())?;
 

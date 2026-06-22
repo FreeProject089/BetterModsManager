@@ -1,3 +1,4 @@
+use tauri::Manager;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -85,8 +86,8 @@ pub fn read_session_log_tail(max_bytes: Option<usize>) -> String {
 
 pub fn get_crash_dir(app_handle: Option<&tauri::AppHandle>) -> PathBuf {
     if let Some(handle) = app_handle {
-        handle.path_resolver()
-            .app_data_dir()
+        handle.path()
+            .app_data_dir().ok()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("Crashes")
     } else {

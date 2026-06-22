@@ -28,14 +28,21 @@ path = "src/extra_tools/mcp_server.rs"
 
 
 [build-dependencies]
-tauri-build = { version = "1", features = [] }
+tauri-build = { version = "2", features = [] }
 chrono = "0.4"
 embed-resource = "2"
 
 [dependencies]
-# "devtools" enables the WebView2 inspector in RELEASE builds too — without it the
-# BMM DevTools "OPEN DEVTOOLS" button silently does nothing in production.
-tauri = { version = "1", features = [ "shell-sidecar", "cli", "devtools", "dialog-message", "dialog-confirm", "dialog-ask", "protocol-asset", "custom-protocol", "notification-all", "dialog-open", "dialog-save", "fs-all", "path-all", "window-all", "shell-open"] }
+# Tauri v2 — capabilities replace the allowlist; per-feature flags (dialog/fs/shell/
+# notification/path/window/cli/protocol-asset) move into separate plugins below.
+# "devtools" still enables the WebView2 inspector in RELEASE builds.
+tauri = { version = "2", features = ["devtools", "protocol-asset"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-cli = "2"
+tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
@@ -85,7 +92,7 @@ tempfile = "3"
 base64 = "0.21"
 winreg = "0.52"
 rayon = "1.8"
-tauri-plugin-single-instance = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
+tauri-plugin-single-instance = "2"
 jwalk = "0.8"
 rmcp = { version = "0.16", features = ["server", "transport-io"] }
 schemars = "0.8"
@@ -98,7 +105,5 @@ comfy-table = "7"
 # allocated and freed during normal BMM use.
 mimalloc = { version = "0.1", default-features = false }
 
-[features]
-# this feature is used for production builds or when `devPath` points to the filesystem
-# it is the default for `tauri build`
-custom-protocol = [ "tauri/custom-protocol" ]
+# NB: Tauri v2 dropped the `custom-protocol` cargo feature — the production asset
+# protocol is handled by the bundler/config, so the old `[features]` block is gone.

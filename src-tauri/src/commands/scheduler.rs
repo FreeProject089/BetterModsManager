@@ -12,12 +12,13 @@
 // "allow unsafe" intent the plugin script-runner uses and never invokes a shell
 // (args are passed separately, no `cmd /c "<string>"`), avoiding CWE-78.
 
+use tauri::Manager;
 use tauri::AppHandle;
 use crate::commands::crash::log_line;
 
 fn schedules_path(app: &AppHandle) -> std::path::PathBuf {
-    app.path_resolver()
-        .app_data_dir()
+    app.path()
+        .app_data_dir().ok()
         .unwrap_or_default()
         .join("schedules.json")
 }

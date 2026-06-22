@@ -13,6 +13,7 @@
 // `distinct_id` is the Creator ID — an anonymous, hardware-derived identifier the
 // user already has; no name/email is ever collected.
 
+use tauri::Manager;
 use std::path::PathBuf;
 use tauri::{AppHandle, State};
 use serde_json::{json, Value};
@@ -28,7 +29,7 @@ fn gzip_bytes(data: &[u8]) -> Option<Vec<u8>> {
 }
 
 fn queue_path(app: &AppHandle) -> PathBuf {
-    app.path_resolver().app_data_dir().unwrap_or_default().join("analytics_queue.jsonl")
+    app.path().app_data_dir().ok().unwrap_or_default().join("analytics_queue.jsonl")
 }
 
 fn read_queue(app: &AppHandle) -> Vec<Value> {
@@ -437,7 +438,7 @@ pub async fn analytics_flush(
 
 // ── Sent-packet log + per-packet deletion request ─────────────────────────────
 fn sent_path(app: &AppHandle) -> PathBuf {
-    app.path_resolver().app_data_dir().unwrap_or_default().join("analytics_sent.json")
+    app.path().app_data_dir().ok().unwrap_or_default().join("analytics_sent.json")
 }
 fn read_sent(app: &AppHandle) -> Vec<Value> {
     std::fs::read_to_string(sent_path(app)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
@@ -455,6 +456,51 @@ pub fn analytics_sent_packets(app_handle: AppHandle) -> Vec<Value> {
     let mut v = read_sent(&app_handle);
     v.reverse();
     v
+}
+
+/// Query the dashboard for the received/processed status of previously-sent
+/// packets. Routed through Rust (reqwest) rather than a webview fetch: the
+/// browser fetch needs the custom `ngrok-skip-browser-warning` header, which
+/// forces a CORS preflight that ngrok-free's interstitial intercepts (no
+/// Access-Control-Allow-Origin). reqwest has no CORS and sends a non-browser
+/// User-Agent, so it reaches the endpoint directly. Returns the `statuses` map
+/// ({ id: status }); empty object on any failure (best-effort, never throws).
+#[tauri::command]
+pub async fn analytics_packet_status(
+    endpoint: Option<String>,
+    ids: Vec<String>,
+) -> Value {
+    let base = endpoint.unwrap_or_default();
+    let base = base.trim().trim_end_matches('/').trim_end_matches("/batch");
+    if !base.starts_with("https://") || ids.is_empty() {
+        return json!({});
+    }
+    let url = format!("{}/api/packet-status?ids={}", base, ids.join(","));
+    let client = match reqwest::Client::builder()
+        .user_agent("BetterModsManager")
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return json!({}),
+    };
+    let resp = match client
+        .get(&url)
+        .header("ngrok-skip-browser-warning", "true")
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(_) => return json!({}),
+    };
+    if !resp.status().is_success() {
+        return json!({});
+    }
+    resp.json::<Value>()
+        .await
+        .ok()
+        .and_then(|j| j.get("statuses").cloned())
+        .unwrap_or_else(|| json!({}))
 }
 
 /// Ask the dashboard to erase one previously-sent packet. The deletion is applied
@@ -532,7 +578,7 @@ pub fn analytics_export(app_handle: AppHandle) -> Result<String, String> {
 /// Auto-saves a local replay bundle to the `Replays` folder without prompting.
 #[tauri::command]
 pub fn save_local_replay(app_handle: AppHandle, content: String) -> Result<String, String> {
-    let dir = app_handle.path_resolver().app_data_dir().unwrap_or_default().join("Replays");
+    let dir = app_handle.path().app_data_dir().ok().unwrap_or_default().join("Replays");
     let _ = std::fs::create_dir_all(&dir);
     let name = format!("bmm-session-{}.bmmreplay", chrono::Utc::now().timestamp_millis());
     let path = dir.join(&name);

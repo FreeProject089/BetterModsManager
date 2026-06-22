@@ -1,3 +1,4 @@
+use tauri::Emitter;
 use std::sync::Mutex;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::oneshot;
@@ -134,7 +135,7 @@ async fn get_cloudflared_path(handle: &tauri::AppHandle) -> Result<PathBuf, Stri
     }
 
     // 2. Default auto-download path
-    let app_dir = handle.path_resolver().app_data_dir().ok_or("Impossible de trouver le dossier AppData")?;
+    let app_dir = handle.path().app_data_dir().ok().ok_or("Impossible de trouver le dossier AppData")?;
     let bin_dir = app_dir.join("bin");
     if !bin_dir.exists() {
         std::fs::create_dir_all(&bin_dir).map_err(|e| e.to_string())?;
@@ -383,7 +384,7 @@ pub async fn start_repo_server(
                     };
 
                     if should_notify {
-                        let _ = handle.emit_all("bmm://server-client-connected", ServerClientConnectedPayload {
+                        let _ = handle.emit("bmm://server-client-connected", ServerClientConnectedPayload {
                             ip: ip.clone(),
                             creator_id: key.clone(),
                             protocol: protocol.to_string(),
@@ -456,7 +457,7 @@ pub async fn start_repo_server(
                     };
 
                     if should_notify {
-                        let _ = handle.emit_all("bmm://server-download-started", ServerDownloadStartedPayload {
+                        let _ = handle.emit("bmm://server-download-started", ServerDownloadStartedPayload {
                             ip: ip.clone(),
                             creator_id: key.clone(),
                             file: file_name.clone(),
@@ -548,7 +549,7 @@ pub async fn start_repo_server(
                             let mut completed_notifs = session_completed.lock().unwrap_or_else(|p| p.into_inner());
                             completed_notifs.insert(client_key, true);
                             
-                            let _ = handle_fin.emit_all("bmm://server-download-finished", ServerDownloadFinishedPayload {
+                            let _ = handle_fin.emit("bmm://server-download-finished", ServerDownloadFinishedPayload {
                                 ip: ip_fin,
                                 creator_id: key_fin,
                                 file: file_fin.clone(),

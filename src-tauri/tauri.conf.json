@@ -1,107 +1,84 @@
 {
+    "$schema": "https://schema.tauri.app/config/2",
+    "productName": "Better Mod Manager",
+    "version": "1.0.0",
+    "identifier": "com.bettermm.app",
     "build": {
         "beforeDevCommand": "",
         "beforeBuildCommand": "",
-        "devPath": "../frontend",
-        "distDir": "../frontend",
-        "withGlobalTauri": true
+        "frontendDist": "../frontend"
     },
-    "package": {
-        "productName": "Better Mod Manager",
-        "version": "1.0.0"
-    },
-    "tauri": {
-        "allowlist": {
-            "all": false,
-            "dialog": {
-                "open": true,
-                "save": true,
-                "confirm": true,
-                "ask": true,
-                "message": true
-            },
-            "fs": {
-                "all": true,
-                "scope": [
-                    "$APP/**",
-                    "$APPDATA/**",
-                    "$RESOURCE/**"
-                ]
-            },
-            "path": {
-                "all": true
-            },
-            "shell": {
-                "open": true,
-                "sidecar": true,
-                "scope": [
-                    {
-                        "name": "binaries/bmm-mcp-server",
-                        "sidecar": true
-                    }
-                ]
-            },
-            "window": {
-                "all": true
-            },
-            "notification": {
-                "all": true
-            },
-            "protocol": {
-                "asset": true,
-                "assetScope": [
-                    "$APP/**",
-                    "$APPDATA/**",
-                    "$RESOURCE/**"
-                ]
+    "app": {
+        "withGlobalTauri": true,
+        "windows": [
+            {
+                "label": "main",
+                "title": "Better Mod Manager",
+                "width": 1480,
+                "height": 960,
+                "minWidth": 1120,
+                "minHeight": 680,
+                "resizable": true,
+                "fullscreen": false,
+                "decorations": false,
+                "transparent": true,
+                "shadow": false,
+                "center": true,
+                "url": "index.html"
             }
-        },
-        "bundle": {
-            "active": true,
-            "targets": "all",
-            "identifier": "com.bettermm.app",
-            "icon": [
-                "icons/32x32.png",
-                "icons/128x128.png",
-                "icons/128x128@2x.png",
-                "icons/icon.icns",
-                "icons/icon.ico"
-            ],
-            "resources": [
-                "../app.cfg",
-                "../LICENSE.md",
-                "../TOS.md",
-                "../TOS_FR.md",
-                "../PRIVACY.md",
-                "../PRIVACY_FR.md",
-                "../frontend/Lang",
-                "../frontend/assets/tutorial-assets",
-                "../frontend/assets/links.json",
-                "../frontend/assets/builtin-themes",
-                "../Update"
-            ],
-            "externalBin": [
-                "binaries/bmm-mcp-server"
-            ],
-            "windows": {
-                "certificateThumbprint": null,
-                "digestAlgorithm": "sha256",
-                "timestampUrl": "",
-                "webviewInstallMode": {
-                    "type": "downloadBootstrapper",
-                    "silent": true
-                },
-                "nsis": {
-                    "license": "nsis/license.txt"
-                },
-                "wix": {
-                    "license": "nsis/license.txt"
-                }
-            }
-        },
+        ],
         "security": {
-            "csp": null
-        },
+            "csp": null,
+            "assetProtocol": {
+                "enable": true,
+                "scope": [
+                    "$APP/**",
+                    "$APPDATA/**",
+                    "$RESOURCE/**"
+                ]
+            }
+        }
+    },
+    "bundle": {
+        "active": true,
+        "targets": "all",
+        "icon": [
+            "icons/32x32.png",
+            "icons/128x128.png",
+            "icons/128x128@2x.png",
+            "icons/icon.icns",
+            "icons/icon.ico"
+        ],
+        "licenseFile": "nsis/license.txt",
+        "resources": [
+            "../app.cfg",
+            "../LICENSE.md",
+            "../TOS.md",
+            "../TOS_FR.md",
+            "../PRIVACY.md",
+            "../PRIVACY_FR.md",
+            "../frontend/Lang",
+            "../frontend/assets/tutorial-assets",
+            "../frontend/assets/links.json",
+            "../frontend/assets/builtin-themes",
+            "../Update"
+        ],
+        "externalBin": [
+            "binaries/bmm-mcp-server"
+        ],
+        "windows": {
+            "certificateThumbprint": null,
+            "digestAlgorithm": "sha256",
+            "timestampUrl": "",
+            "webviewInstallMode": {
+                "type": "downloadBootstrapper",
+                "silent": true
+            },
+            "nsis": {},
+            "wix": {}
+        }
+    },
+    "plugins": {
         "cli": {
             "description": "Better Mods Manager CLI",
             "longDescription": "Interface en ligne de commande pour BMM",
@@ -119,22 +96,6 @@
                     "takesValue": false
                 }
             ]
-        },
-        "windows": [
-            {
-                "label": "main",
-                "title": "Better Mod Manager",
-                "width": 1480,
-                "height": 960,
-                "minWidth": 1120,
-                "minHeight": 680,
-                "resizable": true,
-                "fullscreen": false,
-                "decorations": false,
-                "transparent": true,
-                "center": true,
-                "url": "index.html"
-            }
-        ]
+        }
     }
 }

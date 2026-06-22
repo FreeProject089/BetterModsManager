@@ -899,13 +899,11 @@ async function renderSentPackets(): Promise<void> {
     const reqIds = packets.filter(p => p.deletion_requested).map(p => p.id);
     if (reqIds.length) {
         try {
-            const base = (getLinks().analytics_endpoint || '').trim().replace(/\/+$/, '').replace(/\/batch$/, '');
-            if (base.startsWith('https://')) {
-                const r = await fetch(`${base}/api/packet-status?ids=${encodeURIComponent(reqIds.join(','))}`, {
-                    headers: { 'ngrok-skip-browser-warning': 'true' }
-                });
-                if (r.ok) statuses = (await r.json()).statuses || {};
-            }
+            // Routed through Rust (analytics_packet_status): a webview fetch needs
+            // the ngrok-skip header, which forces a CORS preflight that ngrok-free
+            // intercepts. reqwest in Rust has no CORS and reaches the endpoint.
+            const base = (getLinks().analytics_endpoint || '').trim();
+            statuses = (await invoke('analytics_packet_status', { endpoint: base, ids: reqIds })) as Record<string, any> || {};
         } catch {}
     }
     const clearRow = `<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><button class="btn btn-xs btn-ghost" id="apv-clear-hist">${t('analytics.clearHistory') || 'Clear history'}</button></div>`;

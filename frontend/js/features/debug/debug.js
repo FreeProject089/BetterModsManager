@@ -182,8 +182,8 @@ class DebugHub {
             catch (_e2) { /* ignore */ }
         }
         const dumpStr = JSON.stringify(dump, null, 2);
-        if (window.__TAURI__ && window.__TAURI__.tauri) {
-            window.__TAURI__.tauri.invoke('trigger_manual_crash_report', { frontendDump: dumpStr })
+        if (window.__TAURI__ && window.__TAURI__.core) {
+            window.__TAURI__.core.invoke('trigger_manual_crash_report', { frontendDump: dumpStr })
                 .then(path => console.log('[BMM-DEBUG] Crash report generated at:', path))
                 .catch(err => {
                 console.error('[BMM-DEBUG] Failed to send crash dump to backend:', err);

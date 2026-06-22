@@ -4099,6 +4099,7 @@
   "docs.updates.deltaTip": "Only files whose SHA-256 hash differs from the current version are downloaded, keeping updates small and fast.",
   "docs.updates.silentTip": "When no incremental manifest exists for the current version, BMM downloads and runs the full .msi installer as a fallback.",
   "docs.updates.title": "Application Updates",
+  "docs.videos.openYoutube": "Watch on YouTube",
   "docs.videos.tuto1.offline": "assets/videos/tuto1_en.mp4",
   "docs.videos.tuto1.online": "https://www.youtube.com/embed/dQw4w9WgXcQ",
   "docs.videos.tuto2.offline": "assets/videos/tuto2_en.mp4",

@@ -1,3 +1,4 @@
+use tauri::Emitter;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::net::SocketAddr;
@@ -419,7 +420,7 @@ struct IoIdBody {
 /// the BMM interface (native importer/exporter + file dialog), then reply 202.
 /// Used by all import/export endpoints so they behave "like a human in BMM".
 fn api_exec_reply(handle: &tauri::AppHandle, action: &str, params: serde_json::Value) -> warp::reply::WithStatus<warp::reply::Json> {
-    let _ = handle.emit_all("bmm://api-exec", serde_json::json!({ "action": action, "params": params }));
+    let _ = handle.emit("bmm://api-exec", serde_json::json!({ "action": action, "params": params }));
     warp::reply::with_status(
         warp::reply::json(&serde_json::json!({ "ok": true, "driven_by": "bmm-ui", "action": action })),
         StatusCode::ACCEPTED,
@@ -487,7 +488,7 @@ impl warp::reject::Reject for PermissionDenied {}
 
 // ── Local catalog helpers (module-level so they can be called from warp closures) ──
 fn catalog_path(h: &tauri::AppHandle) -> std::path::PathBuf {
-    h.path_resolver().app_data_dir().unwrap_or_default().join("apps-catalog.json")
+    h.path().app_data_dir().ok().unwrap_or_default().join("apps-catalog.json")
 }
 
 fn catalog_read(h: &tauri::AppHandle) -> serde_json::Value {
@@ -1311,7 +1312,7 @@ pub async fn start_api_server(
         .and(require_token(tok_mod_check))
         .and(with_app_handle(handle_mod_check))
         .map(|handle: tauri::AppHandle| {
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "mod/check-updates", "params": {}
             }));
             warp::reply::with_status(
@@ -1331,7 +1332,7 @@ pub async fn start_api_server(
         .and(warp::body::json::<ModUpdateApiBody>())
         .and(with_app_handle(handle_mod_update))
         .map(|body: ModUpdateApiBody, handle: tauri::AppHandle| {
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "mod/update",
                 "params": { "repoUrl": body.repo_url }
             }));
@@ -1353,7 +1354,7 @@ pub async fn start_api_server(
         .and(warp::body::json::<TelemetryConsentBody>())
         .and(with_app_handle(handle_tc))
         .map(|body: TelemetryConsentBody, handle: tauri::AppHandle| {
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "telemetry/consent", "params": { "enabled": body.enabled }
             }));
             warp::reply::with_status(warp::reply::json(&serde_json::json!({
@@ -1371,7 +1372,7 @@ pub async fn start_api_server(
         .and(warp::body::json::<TelemetrySettingsBody>())
         .and(with_app_handle(handle_ts))
         .map(|body: TelemetrySettingsBody, handle: tauri::AppHandle| {
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "telemetry/set",
                 "params": { "replay": body.replay, "full": body.full, "bench": body.bench }
             }));
@@ -1390,7 +1391,7 @@ pub async fn start_api_server(
         .and(warp::body::json::<RecorderBody>())
         .and(with_app_handle(handle_rec))
         .map(|body: RecorderBody, handle: tauri::AppHandle| {
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "recorder/set",
                 "params": { "on": body.on, "full": body.full, "rust": body.rust, "js": body.js }
             }));
@@ -1407,7 +1408,7 @@ pub async fn start_api_server(
         .and(require_token(tok_rex))
         .and(with_app_handle(handle_rex))
         .map(|handle: tauri::AppHandle| {
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({ "action": "replay/export", "params": {} }));
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({ "action": "replay/export", "params": {} }));
             warp::reply::with_status(warp::reply::json(&serde_json::json!({
                 "ok": true, "driven_by": "bmm-ui", "action": "replay/export"
             })), StatusCode::ACCEPTED)
@@ -1423,7 +1424,7 @@ pub async fn start_api_server(
         .and(warp::body::json::<ReplayImportBody>())
         .and(with_app_handle(handle_rim))
         .map(|body: ReplayImportBody, handle: tauri::AppHandle| {
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "replay/import", "params": { "path": body.path, "url": body.url }
             }));
             warp::reply::with_status(warp::reply::json(&serde_json::json!({
@@ -1440,7 +1441,7 @@ pub async fn start_api_server(
         .and(warp::body::json::<IdBody>())
         .and(with_app_handle(handle_lp))
         .map(|body: IdBody, handle: tauri::AppHandle| {
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "launchpack/run", "params": { "id": body.id }
             }));
             warp::reply::with_status(warp::reply::json(&serde_json::json!({
@@ -1457,7 +1458,7 @@ pub async fn start_api_server(
         .and(warp::body::json::<IdBody>())
         .and(with_app_handle(handle_sr))
         .map(|body: IdBody, handle: tauri::AppHandle| {
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "schedule/run", "params": { "id": body.id }
             }));
             warp::reply::with_status(warp::reply::json(&serde_json::json!({
@@ -1474,7 +1475,7 @@ pub async fn start_api_server(
         .and(warp::body::json::<DiscordRpcBody>())
         .and(with_app_handle(handle_dr))
         .map(|body: DiscordRpcBody, handle: tauri::AppHandle| {
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "discord/rpc", "params": { "enabled": body.enabled }
             }));
             warp::reply::with_status(warp::reply::json(&serde_json::json!({
@@ -1493,7 +1494,7 @@ pub async fn start_api_server(
         .and(warp::body::json::<DataExportAutoBody>())
         .and(with_app_handle(handle_dea))
         .map(|body: DataExportAutoBody, handle: tauri::AppHandle| {
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "data/export-auto",
                 "params": { "dir": body.dir, "name": body.name, "increment": body.increment }
             }));
@@ -1544,7 +1545,7 @@ pub async fn start_api_server(
 
             if is_auto {
                 // Run headless in the backend and return the results synchronously.
-                let window = match handle.get_window("main") {
+                let window = match handle.get_webview_window("main") {
                     Some(w) => w,
                     None => return Ok::<_, warp::Rejection>(warp::reply::with_status(
                         warp::reply::json(&serde_json::json!({ "ok": false, "error": "main window not available" })),
@@ -1566,7 +1567,7 @@ pub async fn start_api_server(
                 }
             } else {
                 // Manual: open the benchmark UI pre-filled; the user clicks Run.
-                let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+                let _ = handle.emit("bmm://api-exec", serde_json::json!({
                     "action": "benchmark/open",
                     "params": { "dataset": dataset, "size": size, "mb": body.mb, "sources": sources, "autoRun": false }
                 }));
@@ -1626,17 +1627,20 @@ pub async fn start_api_server(
 
     // POST /api/restart  (requires token)
     let tok_restart = token.clone();
+    let handle_restart = app_handle.clone();
     let restart = warp::path!("api" / "restart")
         .and(warp::post())
         .and(require_token(tok_restart))
-        .map(|| {
-            let exe = std::env::current_exe().ok();
+        .and(with_app_handle(handle_restart))
+        .map(|handle: tauri::AppHandle| {
+            // Use Tauri's own restart: it relaunches with the correct entry point
+            // (the dev server URL under `tauri dev`, the bundled app in prod) and
+            // then exits. The old approach respawned current_exe() + exit(0), which
+            // under `tauri dev` launched a bare exe that couldn't reach the dev
+            // server, so BMM just closed instead of restarting.
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_millis(300));
-                if let Some(exe_path) = exe {
-                    let _ = crate::commands::proc::hidden_command(exe_path).spawn();
-                }
-                std::process::exit(0);
+                handle.restart();
             });
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({ "ok": true, "message": "Restarting BMM..." })),
@@ -1969,7 +1973,7 @@ pub async fn start_api_server(
                 let st = handle.state::<crate::commands::repo_server::RepoServerState>();
                 if st.sync_busy.load(std::sync::atomic::Ordering::SeqCst) {
                     let reason = "A repo sync is already in progress.";
-                    let _ = handle.emit_all("bmm://api-rejected", serde_json::json!({
+                    let _ = handle.emit("bmm://api-rejected", serde_json::json!({
                         "action": "repo/sync", "reason": reason, "code": 409
                     }));
                     return warp::reply::with_status(
@@ -1985,7 +1989,7 @@ pub async fn start_api_server(
                 "repoProfileId": c.repo_profile_id,
                 "targetLocalProfileId": c.target_local_profile_id,
             })).collect();
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "repo/sync",
                 "params": {
                     "url": body.url,
@@ -2052,7 +2056,7 @@ pub async fn start_api_server(
                 let st = handle.state::<crate::commands::repo_server::RepoServerState>();
                 if st.gen_busy.load(std::sync::atomic::Ordering::SeqCst) {
                     let reason = "A repo generation is already in progress.";
-                    let _ = handle.emit_all("bmm://api-rejected", serde_json::json!({
+                    let _ = handle.emit("bmm://api-rejected", serde_json::json!({
                         "action": "repo/gen", "reason": reason, "code": 409
                     }));
                     return warp::reply::with_status(
@@ -2063,7 +2067,7 @@ pub async fn start_api_server(
             }
             // Drive the export/gen through the BMM interface (Server Repo page),
             // as if a human filled the export form — instead of running headless.
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "repo/gen",
                 "params": {
                     "profileIds": body.profile_ids,
@@ -2100,7 +2104,7 @@ pub async fn start_api_server(
         .and(with_app_handle(handle_repo_update))
         .map(|body: RepoUpdateBody, handle: tauri::AppHandle| {
             // Drive through the BMM interface (same UI-driven pattern as repo/gen)
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "repo/update",
                 "params": {
                     "repoDir": body.repo_dir,
@@ -2138,7 +2142,7 @@ pub async fn start_api_server(
                 let running = st.shutdown_tx.lock().map(|g| g.is_some()).unwrap_or(false);
                 if running {
                     let reason = "A repo server is already running. Stop it first.";
-                    let _ = handle.emit_all("bmm://api-rejected", serde_json::json!({
+                    let _ = handle.emit("bmm://api-rejected", serde_json::json!({
                         "action": "repo/host", "reason": reason, "code": 409
                     }));
                     return warp::reply::with_status(
@@ -2151,7 +2155,7 @@ pub async fn start_api_server(
             // Repo server), exactly as if a human filled the form and clicked
             // "Start" — NOT a detached background server. This makes the running
             // server visible & controllable from the Server Repo page.
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({
                 "action": "repo/host",
                 "params": {
                     "serveDir": body.serve_dir,
@@ -2181,7 +2185,7 @@ pub async fn start_api_server(
         .map(|_shutdown: HttpHostShutdown, handle: tauri::AppHandle| {
             // Stop the native repo server through the BMM interface (toggles the
             // Server Repo "Stop" button) — mirrors the human action.
-            let _ = handle.emit_all("bmm://api-exec", serde_json::json!({ "action": "repo/host-stop" }));
+            let _ = handle.emit("bmm://api-exec", serde_json::json!({ "action": "repo/host-stop" }));
             warp::reply::with_status(
                 warp::reply::json(&serde_json::json!({ "ok": true, "driven_by": "bmm-ui", "message": "HTTP host stop requested through the BMM interface." })),
                 StatusCode::OK,
@@ -2458,7 +2462,7 @@ pub async fn start_api_server(
         .and(warp::body::json::<AppInstallBody>())
         .and(with_app_handle(h_app_install))
         .map(|body: AppInstallBody, h: tauri::AppHandle| {
-            let _ = h.emit_all("bmm://api-exec", serde_json::json!({
+            let _ = h.emit("bmm://api-exec", serde_json::json!({
                 "action": "apps/install",
                 "params": {
                     "appId":       body.app_id,
@@ -2833,7 +2837,7 @@ pub async fn start_api_server(
         let path = info.path().to_string();
         let status = info.status().as_u16();
         if method != "OPTIONS" && path.starts_with("/api/") {
-            let _ = activity_handle.emit_all("bmm://api-action", serde_json::json!({
+            let _ = activity_handle.emit("bmm://api-action", serde_json::json!({
                 "method": method,
                 "path": path,
                 "status": status,
@@ -2973,7 +2977,7 @@ async fn do_api_repo_sync(
     use futures::StreamExt;
 
     macro_rules! emit {
-        ($event:expr, $payload:expr) => {{ let _ = handle.emit_all($event, $payload); }};
+        ($event:expr, $payload:expr) => {{ let _ = handle.emit($event, $payload); }};
     }
     macro_rules! bail {
         ($msg:expr) => {{
@@ -3312,7 +3316,7 @@ async fn do_api_repo_gen(
     use crate::models::repo::{RepoFile, RepoMod, RepoProfile, ServerRepo};
 
     macro_rules! emit {
-        ($event:expr, $payload:expr) => {{ let _ = handle.emit_all($event, $payload); }};
+        ($event:expr, $payload:expr) => {{ let _ = handle.emit($event, $payload); }};
     }
     macro_rules! bail {
         ($msg:expr) => {{

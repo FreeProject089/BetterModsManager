@@ -2,11 +2,12 @@
 // Install / list / delete / export / import .bmmtheme files.
 // A .bmmtheme is a ZIP archive containing theme.json + optional assets/fonts.
 
+use tauri::Manager;
 use std::path::PathBuf;
 
 fn themes_dir(app_handle: &tauri::AppHandle) -> PathBuf {
-    app_handle.path_resolver()
-        .app_data_dir()
+    app_handle.path()
+        .app_data_dir().ok()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("themes")
 }
@@ -31,9 +32,9 @@ fn list_builtin_themes_impl(app_handle: &tauri::AppHandle, include_hidden: bool)
     let hidden = get_hidden_builtins(app_handle.clone());
     // Resolve the bundled resource dir (handles the `_up_` prefix Tauri uses for
     // resources copied from outside src-tauri).
-    let dir = app_handle.path_resolver().resolve_resource("builtin-themes")
-        .or_else(|| app_handle.path_resolver().resolve_resource("_up_/frontend/assets/builtin-themes"))
-        .or_else(|| app_handle.path_resolver().resolve_resource("../frontend/assets/builtin-themes"));
+    let dir = app_handle.path().resolve("builtin-themes", tauri::path::BaseDirectory::Resource).ok()
+        .or_else(|| app_handle.path().resolve("_up_/frontend/assets/builtin-themes", tauri::path::BaseDirectory::Resource).ok())
+        .or_else(|| app_handle.path().resolve("../frontend/assets/builtin-themes", tauri::path::BaseDirectory::Resource).ok());
     let Some(dir) = dir else { return Ok("[]".into()); };
 
     // Accept both plain .json theme files and .bmmtheme ZIP archives.
@@ -87,7 +88,7 @@ fn list_builtin_themes_impl(app_handle: &tauri::AppHandle, include_hidden: bool)
 // restore ("reinstall") them later. The hidden set is a small JSON id list.
 
 fn hidden_builtins_path(app: &tauri::AppHandle) -> Option<PathBuf> {
-    app.path_resolver().app_data_dir().map(|d| d.join("hidden_builtins.json"))
+    app.path().app_data_dir().ok().map(|d| d.join("hidden_builtins.json"))
 }
 
 #[tauri::command]
@@ -142,8 +143,8 @@ pub fn get_active_theme(app_handle: tauri::AppHandle) -> Option<String> {
 /// Persists the active theme id.
 #[tauri::command]
 pub fn set_active_theme(app_handle: tauri::AppHandle, theme_id: String) -> Result<(), String> {
-    let data_dir = app_handle.path_resolver()
-        .app_data_dir().ok_or("no data dir")?;
+    let data_dir = app_handle.path()
+        .app_data_dir().ok().ok_or("no data dir")?;
     std::fs::write(data_dir.join("active_theme.txt"), &theme_id).map_err(|e| e.to_string())
 }
 
@@ -249,12 +250,13 @@ pub async fn export_theme(
     let save_path = match dest_path {
         Some(p) => std::path::PathBuf::from(p),
         None => {
-            use tauri::api::dialog::blocking::FileDialogBuilder;
-            FileDialogBuilder::new()
+            use tauri_plugin_dialog::DialogExt;
+            app_handle.dialog().file()
                 .set_title("Export Theme")
                 .add_filter("BMM Theme", &["bmmtheme"])
-                .set_file_name(&format!("{}.bmmtheme", theme_id))
-                .save_file()
+                .set_file_name(format!("{}.bmmtheme", theme_id))
+                .blocking_save_file()
+                .and_then(|fp| fp.into_path().ok())
                 .ok_or("No path selected")?
         }
     };

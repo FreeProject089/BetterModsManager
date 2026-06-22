@@ -43,11 +43,23 @@ console.error = (...args) => {
 };
 export async function loadTauri() {
     if (window.__TAURI__) {
-        _invoke = window.__TAURI__.invoke;
-        _dialog = window.__TAURI__.dialog;
-        _notifModule = window.__TAURI__.notification;
-        _convertFileSrc = window.__TAURI__.tauri ? window.__TAURI__.tauri.convertFileSrc : (p) => `asset.localhost/${p}`;
-        console.log('[BMM] Using local Tauri bridge');
+        // Tauri v2: invoke / convertFileSrc live under the `core` global. The
+        // dialog plugin's JS is NOT injected by withGlobalTauri, so dialogs are
+        // routed through Rust commands (commands::dialog) instead of __TAURI__.dialog.
+        const core = window.__TAURI__.core || window.__TAURI__;
+        _invoke = core.invoke;
+        _convertFileSrc = typeof core.convertFileSrc === 'function'
+            ? core.convertFileSrc
+            : (p) => `asset.localhost/${p}`;
+        _dialog = {
+            open: async (opts = {}) => opts && opts.directory
+                ? await _invoke('dlg_pick_folder')
+                : await _invoke('dlg_pick_file', { filters: opts?.filters ?? null }),
+            save: async (opts = {}) => await _invoke('dlg_save_file', { defaultPath: opts?.defaultPath ?? null, filters: opts?.filters ?? null }),
+            ask: async (message, opts = {}) => await _invoke('dlg_confirm', { message, title: opts?.title ?? null }),
+        };
+        _notifModule = null;
+        console.log('[BMM] Using local Tauri v2 bridge');
         return;
     }
     // SECURITY: In production, we should NEVER fallback to unpkg without SRI (Issue 5)

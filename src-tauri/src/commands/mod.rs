@@ -32,3 +32,4 @@ pub mod apps;
 pub mod themes;
 pub mod scheduler;
 pub mod analytics;
+pub mod dialog;

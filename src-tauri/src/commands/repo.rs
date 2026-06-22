@@ -1,3 +1,4 @@
+use tauri::Emitter;
 use crate::fs_utils;
 use crate::models::repo::{RepoChunk, RepoFile, RepoMod, ServerRepo};
 use crate::state::AppState;

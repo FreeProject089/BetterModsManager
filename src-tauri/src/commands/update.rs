@@ -1,3 +1,4 @@
+use tauri::Manager;
 use std::path::PathBuf;
 
 #[derive(serde::Serialize)]
@@ -18,8 +19,8 @@ pub struct UpdateFolder {
 pub fn get_update_notes(app_handle: tauri::AppHandle, sub_dir: Option<String>, lang: Option<String>) -> Result<Vec<UpdateNote>, String> {
     // Try to read from the Update directory relative to the executable
     let exe_dir = app_handle
-        .path_resolver()
-        .resource_dir()
+        .path()
+        .resource_dir().ok()
         .unwrap_or_else(|| PathBuf::from("."));
     
     let mut update_dir = exe_dir.join("Update");
@@ -105,8 +106,8 @@ pub fn get_old_updates_count(_app_handle: tauri::AppHandle) -> Result<usize, Str
 pub fn get_update_folder_structure(app_handle: tauri::AppHandle, lang: Option<String>) -> Result<Vec<UpdateFolder>, String> {
     // Try to read from the Update directory relative to the executable
     let exe_dir = app_handle
-        .path_resolver()
-        .resource_dir()
+        .path()
+        .resource_dir().ok()
         .unwrap_or_else(|| PathBuf::from("."));
     
     let update_dir = exe_dir.join("Update");

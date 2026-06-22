@@ -22,7 +22,7 @@ lazy_static! {
 }
 
 pub fn get_whitelist_file_path(handle: &AppHandle) -> Result<PathBuf, String> {
-    let app_dir = handle.path_resolver().app_data_dir().ok_or("Impossible de trouver le dossier AppData")?;
+    let app_dir = handle.path().app_data_dir().ok().ok_or("Impossible de trouver le dossier AppData")?;
     if !app_dir.exists() {
         fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
     }

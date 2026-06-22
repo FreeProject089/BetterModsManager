@@ -11,9 +11,12 @@ export async function initTitlebar(): Promise<void> {
     try {
         if (window.__TAURI__?.window) {
             const w = window.__TAURI__.window as any;
-            // Prefer getCurrent() — it returns the full WebviewWindow (with
-            // startResizing / maximize / …). Fall back to appWindow.
-            tauriWindow = (typeof w.getCurrent === 'function' ? w.getCurrent() : null) || w.appWindow || null;
+            // Prefer getCurrentWindow() (Tauri v2) — it returns the full
+            // WebviewWindow (with startResizing / maximize / …). Fall back to the
+            // v1 getCurrent()/appWindow for safety.
+            tauriWindow = (typeof w.getCurrentWindow === 'function' ? w.getCurrentWindow() : null)
+                || (typeof w.getCurrent === 'function' ? w.getCurrent() : null)
+                || w.appWindow || null;
         }
         // No CDN fallback: importing from unpkg violates the CSP, and the Tauri
         // global API (withGlobalTauri) is always present in the packaged WebView.

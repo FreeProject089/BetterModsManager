@@ -29,27 +29,42 @@ interface TauriAppAPI {
   getTauriVersion(): Promise<string>;
 }
 
+interface TauriWindowHandle {
+  minimize(): Promise<void>;
+  maximize(): Promise<void>;
+  unmaximize(): Promise<void>;
+  toggleMaximize(): Promise<void>;
+  close(): Promise<void>;
+  startDragging(): Promise<void>;
+  startResizing(direction: string): Promise<void>;
+  isMaximized(): Promise<boolean>;
+  onResized(handler: (event: unknown) => void): Promise<() => void>;
+}
+
 interface TauriWindowAPI {
-  appWindow: {
-    minimize(): Promise<void>;
-    toggleMaximize(): Promise<void>;
-    close(): Promise<void>;
-    startDragging(): Promise<void>;
-    startResizing(direction: string): Promise<void>;
-    isMaximized(): Promise<boolean>;
-    onResized(handler: (event: unknown) => void): Promise<() => void>;
-  };
+  appWindow?: TauriWindowHandle;
+  // Tauri v2: returns the current WebviewWindow handle.
+  getCurrentWindow?(): TauriWindowHandle;
+  // Tauri v1 fallback.
+  getCurrent?(): TauriWindowHandle;
 }
 
 interface TauriAPI {
-  invoke(cmd: string, args?: Record<string, unknown>): Promise<unknown>;
-  dialog: TauriDialogAPI;
-  notification: TauriNotificationAPI;
+  // Tauri v2: invoke / convertFileSrc live under `core` (always injected by
+  // withGlobalTauri in the packaged WebView).
+  core: {
+    invoke(cmd: string, args?: Record<string, unknown>): Promise<unknown>;
+    convertFileSrc(path: string, protocol?: string): string;
+  };
+  // Tauri v1 compatibility (kept for the dev/CDN fallback path).
+  invoke?(cmd: string, args?: Record<string, unknown>): Promise<unknown>;
+  dialog?: TauriDialogAPI;
+  notification?: TauriNotificationAPI;
   event: {
     listen(event: string, handler: (event: { payload: any | string }) => void): Promise<() => void>;
     emit(event: string, payload?: any): Promise<void>;
   };
-  tauri: {
+  tauri?: {
     invoke(cmd: string, args?: Record<string, unknown>): Promise<unknown>;
     convertFileSrc(path: string, protocol?: string): string;
   };

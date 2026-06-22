@@ -1,3 +1,4 @@
+use tauri_plugin_fs::FsExt;
 use crate::models::profile::Profile;
 use crate::state::AppState;
 use crate::commands::crash::log_line;

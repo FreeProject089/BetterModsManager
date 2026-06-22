@@ -1,3 +1,4 @@
+use tauri::Emitter;
 use crate::fs_utils;
 use crate::models::mod_entry::{ModEntry, ModStatus, ConflictReport, ConflictCategory, ConflictStatus, derive_content_id, update_content_id_from_hashes};
 use crate::commands::crash::log_line;
@@ -1345,6 +1346,33 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
 #[tauri::command]
 pub fn path_join(base: std::path::PathBuf, relative: String) -> Result<String, String> {
     Ok(base.join(relative).to_string_lossy().to_string())
+}
+
+/// Open an http(s) URL in the user's default browser. Used as the guaranteed
+/// fallback for YouTube tutorials: the inline embed can be refused by YouTube
+/// in the WebView (localhost/tauri.localhost origin), but the system browser
+/// always plays it.
+#[tauri::command]
+pub fn open_external(url: String) -> Result<(), String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("refused: only http(s) URLs".into());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        crate::commands::proc::hidden_command("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        crate::commands::proc::hidden_command("open").arg(&url).spawn().map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        crate::commands::proc::hidden_command("xdg-open").arg(&url).spawn().map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -2759,7 +2787,7 @@ pub fn delete_mod_hashes(app_handle: tauri::AppHandle, state: State<AppState>, m
     let _ = state.save();
     
     // Emit event for UI update
-    let _ = app_handle.emit_all("sha-status-changed", ShaStatusPayload {
+    let _ = app_handle.emit("sha-status-changed", ShaStatusPayload {
         mod_id: mod_id,
         status: "missing".to_string(),
         is_manual: true,
@@ -3086,7 +3114,7 @@ fn process_single_mod_hashing(
     data_shared: &std::sync::Arc<std::sync::Mutex<crate::state::AppData>>,
     data_path: &std::path::PathBuf,
 ) {
-    let _ = app_handle.emit_all("sha-status-changed", ShaStatusPayload {
+    let _ = app_handle.emit("sha-status-changed", ShaStatusPayload {
         mod_id: id.to_string(),
         status: "calculating".to_string(),
         is_manual,
@@ -3158,7 +3186,7 @@ fn process_single_mod_hashing(
         }
     }
     
-    let _ = app_handle.emit_all("sha-status-changed", ShaStatusPayload {
+    let _ = app_handle.emit("sha-status-changed", ShaStatusPayload {
         mod_id: id.to_string(),
         status: "done".to_string(),
         is_manual,

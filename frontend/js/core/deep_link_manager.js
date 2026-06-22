@@ -2,7 +2,7 @@
  * deep_link_manager.ts
  * Handles bmm:// protocol links for one-click mod installation.
  */
-import { invoke, apiBase } from './api.js';
+import { invoke, apiBase, pickFolder } from './api.js';
 import { toast } from '../ui/app.js';
 import { t } from './i18n.js';
 import { refreshMods } from '../features/mods/mods.js';
@@ -765,21 +765,21 @@ async function handleDeepLink(urlStr) {
                     inp.addEventListener('input', validate);
                 });
                 document.getElementById('btn-pick-import-game').onclick = async () => {
-                    const p = await window.__TAURI__.dialog.open({ directory: true });
+                    const p = await pickFolder();
                     if (p) {
                         gameInp.value = p;
                         validate();
                     }
                 };
                 document.getElementById('btn-pick-import-mods').onclick = async () => {
-                    const p = await window.__TAURI__.dialog.open({ directory: true });
+                    const p = await pickFolder();
                     if (p) {
                         modsInp.value = p;
                         validate();
                     }
                 };
                 document.getElementById('btn-pick-import-backup').onclick = async () => {
-                    const p = await window.__TAURI__.dialog.open({ directory: true });
+                    const p = await pickFolder();
                     if (p) {
                         backupInp.value = p;
                         validate();

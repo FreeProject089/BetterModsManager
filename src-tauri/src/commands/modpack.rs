@@ -1,3 +1,5 @@
+use tauri::Manager;
+use tauri::Emitter;
 use crate::models::modpack::LocalModpack;
 use crate::state::AppState;
 use std::path::PathBuf;
@@ -9,8 +11,8 @@ use crate::error::AppError;
 /// Returns the path to the modpacks directory in AppData
 fn get_modpacks_dir(handle: &AppHandle) -> Result<PathBuf, AppError> {
     let app_dir = handle
-        .path_resolver()
-        .app_data_dir()
+        .path()
+        .app_data_dir().ok()
         .ok_or_else(|| AppError::Internal("Cannot resolve AppData directory".to_string()))?;
     let dir = app_dir.join("modpacks");
     if !dir.exists() {
@@ -182,7 +184,7 @@ pub async fn export_modpack(
     id: String,
     dest_dir: Option<String>,
 ) -> Result<(), String> {
-    use tauri::api::dialog::blocking::FileDialogBuilder;
+    use tauri_plugin_dialog::DialogExt;
     let pack = get_modpack_by_id(handle.clone(), id).await?.ok_or("Modpack not found")?;
 
     let default_name = format!("{}.bmp", pack.name.replace(" ", "_"));
@@ -194,10 +196,11 @@ pub async fn export_modpack(
             if !dir.is_dir() { return Err(format!("Not a folder: {}", d)); }
             Some(dir.join(&default_name))
         }
-        None => FileDialogBuilder::new()
+        None => handle.dialog().file()
             .add_filter("Better ModPack", &["bmp"])
             .set_file_name(&default_name)
-            .save_file(),
+            .blocking_save_file()
+            .and_then(|fp| fp.into_path().ok()),
     };
 
     if let Some(path) = target {
@@ -213,7 +216,7 @@ pub async fn import_modpack(
     handle: AppHandle,
     path: Option<String>,
 ) -> Result<LocalModpack, AppError> {
-    use tauri::api::dialog::blocking::FileDialogBuilder;
+    use tauri_plugin_dialog::DialogExt;
 
     let chosen = match path.filter(|p| !p.trim().is_empty()) {
         Some(p) => {
@@ -221,9 +224,10 @@ pub async fn import_modpack(
             if !pb.exists() { return Err(AppError::NotFound(format!("File not found: {}", p))); }
             Some(pb)
         }
-        None => FileDialogBuilder::new()
+        None => handle.dialog().file()
             .add_filter("Better ModPack", &["bmp", "json"])
-            .pick_file(),
+            .blocking_pick_file()
+            .and_then(|fp| fp.into_path().ok()),
     };
 
     if let Some(path) = chosen

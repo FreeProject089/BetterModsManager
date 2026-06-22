@@ -706,7 +706,7 @@ export function initRepo() {
                 
                 let rawInvoke;
                 if (window.__TAURI__) {
-                    rawInvoke = window.__TAURI__.invoke;
+                    rawInvoke = window.__TAURI__.core.invoke;
                 } else {
                     const tauriApi = await import('https://unpkg.com/@tauri-apps/api@1/tauri.js');
                     rawInvoke = tauriApi.invoke;
@@ -1174,7 +1174,7 @@ export function initRepo() {
                     // and avoid api.ts wrapper that logs console.error spam on failure
                     let rawInvoke;
                     if (window.__TAURI__) {
-                        rawInvoke = window.__TAURI__.invoke;
+                        rawInvoke = window.__TAURI__.core.invoke;
                     } else {
                         const tauriApi = await import('https://unpkg.com/@tauri-apps/api@1/tauri.js');
                         rawInvoke = tauriApi.invoke;

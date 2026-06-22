@@ -1,3 +1,4 @@
+use tauri::Manager;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::AppHandle;
 use crate::models::app_catalog::*;
@@ -23,8 +24,8 @@ fn sanitize_download_name(name: &str, fallback_ext: &str) -> String {
 // ── State persistence ─────────────────────────────────────────────────────────
 
 fn state_path(app: &AppHandle) -> std::path::PathBuf {
-    app.path_resolver()
-        .app_data_dir()
+    app.path()
+        .app_data_dir().ok()
         .unwrap_or_default()
         .join("apps_state.json")
 }
@@ -1094,8 +1095,8 @@ pub fn remove_community_source(app_handle: AppHandle, url: String) -> Result<Vec
 
 #[tauri::command]
 pub fn get_default_apps_path(app_handle: AppHandle) -> Result<String, String> {
-    let path = app_handle.path_resolver()
-        .app_data_dir()
+    let path = app_handle.path()
+        .app_data_dir().ok()
         .unwrap_or_default()
         .join("Apps");
     std::fs::create_dir_all(&path).ok();

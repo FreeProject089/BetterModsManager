@@ -1,3 +1,4 @@
+use tauri::Emitter;
 use crate::fs_utils;
 use crate::models::modlist::{DownloadLink, ModFileEntry, ModList, ModListEntry};
 use crate::state::AppState;

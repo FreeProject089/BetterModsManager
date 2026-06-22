@@ -4106,6 +4106,7 @@
   "docs.updates.deltaTip": "Seuls les fichiers dont le hash SHA-256 diffère de la version actuelle sont téléchargés, rendant les mises à jour légères et rapides.",
   "docs.updates.silentTip": "Quand aucun manifest incrémental n'existe pour la version actuelle, BMM télécharge et lance le programme d'installation .msi complet en secours.",
   "docs.updates.title": "Mises à jour de l'application",
+  "docs.videos.openYoutube": "Regarder sur YouTube",
   "docs.videos.tuto1.offline": "assets/videos/tuto1_fr.mp4",
   "docs.videos.tuto1.online": "https://www.youtube.com/embed/dQw4w9WgXcQ",
   "docs.videos.tuto2.offline": "assets/videos/tuto2_fr.mp4",

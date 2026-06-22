@@ -643,7 +643,7 @@ window.revertHistoryAction = async (cacheKey) => {
             }
         });
 
-        const inv = typeof invoke !== 'undefined' ? invoke : window.__TAURI__.tauri.invoke;
+        const inv = typeof invoke !== 'undefined' ? invoke : window.__TAURI__.core.invoke;
         await inv('update_mod_meta', {
             modId: mod.id,
             payload: {

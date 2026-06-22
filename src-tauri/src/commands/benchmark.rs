@@ -1,5 +1,6 @@
+use tauri::Emitter;
 use sysinfo::System;
-use tauri::{Window, State};
+use tauri::{WebviewWindow, State};
 use std::sync::atomic::Ordering;
 use crate::state::AppState;
 use serde::{Serialize, Deserialize};
@@ -34,7 +35,7 @@ pub fn set_advanced_benchmark_mode(state: State<'_, AppState>, enabled: bool) {
 }
 
 #[tauri::command]
-pub async fn start_benchmark(window: Window, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn start_benchmark(window: WebviewWindow, state: State<'_, AppState>) -> Result<(), String> {
     if state.benchmark_running.load(Ordering::SeqCst) {
         return Ok(());
     }
@@ -292,7 +293,7 @@ fn tput(bytes: u64, ms: f64) -> Option<f64> {
 /// ({ step, total, label }) as it goes, and returns the structured report.
 #[tauri::command]
 pub async fn run_app_benchmark(
-    window: Window,
+    window: WebviewWindow,
     mode: String,
     real_sources: Option<Vec<String>>,
     scale: Option<String>,
@@ -330,7 +331,7 @@ pub fn cancel_app_benchmark() {
 }
 
 fn run_app_benchmark_blocking(
-    window: Window,
+    window: WebviewWindow,
     mode: String,
     real_sources: Option<Vec<String>>,
     scale: Option<String>,

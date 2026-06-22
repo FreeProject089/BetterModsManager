@@ -1,3 +1,4 @@
+use tauri::Manager;
 use tauri::State;
 use std::path::PathBuf;
 use crate::state::AppState;
@@ -75,7 +76,7 @@ pub async fn install_plugin(
         .send().await.map_err(|e| format!("Download error: {}", e))?
         .bytes().await.map_err(|e| format!("Read error: {}", e))?;
 
-    let app_dir = handle.path_resolver().app_data_dir()
+    let app_dir = handle.path().app_data_dir().ok()
         .ok_or("Cannot resolve app data dir")?;
     let plugins_dir = app_dir.join("plugins");
     std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
@@ -113,7 +114,7 @@ pub async fn install_plugin_from_file(
 
     let bytes = std::fs::read(&file_path).map_err(|e| format!("Read error: {}", e))?;
 
-    let app_dir = handle.path_resolver().app_data_dir()
+    let app_dir = handle.path().app_data_dir().ok()
         .ok_or("Cannot resolve app data dir")?;
     let plugins_dir = app_dir.join("plugins");
     std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
@@ -1496,7 +1497,7 @@ pub fn create_local_plugin(
         return Err("Plugin id and name are required".to_string());
     }
 
-    let app_dir = handle.path_resolver().app_data_dir()
+    let app_dir = handle.path().app_data_dir().ok()
         .ok_or_else(|| "Cannot resolve app data dir".to_string())?;
     let plugin_dir = app_dir.join("plugins").join(&manifest.id);
     std::fs::create_dir_all(&plugin_dir).map_err(|e| e.to_string())?;

@@ -1,3 +1,4 @@
+use tauri::Manager;
 use crate::state::AppState;
 use tauri::State;
 use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
@@ -59,8 +60,8 @@ fn load_rpc_links(handle: &tauri::AppHandle) -> RpcLinks {
         }
     }
     // 2. Bundled resource copy (offline backup)
-    if let Some(p) = handle.path_resolver().resolve_resource("../frontend/assets/links.json")
-        .or_else(|| handle.path_resolver().resolve_resource("frontend/assets/links.json"))
+    if let Some(p) = handle.path().resolve("../frontend/assets/links.json", tauri::path::BaseDirectory::Resource).ok()
+        .or_else(|| handle.path().resolve("frontend/assets/links.json", tauri::path::BaseDirectory::Resource).ok())
     {
         if let Ok(text) = std::fs::read_to_string(&p) {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {

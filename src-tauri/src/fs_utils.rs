@@ -1,3 +1,4 @@
+use tauri::Manager;
 use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
 use jwalk::WalkDir;
@@ -556,7 +557,7 @@ pub fn resolve_path(app_handle: &tauri::AppHandle, path: &str) -> Option<std::pa
     ];
 
     for candidate in &candidates {
-        if let Some(p) = app_handle.path_resolver().resolve_resource(candidate) {
+        if let Some(p) = app_handle.path().resolve(candidate, tauri::path::BaseDirectory::Resource).ok() {
             if p.exists() {
                 return Some(p);
             }
@@ -564,7 +565,7 @@ pub fn resolve_path(app_handle: &tauri::AppHandle, path: &str) -> Option<std::pa
     }
 
     // 2. Development: Try climbing up from resource_dir
-    if let Some(mut p) = app_handle.path_resolver().resource_dir() {
+    if let Some(mut p) = app_handle.path().resource_dir().ok() {
         for _ in 0..5 {
             let check = p.join(path);
             if check.exists() {
@@ -596,8 +597,8 @@ pub fn get_lang_dir(app_handle: &tauri::AppHandle) -> std::path::PathBuf {
     }
     
     let path = app_handle
-        .path_resolver()
-        .resource_dir()
+        .path()
+        .resource_dir().ok()
         .unwrap_or_else(|| std::path::PathBuf::from("."));
 
     let mut current = path.clone();
