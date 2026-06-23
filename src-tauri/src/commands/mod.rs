@@ -33,3 +33,4 @@ pub mod themes;
 pub mod scheduler;
 pub mod analytics;
 pub mod dialog;
+pub mod installer_handoff;

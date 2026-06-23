@@ -318,6 +318,7 @@ fn main() {
             commands::settings::reset_app_data,
             commands::settings::get_settings,
             commands::settings::update_settings,
+            commands::installer_handoff::consume_installer_handoff,
             commands::settings::apply_fs_security_mode_command,
             commands::settings::is_debug_mode,
             commands::settings::is_dev_build,

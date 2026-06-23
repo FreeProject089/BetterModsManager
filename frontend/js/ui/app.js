@@ -691,6 +691,24 @@ async function main() {
         await invoke('log_frontend_line', { line: '[BMM] App started from generated TypeScript!' });
     }
     catch (e) { }
+    // First-run handoff from BetterInstaller: if the installer pre-configured BMM
+    // (privacy/ToS, language, tutorial, telemetry), apply it BEFORE the first-run
+    // modals below so they don't appear. Settings (language/onboarding/telemetry)
+    // are applied Rust-side; the legal/lang modals are localStorage-gated, so we
+    // satisfy those keys here. No-op when installed without BetterInstaller.
+    try {
+        const ho = await invoke('consume_installer_handoff');
+        if (ho?.applied) {
+            if (ho.legal_accepted) {
+                localStorage.setItem('bmm_eula_accepted', 'true');
+                localStorage.setItem('bmm_privacy_seen', 'true');
+            }
+            if (ho.language_set)
+                localStorage.setItem('bmm_lang_selected', 'true');
+            console.log('[BMM] Applied installer handoff:', ho);
+        }
+    }
+    catch (e) { /* no handoff / older backend — normal */ }
     // Block the WebView2 "Inspect" context menu + F12 / Ctrl+Shift+I,J,C in
     // PRODUCTION only. Runs AFTER loadTauri() so the bridge is ready (otherwise
     // is_dev_build threw "bridge not initialized" and defaulted to prod, killing
