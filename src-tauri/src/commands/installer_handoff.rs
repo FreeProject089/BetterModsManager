@@ -11,9 +11,36 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use tauri::State;
+use tauri::{Manager, State};
 
 use crate::state::AppState;
+
+/// Copy every `*.json` from `src` into `dst` (created if needed). Returns the count.
+/// Skips traversal-y names. Used to seed bundled languages/themes on first run.
+fn copy_json_dir(src: &Path, dst: &Path) -> u32 {
+    if !src.is_dir() {
+        return 0;
+    }
+    let _ = std::fs::create_dir_all(dst);
+    let mut n = 0;
+    if let Ok(entries) = std::fs::read_dir(src) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.extension().and_then(|s| s.to_str()) != Some("json") {
+                continue;
+            }
+            if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
+                if name.contains("..") {
+                    continue;
+                }
+                if std::fs::copy(&p, dst.join(name)).is_ok() {
+                    n += 1;
+                }
+            }
+        }
+    }
+    n
+}
 
 /// Shape of the file we read. We only care about `settings`; unknown keys are
 /// ignored. Every value is validated/clamped — never trusted blindly.
@@ -21,9 +48,16 @@ use crate::state::AppState;
 struct HandoffFile {
     #[serde(default)]
     source: String,
+    /// Where BetterInstaller installed the app (holds any bundled preset file).
+    #[serde(default)]
+    install_dir: String,
     #[serde(default)]
     settings: serde_json::Map<String, serde_json::Value>,
 }
+
+/// Name of the optional preset bundled into the install dir (a normal BMM
+/// `_bmm_backup` export — themes, translations, catalogue, plugins, settings).
+const PRESET_FILE: &str = "bmm-preset.json";
 
 /// Returned to the frontend so it can satisfy the localStorage-gated first-run
 /// modals (legal/privacy/language) that live on the JS side.
@@ -35,10 +69,21 @@ pub struct HandoffResult {
     pub legal_accepted: bool,
     /// A concrete language was applied — lets the UI skip the language picker.
     pub language_set: bool,
+    /// Path to a bundled BMM preset the installer asked us to import (themes,
+    /// translations, catalogue, plugins). The frontend imports it via
+    /// `import_app_data`. `None` when there's nothing to pre-import.
+    pub import_preset_path: Option<String>,
+    /// How many bundled language packs were copied into the Lang dir.
+    pub languages_imported: u32,
+    /// How many bundled themes were copied into the themes dir.
+    pub themes_imported: u32,
 }
 
 #[tauri::command]
-pub fn consume_installer_handoff(state: State<AppState>) -> HandoffResult {
+pub fn consume_installer_handoff(
+    state: State<AppState>,
+    app_handle: tauri::AppHandle,
+) -> HandoffResult {
     let mut res = HandoffResult::default();
 
     let dir = match state.data_path.parent() {
@@ -71,9 +116,48 @@ pub fn consume_installer_handoff(state: State<AppState>) -> HandoffResult {
     }
     let _ = state.save();
 
+    // Pre-import. The installer drops bundled content under <install>/presets/.
+    let want = |k: &str| {
+        parsed
+            .settings
+            .get(k)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    };
+    if !parsed.install_dir.is_empty() {
+        let presets = Path::new(&parsed.install_dir).join("presets");
+        // Extra language packs → BMM's Lang dir (so they're available immediately).
+        if want("import_extra_languages") {
+            let dst = crate::fs_utils::get_lang_dir(&app_handle);
+            res.languages_imported = copy_json_dir(&presets.join("Lang"), &dst);
+        }
+        // Starter themes → BMM's per-user themes dir.
+        if want("import_starter_themes") {
+            if let Ok(data) = app_handle.path().app_data_dir() {
+                res.themes_imported = copy_json_dir(&presets.join("themes"), &data.join("themes"));
+            }
+        }
+        // A full BMM export preset (themes/translations/catalogue/plugins/settings)
+        // is imported by the frontend through the existing `import_app_data`.
+        if (want("import_starter_themes") || want("import_extra_languages"))
+            && Path::new(&parsed.install_dir).join(PRESET_FILE).exists()
+        {
+            res.import_preset_path = Some(
+                Path::new(&parsed.install_dir)
+                    .join(PRESET_FILE)
+                    .to_string_lossy()
+                    .to_string(),
+            );
+        }
+    }
+
     crate::commands::crash::log_line(format!(
-        "[HANDOFF] consumed installer-handoff.json (legal={}, lang_set={})",
-        res.legal_accepted, res.language_set
+        "[HANDOFF] consumed installer-handoff.json (legal={}, lang_set={}, langs={}, themes={}, preset={})",
+        res.legal_accepted,
+        res.language_set,
+        res.languages_imported,
+        res.themes_imported,
+        res.import_preset_path.is_some()
     ));
     mark_consumed(&file);
     res

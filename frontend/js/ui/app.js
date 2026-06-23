@@ -705,6 +705,18 @@ async function main() {
             }
             if (ho.language_set)
                 localStorage.setItem('bmm_lang_selected', 'true');
+            // Pre-import a bundled preset (themes / translations / catalogue / plugins)
+            // through the same path as a manual backup import. Runs before i18n init
+            // so freshly-imported languages are available immediately.
+            if (ho.import_preset_path) {
+                try {
+                    await invoke('import_app_data', { srcPath: ho.import_preset_path });
+                    console.log('[BMM] Imported installer preset:', ho.import_preset_path);
+                }
+                catch (e) {
+                    console.warn('[BMM] preset import failed:', e);
+                }
+            }
             console.log('[BMM] Applied installer handoff:', ho);
         }
     }
