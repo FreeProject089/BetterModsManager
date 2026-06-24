@@ -130,6 +130,22 @@ function _renderHub(overlay: HTMLElement): void {
             openAssetsPanel(tutId);
         });
     });
+    // Click a part chip → jump straight into that part.
+    overlay.querySelectorAll('.tut-hub-part-chip-btn').forEach(chip => {
+        chip.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const el = chip as HTMLElement;
+            _launchTutorialAt(el.dataset.tut!, el.dataset.part!, el.dataset.step || null);
+        });
+    });
+}
+
+/** Start a tutorial at a specific part/step (clicking a part chip in the hub). */
+function _launchTutorialAt(tutId: string, partId: string, stepId: string | null): void {
+    const tut = TUTORIALS.find(t => t.id === tutId);
+    if (!tut) return;
+    closeTutorialHub();
+    startTutorialEngine(tut, partId, stepId, openTutorialHub);
 }
 
 function _maybePromptAssetsThenLaunch(tutId: string, resume: boolean): void {
@@ -146,7 +162,7 @@ function _maybePromptAssetsThenLaunch(tutId: string, resume: boolean): void {
             <h3>${t('hub.assets.promptTitle')}</h3>
             <p>${t('hub.assets.promptDesc').replace('{n}', String(tut.assets.length))}</p>
             <ul class="tut-assets-prompt-list">
-                ${tut.assets.map(a => `<li><strong>${t(a.name_key)}</strong> <span class="tut-asset-type-badge tut-asset-${a.type}">${t(`hub.assets.type.${a.type}`)}</span></li>`).join('')}
+                ${tut.assets.map(a => `<li><span class="tut-asset-icon tut-asset-${a.type}">${_assetIcon(a.type)}</span><strong>${t(a.name_key)}</strong><span class="tut-asset-type-badge tut-asset-${a.type}">${t(`hub.assets.type.${a.type}`)}</span></li>`).join('')}
             </ul>
             <div class="tut-assets-prompt-btns">
                 <button class="btn btn-ghost" id="btn-prompt-skip">${t('hub.assets.skipBtn')}</button>
@@ -191,11 +207,12 @@ function _renderTutorialCard(tut: TutorialDef): string {
                 ? `<span class="tut-hub-part-dot" style="background:${tut.color}"></span>`
                 : `<span class="tut-hub-part-dot"></span>`;
 
-        return `<div class="${chipClass}" style="${partInProgress ? `--part-color:${tut.color}` : ''}">
+        const firstStep = p.steps[0]?.id ?? '';
+        return `<button type="button" class="${chipClass} tut-hub-part-chip-btn" data-tut="${tut.id}" data-part="${p.id}" data-step="${firstStep}" data-tooltip="${t('hub.startHere') || 'Start from here'}" style="${partInProgress ? `--part-color:${tut.color}` : ''}">
             ${icon}
             <span>${t(p.title_key)}</span>
             <span class="tut-hub-part-count">${partDone}/${partTotal}</span>
-        </div>`;
+        </button>`;
     }).join('');
 
     // Assets badge (clickable)
@@ -285,6 +302,13 @@ function _launchTutorial(tutId: string, resume: boolean): void {
 
 // ── Assets panel ─────────────────────────────────────────────────────────────
 
+/** Coloured icon for an asset type (game / mod / modpack). */
+function _assetIcon(type: string): string {
+    if (type === 'game') return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="3"/><path d="M7 12h3m-1.5-1.5v3"/><circle cx="16" cy="11" r=".8" fill="currentColor" stroke="none"/><circle cx="18.5" cy="13" r=".8" fill="currentColor" stroke="none"/></svg>`;
+    if (type === 'modpack') return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`;
+    return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.4 7.34 16.66 4.6A2 2 0 0 0 14 4.53l-2 2-1.46-1.47a2 2 0 0 0-2.83 0L5.6 7.18a2 2 0 0 0 0 2.83L7 11.47l-2 2a2 2 0 0 0 0 2.83l2.74 2.74a2 2 0 0 0 2.83 0l2-2 1.46 1.47a2 2 0 0 0 2.83 0l2.11-2.11a2 2 0 0 0 0-2.83L17.94 12l2-2a2 2 0 0 0 0-2.83Z"/></svg>`;
+}
+
 export function openAssetsPanel(tutId: string, onContinue?: () => void): void {
     const tut = TUTORIALS.find(t => t.id === tutId);
     if (!tut?.assets?.length) return;
@@ -297,10 +321,13 @@ export function openAssetsPanel(tutId: string, onContinue?: () => void): void {
     overlay.className = 'tut-assets-overlay';
 
     const items = tut.assets.map(a => `
-        <div class="tut-asset-item">
-            <div class="tut-asset-type-badge tut-asset-${a.type}">${t(`hub.assets.type.${a.type}`)}</div>
+        <div class="tut-asset-item tut-asset-row-${a.type}">
+            <div class="tut-asset-icon tut-asset-${a.type}">${_assetIcon(a.type)}</div>
             <div class="tut-asset-info">
-                <strong>${t(a.name_key)}</strong>
+                <div class="tut-asset-info-head">
+                    <strong>${t(a.name_key)}</strong>
+                    <span class="tut-asset-type-badge tut-asset-${a.type}">${t(`hub.assets.type.${a.type}`)}</span>
+                </div>
                 <p>${t(a.desc_key)}</p>
                 <small class="tut-asset-usage">${t(a.usage_key)}</small>
             </div>

@@ -198,8 +198,25 @@ function _cleanup(): void {
     if (_modalPollInterval)        { clearInterval(_modalPollInterval);        _modalPollInterval        = null; }
     if (_highlightTrackerInterval) { clearInterval(_highlightTrackerInterval); _highlightTrackerInterval = null; }
     document.querySelectorAll('.tut-highlight').forEach(el => el.remove());
+    document.getElementById('tut-ghost-cursor')?.remove();
+    // Don't leave the step's modal open when moving on.
+    try { _closeStepModal(_currentStep()); } catch { /* tutorial torn down */ }
     const shell = document.querySelector('.app-shell') as HTMLElement | null;
     if (shell) shell.style.pointerEvents = '';
+}
+
+/** Close the modal a step opened (via its modal_selector), using BMM's own close
+ *  button so its cleanup runs. No-op if the modal isn't open. */
+function _closeStepModal(step: TutorialStep | undefined): void {
+    if (!step?.modal_selector) return;
+    const el = document.getElementById(step.modal_selector)
+        || document.querySelector(`.${step.modal_selector}`);
+    const overlay = el?.closest('.modal-overlay') as HTMLElement | null;
+    if (overlay && overlay.classList.contains('open')) {
+        const closeBtn = overlay.querySelector('[data-close], .modal-close') as HTMLElement | null;
+        if (closeBtn) closeBtn.click();
+        else overlay.classList.remove('open');
+    }
 }
 
 function _ensurePanel(): void {
@@ -385,15 +402,35 @@ function _renderStep(): void {
     }).length;
     const globalPct = allStepKeys.length > 0 ? Math.round((completedCount / allStepKeys.length) * 100) : 0;
 
-    /* ── Nav hint (clickable) ── */
+    const hasTarget = !!(step.selector || (step.selectors && step.selectors.length) || (step.action && step.nav) || (step.fields && step.fields.length) || (step.modal_fields && step.modal_fields.length));
+
+    /* ── Field guide: numbered explanation of every field to fill ── */
+    const _fieldList = step.modal_fields ?? step.fields;
+    const fieldGuideHtml = _fieldList && _fieldList.length ? `
+        <div class="tut-field-guide">
+            <div class="tut-field-guide-title">${t('tut.fieldGuide')}</div>
+            ${_fieldList.map((f, i) => `
+                <div class="tut-field-row">
+                    <span class="tut-field-num" style="background:${tut.color}">${i + 1}</span>
+                    <span class="tut-field-desc">${t(f.key)}</span>
+                </div>`).join('')}
+        </div>
+    ` : '';
+
+    /* ── Nav hint (clickable). If already on the page, say so instead of "Go to". ── */
+    const _navViewKey = step.nav ? (_VIEW_ALIAS[step.nav] ?? step.nav) : '';
+    const _activeView = (document.querySelector('.nav-item.active') as HTMLElement | null)?.dataset.view;
+    const _onPage = !!step.nav && _activeView === _navViewKey;
+    const _checkSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="opacity:0.85"><polyline points="20 6 9 17 4 12"/></svg>`;
+    const _chevSvg = `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:2px;opacity:0.5"><polyline points="9 18 15 12 9 6"/></svg>`;
     const navHintHtml = step.nav && NAV_LABELS[step.nav] ? `
-        <button class="tut-nav-hint" id="btn-tut-nav-hint" data-nav="${step.nav}"
-            style="border-color:${tut.color}33;background:${tut.color}0d;cursor:pointer"
-            data-tooltip="${t('hub.goTo')} ${t(NAV_LABELS[step.nav])}">
-            ${NAV_ICONS[step.nav] || ''}
-            <span class="tut-nav-hint-label">${t('hub.goTo')}</span>
+        <button class="tut-nav-hint${_onPage ? ' on-page' : ''}" id="btn-tut-nav-hint" data-nav="${step.nav}"
+            style="border-color:${tut.color}33;background:${tut.color}0d;cursor:${_onPage ? 'default' : 'pointer'}"
+            data-tooltip="${_onPage ? (t('hub.alreadyHere') || 'You are already here') : t('hub.goTo') + ' ' + t(NAV_LABELS[step.nav])}">
+            ${_onPage ? _checkSvg : (NAV_ICONS[step.nav] || '')}
+            <span class="tut-nav-hint-label">${_onPage ? (t('hub.youreOn') || "You're on") : t('hub.goTo')}</span>
             <strong class="tut-nav-hint-page">${t(NAV_LABELS[step.nav])}</strong>
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:2px;opacity:0.5"><polyline points="9 18 15 12 9 6"/></svg>
+            ${_onPage ? '' : _chevSvg}
         </button>
     ` : '';
 
@@ -456,6 +493,7 @@ function _renderStep(): void {
 
             <div class="tut-step-scroll-area">
                 <p class="tut-step-text" id="tut-typewriter"></p>
+                ${fieldGuideHtml}
                 ${actionHtml}
             </div>
         </div>
@@ -471,9 +509,10 @@ function _renderStep(): void {
                 </div>
             </div>
             <div class="tut-footer-btns">
-                ${!isFirst
-                    ? `<button class="tut-prev-btn" id="btn-tut-prev">← ${t('hub.prev')}</button>`
-                    : `<span></span>`}
+                <div style="display:flex;align-items:center;gap:8px">
+                    ${!isFirst ? `<button class="tut-prev-btn" id="btn-tut-prev">← ${t('hub.prev')}</button>` : ''}
+                    ${hasTarget ? `<button class="tut-showme-btn" id="btn-tut-showme" data-tooltip="${t('tut.showMe.tip') || 'Show me where to interact'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 9 5 12 1.8-5.2L21 14Z"/><path d="M7.2 2.2 8 5.1"/><path d="m5.1 8-2.9-.8"/><path d="M14 4.1 12 6"/><path d="m6 12-1.9 2"/></svg>${t('tut.showMe') || 'Show me'}</button>` : ''}
+                </div>
                 <div style="display:flex;align-items:center;gap:8px">
                     <button class="tut-skip-all-btn" id="btn-tut-skip-all" data-tooltip="${t('tut.skip.title')}">${t('tut.skip')}</button>
                     <button class="tut-next-btn" id="btn-tut-next" ${step.action ? 'disabled' : ''} style="background:${tut.color};border-color:${tut.color}">${nextLabel}</button>
@@ -489,7 +528,7 @@ function _renderStep(): void {
         if (!document.getElementById('tut-engine-panel')) return;
         if (_partIndex !== _snapPart || _stepIndex !== _snapStep) return;
         _highlightElements(step);
-        if (step.modal_selector) _startModalPoll(step.modal_selector);
+        if (step.modal_selector) _startModalPoll(step.modal_selector, step.modal_fields);
     }, 300);
 
     /* ── Typewriter ── */
@@ -511,6 +550,7 @@ function _renderStep(): void {
 
     /* ── Skip all (quit tutorial + hub) ── */
     document.getElementById('btn-tut-skip-all')?.addEventListener('click', () => _skipTutorial());
+    document.getElementById('btn-tut-showme')?.addEventListener('click', () => _showMe());
 
     /* ── Skip action ── */
     document.getElementById('btn-tut-skip-action')?.addEventListener('click', () => {
@@ -519,6 +559,9 @@ function _renderStep(): void {
         document.getElementById('tut-action-box')?.classList.add('skipped');
         if (_modalPollInterval) { clearInterval(_modalPollInterval); _modalPollInterval = null; }
         document.querySelectorAll('.tut-highlight').forEach(el => el.remove());
+        // Don't leave the step's modal hanging open (e.g. skipping "create a profile"
+        // while the New Profile dialog is up).
+        _closeStepModal(step);
     });
 
     /* ── Part chip navigation ── */
@@ -705,7 +748,7 @@ function _startTypewriter(text: string): void {
 
 // ── Modal polling — highlights a secondary element once it becomes visible ───
 
-function _startModalPoll(modalSelector: string): void {
+function _startModalPoll(modalSelector: string, fields?: { sel: string; key: string }[]): void {
     if (_modalPollInterval) { clearInterval(_modalPollInterval); _modalPollInterval = null; }
     let attempts = 0;
     _modalPollInterval = setInterval(() => {
@@ -716,31 +759,70 @@ function _startModalPoll(modalSelector: string): void {
         if (target && _isElementVisible(target as HTMLElement)) {
             clearInterval(_modalPollInterval!);
             _modalPollInterval = null;
-            // Remove primary highlights and highlight the modal target instead
+            // Remove primary highlights, then highlight the modal target (and, if the
+            // step declares them, every field to fill — numbered, no dim).
             document.querySelectorAll('.tut-highlight').forEach(el => el.remove());
-            _highlightElement(modalSelector, 0);
+            if (fields && fields.length) {
+                _highlightFields(fields);
+            } else {
+                _highlightElement(modalSelector, 0);
+            }
         }
     }, 250);
 }
 
 // ── Highlighting ─────────────────────────────────────────────────────────────
 
+const _VIEW_ALIAS: Record<string, string> = { modlists: 'modlist', mods: 'library' };
+
+// When true, highlights are drawn as plain numbered rings (no spotlight dim) — used
+// for "field guide" multi-field highlighting where the whole form must stay visible.
+let _suppressDim = false;
+
+/** Highlight + number every field in a guide (no dim, so the form stays readable). */
+function _highlightFields(fields: { sel: string; key: string }[]): void {
+    _suppressDim = true;
+    fields.forEach((f, i) => _highlightElement(f.sel, i));
+    _suppressDim = false;
+}
+
 function _highlightElements(step: TutorialStep): void {
+    // Field guide for fields already on the page (numbered rings, no dim).
+    if (step.fields && step.fields.length) {
+        _highlightFields(step.fields);
+        return;
+    }
     const selectors: string[] = [
         ...(step.selector ? [step.selector] : []),
         ...(step.selectors ?? []),
     ];
-    selectors.forEach((sel, idx) => _highlightElement(sel, idx));
+    if (selectors.length) {
+        selectors.forEach((sel, idx) => _highlightElement(sel, idx));
+        return;
+    }
+    // Every action MUST point somewhere. If a step asks the user to act but declares
+    // no target, spotlight the nav item for its page so there's always an "interact
+    // here" cue instead of a blank "waiting…".
+    if (step.action && step.nav) {
+        const viewKey = _VIEW_ALIAS[step.nav] ?? step.nav;
+        const navBtn = document.querySelector(`.nav-item[data-view="${viewKey}"]`);
+        if (navBtn) _drawHighlight(navBtn, 0);
+    }
 }
 
 function _highlightElement(selector: string, idx: number = 0): void {
     const target = document.getElementById(selector)
         || document.querySelector(`[id="${selector}"]`)
         || document.querySelector(`.${selector}`);
-    if (!target) return;
+    if (target) _drawHighlight(target, idx);
+}
 
+function _drawHighlight(target: Element, idx: number = 0): void {
     const r = target.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return;
+
+    // Smart placement: keep the coach card off the highlighted target.
+    if (idx === 0) _autoPlacePanel(r);
 
     const cs = window.getComputedStyle(target as HTMLElement);
     const baseRadius = parseFloat(cs.borderTopLeftRadius) || 8;
@@ -752,6 +834,12 @@ function _highlightElement(selector: string, idx: number = 0): void {
     const hl = document.createElement('div');
     hl.className     = 'tut-highlight';
     hl.dataset.hlIdx = String(idx);
+    // The primary target (idx 0) carries the spotlight dim: a huge soft box-shadow
+    // darkens everything EXCEPT the cut-out, so the eye lands on the right spot.
+    // Secondary targets get just the coloured ring (no extra dim, to avoid stacking).
+    const dim = (idx === 0 && !_suppressDim)
+        ? `0 0 0 3px ${tutColorHex}40, 0 0 0 9999px rgba(8,11,18,0.60), 0 0 34px ${tutColorHex}99`
+        : `0 0 0 3px ${tutColorHex}33, 0 0 26px ${tutColorHex}80`;
     hl.style.cssText = `
         position:fixed;
         top:${r.top - pad}px;
@@ -760,22 +848,22 @@ function _highlightElement(selector: string, idx: number = 0): void {
         height:${r.height + pad * 2}px;
         border:2px solid ${tutColor};
         border-radius:${baseRadius + pad}px;
-        box-shadow:0 0 0 3px ${tutColorHex}2e, 0 0 28px ${tutColorHex}72;
+        color:${tutColor};
+        box-shadow:${dim};
         z-index:99990;
         pointer-events:none;
-        transition:top 0.18s ease, left 0.18s ease, width 0.18s ease, height 0.18s ease, border-radius 0.18s ease;
-        animation:tutHighlightPulse 2s ease-in-out infinite;
+        transition:top 0.22s cubic-bezier(0.4,0,0.2,1), left 0.22s cubic-bezier(0.4,0,0.2,1), width 0.22s cubic-bezier(0.4,0,0.2,1), height 0.22s cubic-bezier(0.4,0,0.2,1), border-radius 0.22s ease;
     `;
     // Stash the selector so the tracker can re-measure
     (hl as any)._tutTarget = target;
 
-    if (idx > 0) {
+    if (idx > 0 || _suppressDim) {
         const label = document.createElement('div');
         label.style.cssText = `
-            position:absolute; top:-9px; right:-9px;
-            width:17px; height:17px; border-radius:50%;
+            position:absolute; top:-9px; left:-9px;
+            width:18px; height:18px; border-radius:50%;
             background:${tutColor}; color:#fff;
-            font-size:9px; font-weight:800;
+            font-size:10px; font-weight:800;
             display:flex; align-items:center; justify-content:center;
             box-shadow:0 2px 6px ${tutColorHex}80;
         `;
@@ -785,6 +873,103 @@ function _highlightElement(selector: string, idx: number = 0): void {
 
     document.body.appendChild(hl);
     _startHighlightTracker();
+}
+
+/** Anchor the coach card to whichever edge is FARTHER from the spotlight target,
+ *  so the guidance never sits on top of what it's pointing at. No-op once the
+ *  user has dragged the card themselves. */
+function _autoPlacePanel(targetRect: DOMRect): void {
+    if (_panelLeft !== null || _panelTop !== null) return; // user positioned it
+    const panel = document.getElementById('tut-engine-panel');
+    if (!panel || panel.classList.contains('minimized')) return;
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const targetCenterY = targetRect.top + targetRect.height / 2;
+    // Target in the lower ~half → move the card to the top, else keep it bottom.
+    panel.classList.toggle('tut-anchor-top', targetCenterY > vh * 0.52);
+}
+
+/** "Phantom" demo: float a ghost cursor from the coach card to the current
+ *  spotlight target and play a click pulse — shows WHERE/how to interact without
+ *  actually clicking anything (safe). */
+function _showMe(): void {
+    // Visit EVERY highlighted target in order (so multi-field steps demonstrate
+    // each field, not just the "next" button).
+    const hls = Array.from(document.querySelectorAll('.tut-highlight')) as HTMLElement[];
+    if (!hls.length) return;
+    const color = _tutorial?.color ?? 'var(--accent)';
+
+    document.getElementById('tut-ghost-cursor')?.remove();
+    const ghost = document.createElement('div');
+    ghost.id = 'tut-ghost-cursor';
+    ghost.className = 'tut-ghost-cursor';
+    ghost.style.color = color;
+    ghost.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" stroke="#fff" stroke-width="1.3" stroke-linejoin="round"><path d="m4 2 6 16 2.3-6.4L18.8 9.2Z"/></svg>`;
+    const panel = document.getElementById('tut-engine-panel');
+    const pr = panel?.getBoundingClientRect();
+    ghost.style.left = `${pr ? pr.left + 44 : window.innerWidth / 2}px`;
+    ghost.style.top = `${pr ? pr.top + 24 : window.innerHeight - 180}px`;
+    document.body.appendChild(ghost);
+
+    const targetOf = (el: HTMLElement): Element | undefined => (el as { _tutTarget?: Element })._tutTarget;
+    const rectOf = (el: HTMLElement): DOMRect => {
+        const t = targetOf(el);
+        return (t?.getBoundingClientRect() ?? el.getBoundingClientRect()) as DOMRect;
+    };
+
+    // Temp demo values: type a sample into writable text fields, then restore them
+    // at the end (so nothing junk is left behind).
+    const filled: { el: HTMLInputElement; prev: string }[] = [];
+    const demoFill = (el: Element | undefined) => {
+        if (!el) return;
+        const inp = el as HTMLInputElement;
+        const tag = inp.tagName;
+        const type = (inp.getAttribute('type') || 'text').toLowerCase();
+        const typable = (tag === 'INPUT' && ['text', 'search', 'url', 'email', 'number', ''].includes(type)) || tag === 'TEXTAREA';
+        if (!typable || inp.readOnly || inp.disabled) return;
+        const sample = (inp.placeholder || 'Example').replace(/[.…]+\s*$/, '').trim() || 'Example';
+        filled.push({ el: inp, prev: inp.value });
+        inp.value = sample;
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+        inp.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    let i = 0;
+    const visit = () => {
+        if (!document.getElementById('tut-ghost-cursor')) return;
+        if (i >= hls.length) {
+            setTimeout(() => {
+                ghost.remove();
+                // Temp: undo the demo values.
+                filled.forEach(f => { f.el.value = f.prev; f.el.dispatchEvent(new Event('input', { bubbles: true })); });
+            }, 650);
+            return;
+        }
+        const r = rectOf(hls[i]);
+        const tx = r.left + r.width / 2;
+        const ty = r.top + r.height / 2;
+        ghost.style.left = `${tx}px`;
+        ghost.style.top = `${ty}px`;
+        const tgt = targetOf(hls[i]);
+        setTimeout(() => {
+            ghost.classList.add('clicking');
+            _ghostClickPulse(tx, ty, color);
+            demoFill(tgt);
+            setTimeout(() => ghost.classList.remove('clicking'), 300);
+            i++;
+            setTimeout(visit, 760);
+        }, 760);
+    };
+    requestAnimationFrame(visit);
+}
+
+function _ghostClickPulse(x: number, y: number, color: string): void {
+    const ring = document.createElement('div');
+    ring.className = 'tut-ghost-pulse';
+    ring.style.left = `${x}px`;
+    ring.style.top = `${y}px`;
+    ring.style.borderColor = color;
+    document.body.appendChild(ring);
+    setTimeout(() => ring.remove(), 650);
 }
 
 /* ── Highlight position tracker — re-measures every 150ms ────────────────── */

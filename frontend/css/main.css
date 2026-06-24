@@ -4169,10 +4169,8 @@ select.input-field option {
     display: flex;
     flex-direction: column;
     gap: 0;
-    /* Subtle two-tone surface so cards read as raised panels, not flat boxes. */
-    background:
-        linear-gradient(180deg, color-mix(in srgb, var(--tut-color, var(--accent)) 5%, transparent), transparent 120px),
-        var(--bmm-s02);
+    /* Flat surface (no coloured gradient bleed). */
+    background: var(--bmm-s02);
     border: 1px solid var(--bmm-s07);
     border-radius: 18px;
     transition: background 0.2s, box-shadow 0.25s, transform 0.18s, border-color 0.2s;
@@ -4193,15 +4191,6 @@ select.input-field option {
     pointer-events: none;
 }
 
-.tut-card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, var(--tut-color, var(--accent)) 9%, transparent) 0%, transparent 55%);
-    pointer-events: none;
-    border-radius: inherit;
-}
-
 .tut-card:hover {
     box-shadow: 0 10px 34px rgba(0,0,0,0.36), 0 0 0 1px color-mix(in srgb, var(--tut-color, var(--accent)) 26%, transparent);
     border-color: color-mix(in srgb, var(--tut-color, var(--accent)) 30%, var(--bmm-s07));
@@ -4213,10 +4202,6 @@ select.input-field option {
 .tut-card.is-complete {
     opacity: 0.78;
     border-left-color: var(--success);
-}
-
-.tut-card.is-complete::before {
-    background: linear-gradient(135deg, var(--success), transparent 60%);
 }
 
 /* Left color bar — hidden, replaced by border-left */
@@ -4321,10 +4306,11 @@ select.input-field option {
 
 .tut-card-progress-bar {
     flex: 1;
-    height: 6px;
+    height: 8px;
     background: var(--bmm-s06);
     border-radius: 99px;
     overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
 }
 
 .tut-card-progress-fill {
@@ -4332,7 +4318,21 @@ select.input-field option {
     border-radius: 99px;
     transition: width 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
     box-shadow: 0 0 8px -2px currentColor;
+    position: relative;
+    overflow: hidden;
 }
+/* Moving sheen on in-progress bars (the inline color sets `background`, so the
+   shimmer rides on a ::after overlay). */
+.tut-card.has-progress .tut-card-progress-fill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 20%, rgba(255,255,255,0.32) 50%, transparent 80%);
+    background-size: 200% 100%;
+    animation: tut-progress-shimmer 1.9s linear infinite;
+}
+@keyframes tut-progress-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .tut-card.has-progress .tut-card-progress-fill::after { animation: none; } }
 
 .tut-card-progress-label {
     font-size: 10px;
@@ -4355,12 +4355,12 @@ select.input-field option {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 10px 4px 8px;
-    border-radius: 20px;
+    padding: 4px 7px 4px 9px;
+    border-radius: 999px;
     font-size: 10.5px;
     font-weight: 600;
-    background: var(--bmm-s04);
-    border: 1px solid var(--bmm-s08);
+    background: var(--bmm-s03);
+    border: 1px solid var(--bmm-s07);
     color: var(--text-secondary);
     white-space: nowrap;
     transition: background 0.15s, border-color 0.15s, transform 0.12s;
@@ -4369,6 +4369,17 @@ select.input-field option {
 .tut-hub-part-chip:hover {
     transform: translateY(-1px);
     border-color: color-mix(in srgb, var(--part-color, var(--accent)) 35%, var(--bmm-s08));
+}
+
+/* Part chips are clickable buttons (jump into that part). */
+.tut-hub-part-chip-btn {
+    cursor: pointer;
+    font-family: inherit;
+    line-height: 1.4;
+}
+.tut-hub-part-chip-btn:hover {
+    border-color: color-mix(in srgb, var(--part-color, var(--accent)) 55%, var(--bmm-s08));
+    background: var(--bmm-s05);
 }
 
 .tut-hub-part-chip.done {
@@ -4396,9 +4407,21 @@ select.input-field option {
 .tut-hub-part-chip.done .tut-hub-part-dot { background: var(--success); }
 
 .tut-hub-part-count {
-    opacity: 0.5;
     font-size: 9px;
+    font-weight: 700;
     margin-left: 1px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    color: var(--text-muted);
+}
+.tut-hub-part-chip.done .tut-hub-part-count {
+    background: rgba(34,197,94,0.18);
+    color: var(--success);
+}
+.tut-hub-part-chip.in-progress .tut-hub-part-count {
+    background: color-mix(in srgb, var(--part-color, var(--accent)) 22%, transparent);
+    color: var(--text-primary);
 }
 
 /* Action buttons — bottom footer row */
@@ -4475,7 +4498,11 @@ select.input-field option {
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    width: min(720px, calc(100% - 32px));
+    width: min(540px, calc(100% - 32px));
+    /* User-resizable (drag the bottom-right grip). */
+    resize: both;
+    min-width: 360px;
+    min-height: 240px;
     /* Topmost of the whole tutorial system — above the hub, asset panels AND every
        app modal, so the interactive step guide is never hidden. */
     z-index: 2000100;
@@ -4490,9 +4517,26 @@ select.input-field option {
     animation: tutCardUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     display: flex;
     flex-direction: column;
-    max-height: calc(100vh - 60px);
+    max-height: min(560px, calc(100vh - 70px));
 }
 
+/* Coloured signature bar across the top of the coach card (tutorial's colour). */
+.tut-engine-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg,
+        var(--tut-panel-color, var(--accent)),
+        color-mix(in srgb, var(--tut-panel-color, var(--accent)) 45%, transparent));
+    z-index: 3;
+    pointer-events: none;
+}
+.tut-engine-panel {
+    box-shadow:
+        0 16px 50px -12px rgba(0,0,0,0.75),
+        0 0 0 1px color-mix(in srgb, var(--tut-panel-color, var(--accent)) 18%, var(--bmm-s05));
+}
 .tut-engine-panel.closing {
     animation: tutCardDown 0.25s ease forwards;
 }
@@ -4506,6 +4550,22 @@ select.input-field option {
     from { transform: translateX(-50%) translateY(0);    opacity: 1; }
     to   { transform: translateX(-50%) translateY(28px); opacity: 0; }
 }
+
+/* Smart placement: when the spotlight target sits in the lower half, the coach
+   card flips to the top so it never covers what it points at. */
+.tut-engine-panel.tut-anchor-top {
+    top: 20px;
+    bottom: auto;
+}
+
+/* Per-step fade-in (the body re-renders each step, so this replays every time). */
+@keyframes tutStepIn {
+    from { opacity: 0; transform: translateY(7px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.tut-card-body { animation: tutStepIn 0.28s ease both; }
+.bmm-no-anim .tut-card-body { animation: none; }
+@media (prefers-reduced-motion: reduce) { .tut-card-body { animation: none; } }
 
 /* ── Top bar ── */
 .tut-card-topbar {
@@ -4693,6 +4753,15 @@ select.input-field option {
     letter-spacing: -0.01em;
     color: #fff;
 }
+
+/* "You're already on this page" state (no need to navigate). */
+.tut-nav-hint.on-page {
+    border-color: rgba(34,197,94,0.32) !important;
+    background: rgba(34,197,94,0.10) !important;
+    color: var(--success);
+}
+.tut-nav-hint.on-page .tut-nav-hint-label { color: var(--success); opacity: 0.85; }
+.tut-nav-hint.on-page .tut-nav-hint-page { color: var(--success); }
 
 /* ── Body ── */
 .tut-card-body {
@@ -5334,9 +5403,113 @@ select.input-field option {
 .tut-min-restore-btn:hover { background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.22); }
 
 /* ── Highlight pulse ── */
-@keyframes tutHighlightPulse {
-    0%, 100% { box-shadow: 0 0 0 3px rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.15), 0 0 20px rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.35); }
-    50%       { box-shadow: 0 0 0 4px rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.28), 0 0 40px rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.6); }
+/* Expanding "radar" ring on the spotlight target — rides on ::after so the
+   element's own box-shadow (the dim cut-out + glow) stays static underneath. */
+.tut-highlight::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    pointer-events: none;
+    animation: tutRingPulse 2s ease-out infinite;
+}
+@keyframes tutRingPulse {
+    0%   { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 60%, transparent); }
+    70%  { box-shadow: 0 0 0 11px color-mix(in srgb, currentColor 0%, transparent); }
+    100% { box-shadow: 0 0 0 11px transparent; }
+}
+.bmm-no-anim .tut-highlight::after { animation: none; }
+@media (prefers-reduced-motion: reduce) { .tut-highlight::after { animation: none; } }
+
+/* ── "Show me" phantom demo (ghost cursor + click pulse) ── */
+.tut-ghost-cursor {
+    position: fixed;
+    z-index: 99995;
+    pointer-events: none;
+    transform: translate(-3px, -2px);
+    transition: left 0.72s cubic-bezier(0.34, 1.1, 0.64, 1), top 0.72s cubic-bezier(0.34, 1.1, 0.64, 1);
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.6));
+}
+.tut-ghost-cursor.clicking { animation: tutGhostClick 0.28s ease; }
+@keyframes tutGhostClick {
+    0%, 100% { transform: translate(-3px,-2px) scale(1); }
+    50%      { transform: translate(-3px,-2px) scale(0.78); }
+}
+.tut-ghost-pulse {
+    position: fixed;
+    z-index: 99994;
+    pointer-events: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    transform: translate(-50%, -50%);
+    animation: tutGhostPulse 0.62s ease-out forwards;
+}
+@keyframes tutGhostPulse {
+    from { opacity: 0.85; transform: translate(-50%,-50%) scale(0.5); }
+    to   { opacity: 0;    transform: translate(-50%,-50%) scale(4.5); }
+}
+.tut-showme-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 12px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--bmm-s04);
+    border: 1px solid var(--bmm-s09);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.tut-showme-btn:hover {
+    background: var(--bmm-s06);
+    color: var(--text-primary);
+    border-color: var(--accent);
+}
+
+/* ── Field guide (numbered explanation of each field to fill) ── */
+.tut-field-guide {
+    margin-top: 10px;
+    border: 1px solid var(--bmm-s07);
+    border-radius: 10px;
+    background: var(--bmm-s02);
+    padding: 10px 12px;
+}
+.tut-field-guide-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+.tut-field-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.tut-field-row:last-child { margin-bottom: 0; }
+.tut-field-num {
+    flex-shrink: 0;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+}
+.tut-field-desc {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    line-height: 1.45;
 }
 
 /* ── Assets Panel ────────────────────────────────────────────── */
@@ -5394,46 +5567,71 @@ select.input-field option {
 
 .tut-asset-item {
     display: flex;
-    gap: 12px;
-    padding: 12px;
+    gap: 13px;
+    padding: 13px 14px;
     background: var(--bmm-s03);
     border: 1px solid var(--bmm-s07);
+    border-radius: 12px;
+    transition: background .15s, border-color .15s, transform .12s;
+}
+.tut-asset-item:hover { background: var(--bmm-s04); transform: translateX(2px); }
+.tut-asset-row-game:hover    { border-color: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.45); }
+.tut-asset-row-mod:hover     { border-color: rgba(245,158,11,0.45); }
+.tut-asset-row-modpack:hover { border-color: rgba(34,197,94,0.45); }
+
+/* Coloured icon tile (left of each asset row). */
+.tut-asset-icon {
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
     border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.tut-asset-icon svg { width: 20px; height: 20px; }
+
+.tut-asset-info-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 3px;
 }
 
 .tut-asset-type-badge {
     flex-shrink: 0;
     padding: 2px 8px;
-    border-radius: 6px;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
+    border-radius: 999px;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
     height: fit-content;
 }
 
-.tut-asset-game    { background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.15); color: var(--accent); border: 1px solid rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.3); }
-.tut-asset-mod     { background: rgba(245, 158, 11, 0.15); color: var(--bmm-warning); border: 1px solid rgba(245, 158, 11, 0.3); }
-.tut-asset-modpack { background: rgba(34, 197, 94, 0.15);  color: var(--success); border: 1px solid rgba(34, 197, 94, 0.3); }
+.tut-asset-game    { background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.16); color: var(--accent);       border: 1px solid rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.34); }
+.tut-asset-mod     { background: rgba(245, 158, 11, 0.16);                                              color: var(--bmm-warning);  border: 1px solid rgba(245, 158, 11, 0.34); }
+.tut-asset-modpack { background: rgba(34, 197, 94, 0.16);                                               color: var(--success);      border: 1px solid rgba(34, 197, 94, 0.34); }
 
 .tut-asset-info {
     font-size: 12px;
     color: var(--text-secondary);
     flex: 1;
+    min-width: 0;
 }
+.tut-asset-info p { margin: 0; line-height: 1.5; }
 
-.tut-asset-info strong {
-    font-size: 13px;
+.tut-asset-info-head strong {
+    font-size: 13.5px;
     color: var(--text-primary);
-    display: block;
-    margin-bottom: 2px;
+    font-weight: 700;
 }
 
 .tut-asset-usage {
     display: block;
     font-size: 11px;
     color: var(--text-muted);
-    margin-top: 4px;
+    margin-top: 5px;
     font-style: italic;
 }
 
@@ -5517,15 +5715,19 @@ select.input-field option {
 .tut-assets-prompt-list li {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 10px;
-    padding: 8px 12px;
+    padding: 8px 12px 8px 8px;
     background: var(--bmm-s03);
     border: 1px solid var(--bmm-s06);
-    border-radius: 9px;
+    border-radius: 10px;
     font-size: 12.5px;
     color: var(--text-primary);
+    transition: border-color .15s, background .15s;
 }
+.tut-assets-prompt-list li:hover { background: var(--bmm-s04); }
+.tut-assets-prompt-list li strong { flex: 1; font-weight: 600; }
+.tut-assets-prompt-list .tut-asset-icon { width: 30px; height: 30px; border-radius: 8px; }
+.tut-assets-prompt-list .tut-asset-icon svg { width: 16px; height: 16px; }
 
 .tut-assets-prompt-btns {
     display: flex;

@@ -395,11 +395,11 @@ function renderAppCard(app: AppEntry) {
       <div class="apps-card-body">
         <span class="apps-card-title">${escHtml(app.title)}</span>
         <div class="apps-card-meta">
-          <span class="apps-cat-badge apps-cat-${app.category}">${escHtml(app.category)}</span>
+          <span class="apps-cat-badge apps-cat-${app.category}">${catIconSm(app.category)}${escHtml(app.category)}</span>
           ${app.version ? `<span class="apps-version">v${escHtml(app.version)}</span>` : ''}
         </div>
         <p class="apps-card-desc">${escHtml(app.description)}</p>
-        <div class="apps-card-tags">${app.tags.slice(0,3).map(tag=>`<span class="apps-tag">${escHtml(tag)}</span>`).join('')}</div>
+        <div class="apps-card-tags">${app.tags.slice(0,3).map(tag=>`<span class="apps-tag">${escHtml(tag)}</span>`).join('')}${app.tags.length>3?`<span class="apps-tag apps-tag-more">+${app.tags.length-3}</span>`:''}</div>
       </div>
     </div>`;
 }
@@ -407,6 +407,13 @@ function renderAppCard(app: AppEntry) {
 function priceBadge(price: string) {
     const cls: Record<string,string> = { free:'apps-price-free', freemium:'apps-price-freemium', paid:'apps-price-paid' };
     return `<span class="apps-price-badge ${cls[price]||''}">${escHtml(price)}</span>`;
+}
+
+/** Small (badge-sized) category icon — drawn at 12px via CSS. */
+function catIconSm(cat: string) {
+    if (cat === 'game') return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="3"/><path d="M7 12h3m-1.5-1.5v3"/><circle cx="16" cy="11" r=".7" fill="currentColor" stroke="none"/><circle cx="18" cy="13" r=".7" fill="currentColor" stroke="none"/></svg>`;
+    if (cat === 'utility') return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>`;
 }
 
 function thumbIcon(cat: string) {

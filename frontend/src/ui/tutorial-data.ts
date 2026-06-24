@@ -90,7 +90,41 @@ const BASICS: TutorialDef = {
                     nav: 'profiles',
                     selector: 'btn-new-profile',
                     modal_selector: 'btn-confirm-profile',
+                    // Every field of the New Profile modal, explained + numbered.
+                    modal_fields: [
+                        { sel: 'prof-name',        key: 'tut.basics.profiles.f.name' },
+                        { sel: 'prof-game',        key: 'tut.basics.profiles.f.game' },
+                        { sel: 'prof-color',       key: 'tut.basics.profiles.f.color' },
+                        { sel: 'prof-icon-grid',   key: 'tut.basics.profiles.f.icon' },
+                        { sel: 'prof-game-path',   key: 'tut.basics.profiles.f.gamedir' },
+                        { sel: 'prof-mods-path',   key: 'tut.basics.profiles.f.modsdir' },
+                        { sel: 'prof-backup-path', key: 'tut.basics.profiles.f.backupdir' },
+                        { sel: 'btn-confirm-profile', key: 'tut.basics.profiles.f.create' },
+                    ],
                     action: { event: BMM_ACTIONS.PROFILE_CREATED, desc_key: 'tut.basics.profiles.s2.action' },
+                },
+                {
+                    id: 'edit',
+                    title_key: 'tut.basics.profiles.edit.title',
+                    text_key:  'tut.basics.profiles.edit.text',
+                    img: 'assets/Tasky.png',
+                    nav: 'profiles',
+                    icon: ICON.profile,
+                    selector: 'btn-edit-profile',
+                    modal_selector: 'btn-confirm-edit-profile',
+                    optional: true,
+                    // Same fields as creation — edit/customise any of them anytime.
+                    modal_fields: [
+                        { sel: 'edit-prof-name',         key: 'tut.basics.profiles.f.name' },
+                        { sel: 'edit-prof-game',         key: 'tut.basics.profiles.f.game' },
+                        { sel: 'edit-prof-color',        key: 'tut.basics.profiles.f.color' },
+                        { sel: 'edit-prof-icon-grid',    key: 'tut.basics.profiles.f.icon' },
+                        { sel: 'edit-prof-game-path',    key: 'tut.basics.profiles.f.gamedir' },
+                        { sel: 'edit-prof-mods-path',    key: 'tut.basics.profiles.f.modsdir' },
+                        { sel: 'edit-prof-backup-path',  key: 'tut.basics.profiles.f.backupdir' },
+                        { sel: 'btn-confirm-edit-profile', key: 'tut.basics.profiles.f.save' },
+                    ],
+                    action: { event: BMM_ACTIONS.PROFILE_EDITED, desc_key: 'tut.basics.profiles.edit.action' },
                 },
                 {
                     id: 's3',
@@ -389,7 +423,7 @@ const ADVANCED: TutorialDef = {
     id: 'advanced',
     title_key: 'tut.advanced.meta.title',
     desc_key:  'tut.advanced.meta.desc',
-    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`,
+    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>`,
     color: '#f59e0b',
     parts: [
         // ── Part 1 : .MM Lists ─────────────────────────────────────

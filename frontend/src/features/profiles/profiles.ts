@@ -600,6 +600,7 @@ async function confirmEditProfile() {
 
         document.getElementById('modal-edit-profile').classList.remove('open');
         toast(t('prof.updated').replace('{name}', name), 'success');
+        dispatchBmmAction(BMM_ACTIONS.PROFILE_EDITED, { profileId, name });
         await renderProfiles();
         updateProfileChip();
         updateLibraryProfileSelector();

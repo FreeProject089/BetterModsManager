@@ -617,6 +617,21 @@ function patchHtmlLinks() {
             el.dataset.url = url;
     });
 }
+// Open an external URL in the system browser. `window.open(url,'_blank')` is a
+// no-op in the Tauri v2 webview, so route through the backend `open_external`
+// command (this is why the credits stack links stopped working after v2).
+function openExternal(url) {
+    if (!url)
+        return;
+    invoke('open_external', { url }).catch((e) => {
+        console.warn('[BMM] open_external failed:', e);
+        try {
+            window.open(url, '_blank');
+        }
+        catch { /* ignore */ }
+    });
+}
+window.openExternal = openExternal;
 // ── Boot ──────────────────────────────────────────────────
 async function main() {
     console.log('[BMM] App starting from generated TypeScript!');
@@ -1295,7 +1310,7 @@ window.openStackModal = () => {
         <div class="stack-section-title" data-i18n="credits.stackBackend">${t('credits.stackBackend')}</div>
         <div class="stack-grid">
             ${backend.map(item => `
-                <div class="stack-item" style="cursor:pointer" onclick="window.open('${item.url}', '_blank')">
+                <div class="stack-item" style="cursor:pointer" onclick="window.openExternal('${item.url}')">
                     <div class="stack-item-header">
                         <span class="stack-item-name">${item.name}</span>
                         <span class="stack-item-version">${item.v}</span>
@@ -1307,7 +1322,7 @@ window.openStackModal = () => {
         <div class="stack-section-title" data-i18n="credits.stackFrontend">${t('credits.stackFrontend')}</div>
         <div class="stack-grid">
             ${frontend.map(item => `
-                <div class="stack-item" style="cursor:pointer" onclick="window.open('${item.url}', '_blank')">
+                <div class="stack-item" style="cursor:pointer" onclick="window.openExternal('${item.url}')">
                     <div class="stack-item-header">
                         <span class="stack-item-name">${item.name}</span>
                         <span class="stack-item-version">${item.v}</span>
@@ -1342,13 +1357,13 @@ window.openContributorModal = (id) => {
         </div>
         <div class="contributor-modal-links">
             ${c.github ? `
-                <a href="${c.github}" target="_blank" class="contributor-link-btn">
+                <a href="${c.github}" onclick="event.preventDefault();window.openExternal('${c.github}')" class="contributor-link-btn" style="cursor:pointer">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
                     GitHub
                 </a>
             ` : ''}
             ${c.website ? `
-                <a href="${c.website}" target="_blank" class="contributor-link-btn">
+                <a href="${c.website}" onclick="event.preventDefault();window.openExternal('${c.website}')" class="contributor-link-btn" style="cursor:pointer">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                     Website
                 </a>

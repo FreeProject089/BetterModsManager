@@ -35,6 +35,12 @@ export interface TutorialStep {
   selectors?: string[];
   /** After the primary selector is interacted with (e.g. modal opens), highlight this element */
   modal_selector?: string;
+  /** Once the modal is open, ALSO highlight + explain each of these fields. Each entry
+   *  is a DOM id/class + an i18n key describing what the field does. Rendered as a
+   *  numbered "field guide" in the coach card, and "Show me" visits each in turn. */
+  modal_fields?: { sel: string; key: string }[];
+  /** Same as modal_fields but for fields already on the page (no modal wait). */
+  fields?: { sel: string; key: string }[];
   /** Inline SVG icon HTML to show next to the title */
   icon?: string;
   /** If set, the step waits for this BMM action before allowing Next */

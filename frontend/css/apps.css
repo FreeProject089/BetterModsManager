@@ -228,54 +228,71 @@
 }
 .apps-card-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: auto; }
 
-/* ── Badges ── */
+/* ── Badges & tags (refreshed: rounded pills, color-matched borders, icons) ── */
 .apps-price-badge {
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 7px;
-    border-radius: 10px;
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
     text-transform: uppercase;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.5px;
+    border: 1px solid transparent;
+    line-height: 1.5;
 }
-.apps-price-free    { background: rgba(16,185,129,0.2);  color: #10b981; }
-.apps-price-freemium{ background: rgba(99,102,241,0.2);  color: #818cf8; }
-.apps-price-paid    { background: rgba(245,158,11,0.2);  color: #f59e0b; }
+.apps-price-free    { background: rgba(16,185,129,0.16);  color: #34d399; border-color: rgba(16,185,129,0.38); }
+.apps-price-freemium{ background: rgba(99,102,241,0.16);  color: #a5b4fc; border-color: rgba(99,102,241,0.38); }
+.apps-price-paid    { background: rgba(245,158,11,0.16);  color: #fbbf24; border-color: rgba(245,158,11,0.38); }
 
 .apps-cat-badge {
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 7px;
-    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 9px 2px 7px;
+    border-radius: 999px;
     text-transform: capitalize;
+    border: 1px solid transparent;
+    line-height: 1.6;
 }
-.apps-cat-game    { background: rgba(59,130,246,0.15); color: #60a5fa; }
-.apps-cat-utility { background: rgba(139,92,246,0.15); color: #a78bfa; }
-.apps-cat-other   { background: var(--bmm-s08); color: var(--text-muted); }
+.apps-cat-badge svg { width: 12px; height: 12px; flex: none; }
+.apps-cat-game    { background: rgba(59,130,246,0.14);  color: #60a5fa; border-color: rgba(59,130,246,0.42); }
+.apps-cat-utility { background: rgba(139,92,246,0.14);  color: #a78bfa; border-color: rgba(139,92,246,0.42); }
+.apps-cat-other   { background: rgba(148,163,184,0.12); color: #94a3b8; border-color: rgba(148,163,184,0.34); }
 
 .apps-official-badge {
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 10px;
-    background: rgba(245,158,11,0.2);
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 9.5px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(245,158,11,0.26), rgba(245,158,11,0.10));
     color: #fbbf24;
+    border: 1px solid rgba(245,158,11,0.45);
 }
 .apps-partner-badge {
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 7px;
-    border-radius: 10px;
-    background: rgba(99,102,241,0.15);
-    color: #818cf8;
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(99,102,241,0.14);
+    color: #a5b4fc;
+    border: 1px solid rgba(99,102,241,0.42);
 }
 .apps-tag {
     font-size: 10px;
-    padding: 2px 7px;
+    font-weight: 500;
+    padding: 2px 8px;
     border-radius: 6px;
     background: var(--bmm-s06);
     color: var(--text-muted);
     border: 1px solid var(--border);
+    transition: border-color .14s, color .14s, background .14s;
 }
+.apps-tag::before { content: "#"; opacity: 0.45; margin-right: 1px; }
+.apps-tag-more::before { content: ""; margin: 0; }
+.apps-tag-more { font-weight: 700; opacity: 0.85; }
+.apps-card:hover .apps-tag { border-color: rgba(var(--accent-rgb), 0.4); }
 .apps-version { font-size: 11px; color: var(--text-muted); }
 
 /* ── Installed List ── */
@@ -466,18 +483,26 @@
     padding: 0 1px;
 }
 .apps-tag-chip {
-    padding: 3px 10px;
-    border-radius: 16px;
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 999px;
     font-size: 11px;
-    font-weight: 500;
+    font-weight: 600;
     border: 1px solid var(--border);
     background: var(--bg-secondary);
     color: var(--text-muted);
     cursor: pointer;
     transition: all 0.15s;
+    user-select: none;
 }
-.apps-tag-chip:hover { border-color: var(--accent); color: var(--text-primary); }
-.apps-tag-chip.active { background: rgba(var(--accent-rgb), 0.12); border-color: var(--accent); color: var(--accent); }
+.apps-tag-chip:hover { border-color: var(--accent); color: var(--text-primary); transform: translateY(-1px); }
+.apps-tag-chip.active {
+    background: rgba(var(--accent-rgb), 0.14);
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.25), 0 2px 6px rgba(var(--accent-rgb), 0.18);
+}
 
 /* Installed: fav button */
 .apps-inst-fav-btn {
