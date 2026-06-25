@@ -91,6 +91,7 @@ export async function initMapper(): Promise<void> {
         } finally {
             _mapperBusy = false;
         }
+        if (selectedModId) dispatchBmmAction(BMM_ACTIONS.MAPPER_MOD_SELECTED, { modId: selectedModId });
     });
 
     profileSelect?.addEventListener('change', async () => {

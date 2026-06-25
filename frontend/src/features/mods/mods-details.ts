@@ -7,6 +7,7 @@ import { escHtml, escAttr, escJs } from '../../core/utils.js';
 import { getModDetailHTML } from '../../ui/components.js';
 import { renderModList, updateCardState } from './mods-list.js';
 import { setupDependencyInput } from './mods-actions.js';
+import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 
 const S = new Proxy(appState.state, {
   get(target, prop) { return target[prop]; },
@@ -122,6 +123,7 @@ export function selectMod(modId) {
   const newCard = document.querySelector(`.mod-card[data-id="${modId}"]`);
   if (newCard) newCard.classList.add('selected');
   renderModDetail(modId);
+  dispatchBmmAction(BMM_ACTIONS.MOD_DETAIL_OPENED, { modId });
 }
 
 export function closeModDetail() {

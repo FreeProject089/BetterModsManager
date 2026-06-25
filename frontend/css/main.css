@@ -5329,13 +5329,19 @@ select.input-field option {
 
 /* ── Minimized pill ── */
 .tut-engine-panel.minimized {
-    width: auto;
-    min-width: 220px;
-    max-width: min(380px, calc(100% - 32px));
+    /* Override the base panel sizing — otherwise min-height:240px + the user's
+       resized inline width/height force a tall, broken box instead of a pill. */
+    width: auto !important;
+    height: auto !important;
+    min-width: 0;
+    min-height: 0 !important;
+    max-width: min(360px, calc(100% - 32px));
+    max-height: none;
     border-radius: 999px;
     overflow: hidden;
-    max-height: none;
     flex-direction: row;
+    resize: none;
+    animation: none;
 }
 
 .tut-min-pill {
@@ -5353,10 +5359,16 @@ select.input-field option {
 .tut-min-mascot {
     width: 30px;
     height: 30px;
-    object-fit: contain;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     filter: drop-shadow(0 2px 6px rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.3));
 }
+.tut-min-mascot svg { width: 22px; height: 22px; }
+/* Tutorial/step icon shown in the step avatar (replaces the old mascot image). */
+.tut-avatar svg { width: 28px; height: 28px; }
+.tut-finish-check { display: flex; align-items: center; justify-content: center; }
 
 .tut-min-info {
     flex: 1;
@@ -5430,6 +5442,54 @@ select.input-field option {
     transition: left 0.72s cubic-bezier(0.34, 1.1, 0.64, 1), top 0.72s cubic-bezier(0.34, 1.1, 0.64, 1);
     filter: drop-shadow(0 2px 5px rgba(0,0,0,0.6));
 }
+
+.tut-ghost-caption {
+    position: fixed;
+    z-index: 99996;
+    pointer-events: none;
+    max-width: 200px;
+    padding: 4px 9px;
+    border-radius: 7px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.45);
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+    transition: left 0.72s cubic-bezier(0.34,1.1,0.64,1), top 0.72s cubic-bezier(0.34,1.1,0.64,1), opacity 0.2s, transform 0.2s;
+}
+.tut-ghost-caption.show { opacity: 0.97; transform: translateY(0) scale(1); }
+
+/* "Scroll up/down" cue when the highlighted target is off-screen. */
+.tut-scroll-hint {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2000200;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 13px;
+    border: none;
+    border-radius: 999px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    animation: tutScrollBounce 1.1s ease-in-out infinite;
+}
+.tut-scroll-hint.is-up { top: 16px; }
+.tut-scroll-hint.is-down { bottom: 16px; }
+@keyframes tutScrollBounce {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50%      { transform: translateX(-50%) translateY(var(--tut-bounce, 4px)); }
+}
+.tut-scroll-hint.is-up { --tut-bounce: -4px; }
+.tut-scroll-hint.is-down { --tut-bounce: 4px; }
 .tut-ghost-cursor.clicking { animation: tutGhostClick 0.28s ease; }
 @keyframes tutGhostClick {
     0%, 100% { transform: translate(-3px,-2px) scale(1); }
@@ -5469,6 +5529,51 @@ select.input-field option {
     color: var(--text-primary);
     border-color: var(--accent);
 }
+
+/* ── Unsaved-changes warning (shown before closing an edited modal mid-tutorial) ── */
+.tut-unsaved-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000200;
+    background: rgba(5,10,22,0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.15s ease;
+}
+.tut-unsaved-box {
+    width: min(400px, 90vw);
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-s09);
+    border-radius: 16px;
+    padding: 22px 24px 18px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.tut-unsaved-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    background: rgba(245,158,11,0.12);
+    border: 1px solid rgba(245,158,11,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+.tut-unsaved-box h3 { font-size: 16px; margin: 0 0 6px; color: var(--text-primary); }
+.tut-unsaved-box p { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin: 0 0 14px; }
+.tut-unsaved-remember {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+    cursor: pointer;
+}
+.tut-unsaved-remember input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.tut-unsaved-btns { display: flex; justify-content: flex-end; gap: 10px; }
 
 /* ── Field guide (numbered explanation of each field to fill) ── */
 .tut-field-guide {
@@ -11009,6 +11114,24 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .sched-step { background:rgba(255,255,255,0.025); border:1px solid var(--border); border-radius:8px; padding:8px 10px; }
 .sched-step-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .sched-step-tag { font-size:10px; font-weight:800; padding:2px 7px; border-radius:5px; letter-spacing:.05em; }
+/* Drag-to-reorder: a clean full-height grip gutter on the left edge. */
+.sched-step { position:relative; padding-left:26px; }
+.sched-drag-handle {
+    position:absolute; left:0; top:0; bottom:0;
+    display:flex; align-items:center; justify-content:center;
+    width:22px; color:var(--text-muted); opacity:.32;
+    cursor:grab; border-radius:8px 0 0 8px;
+    transition:opacity .12s ease, background .12s ease;
+}
+.sched-drag-handle:hover { opacity:.95; background:rgba(255,255,255,0.05); }
+.sched-drag-handle:active { cursor:grabbing; }
+/* The inner SVG must NOT capture the drag (a WebView would start an image-drag and
+   the handle's dragstart would never fire). */
+.sched-drag-handle svg { pointer-events:none; }
+.sched-step.sched-dragging { opacity:.4; }
+/* Insertion line above/below the hovered block. */
+.sched-step.sched-drop-before { box-shadow:0 -3px 0 -1px var(--accent); }
+.sched-step.sched-drop-after  { box-shadow:0 3px 0 -1px var(--accent); }
 .sched-do { background:rgba(59,130,246,0.15); color:#60a5fa; }
 .sched-if { background:rgba(245,158,11,0.15); color:#f59e0b; }
 .sched-wait { background:rgba(16,185,129,0.15); color:#10b981; }

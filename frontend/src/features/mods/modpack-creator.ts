@@ -234,8 +234,11 @@ function _refreshModSelectorInEditor() {
         Array.from(document.querySelectorAll('#mp-selected-items [data-mod-id]'))
             .map(el => (el as HTMLElement).dataset.modId || '')
     );
-    availableContainer.innerHTML = _allMods.length
-        ? _allMods.map(m => `
+    // Tutorial demo mods float to the top so they're easy to find while following a tutorial.
+    const sortedMods = [..._allMods].sort((a: any, b: any) =>
+        (b.id?.startsWith('__bmm_tutorial_demo_mod_') ? 1 : 0) - (a.id?.startsWith('__bmm_tutorial_demo_mod_') ? 1 : 0));
+    availableContainer.innerHTML = sortedMods.length
+        ? sortedMods.map(m => `
             <div class="mp-mod-item${existingIds.has(m.id) ? ' mp-mod-selected' : ''}" data-id="${m.id}" data-name="${m.name || m.id}">
                 <span class="mp-mod-name">${m.name || m.id}</span>
                 <button class="btn btn-xs mp-mod-add-btn" ${existingIds.has(m.id) ? 'disabled' : ''}>+</button>
@@ -1303,6 +1306,7 @@ async function _executeApplyModpack(container, pack, isApplying) {
     } else {
         toast(isApplying ? t('modpack.applyOk') : t('modpack.deactivateOk') || 'Modpack désactivé avec succès !', 'success');
     }
+    if (isApplying) dispatchBmmAction(BMM_ACTIONS.MODPACK_APPLIED, { name: pack?.name });
 
     await _loadData();
     if (container) _renderModpackList(container);

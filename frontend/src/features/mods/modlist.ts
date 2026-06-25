@@ -243,6 +243,7 @@ export function initModlist() {
 
             const successCount = results.filter(r => r.includes('✅') || r.startsWith('[OK]')).length;
             toast(t('mm.installSuccess').replace('{success}', successCount).replace('{total}', results.length), 'success');
+            dispatchBmmAction(BMM_ACTIONS.MODLIST_IMPORTED, { count: successCount });
 
             if (createProfile) {
                 await renderProfiles();

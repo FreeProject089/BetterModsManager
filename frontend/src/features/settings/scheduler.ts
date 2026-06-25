@@ -52,6 +52,10 @@ interface Task {
 // ── State ───────────────────────────────────────────────────────────────────
 let _tasks: Task[] = [];
 let _timer: number | null = null;
+// Active drag-to-reorder operation (scoped to one steps[] list).
+let _dragState: { steps: Step[]; from: number } | null = null;
+// Last hovered insertion point — applied on dragend (drop is unreliable in WebView2).
+let _dropInfo: { steps: Step[]; index: number; after: boolean } | null = null;
 const _appStartFired = new Set<string>();
 const _onceFired = new Set<string>();
 
@@ -986,6 +990,28 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
         // clean guide line per level) — NOT a per-step margin, which used to stack
         // on top of the branch padding and squeezed deep blocks into a tiny column.
         const rerenderHere = () => renderStepsEditor(host, steps, depth);
+
+        // Drag-to-reorder within this list. A grip handle initiates the drag; we record
+        // the hovered insertion point on dragover and actually apply it on dragEND —
+        // `drop` is unreliable in WebView2, but `dragend` always fires.
+        const dropAfter = (e: DragEvent): boolean => {
+            const r = block.getBoundingClientRect();
+            return e.clientY > r.top + r.height / 2;
+        };
+        const markDrop = (e: DragEvent) => {
+            if (!_dragState || _dragState.steps !== steps) return;
+            e.preventDefault();                       // allow the drop (required for dragenter/over)
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+            const after = dropAfter(e);
+            _dropInfo = { steps, index: i, after };
+            host.querySelectorAll('.sched-drop-before, .sched-drop-after')
+                .forEach(el => el.classList.remove('sched-drop-before', 'sched-drop-after'));
+            block.classList.add(after ? 'sched-drop-after' : 'sched-drop-before');
+        };
+        block.addEventListener('dragenter', markDrop);
+        block.addEventListener('dragover', markDrop);
+        block.addEventListener('drop', (e) => { if (_dragState && _dragState.steps === steps) e.preventDefault(); });
+
         if (step.kind === 'action') {
             block.appendChild(actionEditor(step.action, () => _deleteStep(step, steps, i, rerenderHere)));
         } else if (step.kind === 'delay') {
@@ -1054,6 +1080,41 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             renderAddRow(block.querySelector('.sched-loop-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
             _wireFold(block, step);
         }
+
+        // Grip handle initiates the drag (block stays the drop target + drag image).
+        const handle = document.createElement('span');
+        handle.className = 'sched-drag-handle';
+        handle.draggable = true;
+        handle.title = t('sched.reorder') || 'Drag to reorder';
+        handle.innerHTML = `<svg width="12" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg>`;
+        handle.addEventListener('dragstart', (e) => {
+            _dragState = { steps, from: i };
+            _dropInfo = null;
+            block.classList.add('sched-dragging');
+            if (e.dataTransfer) {
+                e.dataTransfer.effectAllowed = 'move';
+                try { e.dataTransfer.setData('text/plain', String(i)); } catch { /* IE guard */ }
+                e.dataTransfer.setDragImage(block, 20, 14);
+            }
+        });
+        // Apply the reorder here: `dragend` always fires, `drop` does not (WebView2).
+        handle.addEventListener('dragend', () => {
+            block.classList.remove('sched-dragging');
+            host.querySelectorAll('.sched-drop-before, .sched-drop-after')
+                .forEach(el => el.classList.remove('sched-drop-before', 'sched-drop-after'));
+            const ds = _dragState, di = _dropInfo;
+            _dragState = null; _dropInfo = null;
+            if (!ds || !di || ds.steps !== di.steps) return;
+            let to = di.index + (di.after ? 1 : 0);
+            if (ds.from < to) to--;                    // account for the removed item
+            if (to === ds.from) return;
+            _snapshot();
+            const [moved] = ds.steps.splice(ds.from, 1);
+            ds.steps.splice(to, 0, moved);
+            rerenderHere();
+        });
+        block.prepend(handle);
+
         host.appendChild(block);
     });
 }

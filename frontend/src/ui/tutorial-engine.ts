@@ -54,6 +54,9 @@ let _typeInterval: ReturnType<typeof setInterval> | null = null;
 let _modalPollInterval: ReturnType<typeof setInterval> | null = null;
 let _onClose: (() => void) | null = null;
 let _langListener: ((e: Event) => void) | null = null;
+// Set when the user ticks "don't remind me" on the unsaved-changes warning —
+// suppresses it for the rest of this tutorial session.
+let _skipUnsavedWarning = false;
 
 // Drag state
 let _isDragging = false;
@@ -70,7 +73,7 @@ let _demoCreated = false;
 let _demoPrevActive: string | null = null;
 // Tutorials whose steps demonstrate mod/profile features and benefit from a
 // concrete example when the user has no real data yet.
-const DEMO_TUTORIALS = new Set(['basics']);
+const DEMO_TUTORIALS = new Set(['basics', 'advanced', 'other']);
 
 async function _setupDemo(): Promise<void> {
     try {
@@ -113,6 +116,7 @@ export function startTutorialEngine(
     _tutorial    = tutorial;
     _onClose     = onClose;
     _isMinimized = false;
+    _skipUnsavedWarning = false;
     try { (window as any).bmmTrack?.('tutorial', { id: tutorial.id, action: 'start' }); } catch {}
 
     _partIndex = 0;
@@ -199,6 +203,8 @@ function _cleanup(): void {
     if (_highlightTrackerInterval) { clearInterval(_highlightTrackerInterval); _highlightTrackerInterval = null; }
     document.querySelectorAll('.tut-highlight').forEach(el => el.remove());
     document.getElementById('tut-ghost-cursor')?.remove();
+    document.getElementById('tut-scroll-hint')?.remove();
+    document.getElementById('tut-unsaved-overlay')?.remove();
     // Don't leave the step's modal open when moving on.
     try { _closeStepModal(_currentStep()); } catch { /* tutorial torn down */ }
     const shell = document.querySelector('.app-shell') as HTMLElement | null;
@@ -211,7 +217,7 @@ function _closeStepModal(step: TutorialStep | undefined): void {
     if (!step?.modal_selector) return;
     const el = document.getElementById(step.modal_selector)
         || document.querySelector(`.${step.modal_selector}`);
-    const overlay = el?.closest('.modal-overlay') as HTMLElement | null;
+    const overlay = el?.closest('.modal-overlay, .modal-generic-overlay') as HTMLElement | null;
     if (overlay && overlay.classList.contains('open')) {
         const closeBtn = overlay.querySelector('[data-close], .modal-close') as HTMLElement | null;
         if (closeBtn) closeBtn.click();
@@ -315,6 +321,10 @@ function _renderMinimizedPill(): void {
     const panel = document.getElementById('tut-engine-panel');
     if (!panel) return;
     panel.classList.add('minimized');
+    // Drop any inline width/height left by the resize grip, so the pill collapses
+    // to its natural size instead of keeping the expanded panel dimensions.
+    panel.style.width = '';
+    panel.style.height = '';
     _applyDragPosition(panel);
 
     const tut  = _tutorial!;
@@ -322,7 +332,7 @@ function _renderMinimizedPill(): void {
 
     panel.innerHTML = `
         <div class="tut-min-pill">
-            <img src="${step.img || 'assets/Tasky.png'}" alt="Tasky" class="tut-min-mascot" />
+            <span class="tut-min-mascot" style="color:${tut.color}">${tut.icon || ''}</span>
             <div class="tut-min-info">
                 <span class="tut-min-title">${t(step.title_key)}</span>
                 <span class="tut-min-sub" style="color:${tut.color}">${t(tut.title_key)} &middot; ${t('hub.step').replace('{current}', String(_stepIndex + 1)).replace('{total}', String(_totalSteps()))}</span>
@@ -474,8 +484,8 @@ function _renderStep(): void {
 
         <div class="tut-card-body">
             <div class="tut-step-header">
-                <div class="tut-avatar">
-                    <img src="${step.img || 'assets/Tasky.png'}" alt="Tasky" />
+                <div class="tut-avatar" style="color:${tut.color}">
+                    ${step.icon || tut.icon || ''}
                 </div>
                 <div class="tut-header-text">
                     <div class="tut-header-meta">
@@ -685,6 +695,15 @@ function _prevStep(): void {
 
 function _nextStep(): void {
     const step = _currentStep();
+    // Leaving a step whose modal is still open + has unsaved edits → warn first.
+    if (!_skipUnsavedWarning && _isModalDirty(step)) {
+        _showUnsavedWarning(() => _advanceStep(step));
+        return;
+    }
+    _advanceStep(step);
+}
+
+function _advanceStep(step: TutorialStep): void {
     if (!step.action) markStepComplete(_tutorial!.id, _currentPart().id, step.id);
     _cleanup();
 
@@ -692,6 +711,53 @@ function _nextStep(): void {
     else if (_partIndex < _tutorial!.parts.length - 1) { _partIndex++; _stepIndex = 0; }
     else                                               { _finishTutorial(); return; }
     _renderStep();
+}
+
+/** True if the step's modal is open AND the user has typed/picked something in it. */
+function _isModalDirty(step: TutorialStep | undefined): boolean {
+    if (!step?.modal_selector) return false;
+    const el = document.getElementById(step.modal_selector)
+        || document.querySelector(`.${step.modal_selector}`);
+    const overlay = el?.closest('.modal-overlay, .modal-generic-overlay') as HTMLElement | null;
+    if (!overlay || !overlay.classList.contains('open')) return false;
+    const inputs = overlay.querySelectorAll('input, textarea, select');
+    for (const node of Array.from(inputs)) {
+        const inp = node as HTMLInputElement;
+        const type = (inp.getAttribute('type') || 'text').toLowerCase();
+        if (inp.disabled || type === 'hidden' || type === 'button' || type === 'submit') continue;
+        if ((inp.value ?? '').trim() !== '') return true;
+    }
+    return false;
+}
+
+/** Small "unsaved changes" warning shown before closing an edited modal mid-tutorial.
+ *  Continue-without-saving only; optional "don't remind me again" for the session. */
+function _showUnsavedWarning(onContinue: () => void): void {
+    document.getElementById('tut-unsaved-overlay')?.remove();
+    const color = _tutorial?.color ?? 'var(--accent)';
+    const ov = document.createElement('div');
+    ov.id = 'tut-unsaved-overlay';
+    ov.className = 'tut-unsaved-overlay';
+    ov.innerHTML = `
+        <div class="tut-unsaved-box">
+            <div class="tut-unsaved-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--bmm-warning)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+            <h3>${t('tut.unsaved.title') || 'Unsaved changes'}</h3>
+            <p>${t('tut.unsaved.text') || "You started editing here but didn't save. Continue anyway? Your changes in this dialog will be discarded."}</p>
+            <label class="tut-unsaved-remember"><input type="checkbox" id="tut-unsaved-remember" /> <span>${t('tut.unsaved.remember') || "Don't remind me again during this tutorial"}</span></label>
+            <div class="tut-unsaved-btns">
+                <button class="tut-skip-all-btn" id="tut-unsaved-cancel">${t('common.cancel') || 'Cancel'}</button>
+                <button class="tut-next-btn" id="tut-unsaved-continue" style="background:${color};border-color:${color}">${t('tut.unsaved.continue') || 'Continue without saving'}</button>
+            </div>
+        </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#tut-unsaved-cancel')?.addEventListener('click', () => ov.remove());
+    ov.querySelector('#tut-unsaved-continue')?.addEventListener('click', () => {
+        if ((ov.querySelector('#tut-unsaved-remember') as HTMLInputElement | null)?.checked) {
+            _skipUnsavedWarning = true;
+        }
+        ov.remove();
+        onContinue();
+    });
 }
 
 function _finishTutorial(): void {
@@ -704,7 +770,9 @@ function _finishTutorial(): void {
     panel.innerHTML = `
         <div class="tut-finish-screen">
             <div class="tut-finish-glow" style="background:${tut.color}"></div>
-            <img src="assets/Tasky_Happy.png" alt="Tasky" class="tut-finish-mascot" />
+            <div class="tut-finish-mascot tut-finish-check" style="color:${tut.color}">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
             <div class="tut-finish-text-col">
                 <h2 class="tut-finish-title">${t('hub.done')}</h2>
                 <p class="tut-finish-subtitle">${t(tut.title_key)}</p>
@@ -810,10 +878,37 @@ function _highlightElements(step: TutorialStep): void {
     }
 }
 
+/** A native <select> is replaced app-wide by a custom dropdown: the real <select>
+ *  is hidden (display:none ⇒ 0×0) and a sibling `.bmm-csel-trigger` button is shown.
+ *  Resolve any hidden select to its visible trigger so highlights/Show-me land on it. */
+function _resolveCustomSelect(el: Element | null | undefined): Element | null | undefined {
+    if (!el) return el;
+    if (el.tagName === 'SELECT' || el.classList?.contains('bmm-csel-native-hidden')) {
+        const wrap = el.nextElementSibling;
+        const trig = wrap?.classList?.contains('bmm-csel') ? wrap.querySelector('.bmm-csel-trigger') : null;
+        if (trig) return trig;
+    }
+    return el;
+}
+
+/** Tutorial demo entities carry ids prefixed `__bmm_tutorial_demo`. When an action
+ *  step targets a class that matches several elements (a mod card, a toggle, an Apply
+ *  button…), always prefer the one tied to the demo entity so the user acts on the
+ *  example — never on their real mods. */
+const _DEMO_ATTR = '[data-id^="__bmm_tutorial_demo"], [data-pack-id^="__bmm_tutorial_demo"], [data-modpack-id^="__bmm_tutorial_demo"]';
+function _preferDemo(matches: Element[]): Element | null {
+    if (!matches.length) return null;
+    return matches.find(el => el.matches(_DEMO_ATTR) || el.closest(_DEMO_ATTR)) || matches[0];
+}
+
 function _highlightElement(selector: string, idx: number = 0): void {
-    const target = document.getElementById(selector)
-        || document.querySelector(`[id="${selector}"]`)
-        || document.querySelector(`.${selector}`);
+    let target: Element | null = document.getElementById(selector)
+        || document.querySelector(`[id="${selector}"]`);
+    if (!target) {
+        // Class match — there may be many (one per mod/pack); prefer the demo entity's.
+        target = _preferDemo(Array.from(document.querySelectorAll(`.${selector}`)));
+    }
+    target = _resolveCustomSelect(target) ?? null;
     if (target) _drawHighlight(target, idx);
 }
 
@@ -910,10 +1005,47 @@ function _showMe(): void {
     ghost.style.top = `${pr ? pr.top + 24 : window.innerHeight - 180}px`;
     document.body.appendChild(ghost);
 
+    // A little caption that follows the cursor and says what to DO at each stop —
+    // makes "Show me" actually teach instead of just hovering.
+    const caption = document.createElement('div');
+    caption.id = 'tut-ghost-caption';
+    caption.className = 'tut-ghost-caption';
+    caption.style.background = color;
+    document.body.appendChild(caption);
+    const captionFor = (el: Element | undefined): string => {
+        if (!el) return t('tut.showme.look');
+        const node = el as HTMLElement;
+        const tag = node.tagName;
+        const name = (node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 22)
+            || node.getAttribute('aria-label') || (node as HTMLInputElement).placeholder || '';
+        if (tag === 'SELECT' || node.getAttribute('role') === 'combobox') return t('tut.showme.pick');
+        if (tag === 'INPUT' || tag === 'TEXTAREA') {
+            return (node as HTMLInputElement).readOnly ? t('tut.showme.choose') : t('tut.showme.type');
+        }
+        if (tag === 'BUTTON' || node.closest('button')) {
+            return name ? `${t('tut.showme.click')} “${name}”` : t('tut.showme.click');
+        }
+        return t('tut.showme.lookHere');
+    };
+
     const targetOf = (el: HTMLElement): Element | undefined => (el as { _tutTarget?: Element })._tutTarget;
+    // The element you actually CLICK for a field: a readonly path input is filled via
+    // its Browse/pick button, so point the ghost there instead of the (uneditable) box.
+    const actionPointOf = (t: Element | undefined): Element | undefined => {
+        if (!t) return t;
+        // Hidden native <select> → its visible custom-dropdown trigger.
+        const csel = _resolveCustomSelect(t);
+        if (csel && csel !== t) return csel;
+        const inp = t as HTMLInputElement;
+        if (inp.tagName === 'INPUT' && inp.readOnly) {
+            const btn = inp.closest('.path-picker, .form-group')?.querySelector('button');
+            if (btn) return btn;
+        }
+        return t;
+    };
     const rectOf = (el: HTMLElement): DOMRect => {
-        const t = targetOf(el);
-        return (t?.getBoundingClientRect() ?? el.getBoundingClientRect()) as DOMRect;
+        const ap = actionPointOf(targetOf(el));
+        return (ap?.getBoundingClientRect() ?? el.getBoundingClientRect()) as DOMRect;
     };
 
     // Temp demo values: type a sample into writable text fields, then restore them
@@ -924,8 +1056,15 @@ function _showMe(): void {
         const inp = el as HTMLInputElement;
         const tag = inp.tagName;
         const type = (inp.getAttribute('type') || 'text').toLowerCase();
-        const typable = (tag === 'INPUT' && ['text', 'search', 'url', 'email', 'number', ''].includes(type)) || tag === 'TEXTAREA';
+        const typable = (tag === 'INPUT' && ['text', 'url', 'email', 'number', ''].includes(type)) || tag === 'TEXTAREA';
         if (!typable || inp.readOnly || inp.disabled) return;
+        // Skip pickers / autocompletes / filters — typing a sample into a "search a
+        // mod" or "add a dependency" box is wrong (it's a selection, not free text).
+        const idl = (inp.id || '').toLowerCase();
+        if (/depend|search|require|filter|^mod-tag$|autocomplete/.test(idl)) return;
+        if (inp.getAttribute('role') === 'combobox' || inp.hasAttribute('list')) return;
+        const grp = inp.closest('.form-group, .path-picker') || inp.parentElement;
+        if (grp && grp.querySelector('[id*="suggest" i],[class*="suggest" i],[class*="dropdown" i]')) return;
         const sample = (inp.placeholder || 'Example').replace(/[.…]+\s*$/, '').trim() || 'Example';
         filled.push({ el: inp, prev: inp.value });
         inp.value = sample;
@@ -939,25 +1078,44 @@ function _showMe(): void {
         if (i >= hls.length) {
             setTimeout(() => {
                 ghost.remove();
+                caption.remove();
                 // Temp: undo the demo values.
                 filled.forEach(f => { f.el.value = f.prev; f.el.dispatchEvent(new Event('input', { bubbles: true })); });
             }, 650);
             return;
         }
-        const r = rectOf(hls[i]);
-        const tx = r.left + r.width / 2;
-        const ty = r.top + r.height / 2;
-        ghost.style.left = `${tx}px`;
-        ghost.style.top = `${ty}px`;
-        const tgt = targetOf(hls[i]);
+        // Bring the real click target on-screen first, otherwise the ghost would point
+        // at an element scrolled out of view.
+        const ap = actionPointOf(targetOf(hls[i])) as HTMLElement | undefined;
+        ap?.scrollIntoView?.({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        // Let the scroll settle, then aim.
         setTimeout(() => {
-            ghost.classList.add('clicking');
-            _ghostClickPulse(tx, ty, color);
-            demoFill(tgt);
-            setTimeout(() => ghost.classList.remove('clicking'), 300);
-            i++;
-            setTimeout(visit, 760);
-        }, 760);
+            if (!document.getElementById('tut-ghost-cursor')) return;
+            const r = rectOf(hls[i]);
+            const tx = r.left + r.width / 2;
+            // For tall targets (panels / file trees) aim near the top — that's where the
+            // header, dropdown and first row live — not the dead centre of a huge box.
+            const ty = r.height > 140 ? r.top + 34 : r.top + r.height / 2;
+            ghost.style.left = `${tx}px`;
+            ghost.style.top = `${ty}px`;
+            const tgt = targetOf(hls[i]);
+            // Caption: keep it on-screen, just above-right of the cursor.
+            caption.textContent = captionFor(ap ?? (tgt as HTMLElement));
+            const capX = Math.min(tx + 16, window.innerWidth - 160);
+            const capY = Math.max(ty - 30, 8);
+            caption.style.left = `${capX}px`;
+            caption.style.top = `${capY}px`;
+            caption.classList.add('show');
+            setTimeout(() => {
+                if (!document.getElementById('tut-ghost-cursor')) return;
+                ghost.classList.add('clicking');
+                _ghostClickPulse(tx, ty, color);
+                demoFill(tgt);
+                setTimeout(() => ghost.classList.remove('clicking'), 300);
+                i++;
+                setTimeout(visit, 760);
+            }, 620);
+        }, 280);
     };
     requestAnimationFrame(visit);
 }
@@ -982,14 +1140,26 @@ function _startHighlightTracker(): void {
         if (highlights.length === 0) {
             clearInterval(_highlightTrackerInterval!);
             _highlightTrackerInterval = null;
+            _renderScrollHint(null, null);
             return;
         }
+        let anyInView = false;
+        let offTarget: { el: HTMLElement; dir: 'up' | 'down' } | null = null;
         highlights.forEach(hlEl => {
             const hl     = hlEl as HTMLElement;
             const target = (hl as any)._tutTarget as HTMLElement | null;
             if (!target || !target.isConnected) { hl.remove(); return; }
             const r = target.getBoundingClientRect();
             if (r.width === 0 || r.height === 0) { hl.remove(); return; }
+            // View bounds = the nearest scroll container, else the window.
+            const clip = _scrollClipRect(target);
+            const vTop = clip ? clip.top : 0;
+            const vBottom = clip ? clip.bottom : window.innerHeight;
+            const cy = r.top + r.height / 2;
+            const inView = cy >= vTop - 2 && cy <= vBottom + 2;
+            hl.style.visibility = inView ? 'visible' : 'hidden';
+            if (inView) anyInView = true;
+            else if (!offTarget) offTarget = { el: target, dir: cy < vTop ? 'up' : 'down' };
             const pad        = 4;
             const cs         = window.getComputedStyle(target);
             const baseRadius = parseFloat(cs.borderTopLeftRadius) || 8;
@@ -999,5 +1169,45 @@ function _startHighlightTracker(): void {
             hl.style.height      = `${r.height + pad * 2}px`;
             hl.style.borderRadius= `${baseRadius + pad}px`;
         });
+        // Show a "scroll up/down" cue when the highlighted target is off-screen and
+        // nothing else for this step is currently visible.
+        if (!anyInView && offTarget) _renderScrollHint((offTarget as { dir: 'up' | 'down' }).dir, (offTarget as { el: HTMLElement }).el);
+        else _renderScrollHint(null, null);
     }, 150);
+}
+
+/** Floating "scroll up/down" cue shown when the highlighted target is out of view.
+ *  Clicking it scrolls the target into view. Pass (null, null) to remove it. */
+function _renderScrollHint(dir: 'up' | 'down' | null, target: HTMLElement | null): void {
+    const existing = document.getElementById('tut-scroll-hint');
+    if (!dir || !target) { existing?.remove(); return; }
+    const color = _tutorial?.color ?? 'var(--accent)';
+    let hint = existing;
+    if (!hint) {
+        hint = document.createElement('button');
+        hint.id = 'tut-scroll-hint';
+        hint.className = 'tut-scroll-hint';
+        document.body.appendChild(hint);
+    }
+    hint.classList.toggle('is-up', dir === 'up');
+    hint.classList.toggle('is-down', dir === 'down');
+    hint.style.background = color;
+    const arrow = dir === 'up'
+        ? '<polyline points="18 15 12 9 6 15"/>'
+        : '<polyline points="6 9 12 15 18 9"/>';
+    hint.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${arrow}</svg><span>${dir === 'up' ? t('tut.scroll.up') : t('tut.scroll.down')}</span>`;
+    (hint as any).onclick = () => target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+/** Rect of the nearest scrollable ancestor (to clip highlights to the scroll area). */
+function _scrollClipRect(el: HTMLElement): DOMRect | null {
+    let p = el.parentElement;
+    while (p && p !== document.body) {
+        const cs = window.getComputedStyle(p);
+        if (/(auto|scroll)/.test(cs.overflowY) || /(auto|scroll)/.test(cs.overflow)) {
+            return p.getBoundingClientRect();
+        }
+        p = p.parentElement;
+    }
+    return null;
 }

@@ -239,6 +239,7 @@ export async function confirmAddMod() {
         }
         document.getElementById('modal-add-mod').classList.remove('open');
         toast(t('mod.added', { name }), 'success');
+        dispatchBmmAction(BMM_ACTIONS.MOD_ADDED, { name });
         await refreshMods(false, true); // Force immediate refresh
     }
     catch (err) {

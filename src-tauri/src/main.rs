@@ -207,6 +207,7 @@ fn main() {
                 // Clean up any tutorial demo data left over from a previous session
                 // (e.g. BMM closed mid-tutorial before cleanup could run).
                 crate::commands::tutorial_demo::purge_tutorial_demo(&mut data);
+                crate::commands::tutorial_demo::purge_demo_files();
             }
             let _ = app_state.save();
 
