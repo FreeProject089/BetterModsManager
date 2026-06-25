@@ -106,7 +106,7 @@ function _renderHub(overlay: HTMLElement): void {
     overlay.querySelectorAll('[data-tut-start]').forEach(btn => {
         btn.addEventListener('click', () => {
             const tutId = (btn as HTMLElement).dataset.tutStart!;
-            _maybePromptAssetsThenLaunch(tutId, false);
+            _launchTutorial(tutId, false);
         });
     });
     overlay.querySelectorAll('[data-tut-restart]').forEach(btn => {
@@ -121,13 +121,6 @@ function _renderHub(overlay: HTMLElement): void {
         btn.addEventListener('click', () => {
             const tutId = (btn as HTMLElement).dataset.tutResume!;
             _launchTutorial(tutId, true);
-        });
-    });
-    overlay.querySelectorAll('[data-tut-assets]').forEach(badge => {
-        badge.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const tutId = (badge as HTMLElement).dataset.tutAssets!;
-            openAssetsPanel(tutId);
         });
     });
     // Click a part chip → jump straight into that part.
@@ -146,40 +139,6 @@ function _launchTutorialAt(tutId: string, partId: string, stepId: string | null)
     if (!tut) return;
     closeTutorialHub();
     startTutorialEngine(tut, partId, stepId, openTutorialHub);
-}
-
-function _maybePromptAssetsThenLaunch(tutId: string, resume: boolean): void {
-    const tut = TUTORIALS.find(t => t.id === tutId);
-    if (!tut?.assets?.length) { _launchTutorial(tutId, resume); return; }
-
-    const overlay = document.createElement('div');
-    overlay.className = 'tut-assets-prompt-overlay';
-    overlay.innerHTML = `
-        <div class="tut-assets-prompt">
-            <div class="tut-assets-prompt-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="${tut.color}" stroke-width="2.2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-            </div>
-            <h3>${t('hub.assets.promptTitle')}</h3>
-            <p>${t('hub.assets.promptDesc').replace('{n}', String(tut.assets.length))}</p>
-            <ul class="tut-assets-prompt-list">
-                ${tut.assets.map(a => `<li><span class="tut-asset-icon tut-asset-${a.type}">${_assetIcon(a.type)}</span><strong>${t(a.name_key)}</strong><span class="tut-asset-type-badge tut-asset-${a.type}">${t(`hub.assets.type.${a.type}`)}</span></li>`).join('')}
-            </ul>
-            <div class="tut-assets-prompt-btns">
-                <button class="btn btn-ghost" id="btn-prompt-skip">${t('hub.assets.skipBtn')}</button>
-                <button class="btn btn-primary" id="btn-prompt-view" style="background:${tut.color};border-color:${tut.color}">${t('hub.assets.viewBtn')}</button>
-            </div>
-        </div>
-    `;
-    document.getElementById('app-window-outer')?.appendChild(overlay);
-
-    overlay.querySelector('#btn-prompt-skip')?.addEventListener('click', () => {
-        overlay.remove();
-        _launchTutorial(tutId, resume);
-    });
-    overlay.querySelector('#btn-prompt-view')?.addEventListener('click', () => {
-        overlay.remove();
-        openAssetsPanel(tutId, () => _launchTutorial(tutId, resume));
-    });
 }
 
 function _renderTutorialCard(tut: TutorialDef): string {
@@ -214,14 +173,6 @@ function _renderTutorialCard(tut: TutorialDef): string {
             <span class="tut-hub-part-count">${partDone}/${partTotal}</span>
         </button>`;
     }).join('');
-
-    // Assets badge (clickable)
-    const assetsBadge = tut.assets?.length ? `
-        <button class="tut-assets-badge" data-tut-assets="${tut.id}" data-tooltip="${t('hub.assets.title')}" type="button">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-            ${tut.assets.length} ${t('hub.assets.count')}
-        </button>
-    ` : '';
 
     // Action button
     let actionBtn = '';
@@ -262,7 +213,6 @@ function _renderTutorialCard(tut: TutorialDef): string {
                         <p class="tut-card-desc">${t(tut.desc_key)}</p>
                     </div>
                     <div class="tut-card-badges-col">
-                        ${assetsBadge}
                         <span class="tut-card-parts-badge">${tut.parts.length} ${t('hub.parts')}</span>
                     </div>
                 </div>
@@ -298,118 +248,4 @@ function _launchTutorial(tutId: string, resume: boolean): void {
     }
 
     startTutorialEngine(tut, partId, stepId, openTutorialHub);
-}
-
-// ── Assets panel ─────────────────────────────────────────────────────────────
-
-/** Coloured icon for an asset type (game / mod / modpack). */
-function _assetIcon(type: string): string {
-    if (type === 'game') return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="3"/><path d="M7 12h3m-1.5-1.5v3"/><circle cx="16" cy="11" r=".8" fill="currentColor" stroke="none"/><circle cx="18.5" cy="13" r=".8" fill="currentColor" stroke="none"/></svg>`;
-    if (type === 'modpack') return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`;
-    return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.4 7.34 16.66 4.6A2 2 0 0 0 14 4.53l-2 2-1.46-1.47a2 2 0 0 0-2.83 0L5.6 7.18a2 2 0 0 0 0 2.83L7 11.47l-2 2a2 2 0 0 0 0 2.83l2.74 2.74a2 2 0 0 0 2.83 0l2-2 1.46 1.47a2 2 0 0 0 2.83 0l2.11-2.11a2 2 0 0 0 0-2.83L17.94 12l2-2a2 2 0 0 0 0-2.83Z"/></svg>`;
-}
-
-export function openAssetsPanel(tutId: string, onContinue?: () => void): void {
-    const tut = TUTORIALS.find(t => t.id === tutId);
-    if (!tut?.assets?.length) return;
-
-    const existing = document.getElementById('tut-assets-overlay');
-    if (existing) existing.remove();
-
-    const overlay = document.createElement('div');
-    overlay.id = 'tut-assets-overlay';
-    overlay.className = 'tut-assets-overlay';
-
-    const items = tut.assets.map(a => `
-        <div class="tut-asset-item tut-asset-row-${a.type}">
-            <div class="tut-asset-icon tut-asset-${a.type}">${_assetIcon(a.type)}</div>
-            <div class="tut-asset-info">
-                <div class="tut-asset-info-head">
-                    <strong>${t(a.name_key)}</strong>
-                    <span class="tut-asset-type-badge tut-asset-${a.type}">${t(`hub.assets.type.${a.type}`)}</span>
-                </div>
-                <p>${t(a.desc_key)}</p>
-                <small class="tut-asset-usage">${t(a.usage_key)}</small>
-            </div>
-        </div>
-    `).join('');
-
-    const continueBtnHtml = onContinue
-        ? `<button class="btn btn-primary" id="btn-assets-continue" style="background:${tut.color};border-color:${tut.color}">${t('hub.assets.continueBtn')}</button>`
-        : '';
-
-    overlay.innerHTML = `
-        <div class="tut-assets-container">
-            <div class="tut-assets-header">
-                <h3>${t('hub.assets.title')}</h3>
-                <button class="tut-hub-close" id="btn-assets-close">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                </button>
-            </div>
-            <p class="tut-assets-desc">${t('hub.assets.desc')}</p>
-            <div class="tut-asset-list">${items}</div>
-            <div class="tut-assets-actions">
-                <button class="btn btn-ghost tut-assets-download-btn" id="btn-assets-download">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    ${t('hub.assets.downloadBtn')}
-                </button>
-                ${continueBtnHtml}
-            </div>
-            <p class="tut-assets-path">assets/tutorial-assets/</p>
-        </div>
-    `;
-
-    document.getElementById('app-window-outer')?.appendChild(overlay);
-    document.getElementById('btn-assets-close')?.addEventListener('click', () => overlay.remove());
-    document.getElementById('btn-assets-download')?.addEventListener('click', async () => {
-        const btn = document.getElementById('btn-assets-download') as HTMLButtonElement | null;
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;animation:spin 1s linear infinite"><path d="M12 2a10 10 0 0 1 10 10" stroke-opacity="0.8"/><circle cx="12" cy="12" r="10" stroke-opacity="0.2"/></svg>${t('hub.assets.saving')}`;
-        }
-        try {
-            const tauri = (window as any).__TAURI__;
-
-            // 1. Get the bundled source path
-            const assetsPath: string = await tauri.invoke('get_tutorial_assets_path');
-
-            // 2. Show folder picker — user chooses where to save
-            const destDir: string | null = await tauri.dialog.open({
-                directory: true,
-                multiple: false,
-                title: t('hub.assets.saveDialogTitle'),
-            });
-
-            if (!destDir) {
-                // User cancelled the dialog
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${t('hub.assets.downloadBtn')}`;
-                }
-                return;
-            }
-
-            // 3. Copy tutorial-assets folder to chosen destination
-            const finalPath: string = await tauri.invoke('export_tutorial_assets', {
-                source: assetsPath,
-                destination: destDir,
-            });
-
-            // 4. Open the resulting folder so the user can see it, then close overlay
-            await tauri.invoke('open_folder', { path: finalPath });
-            overlay.remove();
-        } catch (err) {
-            console.error('[tutorial-hub] export_tutorial_assets failed:', err);
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>${t('hub.assets.downloadBtn')}`;
-            }
-        }
-    });
-    document.getElementById('btn-assets-continue')?.addEventListener('click', () => {
-        overlay.remove();
-        if (onContinue) onContinue();
-    });
 }

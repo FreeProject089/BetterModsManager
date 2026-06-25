@@ -52,10 +52,6 @@ interface Task {
 // ── State ───────────────────────────────────────────────────────────────────
 let _tasks: Task[] = [];
 let _timer: number | null = null;
-// Active drag-to-reorder operation (scoped to one steps[] list).
-let _dragState: { steps: Step[]; from: number } | null = null;
-// Last hovered insertion point — applied on dragend (drop is unreliable in WebView2).
-let _dropInfo: { steps: Step[]; index: number; after: boolean } | null = null;
 const _appStartFired = new Set<string>();
 const _onceFired = new Set<string>();
 
@@ -981,6 +977,60 @@ function renderTriggerEditor(host: HTMLElement): void {
 }
 
 // Recursive step list editor.
+/** Pointer-based step reordering (reliable in WebView2, unlike native HTML5 DnD).
+ *  Grabs the grip handle, tracks the cursor, shows an insertion line, applies on release. */
+function _startStepDrag(ev: MouseEvent, steps: Step[], fromIdx: number, block: HTMLElement, host: HTMLElement, rerender: () => void): void {
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    const startY = ev.clientY;
+    let dragging = false;
+    let insertIdx = fromIdx;
+    const stepBlocks = (): HTMLElement[] =>
+        Array.from(host.children).filter(c => (c as HTMLElement).classList.contains('sched-step')) as HTMLElement[];
+    const clearMarks = () => host.querySelectorAll('.sched-drop-before, .sched-drop-after')
+        .forEach(el => el.classList.remove('sched-drop-before', 'sched-drop-after'));
+
+    const computeInsert = (clientY: number) => {
+        const bs = stepBlocks();
+        clearMarks();
+        let idx = bs.length;                    // default: append at the end
+        for (let k = 0; k < bs.length; k++) {
+            const r = bs[k].getBoundingClientRect();
+            if (clientY < r.top + r.height / 2) { idx = k; break; }
+        }
+        if (idx < bs.length) bs[idx].classList.add('sched-drop-before');
+        else if (bs.length) bs[bs.length - 1].classList.add('sched-drop-after');
+        insertIdx = idx;
+    };
+
+    const onMove = (e: MouseEvent) => {
+        if (!dragging) {
+            if (Math.abs(e.clientY - startY) < 4) return;   // small threshold before it counts as a drag
+            dragging = true;
+            block.classList.add('sched-dragging');
+            document.body.style.userSelect = 'none';
+        }
+        computeInsert(e.clientY);
+    };
+    const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.userSelect = '';
+        block.classList.remove('sched-dragging');
+        clearMarks();
+        if (!dragging) return;
+        let target = insertIdx;
+        if (fromIdx < target) target--;          // removing the source shifts later indices down
+        if (target === fromIdx) return;
+        _snapshot();
+        const [moved] = steps.splice(fromIdx, 1);
+        steps.splice(target, 0, moved);
+        rerender();
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+}
+
 function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
     host.innerHTML = '';
     steps.forEach((step, i) => {
@@ -991,32 +1041,11 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
         // on top of the branch padding and squeezed deep blocks into a tiny column.
         const rerenderHere = () => renderStepsEditor(host, steps, depth);
 
-        // Drag-to-reorder within this list. A grip handle initiates the drag; we record
-        // the hovered insertion point on dragover and actually apply it on dragEND —
-        // `drop` is unreliable in WebView2, but `dragend` always fires.
-        const dropAfter = (e: DragEvent): boolean => {
-            const r = block.getBoundingClientRect();
-            return e.clientY > r.top + r.height / 2;
-        };
-        const markDrop = (e: DragEvent) => {
-            if (!_dragState || _dragState.steps !== steps) return;
-            e.preventDefault();                       // allow the drop (required for dragenter/over)
-            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-            const after = dropAfter(e);
-            _dropInfo = { steps, index: i, after };
-            host.querySelectorAll('.sched-drop-before, .sched-drop-after')
-                .forEach(el => el.classList.remove('sched-drop-before', 'sched-drop-after'));
-            block.classList.add(after ? 'sched-drop-after' : 'sched-drop-before');
-        };
-        block.addEventListener('dragenter', markDrop);
-        block.addEventListener('dragover', markDrop);
-        block.addEventListener('drop', (e) => { if (_dragState && _dragState.steps === steps) e.preventDefault(); });
-
         if (step.kind === 'action') {
             block.appendChild(actionEditor(step.action, () => _deleteStep(step, steps, i, rerenderHere)));
         } else if (step.kind === 'delay') {
             block.innerHTML = `<div class="sched-step-head"><span class="sched-step-tag">${t('sched.delay') || 'Wait'}</span>
-                <input type="number" class="input" min="0" value="${step.seconds}" style="max-width:90px"> ${t('sched.unitSec') || 's'}
+                <span class="sched-delay-body"><input type="number" class="input" min="0" value="${step.seconds}" style="max-width:90px"> ${t('sched.unitSec') || 's'}</span>
                 <button class="btn btn-xs btn-ghost sched-del" style="margin-left:auto;color:var(--danger)">${SCHED_X}</button></div>`;
             block.querySelector('input')?.addEventListener('input', (e) => { step.seconds = parseInt((e.target as HTMLInputElement).value) || 0; });
             block.querySelector('.sched-del')?.addEventListener('click', () => _deleteStep(step, steps, i, rerenderHere));
@@ -1081,38 +1110,20 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             _wireFold(block, step);
         }
 
-        // Grip handle initiates the drag (block stays the drop target + drag image).
+        // Every step is collapsible. if/repeat/waitFor add their fold inline; action +
+        // delay get one injected into their head here.
+        const headEl = block.querySelector('.sched-act-head, .sched-step-head') as HTMLElement | null;
+        if (headEl && !headEl.querySelector('.sched-fold')) {
+            headEl.insertAdjacentHTML('afterbegin', _foldBtn(step));
+            _wireFold(block, step);
+        }
+
+        // Grip handle — pointer-based reorder (native HTML5 DnD is unreliable in WebView2).
         const handle = document.createElement('span');
         handle.className = 'sched-drag-handle';
-        handle.draggable = true;
         handle.title = t('sched.reorder') || 'Drag to reorder';
         handle.innerHTML = `<svg width="12" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg>`;
-        handle.addEventListener('dragstart', (e) => {
-            _dragState = { steps, from: i };
-            _dropInfo = null;
-            block.classList.add('sched-dragging');
-            if (e.dataTransfer) {
-                e.dataTransfer.effectAllowed = 'move';
-                try { e.dataTransfer.setData('text/plain', String(i)); } catch { /* IE guard */ }
-                e.dataTransfer.setDragImage(block, 20, 14);
-            }
-        });
-        // Apply the reorder here: `dragend` always fires, `drop` does not (WebView2).
-        handle.addEventListener('dragend', () => {
-            block.classList.remove('sched-dragging');
-            host.querySelectorAll('.sched-drop-before, .sched-drop-after')
-                .forEach(el => el.classList.remove('sched-drop-before', 'sched-drop-after'));
-            const ds = _dragState, di = _dropInfo;
-            _dragState = null; _dropInfo = null;
-            if (!ds || !di || ds.steps !== di.steps) return;
-            let to = di.index + (di.after ? 1 : 0);
-            if (ds.from < to) to--;                    // account for the removed item
-            if (to === ds.from) return;
-            _snapshot();
-            const [moved] = ds.steps.splice(ds.from, 1);
-            ds.steps.splice(to, 0, moved);
-            rerenderHere();
-        });
+        handle.addEventListener('mousedown', (e) => _startStepDrag(e, steps, i, block, host, rerenderHere));
         block.prepend(handle);
 
         host.appendChild(block);
@@ -1178,12 +1189,14 @@ const GROUP_ICON: Record<string, string> = {
 const SCHED_X = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
 // Fold chevron for collapsible control blocks (if / loop / wait until).
 const SCHED_CHEV = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>';
-// Fold button + a "N steps inside" summary shown only while collapsed.
+// Fold button + a short summary shown only while collapsed.
 function _foldBtn(step: any): string {
-    const inner = step.kind === 'if' ? (step.then?.length || 0) + (step.else?.length || 0)
-        : step.kind === 'repeat' ? (step.steps?.length || 0) : 0;
-    const sum = step.kind === 'waitFor' ? '' : `<span class="sched-fold-sum">${inner} ${t('sched.stepsInside') || 'inside'}</span>`;
-    return `<button class="btn btn-xs btn-ghost sched-fold" title="${escAttr(t('sched.foldTip') || 'Collapse / expand')}" aria-label="fold">${SCHED_CHEV}</button>${sum}`;
+    let sum = '';
+    if (step.kind === 'if') sum = `${(step.then?.length || 0) + (step.else?.length || 0)} ${t('sched.stepsInside') || 'inside'}`;
+    else if (step.kind === 'repeat') sum = `${step.steps?.length || 0} ${t('sched.stepsInside') || 'inside'}`;
+    else if (step.kind === 'delay') sum = `${step.seconds || 0}${t('sched.unitSec') || 's'}`;
+    const sumHtml = sum ? `<span class="sched-fold-sum">${sum}</span>` : '';
+    return `<button class="btn btn-xs btn-ghost sched-fold" title="${escAttr(t('sched.foldTip') || 'Collapse / expand')}" aria-label="fold">${SCHED_CHEV}</button>${sumHtml}`;
 }
 function _wireFold(block: HTMLElement, step: any): void {
     block.querySelector('.sched-fold')?.addEventListener('click', (e) => {

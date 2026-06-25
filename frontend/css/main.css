@@ -11234,14 +11234,19 @@ body.tasky-hidden .titlebar-left .titlebar-version {
 .sched-step-repeat  > .sched-step-head { background:rgba(167,139,250,0.10); }
 .sched-step > .sched-step-head { margin:-8px -10px 0; padding:7px 10px; border-radius:7px 7px 0 0; }
 .sched-step.collapsed > .sched-step-head { border-radius:7px; margin-bottom:-8px; }
-/* Fold chevron + "N inside" summary */
+/* Fold chevron + summary (works for both step heads and action-card heads) */
 .sched-fold { width:22px; height:22px; padding:0; flex-shrink:0; color:var(--text-muted); }
 .sched-fold svg { transition:transform .15s ease; }
-.sched-step.collapsed > .sched-step-head .sched-fold svg { transform:rotate(-90deg); }
+.sched-step.collapsed .sched-fold svg { transform:rotate(-90deg); }
 .sched-fold-sum { display:none; font-size:11px; font-weight:600; color:var(--text-muted); }
-.sched-step.collapsed > .sched-step-head .sched-fold-sum { display:inline-block; }
-/* Collapsed → hide everything but the header (the "zoom out" of a sub-tree) */
-.sched-step.collapsed > .sched-branch, .sched-step.collapsed > .sched-wait-opts { display:none; }
+.sched-step.collapsed .sched-fold-sum { display:inline-block; }
+/* Collapsed → hide every step body, whatever the kind. */
+.sched-step.collapsed > .sched-branch,
+.sched-step.collapsed > .sched-wait-opts,
+.sched-step.collapsed .sched-loop,
+.sched-step.collapsed .sched-loop-add,
+.sched-step.collapsed .sched-act-params,
+.sched-step.collapsed .sched-delay-body { display:none; }
 .sched-repeat { background:rgba(167,139,250,0.16); color:#a78bfa; }
 .sched-add-loop { color:#a78bfa; }
 .sched-add-loop:hover { background:rgba(167,139,250,0.14); border-color:rgba(167,139,250,0.4); }
