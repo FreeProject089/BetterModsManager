@@ -5464,12 +5464,14 @@ select.input-field option {
 .tut-ghost-caption.show { opacity: 0.97; transform: translateY(0) scale(1); }
 
 /* ── Collapsible Settings glass cards ── */
-.glass-card.bmm-foldable > .card-title {
+.glass-card.bmm-foldable > .bmm-fold-head {
+    cursor: pointer;
+    user-select: none;
+}
+.glass-card.bmm-foldable > .card-title.bmm-fold-head {
     display: flex;
     align-items: center;
     gap: 10px;
-    cursor: pointer;
-    user-select: none;
 }
 .bmm-fold-chevron {
     margin-left: auto;
@@ -5485,10 +5487,10 @@ select.input-field option {
     transition: transform 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 .bmm-fold-chevron:hover { color: var(--text-primary); background: rgba(255,255,255,0.06); }
-.glass-card.bmm-collapsed > .card-title .bmm-fold-chevron { transform: rotate(-90deg); }
-/* Collapsed → hide everything but the title row. */
-.glass-card.bmm-collapsed > :not(.card-title) { display: none !important; }
-.glass-card.bmm-collapsed > .card-title { margin-bottom: 0; }
+.glass-card.bmm-collapsed .bmm-fold-chevron { transform: rotate(-90deg); }
+/* Collapsed → hide everything but the header row (which holds the title). */
+.glass-card.bmm-collapsed > :not(.bmm-fold-head) { display: none !important; }
+.glass-card.bmm-collapsed > .bmm-fold-head { margin-bottom: 0 !important; }
 
 /* "Scroll up/down" cue when the highlighted target is off-screen. */
 .tut-scroll-hint {

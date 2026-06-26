@@ -17,16 +17,29 @@ function cardKey(card: HTMLElement, title: HTMLElement): string {
     return KEY_PREFIX + id;
 }
 
-/** Idempotent — safe to call multiple times (e.g. after settings re-renders). */
+/** Idempotent — safe to call multiple times (e.g. after settings re-renders).
+ *  Handles cards whose `.card-title` is a direct child AND cards whose title sits in a
+ *  header row (e.g. title + a badge), by folding around the title's direct-child header. */
 export function initCollapsibleSettingsCards(): void {
     const view = document.getElementById('view-settings');
     if (!view) return;
 
     view.querySelectorAll('.glass-card').forEach((el) => {
         const card = el as HTMLElement;
-        const title = card.querySelector(':scope > .card-title') as HTMLElement | null;
-        if (!title || title.querySelector('.bmm-fold-chevron')) return; // need a direct title, once
+        if (card.querySelector(':scope > .bmm-fold-head')) return; // already processed (once)
 
+        // The card's OWN title (not a nested glass-card's).
+        const title = Array.from(card.querySelectorAll('.card-title'))
+            .find((t) => (t as HTMLElement).closest('.glass-card') === card) as HTMLElement | undefined;
+        if (!title) return;
+
+        // The direct child of the card that contains the title = the row we keep visible
+        // when collapsed (it may be the title itself, or a header wrapping title + a badge).
+        let head: HTMLElement = title;
+        while (head.parentElement && head.parentElement !== card) head = head.parentElement;
+        if (head.parentElement !== card) return; // title isn't in this card's own subtree
+
+        head.classList.add('bmm-fold-head');
         card.classList.add('bmm-foldable');
         const key = cardKey(card, title);
 
@@ -43,11 +56,12 @@ export function initCollapsibleSettingsCards(): void {
             const collapsed = card.classList.toggle('bmm-collapsed');
             try { localStorage.setItem(key, collapsed ? '1' : '0'); } catch { /* ignore */ }
         };
-        // Click the chevron, or the title background (but not interactive controls in it).
-        title.addEventListener('click', (e) => {
+        // Click the header row (but not interactive controls / a nested card in it).
+        head.addEventListener('click', (e) => {
             const t = e.target as HTMLElement;
-            if (t.closest('a, input, select, textarea') ||
-                t.closest('button:not(.bmm-fold-chevron)')) return;
+            if (t.closest('a, input, select, textarea')) return;
+            if (t.closest('button:not(.bmm-fold-chevron)')) return;
+            if (t.closest('.glass-card') !== card) return; // ignore clicks inside a nested card
             toggle();
         });
     });

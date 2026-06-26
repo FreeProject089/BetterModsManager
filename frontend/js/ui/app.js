@@ -168,6 +168,11 @@ function initNavigation() {
             setTimeout(() => {
                 document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
                 document.getElementById('view-' + viewId)?.classList.add('active');
+                // Re-apply the (existing) collapsible-cards enhancement on every Settings
+                // open — catches cards that were re-rendered since the initial pass.
+                if (viewId === 'settings') {
+                    import('./settings-fold.js').then(m => m.initCollapsibleSettingsCards()).catch(() => { });
+                }
                 // Auto-sync when entering library
                 if (viewId === 'library') {
                     window._refreshModsFn?.(true);
@@ -907,16 +912,24 @@ async function main() {
         await checkShowReleaseNotes();
         await waitForModalClosed('modal-update-notes');
     }
-    // 4.5. FS Security Mode Choice (Persistent)
-    await checkSecurityMode();
-    await waitForModalClosed('modal-security-choice');
-    // 4.9. Telemetry consent — LAST modal, after TOS + Privacy + all the rest.
-    try {
-        const { maybeShowConsentModal } = await import('../core/analytics.js');
-        await maybeShowConsentModal();
-    }
-    catch (e) {
-        console.warn('[BMM] consent modal failed', e);
+    // 4.5 + 4.9 — De-spam the first launch. A brand-new user already wades through
+    // language + TOS + privacy before even seeing the welcome; the FS-security-mode and
+    // telemetry-consent prompts are NOT urgent, so we DON'T stack them on top on the very
+    // first run. They surface on a later launch instead (and stay reachable in Settings),
+    // and a fresh install keeps its safe defaults until then. Returning users see them
+    // normally.
+    if (!isFirstRun) {
+        // 4.5. FS Security Mode Choice (Persistent)
+        await checkSecurityMode();
+        await waitForModalClosed('modal-security-choice');
+        // 4.9. Telemetry consent.
+        try {
+            const { maybeShowConsentModal } = await import('../core/analytics.js');
+            await maybeShowConsentModal();
+        }
+        catch (e) {
+            console.warn('[BMM] consent modal failed', e);
+        }
     }
     // 5. Show onboarding on first launch (it handles language too, so the standalone
     // picker above won't be repeated — see startOnboarding).
