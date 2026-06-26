@@ -425,6 +425,8 @@ fn main() {
             commands::autoupdate::download_and_install_update,
             commands::autoupdate::fetch_update_manifest,
             commands::autoupdate::apply_incremental_update,
+            commands::autoupdate::check_update_via_installer,
+            commands::autoupdate::update_via_installer,
             commands::benchmark::is_benchmark_enabled,
             commands::benchmark::set_advanced_benchmark_mode,
             commands::benchmark::start_benchmark,

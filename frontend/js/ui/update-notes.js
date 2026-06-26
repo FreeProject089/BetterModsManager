@@ -571,6 +571,22 @@ async function performUpdateCheck(showNoUpdateToast = false) {
     }
     try {
         const info = await invoke('check_for_update', { includePrerelease: isPreReleaseEnabled(), apiBaseUrl: getLinks().autoupdate_api });
+        // When BMM was installed by BetterInstaller, its bundled updater is the source of
+        // truth (it's exactly what an --update will apply): override the version/notes from
+        // its manifest. Skipped (kept on the GitHub result) when not installed via
+        // BetterInstaller, or when its check errored (e.g. no manifest published yet) — so
+        // older MSI/NSIS installs still get updates through the GitHub path.
+        try {
+            const bi = await invoke('check_update_via_installer');
+            if (bi && !bi.error) {
+                info.has_update = !!bi.update_available;
+                info.current_version = bi.current_version ?? info.current_version;
+                info.latest_version = bi.latest_version ?? info.latest_version;
+                if (bi.notes)
+                    info.release_notes = bi.notes;
+            }
+        }
+        catch (_) { /* installer check unavailable → keep the GitHub result */ }
         if (info.has_update) {
             showUpdateAvailableModal(info);
             [sidebarBtn, document.getElementById('btn-settings-check-update')].forEach(btn => {
@@ -856,6 +872,15 @@ function showUpdateAvailableModal(info) {
             downloadBtn.disabled = true;
             downloadBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ' + (t('update.downloading') || 'Downloading...');
             try {
+                // Prefer BetterInstaller's updater (delta + signature + rollback via the
+                // bundled <install>/uninstall.exe). On success it spawns the updater and
+                // quits BMM, so this invoke never returns. If BMM wasn't installed by
+                // BetterInstaller it throws → fall back to the direct download below.
+                try {
+                    await invoke('update_via_installer');
+                    return; // BMM is exiting; updater window takes over
+                }
+                catch (_) { /* not installed via BetterInstaller → direct download */ }
                 let filename = info.download_url.split('/').pop() || 'setup.exe';
                 if (!filename.includes('.'))
                     filename += '.exe';

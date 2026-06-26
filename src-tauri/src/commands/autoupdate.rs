@@ -165,6 +165,74 @@ pub async fn check_for_update(app_handle: tauri::AppHandle, include_prerelease: 
     })
 }
 
+/// Locate the BetterInstaller maintenance binary left next to BMM at install time
+/// (`<install>/uninstall.exe` — it handles repair / update / uninstall). `None` when
+/// BMM wasn't installed by BetterInstaller (dev/portable run).
+#[cfg(windows)]
+fn installer_maintenance_exe(app_handle: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    // Install root = parent of the resource dir (where frontend/, Lang/ … live), with a
+    // fallback to the running exe's folder.
+    let root = app_handle
+        .path()
+        .resource_dir()
+        .ok()
+        .and_then(|mut p| {
+            p.pop();
+            Some(p)
+        })
+        .or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|e| e.parent().map(|p| p.to_path_buf()))
+        })?;
+    let exe = root.join("uninstall.exe");
+    exe.exists().then_some(exe)
+}
+#[cfg(not(windows))]
+fn installer_maintenance_exe(_app_handle: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    None
+}
+
+/// Check for updates *through BetterInstaller* — runs `<install>/uninstall.exe
+/// --check-update` and returns its JSON report (`update_available`, `current_version`,
+/// `latest_version`, `notes`, `url`, …). Returns `Ok(None)` when BMM wasn't installed by
+/// BetterInstaller, so the caller can fall back to the direct GitHub check.
+#[tauri::command]
+pub fn check_update_via_installer(
+    app_handle: tauri::AppHandle,
+) -> Result<Option<serde_json::Value>, String> {
+    let exe = match installer_maintenance_exe(&app_handle) {
+        Some(e) => e,
+        None => return Ok(None),
+    };
+    let out = crate::commands::proc::hidden_command(&exe)
+        .arg("--check-update")
+        .output()
+        .map_err(|e| format!("Failed to run updater: {e}"))?;
+    let json: serde_json::Value =
+        serde_json::from_slice(&out.stdout).map_err(|e| format!("Bad updater output: {e}"))?;
+    log_line(format!("[UPDATE] BetterInstaller check: {json}"));
+    Ok(Some(json))
+}
+
+/// Apply an update *through BetterInstaller*: spawn `<install>/uninstall.exe --update`
+/// (downloads + verifies the signed `.bpkg`, delta when offered, rollback on failure)
+/// then exit BMM so its files can be replaced. Errs when not installed by BetterInstaller
+/// (the caller falls back to the direct download).
+#[tauri::command]
+pub fn update_via_installer(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let exe = installer_maintenance_exe(&app_handle)
+        .ok_or_else(|| "not installed via BetterInstaller".to_string())?;
+    log_line(format!("[UPDATE] Launching BetterInstaller updater: {exe:?}"));
+    crate::commands::proc::hidden_command(&exe)
+        .arg("--update")
+        .spawn()
+        .map_err(|e| format!("Failed to launch updater: {e}"))?;
+    // Give the updater a moment to start, then quit so the install dir unlocks.
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    std::process::exit(0);
+}
+
 /// Compares two semver-like version strings (e.g., "1.0.9" > "1.0.8").
 /// Returns true if `latest` is strictly newer than `current`.
 fn is_newer_version(latest: &str, current: &str) -> bool {
