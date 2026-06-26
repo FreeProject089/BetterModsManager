@@ -32,6 +32,12 @@ export async function markOnboardingShown() {
 }
 /** Called on first launch — shows language selection, then opens the hub. */
 export function startOnboarding() {
+    // Language was already chosen earlier (the standalone first-run picker, or the
+    // BetterInstaller handoff) → skip this redundant step and go straight to the hub.
+    if (localStorage.getItem('bmm_lang_selected') === 'true') {
+        _closeAndOpenHub();
+        return;
+    }
     _langStep = true;
     _renderLangStep();
     document.addEventListener('langChanged', () => {

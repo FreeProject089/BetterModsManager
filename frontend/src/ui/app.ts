@@ -898,6 +898,11 @@ async function main() {
     } catch (_e) { /* use defaults */ }
 
     // ── Startup Modal Sequence ──
+    // First run = onboarding hasn't been shown yet. We use this to AVOID piling
+    // first-launch-irrelevant modals onto a brand-new user (e.g. "what's new" release
+    // notes for a version they never had).
+    const isFirstRun = await shouldShowOnboarding();
+
     // 0. Language selection on first start (before everything else)
     await checkLangSelect();
     await waitForModalClosed('modal-lang-select');
@@ -920,9 +925,15 @@ async function main() {
     // 3. Auto Update System
     initAutoUpdate();
 
-    // 4. Show release notes on first launch
-    await checkShowReleaseNotes();
-    await waitForModalClosed('modal-update-notes');
+    // 4. Release notes — only for returning users. A fresh install has no previous
+    // version, so "what's new" is just noise; mark it seen and skip it (the onboarding
+    // + tutorial hub is the first-run welcome instead).
+    if (isFirstRun) {
+        try { localStorage.setItem('bmm_release_notes_shown', 'true'); } catch { /* ignore */ }
+    } else {
+        await checkShowReleaseNotes();
+        await waitForModalClosed('modal-update-notes');
+    }
 
     // 4.5. FS Security Mode Choice (Persistent)
     await checkSecurityMode();
@@ -934,8 +945,9 @@ async function main() {
         await maybeShowConsentModal();
     } catch (e) { console.warn('[BMM] consent modal failed', e); }
 
-    // 5. Show onboarding on first launch (language is step 0 inside onboarding)
-    if (await shouldShowOnboarding()) {
+    // 5. Show onboarding on first launch (it handles language too, so the standalone
+    // picker above won't be repeated — see startOnboarding).
+    if (isFirstRun) {
         // Delay slightly to allow UI to render
         setTimeout(() => {
             startOnboarding();
@@ -963,6 +975,12 @@ async function main() {
             console.error("[BMM] Auto-Calibration startup failed:", e);
         }
     }, 2000); // 2s delay to ensure disks are mounted and system is stable
+
+    // Make the Settings glass cards collapsible (declutter).
+    try {
+        const { initCollapsibleSettingsCards } = await import('./settings-fold.js');
+        initCollapsibleSettingsCards();
+    } catch (e) { console.warn('[BMM] settings-fold init failed', e); }
 
     // Interaction log
     initInteractionLogging();
