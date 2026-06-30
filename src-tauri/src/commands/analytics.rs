@@ -585,17 +585,8 @@ pub fn save_local_replay(app_handle: AppHandle, content: String) -> Result<Strin
     std::fs::write(&path, content).map_err(|e| e.to_string())?;
     log_line(format!("[ANALYTICS] Auto-saved local replay to {:?}", path));
 
-    // Limit to 20 local replays
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        let mut files: Vec<PathBuf> = entries.filter_map(Result::ok).map(|e| e.path())
-            .filter(|p| p.is_file() && p.extension().and_then(|s| s.to_str()) == Some("bmmreplay")).collect();
-        files.sort_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH));
-        if files.len() > 20 {
-            for p in files.iter().take(files.len() - 20) {
-                let _ = std::fs::remove_file(p);
-            }
-        }
-    }
+    // Retention is handled by the configurable `prune_sessions` (count + total size),
+    // called by the caller after saving — so no hard 20-cap here anymore.
 
     Ok(path.to_string_lossy().to_string())
 }
@@ -606,6 +597,94 @@ pub fn delete_local_replay(path: String) -> Result<(), String> {
     std::fs::remove_file(&path).map_err(|e| e.to_string())
 }
 
+/// Overwrite the single rolling "crash buffer". The session is ALWAYS recorded in
+/// memory and flushed here, but this file is NOT a saved replay (never shown in the
+/// list, never sent). It exists only so a crash report can attach the session just
+/// before the crash. Saving a *real* replay to the list happens via
+/// `save_local_replay`, and only when the user enables the Session recorder.
+#[tauri::command]
+pub fn save_crash_session(app_handle: AppHandle, content: String) -> Result<(), String> {
+    let dir = app_handle.path().app_data_dir().ok().unwrap_or_default();
+    let _ = std::fs::create_dir_all(&dir);
+    std::fs::write(dir.join("last_crash_session.bmmreplay"), content).map_err(|e| e.to_string())
+}
+
+/// Prune saved sessions to the user's limits: keep at most `max_count` of the
+/// newest, and delete oldest until the total is under `max_mb` megabytes. Applies
+/// to BOTH the saved replays (Replays/*.bmmreplay) and the "Session" crash reports
+/// (Reports/Session + Archive/Session *.zip), so the manager never floods. Returns
+/// how many files were deleted.
+#[tauri::command]
+pub fn prune_sessions(app_handle: AppHandle, max_count: usize, max_mb: u64) -> usize {
+    let root = app_handle.path().app_data_dir().ok().unwrap_or_default();
+    let max_bytes = max_mb.saturating_mul(1024 * 1024);
+    // (modified_time, size, path) for every prunable session-ish file.
+    let mut items: Vec<(std::time::SystemTime, u64, PathBuf)> = Vec::new();
+    let mut collect = |dir: PathBuf, exts: &[&str]| {
+        if let Ok(rd) = std::fs::read_dir(&dir) {
+            for e in rd.flatten() {
+                let p = e.path();
+                let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("");
+                if !exts.contains(&ext) {
+                    continue;
+                }
+                if let Ok(m) = e.metadata() {
+                    items.push((m.modified().unwrap_or(std::time::UNIX_EPOCH), m.len(), p));
+                }
+            }
+        }
+    };
+    collect(root.join("Replays"), &["bmmreplay"]);
+    let crashes = root.join("Crashes");
+    collect(crashes.join("Reports").join("Session"), &["zip"]);
+    collect(crashes.join("Archive").join("Session"), &["zip"]);
+
+    // Newest first.
+    items.sort_by(|a, b| b.0.cmp(&a.0));
+    let max_count = max_count.max(1);
+
+    let mut deleted = 0usize;
+    let mut running: u64 = 0;
+    for (i, (_, size, path)) in items.iter().enumerate() {
+        running = running.saturating_add(*size);
+        let over_count = i >= max_count;
+        let over_size = max_bytes > 0 && running > max_bytes;
+        if over_count || over_size {
+            if std::fs::remove_file(path).is_ok() {
+                deleted += 1;
+            }
+        }
+    }
+    deleted
+}
+
+/// List saved local replays (the persistent ones, when recording is enabled),
+/// newest first — so the UI can play/delete/export them without importing a file.
+#[tauri::command]
+pub fn list_saved_replays(app_handle: AppHandle) -> Vec<serde_json::Value> {
+    let dir = app_handle.path().app_data_dir().ok().unwrap_or_default().join("Replays");
+    let mut out: Vec<(std::time::SystemTime, serde_json::Value)> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.extension().and_then(|s| s.to_str()) != Some("bmmreplay") {
+                continue;
+            }
+            let meta = std::fs::metadata(&p).ok();
+            let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+            let modified = meta.and_then(|m| m.modified().ok()).unwrap_or(std::time::UNIX_EPOCH);
+            let ts = modified.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+            out.push((modified, serde_json::json!({
+                "name": p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string(),
+                "path": p.to_string_lossy().to_string(),
+                "size": size,
+                "ts": ts,
+            })));
+        }
+    }
+    out.sort_by(|a, b| b.0.cmp(&a.0));
+    out.into_iter().map(|(_, v)| v).collect()
+}
 
 /// Right to erasure: wipe all locally buffered telemetry.
 #[tauri::command]

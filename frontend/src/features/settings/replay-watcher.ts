@@ -15,10 +15,10 @@ const FULL = 'bmm_watcher_full';
 const RUST = 'bmm_watcher_rust';
 const JS = 'bmm_watcher_js';
 
-// Default ON: a local rolling recording is kept so it can be attached to a crash
-// report for diagnostics. It never leaves the machine unless you export it or
-// share a crash zip. Turn it off in Settings → Debug & trouble.
-export const watcherEnabled = () => { try { return localStorage.getItem(ON) !== '0'; } catch { return true; } };
+// The session is ALWAYS recorded in memory (and the latest is attached to a crash
+// report). This toggle only controls whether each session is also SAVED to the
+// persistent replay list. Default OFF = record-for-crashes only, never saved.
+export const watcherEnabled = () => { try { return localStorage.getItem(ON) === '1'; } catch { return false; } };
 export const watcherFull = () => { try { return localStorage.getItem(FULL) === '1'; } catch { return false; } };
 const watcherRust = () => { try { return localStorage.getItem(RUST) !== '0'; } catch { return true; } };
 const watcherJs = () => { try { return localStorage.getItem(JS) !== '0'; } catch { return true; } };
@@ -71,6 +71,18 @@ export function initWatcherUI(): void {
     document.getElementById('watcher-export')?.addEventListener('click', () => exportSession());
     document.getElementById('watcher-import')?.addEventListener('click', () => importAndPlay());
     document.getElementById('watcher-list')?.addEventListener('click', () => openReplayList());
+    // Retention limits (shared with the Crash Reports manager).
+    const keepEl = document.getElementById('watcher-keep') as HTMLInputElement | null;
+    const mbEl = document.getElementById('watcher-maxmb') as HTMLInputElement | null;
+    if (keepEl) keepEl.value = String(Math.max(1, parseInt(localStorage.getItem('bmm_session_keep_count') || '30', 10) || 30));
+    if (mbEl) mbEl.value = String(Math.max(0, parseInt(localStorage.getItem('bmm_session_max_mb') || '2048', 10) || 2048));
+    document.getElementById('watcher-applylimits')?.addEventListener('click', async () => {
+      const keep = Math.max(1, parseInt(keepEl?.value || '30', 10) || 30);
+      const mb = Math.max(0, parseInt(mbEl?.value || '2048', 10) || 2048);
+      localStorage.setItem('bmm_session_keep_count', String(keep));
+      localStorage.setItem('bmm_session_max_mb', String(mb));
+      try { const n = await invoke('prune_sessions', { maxCount: keep, maxMb: mb }); toast(`${t('crashmgr.pruned') || 'Pruned'}: ${n}`, 'success'); } catch { /* ignore */ }
+    });
   }
 }
 
@@ -98,7 +110,11 @@ export async function startWatcher(): Promise<void> {
   // the frontend before any close handler runs) still leaves a recent session
   // that the crash report can attach. Silent = doesn't clutter the replay list.
   if (_autoSaveTimer === null) {
-    _autoSaveTimer = window.setInterval(() => { autoSaveSession(false); }, 45000);
+    _autoSaveTimer = window.setInterval(() => { flushSession('crash'); }, 45000);
+    // Clean up the accumulated session backlog once at boot, per the user's limits.
+    const keep = Math.max(1, parseInt(localStorage.getItem('bmm_session_keep_count') || '30', 10) || 30);
+    const mb = Math.max(0, parseInt(localStorage.getItem('bmm_session_max_mb') || '2048', 10) || 2048);
+    invoke('prune_sessions', { maxCount: keep, maxMb: mb }).catch(() => {});
   }
 }
 
@@ -108,37 +124,60 @@ let _closeListenersRegistered = false;
 function registerCloseListeners(): void {
   if (_closeListenersRegistered) return;
   _closeListenersRegistered = true;
-  window.addEventListener('bmm-closing', () => { autoSaveSession(); });
+  // On close: always refresh the crash buffer; persist a real replay to the list
+  // only if the user enabled the Session recorder.
+  const onClose = () => { flushSession('crash'); if (watcherEnabled()) flushSession('list'); };
+  window.addEventListener('bmm-closing', onClose);
   try {
     const w = (window as any).__TAURI__;
-    w?.event?.listen?.('tauri://close-requested', () => { autoSaveSession(); });
+    w?.event?.listen?.('tauri://close-requested', onClose);
   } catch {}
 }
 
-/** Automatically save the current session without prompting (e.g. on close or
- *  on the periodic crash-buffer flush). `recent=false` skips the replay list. */
-export async function autoSaveSession(recent = true): Promise<void> {
-  if (!_recording) return; // Not recording
+/** Build the current session bundle (rrweb events + console + Rust log). */
+async function buildBundle(): Promise<string | null> {
   const events = _chunks.flat();
-  if (events.length < 2) return;
-  try {
-    const rustLog = watcherRust() ? (await invoke('read_session_log_tail', { maxBytes: 262144 }).catch(() => '') as string) : '';
-    const bundle = {
-      bmmReplay: 1,
-      app: 'BetterModsManager',
-      createdAt: new Date().toISOString(),
-      masked: !watcherFull(),
-      durationMs: Date.now() - _startedAt,
-      events,
-      console: watcherJs() ? _console : [],
-      rustLog,
-    };
-    const path = await invoke('save_local_replay', { content: JSON.stringify(bundle) }) as string;
-    if (recent) addRecent(path);
-  } catch (e) {
-    console.error('Auto-save replay failed:', e);
-  }
+  if (events.length < 2) return null;
+  const rustLog = watcherRust() ? (await invoke('read_session_log_tail', { maxBytes: 262144 }).catch(() => '') as string) : '';
+  return JSON.stringify({
+    bmmReplay: 1,
+    app: 'BetterModsManager',
+    createdAt: new Date().toISOString(),
+    masked: !watcherFull(),
+    durationMs: Date.now() - _startedAt,
+    events,
+    console: watcherJs() ? _console : [],
+    rustLog,
+  });
 }
+
+/**
+ * Flush the in-memory recording.
+ *  - 'crash': overwrite the single rolling crash buffer (NOT a saved replay). Done
+ *    always, so a crash report can attach the session. Never shown in the list.
+ *  - 'list':  save a real replay to the persistent list. Only when the user enabled
+ *    the Session recorder.
+ */
+async function flushSession(mode: 'crash' | 'list'): Promise<void> {
+  if (!_recording) return;
+  try {
+    const content = await buildBundle();
+    if (!content) return;
+    if (mode === 'crash') {
+      await invoke('save_crash_session', { content });
+    } else {
+      const path = await invoke('save_local_replay', { content }) as string;
+      addRecent(path);
+      // Enforce the configurable retention (count + total size) after each save.
+      const keep = Math.max(1, parseInt(localStorage.getItem('bmm_session_keep_count') || '30', 10) || 30);
+      const mb = Math.max(0, parseInt(localStorage.getItem('bmm_session_max_mb') || '2048', 10) || 2048);
+      invoke('prune_sessions', { maxCount: keep, maxMb: mb }).catch(() => {});
+    }
+  } catch (e) { console.error('Session flush failed:', e); }
+}
+
+/** Back-compat: manual "save to list now". */
+export async function autoSaveSession(): Promise<void> { await flushSession('list'); }
 
 /** Stop local recording (keeps the buffer for export). */
 export function stopWatcher(): void {
@@ -150,10 +189,13 @@ export function stopWatcher(): void {
   }
 }
 
-/** Apply the on/off setting: start or stop accordingly. */
+/**
+ * Recording is ALWAYS on (for crash diagnostics) — so this always starts it. The
+ * `bmm_watcher_on` toggle no longer gates recording; it only controls whether each
+ * session is *persisted to the replay list* (handled on close / by the editor).
+ */
 export async function syncWatcher(): Promise<void> {
-  if (watcherEnabled()) await startWatcher();
-  else stopWatcher();
+  await startWatcher();
 }
 
 /** Export the current recording (rrweb + console + Rust log) to a .bmmreplay file. */
@@ -225,6 +267,14 @@ export async function setWatcherOptions(opts: { on?: boolean; full?: boolean; ru
 
 /** Import + replay a .bmmreplay from an absolute file path (API / deep link). */
 export async function importReplayFromPath(path: string): Promise<void> { await loadAndPlay(path); }
+
+/** Replay a session directly from its JSON (e.g. one extracted from a crash zip). */
+export async function playReplayJson(json: string): Promise<void> {
+  let bundle: any;
+  try { bundle = JSON.parse(json); } catch { toast(t('watcher.badFile') || 'Unreadable file', 'error'); return; }
+  if (!Array.isArray(bundle?.events) || bundle.events.length < 2) { toast(t('watcher.empty') || 'Empty recording', 'error'); return; }
+  await playBundle(bundle);
+}
 
 /** Import + replay a .bmmreplay from a download URL (API / deep link). */
 export async function importReplayFromUrl(url: string): Promise<void> {

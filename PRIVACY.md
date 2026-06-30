@@ -65,6 +65,14 @@ erased (see §2.4).
   are masked by default**, so the characters you type are replaced by dots and never recorded. An
   explicit, separate **"full (unmasked)"** option exists for your own local debugging; it stays off
   unless you turn it on. Replays cover the BMM window only — never other apps or your screen.
+- **Local crash recording (always on, never sent):** to help diagnose crashes, BMM continuously
+  keeps a short **in-memory** recording of the current session (same masking as above). It is
+  **never saved as a file and never transmitted** — *except* that, **if BMM crashes**, the most
+  recent recording is written into the **local crash report `.zip`** so you (or, only if you choose
+  to share that zip) can see what happened right before the crash. Turning on the **Session
+  recorder** (Settings → Debug & trouble) additionally saves each session to a **local** replay
+  list on your disk. Nothing here is uploaded; crash reports stay on your machine unless you send
+  one yourself.
 - **Approximate location:** derived **server‑side from your IP** (country / region / city). The
   location shown is **rounded and never precise** — your exact location is never stored or shown.
 

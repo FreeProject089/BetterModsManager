@@ -320,27 +320,33 @@ fn generate_report_internal(
         }
     }
 
-    // 7. Latest local session replay (rrweb) — the user-controlled recorder
-    //    periodically flushes to <app_data>/Replays; attach the freshest one so
-    //    a report shows what happened just before the crash. Local-only data.
+    // 7. The session recording (rrweb) just before the crash. BMM always records
+    //    the current session in memory and flushes a single rolling buffer to
+    //    <app_data>/last_crash_session.bmmreplay (NOT a saved replay — that only
+    //    happens if the user enables the Session recorder). Attach that buffer so a
+    //    report shows what happened. Local-only data; never leaves unless you share.
     if let Some(app_data) = get_crash_dir(None).parent().map(|p| p.to_path_buf()) {
-        let replay_dir = app_data.join("Replays");
-        if let Ok(entries) = fs::read_dir(&replay_dir) {
-            let mut files: Vec<PathBuf> = entries
-                .filter_map(Result::ok)
-                .map(|e| e.path())
-                .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("bmmreplay"))
-                .collect();
-            files.sort_by_key(|p| {
-                fs::metadata(p)
-                    .and_then(|m| m.modified())
-                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-            });
-            if let Some(latest) = files.last() {
-                if let Ok(content) = fs::read(latest) {
-                    let _ = zip.start_file("session_replay.bmmreplay", opts);
-                    let _ = zip.write_all(&content);
-                }
+        let buffer = app_data.join("last_crash_session.bmmreplay");
+        let chosen = if buffer.exists() {
+            Some(buffer)
+        } else {
+            // Back-compat: fall back to the freshest saved replay if no buffer yet.
+            fs::read_dir(app_data.join("Replays")).ok().and_then(|entries| {
+                let mut files: Vec<PathBuf> = entries
+                    .filter_map(Result::ok)
+                    .map(|e| e.path())
+                    .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("bmmreplay"))
+                    .collect();
+                files.sort_by_key(|p| {
+                    fs::metadata(p).and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                });
+                files.pop()
+            })
+        };
+        if let Some(path) = chosen {
+            if let Ok(content) = fs::read(&path) {
+                let _ = zip.start_file("session_replay.bmmreplay", opts);
+                let _ = zip.write_all(&content);
             }
         }
     }
@@ -643,6 +649,111 @@ pub async fn list_crash_reports() -> Result<Vec<CrashReportEntry>, String> {
 
     // Sort by date descending
     reports.sort_by(|a, b| b.date.cmp(&a.date));
-    
+
     Ok(reports)
+}
+
+/// Guard: only allow operating on .zip files inside BMM's own Crashes tree.
+fn is_managed_crash_zip(path: &str) -> bool {
+    let p = std::path::Path::new(path);
+    if p.extension().and_then(|s| s.to_str()) != Some("zip") {
+        return false;
+    }
+    let base = get_crash_dir(None);
+    match (fs::canonicalize(p), fs::canonicalize(&base)) {
+        (Ok(fp), Ok(bp)) => fp.starts_with(&bp),
+        _ => false,
+    }
+}
+
+/// Delete a crash/session report .zip (must live inside the Crashes tree).
+#[tauri::command]
+pub fn delete_crash_report(path: String) -> Result<(), String> {
+    if !is_managed_crash_zip(&path) {
+        return Err("Not a managed crash report".into());
+    }
+    fs::remove_file(&path).map_err(|e| e.to_string())
+}
+
+/// Copy a file to a user-chosen destination (used by the crash manager's Export).
+#[tauri::command]
+pub fn copy_file(src: String, dest: String) -> Result<(), String> {
+    fs::copy(&src, &dest).map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Read a report .zip for in-app analysis: metadata, app logs (tail), the file
+/// list, and whether a session recording is attached. No need to import anything.
+#[tauri::command]
+pub fn read_crash_report(path: String) -> Result<serde_json::Value, String> {
+    if !is_managed_crash_zip(&path) {
+        return Err("Not a managed crash report".into());
+    }
+    let file = fs::File::open(&path).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    let mut files: Vec<String> = Vec::new();
+    let mut metadata = String::new();
+    let mut system_info = String::new();
+    let mut logs = String::new();
+    let mut has_session = false;
+    for i in 0..zip.len() {
+        let mut f = match zip.by_index(i) {
+            Ok(f) => f,
+            Err(_) => continue,
+        };
+        let name = f.name().to_string();
+        files.push(name.clone());
+        if name == "session_replay.bmmreplay" {
+            has_session = true;
+            continue;
+        }
+        use std::io::Read;
+        match name.as_str() {
+            "metadata.txt" => {
+                let mut s = String::new();
+                let _ = (&mut f).take(16 * 1024).read_to_string(&mut s);
+                metadata = s;
+            }
+            "system_info.txt" => {
+                let mut s = String::new();
+                let _ = (&mut f).take(32 * 1024).read_to_string(&mut s);
+                system_info = s;
+            }
+            "app_logs.txt" => {
+                // Keep the tail (most recent ~64 KB) — that's where a crash shows.
+                let mut s = String::new();
+                let _ = f.read_to_string(&mut s);
+                logs = if s.len() > 64 * 1024 {
+                    s[s.len() - 64 * 1024..].to_string()
+                } else {
+                    s
+                };
+            }
+            _ => {}
+        }
+    }
+    Ok(serde_json::json!({
+        "metadata": metadata,
+        "systemInfo": system_info,
+        "logs": logs,
+        "files": files,
+        "hasSession": has_session,
+    }))
+}
+
+/// Extract the attached session recording (session_replay.bmmreplay) from a report
+/// zip and return its JSON so the in-app player can replay it directly.
+#[tauri::command]
+pub fn read_crash_session(path: String) -> Result<String, String> {
+    if !is_managed_crash_zip(&path) {
+        return Err("Not a managed crash report".into());
+    }
+    let file = fs::File::open(&path).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    let mut f = zip
+        .by_name("session_replay.bmmreplay")
+        .map_err(|_| "No session recording in this report".to_string())?;
+    use std::io::Read;
+    let mut s = String::new();
+    f.read_to_string(&mut s).map_err(|e| e.to_string())?;
+    Ok(s)
 }

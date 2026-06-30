@@ -54,6 +54,8 @@ export async function checkPreviousCrash(): Promise<void> {
 }
 
 export function initCrashReportUI(): void {
+    // Wire the "Manage & analyze" crash-reports modal button.
+    import('../features/settings/crash-manager.js').then(m => m.initCrashManager()).catch(() => {});
     const openFolderBtn = document.getElementById('btn-open-crash-folder');
     if (openFolderBtn) {
         openFolderBtn.addEventListener('click', async () => {

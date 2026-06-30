@@ -69,6 +69,14 @@ données sont mises en cache localement et envoyées par lots via **HTTPS** ; ch
   explicite **« complet (non masqué) »** existe pour votre propre débogage local ; elle reste
   désactivée tant que vous ne l'activez pas. La relecture ne couvre que la fenêtre BMM — jamais les
   autres applications ni votre écran.
+- **Enregistrement local de crash (toujours actif, jamais envoyé) :** pour aider à diagnostiquer les
+  plantages, BMM garde en continu un court enregistrement **en mémoire** de la session en cours (même
+  masquage que ci-dessus). Il n'est **jamais sauvegardé en fichier ni transmis** — *sauf* que, **si
+  BMM plante**, le dernier enregistrement est écrit dans le **rapport de crash `.zip` local** afin que
+  vous (ou, uniquement si vous choisissez de partager ce zip) puissiez voir ce qui s'est passé juste
+  avant. Activer l'**Enregistreur de session** (Paramètres → Débogage & dépannage) sauvegarde en plus
+  chaque session dans une liste de relectures **locale** sur votre disque. Rien n'est téléversé ; les
+  rapports de crash restent sur votre machine tant que vous n'en envoyez pas un vous-même.
 - **Localisation approximative :** déduite **côté serveur à partir de votre IP** (pays / région /
   ville). La localisation est **arrondie et jamais précise** — votre position exacte n'est jamais
   stockée ni affichée.

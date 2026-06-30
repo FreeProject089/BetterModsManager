@@ -5604,6 +5604,46 @@ select.input-field option {
 .api-note { color: var(--text-muted); font-size: 12px; margin-top: 10px; }
 .api-warn { color: #fca5a5; font-size: 12.5px; background: rgba(248,113,113,0.08); border-left: 3px solid #f87171; border-radius: 6px; padding: 10px 12px; margin-top: 12px; }
 
+/* ── Crash Reports & Sessions manager ── */
+.crashmgr-modal { width: min(720px, 94vw); max-height: 86vh; display: flex; flex-direction: column; padding: 18px 20px; background: var(--bmm-bg-elevated); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+.crashmgr-head, .crashmgr-tabs, .crashmgr-limits, .crashmgr-actions { flex-shrink: 0; }
+.crashmgr-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.crashmgr-head h3 { margin: 0; font-size: 16px; }
+.crashmgr-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+.crashmgr-tab { background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); padding: 6px 10px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.crashmgr-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.crashmgr-limits { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; color: var(--text-muted); margin-bottom: 10px; padding: 7px 9px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; }
+.crashmgr-limits input { width: 64px; padding: 3px 6px; font-size: 11px; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); }
+.crashmgr-limits-hint { color: var(--text-muted); opacity: 0.7; font-style: italic; margin-left: auto; }
+.crashmgr-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; margin-right: -4px; }
+.crashmgr-empty { color: var(--text-muted); font-size: 13px; text-align: center; padding: 24px 0; }
+.crashmgr-row { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px; background: rgba(255,255,255,0.02); flex-wrap: wrap; }
+.crashmgr-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.crashmgr-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crashmgr-meta { font-size: 11px; color: var(--text-muted); }
+.crashmgr-cat { color: var(--accent); }
+.crashmgr-row-actions { display: flex; gap: 4px; flex-wrap: wrap; flex-shrink: 0; }
+.crashmgr-del { color: var(--danger); }
+/* Collapsible category groups; rows inside are always visible */
+.crashmgr-group { flex-shrink: 0; border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,0.015); overflow: hidden; }
+.crashmgr-group + .crashmgr-group { margin-top: 6px; }
+.crashmgr-gsum { display: flex; align-items: center; gap: 9px; padding: 9px 11px; cursor: pointer; list-style: none; user-select: none; font-weight: 600; font-size: 12.5px; }
+.crashmgr-gsum::-webkit-details-marker { display: none; }
+.crashmgr-chev { flex-shrink: 0; color: var(--text-muted); transition: transform .18s; }
+.crashmgr-group[open] .crashmgr-chev { transform: rotate(90deg); color: var(--accent); }
+.crashmgr-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.crashmgr-dot.is-crash { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,0.6); }
+.crashmgr-dot.is-session { background: #60a5fa; }
+.crashmgr-gtitle { flex: 1; }
+.crashmgr-gcount { font-size: 11px; color: var(--text-muted); background: rgba(255,255,255,0.06); padding: 1px 8px; border-radius: 999px; }
+.crashmgr-glist { padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 5px; border-top: 1px solid var(--border); }
+.crashmgr-glist .crashmgr-row { border-color: var(--border); }
+.crashmgr-rowdetail { padding: 4px 10px 10px; }
+.crashmgr-rowdetail h5 { margin: 10px 0 4px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.crashmgr-sub > summary { cursor: pointer; font-size: 12px; color: var(--text-secondary); margin: 8px 0 4px; }
+.crashmgr-pre { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 11px; font-family: var(--font-mono, monospace); white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; margin: 0; color: var(--text-secondary); }
+.crashmgr-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
 .nbe-code { font-family: var(--font-mono, monospace); font-size: 12px; resize: vertical; min-height: 56px; }
 .nbe-pages > summary { color: var(--accent); }
 .nbe-page-block { border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,0.025); padding: 8px; margin-bottom: 8px; }
