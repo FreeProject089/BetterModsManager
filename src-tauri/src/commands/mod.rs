@@ -32,5 +32,6 @@ pub mod apps;
 pub mod themes;
 pub mod scheduler;
 pub mod analytics;
+pub mod custom_pages;
 pub mod dialog;
 pub mod installer_handoff;

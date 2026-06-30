@@ -165,6 +165,11 @@ fn main() {
     }
 
     tauri::Builder::default()
+        // Custom sandboxed pages: `bmmpage://<id>/<file>` serves a page's bundle
+        // read-only with a strict CSP and an opaque origin (see commands::custom_pages).
+        .register_uri_scheme_protocol("bmmpage", |ctx, request| {
+            commands::custom_pages::bmmpage_protocol(ctx, request)
+        })
         // Sub-frame guard: Tauri v2 defines window.__TAURI_INTERNALS__ for the
         // MAIN frame only, but injects code into every frame (incl. cross-origin
         // iframes like the YouTube tutorial embeds and about:blank) that reads
@@ -427,6 +432,23 @@ fn main() {
             commands::autoupdate::apply_incremental_update,
             commands::autoupdate::check_update_via_installer,
             commands::autoupdate::update_via_installer,
+            commands::custom_pages::list_custom_pages,
+            commands::custom_pages::create_custom_page,
+            commands::custom_pages::get_custom_page_source,
+            commands::custom_pages::update_custom_page,
+            commands::custom_pages::delete_custom_page,
+            commands::custom_pages::import_page_file,
+            commands::custom_pages::page_storage_get,
+            commands::custom_pages::page_storage_set,
+            commands::custom_pages::page_storage_remove,
+            commands::custom_pages::page_storage_keys,
+            commands::custom_pages::page_storage_clear,
+            commands::custom_pages::page_grants_get,
+            commands::custom_pages::page_set_grant,
+            commands::custom_pages::page_net_origins_get,
+            commands::custom_pages::page_set_net_origins,
+            commands::custom_pages::page_fetch,
+            commands::custom_pages::page_system_info,
             commands::benchmark::is_benchmark_enabled,
             commands::benchmark::set_advanced_benchmark_mode,
             commands::benchmark::start_benchmark,

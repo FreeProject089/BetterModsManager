@@ -344,6 +344,26 @@ export function showTaskyHelp(key, iconClass = 'info', isLiteral = false) {
 /**
  * Internal implementation for showing tooltip
  */
+// Every `icon-*` class that actually has a mask-image rule in main.css. Used to
+// guarantee the Tasky tooltip only ever applies a real icon (no missing-glyph box).
+const DEFINED_TASKY_ICONS = new Set([
+    'icon-option', 'icon-disk', 'icon-start', 'icon-search', 'icon-verify', 'icon-network',
+    'icon-download', 'icon-layers', 'icon-blocks', 'icon-cloud', 'icon-build', 'icon-patch',
+    'icon-check', 'icon-done', 'icon-flow', 'icon-user', 'icon-share', 'icon-group',
+    'icon-delete', 'icon-trash', 'icon-link', 'icon-refresh', 'icon-image', 'icon-text',
+    'icon-code', 'icon-save', 'icon-add', 'icon-alert', 'icon-folder', 'icon-file',
+    'icon-lock', 'icon-list', 'icon-chart', 'icon-stop', 'icon-settings', 'icon-play',
+    'icon-shield', 'icon-plus', 'icon-minus', 'icon-x', 'icon-info', 'icon-help',
+    'icon-warning', 'icon-history', 'icon-package', 'icon-grid', 'icon-database', 'icon-heart',
+    'icon-close', 'icon-maximize', 'icon-minimize', 'icon-edit', 'icon-toggle', 'icon-pin',
+    'icon-activity', 'icon-app', 'icon-archive', 'icon-bolt', 'icon-box', 'icon-brain',
+    'icon-cog', 'icon-command', 'icon-compare', 'icon-copy', 'icon-cpu', 'icon-drive',
+    'icon-export', 'icon-flash', 'icon-globe', 'icon-import', 'icon-integrity', 'icon-intersect',
+    'icon-key', 'icon-layout', 'icon-message', 'icon-meta', 'icon-meter', 'icon-mouse',
+    'icon-priority', 'icon-req', 'icon-restore', 'icon-scales', 'icon-scissors', 'icon-script',
+    'icon-server', 'icon-speed', 'icon-star', 'icon-stream', 'icon-sync', 'icon-terminal',
+    'icon-time', 'icon-unlock', 'icon-users', 'icon-zap',
+]);
 function showTooltipImpl(key, iconClass, isLiteral) {
     const bubble = document.querySelector('.tasky-speech-bubble');
     const eyes = document.getElementById('tasky-bubble-eyes');
@@ -413,6 +433,14 @@ function showTooltipImpl(key, iconClass, isLiteral) {
         finalIcon = 'icon-layers';
     if (finalIcon === 'pin' || finalIcon === 'sticky' || finalIcon === 'icon-pin')
         finalIcon = 'icon-pin';
+    // Universal safety net: a caller may pass a bare name ('grid', 'apps', …) that
+    // no rule above maps. Prefix it, and if the resulting class isn't an actually
+    // DEFINED icon (a mask-image rule in CSS), fall back to icon-info — so the
+    // tooltip never shows a broken "tofu" box. Fixes navbar + anywhere else.
+    if (!finalIcon.startsWith('icon-'))
+        finalIcon = 'icon-' + finalIcon;
+    if (!DEFINED_TASKY_ICONS.has(finalIcon))
+        finalIcon = 'icon-info';
     // Text content logic
     let exp = key;
     if (!isLiteral) {

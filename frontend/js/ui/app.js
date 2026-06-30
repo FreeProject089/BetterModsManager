@@ -8,6 +8,7 @@ import { initMods, refreshMods } from '../features/mods/mods.js';
 import { initI18n, applyTranslations, t } from '../core/i18n.js';
 import { initBenchmark } from '../features/bench/benchmark.js';
 import { shouldShowOnboarding, startOnboarding } from './onboarding.js';
+import { initNavbarCustomize } from './navbar-customize.js';
 import { openTutorialHub } from './tutorial-hub.js';
 import { initRepo } from '../features/repo/repo.js';
 import { appState } from '../core/state.js';
@@ -153,6 +154,8 @@ export function triggerTaskyPulse() {
 }
 // ── Navigation ────────────────────────────────────────────
 function initNavigation() {
+    // Apply saved navbar customization (order / hidden / rename) + add the editor trigger.
+    initNavbarCustomize();
     const navItems = document.querySelectorAll('.nav-item[data-view]');
     navItems.forEach(item => {
         item.addEventListener('click', () => {
@@ -160,7 +163,9 @@ function initNavigation() {
             invoke('log_frontend_line', { line: `Navigated to view: ${viewId}` });
             if (viewId)
                 trackView(viewId);
-            navItems.forEach(n => n.classList.remove('active'));
+            // Clear ALL nav items (incl. custom navbar buttons), not just [data-view],
+            // otherwise a custom button stays stuck in its active/hover state.
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             item.classList.add('active');
             // Trigger mascot loading safely
             triggerTaskyPulse();
@@ -1139,6 +1144,9 @@ window.applyTaskySettings = function () {
     document.documentElement.style.setProperty('--tasky-bubble-opacity', String(opacity / 100));
     if (container)
         container.style.display = isVisible ? '' : 'none';
+    // The titlebar version badge duplicates the corner Tasky's role; when the
+    // corner Tasky is hidden, hide the lone badge too (cleaner titlebar).
+    document.querySelectorAll('.titlebar-version').forEach(el => { el.style.display = isVisible ? '' : 'none'; });
     if (mascotImg) {
         if (isAnimated) {
             mascotImg.style.filter = 'drop-shadow(2px 4px 12px rgba(0,0,0,0.6))';

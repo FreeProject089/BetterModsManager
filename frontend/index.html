@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' https://app.betahub.io https://www.youtube.com https://www.youtube-nocookie.com https://s.ytimg.com https://*.ytimg.com https://www.google.com https://apis.google.com 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://app.betahub.io; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: asset: asset.localhost/ http://asset.localhost/ blob: https://* https://betahub.io https://i.ytimg.com https://*.ytimg.com https://*.youtube.com https://flagcdn.com; media-src 'self' blob: data: https://*.googlevideo.com https://*.youtube.com https://*.youtube-nocookie.com; frame-src 'self' https://www.youtube.com https://*.youtube.com https://*.youtube-nocookie.com https://www.google.com blob:; child-src 'self' https://*.youtube.com https://*.youtube-nocookie.com blob:; worker-src 'self' blob:; connect-src 'self' https://* tauri://* ipc://* ipc://localhost http://ipc.localhost https://tauri.localhost http://tauri.localhost https://asset.localhost http://asset.localhost ws://localhost:* wss://localhost:* http://localhost:* http://127.0.0.1:*;">
+        content="default-src 'self'; script-src 'self' https://app.betahub.io https://www.youtube.com https://www.youtube-nocookie.com https://s.ytimg.com https://*.ytimg.com https://www.google.com https://apis.google.com 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://app.betahub.io; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: asset: asset.localhost/ http://asset.localhost/ blob: https://* https://betahub.io https://i.ytimg.com https://*.ytimg.com https://*.youtube.com https://flagcdn.com; media-src 'self' blob: data: https://*.googlevideo.com https://*.youtube.com https://*.youtube-nocookie.com; frame-src 'self' https: blob: bmmpage: http://bmmpage.localhost https://bmmpage.localhost; child-src 'self' https: blob: bmmpage: http://bmmpage.localhost https://bmmpage.localhost; worker-src 'self' blob:; connect-src 'self' https://* tauri://* ipc://* ipc://localhost http://ipc.localhost https://tauri.localhost http://tauri.localhost https://asset.localhost http://asset.localhost ws://localhost:* wss://localhost:* http://localhost:* http://127.0.0.1:*;">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Better Mod Manager</title>
     <meta name="description" content="Modern universal mod manager" />
@@ -2676,6 +2676,14 @@
                                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
                                 </svg>
                                 <span data-i18n="docs.tab.pluginsApi">Plugins & API</span>
+                            </button>
+                            <button class="docs-tab-btn btn-docs-tab" data-tab="pages-api">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                    <path d="M9 3v18"/>
+                                </svg>
+                                <span data-i18n="docs.tab.pagesApi">Custom Pages API</span>
                             </button>
                         </div>
                     </div>
@@ -6535,6 +6543,72 @@
                                 </div>
                             </details>
                         </div><!-- /faq-category mod-updates -->
+
+                        <!-- CUSTOMIZATION & CUSTOM PAGES -->
+                        <div class="faq-category">
+                            <div class="faq-category-header">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                                    <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+                                </svg>
+                                <span data-i18n="faq.category.custom">Customization &amp; Custom Pages</span>
+                            </div>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+                                        <span data-i18n="faq.cust.q1">How do I customize the navigation bar?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.cust.a1">Open Settings → the toolbar at the top of the cards → "Customize navigation".</div>
+                            </details>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+                                        <span data-i18n="faq.cust.q2">What are custom pages?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.cust.a2">Custom pages are tiny HTML/CSS/JS/WASM apps you add to the navbar.</div>
+                            </details>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z"/></svg>
+                                        <span data-i18n="faq.cust.q3">Are custom pages safe? Can they access my mods or files?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.cust.a3">No. Every page runs in a strict sandbox and is denied everything by default.</div>
+                            </details>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg>
+                                        <span data-i18n="faq.cust.q4">Can a custom page access the internet or store data?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.cust.a4">Only if you allow it — per-page toggles for storage, notify, internet (allow-listed origins), and app info.</div>
+                            </details>
+
+                            <details class="faq-accordion">
+                                <summary class="faq-summary">
+                                    <span style="display:flex;align-items:center;gap:8px">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                        <span data-i18n="faq.cust.q5">An external URL button shows a blank page — why?</span>
+                                    </span>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </summary>
+                                <div class="faq-content" data-i18n="faq.cust.a5">Some sites forbid being embedded (X-Frame-Options). Use "Open in browser", or pick an embeddable site.</div>
+                            </details>
+                        </div><!-- /faq-category customization -->
                     </div><!-- /docs-tab-faq -->
 
                     <!-- TAB: PLUGINS & API -->
@@ -7083,6 +7157,151 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
 
                         </div><!-- /sections wrapper -->
                     </div><!-- /docs-tab-plugins-api -->
+
+                    <!-- TAB: CUSTOM PAGES API -->
+                    <div id="docs-tab-pages-api" class="docs-tab-content" style="display: none; padding: 24px 0 40px;">
+                        <div class="api-doc">
+                            <div class="api-hero">
+                                <div class="api-hero-icon">
+                                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                                </div>
+                                <div>
+                                    <h2 class="api-title" data-i18n="docs.pagesApi.h2">Custom Pages — the <code>bmm</code> API</h2>
+                                    <p class="api-lede" data-i18n="docs.pagesApi.intro">
+                                        Custom pages are small HTML/CSS/JS/WASM apps you add to the navbar
+                                        (<b>Settings → Customize navigation → Custom pages</b>). Each page runs in a
+                                        <b>fully isolated sandbox</b>. A page <b>cannot</b> reach BMM, your mods, files, the system,
+                                        the network, or any other page. Its only link to BMM is the global <code>bmm</code> object,
+                                        and every method requires a permission you grant per-page (everything is denied by default).
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="api-sec">
+                                <h3 class="api-h" data-i18n="docs.pagesApi.startH">Getting started</h3>
+                                <ol class="api-steps">
+                                    <li data-i18n="docs.pagesApi.start1">Open <b>Settings → Customize navigation → Custom pages</b> and click <b>Create page</b>.</li>
+                                    <li data-i18n="docs.pagesApi.start2">Fill the <b>HTML</b>, <b>CSS</b> and <b>JS</b> boxes. Your JS goes into <code>app.js</code>; inline <code>onclick</code>/<code>&lt;script&gt;</code> are blocked, so wire events with <code>addEventListener</code>.</li>
+                                    <li data-i18n="docs.pagesApi.start3">Grant the permissions the page needs (use a <b>preset</b>: Strict / Mid / Low), and for internet add the allowed origins.</li>
+                                    <li data-i18n="docs.pagesApi.start4">Add a navbar button of type <b>Custom page</b> pointing at it. Re-open the page (switch tab and back) after changing permissions so the new rules apply.</li>
+                                    <li data-i18n="docs.pagesApi.start5">Need a binary asset (e.g. a <code>.wasm</code>)? Use <b>Import file</b> on the page, then load it with a relative URL (<code>fetch('module.wasm')</code>).</li>
+                                </ol>
+                            </div>
+
+                            <div class="api-sec">
+                                <h3 class="api-h" data-i18n="docs.pagesApi.permsH">Permissions (granted per page, default-deny)</h3>
+                                <div class="api-table-wrap"><table class="api-table">
+                                    <thead><tr><th data-i18n="docs.pagesApi.thCap">Capability</th><th data-i18n="docs.pagesApi.thUnlocks">Unlocks</th></tr></thead>
+                                    <tbody>
+                                        <tr><td><span class="perm s-storage">storage</span></td><td data-i18n="docs.pagesApi.capStorage"><code>bmm.storage.*</code> — a private key/value store (2&nbsp;MB), namespaced to this page only.</td></tr>
+                                        <tr><td><span class="perm s-notify">notify</span></td><td data-i18n="docs.pagesApi.capNotify"><code>bmm.notify()</code> — show a BMM toast.</td></tr>
+                                        <tr><td><span class="perm s-internet">internet</span></td><td data-i18n="docs.pagesApi.capNet"><code>bmm.fetch()</code> — GET, but <b>only</b> to the origins you explicitly allow-list for the page. Once granted, a plain <code>fetch()</code> to those origins works too.</td></tr>
+                                        <tr><td><span class="perm s-appinfo">app info</span></td><td data-i18n="docs.pagesApi.capRead"><code>bmm.read()</code> — a few non-sensitive values (app name/version/platform/lang, current theme). Never your data, files, or settings.</td></tr>
+                                    </tbody>
+                                </table></div>
+                            </div>
+
+                            <div class="api-sec">
+                            <h3 class="api-h" data-i18n="docs.pagesApi.apiRefH">API reference</h3>
+                            <pre class="api-code"><code>// All methods return a Promise and reject if the capability isn't granted.
+
+// storage — private to this page, persists across launches
+await bmm.storage.set('key', 'value');   // value is stored as a string
+await bmm.storage.get('key');            // → "value"  (or null)
+await bmm.storage.remove('key');
+await bmm.storage.keys();                // → ["key", ...]
+await bmm.storage.clear();
+
+// notify — a BMM toast (type: 'info' | 'success' | 'error')
+bmm.notify('Saved!', 'success');
+
+// fetch — internet GET, only to an allow-listed origin
+const res = await bmm.fetch('https://api.example.com/data');
+//   → { status: 200, body: "..." }   (body is text)
+
+// read — a few safe, read-only values
+await bmm.read('app.version');     // e.g. "1.0.0"
+await bmm.read('app.name');        // "Better Mods Manager"
+await bmm.read('app.platform');    // e.g. "Win32"
+await bmm.read('app.lang');        // e.g. "en"
+await bmm.read('theme.current');   // current theme id</code></pre>
+
+                            </div><!-- /api-sec API reference -->
+
+                            <div class="api-sec">
+                            <h3 class="api-h" data-i18n="docs.pagesApi.callsH">Complete call list</h3>
+                            <div class="api-table-wrap"><table class="api-table">
+                                <thead><tr>
+                                    <th data-i18n="docs.pagesApi.colCall">Call</th>
+                                    <th data-i18n="docs.pagesApi.colPerm">Permission</th>
+                                    <th data-i18n="docs.pagesApi.colReturns">Returns / does</th>
+                                </tr></thead>
+                                <tbody>
+                                    <tr><td><code>bmm.storage.set(key, value)</code></td><td><span class="perm s-storage">storage</span></td><td data-i18n="docs.pagesApi.cStorageSet">Stores <code>value</code> (a string) under <code>key</code>.</td></tr>
+                                    <tr><td><code>bmm.storage.get(key)</code></td><td><span class="perm s-storage">storage</span></td><td data-i18n="docs.pagesApi.cStorageGet">The stored string, or <code>null</code>.</td></tr>
+                                    <tr><td><code>bmm.storage.remove(key)</code></td><td><span class="perm s-storage">storage</span></td><td data-i18n="docs.pagesApi.cStorageRemove">Deletes <code>key</code>.</td></tr>
+                                    <tr><td><code>bmm.storage.keys()</code></td><td><span class="perm s-storage">storage</span></td><td data-i18n="docs.pagesApi.cStorageKeys">An array of all keys.</td></tr>
+                                    <tr><td><code>bmm.storage.clear()</code></td><td><span class="perm s-storage">storage</span></td><td data-i18n="docs.pagesApi.cStorageClear">Removes everything stored by this page.</td></tr>
+                                    <tr><td><code>bmm.notify(msg, type?)</code></td><td><span class="perm s-notify">notify</span></td><td data-i18n="docs.pagesApi.cNotify">Shows a toast. <code>type</code> = <code>'info'</code> (default), <code>'success'</code>, or <code>'error'</code>.</td></tr>
+                                    <tr><td><code>bmm.fetch(url)</code></td><td><span class="perm s-internet">internet</span></td><td data-i18n="docs.pagesApi.cFetch">GET an allow-listed URL → <code>{ status, body }</code> (body is text). Works around CORS (done server-side).</td></tr>
+                                    <tr><td><code>bmm.read(scope)</code></td><td><span class="perm s-appinfo">app info</span></td><td data-i18n="docs.pagesApi.cRead">A safe read-only value (see scopes below), or <code>null</code>.</td></tr>
+                                    <tr><td><code>bmm.clipboard.write(text)</code></td><td><span class="perm s-clipboard">clipboard</span></td><td data-i18n="docs.pagesApi.cClipWrite">Copies <code>text</code> to the system clipboard. Resolves <code>true</code>.</td></tr>
+                                    <tr><td><code>bmm.clipboard.read()</code></td><td><span class="perm s-clipboard">clipboard</span></td><td data-i18n="docs.pagesApi.cClipRead">The current clipboard text.</td></tr>
+                                    <tr><td><code>bmm.system.info()</code></td><td><span class="perm s-system">system info</span></td><td data-i18n="docs.pagesApi.cSystem">Safe read-only system facts (see shape below). No filesystem, processes, or shell.</td></tr>
+                                </tbody>
+                            </table></div>
+                            <p class="api-note" data-i18n="docs.pagesApi.callsNote">Every call returns a <code>Promise</code>. If the permission isn't granted it rejects with <code>permission_denied</code> (and a toast names the missing permission).</p>
+
+                            <h4 class="api-h" style="font-size:13px; margin-top:18px;" data-i18n="docs.pagesApi.scopesH"><code>bmm.read()</code> scopes</h4>
+                            <div class="api-table-wrap"><table class="api-table"><tbody>
+                                <tr><td><code>'app.name'</code></td><td>"Better Mods Manager"</td></tr>
+                                <tr><td><code>'app.version'</code></td><td><span data-i18n="docs.pagesApi.scVersion">e.g. "1.0.0"</span></td></tr>
+                                <tr><td><code>'app.platform'</code></td><td><span data-i18n="docs.pagesApi.scPlatform">e.g. "Win32"</span></td></tr>
+                                <tr><td><code>'app.lang'</code></td><td><span data-i18n="docs.pagesApi.scLang">current UI language, e.g. "en"</span></td></tr>
+                                <tr><td><code>'app.locale'</code></td><td><span data-i18n="docs.pagesApi.scLocale">full locale, e.g. "en-US"</span></td></tr>
+                                <tr><td><code>'app.online'</code></td><td><span data-i18n="docs.pagesApi.scOnline">"true" / "false" — network reachable</span></td></tr>
+                                <tr><td><code>'theme.current'</code></td><td><span data-i18n="docs.pagesApi.scTheme">current theme id</span></td></tr>
+                                <tr><td><code>'theme.dark'</code></td><td><span data-i18n="docs.pagesApi.scDark">"true" / "false" — is dark mode</span></td></tr>
+                                <tr><td><code>'theme.accent'</code></td><td><span data-i18n="docs.pagesApi.scAccent">accent colour (CSS value)</span></td></tr>
+                                <tr><td><code>'screen.width'</code> / <code>'screen.height'</code></td><td><span data-i18n="docs.pagesApi.scScreen">screen size in pixels</span></td></tr>
+                            </tbody></table></div>
+
+                            <h4 class="api-h" style="font-size:13px; margin-top:18px;" data-i18n="docs.pagesApi.sysShapeH"><code>bmm.system.info()</code> returns</h4>
+                            <pre class="api-code"><code>{ os: "windows", arch: "x86_64", osVersion, kernelVersion,
+  cpuCount, memTotalMb, memAvailableMb, uptimeSec }</code></pre>
+                            </div><!-- /api-sec calls -->
+
+                            <div class="api-sec">
+                            <h3 class="api-h" data-i18n="docs.pagesApi.writeH">Writing the page</h3>
+                            <p style="color:var(--text-secondary);" data-i18n="docs.pagesApi.writeP">
+                                Inline event handlers (<code>onclick="…"</code>) and inline <code>&lt;script&gt;</code> are blocked by
+                                the page CSP. Put your code in the <b>JS</b> box and use <code>addEventListener</code>.
+                                The <code>bmm</code> object is available globally. WASM works:
+                                <code>WebAssembly.instantiateStreaming(fetch('module.wasm'))</code> can load a <code>.wasm</code> that ships
+                                inside the page (own-bundle fetch is allowed; the internet is not, unless granted).
+                            </p>
+                            <pre class="api-code"><code>&lt;!-- HTML box --&gt;
+&lt;h1&gt;Counter&lt;/h1&gt;
+&lt;button id="inc"&gt;+1&lt;/button&gt; &lt;span id="n"&gt;0&lt;/span&gt;
+
+// JS box  (needs the "storage" + "notify" permissions)
+const out = document.getElementById('n');
+bmm.storage.get('n').then(v =&gt; { out.textContent = v || '0'; });
+document.getElementById('inc').addEventListener('click', async () =&gt; {
+  const n = Number(await bmm.storage.get('n') || 0) + 1;
+  await bmm.storage.set('n', n);
+  out.textContent = n;
+  bmm.notify('Count: ' + n, 'success');
+});</code></pre>
+                            </div><!-- /api-sec writing -->
+
+                            <p class="api-warn" data-i18n="docs.pagesApi.secNote">
+                                Security: a denied call rejects with <code>permission_denied</code>; an internet call to a
+                                non-allow-listed origin rejects with <code>origin_not_allowed</code>. There is no way for a page
+                                to read BMM internals, run system code, or touch another page's data.
+                            </p>
+                        </div>
+                    </div><!-- /docs-tab-pages-api -->
                 </section>
 
                 <!-- ══ CREDITS VIEW ══ -->

@@ -320,8 +320,33 @@ fn generate_report_internal(
         }
     }
 
+    // 7. Latest local session replay (rrweb) — the user-controlled recorder
+    //    periodically flushes to <app_data>/Replays; attach the freshest one so
+    //    a report shows what happened just before the crash. Local-only data.
+    if let Some(app_data) = get_crash_dir(None).parent().map(|p| p.to_path_buf()) {
+        let replay_dir = app_data.join("Replays");
+        if let Ok(entries) = fs::read_dir(&replay_dir) {
+            let mut files: Vec<PathBuf> = entries
+                .filter_map(Result::ok)
+                .map(|e| e.path())
+                .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("bmmreplay"))
+                .collect();
+            files.sort_by_key(|p| {
+                fs::metadata(p)
+                    .and_then(|m| m.modified())
+                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+            });
+            if let Some(latest) = files.last() {
+                if let Ok(content) = fs::read(latest) {
+                    let _ = zip.start_file("session_replay.bmmreplay", opts);
+                    let _ = zip.write_all(&content);
+                }
+            }
+        }
+    }
+
     let _ = zip.finish();
-    
+
     // Archivage et nettoyage
     archive_old_reports(&report_dir, &get_archive_dir(is_crash));
 

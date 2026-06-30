@@ -65,10 +65,12 @@ class DebugUI {
     }
 
     toggle(force) {
-        // Strict lock check
-        if (!appState.get('debugMode') && force !== true) return;
-
         const willOpen = force !== undefined ? force : !this.isOpen;
+
+        // Strict lock gates OPENING only (force === true bypasses it, e.g. a navbar
+        // button). CLOSING must always work — otherwise opening it from the navbar
+        // without unlocking Debug Mode would trap the overlay with no way to close.
+        if (willOpen && !appState.get('debugMode') && force !== true) return;
 
         if (willOpen) {
             if (!this.container) this.init();   // lazy build on first open

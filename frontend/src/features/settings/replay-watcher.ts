@@ -15,7 +15,10 @@ const FULL = 'bmm_watcher_full';
 const RUST = 'bmm_watcher_rust';
 const JS = 'bmm_watcher_js';
 
-export const watcherEnabled = () => { try { return localStorage.getItem(ON) === '1'; } catch { return false; } };
+// Default ON: a local rolling recording is kept so it can be attached to a crash
+// report for diagnostics. It never leaves the machine unless you export it or
+// share a crash zip. Turn it off in Settings → Debug & trouble.
+export const watcherEnabled = () => { try { return localStorage.getItem(ON) !== '0'; } catch { return true; } };
 export const watcherFull = () => { try { return localStorage.getItem(FULL) === '1'; } catch { return false; } };
 const watcherRust = () => { try { return localStorage.getItem(RUST) !== '0'; } catch { return true; } };
 const watcherJs = () => { try { return localStorage.getItem(JS) !== '0'; } catch { return true; } };
@@ -91,7 +94,15 @@ export async function startWatcher(): Promise<void> {
 
   await subscribeReplay(_listener);
   registerCloseListeners();
+  // Periodically flush the rolling buffer to disk so a hard crash (which kills
+  // the frontend before any close handler runs) still leaves a recent session
+  // that the crash report can attach. Silent = doesn't clutter the replay list.
+  if (_autoSaveTimer === null) {
+    _autoSaveTimer = window.setInterval(() => { autoSaveSession(false); }, 45000);
+  }
 }
+
+let _autoSaveTimer: number | null = null;
 
 let _closeListenersRegistered = false;
 function registerCloseListeners(): void {
@@ -104,8 +115,9 @@ function registerCloseListeners(): void {
   } catch {}
 }
 
-/** Automatically save the current session without prompting (e.g. on close). */
-export async function autoSaveSession(): Promise<void> {
+/** Automatically save the current session without prompting (e.g. on close or
+ *  on the periodic crash-buffer flush). `recent=false` skips the replay list. */
+export async function autoSaveSession(recent = true): Promise<void> {
   if (!_recording) return; // Not recording
   const events = _chunks.flat();
   if (events.length < 2) return;
@@ -122,7 +134,7 @@ export async function autoSaveSession(): Promise<void> {
       rustLog,
     };
     const path = await invoke('save_local_replay', { content: JSON.stringify(bundle) }) as string;
-    addRecent(path);
+    if (recent) addRecent(path);
   } catch (e) {
     console.error('Auto-save replay failed:', e);
   }
@@ -130,6 +142,7 @@ export async function autoSaveSession(): Promise<void> {
 
 /** Stop local recording (keeps the buffer for export). */
 export function stopWatcher(): void {
+  if (_autoSaveTimer !== null) { clearInterval(_autoSaveTimer); _autoSaveTimer = null; }
   if (_recording) {
     _recording = false;
     if (_listener) unsubscribeReplay(_listener);

@@ -281,18 +281,18 @@
 }
 .apps-tag {
     font-size: 10px;
-    font-weight: 500;
+    font-weight: 600;
     padding: 2px 8px;
     border-radius: 6px;
-    background: var(--bmm-s06);
-    color: var(--text-muted);
-    border: 1px solid var(--border);
-    transition: border-color .14s, color .14s, background .14s;
+    background: rgba(var(--accent-rgb), 0.07);
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+    transition: background .14s, color .14s;
 }
-.apps-tag::before { content: "#"; opacity: 0.45; margin-right: 1px; }
+.apps-tag::before { content: "#"; opacity: 0.4; margin-right: 1px; font-weight: 700; }
 .apps-tag-more::before { content: ""; margin: 0; }
-.apps-tag-more { font-weight: 700; opacity: 0.85; }
-.apps-card:hover .apps-tag { border-color: rgba(var(--accent-rgb), 0.4); }
+.apps-tag-more { font-weight: 700; color: var(--text-muted); background: transparent; }
+.apps-card:hover .apps-tag { background: rgba(var(--accent-rgb), 0.13); color: var(--text-primary); }
 .apps-version { font-size: 11px; color: var(--text-muted); }
 
 /* ── Installed List ── */

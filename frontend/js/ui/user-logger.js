@@ -24,7 +24,10 @@ export function initInteractionLogging() {
         const key = e.key?.toLowerCase() || '';
         if (e.ctrlKey && e.altKey && key === 'd') {
             e.preventDefault();
-            if (appState.get('debugMode')) {
+            // If the overlay is already open (e.g. opened from a navbar button
+            // without unlocking the Debug glass card), Ctrl+Alt+D must always be
+            // able to CLOSE it. Only OPENING stays gated behind debug mode.
+            if (_debugUI.isOpen || appState.get('debugMode')) {
                 _debugUI.toggle();
             }
             else {

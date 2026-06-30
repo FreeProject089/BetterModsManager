@@ -150,6 +150,7 @@ function renderToolbar(): void {
         <span class="cardorder-hint">⇅ ${t('cardorder.hintEdit') || 'Turn on Edit layout, then drag cards to reorder'}</span>
         <div class="cardorder-actions">
             <button class="btn btn-xs btn-ghost" id="cardorder-editbtn">${t('cardorder.edit') || 'Edit layout'}</button>
+            <button class="btn btn-xs btn-ghost" id="cardorder-navbar">${t('navedit.title') || 'Customize navigation'}</button>
             <button class="btn btn-xs btn-ghost" id="cardorder-share">${t('cardorder.share') || 'Share layout'}</button>
             <button class="btn btn-xs btn-ghost" id="cardorder-import">${t('cardorder.import') || 'Import'}</button>
             <button class="btn btn-xs btn-ghost" id="cardorder-reset">${t('cardorder.reset') || 'Reset'}</button>
@@ -161,6 +162,9 @@ function renderToolbar(): void {
     c.insertBefore(bar, c.firstChild);
 
     bar.querySelector('#cardorder-editbtn')?.addEventListener('click', () => setEditMode(!_editMode));
+    bar.querySelector('#cardorder-navbar')?.addEventListener('click', () => {
+        import('../../ui/navbar-customize.js').then(m => m.openNavbarEditor()).catch(() => {});
+    });
     bar.querySelector('#cardorder-share')?.addEventListener('click', async () => {
         // Copy a READY-TO-USE bmm:// deeplink (clicking it on another machine
         // applies this exact layout). The import box also still accepts it.

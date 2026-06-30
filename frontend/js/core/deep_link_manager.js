@@ -526,6 +526,17 @@ async function handleDeepLink(urlStr) {
             }
             return;
         }
+        // ── Navbar customization (shared layout) ─────────────────────────────
+        if (action === 'settings/navbar') {
+            const code = parsedUrl.searchParams.get('code');
+            if (code) {
+                import('../ui/navbar-customize.js').then(m => {
+                    if (m.applyNavCodeFromLink?.(code))
+                        window.toast?.('Navigation applied', 'success');
+                }).catch(() => { });
+            }
+            return;
+        }
         // ── Scheduler: run a specific task by id (Windows Task Scheduler hook) ──
         if (action === 'schedule/run') {
             const id = parsedUrl.searchParams.get('id');
