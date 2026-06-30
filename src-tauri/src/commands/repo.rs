@@ -134,6 +134,7 @@ pub async fn export_server_repo(
     seed: Option<String>,
     modpacks_share_config: Option<Vec<crate::models::repo::RepoModpackShare>>,
     zip_output: bool,
+    zip_mods: bool,
     server_options: Option<MiniServerExportOptions>,
 ) -> Result<(), String> {
     if author_name.trim().is_empty() {
@@ -317,6 +318,7 @@ pub async fn export_server_repo(
                 description: mod_entry.description.clone(),
                 tags: resolved_tags,
                 files: Vec::new(),
+                archive: None,
                 download_links: mod_entry.download_links.clone(),
                 dependencies: dep_ids,
                 changelog: None,
@@ -329,9 +331,34 @@ pub async fn export_server_repo(
             // Archived mods (.zip) are read from their extracted cache view so the
             // repo packs the actual files (fixes "server repo with .zip bugs").
             let read_root = crate::archive::mod_read_root(&mod_entry.mod_folder_path);
+
+            // ── "Zip mods" mode: pack the whole mod into a single mods/<id>.zip ──
+            if zip_mods {
+                let zip_path = repo_mods_dir.join(format!("{}.zip", mod_entry.id));
+                zip_directory(&read_root, &zip_path, cancel_flag.clone())
+                    .map_err(|e| format!("repo.errZipMod:{}", e))?;
+                let size = fs::metadata(&zip_path).map(|m| m.len()).unwrap_or(0);
+                let (sha256_hash, _) = compute_file_hash_and_chunks(&zip_path, false)?;
+                repo_mod.archive = Some(RepoFile {
+                    relative_path: format!("mods/{}.zip", mod_entry.id),
+                    size,
+                    sha256_hash,
+                    chunks: None,
+                });
+                // The per-file folder isn't used in this mode.
+                let _ = fs::remove_dir_all(&target_mod_dir);
+                let _ = window.emit("bmm://repo-export-progress", RepoProgress {
+                    step: format!(r#"{{"key":"repo.stepExporting","profile":"{}","mod":"{}","current":{},"total":{}}}"#, profile.name, mod_entry.name, idx + 1, total_mods),
+                    progress: (((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32))) * 85.0),
+                    current_file: format!("{}.zip", mod_entry.id),
+                });
+                repo_profile.mods.push(repo_mod);
+                continue;
+            }
+
             let files = fs_utils::list_mod_files(&read_root).map_err(|e| e.to_string())?;
             let total_files = files.len();
-            
+
             use rayon::prelude::*;
             use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -730,7 +757,7 @@ pub async fn update_server_repo(
                 id: pm.mod_entry.id.clone(), name: pm.mod_entry.name.clone(),
                 version: pm.mod_entry.version.clone(), author: pm.mod_entry.author.clone(),
                 description: pm.mod_entry.description.clone(), tags: resolved_tags,
-                files: repo_files, download_links: pm.mod_entry.download_links.clone(),
+                files: repo_files, archive: None, download_links: pm.mod_entry.download_links.clone(),
                 // bare mod ids; pruned to mods present in the repo after the loop
                 dependencies: pm.mod_entry.dependencies.iter()
                     .map(|d| d.split_once("::").map(|(_, m)| m.to_string()).unwrap_or_else(|| d.clone()))
@@ -1568,7 +1595,7 @@ pub fn read_local_repo(repo_dir: String) -> Result<ServerRepo, String> {
     serde_json::from_str(&content).map_err(|e| format!("repo.json parse error: {}", e))
 }
 
-fn zip_directory(src_dir: &Path, dst_file: &Path, cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>) -> Result<(), String> {
+pub(crate) fn zip_directory(src_dir: &Path, dst_file: &Path, cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>) -> Result<(), String> {
     use zip::write::FileOptions;
     use std::io::{copy, BufWriter};
     use walkdir::WalkDir;
@@ -1909,6 +1936,14 @@ pub struct SyncArgs {
     pub overwrite_all: bool,
     pub delete_extra: bool,
     pub download_limit: u32,
+    /// For mods stored as a single `.zip` (repo generated with "zip mods"): true =
+    /// extract the archive into a normal mod folder; false = keep it as a `.zip`
+    /// (an archived mod, read on demand). Ignored for classic per-file repos.
+    #[serde(default = "default_true")]
+    pub unzip_archives: bool,
+}
+fn default_true() -> bool {
+    true
 }
 
 #[tauri::command]
@@ -2064,7 +2099,7 @@ pub async fn sync_server_repo(
             // Add ID prefix to original folder name to avoid collisions if multiple mods sanitize to same name
             let mod_subfolder_name = format!("{}_{}", &repo_mod.id[..8], safe_mod_name);
             let target_mod_dir = mods_path.join(&mod_subfolder_name);
-            server_mod_subfolders.insert(mod_subfolder_name);
+            server_mod_subfolders.insert(mod_subfolder_name.clone());
             
             let is_new_mod = !target_mod_dir.exists();
             if is_new_mod {
@@ -2074,6 +2109,47 @@ pub async fn sync_server_repo(
             }
 
             fs::create_dir_all(&target_mod_dir).map_err(|e| e.to_string())?;
+
+            // ── Zipped mod: download mods/<id>.zip, then extract or keep as the user chose ──
+            if let Some(ref arch) = repo_mod.archive {
+                let zip_url = format!("{}{}", base_url, arch.relative_path.replace("\\", "/"));
+                let mut cb = reqwest::Client::builder();
+                if let Some(ref cid) = args.creator_id {
+                    let mut headers = reqwest::header::HeaderMap::new();
+                    if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) {
+                        headers.insert("X-Creator-ID", hv);
+                    }
+                    cb = cb.default_headers(headers);
+                }
+                let client = cb.build().map_err(|e| e.to_string())?;
+                let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
+                    step: format!(r#"{{"key":"repo.stepDownloading","profile":"{}","mod":"{}","current":{},"total":{}}}"#, repo_profile.name, repo_mod.name, idx + 1, total_mods),
+                    progress: (c_idx as f32 / total_tasks as f32) * 100.0,
+                    current_file: arch.relative_path.clone(),
+                });
+                let res = client.get(&zip_url).send().await
+                    .map_err(|e| format!("Network error ({}): {}", arch.relative_path, e))?;
+                if !res.status().is_success() {
+                    return Err(format!("HTTP {} for {}", res.status(), arch.relative_path));
+                }
+                let bytes = res.bytes().await.map_err(|e| e.to_string())?;
+
+                if args.unzip_archives {
+                    let tmp_zip = target_mod_dir.join(".bmm_dl.zip");
+                    fs::write(&tmp_zip, &bytes).map_err(|e| e.to_string())?;
+                    crate::archive::extract_to(&tmp_zip, &target_mod_dir).map_err(|e| e.to_string())?;
+                    let _ = fs::remove_file(&tmp_zip);
+                } else {
+                    // Keep it zipped: store the archive itself (an archived mod) and
+                    // drop the empty staging folder.
+                    let _ = fs::remove_dir_all(&target_mod_dir);
+                    let archive_dest = mods_path.join(format!("{}.zip", mod_subfolder_name));
+                    fs::write(&archive_dest, &bytes).map_err(|e| e.to_string())?;
+                }
+                prof_summary.files_downloaded += 1;
+                successfully_synced_mods.push(repo_mod);
+                continue;
+            }
 
             let total_files = repo_mod.files.len();
             let mut local_valid_files = std::collections::HashSet::new();
@@ -2299,8 +2375,16 @@ pub async fn sync_server_repo(
             
             for repo_mod in successfully_synced_mods {
                 let safe_mod_name = repo_mod.name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "_");
-                let target_mod_dir = mods_path.join(format!("{}_{}", &repo_mod.id[..8], safe_mod_name));
-                
+                let folder_name = format!("{}_{}", &repo_mod.id[..8], safe_mod_name);
+                // A zipped mod kept as-is lives at "<folder>.zip" (an archived mod);
+                // extracted (or classic) mods live in the "<folder>" directory.
+                let kept_zipped = repo_mod.archive.is_some() && !args.unzip_archives;
+                let target_mod_dir = if kept_zipped {
+                    mods_path.join(format!("{}.zip", folder_name))
+                } else {
+                    mods_path.join(&folder_name)
+                };
+
                 let mut new_mod = crate::models::mod_entry::ModEntry::new(
                     repo_mod.name.clone(),
                     target_mod_dir

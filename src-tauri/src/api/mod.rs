@@ -254,6 +254,9 @@ struct RepoGenBody {
     /// Compress output directory into a .zip archive after gen
     #[serde(default)]
     zip_output: bool,
+    /// Pack each mod into a single mods/<id>.zip (instead of raw per-file copy).
+    #[serde(default)]
+    zip_mods: bool,
 }
 
 /// POST /api/repo/update — incrementally update an existing repo
@@ -3446,6 +3449,7 @@ async fn do_api_repo_gen(
                 description: mod_entry.description.clone(),
                 tags: resolved_tags,
                 files: Vec::new(),
+                archive: None,
                 download_links: mod_entry.download_links.clone(),
                 dependencies: dep_ids,
                 changelog: None,
@@ -3457,6 +3461,25 @@ async fn do_api_repo_gen(
 
             // Archived mods (.zip) read from their extracted cache view.
             let read_root = crate::archive::mod_read_root(&mod_entry.mod_folder_path);
+
+            // "Zip mods": pack the whole mod into one mods/<id>.zip (full mode only).
+            if body.zip_mods && !body.lightweight {
+                let zip_path = repo_mods_dir.join(format!("{}.zip", mod_entry.id));
+                let noflag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                if crate::commands::repo::zip_directory(&read_root, &zip_path, noflag).is_ok() {
+                    let size = std::fs::metadata(&zip_path).map(|m| m.len()).unwrap_or(0);
+                    if let Ok(sha) = api_sha256_file(&zip_path) {
+                        repo_mod.archive = Some(RepoFile {
+                            relative_path: format!("mods/{}.zip", mod_entry.id),
+                            size, sha256_hash: sha, chunks: None,
+                        });
+                    }
+                    let _ = std::fs::remove_dir_all(&target_mod_dir);
+                }
+                repo_profile.mods.push(repo_mod);
+                continue;
+            }
+
             if let Ok(files) = crate::fs_utils::list_mod_files(&read_root) {
                 for rel_path in &files {
                     let src = read_root.join(rel_path);

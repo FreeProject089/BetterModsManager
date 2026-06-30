@@ -51,6 +51,11 @@ pub struct RepoMod {
     pub description: Option<String>,
     pub tags: Vec<RepoTag>,
     pub files: Vec<RepoFile>,
+    /// When a repo is generated with "zip mods", the mod's files are packed into a
+    /// single archive (`mods/<dir>.zip`) and this points at it (its sha256 covers
+    /// integrity). `files` is then empty. Absent/None = classic per-file layout.
+    #[serde(default)]
+    pub archive: Option<RepoFile>,
     pub download_links: Vec<crate::models::mod_entry::DownloadLink>,
     /// Mod-id dependencies, filtered at gen time to only those whose target mod
     /// is part of the exported profiles (cross-profile deps to non-exported

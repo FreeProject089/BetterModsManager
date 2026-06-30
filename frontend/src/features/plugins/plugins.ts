@@ -1004,9 +1004,9 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
                     <label class="plug-form-label" style="margin:0;">mod_ids <span style="color:var(--text-muted);font-size:9px;">(optionnel — remplace la liste)</span></label>
                     <div style="display:flex;gap:4px;">
-                        <button type="button" class="btn btn-xs btn-ghost" id="plug-qt-upd-sel-all"    style="font-size:10px;">Tout</button>
+                        <button type="button" class="btn btn-xs btn-ghost" id="plug-qt-upd-sel-all"    style="font-size:10px;">${t('common.all') || 'All'}</button>
                         <button type="button" class="btn btn-xs btn-ghost" id="plug-qt-upd-sel-active" style="font-size:10px;">Actifs</button>
-                        <button type="button" class="btn btn-xs btn-ghost" id="plug-qt-upd-sel-none"   style="font-size:10px;">Aucun</button>
+                        <button type="button" class="btn btn-xs btn-ghost" id="plug-qt-upd-sel-none"   style="font-size:10px;">${t('common.none') || 'None'}</button>
                     </div>
                 </div>
                 <div style="max-height:150px;overflow-y:auto;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:4px;scrollbar-width:thin;">${updModChecks}</div>
@@ -1108,9 +1108,9 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
                     <label class="plug-form-label" style="margin:0;">Mods à inclure</label>
                     <div style="display:flex;gap:4px;">
-                        <button type="button" id="plug-qt-sel-all"    class="btn btn-xs btn-ghost" style="font-size:10px;">Tout</button>
+                        <button type="button" id="plug-qt-sel-all"    class="btn btn-xs btn-ghost" style="font-size:10px;">${t('common.all') || 'All'}</button>
                         <button type="button" id="plug-qt-sel-active" class="btn btn-xs btn-ghost" style="font-size:10px;">Actifs</button>
-                        <button type="button" id="plug-qt-sel-none"   class="btn btn-xs btn-ghost" style="font-size:10px;">Aucun</button>
+                        <button type="button" id="plug-qt-sel-none"   class="btn btn-xs btn-ghost" style="font-size:10px;">${t('common.none') || 'None'}</button>
                     </div>
                 </div>
                 <div style="max-height:180px;overflow-y:auto;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:4px;scrollbar-width:thin;">${modCheckboxes}</div>
@@ -1136,7 +1136,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
     } else if (p === '/api/repo/sync') {
         const profOpts2 = _allProfiles.length
             ? _allProfiles.map(pr => `<option value="${escHtml(pr.id)}">${escHtml(pr.name)}</option>`).join('')
-            : `<option value="">— Créer un nouveau profil —</option>`;
+            : `<option value="">${t('plugins.qt.createNewProfile') || '— Create a new profile —'}</option>`;
         formHtml = `
             <!-- URL (auto-fetch on input) -->
             <div class="plug-qt-smart-field" style="flex-direction:column;">
@@ -1146,14 +1146,14 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             <!-- Repo profiles panel (auto-populated when URL is entered) -->
             <div id="plug-qt-s-repo-profiles-panel" style="display:none;flex-direction:column;gap:4px;margin-top:6px;background:rgba(0,0,0,0.12);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:8px 10px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                    <span class="plug-form-label">Profils du repo <span style="color:var(--text-muted);font-size:10px;">(cocher = auto-sélectionner + syncer)</span></span>
+                    <span class="plug-form-label">${t('plugins.qt.repoProfiles') || 'Repo profiles'} <span style="color:var(--text-muted);font-size:10px;">${t('plugins.qt.repoProfilesHint') || '(tick = auto-select + sync)'}</span></span>
                     <div style="display:flex;gap:4px;">
-                        <button id="plug-qt-sync-sel-all" class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 6px;">Tout</button>
-                        <button id="plug-qt-sync-sel-none" class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 6px;">Aucun</button>
+                        <button id="plug-qt-sync-sel-all" class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 6px;">${t('common.all') || 'All'}</button>
+                        <button id="plug-qt-sync-sel-none" class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 6px;">${t('common.none') || 'None'}</button>
                     </div>
                 </div>
                 <div id="plug-qt-s-repo-profiles-list" style="max-height:130px;overflow-y:auto;scrollbar-width:thin;display:flex;flex-direction:column;gap:2px;">
-                    <p style="font-size:12px;color:var(--text-muted);padding:4px 0;">Entrez une URL pour charger les profils…</p>
+                    <p style="font-size:12px;color:var(--text-muted);padding:4px 0;">${t('plugins.qt.enterUrlForProfiles') || 'Enter a URL to load profiles…'}</p>
                 </div>
             </div>
             <!-- Dirs requis -->
@@ -1173,19 +1173,19 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             </div>
             <!-- Target local profile (optional) -->
             <div class="plug-qt-smart-field" style="margin-top:6px;">
-                <label class="plug-form-label" style="margin-bottom:4px;">Profil local cible <span style="color:var(--text-muted);font-size:10px;">(optionnel — crée un nouveau si vide)</span></label>
+                <label class="plug-form-label" style="margin-bottom:4px;">${t('plugins.qt.targetLocalProfile') || 'Target local profile'} <span style="color:var(--text-muted);font-size:10px;">${t('plugins.qt.optionalCreatesNew') || '(optional — creates a new one if empty)'}</span></label>
                 <select id="plug-qt-s-local-prof" class="select">
-                    <option value="">— Créer un nouveau profil —</option>
+                    <option value="">${t('plugins.qt.createNewProfile') || '— Create a new profile —'}</option>
                     ${profOpts2}
                 </select>
             </div>
             <!-- Sync options row -->
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:flex-end;">
                 <div style="flex:2;min-width:160px;">
-                    <label class="plug-form-label" style="margin-bottom:4px;">Mode de sync</label>
+                    <label class="plug-form-label" style="margin-bottom:4px;">${t('plugins.qt.syncMode') || 'Sync mode'}</label>
                     <select id="plug-qt-s-sync-mode" class="select" style="font-size:12px;">
-                        <option value="smart">Manquants / incorrects seulement (rapide)</option>
-                        <option value="all">Réinstallation complète (overwrite_all)</option>
+                        <option value="smart">${t('plugins.qt.syncSmart') || 'Missing / incorrect only (fast)'}</option>
+                        <option value="all">${t('plugins.qt.syncAll') || 'Full reinstall (overwrite_all)'}</option>
                     </select>
                 </div>
                 <div style="flex:1;min-width:90px;">
@@ -1196,7 +1196,11 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
                     <input type="checkbox" id="plug-qt-s-delete-extra" style="accent-color:var(--accent);">
-                    Supprimer les mods absents du repo (delete_extra)
+                    ${t('plugins.qt.deleteExtra') || 'Remove mods missing from the repo (delete_extra)'}
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <input type="checkbox" id="plug-qt-s-keep-zipped" style="accent-color:var(--accent);">
+                    ${t('plugins.qt.keepZipped') || 'Keep zipped mods as .zip (unzipArchives=false)'}
                 </label>
             </div>`;
 
@@ -1281,8 +1285,8 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
                     <label class="plug-form-label" style="margin:0;">profile_ids <span style="color:var(--danger)">*</span></label>
                     <div style="display:flex;gap:4px;">
-                        <button type="button" id="plug-qt-gen-sel-all"  class="btn btn-xs btn-ghost" style="font-size:10px;">Tout</button>
-                        <button type="button" id="plug-qt-gen-sel-none" class="btn btn-xs btn-ghost" style="font-size:10px;">Aucun</button>
+                        <button type="button" id="plug-qt-gen-sel-all"  class="btn btn-xs btn-ghost" style="font-size:10px;">${t('common.all') || 'All'}</button>
+                        <button type="button" id="plug-qt-gen-sel-none" class="btn btn-xs btn-ghost" style="font-size:10px;">${t('common.none') || 'None'}</button>
                     </div>
                 </div>
                 <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:4px;max-height:120px;overflow-y:auto;scrollbar-width:thin;">${profChecksGen}</div>
@@ -1301,13 +1305,17 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             <!-- Seed -->
             <div style="margin-top:6px;display:flex;flex-direction:column;gap:2px;">
                 <label class="plug-form-label" style="font-size:10px;">seed <span style="color:var(--text-muted);font-size:10px;">(optionnel — stabilité des hachages)</span></label>
-                <input type="text" id="plug-qt-s-seed" class="input input-sm" placeholder="laisser vide pour aléatoire" style="font-family:var(--font-mono);font-size:12px;">
+                <input type="text" id="plug-qt-s-seed" class="input input-sm" placeholder="${t('plugins.qt.seedPh') || 'leave empty for random'}" style="font-family:var(--font-mono);font-size:12px;">
             </div>
-            <!-- zip_output -->
+            <!-- zip_output / zip_mods -->
             <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;align-items:center;">
                 <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
                     <input type="checkbox" id="plug-qt-s-zip-output" style="accent-color:var(--accent);">
-                    ${IC.upload} zip_output (compresser en .zip)
+                    ${IC.upload} zip_output (${t('plugins.qt.zipOutput') || 'compress into a .zip'})
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+                    <input type="checkbox" id="plug-qt-s-zip-mods" style="accent-color:var(--accent);">
+                    ${IC.upload} zip_mods (${t('plugins.qt.zipMods') || 'one .zip per mod'})
                 </label>
             </div>
             ${serverPanel}`;
@@ -1315,9 +1323,9 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
     } else if (p === '/api/repo/update') {
         formHtml = `
             <div style="display:flex;flex-direction:column;gap:12px;">
-              ${txtInput('plug-qt-s-repo-dir', 'repo_dir — dossier du repo existant (contient repo.json)', 'C:/BMM/MyRepo')}
+              ${txtInput('plug-qt-s-repo-dir', t('plugins.qt.repoDir') || 'repo_dir — existing repo folder (contains repo.json)', 'C:/BMM/MyRepo')}
               <div style="padding:10px 12px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;font-size:11px;color:var(--cyan);line-height:1.5;">
-                <b>UI-driven :</b> Cliquer "Send" ouvre la page Server Repo avec le modal <em>Mettre à jour le repo</em> pré-rempli. Tu vois le contenu du repo, tu choisis les mods à ajouter/retirer, puis tu confirmes — comme si tu le faisais à la main.
+                <b>${t('plugins.qt.uiDriven') || 'UI-driven'} :</b> ${t('plugins.qt.repoUpdateNote') || 'Clicking "Send" opens the Server Repo page with the Update repo modal pre-filled. You see the repo contents, choose which mods to add/remove, then confirm — as if doing it by hand.'}
               </div>
             </div>`;
 
@@ -1676,6 +1684,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const author    = (overlay.querySelector('#plug-qt-s-author-name')    as HTMLInputElement)?.value?.trim() || '';
             const seed      = (overlay.querySelector('#plug-qt-s-seed')           as HTMLInputElement)?.value?.trim();
             const zipOutput = (overlay.querySelector('#plug-qt-s-zip-output')     as HTMLInputElement)?.checked || false;
+            const zipMods   = (overlay.querySelector('#plug-qt-s-zip-mods')       as HTMLInputElement)?.checked || false;
             const srvType   = (overlay.querySelector('#plug-qt-s-server-type')    as HTMLSelectElement)?.value || 'user';
             const isServerType = srvType === 'server';
             const useCf     = isServerType ? false : ((overlay.querySelector('#plug-qt-s-use-cf')  as HTMLInputElement)?.checked || false);
@@ -1687,7 +1696,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
             const portStr   = (overlay.querySelector('#plug-qt-s-port')           as HTMLInputElement)?.value?.trim();
             const ulStr     = (overlay.querySelector('#plug-qt-s-upload-limit')   as HTMLInputElement)?.value?.trim();
             const adminPw   = (overlay.querySelector('#plug-qt-s-admin-pw')       as HTMLInputElement)?.value?.trim();
-            bodyObj = { profileIds: profIds, outputDir, authorName: author, generateServer: zipOutput, zipOutput, serverType: srvType, useCloudflare: useCf, useUpnp, autoStart };
+            bodyObj = { profileIds: profIds, outputDir, authorName: author, generateServer: zipOutput, zipOutput, zipMods, serverType: srvType, useCloudflare: useCf, useUpnp, autoStart };
             if (seed)    bodyObj.seed          = seed;
             if (portStr) bodyObj.port          = parseInt(portStr, 10) || 8080;
             if (ulStr)   bodyObj.uploadLimit   = parseInt(ulStr, 10) || 0;
@@ -1704,6 +1713,7 @@ async function openSmartQuickTest(m: string, p: string, rawBody: string) {
                 overwriteAll: (overlay.querySelector('#plug-qt-s-sync-mode')   as HTMLSelectElement)?.value === 'all',
                 deleteExtra:  (overlay.querySelector('#plug-qt-s-delete-extra') as HTMLInputElement)?.checked || false,
                 downloadLimit: parseInt((overlay.querySelector('#plug-qt-s-dl-limit') as HTMLInputElement)?.value || '0', 10) || 0,
+                unzipArchives: !((overlay.querySelector('#plug-qt-s-keep-zipped') as HTMLInputElement)?.checked || false),
             };
             if (profIds.length) bodyObj.choices = profIds.map(pid => ({ repoProfileId: pid }));
 
@@ -3791,8 +3801,8 @@ function renderScripts(container: HTMLElement) {
             '/api/restart':          '',
             '/api/repo/connect':     '{\n  "url": "https://monserveur.com/repo.json",\n  "name": "Mon Serveur"\n}',
             // camelCase — Rust backend uses #[serde(rename_all = "camelCase")]
-            '/api/repo/sync':        '{\n  "url": "https://monserveur.com/repo.json",\n  "gameDir": "C:/Games/MonJeu",\n  "modsDir": "C:/Games/MonJeu/Mods",\n  "backupDir": "C:/BMM/Backups",\n  "choices": [{ "repoProfileId": "prof-uuid" }],\n  "overwriteAll": false,\n  "deleteExtra": false,\n  "downloadLimit": 0\n}',
-            '/api/repo/gen':         '{\n  "profileIds": ["prof-uuid"],\n  "outputDir": "C:/BMM/Export",\n  "authorName": "MonPseudo",\n  "generateServer": false,\n  "zipOutput": false,\n  "useCloudflare": false,\n  "useUpnp": false,\n  "useDocker": false,\n  "dockerOs": "linux",\n  "serverVersion": "std",\n  "autoStart": false,\n  "port": 8080,\n  "uploadLimit": 0,\n  "adminPassword": ""\n}',
+            '/api/repo/sync':        '{\n  "url": "https://monserveur.com/repo.json",\n  "gameDir": "C:/Games/MonJeu",\n  "modsDir": "C:/Games/MonJeu/Mods",\n  "backupDir": "C:/BMM/Backups",\n  "choices": [{ "repoProfileId": "prof-uuid" }],\n  "overwriteAll": false,\n  "deleteExtra": false,\n  "downloadLimit": 0,\n  "unzipArchives": true\n}',
+            '/api/repo/gen':         '{\n  "profileIds": ["prof-uuid"],\n  "outputDir": "C:/BMM/Export",\n  "authorName": "MonPseudo",\n  "generateServer": false,\n  "zipOutput": false,\n  "zipMods": false,\n  "useCloudflare": false,\n  "useUpnp": false,\n  "useDocker": false,\n  "dockerOs": "linux",\n  "serverVersion": "std",\n  "autoStart": false,\n  "port": 8080,\n  "uploadLimit": 0,\n  "adminPassword": ""\n}',
             '/api/repo/host':        '{\n  "serveDir": "C:/BMM/Export",\n  "port": 8080,\n  "uploadLimit": 0\n}',
             // DELETE routes that carry a body
             '/api/repo':             '{\n  "url": "https://monserveur.com/repo.json"\n}',

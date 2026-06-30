@@ -577,11 +577,14 @@ export function initRepoSync(elements) {
                 const syncMode = document.getElementById('repo-sync-mode')?.value || 'missing';
                 const cleanExtra = document.getElementById('repo-sync-clean-extra')?.checked || false;
                 const downloadLimit = parseInt(inputSyncDownloadLimit ? inputSyncDownloadLimit.value : "0") || 0;
+                // Zipped mods: keep them as .zip archives, or extract them. Default = extract.
+                const keepZipped = (document.getElementById('repo-sync-keep-zipped') as HTMLInputElement | null)?.checked || false;
 
                 const summary = await invoke('sync_server_repo', {
                     args: {
                         url, creatorId: finalCreatorId, gameDir, modsDir, backupDir, choices,
-                        overwriteAll: syncMode === 'all', deleteExtra: cleanExtra, downloadLimit
+                        overwriteAll: syncMode === 'all', deleteExtra: cleanExtra, downloadLimit,
+                        unzipArchives: !keepZipped
                     }
                 });
 

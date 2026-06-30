@@ -1550,6 +1550,24 @@
                                             </span>
                                         </label>
 
+                                        <label class="checkbox-container"
+                                            style="font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-top: 8px;">
+                                            <input type="checkbox" id="repo-export-zip-mods" />
+                                            <span class="checkmark"></span>
+                                            <span data-i18n="repo.zipMods">Zip each mod (one .zip per mod)</span>
+                                            <span class="help-icon"
+                                                onmouseenter="window.showTaskyHelp('repo.zipModsHelp', 'info')"
+                                                onmouseleave="window.hideTaskyHelp()"
+                                                style="margin-left:6px; cursor:help; opacity:0.6;">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2.5">
+                                                    <circle cx="12" cy="12" r="10"></circle>
+                                                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                                                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                                </svg>
+                                            </span>
+                                        </label>
+
                                         <div id="repo-export-zip-options"
                                             style="display:none; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.05);">
                                             <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
@@ -2312,6 +2330,19 @@
                                                 <span class="checkmark"></span>
                                                 <span data-i18n="repo.syncCleanExtra">Supprimer les mods locaux en trop
                                                     (Cleanup)</span>
+                                            </label>
+
+                                            <label class="checkbox-container"
+                                                style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">
+                                                <input type="checkbox" id="repo-sync-keep-zipped" />
+                                                <span class="checkmark"></span>
+                                                <span data-i18n="repo.syncKeepZipped">Keep zipped mods as .zip (don't extract)</span>
+                                                <span class="help-icon"
+                                                    onmouseenter="window.showTaskyHelp('repo.syncKeepZippedHelp', 'info')"
+                                                    onmouseleave="window.hideTaskyHelp()"
+                                                    style="margin-left:6px; cursor:help; opacity:0.6;">
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                                                </span>
                                             </label>
                                         </div>
                                     </div>
@@ -7020,7 +7051,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:51274/api/repo/connect" `
                                         <tr><td><code>Update modpack</code></td><td>Modpack ID, New name, Dependency mode (select)</td><td><code>PUT /api/modpacks/&lt;id&gt;</code></td></tr>
                                         <tr><td><code>Sync repo</code></td><td>Repo URL, Mods folder</td><td><code>POST /api/repo/sync</code></td></tr>
                                         <tr><td><code>Cancel sync</code></td><td>—</td><td><code>DELETE /api/repo/sync</code></td></tr>
-                                        <tr><td><code>Generate repo</code></td><td>Output folder, Author, Lightweight (switch), Zip (switch)</td><td><code>POST /api/repo/gen</code></td></tr>
+                                        <tr><td><code>Generate repo</code></td><td>Output folder, Author, Lightweight (switch), Zip output (switch), <code>zipMods</code> — one .zip per mod (switch)</td><td><code>POST /api/repo/gen</code></td></tr>
                                         <tr><td><code>Cancel gen</code></td><td>—</td><td><code>DELETE /api/repo/gen</code></td></tr>
                                         <tr><td><code>Start HTTP host</code></td><td>Folder to host, Port</td><td><code>POST /api/repo/host</code></td></tr>
                                         <tr><td><code>Stop HTTP host</code></td><td>—</td><td><code>DELETE /api/repo/host</code></td></tr>

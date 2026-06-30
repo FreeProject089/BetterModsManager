@@ -304,6 +304,7 @@ export function initRepo() {
         dockerHostSelect: document.getElementById('repo-mini-server-docker-host'),
         // --- Distribution ZIP ---
         cbZipEnable: document.getElementById('repo-export-zip-enable'),
+        cbZipMods: document.getElementById('repo-export-zip-mods'),
         zipOptionsPanel: document.getElementById('repo-export-zip-options'),
         inputZipPort: document.getElementById('repo-export-server-port'),
         inputZipLimit: document.getElementById('repo-export-server-limit'),
@@ -1968,6 +1969,7 @@ export function initRepo() {
                     seed: elements.inputExportSeed ? elements.inputExportSeed.value.trim() || null : null,
                     modpacksShareConfig: modpacksShareConfig.length > 0 ? modpacksShareConfig : null,
                     zipOutput: elements.cbZipEnable ? elements.cbZipEnable.checked : false,
+                    zipMods: elements.cbZipMods ? elements.cbZipMods.checked : false,
                     serverOptions: serverOptions
                 });
                 saveHostHistory(outPath);
