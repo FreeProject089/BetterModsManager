@@ -5,13 +5,12 @@ name: Release
 # update.json, and publish the GitHub release with every asset. This is the CI
 # version of examples/bmm/release.ps1.
 #
-# Required repo secrets:
+# Required repo secret:
 #   BMM_PRIVATE_KEY  – the Ed25519 private key (contents of examples/bmm/keys/private.key).
 #                      MUST be the existing key, so the public_key baked in installer.toml
 #                      still matches (otherwise installed copies reject the update).
-#   BI_TOKEN         – a PAT with read access to FreeProject089/BetterInstaller
-#                      (only needed if that repo is private; omit the `token:` line if public).
-# GITHUB_TOKEN is provided automatically and is what `gh release create` uses.
+# BetterInstaller is public, so its checkout needs no token. GITHUB_TOKEN is
+# provided automatically and is what `gh release create` uses.
 
 on:
   push:
