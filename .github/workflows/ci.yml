@@ -1,0 +1,51 @@
+name: CI
+
+# Quality gate on every push / PR: catches the exact regressions we kept hitting
+# by hand (typecheck, security-guard, i18n parity, fmt, clippy). Split into a fast
+# frontend job (Linux) and the Rust job (Windows — BMM's Tauri target).
+
+on:
+  push:
+    branches: [main, Tdev]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (tsc · guard · i18n)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Security guard (no eval / new Function)
+        run: node scripts/security-guard.mjs
+      - name: i18n parity (en === fr)
+        run: node scripts/check-i18n-parity.mjs
+      - name: TypeScript typecheck
+        run: npx tsc --project frontend --noEmit
+
+  rust:
+    name: Rust (fmt · clippy)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: cargo fmt --check
+        working-directory: src-tauri
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings

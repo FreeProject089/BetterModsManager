@@ -8,6 +8,8 @@
         "dev": "concurrently \"npm run watch\" \"npx tauri dev --no-dev-server\"",
         "build": "node scripts/security-guard.mjs && tsc --project frontend && npx tauri build && node scripts/gen-update-manifest.mjs",
         "security-guard": "node scripts/security-guard.mjs",
+        "check:i18n": "node scripts/check-i18n-parity.mjs",
+        "ci": "node scripts/security-guard.mjs && node scripts/check-i18n-parity.mjs && tsc --project frontend --noEmit",
         "gen-manifest": "node scripts/gen-update-manifest.mjs",
         "typecheck": "tsc --project frontend --noEmit",
         "watch": "tsc --project frontend --watch",

@@ -1,0 +1,84 @@
+name: Release
+
+# Push a tag like `v1.2.3` → build BMM, pack/sign/stamp it into a Setup.exe with
+# BetterInstaller, make a delta from the previous release, write the multi-source
+# update.json, and publish the GitHub release with every asset. This is the CI
+# version of examples/bmm/release.ps1.
+#
+# Required repo secrets:
+#   BMM_PRIVATE_KEY  – the Ed25519 private key (contents of examples/bmm/keys/private.key).
+#                      MUST be the existing key, so the public_key baked in installer.toml
+#                      still matches (otherwise installed copies reject the update).
+#   BI_TOKEN         – a PAT with read access to FreeProject089/BetterInstaller
+#                      (only needed if that repo is private; omit the `token:` line if public).
+# GITHUB_TOKEN is provided automatically and is what `gh release create` uses.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (without the leading v), e.g. 1.2.3'
+        required: true
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write          # gh release create
+    steps:
+      - name: Checkout BMM
+        uses: actions/checkout@v4
+
+      - name: Checkout BetterInstaller
+        uses: actions/checkout@v4
+        with:
+          repository: FreeProject089/BetterInstaller
+          path: betterinstaller-src
+          token: ${{ secrets.BI_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri
+            betterinstaller-src
+
+      - name: Install BMM deps
+        run: npm ci
+
+      - name: Build BetterInstaller (bpkg + installer)
+        working-directory: betterinstaller-src
+        run: cargo build --release -p bpkg-cli -p installer
+
+      - name: Restore signing key
+        shell: pwsh
+        run: |
+          $keyDir = "betterinstaller-src/examples/bmm/keys"
+          New-Item -ItemType Directory -Force $keyDir | Out-Null
+          Set-Content -Path "$keyDir/private.key" -Value "${{ secrets.BMM_PRIVATE_KEY }}" -NoNewline
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "${{ github.event.inputs.version }}"
+          if (-not $v) { $v = "${{ github.ref_name }}" -replace '^v', '' }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build + pack + sign + release
+        working-directory: betterinstaller-src
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./examples/bmm/release.ps1 `
+            -Version "${{ steps.ver.outputs.version }}" `
+            -BmmRoot "${{ github.workspace }}" `
+            -Notes "Better Mods Manager ${{ steps.ver.outputs.version }}" `
+            -Publish
