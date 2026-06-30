@@ -50,6 +50,17 @@ jobs:
       - name: Install BMM deps
         run: npm ci
 
+      - name: BetaHub config for the build
+        # Ship the REAL token via the optional BETAHUB_CONFIG secret (full contents
+        # of betahub-config.local.ts). Falls back to the committed example otherwise.
+        shell: pwsh
+        env:
+          BETAHUB_CONFIG: ${{ secrets.BETAHUB_CONFIG }}
+        run: |
+          $dst = "frontend/src/features/betahub/betahub-config.local.ts"
+          if ($env:BETAHUB_CONFIG) { Set-Content -Path $dst -Value $env:BETAHUB_CONFIG -Encoding utf8 }
+          else { Copy-Item "frontend/src/features/betahub/betahub-config.example.ts" $dst -Force }
+
       - name: Build BetterInstaller (bpkg + installer)
         working-directory: betterinstaller-src
         run: cargo build --release -p bpkg-cli -p installer
