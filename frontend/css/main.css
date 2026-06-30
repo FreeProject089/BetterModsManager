@@ -5550,6 +5550,12 @@ select.input-field option {
 }
 .nbe-icon-opt:hover { color: var(--text-primary); border-color: var(--accent); }
 .nbe-icon-opt.sel { color: var(--accent); border-color: var(--accent); background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.12); }
+.nbe-icon-opt img, .nbe-icon-preview img { width: 18px; height: 18px; object-fit: contain; }
+.nbe-icon-upload { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.nbe-icon-preview { display: inline-flex; align-items: center; }
+.nbe-icon-preview img { width: 22px; height: 22px; border: 1px solid var(--accent); border-radius: 6px; padding: 2px; }
+/* Uploaded custom icon shown on the real nav button */
+.nav-custom-img { width: 18px; height: 18px; object-fit: contain; display: block; }
 /* Import row */
 .nbe-import-row { display: flex; gap: 8px; margin-top: 12px; }
 .nbe-import-row .input { flex: 1; }

@@ -6277,5 +6277,12 @@
   "crashmgr.keepLast": "Keep last",
   "crashmgr.maxSize": "Max total",
   "crashmgr.limitsHint": "applies to saved sessions + session reports",
-  "crashmgr.pruned": "Pruned"
+  "crashmgr.pruned": "Pruned",
+  "navedit.uploadIcon": "Upload icon…",
+  "navedit.iconTooBig": "Icon must be under 256 KB",
+  "navedit.exportFile": ".bmmnav",
+  "navedit.importFileNav": "Import .bmmnav",
+  "navedit.bundleExported": "Navigation exported (.bmmnav)",
+  "navedit.bundleImported": "Navigation imported",
+  "navedit.badBundle": "Not a valid .bmmnav file"
 }

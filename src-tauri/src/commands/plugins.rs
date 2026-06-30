@@ -1421,7 +1421,7 @@ pub fn write_text_file(path: String, content: String) -> Result<(), String> {
     const ALLOWED_WRITE_EXT: &[&str] = &[
         "ps1", "bat", "cmd", "sh", "py", "js", "mjs", "ts", "vbs", "lua", "rb", "pl",
         "txt", "csv", "json", "md", "log", "yaml", "yml", "ini", "conf", "xml", "bmmpa",
-        "bmmreplay",
+        "bmmreplay", "bmmnav",
     ];
     let ext = std::path::Path::new(&path)
         .extension()
@@ -1446,6 +1446,25 @@ pub fn write_text_file(path: String, content: String) -> Result<(), String> {
     }
     std::fs::write(&path, content).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Read a shared navbar bundle (.bmmnav) the user picked via the native open
+/// dialog. Restricted to that extension + JSON, with a size cap, so it can't be
+/// abused to slurp arbitrary files.
+#[tauri::command]
+pub fn read_nav_bundle(path: String) -> Result<String, String> {
+    let ext = std::path::Path::new(&path)
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    if ext != "bmmnav" && ext != "json" {
+        return Err("Refused: not a .bmmnav file".to_string());
+    }
+    let meta = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+    if meta.len() > 64 * 1024 * 1024 {
+        return Err("File too large".to_string());
+    }
+    std::fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
 // ── Write multiple files as a ZIP (for Script Generator "Save as ZIP") ───────

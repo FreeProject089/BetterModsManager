@@ -565,6 +565,7 @@ fn main() {
             commands::plugins::generate_script,
             commands::plugins::export_plugin,
             commands::plugins::write_text_file,
+            commands::plugins::read_nav_bundle,
             commands::plugins::write_zip_files,
             commands::plugins::get_app_exe_path,
             commands::plugins::create_local_plugin,

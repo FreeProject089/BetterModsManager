@@ -3,7 +3,7 @@
 // and rename. State is persisted in localStorage. No third-party code execution here.
 
 import { t } from '../core/i18n.js';
-import { invoke, pickFile } from '../core/api.js';
+import { invoke, pickFile, saveFile } from '../core/api.js';
 import { initPageBroker, refreshGrants } from './custom-page-broker.js';
 
 const LS_KEY = 'bmm_navbar_config';
@@ -101,8 +101,61 @@ function save(c: NavbarConfig): void {
 // ── Shareable config (short code / bmm:// link), mirroring card-order.ts ──
 const NAV_CODE_PREFIX = 'BMMNAV1.';
 function exportNavCode(): string {
-    return NAV_CODE_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(load()))));
+    // The bmm:// link is the lightweight share: classic navbar + custom buttons.
+    // Uploaded (data: URI) icons and custom pages are too big for a URL — those
+    // travel in the .bmmnav file instead. Strip data-URI icons so the link stays short.
+    const cfg = load();
+    cfg.custom = cfg.custom.map(c => c.icon && c.icon.startsWith('data:') ? { ...c, icon: '' } : c);
+    return NAV_CODE_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(cfg))));
 }
+// ── .bmmnav file: the FULL portable bundle (navbar config + custom icons +
+//    custom pages' source/permissions). The bmm:// code link can't carry page
+//    bundles or uploaded icons, so sharing those uses this file. ──
+interface NavBundlePage { id: string; name: string; html: string; css: string; js: string; grants: string[]; netOrigins: string[]; }
+interface NavBundle { format: 'bmmnav'; version: 1; navbar: NavbarConfig; pages: NavBundlePage[]; }
+
+async function exportNavBundle(): Promise<void> {
+    const cfg = load();
+    const pageIds = new Set(cfg.custom.filter(c => c.kind === 'page').map(c => c.target));
+    const pages: NavBundlePage[] = [];
+    for (const id of pageIds) {
+        try {
+            const src = await invoke('get_custom_page_source', { id }) as { name: string; html: string; css: string; js: string };
+            const grants = await invoke('page_grants_get', { id }).catch(() => []) as string[];
+            const netOrigins = await invoke('page_net_origins_get', { id }).catch(() => []) as string[];
+            pages.push({ id, ...src, grants, netOrigins });
+        } catch { /* page gone — skip */ }
+    }
+    const bundle: NavBundle = { format: 'bmmnav', version: 1, navbar: cfg, pages };
+    const path = await saveFile({ defaultPath: 'my-navbar.bmmnav', filters: [{ name: 'BMM Navigation', extensions: ['bmmnav'] }] }).catch(() => null);
+    if (!path) return;
+    try { await invoke('write_text_file', { path, content: JSON.stringify(bundle) }); (window as any).toast?.(t('navedit.bundleExported') || 'Navigation exported', 'success'); }
+    catch (e) { (window as any).toast?.(String(e), 'error'); }
+}
+
+async function importNavBundle(): Promise<void> {
+    const path = await pickFile({ filters: [{ name: 'BMM Navigation', extensions: ['bmmnav', 'json'] }] }).catch(() => null);
+    if (!path) return;
+    let bundle: NavBundle;
+    try { bundle = JSON.parse(await invoke('read_nav_bundle', { path }) as string); } catch (e) { (window as any).toast?.(String(e), 'error'); return; }
+    if (bundle.format !== 'bmmnav' || !bundle.navbar) { (window as any).toast?.(t('navedit.badBundle') || 'Not a valid .bmmnav file', 'error'); return; }
+    // Recreate each shared page (new ids), then remap the custom buttons' targets.
+    const idMap: Record<string, string> = {};
+    for (const p of bundle.pages || []) {
+        try {
+            const meta = await invoke('create_custom_page', { name: p.name, html: p.html, css: p.css, js: p.js }) as { id: string };
+            idMap[p.id] = meta.id;
+            for (const cap of p.grants || []) { try { await invoke('page_set_grant', { id: meta.id, cap, granted: true }); } catch { /* unknown cap */ } }
+            if (p.netOrigins?.length) { try { await invoke('page_set_net_origins', { id: meta.id, origins: p.netOrigins }); } catch { /* ignore */ } }
+        } catch { /* skip a bad page */ }
+    }
+    const cfg: NavbarConfig = { ...EMPTY_CFG, ...bundle.navbar };
+    for (const c of cfg.custom || []) { if (c.kind === 'page' && idMap[c.target]) c.target = idMap[c.target]; }
+    save(cfg); applyNavbarConfig();
+    (window as any).toast?.(t('navedit.bundleImported') || 'Navigation imported', 'success');
+    openNavbarEditor();
+}
+
 function parseNavCode(input: string): NavbarConfig | null {
     try {
         const s = input.trim();
@@ -128,8 +181,11 @@ function cssEsc(s: string): string {
     return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/["\\]/g, '\\$&');
 }
 function customIcon(item: CustomNavItem): string {
+    const ic = item.icon || '';
+    // Uploaded custom icon (a data: URI image — rendered as <img>, never injected as HTML).
+    if (ic.startsWith('data:')) return `<img class="nav-custom-img" src="${escAttr(ic)}" alt="">`;
     const reg = iconRegistry();
-    if (item.icon && reg[item.icon]) return reg[item.icon];
+    if (ic && reg[ic]) return reg[ic];
     const fallback = item.kind === 'url' ? ICONS.link : item.kind === 'modal' ? ICONS.grid : ICONS.folder;
     return svgWrap(fallback);
 }
@@ -403,6 +459,10 @@ export function openNavbarEditor(): void {
                     <div id="nbe-add-target-wrap"></div>
                     <label class="nbe-flbl">${t('navedit.icon') || 'Icon'}</label>
                     <div class="nbe-icon-grid" id="nbe-icon-grid">${iconGridHtml('folder')}</div>
+                    <div class="nbe-icon-upload">
+                        <label class="btn btn-xs btn-ghost">${t('navedit.uploadIcon') || 'Upload icon…'}<input type="file" id="nbe-icon-file" accept="image/png,image/jpeg,image/svg+xml,image/gif,image/webp" hidden></label>
+                        <span class="nbe-icon-preview" id="nbe-icon-preview"></span>
+                    </div>
                     <button class="btn btn-secondary nbe-add-go" id="nbe-add-go">${t('navedit.add') || 'Add'}</button>
                 </div>
             </details>
@@ -431,6 +491,8 @@ export function openNavbarEditor(): void {
                 <button class="btn btn-ghost nbe-act" id="nbe-reset"><span class="nbe-act-ic">${svgWrap('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>')}</span><span class="nbe-act-tx">${t('navedit.reset') || 'Reset'}</span></button>
                 <button class="btn btn-ghost nbe-act" id="nbe-share"><span class="nbe-act-ic">${svgWrap('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>')}</span><span class="nbe-act-tx">${t('cardorder.share') || 'Share'}</span></button>
                 <button class="btn btn-ghost nbe-act" id="nbe-import"><span class="nbe-act-ic">${svgWrap('<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/>')}</span><span class="nbe-act-tx">${t('cardorder.import') || 'Import'}</span></button>
+                <button class="btn btn-ghost nbe-act" id="nbe-export-file"><span class="nbe-act-ic">${svgWrap('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/>')}</span><span class="nbe-act-tx">${t('navedit.exportFile') || '.bmmnav'}</span></button>
+                <button class="btn btn-ghost nbe-act" id="nbe-import-file"><span class="nbe-act-ic">${svgWrap('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 12v6"/><path d="M9 15l3-3 3 3"/>')}</span><span class="nbe-act-tx">${t('navedit.importFileNav') || 'Import .bmmnav'}</span></button>
                 <button class="btn btn-primary nbe-act" id="nbe-done"><span class="nbe-act-ic">${svgWrap('<path d="M20 6L9 17l-5-5"/>')}</span><span class="nbe-act-tx">${t('common.done') || 'Done'}</span></button>
             </div>
         </div>`;
@@ -471,13 +533,25 @@ export function openNavbarEditor(): void {
     const renderTarget = () => { tgtWrap.innerHTML = targetFieldHtml(kindSel.value); };
     renderTarget();
     kindSel.addEventListener('change', renderTarget);
+    const iconPreview = overlay.querySelector('#nbe-icon-preview') as HTMLElement;
     const setIcon = (icon: string) => {
         chosenIcon = icon;
-        iconGrid.querySelectorAll('.nbe-icon-opt').forEach(o => o.classList.toggle('sel', (o as HTMLElement).dataset.icon === icon));
+        const isCustom = icon.startsWith('data:');
+        iconGrid.querySelectorAll('.nbe-icon-opt').forEach(o => o.classList.toggle('sel', !isCustom && (o as HTMLElement).dataset.icon === icon));
+        iconPreview.innerHTML = isCustom ? `<img class="nav-custom-img" src="${escAttr(icon)}" alt="">` : '';
     };
     iconGrid.addEventListener('click', (e) => {
         const opt = (e.target as HTMLElement).closest('.nbe-icon-opt') as HTMLElement | null;
         if (opt) setIcon(opt.dataset.icon!);
+    });
+    // Upload a custom icon → stored as a small data: URI (FileReader, no backend).
+    (overlay.querySelector('#nbe-icon-file') as HTMLInputElement | null)?.addEventListener('change', (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        if (file.size > 256 * 1024) { (window as any).toast?.(t('navedit.iconTooBig') || 'Icon must be under 256 KB', 'warning'); return; }
+        const reader = new FileReader();
+        reader.onload = () => { if (typeof reader.result === 'string') setIcon(reader.result); };
+        reader.readAsDataURL(file);
     });
 
     // Edit an existing custom button → prefill the form in "save" mode.
@@ -690,6 +764,9 @@ export function openNavbarEditor(): void {
     overlay.querySelector('#nbe-import')?.addEventListener('click', () => {
         importRow.style.display = importRow.style.display === 'none' ? 'flex' : 'none';
     });
+    // Full bundle (navbar + custom icons + custom pages) as a .bmmnav file.
+    overlay.querySelector('#nbe-export-file')?.addEventListener('click', () => exportNavBundle());
+    overlay.querySelector('#nbe-import-file')?.addEventListener('click', () => importNavBundle());
     overlay.querySelector('#nbe-import-apply')?.addEventListener('click', () => {
         const val = (overlay.querySelector('#nbe-import-input') as HTMLInputElement).value;
         const cfg = parseNavCode(val);

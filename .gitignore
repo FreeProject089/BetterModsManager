@@ -23,3 +23,6 @@ benchmarks/rust/target/debug/
 benchmarks/rust/target/release/
 # Tauri v2 build-generated schemas
 src-tauri/gen/
+
+# Local release/build output (installer artifacts, etc.)
+/Release/
